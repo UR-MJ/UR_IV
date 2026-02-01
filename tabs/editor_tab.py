@@ -123,43 +123,82 @@ class MosaicEditor(QWidget):
         container_layout.addWidget(self.image_label)
         layout.addWidget(self.image_container, stretch=8)
 
-        # ── 하단 서브탭 ──
-        self.bottom_tabs = QTabWidget()
-        self.bottom_tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #444; border-radius: 6px; background-color: #1a1a1a; }
-            QTabBar::tab {
-                background: #1E1E1E; color: #888; padding: 8px 16px;
-                border-top-left-radius: 6px; border-top-right-radius: 6px;
-                margin-right: 2px; font-weight: bold; font-size: 13px;
+        # ── 하단 서브탭 (버튼 + 스택) ──
+        from PyQt6.QtWidgets import QStackedWidget, QButtonGroup, QFrame
+        self.bottom_tabs_container = QWidget()
+        bt_layout = QVBoxLayout(self.bottom_tabs_container)
+        bt_layout.setContentsMargins(0, 0, 0, 0)
+        bt_layout.setSpacing(0)
+
+        # 버튼 행
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(4, 4, 4, 4)
+        btn_row.setSpacing(3)
+
+        _TAB_BTN = """
+            QPushButton {
+                background: #1E1E1E; color: #888; padding: 6px 4px;
+                border: none; border-radius: 4px;
+                font-size: 12px; font-weight: bold;
             }
-            QTabBar::tab:selected { background: #2A2A2A; color: #E0E0E0; border-bottom: 2px solid #5865F2; }
-            QTabBar::tab:hover { color: #BBB; }
-        """)
+            QPushButton:hover { color: #BBB; background: #252525; }
+            QPushButton:checked {
+                color: #E0E0E0; background: #2A2A2A;
+                border-bottom: 2px solid #5865F2;
+            }
+        """
+        self._subtab_buttons = []
+        tab_names = ["🔲 모자이크", "🎨 색감", "💧 워터마크", "✏️ 그리기", "✂️ 이동"]
+        for name in tab_names:
+            btn = QPushButton(name)
+            btn.setCheckable(True)
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.setStyleSheet(_TAB_BTN)
+            btn_row.addWidget(btn)
+            self._subtab_buttons.append(btn)
+        self._subtab_buttons[0].setChecked(True)
+
+        bt_layout.addLayout(btn_row)
+
+        # 구분선
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #333;")
+        bt_layout.addWidget(sep)
+
+        # 스택 위젯
+        self._subtab_stack = QStackedWidget()
 
         # 모자이크 패널
         self.mosaic_panel = MosaicPanel(self)
         self.mosaic_panel.set_image_label(self.image_label)
-        self.bottom_tabs.addTab(self.mosaic_panel, "🔲 모자이크")
+        self._subtab_stack.addWidget(self.mosaic_panel)
 
         # 색감 조절 패널
         self.color_panel = ColorAdjustPanel(self)
-        self.bottom_tabs.addTab(self.color_panel, "🎨 색감 조절")
+        self._subtab_stack.addWidget(self.color_panel)
 
         # 워터마크 패널
         self.watermark_panel = WatermarkPanel(self)
-        self.bottom_tabs.addTab(self.watermark_panel, "💧 워터마크")
+        self._subtab_stack.addWidget(self.watermark_panel)
 
         # 그리기 패널
         from tabs.editor.draw_panel import DrawPanel
         self.draw_panel = DrawPanel(self)
-        self.bottom_tabs.addTab(self.draw_panel, "✏️ 그리기")
+        self._subtab_stack.addWidget(self.draw_panel)
 
         # 이동 패널
         self.move_panel = MovePanel(self)
-        self.bottom_tabs.addTab(self.move_panel, "✂️ 이동")
+        self._subtab_stack.addWidget(self.move_panel)
 
-        # bottom_tabs는 에디터 탭 활성화 시 왼쪽 패널에 표시됨
-        # layout.addWidget(self.bottom_tabs)  -- 왼쪽 패널로 이동
+        bt_layout.addWidget(self._subtab_stack, 1)
+
+        # 버튼 클릭 → 스택 전환
+        for i, btn in enumerate(self._subtab_buttons):
+            btn.clicked.connect(lambda checked, idx=i: self._switch_subtab(idx))
+
+        # 호환성: bottom_tabs 참조를 유지 (왼쪽 패널에서 사용)
+        self.bottom_tabs = self.bottom_tabs_container
 
         # ── 시그널 연결 ──
         self._connect_signals()
@@ -236,8 +275,7 @@ class MosaicEditor(QWidget):
         self.move_panel.btn_cancel.clicked.connect(self._on_cancel_move)
         self.move_panel.btn_send_inpaint.clicked.connect(self._on_send_to_inpaint)
 
-        # 서브탭 전환 시 모드 토글
-        self.bottom_tabs.currentChanged.connect(self._on_subtab_changed)
+        # 서브탭 전환은 _switch_subtab에서 처리
 
     # ── 공통 이벤트 ──
 
@@ -544,9 +582,13 @@ class MosaicEditor(QWidget):
 
     # ── 워터마크 ──
 
-    def _on_subtab_changed(self, index: int):
-        """하단 서브탭 전환 시 모드 토글"""
-        current_widget = self.bottom_tabs.widget(index)
+    def _switch_subtab(self, index: int):
+        """서브탭 버튼 클릭 시 스택 전환 + 모드 토글"""
+        self._subtab_stack.setCurrentIndex(index)
+        for i, btn in enumerate(self._subtab_buttons):
+            btn.setChecked(i == index)
+
+        current_widget = self._subtab_stack.widget(index)
 
         is_wm_tab = (current_widget == self.watermark_panel)
         self.image_label.set_wm_mode(is_wm_tab)
