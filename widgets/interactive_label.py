@@ -80,6 +80,16 @@ class InteractiveLabel(QLabel):
         self._draw_preview_end = None  # 미리보기 끝점 (이미지 좌표)
         self._draw_pen_active = False  # 펜 그리기 중
 
+        # 이동 모드
+        self.move_mode = False
+        self._move_region = None       # BGR 이미지 조각
+        self._move_mask = None         # uint8 마스크 조각
+        self._move_offset_x = 0
+        self._move_offset_y = 0
+        self._move_origin_bbox = None  # (x, y, w, h)
+        self._move_drag_start = None   # QPoint (화면 좌표)
+        self._last_hole_mask = None    # 인페인트용
+
         # 설정 가능한 파라미터 (설정 탭에서 변경 가능)
         self._snap_radius = 12
         self._canny_low = 50
@@ -293,6 +303,104 @@ class InteractiveLabel(QLabel):
         if 0 <= bx < w and 0 <= by < h:
             bgr = tuple(int(c) for c in self.display_base_image[by, bx])
             self.color_picked.emit(bgr)
+
+    # ── 이동 모드 ──
+
+    def set_move_mode(self, enabled: bool):
+        """이동 모드 전환"""
+        self.move_mode = enabled
+        if not enabled and self._move_region is not None:
+            # 이동 중 탭 전환 시 취소
+            self.cancel_move()
+        self.update()
+
+    def start_move(self, fill_color: tuple = (0, 0, 0)) -> bool:
+        """선택 영역을 부유 상태로 분리"""
+        if self.selection_mask is None or cv2.countNonZero(self.selection_mask) == 0:
+            return False
+
+        self.push_undo_stack()
+
+        # bbox 계산
+        coords = cv2.findNonZero(self.selection_mask)
+        x, y, w, h = cv2.boundingRect(coords)
+        self._move_origin_bbox = (x, y, w, h)
+
+        # 영역 추출
+        roi_mask = self.selection_mask[y:y+h, x:x+w].copy()
+        roi_image = self.display_base_image[y:y+h, x:x+w].copy()
+        self._move_region = roi_image
+        self._move_mask = roi_mask
+
+        # 인페인트용 구멍 마스크 저장
+        self._last_hole_mask = self.selection_mask.copy()
+
+        # 원래 자리를 채우기 색으로 채움
+        self.display_base_image[self.selection_mask > 0] = fill_color
+
+        # 선택 마스크 초기화
+        self.selection_mask.fill(0)
+        self._move_offset_x = 0
+        self._move_offset_y = 0
+
+        self.rotate_image(0)
+        return True
+
+    def confirm_move(self):
+        """부유 영역을 현재 위치에 합성"""
+        if self._move_region is None or self._move_origin_bbox is None:
+            return
+
+        ox, oy, w, h = self._move_origin_bbox
+        nx = ox + self._move_offset_x
+        ny = oy + self._move_offset_y
+        img_h, img_w = self.display_base_image.shape[:2]
+
+        # 소스/대상 영역 클리핑
+        src_x1 = max(0, -nx)
+        src_y1 = max(0, -ny)
+        src_x2 = min(w, img_w - nx)
+        src_y2 = min(h, img_h - ny)
+
+        if src_x2 <= src_x1 or src_y2 <= src_y1:
+            return
+
+        dst_x1 = max(0, nx)
+        dst_y1 = max(0, ny)
+        dst_x2 = dst_x1 + (src_x2 - src_x1)
+        dst_y2 = dst_y1 + (src_y2 - src_y1)
+
+        region_slice = self._move_region[src_y1:src_y2, src_x1:src_x2]
+        mask_slice = self._move_mask[src_y1:src_y2, src_x1:src_x2]
+
+        dst_roi = self.display_base_image[dst_y1:dst_y2, dst_x1:dst_x2]
+        dst_roi[mask_slice > 0] = region_slice[mask_slice > 0]
+
+        # 상태 초기화 (hole mask는 유지)
+        self._move_region = None
+        self._move_mask = None
+        self._move_origin_bbox = None
+        self._move_drag_start = None
+
+        self._edge_map_dirty = True
+        self.rotate_image(0)
+
+    def cancel_move(self):
+        """이동 취소"""
+        if self._move_region is not None:
+            self.undo()
+        self._move_region = None
+        self._move_mask = None
+        self._move_origin_bbox = None
+        self._move_drag_start = None
+        self._last_hole_mask = None
+        self.update()
+
+    def get_move_hole_mask(self):
+        """마지막 이동의 구멍 마스크 반환"""
+        if self._last_hole_mask is None:
+            return None
+        return self._last_hole_mask.copy()
 
     def clear_selection(self):
         """선택 영역 초기화"""
@@ -763,6 +871,24 @@ class InteractiveLabel(QLabel):
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
             return
 
+        # ── 이동 모드 ──
+        if self.move_mode and self._move_region is not None and event.button() == Qt.MouseButton.LeftButton:
+            # 부유 영역 위 클릭 여부 판정
+            scale, off_x, off_y = self.get_scale_info()
+            ox, oy, rw, rh = self._move_origin_bbox
+            nx = ox + self._move_offset_x
+            ny = oy + self._move_offset_y
+            # 이미지 좌표 → 스크린 좌표
+            scr_x1 = int(nx * scale + off_x)
+            scr_y1 = int(ny * scale + off_y)
+            scr_x2 = int((nx + rw) * scale + off_x)
+            scr_y2 = int((ny + rh) * scale + off_y)
+            mx, my = event.pos().x(), event.pos().y()
+            if scr_x1 <= mx <= scr_x2 and scr_y1 <= my <= scr_y2:
+                self._move_drag_start = event.pos()
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            return
+
         # ── 그리기 모드 ──
         if self.draw_mode and event.button() == Qt.MouseButton.LeftButton:
             bx, by = self.map_to_base_coordinates(event.pos())
@@ -869,6 +995,18 @@ class InteractiveLabel(QLabel):
             self.update()
             return
 
+        # ── 이동 모드 드래그 ──
+        if self.move_mode and self._move_drag_start is not None and self._move_region is not None:
+            scale, off_x, off_y = self.get_scale_info()
+            if scale > 0:
+                dx = int((event.pos().x() - self._move_drag_start.x()) / scale)
+                dy = int((event.pos().y() - self._move_drag_start.y()) / scale)
+                self._move_offset_x += dx
+                self._move_offset_y += dy
+                self._move_drag_start = event.pos()
+            self.update()
+            return
+
         # ── 그리기 모드 이동 ──
         if self.draw_mode:
             if self._draw_pen_active and self.last_draw_pos:
@@ -958,6 +1096,12 @@ class InteractiveLabel(QLabel):
         if self.is_panning:
             self.drag_last_pos = None
             self.setCursor(Qt.CursorShape.OpenHandCursor)
+            return
+
+        # ── 이동 모드 릴리즈 ──
+        if self.move_mode and self._move_drag_start is not None:
+            self._move_drag_start = None
+            self.setCursor(Qt.CursorShape.ArrowCursor)
             return
 
         # ── 그리기 모드 릴리즈 ──
@@ -1106,6 +1250,31 @@ class InteractiveLabel(QLabel):
                         corner.y() - handle_size // 2,
                         handle_size, handle_size
                     )
+
+        # 이동 모드: 부유 영역 미리보기
+        if self.move_mode and self._move_region is not None and self._move_origin_bbox is not None:
+            ox, oy, rw, rh = self._move_origin_bbox
+            nx = ox + self._move_offset_x
+            ny = oy + self._move_offset_y
+            # 이미지 좌표 → 스크린 좌표
+            scr_x = int(nx * scale + off_x)
+            scr_y = int(ny * scale + off_y)
+            scr_w = int(rw * scale)
+            scr_h = int(rh * scale)
+
+            # 부유 영역을 마스크 적용하여 그리기
+            region_rgba = np.zeros((rh, rw, 4), dtype=np.uint8)
+            region_rgb = cv2.cvtColor(self._move_region, cv2.COLOR_BGR2RGB)
+            region_rgba[:, :, :3] = region_rgb
+            region_rgba[:, :, 3] = self._move_mask  # 마스크된 부분만 불투명
+            q_region = QImage(region_rgba.data, rw, rh, rw * 4, QImage.Format.Format_RGBA8888)
+            from PyQt6.QtCore import QRect as QR
+            painter.drawImage(QR(scr_x, scr_y, scr_w, scr_h), q_region)
+
+            # 파란 점선 테두리
+            painter.setPen(QPen(Qt.GlobalColor.cyan, 2, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(scr_x, scr_y, scr_w, scr_h)
 
         # 마스크 오버레이
         if self.selection_mask is not None and self.display_base_image is not None:

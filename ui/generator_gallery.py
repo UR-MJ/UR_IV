@@ -69,7 +69,7 @@ class GalleryMixin:
         elif target == "inpaint":
             pixmap = QPixmap(path)
             if not pixmap.isNull():
-                self.inpaint_tab.set_image(pixmap)
+                self.inpaint_tab.set_image_and_mask(pixmap)
             idx = self.center_tabs.indexOf(self.inpaint_tab)
         elif target == "editor":
             self.mosaic_editor.load_image(path)

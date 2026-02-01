@@ -57,6 +57,16 @@ class MaskCanvas(QLabel):
             self.mask_image.fill(QColor(0, 0, 0, 0))
             self._update_display()
 
+    def set_mask_from_numpy(self, mask_np):
+        """numpy uint8 마스크를 빨간 반투명 QImage로 변환하여 설정"""
+        import numpy as np
+        h, w = mask_np.shape[:2]
+        rgba = np.zeros((h, w, 4), dtype=np.uint8)
+        rgba[mask_np > 0] = [255, 0, 0, 128]
+        q_img = QImage(rgba.data, w, h, w * 4, QImage.Format.Format_RGBA8888)
+        self.mask_image = q_img.convertToFormat(QImage.Format.Format_ARGB32).copy()
+        self._update_display()
+
     def invert_mask(self):
         """마스크 반전"""
         if not self.mask_image:
@@ -506,6 +516,26 @@ class InpaintTab(QWidget):
         buffer = BytesIO()
         img.save(buffer, format='PNG')
         self.current_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+    def set_image_and_mask(self, pixmap: QPixmap, mask_np=None):
+        """에디터에서 이미지 + 마스크를 직접 전달받아 설정"""
+        if pixmap.isNull():
+            return
+        self.canvas.set_image(pixmap)
+
+        # QPixmap → base64 인코딩
+        buffer = BytesIO()
+        q_img = pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
+        w, h = q_img.width(), q_img.height()
+        ptr = q_img.bits()
+        ptr.setsize(w * h * 3)
+        img = Image.frombytes('RGB', (w, h), bytes(ptr))
+        img.save(buffer, format='PNG')
+        self.current_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+        # 마스크 설정
+        if mask_np is not None:
+            self.canvas.set_mask_from_numpy(mask_np)
 
     def load_from_payload(self, payload: dict):
         """PngInfo 탭에서 전달받은 payload 적용"""

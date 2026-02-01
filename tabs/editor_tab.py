@@ -12,6 +12,7 @@ from utils.shortcut_manager import get_shortcut_manager
 from tabs.editor.mosaic_panel import MosaicPanel, ResizeDialog
 from tabs.editor.color_panel import ColorAdjustPanel
 from tabs.editor.watermark_panel import WatermarkPanel
+from tabs.editor.move_panel import MovePanel
 
 
 class YOLODetectWorker(QThread):
@@ -153,6 +154,10 @@ class MosaicEditor(QWidget):
         self.draw_panel = DrawPanel(self)
         self.bottom_tabs.addTab(self.draw_panel, "✏️ 그리기")
 
+        # 이동 패널
+        self.move_panel = MovePanel(self)
+        self.bottom_tabs.addTab(self.move_panel, "✂️ 이동")
+
         # bottom_tabs는 에디터 탭 활성화 시 왼쪽 패널에 표시됨
         # layout.addWidget(self.bottom_tabs)  -- 왼쪽 패널로 이동
 
@@ -224,6 +229,12 @@ class MosaicEditor(QWidget):
 
         # 그리기 패널 — 스포이트 색상 연결
         self.image_label.color_picked.connect(self.draw_panel.set_color_from_bgr)
+
+        # 이동 패널
+        self.move_panel.btn_start_move.clicked.connect(self._on_start_move)
+        self.move_panel.btn_confirm.clicked.connect(self._on_confirm_move)
+        self.move_panel.btn_cancel.clicked.connect(self._on_cancel_move)
+        self.move_panel.btn_send_inpaint.clicked.connect(self._on_send_to_inpaint)
 
         # 서브탭 전환 시 모드 토글
         self.bottom_tabs.currentChanged.connect(self._on_subtab_changed)
@@ -546,6 +557,9 @@ class MosaicEditor(QWidget):
         if is_draw_tab:
             self.draw_panel._sync_to_label()
 
+        is_move_tab = (current_widget == self.move_panel)
+        self.image_label.set_move_mode(is_move_tab)
+
     def _on_wm_scale_changed(self, ratio: float):
         """캔버스에서 워터마크 크기 드래그 조절 (ratio는 시작점 대비 배율)"""
         # 리사이즈 시작 시 기준 값 기록
@@ -805,3 +819,59 @@ class MosaicEditor(QWidget):
             )
         else:
             QMessageBox.critical(self, "오류", f"자동 감지 실패:\n{error_msg}")
+
+    # ── 이동 ──
+
+    def _on_start_move(self):
+        """이동 시작"""
+        if self.image_label.display_base_image is None:
+            self.move_panel.update_status("이미지를 먼저 로드하세요")
+            return
+        fill_color = self.move_panel.fill_combo.currentData()
+        ok = self.image_label.start_move(fill_color)
+        if ok:
+            self.move_panel.set_moving_state(True)
+            self.move_panel.update_status("드래그로 영역을 이동하세요")
+        else:
+            self.move_panel.update_status("모자이크 탭에서 영역을 먼저 선택하세요")
+
+    def _on_confirm_move(self):
+        """이동 확정"""
+        self.image_label.confirm_move()
+        self.move_panel.set_confirmed_state()
+        self.move_panel.update_status("이동 완료! Inpaint 전송 가능")
+
+    def _on_cancel_move(self):
+        """이동 취소"""
+        self.image_label.cancel_move()
+        self.move_panel.set_moving_state(False)
+        self.move_panel.btn_start_move.setEnabled(True)
+        self.move_panel.btn_confirm.setEnabled(False)
+        self.move_panel.btn_cancel.setEnabled(False)
+        self.move_panel.update_status("이동이 취소되었습니다")
+
+    def _on_send_to_inpaint(self):
+        """현재 이미지 + 구멍 마스크를 Inpaint 탭으로 전송"""
+        if self.image_label.display_base_image is None:
+            return
+
+        # 이미지를 QPixmap으로 변환
+        img = self.image_label.display_base_image
+        h, w = img.shape[:2]
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        from PyQt6.QtGui import QPixmap, QImage
+        q_img = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
+        pixmap = QPixmap.fromImage(q_img.copy())
+
+        # 구멍 마스크 가져오기
+        hole_mask = self.image_label.get_move_hole_mask()
+
+        # Inpaint 탭으로 전송
+        main_window = self.window()
+        if hasattr(main_window, 'inpaint_tab'):
+            main_window.inpaint_tab.set_image_and_mask(pixmap, hole_mask)
+            # Inpaint 탭으로 전환
+            if hasattr(main_window, 'center_tabs'):
+                idx = main_window.center_tabs.indexOf(main_window.inpaint_tab)
+                if idx >= 0:
+                    main_window.center_tabs.setCurrentIndex(idx)
