@@ -578,6 +578,12 @@ class UISetupMixin:
         self.hires_denoising_input, _ = self._create_param_slider(
             hires_l, "Denoise", 0, 1, 0.4, 0.01
         )
+        self.hires_scale_input, _ = self._create_param_slider(
+            hires_l, "Scale", 1, 4, 2, 0.05
+        )
+        self.hires_cfg_input, _ = self._create_param_slider(
+            hires_l, "CFG", 0, 30, 0, 0.5
+        )
         layout.addWidget(self.hires_options_group)
 
         # NegPiP 확장

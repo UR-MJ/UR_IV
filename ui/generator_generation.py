@@ -95,13 +95,18 @@ class GenerationMixin:
         
         # Hires.fix
         if self.hires_options_group.isChecked():
-            payload.update({
+            hr_payload = {
                 "enable_hr": True,
                 "hr_upscaler": self.upscaler_combo.currentText(),
                 "hr_second_pass_steps": int(self.hires_steps_input.text()),
                 "denoising_strength": float(self.hires_denoising_input.text()),
+                "hr_scale": float(self.hires_scale_input.text()),
                 "hr_additional_modules": [],
-            })
+            }
+            hr_cfg = float(self.hires_cfg_input.text())
+            if hr_cfg > 0:
+                hr_payload["hr_cfg_scale"] = hr_cfg
+            payload.update(hr_payload)
 
         # NegPiP
         if hasattr(self, 'negpip_group') and self.negpip_group.isChecked():

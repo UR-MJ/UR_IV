@@ -53,6 +53,8 @@ class SettingsMixin:
             "hires_upscaler": self.upscaler_combo.currentText(),
             "hires_steps": self.hires_steps_input.text(),
             "hires_denoising": self.hires_denoising_input.text(),
+            "hires_scale": self.hires_scale_input.text(),
+            "hires_cfg": self.hires_cfg_input.text(),
 
             "negpip_enabled": self.negpip_group.isChecked() if hasattr(self, 'negpip_group') else False,
 
@@ -177,6 +179,8 @@ class SettingsMixin:
                 self.upscaler_combo.setCurrentIndex(idx)
             self.hires_steps_input.setText(settings.get("hires_steps", "0"))
             self.hires_denoising_input.setText(settings.get("hires_denoising", "0.4"))
+            self.hires_scale_input.setText(settings.get("hires_scale", "2.0"))
+            self.hires_cfg_input.setText(settings.get("hires_cfg", "0"))
             
             # NegPiP
             if hasattr(self, 'negpip_group'):
