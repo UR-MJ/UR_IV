@@ -15,6 +15,7 @@ class ColorAdjustPanel(QWidget):
     apply_requested = pyqtSignal(int, int, int)
     reset_requested = pyqtSignal()
     filter_apply_requested = pyqtSignal(str)
+    auto_correct_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -58,6 +59,17 @@ class ColorAdjustPanel(QWidget):
         btn_row.addWidget(self.btn_apply, 2)
         btn_row.addWidget(self.btn_reset, 1)
         layout.addLayout(btn_row)
+
+        # 자동 보정
+        self.btn_auto_correct = QPushButton("✨ 자동 보정")
+        self.btn_auto_correct.setFixedHeight(35)
+        self.btn_auto_correct.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_auto_correct.setStyleSheet(
+            "background-color: #2D8C4E; color: white; border-radius: 4px; "
+            "font-size: 13px; font-weight: bold;"
+        )
+        self.btn_auto_correct.clicked.connect(lambda: self.auto_correct_requested.emit())
+        layout.addWidget(self.btn_auto_correct)
 
         # ── 필터 프리셋 ──
         preset_label = QLabel("필터 프리셋")
@@ -174,3 +186,26 @@ class ColorAdjustPanel(QWidget):
             return cv2.GaussianBlur(img, (5, 5), 0)
 
         return img
+
+    @staticmethod
+    def auto_correct(img: np.ndarray) -> np.ndarray:
+        """자동 색감 보정 (CLAHE + 화이트밸런스)"""
+        # LAB 색공간에서 CLAHE 적용 (밝기 + 대비 보정)
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        l = clahe.apply(l)
+        lab = cv2.merge([l, a, b])
+        result = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+        # 간단한 화이트밸런스 (Gray World)
+        avg_b = np.mean(result[:, :, 0])
+        avg_g = np.mean(result[:, :, 1])
+        avg_r = np.mean(result[:, :, 2])
+        avg_gray = (avg_b + avg_g + avg_r) / 3.0
+        if avg_b > 0 and avg_g > 0 and avg_r > 0:
+            result[:, :, 0] = np.clip(result[:, :, 0] * (avg_gray / avg_b), 0, 255).astype(np.uint8)
+            result[:, :, 1] = np.clip(result[:, :, 1] * (avg_gray / avg_g), 0, 255).astype(np.uint8)
+            result[:, :, 2] = np.clip(result[:, :, 2] * (avg_gray / avg_r), 0, 255).astype(np.uint8)
+
+        return result

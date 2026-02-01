@@ -347,11 +347,60 @@ class WatermarkPanel(QWidget):
         return x, y
 
     @staticmethod
+    def _render_text_pil(text: str, font_family: str, font_size: int, color_bgr: tuple) -> np.ndarray:
+        """PIL로 텍스트를 BGRA numpy 이미지로 렌더링"""
+        from PIL import Image, ImageDraw, ImageFont
+
+        # 폰트 로드
+        pil_font = None
+        if font_family:
+            try:
+                # 시스템 폰트에서 검색
+                from matplotlib import font_manager
+                font_path = font_manager.findfont(
+                    font_manager.FontProperties(family=font_family),
+                    fallback_to_default=True
+                )
+                if font_path:
+                    pil_font = ImageFont.truetype(font_path, font_size)
+            except Exception:
+                pass
+        if pil_font is None:
+            try:
+                pil_font = ImageFont.truetype("arial.ttf", font_size)
+            except Exception:
+                pil_font = ImageFont.load_default()
+
+        # 텍스트 크기 측정
+        dummy = Image.new('RGBA', (1, 1))
+        draw = ImageDraw.Draw(dummy)
+        bbox = draw.textbbox((0, 0), text, font=pil_font)
+        tw = bbox[2] - bbox[0] + 20
+        th = bbox[3] - bbox[1] + 20
+
+        # RGBA 캔버스에 텍스트 그리기
+        canvas = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        # BGR → RGB 변환
+        r, g, b = color_bgr[2], color_bgr[1], color_bgr[0]
+        draw.text((10 - bbox[0], 10 - bbox[1]), text, font=pil_font, fill=(r, g, b, 255))
+
+        # numpy BGRA로 변환
+        arr = np.array(canvas)  # RGBA
+        bgra = np.zeros_like(arr)
+        bgra[:, :, 0] = arr[:, :, 2]  # B
+        bgra[:, :, 1] = arr[:, :, 1]  # G
+        bgra[:, :, 2] = arr[:, :, 0]  # R
+        bgra[:, :, 3] = arr[:, :, 3]  # A
+        return bgra
+
+    @staticmethod
     def render_text_watermark(img: np.ndarray, config: dict) -> np.ndarray:
-        """텍스트 워터마크를 이미지에 렌더링"""
+        """텍스트 워터마크를 이미지에 렌더링 (PIL 기반)"""
         h, w = img.shape[:2]
         text = config['text']
         font_size = config['font_size']
+        font_family = config.get('font_family', '')
         color = config['color']  # BGR tuple
         opacity = config['opacity']
         rotation = config['rotation']
@@ -359,52 +408,67 @@ class WatermarkPanel(QWidget):
         x_pct = config.get('x_pct', 50)
         y_pct = config.get('y_pct', 50)
 
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        scale = font_size / 30.0
-        thickness = max(1, int(font_size / 15))
-
-        (tw, th), baseline = cv2.getTextSize(text, font, scale, thickness)
+        # PIL로 텍스트 렌더링
+        text_bgra = WatermarkPanel._render_text_pil(text, font_family, font_size, color)
+        th_t, tw_t = text_bgra.shape[:2]
 
         if tile:
-            overlay = np.zeros_like(img)
-            spacing_x = tw + 50
-            spacing_y = th + 50
-            for ty in range(-h, h * 2, spacing_y):
-                for tx in range(-w, w * 2, spacing_x):
-                    cv2.putText(overlay, text, (tx, ty + th), font, scale, color, thickness, cv2.LINE_AA)
+            # 타일 배치: 회전 시 빈 공간이 생기지 않도록 대각선 길이만큼 확장
+            diag = int(np.sqrt(w * w + h * h))
+            pad = (diag - min(w, h)) // 2 + max(tw_t, th_t)
+            ow = w + pad * 2
+            oh = h + pad * 2
+
+            overlay = np.zeros((oh, ow, 4), dtype=np.uint8)
+            spacing_x = tw_t + 40
+            spacing_y = th_t + 40
+            for ty_i in range(0, oh, spacing_y):
+                for tx_i in range(0, ow, spacing_x):
+                    # 클리핑하여 복사
+                    ex = min(tx_i + tw_t, ow)
+                    ey = min(ty_i + th_t, oh)
+                    sw = ex - tx_i
+                    sh = ey - ty_i
+                    overlay[ty_i:ey, tx_i:ex] = text_bgra[:sh, :sw]
 
             if rotation != 0:
-                center = (w // 2, h // 2)
+                center = (ow // 2, oh // 2)
                 M = cv2.getRotationMatrix2D(center, rotation, 1.0)
-                overlay = cv2.warpAffine(overlay, M, (w, h))
+                overlay = cv2.warpAffine(overlay, M, (ow, oh),
+                                         borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
 
-            mask = cv2.cvtColor(overlay, cv2.COLOR_BGR2GRAY)
-            mask = (mask > 0).astype(np.float32) * opacity
-            mask = np.stack([mask] * 3, axis=-1)
-            result = (img.astype(np.float32) * (1 - mask) + overlay.astype(np.float32) * mask)
+            # 중앙 크롭 (원본 크기로)
+            cx = (ow - w) // 2
+            cy = (oh - h) // 2
+            overlay = overlay[cy:cy + h, cx:cx + w]
+
+            # 합성
+            alpha = overlay[:, :, 3].astype(np.float32) / 255.0 * opacity
+            alpha = np.stack([alpha] * 3, axis=-1)
+            wm_bgr = overlay[:, :, :3].astype(np.float32)
+            result = img.astype(np.float32) * (1 - alpha) + wm_bgr * alpha
             return np.clip(result, 0, 255).astype(np.uint8)
 
         # 단일 워터마크
-        pad = 20
-        text_img = np.zeros((th + baseline + pad * 2, tw + pad * 2, 3), dtype=np.uint8)
-        cv2.putText(text_img, text, (pad, th + pad), font, scale, color, thickness, cv2.LINE_AA)
+        text_bgr = text_bgra[:, :, :3]
+        text_alpha = text_bgra[:, :, 3]
 
         if rotation != 0:
-            th2, tw2 = text_img.shape[:2]
-            center = (tw2 // 2, th2 // 2)
+            center = (tw_t // 2, th_t // 2)
             M = cv2.getRotationMatrix2D(center, rotation, 1.0)
             cos_v = np.abs(M[0, 0])
             sin_v = np.abs(M[0, 1])
-            nw = int(th2 * sin_v + tw2 * cos_v)
-            nh = int(th2 * cos_v + tw2 * sin_v)
+            nw = int(th_t * sin_v + tw_t * cos_v)
+            nh = int(th_t * cos_v + tw_t * sin_v)
             M[0, 2] += (nw / 2) - center[0]
             M[1, 2] += (nh / 2) - center[1]
-            text_img = cv2.warpAffine(text_img, M, (nw, nh))
+            text_bgr = cv2.warpAffine(text_bgr, M, (nw, nh))
+            text_alpha = cv2.warpAffine(text_alpha, M, (nw, nh))
+            tw_t, th_t = nw, nh
 
-        rh, rw = text_img.shape[:2]
+        rh, rw = text_bgr.shape[:2]
         x, y = WatermarkPanel._pct_to_xy(x_pct, y_pct, w, h, rw, rh)
 
-        # 안전한 범위 클리핑
         x1 = max(0, x)
         y1 = max(0, y)
         x2 = min(w, x + rw)
@@ -418,11 +482,11 @@ class WatermarkPanel(QWidget):
             return img
 
         roi = img[y1:y2, x1:x2].astype(np.float32)
-        wm_roi = text_img[sy1:sy2, sx1:sx2].astype(np.float32)
-        mask = (cv2.cvtColor(text_img[sy1:sy2, sx1:sx2], cv2.COLOR_BGR2GRAY) > 0).astype(np.float32) * opacity
-        mask = np.stack([mask] * 3, axis=-1)
+        wm_roi = text_bgr[sy1:sy2, sx1:sx2].astype(np.float32)
+        alpha = text_alpha[sy1:sy2, sx1:sx2].astype(np.float32) / 255.0 * opacity
+        alpha = np.stack([alpha] * 3, axis=-1)
 
-        blended = roi * (1 - mask) + wm_roi * mask
+        blended = roi * (1 - alpha) + wm_roi * alpha
         result = img.copy()
         result[y1:y2, x1:x2] = np.clip(blended, 0, 255).astype(np.uint8)
         return result

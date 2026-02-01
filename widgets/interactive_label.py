@@ -89,6 +89,8 @@ class InteractiveLabel(QLabel):
         self._move_origin_bbox = None  # (x, y, w, h)
         self._move_drag_start = None   # QPoint (화면 좌표)
         self._last_hole_mask = None    # 인페인트용
+        self._move_rotation = 0        # 회전 각도 (도)
+        self._move_scale = 1.0         # 크기 배율
 
         # 설정 가능한 파라미터 (설정 탭에서 변경 가능)
         self._snap_radius = 12
@@ -347,11 +349,42 @@ class InteractiveLabel(QLabel):
         return True
 
     def confirm_move(self):
-        """부유 영역을 현재 위치에 합성"""
+        """부유 영역을 현재 위치에 합성 (회전/크기 적용)"""
         if self._move_region is None or self._move_origin_bbox is None:
             return
 
-        ox, oy, w, h = self._move_origin_bbox
+        ox, oy, orig_w, orig_h = self._move_origin_bbox
+
+        # 회전/크기 적용
+        region = self._move_region.copy()
+        mask = self._move_mask.copy()
+        ms = self._move_scale
+        mr = self._move_rotation
+
+        if ms != 1.0:
+            new_w = max(1, int(orig_w * ms))
+            new_h = max(1, int(orig_h * ms))
+            region = cv2.resize(region, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+            mask = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+        else:
+            new_w, new_h = orig_w, orig_h
+
+        if mr != 0:
+            center = (new_w // 2, new_h // 2)
+            M = cv2.getRotationMatrix2D(center, mr, 1.0)
+            cos_v = np.abs(M[0, 0])
+            sin_v = np.abs(M[0, 1])
+            rot_w = int(new_h * sin_v + new_w * cos_v)
+            rot_h = int(new_h * cos_v + new_w * sin_v)
+            M[0, 2] += (rot_w / 2) - center[0]
+            M[1, 2] += (rot_h / 2) - center[1]
+            region = cv2.warpAffine(region, M, (rot_w, rot_h),
+                                    borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+            mask = cv2.warpAffine(mask, M, (rot_w, rot_h),
+                                  flags=cv2.INTER_NEAREST,
+                                  borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            new_w, new_h = rot_w, rot_h
+
         nx = ox + self._move_offset_x
         ny = oy + self._move_offset_y
         img_h, img_w = self.display_base_image.shape[:2]
@@ -359,8 +392,8 @@ class InteractiveLabel(QLabel):
         # 소스/대상 영역 클리핑
         src_x1 = max(0, -nx)
         src_y1 = max(0, -ny)
-        src_x2 = min(w, img_w - nx)
-        src_y2 = min(h, img_h - ny)
+        src_x2 = min(new_w, img_w - nx)
+        src_y2 = min(new_h, img_h - ny)
 
         if src_x2 <= src_x1 or src_y2 <= src_y1:
             return
@@ -370,8 +403,8 @@ class InteractiveLabel(QLabel):
         dst_x2 = dst_x1 + (src_x2 - src_x1)
         dst_y2 = dst_y1 + (src_y2 - src_y1)
 
-        region_slice = self._move_region[src_y1:src_y2, src_x1:src_x2]
-        mask_slice = self._move_mask[src_y1:src_y2, src_x1:src_x2]
+        region_slice = region[src_y1:src_y2, src_x1:src_x2]
+        mask_slice = mask[src_y1:src_y2, src_x1:src_x2]
 
         dst_roi = self.display_base_image[dst_y1:dst_y2, dst_x1:dst_x2]
         dst_roi[mask_slice > 0] = region_slice[mask_slice > 0]
@@ -1254,20 +1287,45 @@ class InteractiveLabel(QLabel):
         # 이동 모드: 부유 영역 미리보기
         if self.move_mode and self._move_region is not None and self._move_origin_bbox is not None:
             ox, oy, rw, rh = self._move_origin_bbox
-            nx = ox + self._move_offset_x
-            ny = oy + self._move_offset_y
-            # 이미지 좌표 → 스크린 좌표
-            scr_x = int(nx * scale + off_x)
-            scr_y = int(ny * scale + off_y)
-            scr_w = int(rw * scale)
-            scr_h = int(rh * scale)
 
-            # 부유 영역을 마스크 적용하여 그리기
+            # 회전/크기 적용된 영역 생성
             region_rgba = np.zeros((rh, rw, 4), dtype=np.uint8)
             region_rgb = cv2.cvtColor(self._move_region, cv2.COLOR_BGR2RGB)
             region_rgba[:, :, :3] = region_rgb
-            region_rgba[:, :, 3] = self._move_mask  # 마스크된 부분만 불투명
-            q_region = QImage(region_rgba.data, rw, rh, rw * 4, QImage.Format.Format_RGBA8888)
+            region_rgba[:, :, 3] = self._move_mask
+
+            # 크기 변환
+            ms = self._move_scale
+            if ms != 1.0:
+                new_w = max(1, int(rw * ms))
+                new_h = max(1, int(rh * ms))
+                region_rgba = cv2.resize(region_rgba, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+            else:
+                new_w, new_h = rw, rh
+
+            # 회전 변환
+            mr = self._move_rotation
+            if mr != 0:
+                center = (new_w // 2, new_h // 2)
+                M = cv2.getRotationMatrix2D(center, mr, 1.0)
+                cos_v = np.abs(M[0, 0])
+                sin_v = np.abs(M[0, 1])
+                rot_w = int(new_h * sin_v + new_w * cos_v)
+                rot_h = int(new_h * cos_v + new_w * sin_v)
+                M[0, 2] += (rot_w / 2) - center[0]
+                M[1, 2] += (rot_h / 2) - center[1]
+                region_rgba = cv2.warpAffine(region_rgba, M, (rot_w, rot_h),
+                                             borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+                new_w, new_h = rot_w, rot_h
+
+            nx = ox + self._move_offset_x
+            ny = oy + self._move_offset_y
+            scr_x = int(nx * scale + off_x)
+            scr_y = int(ny * scale + off_y)
+            scr_w = int(new_w * scale)
+            scr_h = int(new_h * scale)
+
+            q_region = QImage(region_rgba.data, new_w, new_h, new_w * 4, QImage.Format.Format_RGBA8888)
             from PyQt6.QtCore import QRect as QR
             painter.drawImage(QR(scr_x, scr_y, scr_w, scr_h), q_region)
 

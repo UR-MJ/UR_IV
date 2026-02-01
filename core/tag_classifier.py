@@ -38,41 +38,56 @@ class TagClassifier:
         self._load_special_tags()
     
     def _load_all_python_dicts(self):
-        """모든 Python dict 파일 로드"""
-        char_path = TAGS_DB_PATH / "danbooru_character.py"
-        if char_path.exists():
-            self.characters = self._load_python_dict(char_path)
-            print(f"✅ {char_path}: {len(self.characters)}개 로드")
-        
-        copy_path = TAGS_DB_PATH / "copyright_list_reformatted.py"
-        if copy_path.exists():
-            self.copyrights = self._load_python_dict(copy_path)
-            print(f"✅ {copy_path}: {len(self.copyrights)}개 로드")
-        
+        """딕셔너리 파일에서 태그 로드"""
+        # 캐릭터: character_dictionary.py 또는 danbooru_character.py
+        for name in ["character_dictionary.py", "danbooru_character.py"]:
+            char_path = TAGS_DB_PATH / name
+            if char_path.exists():
+                self.characters = self._load_python_dict_keys(char_path)
+                print(f"✅ 캐릭터: {name} → {len(self.characters)}개 로드")
+                break
+
+        # 작품: copyright_dictionary.py 또는 copyright_list_reformatted.py
+        for name in ["copyright_dictionary.py", "copyright_list_reformatted.py"]:
+            copy_path = TAGS_DB_PATH / name
+            if copy_path.exists():
+                self.copyrights = self._load_python_dict_keys(copy_path)
+                print(f"✅ 작품: {name} → {len(self.copyrights)}개 로드")
+                break
+
+        # 작가: artist_dictionary.py
         artist_path = TAGS_DB_PATH / "artist_dictionary.py"
         if artist_path.exists():
-            self.artists = self._load_python_dict(artist_path)
-            print(f"✅ {artist_path}: {len(self.artists)}개 로드")
-    
-    def _load_python_dict(self, filepath):
-        """Python 파일에서 태그 로드"""
+            self.artists = self._load_python_dict_keys(artist_path)
+            print(f"✅ 작가: artist_dictionary.py → {len(self.artists)}개 로드")
+
+    def _load_python_dict_keys(self, filepath):
+        """Python 파일에서 dict 키 또는 list 항목을 로드"""
         tags = set()
         try:
+            namespace = {}
             with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            pattern = r'["\']([^"\']+)["\']'
-            matches = re.findall(pattern, content)
-            
-            for match in matches:
-                tag = match.lower().strip()
-                if tag:
-                    tags.add(tag)
-                    tags.add(tag.replace(r'\(', '(').replace(r'\)', ')'))
-                    tags.add(tag.replace('(', r'\(').replace(')', r'\)'))
+                exec(f.read(), namespace)
+
+            # namespace에서 dict/list 찾기
+            for key, val in namespace.items():
+                if key.startswith('_'):
+                    continue
+                if isinstance(val, dict):
+                    for k in val.keys():
+                        tag = str(k).lower().strip()
+                        if tag:
+                            tags.add(tag)
+                    break
+                elif isinstance(val, (list, tuple)):
+                    for item in val:
+                        tag = str(item).lower().strip()
+                        if tag:
+                            tags.add(tag)
+                    break
         except Exception as e:
             print(f"⚠️ {filepath} 로드 실패: {e}")
-        
+
         return tags
     
     def _load_text_files(self):
@@ -285,17 +300,28 @@ class TagClassifier:
         
         return False
         
+    def _tag_variants(self, tag: str) -> list:
+        """태그의 모든 변형 생성 (공백/언더스코어, 이스케이프 괄호)"""
+        tag_clean = tag.strip().lower()
+        variants = {tag_clean}
+        variants.add(tag_clean.replace('_', ' '))
+        variants.add(tag_clean.replace(' ', '_'))
+        variants.add(tag_clean.replace(r'\(', '(').replace(r'\)', ')'))
+        variants.add(tag_clean.replace('(', r'\(').replace(')', r'\)'))
+        # 언더스코어→공백 + 이스케이프 해제 조합
+        tag_space = tag_clean.replace('_', ' ')
+        variants.add(tag_space.replace(r'\(', '(').replace(r'\)', ')'))
+        return list(variants)
+
     def classify_tag(self, tag):
         """태그 분류"""
-        tag_clean = tag.strip().lower()
-        tag_escaped = tag_clean.replace('(', r'\(').replace(')', r'\)')
-        tag_unescaped = tag_clean.replace(r'\(', '(').replace(r'\)', ')')
-        
-        if tag_clean in self.characters or tag_escaped in self.characters or tag_unescaped in self.characters:
+        variants = self._tag_variants(tag)
+
+        if any(v in self.characters for v in variants):
             return "character"
-        if tag_clean in self.copyrights or tag_escaped in self.copyrights or tag_unescaped in self.copyrights:
+        if any(v in self.copyrights for v in variants):
             return "copyright"
-        if tag_clean in self.artists or tag_escaped in self.artists or tag_unescaped in self.artists:
+        if any(v in self.artists for v in variants):
             return "artist"
         
         if tag_clean in self.tag_to_category:

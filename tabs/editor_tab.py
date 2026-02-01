@@ -255,6 +255,7 @@ class MosaicEditor(QWidget):
             lambda: self.image_label.clear_adjustment_preview()
         )
         self.color_panel.filter_apply_requested.connect(self._apply_filter_preset)
+        self.color_panel.auto_correct_requested.connect(self._apply_auto_correct)
 
         # 워터마크 패널
         self.watermark_panel.text_watermark_requested.connect(self._apply_text_watermark)
@@ -274,6 +275,12 @@ class MosaicEditor(QWidget):
         self.move_panel.btn_confirm.clicked.connect(self._on_confirm_move)
         self.move_panel.btn_cancel.clicked.connect(self._on_cancel_move)
         self.move_panel.btn_send_inpaint.clicked.connect(self._on_send_to_inpaint)
+        self.move_panel.slider_rotation.valueChanged.connect(
+            lambda v: self._on_move_transform_changed()
+        )
+        self.move_panel.slider_scale.valueChanged.connect(
+            lambda v: self._on_move_transform_changed()
+        )
 
         # 서브탭 전환은 _switch_subtab에서 처리
 
@@ -580,6 +587,15 @@ class MosaicEditor(QWidget):
         self.image_label.update_image_keep_view(filtered)
         self.image_label.setFocus()
 
+    def _apply_auto_correct(self):
+        """자동 색감 보정"""
+        if self.image_label.display_base_image is None:
+            return
+        self.image_label.push_undo_stack()
+        corrected = ColorAdjustPanel.auto_correct(self.image_label.display_base_image)
+        self.image_label.update_image_keep_view(corrected)
+        self.image_label.setFocus()
+
     # ── 워터마크 ──
 
     def _switch_subtab(self, index: int):
@@ -650,32 +666,23 @@ class MosaicEditor(QWidget):
         """텍스트 워터마크를 BGRA 오버레이로 렌더링 (미리보기용)"""
         import cv2
         import numpy as np
+        from tabs.editor.watermark_panel import WatermarkPanel
 
         text = config['text']
         font_size = config['font_size']
+        font_family = config.get('font_family', '')
         color = config['color']
         opacity = config['opacity']
         rotation = config['rotation']
 
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        scale = font_size / 30.0
-        thickness = max(1, int(font_size / 15))
-        (tw, th), baseline = cv2.getTextSize(text, font, scale, thickness)
+        # PIL로 텍스트 렌더링
+        text_bgra = WatermarkPanel._render_text_pil(text, font_family, font_size, color)
 
-        pad = 20
-        canvas_h = th + baseline + pad * 2
-        canvas_w = tw + pad * 2
-        # BGRA 캔버스
-        canvas = np.zeros((canvas_h, canvas_w, 4), dtype=np.uint8)
-        # BGR 텍스트 그리기
-        cv2.putText(canvas, text, (pad, th + pad), font, scale,
-                    (color[0], color[1], color[2], 255), thickness, cv2.LINE_AA)
-        # 알파 채널 설정
-        gray = cv2.cvtColor(canvas[:, :, :3], cv2.COLOR_BGR2GRAY)
-        canvas[:, :, 3] = (gray > 0).astype(np.uint8) * int(255 * opacity)
+        # 알파에 opacity 적용
+        text_bgra[:, :, 3] = (text_bgra[:, :, 3].astype(np.float32) * opacity).astype(np.uint8)
 
         if rotation != 0:
-            rh, rw = canvas.shape[:2]
+            rh, rw = text_bgra.shape[:2]
             center = (rw // 2, rh // 2)
             M = cv2.getRotationMatrix2D(center, rotation, 1.0)
             cos_v = np.abs(M[0, 0])
@@ -684,9 +691,9 @@ class MosaicEditor(QWidget):
             nh = int(rh * cos_v + rw * sin_v)
             M[0, 2] += (nw / 2) - center[0]
             M[1, 2] += (nh / 2) - center[1]
-            canvas = cv2.warpAffine(canvas, M, (nw, nh), flags=cv2.INTER_LINEAR,
-                                    borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
-        return canvas
+            text_bgra = cv2.warpAffine(text_bgra, M, (nw, nh), flags=cv2.INTER_LINEAR,
+                                       borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+        return text_bgra
 
     def _render_image_overlay(self, config: dict):
         """이미지 워터마크를 BGRA 오버레이로 렌더링 (미리보기용)"""
@@ -875,17 +882,27 @@ class MosaicEditor(QWidget):
             self.move_panel.set_moving_state(True)
             self.move_panel.update_status("드래그로 영역을 이동하세요")
         else:
-            self.move_panel.update_status("모자이크 탭에서 영역을 먼저 선택하세요")
+            self.move_panel.update_status("마스킹을 먼저 해주세요")
+
+    def _on_move_transform_changed(self):
+        """이동 중 회전/크기 슬라이더 변경"""
+        self.image_label._move_rotation = self.move_panel.slider_rotation.value()
+        self.image_label._move_scale = self.move_panel.slider_scale.value() / 100.0
+        self.image_label.update()
 
     def _on_confirm_move(self):
         """이동 확정"""
         self.image_label.confirm_move()
         self.move_panel.set_confirmed_state()
+        self.move_panel.slider_rotation.setValue(0)
+        self.move_panel.slider_scale.setValue(100)
         self.move_panel.update_status("이동 완료! Inpaint 전송 가능")
 
     def _on_cancel_move(self):
         """이동 취소"""
         self.image_label.cancel_move()
+        self.move_panel.slider_rotation.setValue(0)
+        self.move_panel.slider_scale.setValue(100)
         self.move_panel.set_moving_state(False)
         self.move_panel.btn_start_move.setEnabled(True)
         self.move_panel.btn_confirm.setEnabled(False)

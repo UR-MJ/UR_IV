@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QFrame, QComboBox
 )
 from PyQt6.QtCore import Qt
+from widgets.sliders import NumericSlider
 
 
 _BTN_STYLE = """
@@ -62,7 +63,7 @@ class MovePanel(QWidget):
         layout.addWidget(header)
 
         # 상태 라벨
-        self.status_label = QLabel("1. 모자이크 탭에서 영역을 선택하세요")
+        self.status_label = QLabel("마스킹을 먼저 해주세요")
         self.status_label.setWordWrap(True)
         self.status_label.setStyleSheet(
             "color: #AAA; font-size: 12px; padding: 6px; "
@@ -90,6 +91,13 @@ class MovePanel(QWidget):
         )
         self.fill_combo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         layout.addWidget(self.fill_combo)
+
+        # 회전 / 크기 슬라이더
+        self.slider_rotation = NumericSlider("회전 (°)", -180, 180, 0)
+        layout.addWidget(self.slider_rotation)
+
+        self.slider_scale = NumericSlider("크기 (%)", 10, 500, 100)
+        layout.addWidget(self.slider_scale)
 
         # 이동 시작 버튼
         self.btn_start_move = QPushButton("✂️  이동 시작")
