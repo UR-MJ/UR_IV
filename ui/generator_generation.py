@@ -106,6 +106,30 @@ class GenerationMixin:
             hr_cfg = float(self.hires_cfg_input.text())
             if hr_cfg > 0:
                 hr_payload["hr_cfg"] = hr_cfg
+
+            # Hires Checkpoint
+            hr_ckpt = self.hires_checkpoint_combo.currentText()
+            if hr_ckpt and hr_ckpt != "Use same checkpoint":
+                hr_payload["hr_checkpoint_name"] = hr_ckpt
+
+            # Hires Sampler
+            hr_sampler = self.hires_sampler_combo.currentText()
+            if hr_sampler and hr_sampler != "Use same sampler":
+                hr_payload["hr_sampler_name"] = hr_sampler
+
+            # Hires Scheduler
+            hr_scheduler = self.hires_scheduler_combo.currentText()
+            if hr_scheduler and hr_scheduler != "Use same scheduler":
+                hr_payload["hr_scheduler"] = hr_scheduler
+
+            # Hires Prompt / Negative Prompt
+            hr_prompt = self.hires_prompt_text.toPlainText().strip()
+            if hr_prompt:
+                hr_payload["hr_prompt"] = hr_prompt
+            hr_neg = self.hires_neg_prompt_text.toPlainText().strip()
+            if hr_neg:
+                hr_payload["hr_negative_prompt"] = hr_neg
+
             payload.update(hr_payload)
 
         # NegPiP

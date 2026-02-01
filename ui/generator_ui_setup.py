@@ -587,10 +587,10 @@ class UISetupMixin:
         self.hires_options_group.setCheckable(True)
         self.hires_options_group.setChecked(False)
         hires_l = QVBoxLayout(self.hires_options_group)
-        
+
         self.upscaler_combo = NoScrollComboBox()
         hires_l.addWidget(self.upscaler_combo)
-        
+
         self.hires_steps_input, _ = self._create_param_slider(
             hires_l, "Steps", 0, 50, 0, 1
         )
@@ -603,6 +603,47 @@ class UISetupMixin:
         self.hires_cfg_input, _ = self._create_param_slider(
             hires_l, "CFG", 0, 30, 0, 0.5
         )
+
+        # Hires Checkpoint
+        hr_ckpt_label = QLabel("Checkpoint")
+        hr_ckpt_label.setStyleSheet("color: #999; font-size: 11px;")
+        hires_l.addWidget(hr_ckpt_label)
+        self.hires_checkpoint_combo = NoScrollComboBox()
+        hires_l.addWidget(self.hires_checkpoint_combo)
+
+        # Hires Sampler / Scheduler
+        self.hires_sampler_combo = NoScrollComboBox()
+        self.hires_scheduler_combo = NoScrollComboBox()
+        hires_l.addWidget(
+            self._make_hbox([self.hires_sampler_combo, self.hires_scheduler_combo])
+        )
+
+        # Hires Prompt
+        hr_prompt_label = QLabel("Hires Prompt")
+        hr_prompt_label.setStyleSheet("color: #999; font-size: 11px;")
+        hires_l.addWidget(hr_prompt_label)
+        self.hires_prompt_text = QTextEdit()
+        self.hires_prompt_text.setFixedHeight(50)
+        self.hires_prompt_text.setPlaceholderText("비워두면 메인 프롬프트 사용")
+        self.hires_prompt_text.setStyleSheet(
+            "background-color: #2C2C2C; color: #DDD; border: 1px solid #444; "
+            "border-radius: 4px; padding: 4px; font-size: 12px;"
+        )
+        hires_l.addWidget(self.hires_prompt_text)
+
+        # Hires Negative Prompt
+        hr_neg_label = QLabel("Hires Negative")
+        hr_neg_label.setStyleSheet("color: #999; font-size: 11px;")
+        hires_l.addWidget(hr_neg_label)
+        self.hires_neg_prompt_text = QTextEdit()
+        self.hires_neg_prompt_text.setFixedHeight(50)
+        self.hires_neg_prompt_text.setPlaceholderText("비워두면 메인 네거티브 사용")
+        self.hires_neg_prompt_text.setStyleSheet(
+            "background-color: #2C2C2C; color: #DDD; border: 1px solid #444; "
+            "border-radius: 4px; padding: 4px; font-size: 12px;"
+        )
+        hires_l.addWidget(self.hires_neg_prompt_text)
+
         layout.addWidget(self.hires_options_group)
 
         # NegPiP 확장

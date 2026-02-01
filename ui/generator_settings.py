@@ -55,6 +55,11 @@ class SettingsMixin:
             "hires_denoising": self.hires_denoising_input.text(),
             "hires_scale": self.hires_scale_input.text(),
             "hires_cfg": self.hires_cfg_input.text(),
+            "hires_checkpoint": self.hires_checkpoint_combo.currentText(),
+            "hires_sampler": self.hires_sampler_combo.currentText(),
+            "hires_scheduler": self.hires_scheduler_combo.currentText(),
+            "hires_prompt": self.hires_prompt_text.toPlainText(),
+            "hires_neg_prompt": self.hires_neg_prompt_text.toPlainText(),
 
             "negpip_enabled": self.negpip_group.isChecked() if hasattr(self, 'negpip_group') else False,
 
@@ -181,7 +186,25 @@ class SettingsMixin:
             self.hires_denoising_input.setText(settings.get("hires_denoising", "0.4"))
             self.hires_scale_input.setText(settings.get("hires_scale", "2.0"))
             self.hires_cfg_input.setText(settings.get("hires_cfg", "0"))
-            
+
+            hr_ckpt = settings.get("hires_checkpoint", "")
+            idx = self.hires_checkpoint_combo.findText(hr_ckpt)
+            if idx >= 0:
+                self.hires_checkpoint_combo.setCurrentIndex(idx)
+
+            hr_sampler = settings.get("hires_sampler", "")
+            idx = self.hires_sampler_combo.findText(hr_sampler)
+            if idx >= 0:
+                self.hires_sampler_combo.setCurrentIndex(idx)
+
+            hr_scheduler = settings.get("hires_scheduler", "")
+            idx = self.hires_scheduler_combo.findText(hr_scheduler)
+            if idx >= 0:
+                self.hires_scheduler_combo.setCurrentIndex(idx)
+
+            self.hires_prompt_text.setPlainText(settings.get("hires_prompt", ""))
+            self.hires_neg_prompt_text.setPlainText(settings.get("hires_neg_prompt", ""))
+
             # NegPiP
             if hasattr(self, 'negpip_group'):
                 self.negpip_group.setChecked(settings.get("negpip_enabled", False))

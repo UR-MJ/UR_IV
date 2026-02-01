@@ -44,7 +44,15 @@ class WebUIMixin:
         upscalers = info.get('upscalers', [])
         self.upscaler_combo.clear()
         self.upscaler_combo.addItems(upscalers)
-        
+
+        # Hires Checkpoint / Sampler / Scheduler
+        self.hires_checkpoint_combo.clear()
+        self.hires_checkpoint_combo.addItems(["Use same checkpoint"] + models)
+        self.hires_sampler_combo.clear()
+        self.hires_sampler_combo.addItems(["Use same sampler"] + samplers)
+        self.hires_scheduler_combo.clear()
+        self.hires_scheduler_combo.addItems(["Use same scheduler"] + schedulers)
+
         # VAE
         vae_list = info.get('vae', ["Use same VAE"])
         for slot_widgets in [self.s1_widgets, self.s2_widgets]:
