@@ -454,25 +454,11 @@ class UISetupMixin:
         layout.addWidget(self.suffix_toggle_button)
         layout.addWidget(self.suffix_prompt_text)
         
-        # 네거티브 프롬프트 컨테이너 (먼저 생성!)
-        self.neg_prompts_container = QWidget()
-        neg_layout = QVBoxLayout(self.neg_prompts_container)
-        neg_layout.setContentsMargins(0, 0, 0, 0)
-        
-        neg_layout.addWidget(QLabel("네거티브 프롬프트 (WebUI 전송용)"))
+        # 네거티브 프롬프트
         self.neg_prompt_text = QTextEdit()
         self.neg_prompt_text.setMinimumHeight(60)
-        neg_layout.addWidget(self.neg_prompt_text)
-        
-        neg_layout.addWidget(QLabel("제외할 프롬프트 (적용 시 필터링용)"))
-        self.exclude_prompt_local_input = QTextEdit()
-        self.exclude_prompt_local_input.setMinimumHeight(60)
-        self.exclude_prompt_local_input.setPlaceholderText(
-            "예: arms up, __hair, hair__, __username__, ~blue hair"
-        )
-        neg_layout.addWidget(self.exclude_prompt_local_input)
-        
-        self.neg_toggle_button = QPushButton("▼ 부정 (Negative) & 제외 (Local)")
+
+        self.neg_toggle_button = QPushButton("▼ 부정 프롬프트 (Negative)")
         self.neg_toggle_button.setCheckable(True)
         self.neg_toggle_button.setChecked(True)
         self.neg_toggle_button.setStyleSheet("""
@@ -494,9 +480,42 @@ class UISetupMixin:
             }
         """)
         self.neg_toggle_button.toggled.connect(self._on_neg_toggle)
-        
+
         layout.addWidget(self.neg_toggle_button)
-        layout.addWidget(self.neg_prompts_container)
+        layout.addWidget(self.neg_prompt_text)
+
+        # 제외 프롬프트
+        self.exclude_prompt_local_input = QTextEdit()
+        self.exclude_prompt_local_input.setMinimumHeight(60)
+        self.exclude_prompt_local_input.setPlaceholderText(
+            "예: arms up, __hair, hair__, __username__, ~blue hair"
+        )
+
+        self.exclude_toggle_button = QPushButton("▼ 제외 프롬프트 (Local)")
+        self.exclude_toggle_button.setCheckable(True)
+        self.exclude_toggle_button.setChecked(True)
+        self.exclude_toggle_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e67e22;
+                border: 1px solid #e67e22;
+                border-radius: 6px;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                text-align: left;
+            }
+            QPushButton:!checked {
+                background-color: #2A2A2A;
+                color: #e67e22;
+            }
+            QPushButton:hover {
+                background-color: #3A3A3A;
+            }
+        """)
+        self.exclude_toggle_button.toggled.connect(self._on_exclude_toggle)
+
+        layout.addWidget(self.exclude_toggle_button)
+        layout.addWidget(self.exclude_prompt_local_input)
 
 
         # 모델 선택
@@ -980,9 +999,16 @@ class UISetupMixin:
     
     def _on_neg_toggle(self, checked):
         """네거티브 프롬프트 토글"""
-        self.neg_prompts_container.setVisible(checked)
+        self.neg_prompt_text.setVisible(checked)
         self.neg_toggle_button.setText(
-            "▼ 부정 (Negative) & 제외 (Local)" if checked else "▶ 부정 (Negative) & 제외 (Local)"
+            "▼ 부정 프롬프트 (Negative)" if checked else "▶ 부정 프롬프트 (Negative)"
+        )
+
+    def _on_exclude_toggle(self, checked):
+        """제외 프롬프트 토글"""
+        self.exclude_prompt_local_input.setVisible(checked)
+        self.exclude_toggle_button.setText(
+            "▼ 제외 프롬프트 (Local)" if checked else "▶ 제외 프롬프트 (Local)"
         )
         
     def _create_favorites_tab(self):

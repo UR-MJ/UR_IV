@@ -105,7 +105,7 @@ class GenerationMixin:
             }
             hr_cfg = float(self.hires_cfg_input.text())
             if hr_cfg > 0:
-                hr_payload["hr_cfg_scale"] = hr_cfg
+                hr_payload["hr_cfg"] = hr_cfg
             payload.update(hr_payload)
 
         # NegPiP

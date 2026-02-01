@@ -76,7 +76,7 @@ class ActionsMixin:
             lambda checked: self.suffix_prompt_text.setVisible(checked)
         )
         self.neg_toggle_button.toggled.connect(
-            lambda checked: self.neg_prompts_container.setVisible(checked)
+            lambda checked: self.neg_prompt_text.setVisible(checked)
         )
         
         # ADetailer 토글
@@ -169,7 +169,10 @@ class ActionsMixin:
 
         if hasattr(self, 'xyz_plot_tab'):
             self.xyz_plot_tab.add_to_queue_requested.connect(self._on_xyz_add_to_queue)
-            self.xyz_plot_tab.start_generation_requested.connect(self._on_xyz_start_generation)            
+            self.xyz_plot_tab.start_generation_requested.connect(self._on_xyz_start_generation)
+
+        # T2I 뷰어 우클릭 메뉴
+        self.setup_viewer_context_menu()
     
     def on_generate_clicked(self):
         """생성 버튼 클릭 (일반 생성 또는 자동화 시작/중지)"""

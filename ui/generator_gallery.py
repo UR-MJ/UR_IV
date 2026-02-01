@@ -8,6 +8,8 @@ from PyQt6.QtWidgets import QListWidgetItem, QMessageBox, QMenu
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QGuiApplication, QAction
 
+from PyQt6.QtWidgets import QApplication
+
 from config import OUTPUT_DIR, FAVORITES_FILE
 from core.image_utils import exif_for_display, move_to_trash
 from widgets.thumbnail import ThumbnailItem
@@ -20,6 +22,64 @@ class GalleryMixin:
     
     # ==================== 갤러리 기본 ====================
     
+    def setup_viewer_context_menu(self):
+        """뷰어 라벨에 우클릭 메뉴 설정"""
+        self.viewer_label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.viewer_label.customContextMenuRequested.connect(self._on_viewer_context_menu)
+
+    def _on_viewer_context_menu(self, pos):
+        """T2I 뷰어 우클릭 메뉴"""
+        if not hasattr(self, 'current_image_path') or not self.current_image_path:
+            return
+        if not os.path.exists(self.current_image_path):
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2C2C2C; border: 1px solid #555; color: white;
+            }
+            QMenu::item { padding: 6px 24px; }
+            QMenu::item:selected { background-color: #5865F2; }
+        """)
+
+        action_i2i = QAction("🖼️ I2I로 보내기", self)
+        action_inpaint = QAction("🎨 Inpaint로 보내기", self)
+        action_editor = QAction("✏️ Editor로 보내기", self)
+
+        action_i2i.triggered.connect(lambda: self._send_to_tab("i2i"))
+        action_inpaint.triggered.connect(lambda: self._send_to_tab("inpaint"))
+        action_editor.triggered.connect(lambda: self._send_to_tab("editor"))
+
+        menu.addAction(action_i2i)
+        menu.addAction(action_inpaint)
+        menu.addAction(action_editor)
+
+        menu.exec(self.viewer_label.mapToGlobal(pos))
+
+    def _send_to_tab(self, target: str):
+        """현재 이미지를 대상 탭으로 전송"""
+        path = self.current_image_path
+        if not path or not os.path.exists(path):
+            return
+
+        if target == "i2i":
+            self.i2i_tab._load_image(path)
+            idx = self.center_tabs.indexOf(self.i2i_tab)
+        elif target == "inpaint":
+            pixmap = QPixmap(path)
+            if not pixmap.isNull():
+                self.inpaint_tab.set_image(pixmap)
+            idx = self.center_tabs.indexOf(self.inpaint_tab)
+        elif target == "editor":
+            self.mosaic_editor.load_image(path)
+            idx = self.center_tabs.indexOf(self.mosaic_editor)
+        else:
+            return
+
+        if idx >= 0:
+            self.center_tabs.setCurrentIndex(idx)
+
     def load_gallery(self):
         """갤러리 로드"""
         if not os.path.exists(OUTPUT_DIR):

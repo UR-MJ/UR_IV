@@ -33,18 +33,16 @@ class PromptHandlingMixin:
         if self.artist_input.text().strip():
             parts.append(self.artist_input.text().strip())
 
-        # 5. 선행 (Prefix) - 토글 켜져 있을 때만!
-        if self.prefix_toggle_button.isChecked() and \
-           self.prefix_prompt_text.toPlainText().strip():
+        # 5. 선행 (Prefix) - 접기와 무관하게 항상 포함
+        if self.prefix_prompt_text.toPlainText().strip():
             parts.append(self.prefix_prompt_text.toPlainText().strip())
 
         # 6. 메인
         if self.main_prompt_text.toPlainText().strip():
             parts.append(self.main_prompt_text.toPlainText().strip())
 
-        # 7. 후행 (Suffix) - 토글 켜져 있을 때만!
-        if self.suffix_toggle_button.isChecked() and \
-           self.suffix_prompt_text.toPlainText().strip():
+        # 7. 후행 (Suffix) - 접기와 무관하게 항상 포함
+        if self.suffix_prompt_text.toPlainText().strip():
             parts.append(self.suffix_prompt_text.toPlainText().strip())
 
         # 최종 반영
@@ -236,7 +234,33 @@ class PromptHandlingMixin:
         
         _logger.debug(f"최종 general: {len(final_general)}개")
         
-        # 6. 이스케이프 (가중치 괄호 보존)
+        # 6. 선행/후행 프롬프트와 중복 제거
+        def _norm(tag: str) -> str:
+            return tag.replace('_', ' ').strip().lower()
+
+        fixed_tags = set()
+        for src in (self.prefix_prompt_text.toPlainText(),
+                    self.suffix_prompt_text.toPlainText()):
+            for t in src.split(','):
+                nt = _norm(t)
+                if nt:
+                    fixed_tags.add(nt)
+
+        if fixed_tags:
+            final_general = [t for t in final_general if _norm(t) not in fixed_tags]
+            _logger.debug(f"고정프롬프트 중복 제거 후 general: {len(final_general)}개")
+
+        # 6.5. general 내부 중복 제거
+        seen_tags = set()
+        deduped_general = []
+        for t in final_general:
+            nt = _norm(t)
+            if nt not in seen_tags:
+                seen_tags.add(nt)
+                deduped_general.append(t)
+        final_general = deduped_general
+
+        # 7. 이스케이프 (가중치 괄호 보존)
         from utils.prompt_cleaner import escape_parentheses
         def escape(tags):
             result = []
@@ -246,8 +270,8 @@ class PromptHandlingMixin:
                 else:
                     result.append(escape_parentheses(t))
             return result
-        
-        # 7. UI 업데이트
+
+        # 8. UI 업데이트
         self.is_programmatic_change = True
         
         self.char_count_input.setText(", ".join(escape(final_count)))
