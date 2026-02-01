@@ -12,17 +12,19 @@ class ThumbnailItem(QWidget):
     clicked = pyqtSignal(str)  # filepath 전달
     action_triggered = pyqtSignal(str, str)  # action, filepath 전달
 
-    def __init__(self, filepath, size=150, parent=None):
+    def __init__(self, filepath, size=150, hover_enabled=True, parent=None):
         super().__init__(parent)
         self.filepath = filepath
         self.thumb_size = size
         self.is_selected = False
         self._is_hovered = False
+        self._hover_enabled = hover_enabled
         self.pixmap = None
 
         self.setFixedSize(size, size)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        if hover_enabled:
+            self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
 
         # 썸네일 로드
         thumb_path = get_thumb_path(filepath)
@@ -32,27 +34,29 @@ class ThumbnailItem(QWidget):
         elif os.path.exists(filepath):
             self.pixmap = QPixmap(filepath)
 
-        # 크게 보기 버튼 (오버레이 위)
-        self._view_btn = QPushButton("크게 보기", self)
-        btn_w, btn_h = 80, 28
-        self._view_btn.setFixedSize(btn_w, btn_h)
-        self._view_btn.move((size - btn_w) // 2, (size - btn_h) // 2)
-        self._view_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(88, 101, 242, 200);
-                color: white; border: none; border-radius: 6px;
-                font-size: 12px; font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(88, 101, 242, 240);
-            }
-        """)
-        self._view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._view_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._view_btn.clicked.connect(
-            lambda: self.action_triggered.emit("view", self.filepath)
-        )
-        self._view_btn.hide()
+        # 크게 보기 버튼 (hover 활성화된 경우만)
+        self._view_btn = None
+        if hover_enabled:
+            self._view_btn = QPushButton("크게 보기", self)
+            btn_w, btn_h = 80, 28
+            self._view_btn.setFixedSize(btn_w, btn_h)
+            self._view_btn.move((size - btn_w) // 2, (size - btn_h) // 2)
+            self._view_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(88, 101, 242, 200);
+                    color: white; border: none; border-radius: 6px;
+                    font-size: 12px; font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: rgba(88, 101, 242, 240);
+                }
+            """)
+            self._view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._view_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self._view_btn.clicked.connect(
+                lambda: self.action_triggered.emit("view", self.filepath)
+            )
+            self._view_btn.hide()
 
         self.set_selected(False)
 
@@ -118,15 +122,23 @@ class ThumbnailItem(QWidget):
         self.update()
 
     def enterEvent(self, event):
+        if not self._hover_enabled:
+            super().enterEvent(event)
+            return
         self._is_hovered = True
-        self._view_btn.show()
-        self._view_btn.raise_()
+        if self._view_btn:
+            self._view_btn.show()
+            self._view_btn.raise_()
         self.update()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
+        if not self._hover_enabled:
+            super().leaveEvent(event)
+            return
         self._is_hovered = False
-        self._view_btn.hide()
+        if self._view_btn:
+            self._view_btn.hide()
         self.update()
         super().leaveEvent(event)
 

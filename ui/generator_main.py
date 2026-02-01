@@ -88,9 +88,7 @@ class GeneratorMainUI(
     def eventFilter(self, obj, event):
         """QTextEdit의 포커스 잃음 이벤트를 감지하기 위한 이벤트 필터"""
         text_edits_to_clean = [
-            self.prefix_prompt_text,
             self.main_prompt_text,
-            self.suffix_prompt_text,
             self.neg_prompt_text,
             self.s1_widgets['prompt'],
             self.s2_widgets['prompt'],

@@ -41,7 +41,7 @@ class GalleryMixin:
     
     def add_image_to_gallery(self, filepath):
         """갤러리에 이미지 추가"""
-        thumb = ThumbnailItem(filepath)
+        thumb = ThumbnailItem(filepath, hover_enabled=False)
         thumb.clicked.connect(self.on_thumbnail_clicked)
         thumb.action_triggered.connect(self.on_thumbnail_action)
         

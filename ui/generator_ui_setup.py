@@ -27,6 +27,7 @@ from tabs.xyz_plot_tab import XYZPlotTab
 from tabs.i2i_tab import Img2ImgTab
 from tabs.inpaint_tab import InpaintTab
 from config import OUTPUT_DIR
+from widgets.tag_input import TagInputWidget
 
 class UISetupMixin:
     """UI 구성을 담당하는 Mixin 클래스"""
@@ -268,8 +269,10 @@ class UISetupMixin:
         # 프롬프트 표시창
         self.total_prompt_display = QTextEdit()
         self.total_prompt_display.setReadOnly(False)
-        self.total_prompt_display.setMinimumHeight(120)  # ← 80 → 120으로 증가
-        self.total_prompt_display.setMaximumHeight(200)  # ← 최대 높이 추가
+        self.total_prompt_display.setMinimumHeight(60)
+        self.total_prompt_display.document().contentsChanged.connect(
+            self._adjust_total_prompt_height
+        )
         self._create_group(layout, "최종 프롬프트", self.total_prompt_display)
         
         # 생성 버튼 그룹
@@ -417,8 +420,8 @@ class UISetupMixin:
         layout.addWidget(self.prefix_toggle_button)
         layout.addWidget(self.prefix_prompt_text)
         
-        # 메인 프롬프트
-        self.main_prompt_text = self._create_group(layout, "메인", QTextEdit())
+        # 메인 프롬프트 (자동완성 지원)
+        self.main_prompt_text = self._create_group(layout, "메인", TagInputWidget())
         self.main_prompt_text.setMinimumHeight(80)
 
         # 후행 프롬프트 (QTextEdit 먼저 생성!)
@@ -868,6 +871,13 @@ class UISetupMixin:
             self.btn_refresh_gallery.setEnabled(True)
         ))
         
+    def _adjust_total_prompt_height(self):
+        """최종 프롬프트 칸 내용에 맞춰 높이 자동 조절"""
+        doc = self.total_prompt_display.document()
+        doc_height = int(doc.size().height()) + 10  # 여백
+        new_h = max(60, min(doc_height, 600))
+        self.total_prompt_display.setFixedHeight(new_h)
+
     def _create_group(self, parent_layout, title, widget_or_layout):
         """그룹 생성 헬퍼"""
         parent_layout.addWidget(QLabel(title))

@@ -170,8 +170,8 @@ class TagInputWidget(QTextEdit):
         # 현재 단어 대체
         cursor.setPosition(start_pos)
         cursor.setPosition(pos, cursor.MoveMode.KeepAnchor)
-        cursor.insertText(tag)
-        
+        cursor.insertText(tag + ", ")
+
         self.setTextCursor(cursor)
         self.popup.hide()
         
