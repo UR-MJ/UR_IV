@@ -1,0 +1,12 @@
+# 헤어스타일 와일드카드 예시
+# 한 줄 = 한 그룹, 쉼표로 옵션 구분
+# 사용법: ~/hairstyle/~ (전체) 또는 ~/hairstyle:1/~ (1그룹만)
+
+# 머리색
+red hair, blue hair, green hair, blonde hair, black hair, white hair, pink hair, purple hair
+
+# 머리 스타일
+ponytail, twintails, braid, side braid, french braid, twin braids, low ponytail, high ponytail
+
+# 머리 길이
+short hair, medium hair, long hair, very long hair

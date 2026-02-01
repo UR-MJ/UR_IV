@@ -1,0 +1,480 @@
+# ui/generator_settings.py
+"""
+설정 저장 및 불러오기 관련 로직
+"""
+import os
+import json
+from PyQt6.QtWidgets import QMessageBox, QFileDialog
+from config import PROMPT_SETTINGS_FILE
+from utils.shortcut_manager import get_shortcut_manager
+
+class SettingsMixin:
+    """설정 관련 로직을 담당하는 Mixin"""
+    
+    def save_settings(self):
+        """설정 저장"""
+        try:
+            settings = self._build_settings_dict()
+            with open(PROMPT_SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, ensure_ascii=False, indent=4)
+            self.show_status("✅ 설정이 저장되었습니다.", 3000)
+        except Exception as e:
+            from utils.app_logger import get_logger
+            get_logger('settings').error(f"설정 저장 실패: {e}")
+            QMessageBox.critical(self, "저장 실패", f"설정 저장 중 오류: {e}")
+
+    def _build_settings_dict(self) -> dict:
+        """설정 딕셔너리 구성"""
+        settings = {
+            "char_count": self.char_count_input.text(),
+            "character": self.character_input.text(),
+            "copyright": self.copyright_input.text(),
+            "artist": self.artist_input.text(),
+            "artist_locked": self.btn_lock_artist.isChecked(),
+            "prefix_prompt": self.prefix_prompt_text.toPlainText(),
+            "main_prompt": self.main_prompt_text.toPlainText(),
+            "suffix_prompt": self.suffix_prompt_text.toPlainText(),
+            "negative_prompt": self.neg_prompt_text.toPlainText(),
+            "exclude_prompt_local": self.exclude_prompt_local_input.toPlainText(),
+
+            "model": self.model_combo.currentText(),
+            "sampler": self.sampler_combo.currentText(),
+            "scheduler": self.scheduler_combo.currentText(),
+            "steps": self.steps_input.text(),
+            "cfg": self.cfg_input.text(),
+            "seed": self.seed_input.text(),
+            "width": self.width_input.text(),
+            "height": self.height_input.text(),
+
+            "random_res_enabled": self.random_res_check.isChecked(),
+            "random_resolutions": self.random_resolutions,
+
+            "hires_enabled": self.hires_options_group.isChecked(),
+            "hires_upscaler": self.upscaler_combo.currentText(),
+            "hires_steps": self.hires_steps_input.text(),
+            "hires_denoising": self.hires_denoising_input.text(),
+
+            "negpip_enabled": self.negpip_group.isChecked() if hasattr(self, 'negpip_group') else False,
+
+            "adetailer_enabled": self.adetailer_group.isChecked(),
+            "adetailer_slot1_enabled": self.ad_slot1_group.isChecked(),
+            "adetailer_slot2_enabled": self.ad_slot2_group.isChecked(),
+            
+            "adetailer_slot1": self._get_slot_settings(self.s1_widgets),
+            "adetailer_slot2": self._get_slot_settings(self.s2_widgets),
+            
+            "prefix_toggle": self.prefix_toggle_button.isChecked(),
+            "suffix_toggle": self.suffix_toggle_button.isChecked(),
+            "neg_toggle": self.neg_toggle_button.isChecked(),
+            
+            "remove_artist": self.chk_remove_artist.isChecked(),
+            "remove_copyright": self.chk_remove_copyright.isChecked(),
+            "remove_meta": self.chk_remove_meta.isChecked(),
+            
+            "cond_prompt_enabled": self.cond_prompt_check.isChecked(),
+            "cond_prompt_rules": self.cond_prompt_input.toPlainText(),
+            "cond_prevent_dupe": self.cond_prevent_dupe_check.isChecked(),
+            "cond_neg_enabled": self.cond_neg_check.isChecked(),
+            "cond_neg_rules": self.cond_neg_input.toPlainText(),
+            
+            "base_prefix_prompt": self.base_prefix_prompt,
+            "base_suffix_prompt": self.base_suffix_prompt,
+            "base_neg_prompt": self.base_neg_prompt,
+            
+            "remove_artist": self.chk_remove_artist.isChecked(),
+            "remove_copyright": self.chk_remove_copyright.isChecked(),
+            "remove_meta": self.chk_remove_meta.isChecked(),
+            "remove_censorship": self.chk_remove_censorship.isChecked(),  # ← 추가!
+            "remove_text": self.chk_remove_text.isChecked(),  # ← 추가!
+            
+            # 웹 설정 추가!
+            "web_home_url": self.web_tab.home_url if hasattr(self.web_tab, 'home_url') else "",
+
+            "theme": self.settings_tab.theme_combo.currentText() if hasattr(self.settings_tab, 'theme_combo') else "다크",
+            "font_family": self.settings_tab.font_combo.currentText() if hasattr(self.settings_tab, 'font_combo') else "Pretendard",
+            "font_size": self.settings_tab.font_size_spin.value() if hasattr(self.settings_tab, 'font_size_spin') else 10.5,
+
+            "cleaning_options": self.settings_tab.get_cleaning_options(),
+            "editor_defaults": self.settings_tab.get_editor_defaults(),
+            "bg_removal_model": self.mosaic_editor.mosaic_panel.bg_model_combo.currentData() if hasattr(self, 'mosaic_editor') else "u2net",
+            "shortcuts": get_shortcut_manager().to_dict(),
+            "wildcard_enabled": self.settings_tab.chk_wildcard_enabled.isChecked() if hasattr(self.settings_tab, 'chk_wildcard_enabled') else True,
+
+            "parquet_dir": self.settings_tab.parquet_dir_input.text() if hasattr(self.settings_tab, 'parquet_dir_input') else "",
+            "event_parquet_dir": self.settings_tab.event_parquet_dir_input.text() if hasattr(self.settings_tab, 'event_parquet_dir_input') else "",
+
+            "gallery_folder": self.gallery_tab._current_folder if hasattr(self, 'gallery_tab') else "",
+
+            # I2I 탭 설정
+            "i2i_settings": self._get_i2i_settings() if hasattr(self, 'i2i_tab') else {},
+
+            # Inpaint 탭 설정
+            "inpaint_settings": self._get_inpaint_settings() if hasattr(self, 'inpaint_tab') else {},
+
+            # Search 탭 설정
+            "search_criteria": self.search_tab._get_criteria_dict() if hasattr(self, 'search_tab') else {},
+        }
+        return settings
+    
+    def load_settings(self):
+        """설정 불러오기"""
+        if not os.path.exists(PROMPT_SETTINGS_FILE):
+            return
+        
+        try:
+            with open(PROMPT_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            
+            self.is_programmatic_change = True
+            
+            # 기본 입력
+            self.char_count_input.setText(settings.get("char_count", ""))
+            self.character_input.setText(settings.get("character", ""))
+            self.copyright_input.setText(settings.get("copyright", ""))
+            self.artist_input.setText(settings.get("artist", ""))
+            self.btn_lock_artist.setChecked(settings.get("artist_locked", False))
+            
+            # 프롬프트
+            self.prefix_prompt_text.setPlainText(settings.get("prefix_prompt", ""))
+            self.main_prompt_text.setPlainText(settings.get("main_prompt", ""))
+            self.suffix_prompt_text.setPlainText(settings.get("suffix_prompt", ""))
+            self.neg_prompt_text.setPlainText(settings.get("negative_prompt", ""))
+            self.exclude_prompt_local_input.setPlainText(settings.get("exclude_prompt_local", ""))
+            
+            # 생성 파라미터
+            model_text = settings.get("model", "")
+            idx = self.model_combo.findText(model_text)
+            if idx >= 0: 
+                self.model_combo.setCurrentIndex(idx)
+            
+            sampler_text = settings.get("sampler", "")
+            idx = self.sampler_combo.findText(sampler_text)
+            if idx >= 0: 
+                self.sampler_combo.setCurrentIndex(idx)
+            
+            scheduler_text = settings.get("scheduler", "")
+            idx = self.scheduler_combo.findText(scheduler_text)
+            if idx >= 0: 
+                self.scheduler_combo.setCurrentIndex(idx)
+            
+            self.steps_input.setText(settings.get("steps", "25"))
+            self.cfg_input.setText(settings.get("cfg", "7.0"))
+            self.seed_input.setText(settings.get("seed", "-1"))
+            self.width_input.setText(settings.get("width", "1024"))
+            self.height_input.setText(settings.get("height", "1024"))
+            
+            # 랜덤 해상도
+            self.random_res_check.setChecked(settings.get("random_res_enabled", False))
+            if "random_resolutions" in settings:
+                self.random_resolutions = settings["random_resolutions"]
+                self._update_resolution_list()
+            
+            # Hires.fix
+            self.hires_options_group.setChecked(settings.get("hires_enabled", False))
+            upscaler_text = settings.get("hires_upscaler", "")
+            idx = self.upscaler_combo.findText(upscaler_text)
+            if idx >= 0: 
+                self.upscaler_combo.setCurrentIndex(idx)
+            self.hires_steps_input.setText(settings.get("hires_steps", "0"))
+            self.hires_denoising_input.setText(settings.get("hires_denoising", "0.4"))
+            
+            # NegPiP
+            if hasattr(self, 'negpip_group'):
+                self.negpip_group.setChecked(settings.get("negpip_enabled", False))
+            
+            # ADetailer
+            self.adetailer_group.setChecked(settings.get("adetailer_enabled", False))
+            self.ad_slot1_group.setChecked(settings.get("adetailer_slot1_enabled", False))
+            self.ad_slot2_group.setChecked(settings.get("adetailer_slot2_enabled", False))
+            
+            if "adetailer_slot1" in settings:
+                self._set_slot_settings(self.s1_widgets, settings["adetailer_slot1"])
+            if "adetailer_slot2" in settings:
+                self._set_slot_settings(self.s2_widgets, settings["adetailer_slot2"])
+            
+            # 토글 상태
+            self.prefix_toggle_button.setChecked(settings.get("prefix_toggle", True))
+            self.suffix_toggle_button.setChecked(settings.get("suffix_toggle", True))
+            self.neg_toggle_button.setChecked(settings.get("neg_toggle", True))
+            
+            # 제거 옵션
+            self.chk_remove_artist.setChecked(settings.get("remove_artist", False))
+            self.chk_remove_copyright.setChecked(settings.get("remove_copyright", False))
+            self.chk_remove_meta.setChecked(settings.get("remove_meta", False))
+            self.chk_remove_artist.setChecked(settings.get("remove_artist", False))
+            self.chk_remove_copyright.setChecked(settings.get("remove_copyright", False))
+            self.chk_remove_meta.setChecked(settings.get("remove_meta", False))
+            self.chk_remove_censorship.setChecked(settings.get("remove_censorship", False))  # ← 추가!
+            self.chk_remove_text.setChecked(settings.get("remove_text", False))  # ← 추가!
+
+            # 웹 설정 불러오기
+            web_home = settings.get("web_home_url", "")
+            if web_home and hasattr(self.web_tab, 'set_home_url'):
+                self.web_tab.set_home_url(web_home)
+            
+            # 조건부 프롬프트
+            self.cond_prompt_check.setChecked(settings.get("cond_prompt_enabled", False))
+            self.cond_prompt_input.setPlainText(settings.get("cond_prompt_rules", ""))
+            self.cond_prevent_dupe_check.setChecked(settings.get("cond_prevent_dupe", True))
+            self.cond_neg_check.setChecked(settings.get("cond_neg_enabled", False))
+            self.cond_neg_input.setPlainText(settings.get("cond_neg_rules", ""))
+            
+            # 베이스 프롬프트
+            self.base_prefix_prompt = settings.get("base_prefix_prompt", "")
+            self.base_suffix_prompt = settings.get("base_suffix_prompt", "")
+            self.base_neg_prompt = settings.get("base_neg_prompt", "")
+
+            # 테마 복원
+            theme_name = settings.get("theme", "다크")
+            if hasattr(self.settings_tab, 'theme_combo'):
+                self.settings_tab.theme_combo.setCurrentText(theme_name)
+            if hasattr(self, 'set_theme'):
+                self.set_theme(theme_name)
+
+            # 글꼴 복원
+            font_family = settings.get("font_family", "")
+            font_size = settings.get("font_size", 10.5)
+            if font_family:
+                from utils.theme_manager import get_theme_manager
+                tm = get_theme_manager()
+                tm.set_font(font_family, font_size)
+                if hasattr(self.settings_tab, 'font_combo'):
+                    self.settings_tab.font_combo.setCurrentText(font_family)
+                if hasattr(self.settings_tab, 'font_size_spin'):
+                    self.settings_tab.font_size_spin.setValue(font_size)
+                if hasattr(self, 'apply_stylesheet'):
+                    self.apply_stylesheet()
+
+            # 클리닝 옵션
+            cleaning_options = settings.get("cleaning_options", {})
+            if cleaning_options:
+                self.settings_tab.chk_auto_comma.setChecked(cleaning_options.get("auto_comma", True))
+                self.settings_tab.chk_auto_space.setChecked(cleaning_options.get("auto_space", True))
+                self.settings_tab.chk_auto_escape.setChecked(cleaning_options.get("auto_escape", False))
+                self.settings_tab.chk_remove_duplicates.setChecked(cleaning_options.get("remove_duplicates", False))
+                self.settings_tab.chk_underscore_to_space.setChecked(cleaning_options.get("underscore_to_space", True))
+                self.prompt_cleaner.set_options(**cleaning_options)
+            
+            # 에디터 기본값
+            ed = settings.get("editor_defaults", {})
+            if ed:
+                self.settings_tab.spin_def_tool_size.setValue(ed.get("tool_size", 20))
+                self.settings_tab.spin_def_effect_strength.setValue(ed.get("effect_strength", 15))
+                self.settings_tab.spin_def_bar_w.setValue(ed.get("bar_w", 50))
+                self.settings_tab.spin_def_bar_h.setValue(ed.get("bar_h", 20))
+                self.settings_tab.spin_def_detect_conf.setValue(ed.get("detect_conf", 25))
+                self.settings_tab.chk_def_magnetic_lasso.setChecked(ed.get("magnetic_lasso", False))
+                self.settings_tab.spin_def_snap_radius.setValue(ed.get("snap_radius", 12))
+                self.settings_tab.spin_def_canny_low.setValue(ed.get("canny_low", 50))
+                self.settings_tab.spin_def_canny_high.setValue(ed.get("canny_high", 150))
+                self.settings_tab.spin_def_smooth_factor.setValue(ed.get("smooth_factor", 0.008))
+                self.settings_tab.spin_def_rotation_step.setValue(ed.get("rotation_step", 5))
+                self.settings_tab.spin_def_undo_limit.setValue(ed.get("undo_limit", 20))
+
+            # 에디터 탭에 기본값 적용
+            if hasattr(self, 'mosaic_editor'):
+                self.mosaic_editor.apply_defaults(self.settings_tab.get_editor_defaults())
+
+            # 배경 제거 모델 복원
+            bg_model = settings.get("bg_removal_model", "u2net")
+            if hasattr(self, 'mosaic_editor'):
+                combo = self.mosaic_editor.mosaic_panel.bg_model_combo
+                for i in range(combo.count()):
+                    if combo.itemData(i) == bg_model:
+                        combo.setCurrentIndex(i)
+                        break
+
+            # 단축키 로드
+            shortcuts_data = settings.get("shortcuts", {})
+            if shortcuts_data:
+                sm = get_shortcut_manager()
+                sm.from_dict(shortcuts_data)
+                # UI 버튼 갱신
+                if hasattr(self.settings_tab, '_key_capture_buttons'):
+                    for btn in self.settings_tab._key_capture_buttons.values():
+                        btn.refresh()
+
+            # 와일드카드 활성화 상태
+            if hasattr(self.settings_tab, 'chk_wildcard_enabled'):
+                self.settings_tab.chk_wildcard_enabled.setChecked(
+                    settings.get("wildcard_enabled", True)
+                )
+
+            # 데이터 경로 복원
+            import config as _cfg
+            parquet_dir = settings.get("parquet_dir", "")
+            if parquet_dir and hasattr(self.settings_tab, 'parquet_dir_input'):
+                self.settings_tab.parquet_dir_input.setText(parquet_dir)
+                _cfg.PARQUET_DIR = parquet_dir
+            event_parquet_dir = settings.get("event_parquet_dir", "")
+            if event_parquet_dir and hasattr(self.settings_tab, 'event_parquet_dir_input'):
+                self.settings_tab.event_parquet_dir_input.setText(event_parquet_dir)
+                _cfg.EVENT_PARQUET_DIR = event_parquet_dir
+
+            # 갤러리 폴더 복원 (경로만 기억, 탭 클릭 시 실제 로드)
+            gallery_folder = settings.get("gallery_folder", "")
+            if gallery_folder and os.path.isdir(gallery_folder) and hasattr(self, 'gallery_tab'):
+                self.gallery_tab._current_folder = gallery_folder
+                self.gallery_tab.label_folder.setText(gallery_folder)
+                self.gallery_tab.label_folder.setStyleSheet("color: #DDD; font-size: 12px;")
+
+            # I2I 탭 복원
+            i2i_s = settings.get("i2i_settings", {})
+            if i2i_s and hasattr(self, 'i2i_tab'):
+                self._apply_i2i_settings(i2i_s)
+
+            # Inpaint 탭 복원
+            inp_s = settings.get("inpaint_settings", {})
+            if inp_s and hasattr(self, 'inpaint_tab'):
+                self._apply_inpaint_settings(inp_s)
+
+            # Search 탭 복원
+            search_s = settings.get("search_criteria", {})
+            if search_s and hasattr(self, 'search_tab'):
+                self.search_tab._apply_criteria_dict(search_s)
+
+            self.is_programmatic_change = False
+
+            self.loaded_settings = settings
+            self.show_status("✅ 설정을 불러왔습니다.", 3000)
+            
+        except Exception as e:
+            from utils.app_logger import get_logger
+            get_logger('settings').error(f"설정 불러오기 실패: {e}")
+    
+    def _get_slot_settings(self, widgets):
+        """ADetailer 슬롯 설정 가져오기"""
+        return {
+            "model": widgets['model'].text(),
+            "prompt": widgets['prompt'].toPlainText(),
+            "mask_blur": widgets['mask_blur'].text(),
+            "denoise": widgets['denoise'].text(),
+            "confidence": widgets['confidence'].text(),
+            "padding": widgets['padding'].text(),
+            
+            "use_inpaint_size": widgets['use_inpaint_size_check'].isChecked(),
+            "inpaint_width": widgets['inpaint_width'].text(),
+            "inpaint_height": widgets['inpaint_height'].text(),
+            
+            "use_steps": widgets['use_steps_check'].isChecked(),
+            "steps": widgets['steps'].text(),
+            
+            "use_cfg": widgets['use_cfg_check'].isChecked(),
+            "cfg": widgets['cfg'].text(),
+            
+            "use_checkpoint": widgets['use_checkpoint_check'].isChecked(),
+            "checkpoint": widgets['checkpoint_combo'].currentText(),
+            
+            "use_vae": widgets['use_vae_check'].isChecked(),
+            "vae": widgets['vae_combo'].currentText(),
+            
+            "use_sampler": widgets['use_sampler_check'].isChecked(),
+            "sampler": widgets['sampler_combo'].currentText(),
+            "scheduler": widgets['scheduler_combo'].currentText(),
+        }
+    
+    def _set_slot_settings(self, widgets, settings):
+        """ADetailer 슬롯 설정 적용"""
+        widgets['model'].setText(settings.get("model", "face_yolov8n.pt"))
+        widgets['prompt'].setPlainText(settings.get("prompt", ""))
+        widgets['mask_blur'].setText(settings.get("mask_blur", "8"))
+        widgets['denoise'].setText(settings.get("denoise", "0.4"))
+        widgets['confidence'].setText(settings.get("confidence", "0.3"))
+        widgets['padding'].setText(settings.get("padding", "32"))
+        
+        widgets['use_inpaint_size_check'].setChecked(settings.get("use_inpaint_size", False))
+        widgets['inpaint_width'].setText(settings.get("inpaint_width", "1024"))
+        widgets['inpaint_height'].setText(settings.get("inpaint_height", "1024"))
+        
+        widgets['use_steps_check'].setChecked(settings.get("use_steps", False))
+        widgets['steps'].setText(settings.get("steps", "32"))
+        
+        widgets['use_cfg_check'].setChecked(settings.get("use_cfg", False))
+        widgets['cfg'].setText(settings.get("cfg", "5.0"))
+        
+        widgets['use_checkpoint_check'].setChecked(settings.get("use_checkpoint", False))
+        checkpoint_text = settings.get("checkpoint", "")
+        idx = widgets['checkpoint_combo'].findText(checkpoint_text)
+        if idx >= 0: 
+            widgets['checkpoint_combo'].setCurrentIndex(idx)
+        
+        widgets['use_vae_check'].setChecked(settings.get("use_vae", False))
+        vae_text = settings.get("vae", "")
+        idx = widgets['vae_combo'].findText(vae_text)
+        if idx >= 0: 
+            widgets['vae_combo'].setCurrentIndex(idx)
+        
+        widgets['use_sampler_check'].setChecked(settings.get("use_sampler", False))
+        sampler_text = settings.get("sampler", "")
+        idx = widgets['sampler_combo'].findText(sampler_text)
+        if idx >= 0:
+            widgets['sampler_combo'].setCurrentIndex(idx)
+
+        scheduler_text = settings.get("scheduler", "")
+        idx = widgets['scheduler_combo'].findText(scheduler_text)
+        if idx >= 0:
+            widgets['scheduler_combo'].setCurrentIndex(idx)
+
+    # ── I2I 탭 설정 ──
+
+    def _get_i2i_settings(self) -> dict:
+        """I2I 탭 설정 가져오기"""
+        tab = self.i2i_tab
+        return {
+            "prompt": tab.prompt_text.toPlainText(),
+            "negative_prompt": tab.neg_prompt_text.toPlainText(),
+            "denoising": tab.denoise_input.text(),
+            "resize_mode": tab.resize_combo.currentIndex(),
+            "width": tab.width_input.text(),
+            "height": tab.height_input.text(),
+            "steps": tab.steps_input.text(),
+            "cfg": tab.cfg_input.text(),
+            "seed": tab.seed_input.text(),
+        }
+
+    def _apply_i2i_settings(self, s: dict):
+        """I2I 탭 설정 적용"""
+        tab = self.i2i_tab
+        tab.prompt_text.setPlainText(s.get("prompt", ""))
+        tab.neg_prompt_text.setPlainText(s.get("negative_prompt", ""))
+        tab.denoise_input.setText(s.get("denoising", "0.75"))
+        tab.resize_combo.setCurrentIndex(s.get("resize_mode", 0))
+        tab.width_input.setText(s.get("width", "1024"))
+        tab.height_input.setText(s.get("height", "1024"))
+        tab.steps_input.setText(s.get("steps", "20"))
+        tab.cfg_input.setText(s.get("cfg", "7.0"))
+        tab.seed_input.setText(s.get("seed", "-1"))
+
+    # ── Inpaint 탭 설정 ──
+
+    def _get_inpaint_settings(self) -> dict:
+        """Inpaint 탭 설정 가져오기"""
+        tab = self.inpaint_tab
+        return {
+            "prompt": tab.prompt_text.toPlainText(),
+            "negative_prompt": tab.neg_prompt_text.toPlainText(),
+            "denoising": tab.denoise_input.text(),
+            "fill_mode": tab.fill_combo.currentIndex(),
+            "mask_blur": tab.mask_blur_input.text(),
+            "full_res": tab.chk_full_res.isChecked(),
+            "padding": tab.padding_input.text(),
+            "steps": tab.steps_input.text(),
+            "cfg": tab.cfg_input.text(),
+            "seed": tab.seed_input.text(),
+            "brush_size": tab.brush_slider.value(),
+        }
+
+    def _apply_inpaint_settings(self, s: dict):
+        """Inpaint 탭 설정 적용"""
+        tab = self.inpaint_tab
+        tab.prompt_text.setPlainText(s.get("prompt", ""))
+        tab.neg_prompt_text.setPlainText(s.get("negative_prompt", ""))
+        tab.denoise_input.setText(s.get("denoising", "0.75"))
+        tab.fill_combo.setCurrentIndex(s.get("fill_mode", 1))
+        tab.mask_blur_input.setText(s.get("mask_blur", "4"))
+        tab.chk_full_res.setChecked(s.get("full_res", True))
+        tab.padding_input.setText(s.get("padding", "32"))
+        tab.steps_input.setText(s.get("steps", "20"))
+        tab.cfg_input.setText(s.get("cfg", "7.0"))
+        tab.seed_input.setText(s.get("seed", "-1"))
+        tab.brush_slider.setValue(s.get("brush_size", 30))

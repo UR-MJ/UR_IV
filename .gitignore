@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual Environment
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+.pytest_cache/
+.mypy_cache/
+
+# Claude
+.claude/
+
+# Caches
+image_cache/
+web_cache/
+
+# User-specific config (절대 경로, 개인 설정 포함)
+prompt_settings.json
+favorites.json
+event_gen_settings.json
+search_tab_settings.json
+yolo_model_config.json
+
+# Large data files
+*.parquet
+!tags_db/*.parquet
+*.sqlite
+
+# Model files
+*.pt
+*.onnx
+
+# Generated output
+generated_images/
+
+# Logs & backups
+*.log
+*.bak
+
+# Archives
+*.zip
+
+# Danbooru wiki data
+danbooru wiki/
+
+# Windows
+nul
+Thumbs.db
+Desktop.ini
+
+# Temporary
+*.tmp
+*.swp

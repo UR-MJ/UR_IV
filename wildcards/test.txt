@@ -1,0 +1,8 @@
+# 여기에 옵션을 작성하세요
+# 한 줄 = 한 그룹, 쉼표로 옵션 구분
+
+testing, [test|tes2], [test3|test4]
+
+tesfix, testfix
+
+[output|input]
