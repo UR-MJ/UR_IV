@@ -112,6 +112,11 @@ class SettingsMixin:
 
             "gallery_folder": self.gallery_tab._current_folder if hasattr(self, 'gallery_tab') else "",
 
+            # 백엔드 설정
+            "backend_type": self._get_backend_type_str(),
+            "comfyui_url": self._get_comfyui_url(),
+            "comfyui_workflow_path": self._get_comfyui_workflow_path(),
+
             # I2I 탭 설정
             "i2i_settings": self._get_i2i_settings() if hasattr(self, 'i2i_tab') else {},
 
@@ -360,6 +365,10 @@ class SettingsMixin:
             if search_s and hasattr(self, 'search_tab'):
                 self.search_tab._apply_criteria_dict(search_s)
 
+            # 백엔드 설정 복원
+            if "backend_type" in settings:
+                self._restore_backend_settings(settings)
+
             self.is_programmatic_change = False
 
             self.loaded_settings = settings
@@ -505,3 +514,39 @@ class SettingsMixin:
         tab.cfg_input.setText(s.get("cfg", "7.0"))
         tab.seed_input.setText(s.get("seed", "-1"))
         tab.brush_slider.setValue(s.get("brush_size", 30))
+
+    # ── 백엔드 설정 헬퍼 ──
+
+    def _get_backend_type_str(self) -> str:
+        """현재 백엔드 타입 문자열"""
+        try:
+            from backends import get_backend_type
+            return get_backend_type().value
+        except Exception:
+            return "webui"
+
+    def _get_comfyui_url(self) -> str:
+        """ComfyUI API URL"""
+        import config
+        return getattr(config, 'COMFYUI_API_URL', 'http://127.0.0.1:8188')
+
+    def _get_comfyui_workflow_path(self) -> str:
+        """ComfyUI 워크플로우 경로"""
+        import config
+        return getattr(config, 'COMFYUI_WORKFLOW_PATH', '')
+
+    def _restore_backend_settings(self, settings: dict):
+        """백엔드 설정 복원"""
+        import config
+        backend_type_str = settings.get("backend_type", "webui")
+        comfyui_url = settings.get("comfyui_url", "http://127.0.0.1:8188")
+        workflow_path = settings.get("comfyui_workflow_path", "")
+
+        config.COMFYUI_API_URL = comfyui_url
+        config.COMFYUI_WORKFLOW_PATH = workflow_path
+
+        from backends import set_backend, BackendType
+        if backend_type_str == "comfyui":
+            set_backend(BackendType.COMFYUI, comfyui_url)
+        else:
+            set_backend(BackendType.WEBUI, config.WEBUI_API_URL)

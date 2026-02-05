@@ -819,28 +819,91 @@ class SettingsTab(QWidget):
         """API 연결 페이지"""
         w, l = self._create_container()
         l.addWidget(self._create_header("API 연결 설정"))
-        
-        from config import WEBUI_API_URL
-        
-        group = QGroupBox("WebUI API")
-        gl = QVBoxLayout(group)
-        
+
+        import config
+        from backends import get_backend_type, BackendType
+
+        # 백엔드 선택
+        from PyQt6.QtWidgets import QRadioButton, QButtonGroup
+        select_group = QGroupBox("백엔드 선택")
+        sg_layout = QVBoxLayout(select_group)
+        self._api_btn_group = QButtonGroup(w)
+        self.radio_webui = QRadioButton("WebUI (A1111 / Forge)")
+        self.radio_comfyui = QRadioButton("ComfyUI")
+        self._api_btn_group.addButton(self.radio_webui)
+        self._api_btn_group.addButton(self.radio_comfyui)
+
+        current_type = get_backend_type()
+        self.radio_webui.setChecked(current_type == BackendType.WEBUI)
+        self.radio_comfyui.setChecked(current_type == BackendType.COMFYUI)
+
+        sg_layout.addWidget(self.radio_webui)
+        sg_layout.addWidget(self.radio_comfyui)
+        l.addWidget(select_group)
+
+        # WebUI URL
+        webui_group = QGroupBox("WebUI API")
+        wg_layout = QVBoxLayout(webui_group)
         h = QHBoxLayout()
-        self.api_input = QLineEdit(WEBUI_API_URL)
+        self.api_input = QLineEdit(config.WEBUI_API_URL)
+        self.api_input.setPlaceholderText("http://127.0.0.1:7860")
+        h.addWidget(self.api_input)
+        wg_layout.addLayout(h)
+        l.addWidget(webui_group)
+
+        # ComfyUI URL + 워크플로우
+        comfyui_group = QGroupBox("ComfyUI API")
+        cg_layout = QVBoxLayout(comfyui_group)
+
+        h2 = QHBoxLayout()
+        self.comfyui_api_input = QLineEdit(getattr(config, 'COMFYUI_API_URL', 'http://127.0.0.1:8188'))
+        self.comfyui_api_input.setPlaceholderText("http://127.0.0.1:8188")
+        h2.addWidget(QLabel("URL:"))
+        h2.addWidget(self.comfyui_api_input)
+        cg_layout.addLayout(h2)
+
+        h3 = QHBoxLayout()
+        self.comfyui_workflow_input = QLineEdit(getattr(config, 'COMFYUI_WORKFLOW_PATH', ''))
+        self.comfyui_workflow_input.setPlaceholderText("워크플로우 JSON 경로")
+        btn_browse_wf = QPushButton("찾아보기")
+        btn_browse_wf.clicked.connect(self._browse_comfyui_workflow)
+        h3.addWidget(QLabel("워크플로우:"))
+        h3.addWidget(self.comfyui_workflow_input)
+        h3.addWidget(btn_browse_wf)
+        cg_layout.addLayout(h3)
+        cg_layout.addWidget(QLabel("※ ComfyUI 'Save (API Format)' JSON 파일"))
+        l.addWidget(comfyui_group)
+
+        # 라디오에 따라 그룹 활성화
+        def on_radio_changed():
+            is_comfy = self.radio_comfyui.isChecked()
+            webui_group.setEnabled(not is_comfy)
+            comfyui_group.setEnabled(is_comfy)
+
+        self.radio_webui.toggled.connect(on_radio_changed)
+        on_radio_changed()
+
+        # 연결 확인 + 저장
+        btn_row = QHBoxLayout()
         self.btn_connect = QPushButton("🔄 연결 확인")
         self.btn_connect.clicked.connect(self.apply_api_url)
-        
-        h.addWidget(self.api_input)
-        h.addWidget(self.btn_connect)
-        gl.addLayout(h)
-        gl.addWidget(QLabel("※ 주소를 변경하면 즉시 재연결을 시도합니다."))
-        l.addWidget(group)
-        
         self.btn_save_api = QPushButton("💾 설정 저장")
         self.btn_save_api.clicked.connect(self.save_all_settings)
-        l.addWidget(self.btn_save_api)
-        
+        btn_row.addWidget(self.btn_connect)
+        btn_row.addWidget(self.btn_save_api)
+        l.addLayout(btn_row)
+
         return w
+
+    def _browse_comfyui_workflow(self):
+        """ComfyUI 워크플로우 JSON 파일 선택"""
+        from PyQt6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(
+            self, "워크플로우 JSON 선택", "",
+            "JSON Files (*.json);;All Files (*)"
+        )
+        if path:
+            self.comfyui_workflow_input.setText(path)
 
     def _create_storage_page(self):
         """저장 경로 페이지"""
@@ -1006,8 +1069,21 @@ class SettingsTab(QWidget):
 
     def apply_api_url(self):
         """API URL 적용"""
-        if self.parent_ui: 
-            self.parent_ui.retry_connection(self.api_input.text())
+        import config
+        from backends import set_backend, BackendType
+
+        if hasattr(self, 'radio_comfyui') and self.radio_comfyui.isChecked():
+            url = self.comfyui_api_input.text().strip()
+            config.COMFYUI_API_URL = url
+            if hasattr(self, 'comfyui_workflow_input'):
+                config.COMFYUI_WORKFLOW_PATH = self.comfyui_workflow_input.text().strip()
+            set_backend(BackendType.COMFYUI, url)
+        else:
+            url = self.api_input.text().strip()
+            set_backend(BackendType.WEBUI, url)
+
+        if self.parent_ui:
+            self.parent_ui.retry_connection()
 
     def browse_folder(self):
         """폴더 선택 대화상자"""

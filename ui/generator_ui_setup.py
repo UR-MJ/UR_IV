@@ -26,6 +26,7 @@ from tabs.event_gen_tab import EventGenTab
 from tabs.xyz_plot_tab import XYZPlotTab
 from tabs.i2i_tab import Img2ImgTab
 from tabs.inpaint_tab import InpaintTab
+from tabs.backend_ui_tab import BackendUITab
 from config import OUTPUT_DIR
 from widgets.tag_input import TagInputWidget
 
@@ -216,7 +217,11 @@ class UISetupMixin:
         self.fav_tab = self._create_favorites_tab()
         center_tabs.addTab(self.fav_tab, "⭐ Favorites")
         
-        # 10. 설정 탭
+        # 10. 백엔드 UI 탭
+        self.backend_ui_tab = BackendUITab(self)
+        center_tabs.addTab(self.backend_ui_tab, "🖥️ Backend UI")
+
+        # 11. 설정 탭
         self.settings_tab = SettingsTab(self)
         center_tabs.addTab(self.settings_tab, "⚙️ Setting")
         
@@ -246,12 +251,18 @@ class UISetupMixin:
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(10)
-        
+
+        # API 백엔드 상태 버튼 (최상단, 애니메이션)
+        from widgets.api_status_button import ApiStatusButton
+        self.btn_api_manager = ApiStatusButton()
+        self.btn_api_manager.clicked.connect(self._show_api_manager_popup)
+        layout.addWidget(self.btn_api_manager)
+
         # 제목
         layout.addWidget(
             QLabel("이미지 생성 설정", font=QFont("Arial", 16, QFont.Weight.Bold))
         )
-        
+
         # 상단 저장 버튼
         top_btns = QHBoxLayout()
         top_btns.setSpacing(5)
@@ -783,15 +794,49 @@ class UISetupMixin:
     
     def _create_viewer_panel(self):
         """뷰어 패널 생성"""
+        from PyQt6.QtWidgets import QProgressBar
+
         splitter = QSplitter(Qt.Orientation.Vertical)
 
-        # 상단: 이미지 뷰어
+        # 상단: 이미지 뷰어 + 프로그레스 바 컨테이너
+        viewer_container = QWidget()
+        vc_layout = QVBoxLayout(viewer_container)
+        vc_layout.setContentsMargins(0, 0, 0, 0)
+        vc_layout.setSpacing(0)
+
         self.viewer_label = QLabel("WebUI 정보를 불러오는 중...")
         self.viewer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.viewer_label.setMinimumSize(400, 400)
         self.viewer_label.setStyleSheet(
             "background-color: #1A1A1A; border-radius: 8px; color: #888;"
         )
+        vc_layout.addWidget(self.viewer_label, 1)
+
+        # 생성 진행률 바
+        self.gen_progress_bar = QProgressBar()
+        self.gen_progress_bar.setRange(0, 100)
+        self.gen_progress_bar.setValue(0)
+        self.gen_progress_bar.setFixedHeight(20)
+        self.gen_progress_bar.setTextVisible(True)
+        self.gen_progress_bar.setFormat("%v / %m steps")
+        self.gen_progress_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #1a1a1a;
+                border: 1px solid #333;
+                border-radius: 4px;
+                color: #ddd;
+                font-size: 11px;
+                font-weight: bold;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #5865F2, stop:1 #7289DA);
+                border-radius: 3px;
+            }
+        """)
+        self.gen_progress_bar.hide()
+        vc_layout.addWidget(self.gen_progress_bar)
 
         # 하단: EXIF 정보
         self.exif_display = QTextEdit()
@@ -807,7 +852,7 @@ class UISetupMixin:
             }
         """)
 
-        splitter.addWidget(self.viewer_label)
+        splitter.addWidget(viewer_container)
         splitter.addWidget(self.exif_display)
         splitter.setSizes([800, 200])
         splitter.setStretchFactor(0, 1)

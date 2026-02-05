@@ -163,8 +163,33 @@ class GenerationMixin:
         selected_model = self.model_combo.currentText()
         self.gen_worker = GenerationFlowWorker(selected_model, payload)
         self.gen_worker.finished.connect(self.on_generation_finished)
+        self.gen_worker.progress.connect(self._on_generation_progress)
+
+        # 프로그레스 바 초기화
+        self.gen_progress_bar.setValue(0)
+        self.gen_progress_bar.setRange(0, 100)
+        self.gen_progress_bar.setFormat("생성 준비 중...")
+        self.gen_progress_bar.show()
+
         self.gen_worker.start()
-    
+
+    def _on_generation_progress(self, step: int, total: int, preview):
+        """생성 진행률 업데이트"""
+        if total <= 0:
+            return
+
+        self.gen_progress_bar.setRange(0, total)
+        self.gen_progress_bar.setValue(step)
+        self.gen_progress_bar.setFormat(f"{step} / {total} steps")
+
+        pct = int(step / total * 100)
+        self.setWindowTitle(f"AI Studio - Pro [{step}/{total} steps · {pct}%]")
+        self.viewer_label.setText(
+            f"🎨 이미지 생성 중...\n\n"
+            f"{step} / {total} steps ({pct}%)"
+        )
+        self.show_status(f"🎨 생성 중... {step}/{total} steps ({pct}%)")
+
     def on_generation_finished(self, result, gen_info):
         """생성 완료 처리"""
         # 버튼 복구 (자동화 모드에 따라 다르게)
@@ -198,10 +223,14 @@ class GenerationMixin:
             """)
         
         self.btn_generate.setEnabled(True)
-        
+
         # 타이틀 복구
         self.setWindowTitle("AI Studio - Pro")
-        
+
+        # 프로그레스 바 숨김
+        self.gen_progress_bar.hide()
+        self.gen_progress_bar.setValue(0)
+
         # 뷰어 스타일 복구
         self.viewer_label.setStyleSheet("""
             QLabel {
@@ -316,6 +345,13 @@ class GenerationMixin:
         
         self.gen_worker = GenerationFlowWorker(selected_model, payload)
         self.gen_worker.finished.connect(self.on_generation_finished)
+        self.gen_worker.progress.connect(self._on_generation_progress)
+
+        self.gen_progress_bar.setValue(0)
+        self.gen_progress_bar.setRange(0, 100)
+        self.gen_progress_bar.setFormat("생성 준비 중...")
+        self.gen_progress_bar.show()
+
         self.gen_worker.start()
 
     def _build_adetailer_slot(self, widgets, is_enabled=True):

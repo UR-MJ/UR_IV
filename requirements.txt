@@ -10,3 +10,4 @@ watchdog>=3.0.0
 exifread>=2.3.2
 ultralytics>=8.0.0
 rembg>=2.0.0
+websocket-client>=1.6.0

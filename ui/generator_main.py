@@ -42,7 +42,7 @@ class GeneratorMainUI(
         self.apply_stylesheet()
         self.connect_signals()
         self.load_settings()
-        self.load_webui_info()
+        self._startup_backend_check()
         
         # 초기화
         self.is_automating = False

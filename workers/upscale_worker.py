@@ -1,12 +1,8 @@
 # workers/upscale_worker.py
 import os
 import base64
-import requests
 from PyQt6.QtCore import QThread, pyqtSignal
-from config import WEBUI_API_URL
-
-_HEADERS = {"accept": "application/json", "Content-Type": "application/json"}
-_TIMEOUT = 600
+from backends import get_backend
 
 
 def _build_empty_adetailer_slot() -> dict:
@@ -124,14 +120,15 @@ class BatchUpscaleWorker(QThread):
                 b64_image = _image_to_base64(path)
                 result_b64 = b64_image
                 mode = self.settings['mode']
+                backend = get_backend()
 
                 # 업스케일
                 if mode in ('upscale_only', 'both'):
-                    result_b64 = self._do_upscale(result_b64)
+                    result_b64 = backend.upscale(result_b64, self.settings)
 
                 # ADetailer
                 if mode in ('adetailer_only', 'both'):
-                    result_b64 = self._do_adetailer(result_b64)
+                    result_b64 = backend.adetailer(result_b64, self.settings)
 
                 # 저장
                 output_folder = self.settings['output_folder']
@@ -151,66 +148,3 @@ class BatchUpscaleWorker(QThread):
     def request_stop(self):
         """처리 중지 요청"""
         self._stop_requested = True
-
-    def _do_upscale(self, b64_image: str) -> str:
-        """extra-single-image API로 업스케일"""
-        payload = {
-            "image": b64_image,
-            "resize_mode": 0 if self.settings['scale_mode'] == 'factor' else 1,
-            "upscaling_resize": self.settings.get('scale_factor', 2),
-            "upscaling_resize_w": self.settings.get('target_width', 1024),
-            "upscaling_resize_h": self.settings.get('target_height', 1024),
-            "upscaler_1": self.settings['upscaler_name'],
-        }
-
-        response = requests.post(
-            f'{WEBUI_API_URL}/sdapi/v1/extra-single-image',
-            json=payload, headers=_HEADERS, timeout=_TIMEOUT
-        )
-        response.raise_for_status()
-        r = response.json()
-
-        if 'image' in r and r['image']:
-            return r['image']
-        raise RuntimeError("업스케일 API 응답에 이미지가 없습니다.")
-
-    def _do_adetailer(self, b64_image: str) -> str:
-        """img2img + ADetailer로 디테일 보정"""
-        ad_slot = _build_adetailer_slot(
-            model=self.settings.get('ad_model', 'face_yolov8s.pt'),
-            confidence=self.settings.get('ad_confidence', 0.3),
-            denoise=self.settings.get('ad_denoise', 0.25),
-            prompt=self.settings.get('ad_prompt', ''),
-        )
-        empty_slots = [_build_empty_adetailer_slot() for _ in range(5)]
-
-        payload = {
-            "init_images": [b64_image],
-            "denoising_strength": 0.1,
-            "width": -1,
-            "height": -1,
-            "resize_mode": 0,
-            "prompt": self.settings.get('ad_prompt', ''),
-            "negative_prompt": "",
-            "sampler_name": "DPM++ 2M",
-            "steps": 20,
-            "cfg_scale": 7,
-            "send_images": True,
-            "save_images": False,
-            "alwayson_scripts": {
-                "ADetailer": {
-                    "args": [True, False, ad_slot] + empty_slots
-                }
-            }
-        }
-
-        response = requests.post(
-            f'{WEBUI_API_URL}/sdapi/v1/img2img',
-            json=payload, headers=_HEADERS, timeout=_TIMEOUT
-        )
-        response.raise_for_status()
-        r = response.json()
-
-        if 'images' in r and r['images']:
-            return r['images'][0]
-        raise RuntimeError("ADetailer API 응답에 이미지가 없습니다.")
