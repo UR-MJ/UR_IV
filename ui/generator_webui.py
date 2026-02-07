@@ -9,8 +9,8 @@ from PyQt6.QtWidgets import (
     QLineEdit, QPushButton, QRadioButton, QGroupBox, QFileDialog,
     QButtonGroup, QFrame, QApplication
 )
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import QTimer, Qt, QSize
+from PyQt6.QtGui import QFont, QIcon, QPixmap
 
 from backends import get_backend, set_backend, get_backend_type, BackendType
 from workers.generation_worker import WebUIInfoWorker
@@ -96,13 +96,22 @@ class WebUIMixin:
         wg_layout.addLayout(h_webui)
 
         # WebUI 선택 버튼
-        btn_select_webui = QPushButton("🎨  WebUI 사용하기")
-        btn_select_webui.setFixedHeight(45)
+        btn_select_webui = QPushButton("  WebUI 사용하기")
+        btn_select_webui.setFixedHeight(50)
         btn_select_webui.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # Gradio 아이콘 로드
+        icon_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icons')
+        gradio_icon_path = os.path.join(icon_dir, 'gradio.png')
+        if os.path.exists(gradio_icon_path):
+            btn_select_webui.setIcon(QIcon(gradio_icon_path))
+            btn_select_webui.setIconSize(QSize(28, 28))
+
         btn_select_webui.setStyleSheet("""
             QPushButton {
                 background: #2d4a2d; border: 2px solid #4a9f4a; border-radius: 8px;
                 color: #8eff8e; font-weight: bold; font-size: 14px;
+                padding-left: 10px; text-align: left;
             }
             QPushButton:hover {
                 background: #3d6a3d; border: 2px solid #6fbf6f;
@@ -188,13 +197,21 @@ class WebUIMixin:
             update_startup_wf_preview(workflow_input.text())
 
         # ComfyUI 선택 버튼
-        btn_select_comfyui = QPushButton("🔧  ComfyUI 사용하기")
-        btn_select_comfyui.setFixedHeight(45)
+        btn_select_comfyui = QPushButton("  ComfyUI 사용하기")
+        btn_select_comfyui.setFixedHeight(50)
         btn_select_comfyui.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # ComfyUI 아이콘 로드
+        comfyui_icon_path = os.path.join(icon_dir, 'comfyui.png')
+        if os.path.exists(comfyui_icon_path):
+            btn_select_comfyui.setIcon(QIcon(comfyui_icon_path))
+            btn_select_comfyui.setIconSize(QSize(28, 28))
+
         btn_select_comfyui.setStyleSheet("""
             QPushButton {
                 background: #2d3a5a; border: 2px solid #4a6f9f; border-radius: 8px;
                 color: #8ec8ff; font-weight: bold; font-size: 14px;
+                padding-left: 10px; text-align: left;
             }
             QPushButton:hover {
                 background: #3d5a7a; border: 2px solid #6f9fbf;
