@@ -32,8 +32,7 @@ class WebUIMixin:
 
         dialog = QDialog(self)
         dialog.setWindowTitle("API 백엔드 선택")
-        dialog.setFixedSize(520, 560)
-        # 항상 최상위에 표시
+        dialog.setFixedSize(560, 620)
         dialog.setWindowFlags(
             dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )
@@ -52,12 +51,6 @@ class WebUIMixin:
                 padding: 6px 10px; color: #ddd;
             }
             QLineEdit:focus { border: 1px solid #5865F2; }
-            QPushButton {
-                background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
-                padding: 8px 16px; color: #ddd;
-            }
-            QPushButton:hover { background: #333; border: 1px solid #666; }
-            QRadioButton { color: #ddd; font-size: 13px; spacing: 8px; }
             QLabel { color: #aaa; }
         """)
 
@@ -71,7 +64,7 @@ class WebUIMixin:
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
 
-        sub_header = QLabel("연결할 이미지 생성 백엔드를 선택하세요")
+        sub_header = QLabel("사용할 이미지 생성 백엔드를 선택하세요")
         sub_header.setStyleSheet("color: #aaa; font-size: 13px;")
         sub_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(sub_header)
@@ -79,12 +72,11 @@ class WebUIMixin:
         # 연결 상태 확인
         webui_url = config.WEBUI_API_URL
         comfyui_url = getattr(config, 'COMFYUI_API_URL', 'http://127.0.0.1:8188')
-
         webui_ok = self._quick_test(webui_url, '/sdapi/v1/samplers')
         comfyui_ok = self._quick_test(comfyui_url, '/system_stats')
 
-        # 백엔드 선택
-        btn_group = QButtonGroup(dialog)
+        # 선택 상태 저장
+        selected_backend = {'type': None}
 
         # ── WebUI 카드 ──
         webui_group = QGroupBox("WebUI (A1111 / Forge)")
@@ -96,11 +88,6 @@ class WebUIMixin:
         )
         wg_layout.addWidget(webui_status)
 
-        radio_webui = QRadioButton("WebUI 사용")
-        radio_webui.setChecked(webui_ok or not comfyui_ok)
-        btn_group.addButton(radio_webui)
-        wg_layout.addWidget(radio_webui)
-
         h_webui = QHBoxLayout()
         h_webui.addWidget(QLabel("URL:"))
         webui_url_input = QLineEdit(webui_url)
@@ -108,6 +95,23 @@ class WebUIMixin:
         h_webui.addWidget(webui_url_input)
         wg_layout.addLayout(h_webui)
 
+        # WebUI 선택 버튼
+        btn_select_webui = QPushButton("🎨  WebUI 사용하기")
+        btn_select_webui.setFixedHeight(45)
+        btn_select_webui.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_select_webui.setStyleSheet("""
+            QPushButton {
+                background: #2d4a2d; border: 2px solid #4a9f4a; border-radius: 8px;
+                color: #8eff8e; font-weight: bold; font-size: 14px;
+            }
+            QPushButton:hover {
+                background: #3d6a3d; border: 2px solid #6fbf6f;
+            }
+            QPushButton:pressed {
+                background: #1d3a1d; border: 2px solid #3a8f3a;
+            }
+        """)
+        wg_layout.addWidget(btn_select_webui)
         layout.addWidget(webui_group)
 
         # ── ComfyUI 카드 ──
@@ -119,11 +123,6 @@ class WebUIMixin:
             f"color: {'#4ade80' if comfyui_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
         )
         cg_layout.addWidget(comfyui_status)
-
-        radio_comfyui = QRadioButton("ComfyUI 사용")
-        radio_comfyui.setChecked(comfyui_ok and not webui_ok)
-        btn_group.addButton(radio_comfyui)
-        cg_layout.addWidget(radio_comfyui)
 
         h_comfy_url = QHBoxLayout()
         h_comfy_url.addWidget(QLabel("URL:"))
@@ -139,12 +138,21 @@ class WebUIMixin:
         h_wf.addWidget(workflow_input)
         btn_browse = QPushButton("...")
         btn_browse.setFixedWidth(36)
+        btn_browse.setStyleSheet("""
+            QPushButton {
+                background: #333; border: 1px solid #555; border-radius: 4px; color: #ddd;
+            }
+            QPushButton:hover { background: #444; }
+        """)
+        h_wf.addWidget(btn_browse)
+        cg_layout.addLayout(h_wf)
 
         # 워크플로우 미리보기
         startup_wf_preview = QLabel("")
         startup_wf_preview.setWordWrap(True)
         startup_wf_preview.setStyleSheet("font-size: 10px; padding: 4px;")
         startup_wf_preview.hide()
+        cg_layout.addWidget(startup_wf_preview)
 
         def update_startup_wf_preview(path: str):
             path = path.strip()
@@ -154,51 +162,125 @@ class WebUIMixin:
             from backends.comfyui_backend import analyze_workflow
             info = analyze_workflow(path)
             if info.get('valid'):
-                ckpt = info.get('checkpoint', '?')
                 w, h = info.get('width', '?'), info.get('height', '?')
                 startup_wf_preview.setText(
                     f"✅ {info['format'].upper()} | 노드 {info['node_count']}개 | "
                     f"{info.get('ksampler_type', '?')} | {w}x{h}"
                 )
-                startup_wf_preview.setStyleSheet(
-                    "font-size: 10px; padding: 4px; color: #4ade80;"
-                )
+                startup_wf_preview.setStyleSheet("font-size: 10px; padding: 4px; color: #4ade80;")
             else:
                 startup_wf_preview.setText(f"❌ {info.get('error', '알 수 없는 오류')}")
-                startup_wf_preview.setStyleSheet(
-                    "font-size: 10px; padding: 4px; color: #f87171;"
-                )
+                startup_wf_preview.setStyleSheet("font-size: 10px; padding: 4px; color: #f87171;")
             startup_wf_preview.show()
 
         def browse_wf():
             path, _ = QFileDialog.getOpenFileName(
-                dialog, "워크플로우 JSON 선택", "",
-                "JSON Files (*.json);;All Files (*)"
+                dialog, "워크플로우 JSON 선택", "", "JSON Files (*.json);;All Files (*)"
             )
             if path:
                 workflow_input.setText(path)
                 update_startup_wf_preview(path)
 
-        workflow_input.editingFinished.connect(
-            lambda: update_startup_wf_preview(workflow_input.text())
-        )
-
+        workflow_input.editingFinished.connect(lambda: update_startup_wf_preview(workflow_input.text()))
         btn_browse.clicked.connect(browse_wf)
-        h_wf.addWidget(btn_browse)
-        cg_layout.addLayout(h_wf)
-        cg_layout.addWidget(startup_wf_preview)
 
-        # 초기 미리보기
         if workflow_input.text().strip():
             update_startup_wf_preview(workflow_input.text())
 
+        # ComfyUI 선택 버튼
+        btn_select_comfyui = QPushButton("🔧  ComfyUI 사용하기")
+        btn_select_comfyui.setFixedHeight(45)
+        btn_select_comfyui.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_select_comfyui.setStyleSheet("""
+            QPushButton {
+                background: #2d3a5a; border: 2px solid #4a6f9f; border-radius: 8px;
+                color: #8ec8ff; font-weight: bold; font-size: 14px;
+            }
+            QPushButton:hover {
+                background: #3d5a7a; border: 2px solid #6f9fbf;
+            }
+            QPushButton:pressed {
+                background: #1d2a4a; border: 2px solid #3a5f8f;
+            }
+        """)
+        cg_layout.addWidget(btn_select_comfyui)
         layout.addWidget(comfyui_group)
+
+        # 연결 확인 다이얼로그
+        def confirm_and_connect(backend_type: str):
+            if backend_type == 'webui':
+                url = webui_url_input.text().strip()
+                name = "WebUI (A1111/Forge)"
+                is_ok = self._quick_test(url, '/sdapi/v1/samplers')
+            else:
+                url = comfyui_url_input.text().strip()
+                name = "ComfyUI"
+                is_ok = self._quick_test(url, '/system_stats')
+
+            # 확인 다이얼로그
+            confirm = QMessageBox(dialog)
+            confirm.setWindowTitle("연결 확인")
+            confirm.setIcon(QMessageBox.Icon.Question)
+            confirm.setWindowFlags(confirm.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+
+            status_text = "🟢 연결 가능" if is_ok else "🔴 연결되지 않음"
+            confirm.setText(f"<b>{name}</b>에 연결하시겠습니까?")
+            confirm.setInformativeText(f"URL: {url}\n상태: {status_text}")
+            confirm.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            confirm.setDefaultButton(QMessageBox.StandardButton.Yes)
+
+            # 버튼 스타일
+            confirm.setStyleSheet("""
+                QMessageBox { background-color: #1a1a1a; color: #ddd; }
+                QLabel { color: #ddd; font-size: 13px; }
+                QPushButton {
+                    background: #333; border: 1px solid #555; border-radius: 4px;
+                    padding: 8px 20px; color: #ddd; min-width: 80px;
+                }
+                QPushButton:hover { background: #444; }
+                QPushButton:default {
+                    background: #5865F2; border: none; color: white;
+                }
+            """)
+
+            if confirm.exec() == QMessageBox.StandardButton.Yes:
+                selected_backend['type'] = backend_type
+                if backend_type == 'comfyui':
+                    config.COMFYUI_API_URL = url
+                    config.COMFYUI_WORKFLOW_PATH = workflow_input.text().strip()
+                    set_backend(BackendType.COMFYUI, url)
+                else:
+                    set_backend(BackendType.WEBUI, url)
+
+                # settings 탭 동기화
+                if hasattr(self, 'settings_tab'):
+                    st = self.settings_tab
+                    if hasattr(st, 'radio_webui'):
+                        st.radio_webui.setChecked(backend_type == 'webui')
+                        st.radio_comfyui.setChecked(backend_type == 'comfyui')
+                    if hasattr(st, 'api_input'):
+                        st.api_input.setText(webui_url_input.text().strip())
+                    if hasattr(st, 'comfyui_api_input'):
+                        st.comfyui_api_input.setText(comfyui_url_input.text().strip())
+                    if hasattr(st, 'comfyui_workflow_input'):
+                        st.comfyui_workflow_input.setText(workflow_input.text().strip())
+
+                dialog.accept()
+
+        btn_select_webui.clicked.connect(lambda: confirm_and_connect('webui'))
+        btn_select_comfyui.clicked.connect(lambda: confirm_and_connect('comfyui'))
 
         # 상태 재확인 버튼
         btn_refresh = QPushButton("🔄 연결 상태 재확인")
-        btn_refresh.setStyleSheet(
-            "background: #1e3a5f; border: 1px solid #2563eb; color: #93c5fd;"
-        )
+        btn_refresh.setStyleSheet("""
+            QPushButton {
+                background: #1e3a5f; border: 1px solid #2563eb; border-radius: 6px;
+                color: #93c5fd; padding: 8px 16px;
+            }
+            QPushButton:hover { background: #2e4a6f; }
+        """)
 
         def refresh_status():
             w_ok = self._quick_test(webui_url_input.text().strip(), '/sdapi/v1/samplers')
@@ -217,65 +299,34 @@ class WebUIMixin:
 
         layout.addStretch()
 
-        # 하단 버튼
+        # 하단 건너뛰기 버튼
         btn_row = QHBoxLayout()
-
-        btn_skip = QPushButton("건너뛰기")
+        btn_skip = QPushButton("건너뛰기 (연결 없이 시작)")
         btn_skip.setToolTip("백엔드 연결 없이 앱 시작")
+        btn_skip.setStyleSheet("""
+            QPushButton {
+                background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
+                padding: 10px 24px; color: #888;
+            }
+            QPushButton:hover { background: #333; color: #aaa; }
+        """)
         btn_skip.clicked.connect(dialog.reject)
-
-        btn_connect = QPushButton("연결")
-        btn_connect.setFixedHeight(38)
-        btn_connect.setStyleSheet(
-            "background: #5865F2; border: none; border-radius: 6px; "
-            "color: white; font-weight: bold; font-size: 14px; padding: 0 32px;"
-        )
-
-        def on_connect():
-            if radio_comfyui.isChecked():
-                url = comfyui_url_input.text().strip()
-                config.COMFYUI_API_URL = url
-                config.COMFYUI_WORKFLOW_PATH = workflow_input.text().strip()
-                set_backend(BackendType.COMFYUI, url)
-            else:
-                url = webui_url_input.text().strip()
-                set_backend(BackendType.WEBUI, url)
-
-            # settings 탭 동기화
-            if hasattr(self, 'settings_tab'):
-                st = self.settings_tab
-                if hasattr(st, 'radio_webui'):
-                    st.radio_webui.setChecked(radio_webui.isChecked())
-                    st.radio_comfyui.setChecked(radio_comfyui.isChecked())
-                if hasattr(st, 'api_input'):
-                    st.api_input.setText(webui_url_input.text().strip())
-                if hasattr(st, 'comfyui_api_input'):
-                    st.comfyui_api_input.setText(comfyui_url_input.text().strip())
-                if hasattr(st, 'comfyui_workflow_input'):
-                    st.comfyui_workflow_input.setText(workflow_input.text().strip())
-
-            dialog.accept()
-
-        btn_connect.clicked.connect(on_connect)
-
+        btn_row.addStretch()
         btn_row.addWidget(btn_skip)
         btn_row.addStretch()
-        btn_row.addWidget(btn_connect)
         layout.addLayout(btn_row)
 
-        # 다이얼로그를 최상위로 활성화
+        # 다이얼로그 활성화
         dialog.raise_()
         dialog.activateWindow()
 
         result = dialog.exec()
 
         if result == QDialog.DialogCode.Accepted:
-            # 자동 저장 후 연결
             if hasattr(self, 'save_settings'):
                 self.save_settings()
             self.load_webui_info()
         else:
-            # 건너뛰기 — 연결 없이 시작
             self.viewer_label.setText(
                 "백엔드에 연결되지 않았습니다.\n\n"
                 "왼쪽 상단의 API 관리 버튼으로 연결하세요."
