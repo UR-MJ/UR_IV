@@ -327,7 +327,15 @@ class WebUIMixin:
             }
             QPushButton:hover { background: #333; color: #aaa; }
         """)
-        btn_skip.clicked.connect(dialog.reject)
+
+        # 건너뛰기 플래그
+        skip_clicked = {'value': False}
+
+        def on_skip():
+            skip_clicked['value'] = True
+            dialog.reject()
+
+        btn_skip.clicked.connect(on_skip)
         btn_row.addStretch()
         btn_row.addWidget(btn_skip)
         btn_row.addStretch()
@@ -343,12 +351,16 @@ class WebUIMixin:
             if hasattr(self, 'save_settings'):
                 self.save_settings()
             self.load_webui_info()
-        else:
+        elif skip_clicked['value']:
             # 건너뛰기 — 연결 없이 UI 시작
             self.viewer_label.setText(
                 "백엔드에 연결되지 않았습니다.\n\n"
                 "왼쪽 상단의 API 관리 버튼으로 연결하세요."
             )
+        else:
+            # X 버튼 — 앱 종료
+            import sys
+            sys.exit(0)
 
     @staticmethod
     def _quick_test(url: str, endpoint: str) -> bool:
