@@ -299,16 +299,16 @@ class WebUIMixin:
 
         layout.addStretch()
 
-        # 하단 종료 버튼
+        # 하단 건너뛰기 버튼
         btn_row = QHBoxLayout()
-        btn_skip = QPushButton("❌ 종료")
-        btn_skip.setToolTip("앱을 종료합니다")
+        btn_skip = QPushButton("⏭️ 건너뛰기")
+        btn_skip.setToolTip("백엔드 연결 없이 UI 시작")
         btn_skip.setStyleSheet("""
             QPushButton {
-                background: #3a2a2a; border: 1px solid #6a4444; border-radius: 6px;
-                padding: 10px 24px; color: #cc8888;
+                background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
+                padding: 10px 24px; color: #888;
             }
-            QPushButton:hover { background: #4a3a3a; color: #dd9999; }
+            QPushButton:hover { background: #333; color: #aaa; }
         """)
         btn_skip.clicked.connect(dialog.reject)
         btn_row.addStretch()
@@ -327,9 +327,11 @@ class WebUIMixin:
                 self.save_settings()
             self.load_webui_info()
         else:
-            # 다이얼로그 종료 시 앱 완전 종료
-            import os
-            os._exit(0)
+            # 건너뛰기 — 연결 없이 UI 시작
+            self.viewer_label.setText(
+                "백엔드에 연결되지 않았습니다.\n\n"
+                "왼쪽 상단의 API 관리 버튼으로 연결하세요."
+            )
 
     @staticmethod
     def _quick_test(url: str, endpoint: str) -> bool:
