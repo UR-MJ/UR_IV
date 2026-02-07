@@ -324,10 +324,30 @@ class GeneratorMainUI(
             self.btn_refresh_gallery.clicked.connect(self.refresh_gallery)
 
     def closeEvent(self, event):
-        """앱 종료 시 설정 자동 저장"""
+        """앱 종료 시 확인 및 설정 저장"""
+        import os
         from utils.app_logger import get_logger
+
+        # 종료 확인 다이얼로그
+        reply = QMessageBox.question(
+            self,
+            "종료 확인",
+            "AI Studio Pro를 종료하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            event.ignore()
+            return
+
+        # 설정 저장
         try:
             self.save_settings()
         except Exception as e:
             get_logger('main').error(f"종료 시 설정 저장 실패: {e}")
-        super().closeEvent(event)
+
+        event.accept()
+
+        # CMD 창까지 완전 종료
+        os._exit(0)
