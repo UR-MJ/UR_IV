@@ -1,5 +1,6 @@
 # tabs/pnginfo_tab.py
 import os
+import json
 import base64
 from io import BytesIO
 from PyQt6.QtWidgets import (
@@ -655,7 +656,12 @@ class PngInfoTab(QWidget):
         try:
             img = Image.open(path)
             self.current_params = {}
-            if 'parameters' in img.info:
+
+            # ComfyUI 형식 감지 (prompt 또는 workflow 키가 있으면 ComfyUI)
+            if 'prompt' in img.info or 'workflow' in img.info:
+                self._parse_comfyui_info(img.info)
+            elif 'parameters' in img.info:
+                # WebUI (A1111/Forge) 형식
                 raw_info = img.info['parameters']
                 self.info_text.setPlainText(raw_info)
                 self.parse_generation_info(raw_info)
@@ -699,6 +705,221 @@ class PngInfoTab(QWidget):
             print(f"⚠️ PNG Info 파싱 실패: {e}")
             self.current_params['prompt'] = text.strip()
             self.current_params['negative_prompt'] = ""
+
+    def _parse_comfyui_info(self, info: dict):
+        """ComfyUI 형식의 메타데이터 파싱"""
+        try:
+            prompt_data = {}
+            workflow_data = {}
+
+            # prompt (API 형식) 파싱
+            if 'prompt' in info:
+                try:
+                    prompt_data = json.loads(info['prompt'])
+                except json.JSONDecodeError:
+                    pass
+
+            # workflow (웹 형식) 파싱
+            if 'workflow' in info:
+                try:
+                    workflow_data = json.loads(info['workflow'])
+                except json.JSONDecodeError:
+                    pass
+
+            # 노드에서 정보 추출
+            extracted = self._extract_comfyui_params(prompt_data)
+
+            # current_params 설정
+            self.current_params = {
+                'prompt': extracted.get('positive_prompt', ''),
+                'negative_prompt': extracted.get('negative_prompt', ''),
+                'Steps': str(extracted.get('steps', 20)),
+                'Seed': str(extracted.get('seed', -1)),
+                'CFG scale': str(extracted.get('cfg', 7.0)),
+                'Sampler': extracted.get('sampler', 'euler'),
+                'Scheduler': extracted.get('scheduler', 'normal'),
+                'Size': f"{extracted.get('width', 1024)}x{extracted.get('height', 1024)}",
+                'Model': extracted.get('checkpoint', ''),
+                'Denoising strength': str(extracted.get('denoise', 1.0)),
+            }
+
+            # 표시용 텍스트 생성
+            display_lines = [
+                "═══════════════════════════════════════════",
+                "  📦 ComfyUI 워크플로우 메타데이터",
+                "═══════════════════════════════════════════",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "📝 Positive Prompt",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                extracted.get('positive_prompt', '(없음)'),
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "🚫 Negative Prompt",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                extracted.get('negative_prompt', '(없음)'),
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "⚙️ 생성 파라미터",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                f"  🎯 Checkpoint: {extracted.get('checkpoint', '(감지 불가)')}",
+                f"  🎲 Seed: {extracted.get('seed', -1)}",
+                f"  📊 Steps: {extracted.get('steps', 20)}",
+                f"  ⚡ CFG: {extracted.get('cfg', 7.0)}",
+                f"  🔄 Sampler: {extracted.get('sampler', 'euler')}",
+                f"  📅 Scheduler: {extracted.get('scheduler', 'normal')}",
+                f"  📐 Size: {extracted.get('width', 1024)} x {extracted.get('height', 1024)}",
+                f"  🎨 Denoise: {extracted.get('denoise', 1.0)}",
+            ]
+
+            # KSampler 타입 표시
+            if extracted.get('ksampler_type'):
+                display_lines.append(f"  🔧 KSampler Type: {extracted['ksampler_type']}")
+
+            # 추가 노드 정보
+            if extracted.get('extra_nodes'):
+                display_lines.extend([
+                    "",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                    "📦 감지된 주요 노드",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                ])
+                for node_type, count in extracted['extra_nodes'].items():
+                    display_lines.append(f"  • {node_type}: {count}개")
+
+            # 워크플로우 정보
+            if workflow_data:
+                node_count = len(workflow_data.get('nodes', []))
+                link_count = len(workflow_data.get('links', []))
+                display_lines.extend([
+                    "",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                    "📊 워크플로우 통계",
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                    f"  📦 전체 노드 수: {node_count}",
+                    f"  🔗 연결 수: {link_count}",
+                ])
+
+            display_lines.extend([
+                "",
+                "═══════════════════════════════════════════",
+            ])
+
+            self.info_text.setPlainText('\n'.join(display_lines))
+
+        except Exception as e:
+            self.info_text.setPlainText(f"ComfyUI 메타데이터 파싱 오류: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _extract_comfyui_params(self, prompt_data: dict) -> dict:
+        """ComfyUI prompt JSON에서 파라미터 추출"""
+        result = {
+            'positive_prompt': '',
+            'negative_prompt': '',
+            'seed': -1,
+            'steps': 20,
+            'cfg': 7.0,
+            'sampler': 'euler',
+            'scheduler': 'normal',
+            'width': 1024,
+            'height': 1024,
+            'checkpoint': '',
+            'denoise': 1.0,
+            'ksampler_type': '',
+            'extra_nodes': {},
+        }
+
+        if not prompt_data:
+            return result
+
+        # 노드 타입별 분류
+        clip_encode_nodes = {}  # node_id -> inputs
+        ksampler_nodes = {}     # node_id -> inputs
+        checkpoint_nodes = {}   # node_id -> inputs
+        latent_nodes = {}       # node_id -> inputs
+
+        for node_id, node_data in prompt_data.items():
+            class_type = node_data.get('class_type', '')
+            inputs = node_data.get('inputs', {})
+
+            # 노드 타입 카운트
+            if class_type not in ['Reroute', 'Note', 'PrimitiveNode']:
+                result['extra_nodes'][class_type] = result['extra_nodes'].get(class_type, 0) + 1
+
+            if class_type == 'CLIPTextEncode':
+                clip_encode_nodes[node_id] = inputs
+            elif class_type in ['KSampler', 'KSamplerAdvanced', 'SamplerCustom']:
+                ksampler_nodes[node_id] = inputs
+                result['ksampler_type'] = class_type
+            elif class_type in ['CheckpointLoaderSimple', 'CheckpointLoader']:
+                checkpoint_nodes[node_id] = inputs
+            elif class_type in ['EmptyLatentImage', 'EmptySD3LatentImage']:
+                latent_nodes[node_id] = inputs
+
+        # Checkpoint 추출
+        for node_id, inputs in checkpoint_nodes.items():
+            if 'ckpt_name' in inputs:
+                result['checkpoint'] = inputs['ckpt_name']
+                break
+
+        # KSampler에서 파라미터 추출 + positive/negative 연결 추적
+        for node_id, inputs in ksampler_nodes.items():
+            if 'seed' in inputs:
+                seed_val = inputs['seed']
+                if isinstance(seed_val, (int, float)):
+                    result['seed'] = int(seed_val)
+            if 'steps' in inputs:
+                result['steps'] = int(inputs['steps'])
+            if 'cfg' in inputs:
+                result['cfg'] = float(inputs['cfg'])
+            if 'sampler_name' in inputs:
+                result['sampler'] = inputs['sampler_name']
+            if 'scheduler' in inputs:
+                result['scheduler'] = inputs['scheduler']
+            if 'denoise' in inputs:
+                result['denoise'] = float(inputs['denoise'])
+
+            # positive/negative 연결 추적
+            positive_ref = inputs.get('positive')
+            negative_ref = inputs.get('negative')
+
+            # 연결 참조 형식: [node_id, output_index]
+            if isinstance(positive_ref, list) and len(positive_ref) >= 1:
+                pos_node_id = str(positive_ref[0])
+                if pos_node_id in clip_encode_nodes:
+                    text = clip_encode_nodes[pos_node_id].get('text', '')
+                    if isinstance(text, str):
+                        result['positive_prompt'] = text
+
+            if isinstance(negative_ref, list) and len(negative_ref) >= 1:
+                neg_node_id = str(negative_ref[0])
+                if neg_node_id in clip_encode_nodes:
+                    text = clip_encode_nodes[neg_node_id].get('text', '')
+                    if isinstance(text, str):
+                        result['negative_prompt'] = text
+
+        # EmptyLatentImage에서 width/height 추출
+        for node_id, inputs in latent_nodes.items():
+            if 'width' in inputs:
+                result['width'] = int(inputs['width'])
+            if 'height' in inputs:
+                result['height'] = int(inputs['height'])
+            break
+
+        # 프롬프트가 없으면 모든 CLIPTextEncode 노드에서 추출 시도
+        if not result['positive_prompt'] and not result['negative_prompt']:
+            prompts = []
+            for node_id, inputs in clip_encode_nodes.items():
+                text = inputs.get('text', '')
+                if isinstance(text, str) and text.strip():
+                    prompts.append(text)
+            if len(prompts) >= 1:
+                result['positive_prompt'] = prompts[0]
+            if len(prompts) >= 2:
+                result['negative_prompt'] = prompts[1]
+
+        return result
 
     def on_generate_immediately(self):
         if not self.current_params:
