@@ -69,11 +69,9 @@ class WebUIMixin:
         sub_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(sub_header)
 
-        # 연결 상태 확인
+        # URL 설정
         webui_url = config.WEBUI_API_URL
         comfyui_url = getattr(config, 'COMFYUI_API_URL', 'http://127.0.0.1:8188')
-        webui_ok = self._quick_test(webui_url, '/sdapi/v1/samplers')
-        comfyui_ok = self._quick_test(comfyui_url, '/system_stats')
 
         # 선택 상태 저장
         selected_backend = {'type': None}
@@ -82,10 +80,8 @@ class WebUIMixin:
         webui_group = QGroupBox("WebUI (A1111 / Forge)")
         wg_layout = QVBoxLayout(webui_group)
 
-        webui_status = QLabel(f"{'🟢 연결 가능' if webui_ok else '🔴 연결 안됨'}")
-        webui_status.setStyleSheet(
-            f"color: {'#4ade80' if webui_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
-        )
+        webui_status = QLabel("⏳ 자동 감지 중...")
+        webui_status.setStyleSheet("color: #fbbf24; font-weight: bold; font-size: 12px;")
         wg_layout.addWidget(webui_status)
 
         h_webui = QHBoxLayout()
@@ -127,10 +123,8 @@ class WebUIMixin:
         comfyui_group = QGroupBox("ComfyUI")
         cg_layout = QVBoxLayout(comfyui_group)
 
-        comfyui_status = QLabel(f"{'🟢 연결 가능' if comfyui_ok else '🔴 연결 안됨'}")
-        comfyui_status.setStyleSheet(
-            f"color: {'#4ade80' if comfyui_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
-        )
+        comfyui_status = QLabel("⏳ 자동 감지 중...")
+        comfyui_status.setStyleSheet("color: #fbbf24; font-weight: bold; font-size: 12px;")
         cg_layout.addWidget(comfyui_status)
 
         h_comfy_url = QHBoxLayout()
@@ -201,8 +195,8 @@ class WebUIMixin:
         btn_select_comfyui.setFixedHeight(50)
         btn_select_comfyui.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        # ComfyUI 아이콘 로드
-        comfyui_icon_path = os.path.join(icon_dir, 'comfyui.png')
+        # ComfyUI 아이콘 로드 (comfyui_icon.png 사용)
+        comfyui_icon_path = os.path.join(icon_dir, 'comfyui_icon.png')
         if os.path.exists(comfyui_icon_path):
             btn_select_comfyui.setIcon(QIcon(comfyui_icon_path))
             btn_select_comfyui.setIconSize(QSize(28, 28))
@@ -289,19 +283,15 @@ class WebUIMixin:
         btn_select_webui.clicked.connect(lambda: confirm_and_connect('webui'))
         btn_select_comfyui.clicked.connect(lambda: confirm_and_connect('comfyui'))
 
-        # 상태 재확인 버튼
-        btn_refresh = QPushButton("🔄 연결 상태 재확인")
-        btn_refresh.setStyleSheet("""
-            QPushButton {
-                background: #1e3a5f; border: 1px solid #2563eb; border-radius: 6px;
-                color: #93c5fd; padding: 8px 16px;
-            }
-            QPushButton:hover { background: #2e4a6f; }
-        """)
+        # 자동 감지 함수
+        def auto_detect():
+            webui_status.setText("⏳ 감지 중...")
+            comfyui_status.setText("⏳ 감지 중...")
+            QApplication.processEvents()
 
-        def refresh_status():
             w_ok = self._quick_test(webui_url_input.text().strip(), '/sdapi/v1/samplers')
             c_ok = self._quick_test(comfyui_url_input.text().strip(), '/system_stats')
+
             webui_status.setText(f"{'🟢 연결 가능' if w_ok else '🔴 연결 안됨'}")
             webui_status.setStyleSheet(
                 f"color: {'#4ade80' if w_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
@@ -311,8 +301,12 @@ class WebUIMixin:
                 f"color: {'#4ade80' if c_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
             )
 
-        btn_refresh.clicked.connect(refresh_status)
-        layout.addWidget(btn_refresh)
+        # URL 변경 시 자동 감지
+        webui_url_input.editingFinished.connect(auto_detect)
+        comfyui_url_input.editingFinished.connect(auto_detect)
+
+        # 다이얼로그 표시 직후 자동 감지 실행
+        QTimer.singleShot(100, auto_detect)
 
         layout.addStretch()
 
