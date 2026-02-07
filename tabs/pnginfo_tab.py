@@ -663,8 +663,8 @@ class PngInfoTab(QWidget):
             elif 'parameters' in img.info:
                 # WebUI (A1111/Forge) 형식
                 raw_info = img.info['parameters']
-                self.info_text.setPlainText(raw_info)
                 self.parse_generation_info(raw_info)
+                self._display_webui_formatted()
             else:
                 self.info_text.setPlainText("표준 PNG Info가 없습니다.")
         except Exception as e:
@@ -705,6 +705,113 @@ class PngInfoTab(QWidget):
             print(f"⚠️ PNG Info 파싱 실패: {e}")
             self.current_params['prompt'] = text.strip()
             self.current_params['negative_prompt'] = ""
+
+    def _display_webui_formatted(self):
+        """WebUI 파라미터를 깔끔하게 포맷팅하여 표시"""
+        p = self.current_params
+
+        display_lines = [
+            "═══════════════════════════════════════════",
+            "  🎨 WebUI (A1111/Forge) 메타데이터",
+            "═══════════════════════════════════════════",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "📝 Positive Prompt",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            p.get('prompt', '(없음)'),
+            "",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "🚫 Negative Prompt",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            p.get('negative_prompt', '(없음)'),
+            "",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "⚙️ 생성 파라미터",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+
+        # 기본 파라미터
+        if 'Model' in p:
+            display_lines.append(f"  🎯 Model: {p['Model']}")
+        if 'Model hash' in p:
+            display_lines.append(f"  🔑 Model Hash: {p['Model hash']}")
+        if 'Seed' in p:
+            display_lines.append(f"  🎲 Seed: {p['Seed']}")
+        if 'Steps' in p:
+            display_lines.append(f"  📊 Steps: {p['Steps']}")
+        if 'CFG scale' in p:
+            display_lines.append(f"  ⚡ CFG Scale: {p['CFG scale']}")
+        if 'Sampler' in p:
+            display_lines.append(f"  🔄 Sampler: {p['Sampler']}")
+        if 'Schedule type' in p:
+            display_lines.append(f"  📅 Scheduler: {p['Schedule type']}")
+        if 'Size' in p:
+            display_lines.append(f"  📐 Size: {p['Size']}")
+
+        # Hires.fix 파라미터
+        hires_params = []
+        if 'Hires upscale' in p:
+            hires_params.append(f"Scale: {p['Hires upscale']}")
+        if 'Hires upscaler' in p:
+            hires_params.append(f"Upscaler: {p['Hires upscaler']}")
+        if 'Hires steps' in p:
+            hires_params.append(f"Steps: {p['Hires steps']}")
+        if 'Denoising strength' in p:
+            hires_params.append(f"Denoise: {p['Denoising strength']}")
+
+        if hires_params:
+            display_lines.extend([
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "🔍 Hires.fix",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            ])
+            for param in hires_params:
+                display_lines.append(f"  • {param}")
+
+        # ADetailer 파라미터
+        adetailer_params = []
+        for key, val in p.items():
+            if key.startswith('ADetailer'):
+                adetailer_params.append(f"{key}: {val}")
+
+        if adetailer_params:
+            display_lines.extend([
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "🎭 ADetailer",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            ])
+            for param in adetailer_params:
+                display_lines.append(f"  • {param}")
+
+        # 기타 파라미터
+        known_keys = {
+            'prompt', 'negative_prompt', 'Model', 'Model hash', 'Seed', 'Steps',
+            'CFG scale', 'Sampler', 'Schedule type', 'Size', 'Hires upscale',
+            'Hires upscaler', 'Hires steps', 'Denoising strength',
+        }
+        other_params = []
+        for key, val in p.items():
+            if key not in known_keys and not key.startswith('ADetailer'):
+                other_params.append(f"{key}: {val}")
+
+        if other_params:
+            display_lines.extend([
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "📦 기타 파라미터",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            ])
+            for param in other_params:
+                display_lines.append(f"  • {param}")
+
+        display_lines.extend([
+            "",
+            "═══════════════════════════════════════════",
+        ])
+
+        self.info_text.setPlainText('\n'.join(display_lines))
 
     def _parse_comfyui_info(self, info: dict):
         """ComfyUI 형식의 메타데이터 파싱"""
@@ -834,7 +941,7 @@ class PngInfoTab(QWidget):
             return result
 
         # 노드 타입별 분류
-        clip_encode_nodes = {}  # node_id -> inputs
+        clip_encode_nodes = {}  # node_id -> node_data
         ksampler_nodes = {}     # node_id -> inputs
         checkpoint_nodes = {}   # node_id -> inputs
         latent_nodes = {}       # node_id -> inputs
@@ -848,7 +955,7 @@ class PngInfoTab(QWidget):
                 result['extra_nodes'][class_type] = result['extra_nodes'].get(class_type, 0) + 1
 
             if class_type == 'CLIPTextEncode':
-                clip_encode_nodes[node_id] = inputs
+                clip_encode_nodes[node_id] = node_data
             elif class_type in ['KSampler', 'KSamplerAdvanced', 'SamplerCustom']:
                 ksampler_nodes[node_id] = inputs
                 result['ksampler_type'] = class_type
@@ -880,24 +987,21 @@ class PngInfoTab(QWidget):
             if 'denoise' in inputs:
                 result['denoise'] = float(inputs['denoise'])
 
-            # positive/negative 연결 추적
+            # positive/negative 연결 추적 (CLIPTextEncode -> text 입력 재귀 추적)
             positive_ref = inputs.get('positive')
             negative_ref = inputs.get('negative')
 
-            # 연결 참조 형식: [node_id, output_index]
             if isinstance(positive_ref, list) and len(positive_ref) >= 1:
                 pos_node_id = str(positive_ref[0])
                 if pos_node_id in clip_encode_nodes:
-                    text = clip_encode_nodes[pos_node_id].get('text', '')
-                    if isinstance(text, str):
-                        result['positive_prompt'] = text
+                    text_input = clip_encode_nodes[pos_node_id].get('inputs', {}).get('text', '')
+                    result['positive_prompt'] = self._resolve_text_value(text_input, prompt_data)
 
             if isinstance(negative_ref, list) and len(negative_ref) >= 1:
                 neg_node_id = str(negative_ref[0])
                 if neg_node_id in clip_encode_nodes:
-                    text = clip_encode_nodes[neg_node_id].get('text', '')
-                    if isinstance(text, str):
-                        result['negative_prompt'] = text
+                    text_input = clip_encode_nodes[neg_node_id].get('inputs', {}).get('text', '')
+                    result['negative_prompt'] = self._resolve_text_value(text_input, prompt_data)
 
         # EmptyLatentImage에서 width/height 추출
         for node_id, inputs in latent_nodes.items():
@@ -910,9 +1014,10 @@ class PngInfoTab(QWidget):
         # 프롬프트가 없으면 모든 CLIPTextEncode 노드에서 추출 시도
         if not result['positive_prompt'] and not result['negative_prompt']:
             prompts = []
-            for node_id, inputs in clip_encode_nodes.items():
-                text = inputs.get('text', '')
-                if isinstance(text, str) and text.strip():
+            for node_id, node_data in clip_encode_nodes.items():
+                text_input = node_data.get('inputs', {}).get('text', '')
+                text = self._resolve_text_value(text_input, prompt_data)
+                if text.strip():
                     prompts.append(text)
             if len(prompts) >= 1:
                 result['positive_prompt'] = prompts[0]
@@ -920,6 +1025,80 @@ class PngInfoTab(QWidget):
                 result['negative_prompt'] = prompts[1]
 
         return result
+
+    def _resolve_text_value(self, value, prompt_data: dict, visited: set = None) -> str:
+        """
+        텍스트 값을 재귀적으로 추적하여 최종 문자열 반환.
+        Text Concatenate, String, Text Multiline 등의 노드를 따라감.
+        """
+        if visited is None:
+            visited = set()
+
+        # 직접 문자열인 경우
+        if isinstance(value, str):
+            return value
+
+        # 노드 연결 참조인 경우: [node_id, output_index]
+        if isinstance(value, list) and len(value) >= 1:
+            ref_node_id = str(value[0])
+
+            # 순환 참조 방지
+            if ref_node_id in visited:
+                return ''
+            visited.add(ref_node_id)
+
+            if ref_node_id not in prompt_data:
+                return ''
+
+            ref_node = prompt_data[ref_node_id]
+            class_type = ref_node.get('class_type', '')
+            inputs = ref_node.get('inputs', {})
+
+            # 텍스트 관련 노드들 처리
+            text_node_types = [
+                'String', 'Text', 'Text Multiline', 'TextMultiline',
+                'String Literal', 'StringLiteral', 'Text box',
+                'CLIPTextEncodeSDXL', 'Text Input', 'TextInput',
+                'easy string', 'String (WLSH)', 'ShowText',
+            ]
+
+            # Text Concatenate 노드 처리
+            concat_node_types = [
+                'Text Concatenate', 'TextConcatenate', 'String Concatenate',
+                'StringConcatenate', 'Concat Text', 'ConcatText',
+                'Text Concat', 'StringConcat', 'easy string concat',
+            ]
+
+            if class_type in concat_node_types:
+                # text1, text2, text3, ... 또는 string1, string2, ... 입력을 연결
+                parts = []
+                for key in ['text1', 'text2', 'text3', 'text4', 'text5',
+                            'string1', 'string2', 'string3', 'string4',
+                            'text', 'string', 'a', 'b', 'c']:
+                    if key in inputs:
+                        part = self._resolve_text_value(inputs[key], prompt_data, visited.copy())
+                        if part.strip():
+                            parts.append(part)
+                # delimiter 처리
+                delimiter = inputs.get('delimiter', inputs.get('separator', ', '))
+                if isinstance(delimiter, list):
+                    delimiter = ', '
+                return delimiter.join(parts)
+
+            # 일반 텍스트 노드
+            for text_key in ['text', 'string', 'value', 'Text', 'STRING', 'content']:
+                if text_key in inputs:
+                    return self._resolve_text_value(inputs[text_key], prompt_data, visited.copy())
+
+            # SDXL CLIP 인코더 처리
+            if class_type == 'CLIPTextEncodeSDXL':
+                text_g = self._resolve_text_value(inputs.get('text_g', ''), prompt_data, visited.copy())
+                text_l = self._resolve_text_value(inputs.get('text_l', ''), prompt_data, visited.copy())
+                if text_g and text_l and text_g != text_l:
+                    return f"{text_g}\n[L]: {text_l}"
+                return text_g or text_l
+
+        return ''
 
     def on_generate_immediately(self):
         if not self.current_params:
