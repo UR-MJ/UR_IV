@@ -1054,15 +1054,7 @@ class PngInfoTab(QWidget):
             class_type = ref_node.get('class_type', '')
             inputs = ref_node.get('inputs', {})
 
-            # 텍스트 관련 노드들 처리
-            text_node_types = [
-                'String', 'Text', 'Text Multiline', 'TextMultiline',
-                'String Literal', 'StringLiteral', 'Text box',
-                'CLIPTextEncodeSDXL', 'Text Input', 'TextInput',
-                'easy string', 'String (WLSH)', 'ShowText',
-            ]
-
-            # Text Concatenate 노드 처리
+            # Text Concatenate 노드 처리 (가장 먼저 체크)
             concat_node_types = [
                 'Text Concatenate', 'TextConcatenate', 'String Concatenate',
                 'StringConcatenate', 'Concat Text', 'ConcatText',
@@ -1070,11 +1062,17 @@ class PngInfoTab(QWidget):
             ]
 
             if class_type in concat_node_types:
-                # text1, text2, text3, ... 또는 string1, string2, ... 입력을 연결
                 parts = []
-                for key in ['text1', 'text2', 'text3', 'text4', 'text5',
-                            'string1', 'string2', 'string3', 'string4',
-                            'text', 'string', 'a', 'b', 'c']:
+                # 다양한 입력 키 패턴 처리
+                concat_keys = [
+                    'text_a', 'text_b', 'text_c', 'text_d', 'text_e',  # WAS 노드 스타일
+                    'text1', 'text2', 'text3', 'text4', 'text5',       # 숫자 스타일
+                    'string1', 'string2', 'string3', 'string4',
+                    'string_a', 'string_b', 'string_c', 'string_d',
+                    'input1', 'input2', 'input3', 'input4',
+                    'a', 'b', 'c', 'd', 'e',
+                ]
+                for key in concat_keys:
                     if key in inputs:
                         part = self._resolve_text_value(inputs[key], prompt_data, visited.copy())
                         if part.strip():
@@ -1085,10 +1083,18 @@ class PngInfoTab(QWidget):
                     delimiter = ', '
                 return delimiter.join(parts)
 
-            # 일반 텍스트 노드
-            for text_key in ['text', 'string', 'value', 'Text', 'STRING', 'content']:
-                if text_key in inputs:
-                    return self._resolve_text_value(inputs[text_key], prompt_data, visited.copy())
+            # Text Multiline / 텍스트 노드 처리
+            text_node_types = [
+                'String', 'Text', 'Text Multiline', 'TextMultiline',
+                'String Literal', 'StringLiteral', 'Text box',
+                'Text Input', 'TextInput', 'easy string',
+                'String (WLSH)', 'ShowText', 'Note',
+            ]
+
+            if class_type in text_node_types:
+                for text_key in ['text', 'string', 'value', 'Text', 'STRING', 'content']:
+                    if text_key in inputs:
+                        return self._resolve_text_value(inputs[text_key], prompt_data, visited.copy())
 
             # SDXL CLIP 인코더 처리
             if class_type == 'CLIPTextEncodeSDXL':
@@ -1097,6 +1103,11 @@ class PngInfoTab(QWidget):
                 if text_g and text_l and text_g != text_l:
                     return f"{text_g}\n[L]: {text_l}"
                 return text_g or text_l
+
+            # 기타 노드 - 일반적인 텍스트 키로 시도
+            for text_key in ['text', 'string', 'value', 'Text', 'STRING', 'content']:
+                if text_key in inputs:
+                    return self._resolve_text_value(inputs[text_key], prompt_data, visited.copy())
 
         return ''
 
