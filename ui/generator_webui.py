@@ -22,29 +22,21 @@ class WebUIMixin:
     # ── 시작 시 백엔드 확인 ──
 
     def _startup_backend_check(self):
-        """앱 시작 시 백엔드 연결 확인 → 실패하면 선택 다이얼로그 표시"""
-        import config
-
-        # 현재 백엔드 빠르게 테스트
-        try:
-            backend = get_backend()
-            if backend.test_connection():
-                # 현재 백엔드가 살아있으면 바로 연결
-                self.load_webui_info()
-                return
-        except Exception:
-            pass
-
-        # 현재 백엔드 연결 실패 → 선택 다이얼로그
+        """앱 시작 시 백엔드 선택 다이얼로그 표시 (항상)"""
+        # 연결 상태와 무관하게 항상 선택 다이얼로그 표시
         self._show_startup_selector()
 
     def _show_startup_selector(self):
-        """시작 시 백엔드 선택 다이얼로그"""
+        """시작 시 백엔드 선택 다이얼로그 (항상 최상위)"""
         import config
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("백엔드 선택")
-        dialog.setFixedSize(520, 540)
+        dialog.setWindowTitle("API 백엔드 선택")
+        dialog.setFixedSize(520, 560)
+        # 항상 최상위에 표시
+        dialog.setWindowFlags(
+            dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
+        )
         dialog.setStyleSheet("""
             QDialog { background-color: #1a1a1a; color: #ddd; }
             QGroupBox {
@@ -74,13 +66,13 @@ class WebUIMixin:
         layout.setSpacing(12)
 
         # 헤더
-        header = QLabel("연결할 백엔드를 선택하세요")
-        header.setStyleSheet("color: #fff; font-size: 16px; font-weight: bold;")
+        header = QLabel("🚀 AI Studio Pro")
+        header.setStyleSheet("color: #fff; font-size: 18px; font-weight: bold;")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
 
-        sub_header = QLabel("현재 설정된 백엔드에 연결할 수 없습니다")
-        sub_header.setStyleSheet("color: #888; font-size: 12px;")
+        sub_header = QLabel("연결할 이미지 생성 백엔드를 선택하세요")
+        sub_header.setStyleSheet("color: #aaa; font-size: 13px;")
         sub_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(sub_header)
 
@@ -270,6 +262,10 @@ class WebUIMixin:
         btn_row.addStretch()
         btn_row.addWidget(btn_connect)
         layout.addLayout(btn_row)
+
+        # 다이얼로그를 최상위로 활성화
+        dialog.raise_()
+        dialog.activateWindow()
 
         result = dialog.exec()
 
