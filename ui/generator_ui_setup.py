@@ -998,7 +998,10 @@ class UISetupMixin:
         doc = self.total_prompt_display.document()
         doc_height = int(doc.size().height()) + 10  # 여백
         new_h = max(60, min(doc_height, 600))
-        self.total_prompt_display.setFixedHeight(new_h)
+        current_h = self.total_prompt_display.height()
+        # 높이 차이가 3px 이상일 때만 업데이트 (진동 방지)
+        if abs(current_h - new_h) > 3:
+            self.total_prompt_display.setFixedHeight(new_h)
 
     def _create_group(self, parent_layout, title, widget_or_layout):
         """그룹 생성 헬퍼"""
