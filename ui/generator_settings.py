@@ -73,6 +73,7 @@ class SettingsMixin:
             "prefix_toggle": self.prefix_toggle_button.isChecked(),
             "suffix_toggle": self.suffix_toggle_button.isChecked(),
             "neg_toggle": self.neg_toggle_button.isChecked(),
+            "exclude_toggle": self.exclude_toggle_button.isChecked(),
             
             "remove_artist": self.chk_remove_artist.isChecked(),
             "remove_copyright": self.chk_remove_copyright.isChecked(),
@@ -228,6 +229,7 @@ class SettingsMixin:
             self.prefix_toggle_button.setChecked(settings.get("prefix_toggle", True))
             self.suffix_toggle_button.setChecked(settings.get("suffix_toggle", True))
             self.neg_toggle_button.setChecked(settings.get("neg_toggle", True))
+            self.exclude_toggle_button.setChecked(settings.get("exclude_toggle", True))
             
             # 제거 옵션
             self.chk_remove_artist.setChecked(settings.get("remove_artist", False))

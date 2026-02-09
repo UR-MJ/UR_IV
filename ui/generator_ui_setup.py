@@ -401,8 +401,8 @@ class UISetupMixin:
         artist_layout.addWidget(self.artist_input)
         layout.addWidget(artist_group)
 
-        # 선행 프롬프트 (QTextEdit 먼저 생성!)
-        self.prefix_prompt_text = QTextEdit()
+        # 선행 프롬프트 (자동완성 지원)
+        self.prefix_prompt_text = TagInputWidget()
         self.prefix_prompt_text.setMinimumHeight(60)
         
         self.prefix_toggle_button = QPushButton("▼ 선행 고정 프롬프트")
@@ -446,8 +446,8 @@ class UISetupMixin:
         self.btn_lora_manager.clicked.connect(self._open_lora_manager)
         layout.addWidget(self.btn_lora_manager)
 
-        # 후행 프롬프트 (QTextEdit 먼저 생성!)
-        self.suffix_prompt_text = QTextEdit()
+        # 후행 프롬프트 (자동완성 지원)
+        self.suffix_prompt_text = TagInputWidget()
         self.suffix_prompt_text.setMinimumHeight(60)
         
         self.suffix_toggle_button = QPushButton("▼ 후행 고정 프롬프트")
@@ -476,8 +476,8 @@ class UISetupMixin:
         layout.addWidget(self.suffix_toggle_button)
         layout.addWidget(self.suffix_prompt_text)
         
-        # 네거티브 프롬프트
-        self.neg_prompt_text = QTextEdit()
+        # 네거티브 프롬프트 (자동완성 지원)
+        self.neg_prompt_text = TagInputWidget()
         self.neg_prompt_text.setMinimumHeight(60)
 
         self.neg_toggle_button = QPushButton("▼ 부정 프롬프트 (Negative)")
@@ -506,8 +506,8 @@ class UISetupMixin:
         layout.addWidget(self.neg_toggle_button)
         layout.addWidget(self.neg_prompt_text)
 
-        # 제외 프롬프트
-        self.exclude_prompt_local_input = QTextEdit()
+        # 제외 프롬프트 (자동완성 지원)
+        self.exclude_prompt_local_input = TagInputWidget()
         self.exclude_prompt_local_input.setMinimumHeight(60)
         self.exclude_prompt_local_input.setPlaceholderText(
             "예: arms up, __hair, hair__, __username__, ~blue hair"

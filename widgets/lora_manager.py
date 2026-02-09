@@ -67,10 +67,11 @@ class LoraManagerDialog(QDialog):
         self.search_input.textChanged.connect(self._filter_list)
         top_bar.addWidget(self.search_input)
 
-        self.btn_refresh = QPushButton("🔄")
-        self.btn_refresh.setFixedSize(35, 35)
+        self.btn_refresh = QPushButton("새로고침")
+        self.btn_refresh.setFixedHeight(35)
         self.btn_refresh.setStyleSheet(
-            "background-color: #333; color: #DDD; border-radius: 4px; font-size: 16px;"
+            "background-color: #333; color: #DDD; border-radius: 4px; "
+            "font-size: 12px; padding: 0 10px;"
         )
         self.btn_refresh.clicked.connect(self._refresh)
         top_bar.addWidget(self.btn_refresh)
@@ -78,6 +79,9 @@ class LoraManagerDialog(QDialog):
 
         # 목록
         self.lora_list = QListWidget()
+        self.lora_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.lora_list.setWordWrap(True)
+        self.lora_list.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.lora_list.setStyleSheet(
             "QListWidget { background-color: #252525; border: 1px solid #444; "
             "border-radius: 4px; font-size: 12px; }"

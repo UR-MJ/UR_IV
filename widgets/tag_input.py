@@ -39,13 +39,14 @@ class TagInputWidget(QTextEdit):
         """자동완성 팝업 생성"""
         self.popup = QListWidget()
         self.popup.setWindowFlags(
-            Qt.WindowType.Popup | 
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.NoDropShadowWindowHint
+            Qt.WindowType.ToolTip |
+            Qt.WindowType.FramelessWindowHint
         )
         self.popup.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.popup.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.popup.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.popup.setMaximumHeight(200)
+        self.popup.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.popup.setStyleSheet("""
             QListWidget {
                 background-color: #2A2A2A;
@@ -66,7 +67,7 @@ class TagInputWidget(QTextEdit):
                 color: white;
             }
         """)
-        
+
         self.popup.itemClicked.connect(self._on_item_clicked)
         self.popup.hide()
     
@@ -180,35 +181,32 @@ class TagInputWidget(QTextEdit):
     def keyPressEvent(self, event: QKeyEvent):
         """키 이벤트 처리"""
         if self.popup.isVisible():
-            # 팝업이 보이는 상태
-            
-            if event.key() == Qt.Key.Key_Down:
-                # 아래 화살표: 다음 항목
+            key = event.key()
+
+            if key == Qt.Key.Key_Down:
                 current = self.popup.currentRow()
                 if current < self.popup.count() - 1:
                     self.popup.setCurrentRow(current + 1)
                 return
-            
-            elif event.key() == Qt.Key.Key_Up:
-                # 위 화살표: 이전 항목
+
+            elif key == Qt.Key.Key_Up:
                 current = self.popup.currentRow()
                 if current > 0:
                     self.popup.setCurrentRow(current - 1)
                 return
-            
-            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
-                # Enter/Tab: 선택 항목 삽입
+
+            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
                 current_item = self.popup.currentItem()
                 if current_item:
                     self._insert_suggestion(current_item.text())
                 return
-            
-            elif event.key() == Qt.Key.Key_Escape:
-                # Escape: 팝업 닫기
+
+            elif key == Qt.Key.Key_Escape:
                 self.popup.hide()
                 return
-        
-        # 기본 처리
+
+            # 그 외 키(일반 타이핑, 백스페이스 등)는 그대로 텍스트에 입력
+
         super().keyPressEvent(event)
     
     def focusOutEvent(self, event: QFocusEvent):
