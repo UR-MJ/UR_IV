@@ -195,8 +195,8 @@ class WebUIMixin:
         btn_select_comfyui.setFixedHeight(50)
         btn_select_comfyui.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        # ComfyUI 아이콘 로드 (comfyui_icon.png 사용)
-        comfyui_icon_path = os.path.join(icon_dir, 'comfyui_icon.png')
+        # ComfyUI 아이콘 로드 (초기: 연결 전 기본 아이콘)
+        comfyui_icon_path = os.path.join(icon_dir, 'comfyui.png')
         if os.path.exists(comfyui_icon_path):
             btn_select_comfyui.setIcon(QIcon(comfyui_icon_path))
             btn_select_comfyui.setIconSize(QSize(28, 28))
@@ -283,23 +283,53 @@ class WebUIMixin:
         btn_select_webui.clicked.connect(lambda: confirm_and_connect('webui'))
         btn_select_comfyui.clicked.connect(lambda: confirm_and_connect('comfyui'))
 
-        # 자동 감지 함수
+        # 자동 감지 함수 (비동기 — UI 스레드 차단 방지)
+        import threading
+        _detect_version = {'v': 0}
+
         def auto_detect():
+            _detect_version['v'] += 1
+            current_v = _detect_version['v']
+
             webui_status.setText("⏳ 감지 중...")
             comfyui_status.setText("⏳ 감지 중...")
-            QApplication.processEvents()
 
-            w_ok = self._quick_test(webui_url_input.text().strip(), '/sdapi/v1/samplers')
-            c_ok = self._quick_test(comfyui_url_input.text().strip(), '/system_stats')
+            w_url = webui_url_input.text().strip()
+            c_url = comfyui_url_input.text().strip()
+            results = {'done': False}
 
-            webui_status.setText(f"{'🟢 연결 가능' if w_ok else '🔴 연결 안됨'}")
-            webui_status.setStyleSheet(
-                f"color: {'#4ade80' if w_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
-            )
-            comfyui_status.setText(f"{'🟢 연결 가능' if c_ok else '🔴 연결 안됨'}")
-            comfyui_status.setStyleSheet(
-                f"color: {'#4ade80' if c_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
-            )
+            def _run():
+                try:
+                    results['w_ok'] = WebUIMixin._quick_test(w_url, '/sdapi/v1/samplers')
+                    results['c_ok'] = WebUIMixin._quick_test(c_url, '/system_stats')
+                except Exception:
+                    results['w_ok'] = False
+                    results['c_ok'] = False
+                results['done'] = True
+
+            def _poll():
+                if current_v != _detect_version['v']:
+                    return
+                if not results['done']:
+                    QTimer.singleShot(100, _poll)
+                    return
+                w_ok, c_ok = results['w_ok'], results['c_ok']
+                webui_status.setText('🟢 연결 가능' if w_ok else '🔴 연결 안됨')
+                webui_status.setStyleSheet(
+                    f"color: {'#4ade80' if w_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
+                )
+                comfyui_status.setText('🟢 연결 가능' if c_ok else '🔴 연결 안됨')
+                comfyui_status.setStyleSheet(
+                    f"color: {'#4ade80' if c_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
+                )
+                # ComfyUI 아이콘: 연결 가능 → comfyui_icon.png, 연결 안됨 → comfyui.png
+                icon_name = 'comfyui_icon.png' if c_ok else 'comfyui.png'
+                new_icon_path = os.path.join(icon_dir, icon_name)
+                if os.path.exists(new_icon_path):
+                    btn_select_comfyui.setIcon(QIcon(new_icon_path))
+
+            threading.Thread(target=_run, daemon=True).start()
+            QTimer.singleShot(200, _poll)
 
         # URL 변경 시 자동 감지
         webui_url_input.editingFinished.connect(auto_detect)
