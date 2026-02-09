@@ -1111,7 +1111,11 @@ class UISetupMixin:
     def _open_lora_manager(self):
         """LoRA 브라우저 다이얼로그 열기"""
         from widgets.lora_manager import LoraManagerDialog
-        backend = getattr(self, '_current_backend', None)
+        from backends import get_backend
+        try:
+            backend = get_backend()
+        except Exception:
+            backend = None
         dlg = LoraManagerDialog(backend=backend, parent=self)
         dlg.lora_inserted.connect(self._on_lora_inserted)
         dlg.exec()

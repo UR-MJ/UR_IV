@@ -18,6 +18,12 @@ class LoraLoadWorker(QThread):
 
     def run(self):
         try:
+            if not self._backend:
+                self.error.emit("백엔드가 없습니다.")
+                return
+            if not self._backend.test_connection():
+                self.error.emit("백엔드 연결 실패 — 서버가 실행 중인지 확인하세요.")
+                return
             loras = self._backend.get_loras()
             self.finished.emit(loras)
         except Exception as e:

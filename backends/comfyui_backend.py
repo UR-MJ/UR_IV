@@ -202,9 +202,11 @@ class ComfyUIBackend(AbstractBackend):
     def get_loras(self) -> list:
         """ComfyUI LoRA 목록 반환"""
         try:
-            obj_info = requests.get(
+            resp = requests.get(
                 f'{self.api_url}/object_info/LoraLoader', timeout=10
-            ).json()
+            )
+            resp.raise_for_status()
+            obj_info = resp.json()
             lora_node = obj_info.get('LoraLoader', {})
             lora_input = lora_node.get('input', {}).get('required', {})
             names = lora_input.get('lora_name', [[]])[0]
@@ -213,8 +215,8 @@ class ComfyUIBackend(AbstractBackend):
                     {'name': n, 'alias': n, 'path': ''}
                     for n in names
                 ]
-        except Exception:
-            pass
+        except Exception as e:
+            _logger.warning(f"ComfyUI LoRA 목록 로드 실패: {e}")
         return []
 
     # ── 워크플로우 포맷 감지 및 변환 ──
