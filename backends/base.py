@@ -68,6 +68,10 @@ class AbstractBackend(ABC):
         """ADetailer 처리. base64 결과 반환"""
         ...
 
+    def get_loras(self) -> List[Dict]:
+        """LoRA 목록 반환. 각 항목: {'name': str, 'alias': str, 'path': str}"""
+        return []
+
     @abstractmethod
     def get_backend_type(self) -> str:
         """백엔드 이름 반환 ('webui' 또는 'comfyui')"""

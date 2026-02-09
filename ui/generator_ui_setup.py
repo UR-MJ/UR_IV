@@ -435,6 +435,17 @@ class UISetupMixin:
         self.main_prompt_text = self._create_group(layout, "메인", TagInputWidget())
         self.main_prompt_text.setMinimumHeight(80)
 
+        # LoRA 삽입 버튼
+        self.btn_lora_manager = QPushButton("📦 LoRA")
+        self.btn_lora_manager.setFixedHeight(28)
+        self.btn_lora_manager.setStyleSheet(
+            "background-color: #8A5CF5; color: white; border-radius: 4px; "
+            "font-size: 12px; font-weight: bold; padding: 0 10px;"
+        )
+        self.btn_lora_manager.setToolTip("LoRA 브라우저 열기")
+        self.btn_lora_manager.clicked.connect(self._open_lora_manager)
+        layout.addWidget(self.btn_lora_manager)
+
         # 후행 프롬프트 (QTextEdit 먼저 생성!)
         self.suffix_prompt_text = QTextEdit()
         self.suffix_prompt_text.setMinimumHeight(60)
@@ -1097,6 +1108,22 @@ class UISetupMixin:
             "▼ 제외 프롬프트 (Local)" if checked else "▶ 제외 프롬프트 (Local)"
         )
         
+    def _open_lora_manager(self):
+        """LoRA 브라우저 다이얼로그 열기"""
+        from widgets.lora_manager import LoraManagerDialog
+        backend = getattr(self, '_current_backend', None)
+        dlg = LoraManagerDialog(backend=backend, parent=self)
+        dlg.lora_inserted.connect(self._on_lora_inserted)
+        dlg.exec()
+
+    def _on_lora_inserted(self, lora_text: str):
+        """LoRA 텍스트를 메인 프롬프트에 삽입"""
+        current = self.main_prompt_text.toPlainText().strip()
+        if current:
+            self.main_prompt_text.setPlainText(f"{current}, {lora_text}")
+        else:
+            self.main_prompt_text.setPlainText(lora_text)
+
     def _create_favorites_tab(self):
         """즐겨찾기 탭 생성"""
         tab = QWidget()

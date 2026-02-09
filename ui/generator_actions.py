@@ -166,6 +166,8 @@ class ActionsMixin:
             self.gallery_tab.send_to_inpaint.connect(self._gallery_send_to_inpaint)
             self.gallery_tab.send_to_upscale.connect(self._gallery_send_to_upscale)
             self.gallery_tab.send_to_queue_signal.connect(self._gallery_send_to_queue)
+            if hasattr(self.gallery_tab, 'send_to_compare'):
+                self.gallery_tab.send_to_compare.connect(self._gallery_send_to_compare)
 
         if hasattr(self, 'xyz_plot_tab'):
             self.xyz_plot_tab.add_to_queue_requested.connect(self._on_xyz_add_to_queue)
@@ -686,3 +688,14 @@ class ActionsMixin:
         if hasattr(self, 'queue_panel'):
             self.queue_panel.add_single_item(payload)
             self.show_status("📋 대기열에 추가되었습니다.")
+
+    def _gallery_send_to_compare(self, path_a: str, path_b: str):
+        """Gallery에서 두 이미지를 PNG Info 비교 탭으로 전송"""
+        if hasattr(self, 'png_info_tab'):
+            self.png_info_tab.load_compare_images(path_a, path_b)
+            idx = self.center_tabs.indexOf(self.png_info_tab)
+            if idx >= 0:
+                self.center_tabs.setCurrentIndex(idx)
+            self.show_status(
+                f"🔍 이미지 비교: {os.path.basename(path_a)} vs {os.path.basename(path_b)}"
+            )

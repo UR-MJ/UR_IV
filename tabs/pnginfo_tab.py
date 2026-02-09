@@ -204,8 +204,17 @@ class ImageCompareWidget(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setSpacing(0)
+
+        # 비교 영역 + diff를 스플리터로 배치
+        self.main_splitter = QSplitter(Qt.Orientation.Vertical)
+
+        # 상단: 기존 비교 영역
+        compare_container = QWidget()
+        layout = QVBoxLayout(compare_container)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
 
         # ── 상단 툴바 ──
@@ -304,6 +313,16 @@ class ImageCompareWidget(QWidget):
         info_layout.addWidget(self.info_b)
         layout.addLayout(info_layout)
 
+        # 상단 비교 영역을 스플리터에 추가
+        self.main_splitter.addWidget(compare_container)
+
+        # 하단: 파라미터 Diff 위젯
+        self.param_diff_widget = ParamDiffWidget()
+        self.main_splitter.addWidget(self.param_diff_widget)
+
+        self.main_splitter.setSizes([500, 200])
+        main_layout.addWidget(self.main_splitter)
+
     def _open_image(self, which):
         path, _ = QFileDialog.getOpenFileName(
             self, f"이미지 {which.upper()} 열기", "",
@@ -333,6 +352,10 @@ class ImageCompareWidget(QWidget):
             self.info_b.setText(info_text)
             self.overlay_widget.set_image_b(pixmap)
             self._update_side_label(self.side_label_b, pixmap)
+
+        # 두 이미지가 모두 로드되면 파라미터 diff 갱신
+        if self.path_a and self.path_b:
+            self.param_diff_widget.load_from_paths(self.path_a, self.path_b)
 
     def _update_side_label(self, label: QLabel, pixmap: QPixmap):
         scaled = pixmap.scaled(
@@ -402,6 +425,193 @@ class ImageCompareWidget(QWidget):
 
 
 # ──────────────────────────────────────────────────────
+#  파라미터 Diff 위젯
+# ──────────────────────────────────────────────────────
+
+class ParamDiffWidget(QWidget):
+    """두 이미지의 생성 파라미터를 비교하여 Diff 표시"""
+
+    COMPARE_KEYS = [
+        'Model', 'Steps', 'CFG scale', 'Sampler', 'Schedule type',
+        'Scheduler', 'Seed', 'Size', 'Denoising strength',
+        'Hires upscaler', 'Hires upscale', 'Hires steps',
+    ]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.params_a: dict = {}
+        self.params_b: dict = {}
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(4)
+
+        header = QLabel("📊 파라미터 비교 (Diff)")
+        header.setStyleSheet("color: #DDD; font-weight: bold; font-size: 13px;")
+        layout.addWidget(header)
+
+        self.diff_text = QTextEdit()
+        self.diff_text.setReadOnly(True)
+        self.diff_text.setStyleSheet(
+            "background-color: #1A1A1A; color: #DDD; border: 1px solid #444; "
+            "border-radius: 4px; font-family: 'Consolas'; font-size: 11px; padding: 6px;"
+        )
+        layout.addWidget(self.diff_text)
+
+    def set_params(self, params_a: dict, params_b: dict):
+        """두 이미지의 파라미터를 설정하고 diff를 렌더링"""
+        self.params_a = params_a
+        self.params_b = params_b
+        self._render_diff()
+
+    def _parse_metadata(self, path: str) -> dict:
+        """이미지 파일에서 생성 파라미터를 파싱"""
+        params: dict = {}
+        try:
+            img = Image.open(path)
+            if 'prompt' in img.info or 'workflow' in img.info:
+                # ComfyUI 형식 — 간략 파싱
+                if 'prompt' in img.info:
+                    import json as _json
+                    prompt_data = _json.loads(img.info['prompt'])
+                    for nid, node in prompt_data.items():
+                        if not isinstance(node, dict):
+                            continue
+                        cls = node.get('class_type', '')
+                        inp = node.get('inputs', {})
+                        if cls in ('KSampler', 'KSamplerAdvanced'):
+                            params['Steps'] = str(inp.get('steps', ''))
+                            params['CFG scale'] = str(inp.get('cfg', ''))
+                            params['Sampler'] = str(inp.get('sampler_name', ''))
+                            params['Scheduler'] = str(inp.get('scheduler', ''))
+                            params['Seed'] = str(inp.get('seed', inp.get('noise_seed', '')))
+                            params['Denoising strength'] = str(inp.get('denoise', ''))
+                        elif cls == 'CheckpointLoaderSimple':
+                            params['Model'] = str(inp.get('ckpt_name', ''))
+                        elif cls == 'EmptyLatentImage':
+                            w = inp.get('width', '')
+                            h = inp.get('height', '')
+                            if w and h:
+                                params['Size'] = f"{w}x{h}"
+                        elif cls == 'CLIPTextEncode':
+                            text = inp.get('text', '')
+                            if isinstance(text, str) and text.strip():
+                                if 'prompt' not in params:
+                                    params['prompt'] = text
+                                elif 'negative_prompt' not in params:
+                                    params['negative_prompt'] = text
+            elif 'parameters' in img.info:
+                raw = img.info['parameters']
+                parts = raw.split('\nNegative prompt: ')
+                prompt = parts[0].strip()
+                negative = ""
+                params_line = ""
+                if len(parts) > 1:
+                    sub = parts[1].split('\nSteps: ')
+                    negative = sub[0].strip()
+                    if len(sub) > 1:
+                        params_line = "Steps: " + sub[1].strip()
+                else:
+                    for line in raw.split('\n'):
+                        if line.startswith("Steps: "):
+                            params_line = line
+                params['prompt'] = prompt
+                params['negative_prompt'] = negative
+                if params_line:
+                    for item in params_line.split(', '):
+                        if ':' in item:
+                            k, v = item.split(':', 1)
+                            params[k.strip()] = v.strip()
+        except Exception:
+            pass
+        return params
+
+    def load_from_paths(self, path_a: str, path_b: str):
+        """경로에서 파라미터를 파싱하고 diff 렌더링"""
+        self.params_a = self._parse_metadata(path_a)
+        self.params_b = self._parse_metadata(path_b)
+        self._render_diff()
+
+    def _render_diff(self):
+        """HTML 기반 diff 렌더링"""
+        a, b = self.params_a, self.params_b
+        if not a and not b:
+            self.diff_text.setHtml("<span style='color:#888;'>파라미터 정보 없음</span>")
+            return
+
+        html = "<table style='width:100%; border-collapse:collapse;'>"
+        html += (
+            "<tr style='border-bottom:1px solid #555;'>"
+            "<th style='text-align:left; padding:4px; color:#AAA;'>항목</th>"
+            "<th style='text-align:left; padding:4px; color:#6AA0D0;'>A</th>"
+            "<th style='text-align:left; padding:4px; color:#D06A6A;'>B</th>"
+            "</tr>"
+        )
+
+        # 고정 키 + 양쪽에만 있는 추가 키
+        all_keys = list(self.COMPARE_KEYS)
+        for k in set(list(a.keys()) + list(b.keys())):
+            if k not in all_keys and k not in ('prompt', 'negative_prompt'):
+                all_keys.append(k)
+
+        for key in all_keys:
+            va = a.get(key, '')
+            vb = b.get(key, '')
+            if not va and not vb:
+                continue
+
+            if va == vb:
+                color_a = color_b = "#888"
+            else:
+                color_a = "#6AA0D0"
+                color_b = "#D06A6A"
+
+            html += (
+                f"<tr style='border-bottom:1px solid #333;'>"
+                f"<td style='padding:3px 6px; color:#AAA;'>{key}</td>"
+                f"<td style='padding:3px 6px; color:{color_a};'>{va or '-'}</td>"
+                f"<td style='padding:3px 6px; color:{color_b};'>{vb or '-'}</td>"
+                f"</tr>"
+            )
+
+        # 프롬프트 태그별 diff
+        prompt_a = [t.strip() for t in a.get('prompt', '').split(',') if t.strip()]
+        prompt_b = [t.strip() for t in b.get('prompt', '').split(',') if t.strip()]
+        if prompt_a or prompt_b:
+            set_a, set_b = set(prompt_a), set(prompt_b)
+            only_a = set_a - set_b
+            only_b = set_b - set_a
+            common = set_a & set_b
+
+            prompt_html = ""
+            for tag in prompt_a:
+                if tag in only_a:
+                    prompt_html += f"<span style='color:#6AA0D0;'>{tag}</span>, "
+                else:
+                    prompt_html += f"<span style='color:#888;'>{tag}</span>, "
+
+            prompt_html_b = ""
+            for tag in prompt_b:
+                if tag in only_b:
+                    prompt_html_b += f"<span style='color:#D06A6A;'>{tag}</span>, "
+                else:
+                    prompt_html_b += f"<span style='color:#888;'>{tag}</span>, "
+
+            html += (
+                f"<tr style='border-bottom:1px solid #333;'>"
+                f"<td style='padding:3px 6px; color:#AAA; vertical-align:top;'>Prompt</td>"
+                f"<td style='padding:3px 6px; font-size:10px;'>{prompt_html.rstrip(', ')}</td>"
+                f"<td style='padding:3px 6px; font-size:10px;'>{prompt_html_b.rstrip(', ')}</td>"
+                f"</tr>"
+            )
+
+        html += "</table>"
+        self.diff_text.setHtml(html)
+
+
+# ──────────────────────────────────────────────────────
 #  PNG Info 탭 (메인)
 # ──────────────────────────────────────────────────────
 
@@ -449,6 +659,12 @@ class PngInfoTab(QWidget):
 
         self.current_params = {}
         self.current_image_path = None
+
+    def load_compare_images(self, path_a: str, path_b: str):
+        """외부에서 두 이미지를 비교 탭에 로드"""
+        self.child_tabs.setCurrentIndex(1)  # 이미지 비교 탭으로 전환
+        self.compare_widget._load_image(path_a, 'a')
+        self.compare_widget._load_image(path_b, 'b')
 
     def _setup_pnginfo_ui(self, container):
         """기존 PNG Info UI를 container 위젯에 구성"""

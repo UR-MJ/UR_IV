@@ -105,6 +105,28 @@ class WebUIBackend(AbstractBackend):
 
         return info
 
+    def get_loras(self) -> list:
+        """WebUI LoRA 목록 반환"""
+        try:
+            r = requests.get(
+                f'{self.api_url}/sdapi/v1/loras',
+                headers=_HEADERS, timeout=10
+            )
+            r.raise_for_status()
+            data = r.json()
+            if isinstance(data, list):
+                return [
+                    {
+                        'name': item.get('name', ''),
+                        'alias': item.get('alias', item.get('name', '')),
+                        'path': item.get('path', ''),
+                    }
+                    for item in data
+                ]
+        except Exception:
+            pass
+        return []
+
     def _switch_model_if_needed(self, model_name: str):
         """필요 시 모델 전환"""
         if not model_name:

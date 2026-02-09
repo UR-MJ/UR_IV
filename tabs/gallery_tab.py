@@ -452,6 +452,7 @@ class ThumbnailWidget(QFrame):
         act_copy_path = menu.addAction("📋 경로 복사")
         act_copy_image = menu.addAction("🖼️ 이미지 복사")
         menu.addSeparator()
+        act_compare = menu.addAction("🔍 비교하기")
         act_favorite = menu.addAction("⭐ 즐겨찾기 토글")
         act_queue = menu.addAction("📋 대기열에 추가")
         menu.addSeparator()
@@ -478,6 +479,8 @@ class ThumbnailWidget(QFrame):
             pix = QPixmap(self.image_path)
             if not pix.isNull():
                 QApplication.clipboard().setPixmap(pix)
+        elif action == act_compare:
+            self.context_action.emit("compare", self.image_path)
         elif action == act_favorite:
             self.context_action.emit("favorite", self.image_path)
         elif action == act_queue:
@@ -517,6 +520,7 @@ class GalleryTab(QWidget):
     send_prompt_signal = pyqtSignal(str, str)    # → T2I 프롬프트 전송
     generate_signal = pyqtSignal(dict)           # → T2I 즉시 생성
     send_to_queue_signal = pyqtSignal(dict)     # → 대기열에 추가
+    send_to_compare = pyqtSignal(str, str)      # → PNG Info 비교 (path_a, path_b)
 
     COLS = 10
     ROWS = 4
@@ -530,6 +534,7 @@ class GalleryTab(QWidget):
         self._current_page = 0
         self._total_pages = 0
         self._thumb_widgets: list[ThumbnailWidget] = []
+        self._compare_first_path: str | None = None
 
         from config import DB_FILE, THUMB_DIR
         self._thumb_dir = THUMB_DIR
@@ -572,6 +577,26 @@ class GalleryTab(QWidget):
         self.label_folder.setStyleSheet("color: #888; font-size: 12px;")
         self.label_folder.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         top_bar.addWidget(self.label_folder)
+
+        self.btn_stats = QPushButton("📊 통계")
+        self.btn_stats.setFixedHeight(35)
+        self.btn_stats.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_stats.setStyleSheet(
+            "background-color: #8A5CF5; color: white; border-radius: 4px; "
+            "font-size: 13px; font-weight: bold; padding: 0 12px;"
+        )
+        self.btn_stats.clicked.connect(self._on_open_stats)
+        top_bar.addWidget(self.btn_stats)
+
+        self.btn_organize = QPushButton("🗂️ 폴더 정리")
+        self.btn_organize.setFixedHeight(35)
+        self.btn_organize.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_organize.setStyleSheet(
+            "background-color: #E67E22; color: white; border-radius: 4px; "
+            "font-size: 13px; font-weight: bold; padding: 0 12px;"
+        )
+        self.btn_organize.clicked.connect(self._on_open_organizer)
+        top_bar.addWidget(self.btn_organize)
 
         layout.addLayout(top_bar)
 
@@ -1148,6 +1173,26 @@ class GalleryTab(QWidget):
             self._toggle_favorite(path)
         elif action == "delete":
             self._delete_image(path)
+        elif action == "compare":
+            self._handle_compare(path)
+
+    def _handle_compare(self, path: str):
+        """비교하기: 첫 번째 선택 시 저장, 두 번째 선택 시 비교 시그널 발사"""
+        if self._compare_first_path is None:
+            self._compare_first_path = path
+            # 상태 표시 (부모가 show_status를 가지면 사용)
+            parent = self.parent()
+            while parent:
+                if hasattr(parent, 'show_status'):
+                    parent.show_status(
+                        f"🔍 비교 A 선택: {os.path.basename(path)} — 두 번째 이미지를 우클릭하세요"
+                    )
+                    break
+                parent = parent.parent() if hasattr(parent, 'parent') else None
+        else:
+            first = self._compare_first_path
+            self._compare_first_path = None
+            self.send_to_compare.emit(first, path)
 
     def _send_to_queue(self, path: str):
         """이미지 EXIF 정보로 대기열에 추가"""
@@ -1203,6 +1248,24 @@ class GalleryTab(QWidget):
             })
 
         self.send_to_queue_signal.emit(payload)
+
+    def _on_open_stats(self):
+        """통계 대시보드 열기"""
+        if not self._current_folder:
+            return
+        from widgets.stats_panel import StatsPanel
+        dlg = StatsPanel(self._db, self._current_folder, self)
+        dlg.exec()
+
+    def _on_open_organizer(self):
+        """폴더 정리 도구 열기"""
+        if not self._current_folder:
+            return
+        from widgets.folder_organizer import FolderOrganizerDialog
+        dlg = FolderOrganizerDialog(self._db, self._current_folder, self)
+        dlg.exec()
+        # 정리 후 갤러리 새로고침
+        self._start_scan(self._current_folder)
 
     def _toggle_favorite(self, path: str):
         """즐겨찾기 토글 (JSON 파일 기반)"""

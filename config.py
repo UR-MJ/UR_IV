@@ -50,6 +50,7 @@ if not _p.scheme:
 
 COMFYUI_API_URL = "http://127.0.0.1:8188"
 COMFYUI_WORKFLOW_PATH = ""
+COMFYUI_WORKFLOW_IMG2IMG_PATH = ""
 
 from utils.app_logger import get_logger as _get_logger
 _logger = _get_logger('config')

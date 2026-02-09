@@ -199,6 +199,24 @@ class ComfyUIBackend(AbstractBackend):
 
         return info
 
+    def get_loras(self) -> list:
+        """ComfyUI LoRA 목록 반환"""
+        try:
+            obj_info = requests.get(
+                f'{self.api_url}/object_info/LoraLoader', timeout=10
+            ).json()
+            lora_node = obj_info.get('LoraLoader', {})
+            lora_input = lora_node.get('input', {}).get('required', {})
+            names = lora_input.get('lora_name', [[]])[0]
+            if isinstance(names, list):
+                return [
+                    {'name': n, 'alias': n, 'path': ''}
+                    for n in names
+                ]
+        except Exception:
+            pass
+        return []
+
     # ── 워크플로우 포맷 감지 및 변환 ──
 
     def _load_workflow(self) -> dict:
@@ -691,13 +709,93 @@ class ComfyUIBackend(AbstractBackend):
             _logger.error(f"예기치 못한 오류: {e}", exc_info=True)
             return GenerationResult(success=False, error=f"ComfyUI 생성 오류: {e}")
 
+    def _load_img2img_workflow(self) -> dict:
+        """img2img 워크플로우 JSON 로드"""
+        import os
+        workflow_path = getattr(config, 'COMFYUI_WORKFLOW_IMG2IMG_PATH', '')
+        if not workflow_path:
+            raise RuntimeError(
+                "ComfyUI img2img 워크플로우 파일이 설정되지 않았습니다.\n"
+                "설정에서 img2img 워크플로우 JSON 파일을 선택해주세요."
+            )
+        if not os.path.exists(workflow_path):
+            raise RuntimeError(
+                f"img2img 워크플로우 파일을 찾을 수 없습니다:\n{workflow_path}"
+            )
+        with open(workflow_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if 'nodes' in data and isinstance(data['nodes'], list):
+            return self._convert_web_to_api(data)
+        return data
+
+    def _upload_image(self, image_b64: str) -> str:
+        """ComfyUI에 이미지 업로드 → 파일명 반환"""
+        import base64
+        image_bytes = base64.b64decode(image_b64)
+
+        resp = requests.post(
+            f'{self.api_url}/upload/image',
+            files={'image': ('input.png', image_bytes, 'image/png')},
+            data={'overwrite': 'true'},
+            timeout=30
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        filename = result.get('name', '')
+        if not filename:
+            raise RuntimeError("업로드 응답에 파일명이 없습니다.")
+        _logger.info(f"이미지 업로드 완료: {filename}")
+        return filename
+
+    def _find_load_image_node(self, workflow: dict) -> Optional[str]:
+        """LoadImage 노드 ID 찾기"""
+        for node_id, node in workflow.items():
+            if not isinstance(node, dict):
+                continue
+            if node.get('class_type') == 'LoadImage':
+                return node_id
+        return None
+
     def img2img(self, model_name: str, payload: Dict,
                 progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
-        """이미지→이미지 생성 (추후 구현)"""
-        return GenerationResult(
-            success=False,
-            error="ComfyUI img2img는 아직 지원되지 않습니다.\n전용 워크플로우가 필요합니다."
-        )
+        """이미지→이미지 생성"""
+        try:
+            _logger.info("=== ComfyUI img2img 시작 ===")
+
+            workflow = self._load_img2img_workflow()
+
+            # 입력 이미지 업로드
+            init_images = payload.get('init_images', [])
+            if not init_images:
+                return GenerationResult(success=False, error="입력 이미지가 없습니다.")
+
+            uploaded_filename = self._upload_image(init_images[0])
+
+            # LoadImage 노드에 파일명 설정
+            load_img_id = self._find_load_image_node(workflow)
+            if load_img_id and load_img_id in workflow:
+                workflow[load_img_id]['inputs']['image'] = uploaded_filename
+            else:
+                _logger.warning("LoadImage 노드를 찾을 수 없습니다. 이미지가 적용되지 않을 수 있습니다.")
+
+            # 파라미터 적용
+            self._apply_params(workflow, model_name, payload)
+
+            # denoise 설정 (img2img에서 중요)
+            try:
+                ks_id, ks_node = self._find_ksampler_node(workflow)
+                ks_node['inputs']['denoise'] = payload.get('denoising_strength', 0.75)
+            except RuntimeError:
+                pass
+
+            return self._queue_and_wait(workflow, progress_callback)
+
+        except RuntimeError as e:
+            _logger.error(f"img2img 오류: {e}")
+            return GenerationResult(success=False, error=str(e))
+        except Exception as e:
+            _logger.error(f"img2img 예외: {e}", exc_info=True)
+            return GenerationResult(success=False, error=f"ComfyUI img2img 오류: {e}")
 
     def upscale(self, image_b64: str, settings: Dict) -> str:
         """업스케일 (추후 구현)"""

@@ -24,6 +24,13 @@ class MetadataManager:
                     pending_delete INTEGER DEFAULT 0
                 )
             """)
+            # 마이그레이션: image_hash 컬럼 추가
+            try:
+                self.conn.execute(
+                    "ALTER TABLE images ADD COLUMN image_hash TEXT DEFAULT ''"
+                )
+            except Exception:
+                pass  # 이미 존재하면 무시
     
     def get_image_data(self, path):
         if not path: 
@@ -62,6 +69,41 @@ class MetadataManager:
         query_path = folder_path.rstrip('/') + '/'
         cur.execute("SELECT path FROM images WHERE path LIKE ?", (query_path + '%',))
         return [row[0] for row in cur.fetchall()]
+
+    def update_image_hash(self, path: str, hash_val: str):
+        """이미지 해시 업데이트"""
+        with self.conn:
+            self.conn.execute(
+                "UPDATE images SET image_hash=? WHERE path=?",
+                (hash_val, path)
+            )
+
+    def find_duplicates_in_folder(self, folder_path: str) -> list:
+        """폴더 내 중복 이미지 그룹 반환 [(hash, [paths...])]"""
+        cur = self.conn.cursor()
+        query_path = folder_path.rstrip('/') + '/'
+        cur.execute(
+            "SELECT image_hash, GROUP_CONCAT(path, '|||') FROM images "
+            "WHERE path LIKE ? AND image_hash != '' AND image_hash IS NOT NULL "
+            "GROUP BY image_hash HAVING COUNT(*) > 1",
+            (query_path + '%',)
+        )
+        result = []
+        for row in cur.fetchall():
+            hash_val = row[0]
+            paths = row[1].split('|||')
+            result.append((hash_val, paths))
+        return result
+
+    def get_all_exif_in_folder(self, folder_path: str) -> list:
+        """폴더 내 모든 (path, exif) 반환"""
+        cur = self.conn.cursor()
+        query_path = folder_path.rstrip('/') + '/'
+        cur.execute(
+            "SELECT path, exif FROM images WHERE path LIKE ? AND exif IS NOT NULL AND exif != ''",
+            (query_path + '%',)
+        )
+        return cur.fetchall()
 
     def search_exif(self, keywords: list, folder_path: str) -> list:
         """키워드 AND 검색 (폴더 범위)"""

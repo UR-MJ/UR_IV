@@ -19,6 +19,7 @@ from widgets.queue_manager import QueueManager
 from widgets.xyz_plot_dialog import XYZPlotDialog
 from utils.prompt_cleaner import get_prompt_cleaner
 from utils.theme_manager import get_theme_manager
+from utils.tray_manager import TrayManager
 
 
 class GeneratorMainUI(
@@ -59,6 +60,9 @@ class GeneratorMainUI(
         
         # 대기열 설정
         self._setup_queue()
+
+        # 시스템 트레이
+        self._setup_tray()
     
     def _clean_widget_text(self, widget):
         """위젯의 텍스트를 정리하는 헬퍼 메서드"""
@@ -171,6 +175,9 @@ class GeneratorMainUI(
     def _on_queue_completed(self, total_count: int):
         """대기열 완료"""
         self.is_automation_running = False
+        # 창이 비활성이면 트레이 알림
+        if not self.isActiveWindow() and hasattr(self, '_tray_manager'):
+            self._tray_manager.notify("생성 완료", f"총 {total_count}장 생성 완료!")
         # 배치 리포트 표시
         from widgets.batch_report_dialog import BatchReportDialog
         report = self.queue_manager.get_batch_report()
@@ -323,31 +330,61 @@ class GeneratorMainUI(
         if hasattr(self, 'btn_refresh_gallery'):
             self.btn_refresh_gallery.clicked.connect(self.refresh_gallery)
 
-    def closeEvent(self, event):
-        """앱 종료 시 확인 및 설정 저장"""
+    def _setup_tray(self):
+        """시스템 트레이 초기화"""
+        self._tray_manager = TrayManager(self)
+        self._tray_manager.show_window_requested.connect(self._restore_from_tray)
+        self._tray_manager.quit_requested.connect(self._quit_app)
+        self._tray_manager.show()
+
+    def _restore_from_tray(self):
+        """트레이에서 창 복원"""
+        self.showNormal()
+        self.activateWindow()
+        self.raise_()
+
+    def _quit_app(self):
+        """앱 완전 종료"""
         import os
         from utils.app_logger import get_logger
-
-        # 종료 확인 다이얼로그
-        reply = QMessageBox.question(
-            self,
-            "종료 확인",
-            "AI Studio Pro를 종료하시겠습니까?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-
-        if reply != QMessageBox.StandardButton.Yes:
-            event.ignore()
-            return
-
-        # 설정 저장
         try:
             self.save_settings()
         except Exception as e:
             get_logger('main').error(f"종료 시 설정 저장 실패: {e}")
-
-        event.accept()
-
-        # CMD 창까지 완전 종료
+        self._tray_manager.hide()
         os._exit(0)
+
+    def tray_notify(self, title: str, message: str):
+        """트레이 알림 (외부 호출용)"""
+        if hasattr(self, '_tray_manager'):
+            self._tray_manager.notify(title, message)
+
+    def closeEvent(self, event):
+        """앱 종료 시 트레이 최소화 / 종료 선택"""
+        import os
+        from utils.app_logger import get_logger
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("종료")
+        msg.setText("AI Studio Pro를 어떻게 처리할까요?")
+        btn_tray = msg.addButton("트레이로 최소화", QMessageBox.ButtonRole.AcceptRole)
+        btn_quit = msg.addButton("완전 종료", QMessageBox.ButtonRole.DestructiveRole)
+        btn_cancel = msg.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+        msg.setDefaultButton(btn_cancel)
+        msg.exec()
+
+        clicked = msg.clickedButton()
+        if clicked == btn_tray:
+            event.ignore()
+            self.hide()
+            self._tray_manager.notify("AI Studio Pro", "트레이로 최소화되었습니다.")
+        elif clicked == btn_quit:
+            try:
+                self.save_settings()
+            except Exception as e:
+                get_logger('main').error(f"종료 시 설정 저장 실패: {e}")
+            self._tray_manager.hide()
+            event.accept()
+            os._exit(0)
+        else:
+            event.ignore()
