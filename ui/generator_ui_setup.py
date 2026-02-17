@@ -1044,62 +1044,37 @@ class UISetupMixin:
         QMessageBox.information(self, "저장 완료", f"프리셋 '{name}'이 저장되었습니다.")
 
     def _load_prompt_preset(self):
-        """저장된 프리셋 불러오기"""
-        from utils.prompt_preset import list_presets, get_preset, delete_preset
+        """저장된 프리셋 불러오기 (미리보기 다이얼로그)"""
+        from utils.prompt_preset import list_presets
+        from widgets.preset_preview_dialog import PresetPreviewDialog
 
         names = list_presets()
         if not names:
             QMessageBox.information(self, "프리셋", "저장된 프리셋이 없습니다.")
             return
 
-        menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2a2a2a; color: #ddd; border: 1px solid #555;
-                padding: 4px;
-            }
-            QMenu::item { padding: 6px 12px; border-radius: 3px; }
-            QMenu::item:selected { background-color: #5865F2; }
-        """)
-
-        for name in names:
-            sub = menu.addMenu(name)
-            act_apply = sub.addAction("적용")
-            act_apply.setData(("apply", name))
-            act_del = sub.addAction("삭제")
-            act_del.setData(("delete", name))
-
-        chosen = menu.exec(self.btn_preset_load.mapToGlobal(
-            self.btn_preset_load.rect().bottomLeft()
-        ))
-        if not chosen:
+        dlg = PresetPreviewDialog(self)
+        if dlg.exec() != dlg.DialogCode.Accepted:
             return
 
-        action_type, preset_name = chosen.data()
-        if action_type == "delete":
-            delete_preset(preset_name)
-            self.show_status(f"프리셋 '{preset_name}' 삭제됨")
-            return
-
-        data = get_preset(preset_name)
+        data = dlg.get_result()
         if not data:
             return
 
-        if data.get("character"):
-            self.character_input.setText(data["character"])
-        if data.get("copyright"):
-            self.copyright_input.setText(data["copyright"])
-        if data.get("artist"):
-            self.artist_input.setText(data["artist"])
-        if data.get("main_prompt"):
-            self.main_prompt_text.setPlainText(data["main_prompt"])
-        if data.get("prefix"):
-            self.prefix_prompt_text.setPlainText(data["prefix"])
-        if data.get("suffix"):
-            self.suffix_prompt_text.setPlainText(data["suffix"])
-        if data.get("negative"):
-            self.neg_prompt_text.setPlainText(data["negative"])
-        self.show_status(f"프리셋 '{preset_name}' 적용됨")
+        _field_map = {
+            "character":    lambda v: self.character_input.setText(v),
+            "copyright":    lambda v: self.copyright_input.setText(v),
+            "artist":       lambda v: self.artist_input.setText(v),
+            "main_prompt":  lambda v: self.main_prompt_text.setPlainText(v),
+            "prefix":       lambda v: self.prefix_prompt_text.setPlainText(v),
+            "suffix":       lambda v: self.suffix_prompt_text.setPlainText(v),
+            "negative":     lambda v: self.neg_prompt_text.setPlainText(v),
+        }
+        for key, setter in _field_map.items():
+            if key in data:
+                setter(data[key])
+
+        self.show_status("프리셋 적용됨")
 
     def _show_prompt_history(self):
         """최근 프롬프트 히스토리 팝업"""
