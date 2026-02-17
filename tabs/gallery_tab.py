@@ -680,6 +680,22 @@ class GalleryTab(QWidget):
         filter_layout.addWidget(self.btn_reset_filter)
 
         filter_layout.addStretch()
+
+        # ── 정렬 ──
+        filter_layout.addWidget(QLabel("정렬:"))
+        self.sort_combo = NoScrollComboBox()
+        self.sort_combo.setMinimumWidth(130)
+        self.sort_combo.addItems([
+            "날짜 (최신순)",
+            "날짜 (오래된순)",
+            "이름 (A→Z)",
+            "이름 (Z→A)",
+            "크기 (큰순)",
+            "크기 (작은순)",
+        ])
+        self.sort_combo.currentIndexChanged.connect(self._on_sort_changed)
+        filter_layout.addWidget(self.sort_combo)
+
         layout.addWidget(self.filter_bar)
 
         # ── 진행률 바 ──
@@ -797,6 +813,7 @@ class GalleryTab(QWidget):
 
     def _on_scan_finished(self):
         self._filtered_paths = list(self._all_paths)
+        self._apply_sort()
         self._update_pagination()
         self._display_current_page()
 
@@ -919,6 +936,7 @@ class GalleryTab(QWidget):
                     matched.append(path)
             self._filtered_paths = matched
 
+        self._apply_sort()
         self._current_page = 0
         self._update_pagination()
         self._display_current_page()
@@ -929,9 +947,34 @@ class GalleryTab(QWidget):
         self.filter_copyright_combo.setCurrentIndex(0)
         self.filter_artist_combo.setCurrentIndex(0)
         self._filtered_paths = list(self._all_paths)
+        self._apply_sort()
         self._current_page = 0
         self._update_pagination()
         self._display_current_page()
+
+    # ── 정렬 ──
+    def _on_sort_changed(self):
+        """정렬 옵션 변경 시 적용"""
+        self._apply_sort()
+        self._current_page = 0
+        self._update_pagination()
+        self._display_current_page()
+
+    def _apply_sort(self):
+        """현재 선택된 정렬 기준으로 _filtered_paths 정렬"""
+        idx = self.sort_combo.currentIndex()
+        if idx == 0:    # 날짜 최신순
+            self._filtered_paths.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        elif idx == 1:  # 날짜 오래된순
+            self._filtered_paths.sort(key=lambda p: os.path.getmtime(p))
+        elif idx == 2:  # 이름 A→Z
+            self._filtered_paths.sort(key=lambda p: os.path.basename(p).lower())
+        elif idx == 3:  # 이름 Z→A
+            self._filtered_paths.sort(key=lambda p: os.path.basename(p).lower(), reverse=True)
+        elif idx == 4:  # 크기 큰순
+            self._filtered_paths.sort(key=lambda p: os.path.getsize(p), reverse=True)
+        elif idx == 5:  # 크기 작은순
+            self._filtered_paths.sort(key=lambda p: os.path.getsize(p))
 
     # ── 파일 시스템 감시 (watchdog) ──
     def _start_watcher(self, folder: str):
@@ -990,6 +1033,7 @@ class GalleryTab(QWidget):
                 changed = True
 
         if changed:
+            self._apply_sort()
             self._update_pagination()
             self._display_current_page()
 
@@ -1020,8 +1064,8 @@ class GalleryTab(QWidget):
                 combined.add(norm_to_orig[np_])
         combined |= name_results
 
-        # 원래 순서 유지
         self._filtered_paths = [p for p in self._all_paths if p in combined]
+        self._apply_sort()
         self._current_page = 0
         self._update_pagination()
         self._display_current_page()
@@ -1029,6 +1073,7 @@ class GalleryTab(QWidget):
     def _on_reset_search(self):
         self.search_input.clear()
         self._filtered_paths = list(self._all_paths)
+        self._apply_sort()
         self._current_page = 0
         self._update_pagination()
         self._display_current_page()
