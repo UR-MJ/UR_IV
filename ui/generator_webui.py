@@ -21,44 +21,11 @@ class WebUIMixin:
 
     # ── 시작 시 백엔드 확인 ──
 
-    def _startup_backend_check_early(self) -> str:
-        """UI 빌드 전 백엔드 선택 다이얼로그 (빠른 표시)
-        Returns: 'accepted' | 'skipped' | 'exit'
-        """
-        return self._show_startup_selector_early()
+    def _startup_backend_check(self):
+        """앱 시작 시 백엔드 선택 다이얼로그 표시"""
+        self._show_startup_selector()
 
-    def _apply_startup_backend_result(self):
-        """UI 완성 후 백엔드 선택 결과 적용"""
-        result = getattr(self, '_startup_backend_result', 'skipped')
-
-        # settings 탭 동기화 (다이얼로그에서 저장한 정보)
-        sync = getattr(self, '_pending_backend_sync', None)
-        if sync and hasattr(self, 'settings_tab'):
-            st = self.settings_tab
-            if hasattr(st, 'radio_webui'):
-                st.radio_webui.setChecked(sync['type'] == 'webui')
-                st.radio_comfyui.setChecked(sync['type'] == 'comfyui')
-            if hasattr(st, 'api_input'):
-                st.api_input.setText(sync['webui_url'])
-            if hasattr(st, 'comfyui_api_input'):
-                st.comfyui_api_input.setText(sync['comfyui_url'])
-            if hasattr(st, 'comfyui_workflow_input'):
-                st.comfyui_workflow_input.setText(sync['workflow'])
-
-        if result == 'accepted':
-            if hasattr(self, 'save_settings'):
-                self.save_settings()
-            self.load_webui_info()
-        elif result == 'skipped':
-            self.viewer_label.setText(
-                "백엔드에 연결되지 않았습니다.\n\n"
-                "왼쪽 상단의 API 관리 버튼으로 연결하세요."
-            )
-
-    def _show_startup_selector_early(self) -> str:
-        """시작 시 백엔드 선택 다이얼로그 (UI 빌드 전, 빠른 표시)
-        Returns: 'accepted' | 'skipped' | 'exit'
-        """
+    def _show_startup_selector(self):
         import config
 
         dialog = QDialog(self)
@@ -296,13 +263,18 @@ class WebUIMixin:
                 else:
                     set_backend(BackendType.WEBUI, url)
 
-                # settings 탭 동기화 (UI 빌드 전이므로 나중에 적용)
-                self._pending_backend_sync = {
-                    'type': backend_type,
-                    'webui_url': webui_url_input.text().strip(),
-                    'comfyui_url': comfyui_url_input.text().strip(),
-                    'workflow': workflow_input.text().strip(),
-                }
+                # settings 탭 동기화
+                if hasattr(self, 'settings_tab'):
+                    st = self.settings_tab
+                    if hasattr(st, 'radio_webui'):
+                        st.radio_webui.setChecked(backend_type == 'webui')
+                        st.radio_comfyui.setChecked(backend_type == 'comfyui')
+                    if hasattr(st, 'api_input'):
+                        st.api_input.setText(webui_url_input.text().strip())
+                    if hasattr(st, 'comfyui_api_input'):
+                        st.comfyui_api_input.setText(comfyui_url_input.text().strip())
+                    if hasattr(st, 'comfyui_workflow_input'):
+                        st.comfyui_workflow_input.setText(workflow_input.text().strip())
 
                 dialog.accept()
 
@@ -398,9 +370,14 @@ class WebUIMixin:
         result = dialog.exec()
 
         if result == QDialog.DialogCode.Accepted:
-            return 'accepted'
+            if hasattr(self, 'save_settings'):
+                self.save_settings()
+            self.load_webui_info()
         elif skip_clicked['value']:
-            return 'skipped'
+            self.viewer_label.setText(
+                "백엔드에 연결되지 않았습니다.\n\n"
+                "왼쪽 상단의 API 관리 버튼으로 연결하세요."
+            )
         else:
             # X 버튼 — 앱 종료
             import sys
