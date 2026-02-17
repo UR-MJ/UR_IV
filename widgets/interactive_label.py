@@ -1443,8 +1443,8 @@ class InteractiveLabel(QLabel):
             self.parent_editor.effect_group.checkedId() == 1
         )
         
-        # 그리기 중 미리보기
-        if self.is_drawing:
+        # 그리기 중 미리보기 (모자이크 전용 — draw_mode일 때는 별도 처리)
+        if self.is_drawing and not self.draw_mode:
             if not is_bar_mode:
                 pen = QPen(Qt.GlobalColor.green, 2, Qt.PenStyle.SolidLine)
                 painter.setPen(pen)
@@ -1461,8 +1461,8 @@ class InteractiveLabel(QLabel):
                 painter.setPen(dash_pen)
                 painter.drawLine(self._straight_line_anchor, self.cursor_pos)
         
-        # 커서 미리보기
-        if (self.current_tool in ['eraser', 'brush'] or is_bar_mode) and self.cursor_pos:
+        # 모자이크 커서 미리보기 (draw_mode에서는 표시하지 않음)
+        if (self.current_tool in ['eraser', 'brush'] or is_bar_mode) and self.cursor_pos and not self.draw_mode:
             if is_bar_mode:
                 bw = int(self.parent_editor.slider_bar_w.value() * scale)
                 bh = int(self.parent_editor.slider_bar_h.value() * scale)
