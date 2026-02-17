@@ -345,28 +345,8 @@ class UISetupMixin:
         )
         self.btn_prompt_history.clicked.connect(self._show_prompt_history)
 
-        self.btn_shuffle = QPushButton("🔀")
-        self.btn_shuffle.setFixedSize(45, 45)
-        self.btn_shuffle.setToolTip("메인 프롬프트 태그 순서 셔플")
-        self.btn_shuffle.setStyleSheet(
-            "font-size: 16px; background-color: #333; color: #DDD; "
-            "border: 1px solid #555; border-radius: 5px;"
-        )
-        self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
-
-        self.btn_ab_test = QPushButton("A/B")
-        self.btn_ab_test.setFixedSize(45, 45)
-        self.btn_ab_test.setToolTip("A/B 프롬프트 비교 테스트")
-        self.btn_ab_test.setStyleSheet(
-            "font-size: 12px; font-weight: bold; background-color: #333; color: #DDD; "
-            "border: 1px solid #555; border-radius: 5px;"
-        )
-        self.btn_ab_test.clicked.connect(self._open_ab_test)
-
         gen_btns.addWidget(self.btn_random_prompt, 1)
         gen_btns.addWidget(self.btn_prompt_history)
-        gen_btns.addWidget(self.btn_shuffle)
-        gen_btns.addWidget(self.btn_ab_test)
         gen_btns.addWidget(self.btn_generate, 1)
         layout.addLayout(gen_btns)
 
@@ -395,27 +375,54 @@ class UISetupMixin:
         self.automation_widget.hide()
         layout.addWidget(self.automation_widget)
 
+        # 셔플 + A/B 비교 버튼 행 (자동화 아래)
+        self.btn_shuffle = QPushButton("🔀 태그 셔플")
+        self.btn_shuffle.setFixedHeight(36)
+        self.btn_shuffle.setToolTip("메인 프롬프트 태그 순서 셔플")
+        self.btn_shuffle.setStyleSheet(
+            "font-size: 12px; background-color: #333; color: #DDD; "
+            "border: 1px solid #555; border-radius: 5px; font-weight: bold;"
+        )
+        self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
+
+        self.btn_ab_test = QPushButton("A/B 비교")
+        self.btn_ab_test.setFixedHeight(36)
+        self.btn_ab_test.setToolTip("A/B 프롬프트 비교 테스트")
+        self.btn_ab_test.setStyleSheet(
+            "font-size: 12px; font-weight: bold; background-color: #333; color: #DDD; "
+            "border: 1px solid #555; border-radius: 5px;"
+        )
+        self.btn_ab_test.clicked.connect(self._open_ab_test)
+
+        util_btns = QHBoxLayout()
+        util_btns.setSpacing(5)
+        util_btns.setContentsMargins(0, 0, 0, 0)
+        util_btns.addWidget(self.btn_shuffle)
+        util_btns.addWidget(self.btn_ab_test)
+        layout.addLayout(util_btns)
+
         # 제거 옵션 버튼
         remove_opts_layout = QHBoxLayout()
-        remove_opts_layout.setContentsMargins(0, 5, 0, 5)
-        
+        remove_opts_layout.setContentsMargins(0, 5, 0, 0)
+
         self.chk_remove_artist = QCheckBox("작가명 제거")
         self.chk_remove_copyright = QCheckBox("작품명 제거")
         self.chk_remove_meta = QCheckBox("메타 제거")
-        
-        for chk in [self.chk_remove_artist, self.chk_remove_copyright, 
+
+        for chk in [self.chk_remove_artist, self.chk_remove_copyright,
                     self.chk_remove_meta]:
             chk.setStyleSheet("font-weight: bold; color: #DDD;")
             remove_opts_layout.addWidget(chk)
+        remove_opts_layout.addStretch()
         layout.addLayout(remove_opts_layout)
-        
+
         # 제거 옵션 2번째 줄
         remove_opts_layout2 = QHBoxLayout()
         remove_opts_layout2.setContentsMargins(0, 0, 0, 5)
-        
+
         self.chk_remove_censorship = QCheckBox("검열 제거")
         self.chk_remove_text = QCheckBox("텍스트 제거")
-        
+
         for chk in [self.chk_remove_censorship, self.chk_remove_text]:
             chk.setStyleSheet("font-weight: bold; color: #DDD;")
             remove_opts_layout2.addWidget(chk)
@@ -688,7 +695,33 @@ class UISetupMixin:
         res_layout.addWidget(QLabel("x"))
         res_layout.addWidget(self.height_input)
         self._create_group(layout, "해상도", res_layout)
-        
+
+        # 해상도 프리셋 버튼
+        _RES_PRESETS = [
+            ("512²", 512, 512), ("512x768", 512, 768), ("768x512", 768, 512),
+            ("1024²", 1024, 1024), ("832x1216", 832, 1216), ("1216x832", 1216, 832),
+        ]
+        res_preset_row = QHBoxLayout()
+        res_preset_row.setSpacing(3)
+        res_preset_row.setContentsMargins(0, 0, 0, 0)
+        _res_btn_style = (
+            "QPushButton { background-color: #333; color: #CCC; border: 1px solid #555; "
+            "border-radius: 3px; padding: 2px 4px; font-size: 10px; }"
+            "QPushButton:hover { background-color: #444; border-color: #5865F2; }"
+        )
+        for _label, _w, _h in _RES_PRESETS:
+            _btn = QPushButton(_label)
+            _btn.setFixedHeight(26)
+            _btn.setStyleSheet(_res_btn_style)
+            _btn.clicked.connect(
+                lambda _, w=_w, h=_h: (
+                    self.width_input.setText(str(w)),
+                    self.height_input.setText(str(h))
+                )
+            )
+            res_preset_row.addWidget(_btn)
+        layout.addLayout(res_preset_row)
+
         # 랜덤 해상도
         self.random_res_check = QCheckBox("랜덤 해상도")
         layout.addWidget(self.random_res_check)
@@ -1254,7 +1287,11 @@ class UISetupMixin:
             
         slider.valueChanged.connect(update_input)
         num_input.editingFinished.connect(update_slider)
-        
+
+        # 슬라이더 참조 저장 (load_settings 시 동기화용)
+        num_input._slider = slider
+        num_input._multiplier = multiplier
+
         slider.setValue(int(default_val * multiplier))
         if hasattr(self, 'wheel_filter'):
             slider.installEventFilter(self.wheel_filter)

@@ -10,7 +10,17 @@ from utils.shortcut_manager import get_shortcut_manager
 
 class SettingsMixin:
     """설정 관련 로직을 담당하는 Mixin"""
-    
+
+    @staticmethod
+    def _sync_slider(line_edit):
+        """QLineEdit의 텍스트 값으로 연결된 슬라이더 위치 동기화"""
+        if hasattr(line_edit, '_slider') and hasattr(line_edit, '_multiplier'):
+            try:
+                value = float(line_edit.text())
+                line_edit._slider.setValue(int(value * line_edit._multiplier))
+            except (ValueError, AttributeError):
+                pass
+
     def save_settings(self):
         """설정 저장"""
         try:
@@ -23,8 +33,23 @@ class SettingsMixin:
             get_logger('settings').error(f"설정 저장 실패: {e}")
             QMessageBox.critical(self, "저장 실패", f"설정 저장 중 오류: {e}")
 
+    def _get_existing_setting(self, key: str, default: str = "") -> str:
+        """기존 설정 파일에서 특정 키의 값을 읽어옴 (콤보 빈값 가드용)"""
+        try:
+            if os.path.exists(PROMPT_SETTINGS_FILE):
+                with open(PROMPT_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f).get(key, default)
+        except Exception:
+            pass
+        return default
+
     def _build_settings_dict(self) -> dict:
         """설정 딕셔너리 구성"""
+        # 콤보가 비어있으면 기존 파일의 값 유지 (백엔드 미연결 시 ""로 덮어쓰기 방지)
+        model_val = self.model_combo.currentText() or self._get_existing_setting("model")
+        sampler_val = self.sampler_combo.currentText() or self._get_existing_setting("sampler")
+        scheduler_val = self.scheduler_combo.currentText() or self._get_existing_setting("scheduler")
+
         settings = {
             "char_count": self.char_count_input.text(),
             "character": self.character_input.text(),
@@ -37,9 +62,9 @@ class SettingsMixin:
             "negative_prompt": self.neg_prompt_text.toPlainText(),
             "exclude_prompt_local": self.exclude_prompt_local_input.toPlainText(),
 
-            "model": self.model_combo.currentText(),
-            "sampler": self.sampler_combo.currentText(),
-            "scheduler": self.scheduler_combo.currentText(),
+            "model": model_val,
+            "sampler": sampler_val,
+            "scheduler": scheduler_val,
             "steps": self.steps_input.text(),
             "cfg": self.cfg_input.text(),
             "seed": self.seed_input.text(),
@@ -50,14 +75,14 @@ class SettingsMixin:
             "random_resolutions": self.random_resolutions,
 
             "hires_enabled": self.hires_options_group.isChecked(),
-            "hires_upscaler": self.upscaler_combo.currentText(),
+            "hires_upscaler": self.upscaler_combo.currentText() or self._get_existing_setting("hires_upscaler"),
             "hires_steps": self.hires_steps_input.text(),
             "hires_denoising": self.hires_denoising_input.text(),
             "hires_scale": self.hires_scale_input.text(),
             "hires_cfg": self.hires_cfg_input.text(),
-            "hires_checkpoint": self.hires_checkpoint_combo.currentText(),
-            "hires_sampler": self.hires_sampler_combo.currentText(),
-            "hires_scheduler": self.hires_scheduler_combo.currentText(),
+            "hires_checkpoint": self.hires_checkpoint_combo.currentText() or self._get_existing_setting("hires_checkpoint"),
+            "hires_sampler": self.hires_sampler_combo.currentText() or self._get_existing_setting("hires_sampler"),
+            "hires_scheduler": self.hires_scheduler_combo.currentText() or self._get_existing_setting("hires_scheduler"),
             "hires_prompt": self.hires_prompt_text.toPlainText(),
             "hires_neg_prompt": self.hires_neg_prompt_text.toPlainText(),
 
@@ -101,7 +126,7 @@ class SettingsMixin:
             "web_home_url": self.web_tab.home_url if hasattr(self.web_tab, 'home_url') else "",
 
             "theme": self.settings_tab.theme_combo.currentText() if hasattr(self.settings_tab, 'theme_combo') else "다크",
-            "font_family": self.settings_tab.font_combo.currentFont().family() if hasattr(self.settings_tab, 'font_combo') else "Pretendard",
+            "font_family": self.settings_tab.font_combo.currentText() if hasattr(self.settings_tab, 'font_combo') else "Pretendard",
             "font_size": self.settings_tab.font_size_spin.value() if hasattr(self.settings_tab, 'font_size_spin') else 10.5,
 
             "cleaning_options": self.settings_tab.get_cleaning_options(),
@@ -174,10 +199,12 @@ class SettingsMixin:
             
             self.steps_input.setText(settings.get("steps", "25"))
             self.cfg_input.setText(settings.get("cfg", "7.0"))
+            self._sync_slider(self.steps_input)
+            self._sync_slider(self.cfg_input)
             self.seed_input.setText(settings.get("seed", "-1"))
             self.width_input.setText(settings.get("width", "1024"))
             self.height_input.setText(settings.get("height", "1024"))
-            
+
             # 랜덤 해상도
             self.random_res_check.setChecked(settings.get("random_res_enabled", False))
             if "random_resolutions" in settings:
@@ -194,6 +221,10 @@ class SettingsMixin:
             self.hires_denoising_input.setText(settings.get("hires_denoising", "0.4"))
             self.hires_scale_input.setText(settings.get("hires_scale", "2.0"))
             self.hires_cfg_input.setText(settings.get("hires_cfg", "0"))
+            self._sync_slider(self.hires_steps_input)
+            self._sync_slider(self.hires_denoising_input)
+            self._sync_slider(self.hires_scale_input)
+            self._sync_slider(self.hires_cfg_input)
 
             hr_ckpt = settings.get("hires_checkpoint", "")
             idx = self.hires_checkpoint_combo.findText(hr_ckpt)

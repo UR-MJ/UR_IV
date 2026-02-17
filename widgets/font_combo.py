@@ -1,24 +1,34 @@
 # widgets/font_combo.py
-"""시스템 폰트 선택 콤보박스 (QFontComboBox 기반)"""
-from PyQt6.QtWidgets import QFontComboBox
+"""시스템 폰트 선택 콤보박스 (QComboBox + QFontDatabase 기반)"""
+from PyQt6.QtWidgets import QComboBox, QCompleter
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QFontDatabase
 
 
-class FontPreviewComboBox(QFontComboBox):
-    """시스템 글꼴을 미리보기와 함께 표시하는 콤보박스"""
+class FontPreviewComboBox(QComboBox):
+    """시스템 글꼴 이름만 깔끔하게 표시하는 콤보박스"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # 시스템 글꼴 목록 로드
+        families = sorted(QFontDatabase.families())
+        self.addItems(families)
+
         self.setMaxVisibleItems(20)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setEditable(True)
-        self.setInsertPolicy(QFontComboBox.InsertPolicy.NoInsert)
+        self.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.setMinimumWidth(200)
 
-        # 다크 테마 스타일 — 드롭다운 화살표 표시
+        # 자동완성 (대소문자 무시, 부분 일치)
+        completer = QCompleter(families, self)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        completer.setMaxVisibleItems(15)
+        self.setCompleter(completer)
+
+        # 다크 테마 스타일
         self.setStyleSheet("""
-            QFontComboBox {
+            QComboBox {
                 background-color: #2A2A2A;
                 color: #DDD;
                 border: 1px solid #444;
@@ -26,10 +36,10 @@ class FontPreviewComboBox(QFontComboBox):
                 padding: 4px 28px 4px 8px;
                 min-height: 24px;
             }
-            QFontComboBox:hover {
+            QComboBox:hover {
                 border-color: #5865F2;
             }
-            QFontComboBox::drop-down {
+            QComboBox::drop-down {
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
                 width: 24px;
@@ -38,10 +48,10 @@ class FontPreviewComboBox(QFontComboBox):
                 border-bottom-right-radius: 4px;
                 background-color: #333;
             }
-            QFontComboBox::drop-down:hover {
+            QComboBox::drop-down:hover {
                 background-color: #444;
             }
-            QFontComboBox::down-arrow {
+            QComboBox::down-arrow {
                 image: none;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
@@ -49,26 +59,34 @@ class FontPreviewComboBox(QFontComboBox):
                 width: 0;
                 height: 0;
             }
-            QFontComboBox QAbstractItemView {
+            QComboBox QAbstractItemView {
                 background-color: #2A2A2A;
                 color: #DDD;
                 border: 1px solid #5865F2;
                 selection-background-color: #5865F2;
                 outline: none;
             }
-            QFontComboBox QAbstractItemView::item {
-                min-height: 28px;
+            QComboBox QAbstractItemView::item {
+                min-height: 24px;
                 padding: 4px;
             }
-            QFontComboBox QAbstractItemView::item:hover {
+            QComboBox QAbstractItemView::item:hover {
                 background-color: #373737;
             }
         """)
 
     def set_current_font(self, family: str):
         """현재 폰트를 설정"""
-        font = QFont(family)
-        self.setCurrentFont(font)
+        idx = self.findText(family, Qt.MatchFlag.MatchFixedString)
+        if idx >= 0:
+            self.setCurrentIndex(idx)
+        else:
+            self.setCurrentText(family)
+
+    def mousePressEvent(self, event):
+        """클릭 시 바로 드롭다운 표시"""
+        self.showPopup()
+        super().mousePressEvent(event)
 
     def wheelEvent(self, event):
         event.ignore()
