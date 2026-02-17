@@ -1017,8 +1017,8 @@ class MosaicEditor(QWidget):
             if new_img is not None:
                 self.image_label.display_base_image = new_img
                 self.image_label._last_hole_mask = None
-                self.image_label.update_display()
-                self._push_undo()
+                self.image_label.update()
+                self.image_label.push_undo_stack()
                 self.move_panel.update_status("✅ 인페인트 완료")
 
                 # 파일 저장

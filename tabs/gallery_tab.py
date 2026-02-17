@@ -1419,12 +1419,12 @@ class SlideshowDialog(QDialog):
             Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.showFullScreen()
 
         self._paths = image_paths
         self._index = 0
         self._paused = False
         self._interval = 3000  # ms
+        self._ready = False
 
         # UI
         layout = QVBoxLayout(self)
@@ -1479,19 +1479,29 @@ class SlideshowDialog(QDialog):
         # 타이머
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._next)
-        self._timer.start(self._interval)
 
+        # showFullScreen 이후 첫 이미지 표시 (지연)
+        self.showFullScreen()
+        self._ready = True
+        QTimer.singleShot(100, self._on_first_show)
+
+    def _on_first_show(self):
+        """전체화면 전환 후 첫 이미지 표시"""
         self._show_image()
+        self._timer.start(self._interval)
 
     def _show_image(self):
         """현재 이미지 표시"""
-        if not self._paths:
+        if not self._paths or not self._ready:
             return
         path = self._paths[self._index]
+        label_size = self._image_label.size()
+        if label_size.width() < 10 or label_size.height() < 10:
+            return
         pix = QPixmap(path)
         if not pix.isNull():
             scaled = pix.scaled(
-                self._image_label.size(),
+                label_size,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation
             )
@@ -1530,7 +1540,8 @@ class SlideshowDialog(QDialog):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._show_image()
+        if self._ready:
+            self._show_image()
 
 
 # ─────────────────────────────────────────────────────────
