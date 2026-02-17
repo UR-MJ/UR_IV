@@ -46,9 +46,11 @@ class FavoriteTagsBar(QWidget):
         outer.setContentsMargins(0, 2, 0, 2)
         outer.setSpacing(4)
 
-        lbl = QLabel("⭐")
-        lbl.setFixedWidth(20)
-        lbl.setStyleSheet("font-size: 14px;")
+        lbl = QLabel("퀵 태그")
+        lbl.setStyleSheet(
+            "color: #FFC107; font-size: 11px; font-weight: bold; padding: 0 2px;"
+        )
+        lbl.setToolTip("클릭하면 메인 프롬프트에 태그를 바로 삽입합니다")
         outer.addWidget(lbl)
 
         # 스크롤 영역
