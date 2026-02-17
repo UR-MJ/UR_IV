@@ -15,7 +15,7 @@ from widgets.common_widgets import (
 )
 from widgets.sliders import NumericSlider
 from widgets.favorite_tags import FavoriteTagsBar
-from widgets.character_feature_panel import CharacterFeaturePanel
+from widgets.character_preset_dialog import CharacterPresetDialog
 from widgets.common_widgets import NoScrollComboBox, AutomationWidget, ResolutionItemWidget
 from tabs.browser_tab import BrowserTab
 from tabs.settings_tab import SettingsTab
@@ -426,14 +426,28 @@ class UISetupMixin:
 
         # 입력 필드들
         self.char_count_input = self._create_group(layout, "인물 수", QLineEdit())
-        self.character_input = self._create_group(layout, "캐릭터 (Character)", QLineEdit())
-
-        # 캐릭터 특징 자동 감지 패널
-        self.character_feature_panel = CharacterFeaturePanel()
-        self.character_feature_panel.insert_requested.connect(
-            self._on_insert_character_features
+        # 캐릭터 입력 + 특징 프리셋 버튼
+        char_header = QHBoxLayout()
+        char_header.addWidget(QLabel("캐릭터 (Character)"))
+        char_header.addStretch()
+        self.btn_char_preset = QPushButton("특징 프리셋")
+        self.btn_char_preset.setFixedHeight(24)
+        self.btn_char_preset.setStyleSheet(
+            "QPushButton { background-color: #5865F2; color: white; "
+            "border-radius: 4px; font-weight: bold; font-size: 11px; "
+            "padding: 0 10px; }"
+            "QPushButton:hover { background-color: #6975F3; }"
         )
-        layout.addWidget(self.character_feature_panel)
+        self.btn_char_preset.clicked.connect(self._open_character_preset)
+        char_header.addWidget(self.btn_char_preset)
+        layout.addLayout(char_header)
+
+        self.character_input = QLineEdit()
+        self.character_input.setStyleSheet(
+            "background-color: #252525; border: none; "
+            "border-radius: 8px; padding: 8px 10px; color: #FFFFFF;"
+        )
+        layout.addWidget(self.character_input)
 
         self.copyright_input = self._create_group(layout, "작품 (Copyright)", QLineEdit())
         
@@ -1389,10 +1403,10 @@ class UISetupMixin:
         else:
             self.main_prompt_text.setPlainText(tags)
 
-    def _on_insert_character_features(self, tags: list[str]):
-        """캐릭터 특징 태그를 메인 프롬프트 앞에 삽입 (중복 제거)"""
-        # 기존 태그 수집
-        existing = set()
+    def _open_character_preset(self):
+        """캐릭터 특징 프리셋 다이얼로그 열기"""
+        # 기존 태그 수집 (중복 표시용)
+        existing: set[str] = set()
         for src in (self.main_prompt_text.toPlainText(),
                     self.prefix_prompt_text.toPlainText(),
                     self.suffix_prompt_text.toPlainText()):
@@ -1401,19 +1415,48 @@ class UISetupMixin:
                 if norm:
                     existing.add(norm)
 
-        new_tags = [
-            t for t in tags
-            if t.strip().lower().replace("_", " ") not in existing
-        ]
-        if not new_tags:
+        current_char = self.character_input.text().strip()
+        dlg = CharacterPresetDialog(
+            existing_tags=existing,
+            current_character=current_char,
+            parent=self
+        )
+        if dlg.exec() != dlg.DialogCode.Accepted:
             return
 
-        insert_str = ", ".join(new_tags)
-        current = self.main_prompt_text.toPlainText().strip()
-        if current:
-            self.main_prompt_text.setPlainText(f"{insert_str}, {current}")
-        else:
-            self.main_prompt_text.setPlainText(insert_str)
+        result = dlg.get_result()
+        if not result:
+            return
+
+        # 캐릭터 이름 설정
+        char_name = result.get("character_name", "")
+        if char_name:
+            cur = self.character_input.text().strip()
+            if cur:
+                # 이미 있는지 체크
+                existing_chars = {c.strip().lower().replace("_", " ")
+                                  for c in cur.split(",")}
+                if char_name.lower().replace("_", " ") not in existing_chars:
+                    self.character_input.setText(f"{cur}, {char_name}")
+            else:
+                self.character_input.setText(char_name)
+
+        # 특징 태그 삽입
+        tags = result.get("tags", [])
+        if tags:
+            new_tags = [
+                t for t in tags
+                if t.strip().lower().replace("_", " ") not in existing
+            ]
+            if new_tags:
+                insert_str = ", ".join(new_tags)
+                current = self.main_prompt_text.toPlainText().strip()
+                if current:
+                    self.main_prompt_text.setPlainText(
+                        f"{insert_str}, {current}"
+                    )
+                else:
+                    self.main_prompt_text.setPlainText(insert_str)
 
     def _create_favorites_tab(self):
         """즐겨찾기 탭 생성"""

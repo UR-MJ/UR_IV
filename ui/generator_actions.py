@@ -68,11 +68,6 @@ class ActionsMixin:
             widget.installEventFilter(self)
         # --- [추가] 끝 ---
 
-        # 캐릭터 특징 자동 감지
-        self.character_input.editingFinished.connect(
-            self._on_character_features_lookup
-        )
-
         # 토글 버튼
         self.prefix_toggle_button.toggled.connect(
             lambda checked: self.prefix_prompt_text.setVisible(checked)

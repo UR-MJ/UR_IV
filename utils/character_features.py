@@ -80,6 +80,37 @@ class CharacterFeatureLookup:
         return results
 
 
+    def search(self, query: str, limit: int = 50) -> list[tuple[str, str, int]]:
+        """캐릭터 이름 검색. Returns: [(원본키, 특징문자열, 게시물수), ...]"""
+        self._ensure_loaded()
+        if not query.strip():
+            return []
+
+        q = self._normalize(query)
+        results: list[tuple[str, str, int, int]] = []  # (key, features, count, priority)
+
+        for norm_key, orig_key in self._norm_index.items():
+            if q in norm_key:
+                features = self._dict.get(orig_key, "")
+                count = self._count.get(orig_key, 0) if self._count else 0
+                # 우선순위: 정확 매칭 > 시작 매칭 > 포함 매칭, 그 안에서 count 내림차순
+                if norm_key == q:
+                    priority = 0
+                elif norm_key.startswith(q):
+                    priority = 1
+                else:
+                    priority = 2
+                results.append((orig_key, features, count, priority))
+
+        results.sort(key=lambda x: (x[3], -x[2]))
+        return [(r[0], r[1], r[2]) for r in results[:limit]]
+
+    def all_keys(self) -> list[str]:
+        """모든 캐릭터 키 반환 (정규화 이전 원본)"""
+        self._ensure_loaded()
+        return list(self._dict.keys()) if self._dict else []
+
+
 _instance: CharacterFeatureLookup | None = None
 
 

@@ -103,33 +103,6 @@ class GeneratorMainUI(
         
         return super().eventFilter(obj, event)
 
-    def _on_character_features_lookup(self):
-        """캐릭터 입력 완료 시 특징 자동 조회"""
-        if self.is_programmatic_change:
-            return
-        text = self.character_input.text().strip()
-        if not text:
-            self.character_feature_panel.hide_features()
-            return
-
-        from utils.character_features import get_character_features
-        results = get_character_features().lookup_multiple(text)
-        if not results:
-            self.character_feature_panel.hide_features()
-            return
-
-        # 기존 태그 수집 (중복 표시용)
-        existing: set[str] = set()
-        for src in (self.main_prompt_text.toPlainText(),
-                    self.prefix_prompt_text.toPlainText(),
-                    self.suffix_prompt_text.toPlainText()):
-            for t in src.split(","):
-                norm = t.strip().lower().replace("_", " ")
-                if norm:
-                    existing.add(norm)
-
-        self.character_feature_panel.show_features(results, existing)
-
     def update_cleaner_options(self):
         """settings_tab에서 클리너 옵션을 가져와 업데이트합니다."""
         if hasattr(self, 'settings_tab') and hasattr(self, 'prompt_cleaner'):
