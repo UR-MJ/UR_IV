@@ -1,22 +1,32 @@
 # utils/character_presets.py
-"""캐릭터별 커스텀 프리셋 저장/로드"""
+"""캐릭터별 커스텀 프리셋 저장/로드 (메모리 캐싱)"""
 import os
 import json
 
 _FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "character_presets.json")
 
+# 모듈 레벨 캐시
+_cache: dict | None = None
+
 
 def _load() -> dict:
+    global _cache
+    if _cache is not None:
+        return _cache
     if not os.path.exists(_FILE):
-        return {}
+        _cache = {}
+        return _cache
     try:
         with open(_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            _cache = json.load(f)
     except Exception:
-        return {}
+        _cache = {}
+    return _cache
 
 
 def _save(data: dict):
+    global _cache
+    _cache = data
     with open(_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 

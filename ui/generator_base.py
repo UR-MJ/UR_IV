@@ -14,17 +14,16 @@ from PyQt6.QtCore import Qt, QTimer
 
 from config import *
 from core.database import MetadataManager
-from core.tag_classifier import TagClassifier
 from core.image_utils import get_thumb_path
 from widgets.common_widgets import WheelEventFilter
 
 class GeneratorBase(QMainWindow):
     def __init__(self):
         super().__init__()
-        
+
         # 데이터베이스 & 분류기
-        self.db = MetadataManager(DB_FILE)        
-        self.tag_classifier = TagClassifier()
+        self.db = MetadataManager(DB_FILE)
+        self._tag_classifier = None  # 지연 로드
         self.wheel_filter = WheelEventFilter()
         
         # 상태 변수들
@@ -54,6 +53,14 @@ class GeneratorBase(QMainWindow):
             (1216, 832, "Wide Landscape")
         ]      
     
+    @property
+    def tag_classifier(self):
+        """TagClassifier 지연 로드 — 첫 접근 시 초기화"""
+        if self._tag_classifier is None:
+            from core.tag_classifier import TagClassifier
+            self._tag_classifier = TagClassifier()
+        return self._tag_classifier
+
     def _create_thumbnail(self, image_path):
         """썸네일 생성"""
         thumb_path = get_thumb_path(image_path)

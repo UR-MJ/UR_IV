@@ -8,7 +8,10 @@ class PandasSearchWorker(QThread):
     """Pandas를 이용한 검색 워커"""
     results_ready = pyqtSignal(list, int)
     status_update = pyqtSignal(str)
-    
+
+    # 검색에 필요한 컬럼만 로드 (메모리 절약)
+    REQUIRED_COLUMNS = ['copyright', 'character', 'artist', 'general', 'meta']
+
     cached_df = None
     loaded_ratings = set()
 
@@ -129,7 +132,10 @@ class PandasSearchWorker(QThread):
             if os.path.exists(path):
                 self.status_update.emit(f"📂 '{rating}' 등급 데이터 로딩 중...")
                 try:
-                    df = pd.read_parquet(path)
+                    try:
+                        df = pd.read_parquet(path, columns=self.REQUIRED_COLUMNS)
+                    except Exception:
+                        df = pd.read_parquet(path)
                     dfs.append(df)
                 except Exception as e:
                     self.status_update.emit(f"⚠️ 파일 로드 실패 ({rating}): {e}")

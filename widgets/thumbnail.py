@@ -20,6 +20,8 @@ class ThumbnailItem(QWidget):
         self._is_hovered = False
         self._hover_enabled = hover_enabled
         self.pixmap = None
+        self._scaled_cache = None  # 스케일링된 이미지 캐시
+        self._cache_size = None    # 캐시된 크기
 
         self.setFixedSize(size, size)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -76,20 +78,21 @@ class ThumbnailItem(QWidget):
         else:
             painter.fillRect(self.rect(), QBrush(QColor("#232323")))
 
-        # 이미지 그리기 (꽉 채우기 - KeepAspectRatioByExpanding)
+        # 이미지 그리기 (꽉 채우기 - 캐싱된 스케일 결과 사용)
         if self.pixmap and not self.pixmap.isNull():
-            scaled = self.pixmap.scaled(
-                self.width(), self.height(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation
-            )
+            cur_size = (self.width(), self.height())
+            if self._scaled_cache is None or self._cache_size != cur_size:
+                scaled = self.pixmap.scaled(
+                    self.width(), self.height(),
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                x = (scaled.width() - self.width()) // 2
+                y = (scaled.height() - self.height()) // 2
+                self._scaled_cache = scaled.copy(x, y, self.width(), self.height())
+                self._cache_size = cur_size
 
-            # 중앙 크롭
-            x = (scaled.width() - self.width()) // 2
-            y = (scaled.height() - self.height()) // 2
-            cropped = scaled.copy(x, y, self.width(), self.height())
-
-            painter.drawPixmap(0, 0, cropped)
+            painter.drawPixmap(0, 0, self._scaled_cache)
         else:
             painter.setPen(QColor("#888888"))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No Image")

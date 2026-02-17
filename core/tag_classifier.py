@@ -120,7 +120,10 @@ class TagClassifier:
         censor_path = TAGS_DB_PATH / "censorship.parquet"
         if censor_path.exists():
             try:
-                df = pd.read_parquet(censor_path)
+                try:
+                    df = pd.read_parquet(censor_path, columns=['name'])
+                except Exception:
+                    df = pd.read_parquet(censor_path)
                 if 'name' in df.columns:
                     self.censorship_tags = set(df['name'].str.lower().tolist())
                 elif 'tag' in df.columns:
@@ -145,7 +148,10 @@ class TagClassifier:
         text_path = TAGS_DB_PATH / "text.parquet"
         if text_path.exists():
             try:
-                df = pd.read_parquet(text_path)
+                try:
+                    df = pd.read_parquet(text_path, columns=['name'])
+                except Exception:
+                    df = pd.read_parquet(text_path)
                 if 'name' in df.columns:
                     self.text_tags = set(df['name'].str.lower().tolist())
                 elif 'tag' in df.columns:
@@ -212,8 +218,14 @@ class TagClassifier:
             group_name = filename.replace('.parquet', '')
             
             try:
-                df = pd.read_parquet(filepath)
-                
+                try:
+                    df = pd.read_parquet(filepath, columns=['tag'])
+                except Exception:
+                    try:
+                        df = pd.read_parquet(filepath, columns=['name'])
+                    except Exception:
+                        df = pd.read_parquet(filepath)
+
                 if 'tag' in df.columns:
                     tags = df['tag'].tolist()
                 elif 'name' in df.columns:

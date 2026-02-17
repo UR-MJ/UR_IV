@@ -43,18 +43,7 @@ class ActionsMixin:
         self.suffix_prompt_text.textChanged.connect(self.on_base_prompts_changed)
         self.neg_prompt_text.textChanged.connect(self.on_base_prompts_changed)
         
-        # --- [추가] 프롬프트 자동 정리 연결 ---
-        line_edits_to_clean = [
-            self.char_count_input,
-            self.character_input,
-            self.copyright_input,
-            self.artist_input,
-        ]
-        for widget in line_edits_to_clean:
-            widget.editingFinished.connect(
-                lambda w=widget: self._clean_widget_text(w)
-            )
-
+        # 포커스 아웃 시 정리 (eventFilter로 처리, 디바운스 타이머의 보완)
         text_edits_to_clean = [
             self.prefix_prompt_text,
             self.main_prompt_text,
@@ -66,7 +55,6 @@ class ActionsMixin:
         ]
         for widget in text_edits_to_clean:
             widget.installEventFilter(self)
-        # --- [추가] 끝 ---
 
         # 토글 버튼
         self.prefix_toggle_button.toggled.connect(

@@ -17,18 +17,6 @@ from widgets.sliders import NumericSlider
 from widgets.favorite_tags import FavoriteTagsBar
 from widgets.character_preset_dialog import CharacterPresetDialog
 from widgets.common_widgets import NoScrollComboBox, AutomationWidget, ResolutionItemWidget
-from tabs.browser_tab import BrowserTab
-from tabs.settings_tab import SettingsTab
-from tabs.pnginfo_tab import PngInfoTab
-from tabs.search_tab import SearchTab
-from tabs.editor_tab import MosaicEditor
-from tabs.upscale_tab import UpscaleTab
-from tabs.gallery_tab import GalleryTab
-from tabs.event_gen_tab import EventGenTab
-from tabs.xyz_plot_tab import XYZPlotTab
-from tabs.i2i_tab import Img2ImgTab
-from tabs.inpaint_tab import InpaintTab
-from tabs.backend_ui_tab import BackendUITab
 from config import OUTPUT_DIR
 from widgets.tag_input import TagInputWidget
 
@@ -151,6 +139,19 @@ class UISetupMixin:
 
     def _create_center_tabs(self):
         """중앙 탭 위젯 생성"""
+        from tabs.browser_tab import BrowserTab
+        from tabs.settings_tab import SettingsTab
+        from tabs.pnginfo_tab import PngInfoTab
+        from tabs.search_tab import SearchTab
+        from tabs.editor_tab import MosaicEditor
+        from tabs.upscale_tab import UpscaleTab
+        from tabs.gallery_tab import GalleryTab
+        from tabs.event_gen_tab import EventGenTab
+        from tabs.xyz_plot_tab import XYZPlotTab
+        from tabs.i2i_tab import Img2ImgTab
+        from tabs.inpaint_tab import InpaintTab
+        from tabs.backend_ui_tab import BackendUITab
+
         center_tabs = QTabWidget()
         center_tabs.setStyleSheet("""
             QTabWidget::pane { 
