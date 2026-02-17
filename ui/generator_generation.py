@@ -77,6 +77,12 @@ class GenerationMixin:
             combined_neg_prompt = resolve_file_wildcards(combined_neg_prompt)
             combined_neg_prompt = process_wildcards(combined_neg_prompt)
 
+        # LoRA 패널 활성 항목 합침
+        if hasattr(self, 'lora_active_panel'):
+            lora_text = self.lora_active_panel.get_active_lora_text()
+            if lora_text:
+                final_prompt = f"{final_prompt}, {lora_text}" if final_prompt else lora_text
+
         # Payload 생성
         payload = {
             "prompt": final_prompt,

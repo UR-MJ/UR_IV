@@ -568,6 +568,11 @@ class UISetupMixin:
         lora_row.addWidget(self.btn_lora_manager)
         layout.addLayout(lora_row)
 
+        # LoRA 활성 목록 패널
+        from widgets.lora_panel import LoraActivePanel
+        self.lora_active_panel = LoraActivePanel()
+        layout.addWidget(self.lora_active_panel)
+
         # 후행 프롬프트 (자동완성 지원)
         self.suffix_prompt_text = TagInputWidget()
         self.suffix_prompt_text.setMinimumHeight(60)
@@ -696,11 +701,15 @@ class UISetupMixin:
         res_layout.addWidget(self.height_input)
         self._create_group(layout, "해상도", res_layout)
 
-        # 해상도 프리셋 버튼
-        _RES_PRESETS = [
+        # 해상도 프리셋 버튼 (우클릭으로 커스텀 해상도 변경 가능)
+        from PyQt6.QtWidgets import QInputDialog
+        self._DEFAULT_RES_PRESETS = [
             ("512²", 512, 512), ("512x768", 512, 768), ("768x512", 768, 512),
             ("1024²", 1024, 1024), ("832x1216", 832, 1216), ("1216x832", 1216, 832),
         ]
+        self._res_presets = [list(p) for p in self._DEFAULT_RES_PRESETS]
+        self._res_preset_btns: list[QPushButton] = []
+
         res_preset_row = QHBoxLayout()
         res_preset_row.setSpacing(3)
         res_preset_row.setContentsMargins(0, 0, 0, 0)
@@ -709,16 +718,21 @@ class UISetupMixin:
             "border-radius: 3px; padding: 2px 4px; font-size: 10px; }"
             "QPushButton:hover { background-color: #444; border-color: #5865F2; }"
         )
-        for _label, _w, _h in _RES_PRESETS:
+        for i, (_label, _w, _h) in enumerate(self._res_presets):
             _btn = QPushButton(_label)
             _btn.setFixedHeight(26)
             _btn.setStyleSheet(_res_btn_style)
             _btn.clicked.connect(
-                lambda _, w=_w, h=_h: (
-                    self.width_input.setText(str(w)),
-                    self.height_input.setText(str(h))
+                lambda _, idx=i: (
+                    self.width_input.setText(str(self._res_presets[idx][1])),
+                    self.height_input.setText(str(self._res_presets[idx][2]))
                 )
             )
+            _btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            _btn.customContextMenuRequested.connect(
+                lambda pos, idx=i, b=_btn: self._on_res_preset_context(idx, b)
+            )
+            self._res_preset_btns.append(_btn)
             res_preset_row.addWidget(_btn)
         layout.addLayout(res_preset_row)
 
@@ -1352,6 +1366,42 @@ class UISetupMixin:
             "▼ 제외 프롬프트 (Local)" if checked else "▶ 제외 프롬프트 (Local)"
         )
         
+    def _on_res_preset_context(self, idx: int, btn):
+        """해상도 프리셋 우클릭 메뉴"""
+        from PyQt6.QtWidgets import QMenu, QInputDialog
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            "QMenu { background-color: #2C2C2C; color: #DDD; border: 1px solid #555; }"
+            "QMenu::item { padding: 6px 16px; }"
+            "QMenu::item:selected { background-color: #5865F2; }"
+        )
+        act_edit = menu.addAction("✏️ 해상도 변경")
+        act_reset = menu.addAction("↩️ 기본값 복원")
+        chosen = menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+        if not chosen:
+            return
+        if chosen == act_edit:
+            current = f"{self._res_presets[idx][1]}x{self._res_presets[idx][2]}"
+            text, ok = QInputDialog.getText(
+                self, "해상도 변경",
+                "해상도 입력 (예: 768x1024):",
+                text=current
+            )
+            if ok and 'x' in text.lower():
+                try:
+                    parts = text.lower().split('x')
+                    w, h = int(parts[0].strip()), int(parts[1].strip())
+                    label = f"{w}x{h}" if w != h else f"{w}²"
+                    self._res_presets[idx] = [label, w, h]
+                    btn.setText(label)
+                except (ValueError, IndexError):
+                    pass
+        elif chosen == act_reset:
+            if idx < len(self._DEFAULT_RES_PRESETS):
+                default = list(self._DEFAULT_RES_PRESETS[idx])
+                self._res_presets[idx] = default
+                btn.setText(default[0])
+
     def _open_lora_manager(self):
         """LoRA 브라우저 다이얼로그 열기"""
         from widgets.lora_manager import LoraManagerDialog
@@ -1365,12 +1415,12 @@ class UISetupMixin:
         dlg.exec()
 
     def _on_lora_inserted(self, lora_text: str):
-        """LoRA 텍스트를 메인 프롬프트에 삽입"""
-        current = self.main_prompt_text.toPlainText().strip()
-        if current:
-            self.main_prompt_text.setPlainText(f"{current}, {lora_text}")
-        else:
-            self.main_prompt_text.setPlainText(lora_text)
+        """LoRA를 활성 패널에 추가"""
+        import re
+        m = re.match(r'<lora:(.+?):([\d.]+)>', lora_text)
+        if m:
+            name, weight = m.group(1), float(m.group(2))
+            self.lora_active_panel.add_lora(name, weight)
 
     def _update_token_count(self):
         """최종 프롬프트 토큰 수 추정 (CLIP 기준 근사)"""

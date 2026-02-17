@@ -73,6 +73,8 @@ class SettingsMixin:
 
             "random_res_enabled": self.random_res_check.isChecked(),
             "random_resolutions": self.random_resolutions,
+            "res_presets": self._res_presets if hasattr(self, '_res_presets') else [],
+            "active_loras": self.lora_active_panel.get_entries() if hasattr(self, 'lora_active_panel') else [],
 
             "hires_enabled": self.hires_options_group.isChecked(),
             "hires_upscaler": self.upscaler_combo.currentText() or self._get_existing_setting("hires_upscaler"),
@@ -204,6 +206,18 @@ class SettingsMixin:
             self.seed_input.setText(settings.get("seed", "-1"))
             self.width_input.setText(settings.get("width", "1024"))
             self.height_input.setText(settings.get("height", "1024"))
+
+            # 해상도 프리셋 복원
+            saved_presets = settings.get("res_presets", [])
+            if saved_presets and hasattr(self, '_res_presets') and hasattr(self, '_res_preset_btns'):
+                for i, preset in enumerate(saved_presets):
+                    if i < len(self._res_presets) and i < len(self._res_preset_btns):
+                        self._res_presets[i] = list(preset)
+                        self._res_preset_btns[i].setText(preset[0])
+
+            # LoRA 활성 목록 복원
+            if hasattr(self, 'lora_active_panel') and "active_loras" in settings:
+                self.lora_active_panel.set_entries(settings["active_loras"])
 
             # 랜덤 해상도
             self.random_res_check.setChecked(settings.get("random_res_enabled", False))
