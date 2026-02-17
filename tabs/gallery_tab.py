@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QFileDialog, QScrollArea, QProgressBar,
     QSizePolicy, QFrame, QMenu, QApplication, QDialog,
-    QTextEdit, QSplitter, QSlider
+    QTextEdit, QSplitter, QSlider, QMessageBox, QInputDialog
 )
 from PyQt6.QtGui import QPixmap, QFont, QCursor, QAction, QDrag
 
@@ -487,6 +487,25 @@ class ThumbnailWidget(QFrame):
         act_to_upscale = send_menu.addAction("🔍 Upscale")
 
         menu.addSeparator()
+        act_rename = menu.addAction("✏️ 파일명 변경")
+
+        # 형식 변환 서브메뉴
+        convert_menu = menu.addMenu("🔄 형식 변환")
+        convert_menu.setStyleSheet(menu.styleSheet())
+        current_ext = os.path.splitext(self.image_path)[1].lower()
+        act_to_png = convert_menu.addAction("→ PNG")
+        act_to_jpeg = convert_menu.addAction("→ JPEG")
+        act_to_webp = convert_menu.addAction("→ WebP")
+        if current_ext == ".png":
+            act_to_png.setEnabled(False)
+        elif current_ext in (".jpg", ".jpeg"):
+            act_to_jpeg.setEnabled(False)
+        elif current_ext == ".webp":
+            act_to_webp.setEnabled(False)
+
+        act_clear_exif = menu.addAction("🧹 EXIF 초기화")
+
+        menu.addSeparator()
         act_delete = menu.addAction("🗑️ 삭제")
 
         action = menu.exec(event.globalPos())
@@ -516,6 +535,16 @@ class ThumbnailWidget(QFrame):
             self.context_action.emit("send_inpaint", self.image_path)
         elif action == act_to_upscale:
             self.context_action.emit("send_upscale", self.image_path)
+        elif action == act_rename:
+            self.context_action.emit("rename", self.image_path)
+        elif action == act_to_png:
+            self.context_action.emit("convert_png", self.image_path)
+        elif action == act_to_jpeg:
+            self.context_action.emit("convert_jpeg", self.image_path)
+        elif action == act_to_webp:
+            self.context_action.emit("convert_webp", self.image_path)
+        elif action == act_clear_exif:
+            self.context_action.emit("clear_exif", self.image_path)
         elif action == act_delete:
             self.context_action.emit("delete", self.image_path)
 
@@ -1398,6 +1427,13 @@ class GalleryTab(QWidget):
             self._handle_compare(path)
         elif action == "param_diff":
             self._handle_param_diff(path)
+        elif action == "rename":
+            self._rename_image(path)
+        elif action.startswith("convert_"):
+            fmt = action.replace("convert_", "")
+            self._convert_image(path, fmt)
+        elif action == "clear_exif":
+            self._clear_exif(path)
 
     def _handle_compare(self, path: str):
         """비교하기: 첫 번째 선택 시 저장, 두 번째 선택 시 비교 시그널 발사"""
@@ -1562,6 +1598,132 @@ class GalleryTab(QWidget):
         self._filtered_paths = [p for p in self._filtered_paths if os.path.normpath(p) != norm]
         self._update_pagination()
         self._display_current_page()
+
+    def _rename_image(self, path: str):
+        """파일명 변경"""
+        base = os.path.basename(path)
+        name_only = os.path.splitext(base)[0]
+        ext = os.path.splitext(base)[1]
+
+        new_name, ok = QInputDialog.getText(self, "파일명 변경", "새 파일명:", text=name_only)
+        if not ok or not new_name.strip():
+            return
+
+        new_path = os.path.join(os.path.dirname(path), new_name.strip() + ext)
+        if os.path.exists(new_path):
+            QMessageBox.warning(self, "오류", "같은 이름의 파일이 이미 존재합니다.")
+            return
+
+        try:
+            os.rename(path, new_path)
+        except OSError as e:
+            QMessageBox.warning(self, "오류", f"파일명 변경 실패: {e}")
+            return
+
+        self._db.update_path(path, new_path)
+        norm_old = os.path.normpath(path)
+        norm_new = os.path.normpath(new_path)
+        self._all_paths = [norm_new if os.path.normpath(p) == norm_old else p for p in self._all_paths]
+        self._filtered_paths = [norm_new if os.path.normpath(p) == norm_old else p for p in self._filtered_paths]
+        self._display_current_page()
+
+    def _convert_image(self, path: str, target_fmt: str):
+        """이미지 포맷 변환"""
+        from PIL import Image
+
+        ext_map = {"png": ".png", "jpeg": ".jpg", "webp": ".webp"}
+        new_ext = ext_map.get(target_fmt)
+        if not new_ext:
+            return
+
+        new_path = os.path.splitext(path)[0] + new_ext
+        if os.path.exists(new_path):
+            reply = QMessageBox.question(
+                self, "형식 변환",
+                f"'{os.path.basename(new_path)}' 파일이 이미 존재합니다. 덮어쓰시겠습니까?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        try:
+            img = Image.open(path)
+            if target_fmt == "jpeg" and img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+
+            save_kwargs: dict = {}
+            if target_fmt in ("jpeg", "webp"):
+                save_kwargs["quality"] = 95
+
+            img.save(new_path, **save_kwargs)
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"변환 실패: {e}")
+            return
+
+        # 원본 삭제 여부
+        reply = QMessageBox.question(
+            self, "형식 변환",
+            "변환 완료. 원본 파일을 삭제하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            self._db.update_path(path, new_path)
+            norm_old = os.path.normpath(path)
+            norm_new = os.path.normpath(new_path)
+            self._all_paths = [norm_new if os.path.normpath(p) == norm_old else p for p in self._all_paths]
+            self._filtered_paths = [norm_new if os.path.normpath(p) == norm_old else p for p in self._filtered_paths]
+        else:
+            # 새 파일을 목록에 추가
+            norm_new = os.path.normpath(new_path)
+            if norm_new not in self._all_paths:
+                self._all_paths.append(norm_new)
+                self._filtered_paths.append(norm_new)
+                self._update_pagination()
+
+        self._display_current_page()
+
+    def _clear_exif(self, path: str):
+        """EXIF/메타데이터 초기화"""
+        reply = QMessageBox.question(
+            self, "EXIF 초기화",
+            f"'{os.path.basename(path)}'의 메타데이터를 모두 제거하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            from PIL import Image
+            from PIL.PngImagePlugin import PngInfo
+
+            ext = os.path.splitext(path)[1].lower()
+            img = Image.open(path)
+
+            if ext == ".png":
+                img.save(path, pnginfo=PngInfo())
+            elif ext in (".jpg", ".jpeg"):
+                data = list(img.getdata())
+                clean = Image.new(img.mode, img.size)
+                clean.putdata(data)
+                clean.save(path, quality=95)
+            elif ext == ".webp":
+                img.save(path, exif=b"")
+            else:
+                QMessageBox.information(self, "EXIF 초기화", "지원하지 않는 형식입니다.")
+                return
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"EXIF 초기화 실패: {e}")
+            return
+
+        self._db.add_or_update_exif(normalize_path(path), "")
+        QMessageBox.information(self, "EXIF 초기화", "메타데이터가 제거되었습니다.")
 
     def _start_slideshow(self):
         """슬라이드쇼 시작"""

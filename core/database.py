@@ -105,6 +105,16 @@ class MetadataManager:
         )
         return cur.fetchall()
 
+    def update_path(self, old_path: str, new_path: str) -> None:
+        """이미지 경로(PK) 변경"""
+        old_norm = normalize_path(old_path)
+        new_norm = normalize_path(new_path)
+        with self.conn:
+            self.conn.execute(
+                "UPDATE images SET path=? WHERE path=?",
+                (new_norm, old_norm)
+            )
+
     def search_exif(self, keywords: list, folder_path: str) -> list:
         """키워드 AND 검색 (폴더 범위)"""
         cur = self.conn.cursor()
