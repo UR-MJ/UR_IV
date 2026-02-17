@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QListWidget, QListWidgetItem, QScrollArea, QWidget,
-    QSplitter, QAbstractItemView
+    QSplitter, QAbstractItemView, QTextEdit, QGroupBox
 )
 from PyQt6.QtCore import Qt, QTimer
 from widgets.common_widgets import FlowLayout
@@ -18,6 +18,21 @@ QLineEdit {
     padding: 8px 12px; font-size: 13px;
 }
 QLineEdit:focus { border: 1px solid #5865F2; }
+QTextEdit {
+    background-color: #2A2A2A; color: #DDD;
+    border: 1px solid #444; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px;
+}
+QTextEdit:focus { border: 1px solid #5865F2; }
+QGroupBox {
+    color: #CCC; font-weight: bold; font-size: 12px;
+    border: 1px solid #444; border-radius: 6px;
+    margin-top: 8px; padding-top: 16px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    padding: 0 6px;
+}
 QListWidget {
     background-color: #252525; color: #DDD;
     border: 1px solid #333; border-radius: 6px;
@@ -79,8 +94,8 @@ class CharacterPresetDialog(QDialog):
                  current_character: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("캐릭터 특징 프리셋")
-        self.setMinimumSize(850, 600)
-        self.resize(950, 650)
+        self.setMinimumSize(950, 750)
+        self.resize(1050, 850)
         self.setStyleSheet(_STYLE)
 
         self._existing_tags = existing_tags or set()
@@ -263,8 +278,60 @@ class CharacterPresetDialog(QDialog):
         right_layout.addLayout(preset_row)
 
         splitter.addWidget(right)
-        splitter.setSizes([280, 550])
+        splitter.setSizes([280, 650])
         root.addWidget(splitter, 1)
+
+        # 캐릭터 조건부 프롬프트
+        self._cond_toggle = QPushButton("▶ 캐릭터 조건부 프롬프트")
+        self._cond_toggle.setCheckable(True)
+        self._cond_toggle.setStyleSheet("""
+            QPushButton {
+                background-color: #2A2A2A; color: #FFA726;
+                border: 1px solid #444; border-radius: 6px;
+                font-weight: bold; font-size: 12px;
+                padding: 6px 12px; text-align: left;
+            }
+            QPushButton:checked { background-color: #3A3000; border-color: #D35400; }
+            QPushButton:hover { background-color: #333; }
+        """)
+        self._cond_toggle.toggled.connect(self._on_cond_toggle)
+        root.addWidget(self._cond_toggle)
+
+        self._cond_container = QWidget()
+        cond_layout = QHBoxLayout(self._cond_container)
+        cond_layout.setContentsMargins(0, 0, 0, 0)
+        cond_layout.setSpacing(8)
+
+        # 조건부 프롬프트
+        cond_pos_group = QGroupBox("조건부 프롬프트")
+        cond_pos_l = QVBoxLayout(cond_pos_group)
+        self._cond_rules_input = QTextEdit()
+        self._cond_rules_input.setPlaceholderText(
+            "문법: (조건태그):/위치+=추가태그\n"
+            "예시:\n"
+            "(night):/main+=moon, stars\n"
+            "(beach):/suffix+=waves, sand\n\n"
+            "위치: /main /prefix /suffix /neg"
+        )
+        self._cond_rules_input.setFixedHeight(100)
+        cond_pos_l.addWidget(self._cond_rules_input)
+        cond_layout.addWidget(cond_pos_group)
+
+        # 조건부 네거티브
+        cond_neg_group = QGroupBox("조건부 네거티브")
+        cond_neg_l = QVBoxLayout(cond_neg_group)
+        self._cond_neg_rules_input = QTextEdit()
+        self._cond_neg_rules_input.setPlaceholderText(
+            "문법: (조건태그)+=네거티브태그\n"
+            "예시:\n"
+            "(1girl)+=bad anatomy, extra limbs"
+        )
+        self._cond_neg_rules_input.setFixedHeight(100)
+        cond_neg_l.addWidget(self._cond_neg_rules_input)
+        cond_layout.addWidget(cond_neg_group)
+
+        self._cond_container.hide()
+        root.addWidget(self._cond_container)
 
         # 하단 버튼
         btn_row = QHBoxLayout()
@@ -301,6 +368,14 @@ class CharacterPresetDialog(QDialog):
         btn_row.addWidget(btn_close)
 
         root.addLayout(btn_row)
+
+    def _on_cond_toggle(self, checked: bool):
+        """조건부 프롬프트 섹션 토글"""
+        self._cond_container.setVisible(checked)
+        self._cond_toggle.setText(
+            "▼ 캐릭터 조건부 프롬프트" if checked
+            else "▶ 캐릭터 조건부 프롬프트"
+        )
 
     # ── 검색 ──
 
@@ -354,26 +429,34 @@ class CharacterPresetDialog(QDialog):
 
         self._populate_tags(name, features)
 
-        # 저장된 프리셋 자동 로드 → 커스텀 태그로 복원
-        from utils.character_presets import get_character_preset
-        saved = get_character_preset(name)
-        if saved:
-            # 저장된 태그 중 danbooru 특징에 없는 것만 커스텀 태그로 추가
-            feature_norms = set()
-            for t in features.split(","):
-                n = t.strip().lower().replace("_", " ")
-                if n:
-                    feature_norms.add(n)
+        # 저장된 프리셋 자동 로드 → 커스텀 태그 + 조건부 규칙 복원
+        from utils.character_presets import get_character_preset_full
+        preset = get_character_preset_full(name)
+        if preset:
+            saved = preset.get("extra_prompt", "")
+            if saved:
+                # 저장된 태그 중 danbooru 특징에 없는 것만 커스텀 태그로 추가
+                feature_norms = set()
+                for t in features.split(","):
+                    n = t.strip().lower().replace("_", " ")
+                    if n:
+                        feature_norms.add(n)
 
-            for t in saved.split(","):
-                tag = t.strip()
-                norm = tag.lower().replace("_", " ")
-                if norm and norm not in feature_norms:
-                    self._add_single_custom_tag(tag)
+                for t in saved.split(","):
+                    tag = t.strip()
+                    norm = tag.lower().replace("_", " ")
+                    if norm and norm not in feature_norms:
+                        self._add_single_custom_tag(tag)
+
+            # 조건부 규칙 복원
+            self._cond_rules_input.setPlainText(preset.get("cond_rules", ""))
+            self._cond_neg_rules_input.setPlainText(preset.get("cond_neg_rules", ""))
 
             self._preset_status.setText("★ 저장된 프리셋 로드됨")
             self._preset_status.setStyleSheet("color: #D35400; font-size: 11px;")
         else:
+            self._cond_rules_input.clear()
+            self._cond_neg_rules_input.clear()
             self._preset_status.setText("")
 
     def _populate_tags(self, char_name: str, features_str: str):
@@ -474,7 +557,7 @@ class CharacterPresetDialog(QDialog):
     # ── 프리셋 저장/삭제 ──
 
     def _save_preset(self):
-        """현재 캐릭터의 체크된 태그를 프리셋으로 저장"""
+        """현재 캐릭터의 체크된 태그 + 조건부 규칙을 프리셋으로 저장"""
         if not self._current_char_key:
             return
 
@@ -484,8 +567,13 @@ class CharacterPresetDialog(QDialog):
                 checked_tags.append(tag)
 
         combined = ", ".join(checked_tags)
+        cond_rules = self._cond_rules_input.toPlainText().strip()
+        cond_neg_rules = self._cond_neg_rules_input.toPlainText().strip()
+
         from utils.character_presets import save_character_preset
-        save_character_preset(self._current_char_key, combined)
+        save_character_preset(
+            self._current_char_key, combined, cond_rules, cond_neg_rules
+        )
         self._preset_status.setText(f"★ 저장 완료")
         self._preset_status.setStyleSheet("color: #27AE60; font-size: 11px;")
 

@@ -25,10 +25,19 @@ def _normalize(name: str) -> str:
     return name.strip().lower().replace("_", " ")
 
 
-def save_character_preset(name: str, extra_prompt: str):
-    """캐릭터 프리셋 저장"""
+def save_character_preset(name: str, extra_prompt: str,
+                          cond_rules: str = "", cond_neg_rules: str = ""):
+    """캐릭터 프리셋 저장 (조건부 규칙 포함)"""
     data = _load()
-    data[_normalize(name)] = {"extra_prompt": extra_prompt, "display_name": name}
+    entry = {
+        "extra_prompt": extra_prompt,
+        "display_name": name,
+    }
+    if cond_rules:
+        entry["cond_rules"] = cond_rules
+    if cond_neg_rules:
+        entry["cond_neg_rules"] = cond_neg_rules
+    data[_normalize(name)] = entry
     _save(data)
 
 
@@ -39,6 +48,14 @@ def get_character_preset(name: str) -> str | None:
     if entry:
         return entry.get("extra_prompt", "")
     return None
+
+
+def get_character_preset_full(name: str) -> dict | None:
+    """캐릭터 프리셋 전체 데이터 로드. 없으면 None.
+    Returns: {extra_prompt, cond_rules, cond_neg_rules, display_name}
+    """
+    data = _load()
+    return data.get(_normalize(name))
 
 
 def delete_character_preset(name: str):
