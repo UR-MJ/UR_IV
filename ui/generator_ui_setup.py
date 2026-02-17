@@ -15,6 +15,7 @@ from widgets.common_widgets import (
 )
 from widgets.sliders import NumericSlider
 from widgets.favorite_tags import FavoriteTagsBar
+from widgets.character_feature_panel import CharacterFeaturePanel
 from widgets.common_widgets import NoScrollComboBox, AutomationWidget, ResolutionItemWidget
 from tabs.browser_tab import BrowserTab
 from tabs.settings_tab import SettingsTab
@@ -426,6 +427,14 @@ class UISetupMixin:
         # 입력 필드들
         self.char_count_input = self._create_group(layout, "인물 수", QLineEdit())
         self.character_input = self._create_group(layout, "캐릭터 (Character)", QLineEdit())
+
+        # 캐릭터 특징 자동 감지 패널
+        self.character_feature_panel = CharacterFeaturePanel()
+        self.character_feature_panel.insert_requested.connect(
+            self._on_insert_character_features
+        )
+        layout.addWidget(self.character_feature_panel)
+
         self.copyright_input = self._create_group(layout, "작품 (Copyright)", QLineEdit())
         
         # 작가 입력창 + 고정 버튼
@@ -1379,6 +1388,32 @@ class UISetupMixin:
             self.main_prompt_text.setPlainText(f"{current}, {tags}")
         else:
             self.main_prompt_text.setPlainText(tags)
+
+    def _on_insert_character_features(self, tags: list[str]):
+        """캐릭터 특징 태그를 메인 프롬프트 앞에 삽입 (중복 제거)"""
+        # 기존 태그 수집
+        existing = set()
+        for src in (self.main_prompt_text.toPlainText(),
+                    self.prefix_prompt_text.toPlainText(),
+                    self.suffix_prompt_text.toPlainText()):
+            for t in src.split(","):
+                norm = t.strip().lower().replace("_", " ")
+                if norm:
+                    existing.add(norm)
+
+        new_tags = [
+            t for t in tags
+            if t.strip().lower().replace("_", " ") not in existing
+        ]
+        if not new_tags:
+            return
+
+        insert_str = ", ".join(new_tags)
+        current = self.main_prompt_text.toPlainText().strip()
+        if current:
+            self.main_prompt_text.setPlainText(f"{insert_str}, {current}")
+        else:
+            self.main_prompt_text.setPlainText(insert_str)
 
     def _create_favorites_tab(self):
         """즐겨찾기 탭 생성"""
