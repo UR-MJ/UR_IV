@@ -9,6 +9,25 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QThread, pyqtSignal
 
 
+def _is_valid_tag(tag: str) -> bool:
+    """태그로 간주할 수 있는 항목인지 확인 (메타데이터/JSON 제외)"""
+    if not tag or len(tag) > 80:
+        return False
+    # JSON-like 키-값 쌍 제외
+    if '"' in tag or '{' in tag or '}' in tag:
+        return False
+    # 순수 숫자 제외
+    stripped = tag.replace('.', '').replace('-', '').replace(' ', '')
+    if stripped.isdigit():
+        return False
+    # key: value 패턴 제외 (단, 가중치 문법 (tag:1.2)는 허용)
+    if ':' in tag and not tag.startswith('<') and not tag.startswith('('):
+        import re
+        if re.match(r'^[a-zA-Z_]\w*\s*:', tag):
+            return False
+    return True
+
+
 def _parse_gen_info(text: str) -> dict:
     """PNG parameters 문자열을 파싱하여 dict 반환"""
     params = {}
@@ -87,12 +106,13 @@ class StatsWorker(QThread):
             if size:
                 resolution_counter[size] += 1
 
-            # 태그
+            # 태그 (메타데이터/JSON 항목 제외)
             prompt = params.get('prompt', '')
             if prompt:
                 tags = [t.strip() for t in prompt.split(',') if t.strip()]
                 for tag in tags:
-                    tag_counter[tag] += 1
+                    if _is_valid_tag(tag):
+                        tag_counter[tag] += 1
 
             # 날짜 (파일 수정 시간 기반)
             try:

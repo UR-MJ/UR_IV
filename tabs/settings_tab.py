@@ -104,6 +104,7 @@ class SettingsTab(QWidget):
         # 사이드바
         self.sidebar = QListWidget()
         self.sidebar.setFixedWidth(180)
+        self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.sidebar.setStyleSheet("""
             QListWidget {
                 background-color: #181818;

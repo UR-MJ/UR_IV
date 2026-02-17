@@ -717,7 +717,7 @@ class UISetupMixin:
         res_layout = QHBoxLayout()
         self.width_input = QLineEdit("1024")
         self.height_input = QLineEdit("1024")
-        btn_swap_res = QPushButton("⮂")
+        btn_swap_res = QPushButton("⇄")
         btn_swap_res.setFixedSize(32, 30)
         btn_swap_res.setToolTip("W ↔ H 교환")
         btn_swap_res.setStyleSheet(
@@ -1429,7 +1429,7 @@ class UISetupMixin:
             h_spin.setSingleStep(64)
             h_spin.setValue(self._res_presets[idx][2])
             h_spin.setStyleSheet("background:#2C2C2C; color:#EEE; border:1px solid #555; padding:4px;")
-            swap_btn = QPushButton("⮂")
+            swap_btn = QPushButton("⇄")
             swap_btn.setFixedSize(32, 32)
             swap_btn.setToolTip("W ↔ H 교환")
             swap_btn.setStyleSheet(
