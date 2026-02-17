@@ -162,11 +162,9 @@ class GeneratorMainUI(
         self.queue_panel = QueuePanel()
         self.queue_manager = QueueManager(self.queue_panel)
 
-        # 메인 레이아웃 하단에 대기열 패널 추가
-        self.centralWidget().layout().addWidget(self.queue_panel)
-
-        # 상태 메시지 라벨을 큐 패널 아래에 배치
-        self.centralWidget().layout().addWidget(self.status_message_label)
+        # 하단 컨테이너에 대기열 + 상태 메시지 배치
+        self._bottom_layout.addWidget(self.queue_panel)
+        self._bottom_layout.addWidget(self.status_message_label)
 
         # 시그널 연결
         self.queue_panel.btn_add_current.clicked.connect(self._add_current_to_queue)

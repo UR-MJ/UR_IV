@@ -64,9 +64,30 @@ class UISetupMixin:
         upper_layout.addWidget(self.center_tabs)
         upper_layout.addWidget(self.history_panel)
 
-        main_layout.addWidget(upper_area, 1)
+        # 메인 스플리터 (상단 작업 영역 + 하단 대기열)
+        from PyQt6.QtWidgets import QSplitter as _Splitter
+        self.main_splitter = _Splitter(Qt.Orientation.Vertical)
+        self.main_splitter.setChildrenCollapsible(False)
+        self.main_splitter.setHandleWidth(5)
+        self.main_splitter.setStyleSheet(
+            "QSplitter::handle:vertical { background: #333; border-radius: 2px; }"
+        )
+        self.main_splitter.addWidget(upper_area)
 
-        # 상태 메시지 라벨은 _setup_queue()에서 큐 패널 아래에 추가
+        # 하단 컨테이너 (대기열 + 상태바, _setup_queue에서 채움)
+        self._bottom_container = QWidget()
+        self._bottom_layout = QVBoxLayout(self._bottom_container)
+        self._bottom_layout.setContentsMargins(0, 0, 0, 0)
+        self._bottom_layout.setSpacing(0)
+        self._bottom_container.setMinimumHeight(100)
+        self.main_splitter.addWidget(self._bottom_container)
+
+        main_layout.addWidget(self.main_splitter)
+        self.main_splitter.setSizes([700, 230])
+        self.main_splitter.setStretchFactor(0, 1)
+        self.main_splitter.setStretchFactor(1, 0)
+
+        # 상태 메시지 라벨은 _setup_queue()에서 하단 컨테이너에 추가
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("statusMessageLabel")
         self.status_message_label.setFixedHeight(24)
@@ -697,12 +718,12 @@ class UISetupMixin:
         self.width_input = QLineEdit("1024")
         self.height_input = QLineEdit("1024")
         btn_swap_res = QPushButton("↔")
-        btn_swap_res.setFixedSize(30, 30)
+        btn_swap_res.setFixedSize(32, 30)
         btn_swap_res.setToolTip("W ↔ H 교환")
         btn_swap_res.setStyleSheet(
-            "QPushButton { background-color: #333; color: #DDD; border: 1px solid #555; "
-            "border-radius: 4px; font-weight: bold; font-size: 13px; }"
-            "QPushButton:hover { background-color: #444; border-color: #5865F2; }"
+            "QPushButton { background-color: #5865F2; color: white; border: none; "
+            "border-radius: 4px; font-weight: bold; font-size: 15px; }"
+            "QPushButton:hover { background-color: #6975F3; }"
         )
         btn_swap_res.clicked.connect(self._swap_resolution)
         res_layout.addWidget(self.width_input)
@@ -1411,7 +1432,10 @@ class UISetupMixin:
             swap_btn = QPushButton("↔")
             swap_btn.setFixedSize(32, 32)
             swap_btn.setToolTip("W ↔ H 교환")
-            swap_btn.setStyleSheet("background:#333; color:#DDD; border-radius:4px; font-weight:bold;")
+            swap_btn.setStyleSheet(
+                "background:#5865F2; color:white; border:none; "
+                "border-radius:4px; font-weight:bold; font-size:15px;"
+            )
             swap_btn.clicked.connect(lambda: (
                 w_spin.setValue(h_spin.value()) or True) if (
                     _tw := w_spin.value()) and (w_spin.setValue(h_spin.value()) or True) and h_spin.setValue(_tw) is None else None

@@ -33,6 +33,7 @@ class LoraLoadWorker(QThread):
 class LoraManagerDialog(QDialog):
     """LoRA 브라우저 다이얼로그"""
     lora_inserted = pyqtSignal(str)  # <lora:name:weight> 문자열
+    _lora_cache: list[dict] = []  # 클래스 레벨 캐시 (한 번 로드 후 재사용)
 
     def __init__(self, backend=None, parent=None):
         super().__init__(parent)
@@ -47,7 +48,10 @@ class LoraManagerDialog(QDialog):
 
         self._setup_ui()
 
-        if backend:
+        # 캐시가 있으면 즉시 표시, 없으면 백엔드에서 로드
+        if LoraManagerDialog._lora_cache:
+            self._on_loaded(LoraManagerDialog._lora_cache)
+        elif backend:
             self._refresh()
 
     def _setup_ui(self):
@@ -162,9 +166,10 @@ class LoraManagerDialog(QDialog):
         self._worker.start()
 
     def _on_loaded(self, loras: list):
+        LoraManagerDialog._lora_cache = loras  # 캐시 업데이트
         self._all_loras = loras
         self._populate_list(loras)
-        self.status_label.setText(f"{len(loras)}개의 LoRA 발견")
+        self.status_label.setText(f"{len(loras)}개의 LoRA 발견 (캐시됨)")
 
     def _on_error(self, msg: str):
         self.status_label.setText(f"로드 실패: {msg}")
