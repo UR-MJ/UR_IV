@@ -101,7 +101,7 @@ class SettingsMixin:
             "web_home_url": self.web_tab.home_url if hasattr(self.web_tab, 'home_url') else "",
 
             "theme": self.settings_tab.theme_combo.currentText() if hasattr(self.settings_tab, 'theme_combo') else "다크",
-            "font_family": self.settings_tab.font_combo.currentText() if hasattr(self.settings_tab, 'font_combo') else "Pretendard",
+            "font_family": self.settings_tab.font_combo.currentFont().family() if hasattr(self.settings_tab, 'font_combo') else "Pretendard",
             "font_size": self.settings_tab.font_size_spin.value() if hasattr(self.settings_tab, 'font_size_spin') else 10.5,
 
             "cleaning_options": self.settings_tab.get_cleaning_options(),
@@ -279,7 +279,7 @@ class SettingsMixin:
                 tm = get_theme_manager()
                 tm.set_font(font_family, font_size)
                 if hasattr(self.settings_tab, 'font_combo'):
-                    self.settings_tab.font_combo.setCurrentText(font_family)
+                    self.settings_tab.font_combo.set_current_font(font_family)
                 if hasattr(self.settings_tab, 'font_size_spin'):
                     self.settings_tab.font_size_spin.setValue(font_size)
                 if hasattr(self, 'apply_stylesheet'):

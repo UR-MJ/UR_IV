@@ -1024,7 +1024,7 @@ class SettingsTab(QWidget):
         self.font_combo = FontPreviewComboBox()
         default_font = tm.get_font_family_name()
         self.font_combo.set_current_font(default_font)
-        self.font_combo.currentTextChanged.connect(self._on_font_changed)
+        self.font_combo.currentFontChanged.connect(self._on_font_changed)
         font_h.addWidget(self.font_combo, stretch=1)
         fl.addLayout(font_h)
 
@@ -1054,9 +1054,9 @@ class SettingsTab(QWidget):
         if self.parent_ui and hasattr(self.parent_ui, 'set_theme'):
             self.parent_ui.set_theme(theme_name)
 
-    def _on_font_changed(self):
+    def _on_font_changed(self, *args):
         """글꼴 변경 시 즉시 적용"""
-        font_name = self.font_combo.currentText()
+        font_name = self.font_combo.currentFont().family()
         font_size = self.font_size_spin.value()
         from utils.theme_manager import get_theme_manager
         tm = get_theme_manager()
