@@ -65,6 +65,7 @@ class DrawPanel(QWidget):
             (3, "⭕  원/타원"),
             (4, "🎨  채우기"),
             (5, "💉  스포이트"),
+            (6, "🖨️  클론 스탬프"),
         ]
 
         for id_val, text in tools:
@@ -170,7 +171,7 @@ class DrawPanel(QWidget):
 
     def current_draw_tool(self) -> str:
         """현재 그리기 도구 이름"""
-        _map = {0: 'pen', 1: 'line', 2: 'rect', 3: 'ellipse', 4: 'fill', 5: 'eyedropper'}
+        _map = {0: 'pen', 1: 'line', 2: 'rect', 3: 'ellipse', 4: 'fill', 5: 'eyedropper', 6: 'clone_stamp'}
         return _map.get(self.tool_group.checkedId(), 'pen')
 
     def current_color_bgr(self) -> tuple:

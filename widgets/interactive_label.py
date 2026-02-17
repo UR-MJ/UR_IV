@@ -4,7 +4,7 @@ import numpy as np
 import time
 from PyQt6.QtWidgets import QLabel, QSizePolicy, QApplication
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint
-from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QPolygon, QTransform
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QPolygon, QTransform, QColor
 from utils.shortcut_manager import get_shortcut_manager
 
 class InteractiveLabel(QLabel):
@@ -79,6 +79,11 @@ class InteractiveLabel(QLabel):
         self._draw_start = None      # 직선/도형 시작점 (이미지 좌표)
         self._draw_preview_end = None  # 미리보기 끝점 (이미지 좌표)
         self._draw_pen_active = False  # 펜 그리기 중
+
+        # 클론 스탬프
+        self._clone_source = None      # 소스 좌표 (이미지 좌표, tuple)
+        self._clone_offset = None      # 소스↔대상 오프셋 (dx, dy)
+        self._clone_active = False     # 클론 중
 
         # 이동 모드
         self.move_mode = False
@@ -222,6 +227,7 @@ class InteractiveLabel(QLabel):
         self._draw_start = None
         self._draw_preview_end = None
         self._draw_pen_active = False
+        self._clone_active = False
         self.update()
 
     def set_draw_params(self, tool: str, color: tuple, size: int,
@@ -305,6 +311,52 @@ class InteractiveLabel(QLabel):
         if 0 <= bx < w and 0 <= by < h:
             bgr = tuple(int(c) for c in self.display_base_image[by, bx])
             self.color_picked.emit(bgr)
+
+    def _apply_clone_at(self, dst_x: int, dst_y: int):
+        """클론 스탬프: 소스→대상으로 원형 브러시 영역 복사"""
+        if self.display_base_image is None or self._clone_offset is None:
+            return
+        img = self.display_base_image
+        h, w = img.shape[:2]
+        ox, oy = self._clone_offset
+        src_x = dst_x + ox
+        src_y = dst_y + oy
+        r = max(1, self.draw_size // 2)
+
+        # 경계 체크용 클립
+        y1s = max(0, src_y - r); y2s = min(h, src_y + r)
+        x1s = max(0, src_x - r); x2s = min(w, src_x + r)
+        y1d = max(0, dst_y - r); y2d = min(h, dst_y + r)
+        x1d = max(0, dst_x - r); x2d = min(w, dst_x + r)
+
+        # 양쪽 모두 유효한 영역만
+        oy1 = max(y1s - (src_y - r), y1d - (dst_y - r))
+        ox1 = max(x1s - (src_x - r), x1d - (dst_x - r))
+        oy2 = min(y2s - (src_y - r), y2d - (dst_y - r))
+        ox2 = min(x2s - (src_x - r), x2d - (dst_x - r))
+
+        if oy2 <= oy1 or ox2 <= ox1:
+            return
+
+        # 원형 마스크
+        diameter = r * 2
+        yy, xx = np.ogrid[:diameter, :diameter]
+        circle = ((xx - r) ** 2 + (yy - r) ** 2) <= r * r
+        mask_slice = circle[oy1:oy2, ox1:ox2]
+
+        sy = src_y - r + oy1; sx = src_x - r + ox1
+        dy = dst_y - r + oy1; dx = dst_x - r + ox1
+        sh = oy2 - oy1; sw = ox2 - ox1
+
+        src_patch = img[sy:sy + sh, sx:sx + sw].copy()
+        dst_patch = img[dy:dy + sh, dx:dx + sw]
+
+        alpha = self.draw_opacity
+        if alpha >= 1.0:
+            dst_patch[mask_slice] = src_patch[mask_slice]
+        else:
+            blended = cv2.addWeighted(src_patch, alpha, dst_patch, 1.0 - alpha, 0)
+            dst_patch[mask_slice] = blended[mask_slice]
 
     # ── 이동 모드 ──
 
@@ -931,6 +983,21 @@ class InteractiveLabel(QLabel):
                 self._eyedropper_at(event.pos())
             elif self.draw_tool == 'fill':
                 self._flood_fill_at(event.pos())
+            elif self.draw_tool == 'clone_stamp':
+                if event.modifiers() & Qt.KeyboardModifier.AltModifier:
+                    # Alt+클릭: 소스 지점 설정
+                    self._clone_source = (bx_i, by_i)
+                    self._clone_offset = None
+                elif self._clone_source is not None:
+                    # 일반 클릭: 복제 시작
+                    self.push_undo_stack()
+                    if self._clone_offset is None:
+                        sx, sy = self._clone_source
+                        self._clone_offset = (sx - bx_i, sy - by_i)
+                    self._clone_active = True
+                    self.last_draw_pos = event.pos()
+                    self._apply_clone_at(bx_i, by_i)
+                    self.rotate_image(0)
             elif self.draw_tool == 'pen':
                 self.push_undo_stack()
                 self._draw_pen_active = True
@@ -1042,7 +1109,13 @@ class InteractiveLabel(QLabel):
 
         # ── 그리기 모드 이동 ──
         if self.draw_mode:
-            if self._draw_pen_active and self.last_draw_pos:
+            if self._clone_active and self.last_draw_pos:
+                # 클론 스탬프: 연속 복제
+                cur_bx, cur_by = self.map_to_base_coordinates(event.pos())
+                self._apply_clone_at(int(round(cur_bx)), int(round(cur_by)))
+                self.rotate_image(0)
+                self.last_draw_pos = event.pos()
+            elif self._draw_pen_active and self.last_draw_pos:
                 # 펜: 이전점→현재점 연결
                 prev_bx, prev_by = self.map_to_base_coordinates(self.last_draw_pos)
                 cur_bx, cur_by = self.map_to_base_coordinates(event.pos())
@@ -1139,7 +1212,10 @@ class InteractiveLabel(QLabel):
 
         # ── 그리기 모드 릴리즈 ──
         if self.draw_mode and event.button() == Qt.MouseButton.LeftButton:
-            if self._draw_pen_active:
+            if self._clone_active:
+                self._clone_active = False
+                self.last_draw_pos = None
+            elif self._draw_pen_active:
                 self._draw_pen_active = False
                 self.last_draw_pos = None
             elif self._draw_start is not None and self._draw_preview_end is not None:
@@ -1440,6 +1516,30 @@ class InteractiveLabel(QLabel):
             painter.setPen(QPen(Qt.GlobalColor.cyan, 1, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(self.cursor_pos, max(1, screen_r), max(1, screen_r))
+
+        # 클론 스탬프 커서 + 소스 표시
+        if self.draw_mode and self.draw_tool == 'clone_stamp':
+            screen_r = max(1, int(self.draw_size * scale / 2))
+            # 대상 위치 (커서)
+            if self.cursor_pos:
+                painter.setPen(QPen(Qt.GlobalColor.cyan, 1, Qt.PenStyle.DashLine))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawEllipse(self.cursor_pos, screen_r, screen_r)
+            # 소스 위치 십자
+            if self._clone_source is not None:
+                sx = int(self._clone_source[0] * scale + off_x)
+                sy = int(self._clone_source[1] * scale + off_y)
+                cross = 10
+                painter.setPen(QPen(QColor(255, 100, 100), 2))
+                painter.drawLine(sx - cross, sy, sx + cross, sy)
+                painter.drawLine(sx, sy - cross, sx, sy + cross)
+                # 클론 중이면 소스 브러시 원도 표시
+                if self._clone_active and self.cursor_pos and self._clone_offset:
+                    cbx, cby = self.map_to_base_coordinates(self.cursor_pos)
+                    live_sx = int((cbx + self._clone_offset[0]) * scale + off_x)
+                    live_sy = int((cby + self._clone_offset[1]) * scale + off_y)
+                    painter.setPen(QPen(QColor(255, 100, 100), 1, Qt.PenStyle.DashLine))
+                    painter.drawEllipse(QPoint(live_sx, live_sy), screen_r, screen_r)
 
     # ──────────────────────────────────────────────────
     #  크롭 / 리사이즈 / 이미지 조정
