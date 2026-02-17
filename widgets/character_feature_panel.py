@@ -64,7 +64,7 @@ class CharacterFeaturePanel(QWidget):
         header.addStretch()
 
         btn_insert = QPushButton("삽입")
-        btn_insert.setFixedHeight(24)
+        btn_insert.setFixedHeight(28)
         btn_insert.setStyleSheet(
             "QPushButton { background-color: #5865F2; color: white; "
             "border-radius: 4px; font-weight: bold; font-size: 11px; "
@@ -75,7 +75,7 @@ class CharacterFeaturePanel(QWidget):
         header.addWidget(btn_insert)
 
         btn_clear = QPushButton("X")
-        btn_clear.setFixedSize(24, 24)
+        btn_clear.setFixedSize(28, 28)
         btn_clear.setStyleSheet(
             "QPushButton { background-color: #444; color: #AAA; "
             "border-radius: 4px; font-weight: bold; font-size: 11px; }"

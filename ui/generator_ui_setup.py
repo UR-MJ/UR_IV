@@ -442,7 +442,7 @@ class UISetupMixin:
         char_header.addWidget(self.chk_auto_char_features)
 
         self.btn_char_preset = QPushButton("특징 프리셋")
-        self.btn_char_preset.setFixedHeight(24)
+        self.btn_char_preset.setFixedHeight(28)
         self.btn_char_preset.setStyleSheet(
             "QPushButton { background-color: #5865F2; color: white; "
             "border-radius: 4px; font-weight: bold; font-size: 11px; "
@@ -539,20 +539,20 @@ class UISetupMixin:
         lora_row.setSpacing(4)
 
         self.btn_tag_weights = QPushButton("⚖️ 가중치")
-        self.btn_tag_weights.setFixedHeight(28)
+        self.btn_tag_weights.setFixedHeight(32)
         self.btn_tag_weights.setStyleSheet(
             "background-color: #2C6B2F; color: white; border-radius: 4px; "
-            "font-size: 12px; font-weight: bold; padding: 0 10px;"
+            "font-size: 12px; font-weight: bold; padding: 2px 10px;"
         )
         self.btn_tag_weights.setToolTip("메인 프롬프트 태그 가중치 슬라이더 편집")
         self.btn_tag_weights.clicked.connect(self._open_tag_weight_editor)
 
         # LoRA 삽입 버튼
         self.btn_lora_manager = QPushButton("📦 LoRA")
-        self.btn_lora_manager.setFixedHeight(28)
+        self.btn_lora_manager.setFixedHeight(32)
         self.btn_lora_manager.setStyleSheet(
             "background-color: #8A5CF5; color: white; border-radius: 4px; "
-            "font-size: 12px; font-weight: bold; padding: 0 10px;"
+            "font-size: 12px; font-weight: bold; padding: 2px 10px;"
         )
         self.btn_lora_manager.setToolTip("LoRA 브라우저 열기")
         self.btn_lora_manager.clicked.connect(self._open_lora_manager)

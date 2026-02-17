@@ -54,13 +54,13 @@ class BackendUITab(QWidget):
         top_bar.addWidget(self._url_display)
 
         btn_reload = QPushButton("🔄")
-        btn_reload.setFixedSize(32, 28)
+        btn_reload.setFixedSize(36, 32)
         btn_reload.setToolTip("새로고침")
         btn_reload.clicked.connect(self._reload)
         top_bar.addWidget(btn_reload)
 
         btn_open = QPushButton("🌐")
-        btn_open.setFixedSize(32, 28)
+        btn_open.setFixedSize(36, 32)
         btn_open.setToolTip("외부 브라우저로 열기")
         btn_open.clicked.connect(self._open_external)
         top_bar.addWidget(btn_open)

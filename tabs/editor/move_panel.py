@@ -101,7 +101,7 @@ class MovePanel(QWidget):
 
         # 되돌리기 버튼
         self.btn_undo_move = QPushButton("↩️  이동 되돌리기")
-        self.btn_undo_move.setFixedHeight(36)
+        self.btn_undo_move.setFixedHeight(40)
         self.btn_undo_move.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_undo_move.setStyleSheet(_BTN_STYLE)
         self.btn_undo_move.setEnabled(False)
@@ -119,14 +119,14 @@ class MovePanel(QWidget):
         row.setSpacing(6)
 
         self.btn_confirm = QPushButton("✅ 확정")
-        self.btn_confirm.setFixedHeight(36)
+        self.btn_confirm.setFixedHeight(40)
         self.btn_confirm.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_confirm.setStyleSheet(_BTN_STYLE)
         self.btn_confirm.setEnabled(False)
         row.addWidget(self.btn_confirm)
 
         self.btn_cancel = QPushButton("❌ 취소")
-        self.btn_cancel.setFixedHeight(36)
+        self.btn_cancel.setFixedHeight(40)
         self.btn_cancel.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_cancel.setStyleSheet(_BTN_STYLE)
         self.btn_cancel.setEnabled(False)

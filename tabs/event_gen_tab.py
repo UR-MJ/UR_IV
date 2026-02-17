@@ -110,7 +110,7 @@ class StepCard(QWidget):
 
         # ★ E. 편집 버튼
         self.btn_edit = QPushButton("✏️")
-        self.btn_edit.setFixedSize(28, 28)
+        self.btn_edit.setFixedSize(34, 34)
         self.btn_edit.setStyleSheet("""
             QPushButton { border: 1px solid #555; border-radius: 4px; font-size: 12px; background: #2a2a2a; }
             QPushButton:hover { background: #3a3a3a; border-color: #777; }
@@ -189,7 +189,7 @@ class StepCard(QWidget):
         layout.addWidget(self.edit_area)
 
         self.btn_apply_edit = QPushButton("적용")
-        self.btn_apply_edit.setFixedHeight(22)
+        self.btn_apply_edit.setFixedHeight(28)
         self.btn_apply_edit.setStyleSheet("font-size: 9px; background: #27ae60; color: white; border-radius: 3px;")
         self.btn_apply_edit.clicked.connect(self._apply_edit)
         self.btn_apply_edit.hide()
@@ -480,13 +480,13 @@ class EventGenTab(QWidget):
         # 설정 저장/불러오기
         save_row = QHBoxLayout()
         self.btn_save_settings = QPushButton("💾 설정 저장")
-        self.btn_save_settings.setFixedHeight(30)
+        self.btn_save_settings.setFixedHeight(36)
         self.btn_save_settings.setStyleSheet("font-size: 11px;")
         self.btn_save_settings.clicked.connect(self._save_settings)
         save_row.addWidget(self.btn_save_settings)
 
         self.btn_load_settings = QPushButton("📂 설정 불러오기")
-        self.btn_load_settings.setFixedHeight(30)
+        self.btn_load_settings.setFixedHeight(36)
         self.btn_load_settings.setStyleSheet("font-size: 11px;")
         self.btn_load_settings.clicked.connect(self._load_settings)
         save_row.addWidget(self.btn_load_settings)

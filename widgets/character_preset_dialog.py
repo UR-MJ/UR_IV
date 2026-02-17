@@ -189,7 +189,7 @@ class CharacterPresetDialog(QDialog):
         # 전체 선택 / 해제 버튼
         sel_row = QHBoxLayout()
         btn_select_all = QPushButton("전체 선택")
-        btn_select_all.setFixedHeight(26)
+        btn_select_all.setFixedHeight(30)
         btn_select_all.setStyleSheet(
             "QPushButton { background-color: #3A3A3A; color: #CCC; "
             "border-radius: 4px; font-size: 11px; padding: 0 10px; }"
@@ -199,7 +199,7 @@ class CharacterPresetDialog(QDialog):
         sel_row.addWidget(btn_select_all)
 
         btn_deselect_all = QPushButton("전체 해제")
-        btn_deselect_all.setFixedHeight(26)
+        btn_deselect_all.setFixedHeight(30)
         btn_deselect_all.setStyleSheet(
             "QPushButton { background-color: #3A3A3A; color: #CCC; "
             "border-radius: 4px; font-size: 11px; padding: 0 10px; }"
@@ -250,7 +250,7 @@ class CharacterPresetDialog(QDialog):
         preset_row.setSpacing(4)
 
         btn_save_preset = QPushButton("프리셋 저장")
-        btn_save_preset.setFixedHeight(26)
+        btn_save_preset.setFixedHeight(30)
         btn_save_preset.setStyleSheet(
             "QPushButton { background-color: #D35400; color: white; "
             "border-radius: 4px; font-weight: bold; font-size: 11px; "
@@ -261,7 +261,7 @@ class CharacterPresetDialog(QDialog):
         preset_row.addWidget(btn_save_preset)
 
         btn_del_preset = QPushButton("프리셋 삭제")
-        btn_del_preset.setFixedHeight(26)
+        btn_del_preset.setFixedHeight(30)
         btn_del_preset.setStyleSheet(
             "QPushButton { background-color: #C0392B; color: white; "
             "border-radius: 4px; font-weight: bold; font-size: 11px; "

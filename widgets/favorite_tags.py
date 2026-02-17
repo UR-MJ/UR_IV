@@ -94,7 +94,7 @@ class FavoriteTagsBar(QWidget):
         favs = _load_favs()
         for i, fav in enumerate(favs):
             btn = QPushButton(fav.get("name", "?"))
-            btn.setFixedHeight(26)
+            btn.setFixedHeight(28)
             btn.setStyleSheet(
                 "QPushButton { background-color: #2C2C2C; color: #DDD; "
                 "border: 1px solid #555; border-radius: 12px; "
