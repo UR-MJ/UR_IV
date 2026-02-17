@@ -137,7 +137,8 @@ class SettingsTab(QWidget):
             "🔌 API 연결",
             "💾 저장 경로",
             "🌐 웹 브라우저",
-            "🎨 테마"
+            "🎨 테마",
+            "📦 백업/복원"
         ]
         for item_text in items:
             self.sidebar.addItem(item_text)
@@ -160,6 +161,7 @@ class SettingsTab(QWidget):
         self.page_storage = self._create_storage_page()
         self.page_web = self._create_web_page()
         self.page_theme = self._create_theme_page()
+        self.page_backup = self._create_backup_page()
 
         self.pages.addWidget(self.page_logic)
         self.pages.addWidget(self.page_autocomplete)
@@ -171,7 +173,8 @@ class SettingsTab(QWidget):
         self.pages.addWidget(self.page_storage)
         self.pages.addWidget(self.page_web)
         self.pages.addWidget(self.page_theme)
-        
+        self.pages.addWidget(self.page_backup)
+
         self.sidebar.currentRowChanged.connect(self.pages.setCurrentIndex)
         self.sidebar.setCurrentRow(0)
 
@@ -1139,3 +1142,118 @@ class SettingsTab(QWidget):
             'remove_duplicates': self.chk_remove_duplicates.isChecked(),
             'underscore_to_space': self.chk_underscore_to_space.isChecked(),
         }
+
+    # ── 백업/복원 ──
+
+    def _create_backup_page(self):
+        """백업/복원 페이지"""
+        w, l = self._create_container()
+        l.addWidget(self._create_header("📦 설정 백업 / 복원"))
+
+        group = QGroupBox("내보내기 / 가져오기")
+        gl = QVBoxLayout(group)
+        gl.setSpacing(10)
+
+        gl.addWidget(QLabel(
+            "앱 설정, 프리셋, 즐겨찾기 태그, 단축키 등을\n"
+            "ZIP 파일로 백업하고 복원할 수 있습니다."
+        ))
+
+        btn_export = QPushButton("📤 설정 내보내기 (ZIP)")
+        btn_export.setFixedHeight(40)
+        btn_export.setStyleSheet(
+            "background-color: #5865F2; color: white; "
+            "font-weight: bold; border-radius: 5px; font-size: 13px;"
+        )
+        btn_export.clicked.connect(self._export_settings)
+        gl.addWidget(btn_export)
+
+        btn_import = QPushButton("📥 설정 가져오기 (ZIP)")
+        btn_import.setFixedHeight(40)
+        btn_import.setStyleSheet(
+            "background-color: #27ae60; color: white; "
+            "font-weight: bold; border-radius: 5px; font-size: 13px;"
+        )
+        btn_import.clicked.connect(self._import_settings)
+        gl.addWidget(btn_import)
+
+        l.addWidget(group)
+        return w
+
+    def _export_settings(self):
+        """설정 파일들을 ZIP으로 내보내기"""
+        import zipfile
+        import os
+
+        base = os.path.dirname(os.path.dirname(__file__))
+        targets = [
+            'prompt_settings.json',
+            'prompt_presets.json',
+            'favorite_tags.json',
+            'favorites.json',
+            'event_gen_settings.json',
+            'search_tab_settings.json',
+        ]
+        # shortcuts
+        shortcut_file = os.path.join(base, 'shortcuts.json')
+        if os.path.exists(shortcut_file):
+            targets.append('shortcuts.json')
+
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "설정 내보내기", "ai_studio_backup.zip", "ZIP (*.zip)"
+        )
+        if not save_path:
+            return
+
+        try:
+            with zipfile.ZipFile(save_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for fname in targets:
+                    fpath = os.path.join(base, fname)
+                    if os.path.exists(fpath):
+                        zf.write(fpath, fname)
+                # queue_presets 폴더
+                qp_dir = os.path.join(base, 'queue_presets')
+                if os.path.isdir(qp_dir):
+                    for qf in os.listdir(qp_dir):
+                        if qf.endswith('.json'):
+                            zf.write(os.path.join(qp_dir, qf), f'queue_presets/{qf}')
+            QMessageBox.information(self, "내보내기 완료", f"설정이 저장되었습니다:\n{save_path}")
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"내보내기 실패: {e}")
+
+    def _import_settings(self):
+        """ZIP에서 설정 파일 복원"""
+        import zipfile
+        import os
+
+        zip_path, _ = QFileDialog.getOpenFileName(
+            self, "설정 가져오기", "", "ZIP (*.zip)"
+        )
+        if not zip_path:
+            return
+
+        reply = QMessageBox.question(
+            self, "설정 복원",
+            "현재 설정이 백업 파일의 내용으로 덮어씌워집니다.\n계속하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        base = os.path.dirname(os.path.dirname(__file__))
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                for info in zf.infolist():
+                    if info.is_dir():
+                        continue
+                    target = os.path.join(base, info.filename)
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    with zf.open(info) as src, open(target, 'wb') as dst:
+                        dst.write(src.read())
+            QMessageBox.information(
+                self, "복원 완료",
+                "설정이 복원되었습니다.\n일부 설정은 앱을 재시작해야 적용됩니다."
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"가져오기 실패: {e}")

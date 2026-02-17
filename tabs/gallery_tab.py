@@ -337,6 +337,7 @@ class ImagePreviewDialog(QDialog):
 class ThumbnailWidget(QFrame):
     """개별 썸네일 위젯"""
     clicked = pyqtSignal(str)  # image_path
+    ctrl_clicked = pyqtSignal(str)  # Ctrl+클릭 (다중 선택)
     double_clicked = pyqtSignal(str)
     context_action = pyqtSignal(str, str)  # action_name, image_path
 
@@ -348,20 +349,13 @@ class ThumbnailWidget(QFrame):
     def __init__(self, image_path: str, thumb_dir: str, thumb_size: int = 0, parent=None):
         super().__init__(parent)
         self.image_path = image_path
+        self._is_selected = False
 
         ts = thumb_size if thumb_size > 0 else self.THUMB_SIZE
         total_h = self.MARGIN * 2 + ts + self.SPACING + self.LABEL_H
         self.setFixedSize(ts + self.MARGIN * 2, total_h)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.setStyleSheet("""
-            ThumbnailWidget {
-                background-color: #2C2C2C; border: 2px solid transparent;
-                border-radius: 6px;
-            }
-            ThumbnailWidget:hover {
-                border: 2px solid #5865F2;
-            }
-        """)
+        self._update_selection_style()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(self.MARGIN, self.MARGIN, self.MARGIN, self.MARGIN)
@@ -399,12 +393,38 @@ class ThumbnailWidget(QFrame):
         name_label.setToolTip(image_path)
         layout.addWidget(name_label)
 
+    def set_selected(self, selected: bool):
+        self._is_selected = selected
+        self._update_selection_style()
+
+    def _update_selection_style(self):
+        if self._is_selected:
+            self.setStyleSheet("""
+                ThumbnailWidget {
+                    background-color: #2C2C2C; border: 2px solid #5865F2;
+                    border-radius: 6px;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                ThumbnailWidget {
+                    background-color: #2C2C2C; border: 2px solid transparent;
+                    border-radius: 6px;
+                }
+                ThumbnailWidget:hover {
+                    border: 2px solid #5865F2;
+                }
+            """)
+
     def mousePressEvent(self, event):
         if _sip_isdeleted(self):
             return
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_start_pos = event.pos()
-            self.clicked.emit(self.image_path)
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                self.ctrl_clicked.emit(self.image_path)
+            else:
+                self.clicked.emit(self.image_path)
 
     def mouseMoveEvent(self, event):
         if _sip_isdeleted(self):
@@ -453,6 +473,7 @@ class ThumbnailWidget(QFrame):
         act_copy_image = menu.addAction("🖼️ 이미지 복사")
         menu.addSeparator()
         act_compare = menu.addAction("🔍 비교하기")
+        act_param_diff = menu.addAction("📊 파라미터 비교")
         act_favorite = menu.addAction("⭐ 즐겨찾기 토글")
         act_queue = menu.addAction("📋 대기열에 추가")
         menu.addSeparator()
@@ -481,6 +502,8 @@ class ThumbnailWidget(QFrame):
                 QApplication.clipboard().setPixmap(pix)
         elif action == act_compare:
             self.context_action.emit("compare", self.image_path)
+        elif action == act_param_diff:
+            self.context_action.emit("param_diff", self.image_path)
         elif action == act_favorite:
             self.context_action.emit("favorite", self.image_path)
         elif action == act_queue:
@@ -536,6 +559,7 @@ class GalleryTab(QWidget):
         self._total_pages = 0
         self._thumb_widgets: list[ThumbnailWidget] = []
         self._compare_first_path: str | None = None
+        self._multi_selected: list[str] = []  # 다중 선택된 경로
 
         from config import DB_FILE, THUMB_DIR
         self._thumb_dir = THUMB_DIR
@@ -755,6 +779,53 @@ class GalleryTab(QWidget):
         )
         self.btn_slideshow.clicked.connect(self._start_slideshow)
         bottom_bar.addWidget(self.btn_slideshow)
+
+        self.btn_similar = QPushButton("🔗 유사 이미지")
+        self.btn_similar.setFixedSize(100, 35)
+        self.btn_similar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_similar.setStyleSheet(
+            "background-color: #2C6B2F; color: white; border-radius: 4px; "
+            "font-size: 12px; font-weight: bold;"
+        )
+        self.btn_similar.clicked.connect(self._show_similar_groups)
+        bottom_bar.addWidget(self.btn_similar)
+
+        # 다중 선택 일괄 작업 버튼
+        self._multi_label = QLabel("")
+        self._multi_label.setStyleSheet("color: #5865F2; font-size: 12px; font-weight: bold;")
+        bottom_bar.addWidget(self._multi_label)
+
+        self.btn_batch_delete = QPushButton("일괄 삭제")
+        self.btn_batch_delete.setFixedSize(80, 35)
+        self.btn_batch_delete.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_batch_delete.setStyleSheet(
+            "background-color: #E74C3C; color: white; border-radius: 4px; "
+            "font-size: 12px; font-weight: bold;"
+        )
+        self.btn_batch_delete.clicked.connect(self._batch_delete)
+        self.btn_batch_delete.hide()
+        bottom_bar.addWidget(self.btn_batch_delete)
+
+        self.btn_batch_fav = QPushButton("일괄 즐겨찾기")
+        self.btn_batch_fav.setFixedSize(96, 35)
+        self.btn_batch_fav.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_batch_fav.setStyleSheet(
+            "background-color: #F39C12; color: white; border-radius: 4px; "
+            "font-size: 12px; font-weight: bold;"
+        )
+        self.btn_batch_fav.clicked.connect(self._batch_favorite)
+        self.btn_batch_fav.hide()
+        bottom_bar.addWidget(self.btn_batch_fav)
+
+        self.btn_batch_clear = QPushButton("선택 해제")
+        self.btn_batch_clear.setFixedSize(80, 35)
+        self.btn_batch_clear.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_batch_clear.setStyleSheet(
+            "background-color: #555; color: #DDD; border-radius: 4px; font-size: 12px;"
+        )
+        self.btn_batch_clear.clicked.connect(self._clear_multi_select)
+        self.btn_batch_clear.hide()
+        bottom_bar.addWidget(self.btn_batch_clear)
 
         bottom_bar.addStretch()
 
@@ -1210,6 +1281,7 @@ class GalleryTab(QWidget):
         for path in page_paths:
             tw = ThumbnailWidget(path, self._thumb_dir, thumb_size=ts)
             tw.clicked.connect(self._on_thumb_clicked)
+            tw.ctrl_clicked.connect(self._on_thumb_ctrl_clicked)
             tw.double_clicked.connect(self._on_thumb_double_clicked)
             tw.context_action.connect(self._on_context_action)
             self.flow_layout.addWidget(tw)
@@ -1242,6 +1314,65 @@ class GalleryTab(QWidget):
         )
         dlg.exec()
 
+    def _on_thumb_ctrl_clicked(self, path: str):
+        """Ctrl+클릭 → 다중 선택 토글"""
+        if path in self._multi_selected:
+            self._multi_selected.remove(path)
+        else:
+            self._multi_selected.append(path)
+        # 썸네일 선택 표시 갱신
+        for tw in self._thumb_widgets:
+            if _sip_isdeleted(tw):
+                continue
+            tw.set_selected(tw.image_path in self._multi_selected)
+        self._update_multi_ui()
+
+    def _update_multi_ui(self):
+        """다중 선택 UI 갱신"""
+        count = len(self._multi_selected)
+        if count > 0:
+            self._multi_label.setText(f"{count}개 선택")
+            self.btn_batch_delete.show()
+            self.btn_batch_fav.show()
+            self.btn_batch_clear.show()
+        else:
+            self._multi_label.setText("")
+            self.btn_batch_delete.hide()
+            self.btn_batch_fav.hide()
+            self.btn_batch_clear.hide()
+
+    def _clear_multi_select(self):
+        """다중 선택 해제"""
+        self._multi_selected.clear()
+        for tw in self._thumb_widgets:
+            if not _sip_isdeleted(tw):
+                tw.set_selected(False)
+        self._update_multi_ui()
+
+    def _batch_delete(self):
+        """선택된 이미지 일괄 삭제"""
+        count = len(self._multi_selected)
+        if count == 0:
+            return
+        reply = QMessageBox.question(
+            self, "일괄 삭제",
+            f"{count}개의 이미지를 삭제하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        for path in self._multi_selected:
+            self._delete_image(path)
+        self._multi_selected.clear()
+        self._update_multi_ui()
+
+    def _batch_favorite(self):
+        """선택된 이미지 일괄 즐겨찾기"""
+        for path in self._multi_selected:
+            self._toggle_favorite(path)
+        self._clear_multi_select()
+
     def _on_thumb_double_clicked(self, path: str):
         """썸네일 더블클릭 → 탐색기에서 열기"""
         norm = os.path.normpath(path)
@@ -1265,6 +1396,8 @@ class GalleryTab(QWidget):
             self._delete_image(path)
         elif action == "compare":
             self._handle_compare(path)
+        elif action == "param_diff":
+            self._handle_param_diff(path)
 
     def _handle_compare(self, path: str):
         """비교하기: 첫 번째 선택 시 저장, 두 번째 선택 시 비교 시그널 발사"""
@@ -1283,6 +1416,38 @@ class GalleryTab(QWidget):
             first = self._compare_first_path
             self._compare_first_path = None
             self.send_to_compare.emit(first, path)
+
+    def _show_similar_groups(self):
+        """현재 폴더의 이미지들에서 유사 이미지 그룹 찾기"""
+        paths = self._filtered_paths
+        if len(paths) < 2:
+            QMessageBox.information(self, "유사 이미지", "비교할 이미지가 2장 이상 필요합니다.")
+            return
+        from widgets.similar_group_dialog import SimilarGroupDialog
+        dlg = SimilarGroupDialog(paths[:200], parent=self)  # 최대 200장
+        dlg.exec()
+
+    def _handle_param_diff(self, path: str):
+        """파라미터 비교: 첫 번째 선택 시 저장, 두 번째 선택 시 diff 다이얼로그"""
+        if not hasattr(self, '_diff_first_path'):
+            self._diff_first_path = None
+
+        if self._diff_first_path is None:
+            self._diff_first_path = path
+            parent = self.parent()
+            while parent:
+                if hasattr(parent, 'show_status'):
+                    parent.show_status(
+                        f"📊 비교 A 선택: {os.path.basename(path)} — 두 번째 이미지를 우클릭→파라미터 비교"
+                    )
+                    break
+                parent = parent.parent() if hasattr(parent, 'parent') else None
+        else:
+            from widgets.param_diff_dialog import ParamDiffDialog
+            first = self._diff_first_path
+            self._diff_first_path = None
+            dlg = ParamDiffDialog(first, path, parent=self)
+            dlg.exec()
 
     def _send_to_queue(self, path: str):
         """이미지 EXIF 정보로 대기열에 추가"""

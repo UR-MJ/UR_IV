@@ -159,6 +159,33 @@ class DrawPanel(QWidget):
         """)
         main_layout.addWidget(self.btn_filled)
 
+        line3 = QFrame()
+        line3.setFrameShape(QFrame.Shape.HLine)
+        line3.setStyleSheet("color: #333;")
+        main_layout.addWidget(line3)
+
+        # ── 그리기 레이어 투명도 ──
+        layer_header = QLabel("레이어")
+        layer_header.setStyleSheet(
+            "color: #999; font-size: 14px; font-weight: bold; padding: 2px 2px;"
+        )
+        main_layout.addWidget(layer_header)
+
+        self.slider_layer_opacity = NumericSlider("그리기 레이어 투명도", 0, 100, 100)
+        self.slider_layer_opacity.valueChanged.connect(self._on_layer_opacity)
+        main_layout.addWidget(self.slider_layer_opacity)
+
+        self.btn_flatten = QPushButton("⬇️ 레이어 병합")
+        self.btn_flatten.setFixedHeight(34)
+        self.btn_flatten.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_flatten.setStyleSheet(
+            "QPushButton { background-color: #2C2C2C; color: #CCC; border: 1px solid #444; "
+            "border-radius: 6px; font-size: 13px; font-weight: bold; }"
+            "QPushButton:hover { border: 1px solid #666; }"
+        )
+        self.btn_flatten.setToolTip("현재 블렌딩 결과를 원본에 병합")
+        main_layout.addWidget(self.btn_flatten)
+
         main_layout.addStretch(1)
 
         # 시그널 연결
@@ -220,6 +247,25 @@ class DrawPanel(QWidget):
 
     def _on_param_changed(self, *args):
         self._sync_to_label()
+
+    def _on_layer_opacity(self, value: int):
+        """그리기 레이어 투명도 변경 → pristine과 현재 이미지 블렌딩"""
+        if not self.parent_editor:
+            return
+        label = getattr(self.parent_editor, 'image_label', None)
+        if not label:
+            return
+        pristine = getattr(label, 'pristine_image', None)
+        current = getattr(label, 'display_base_image', None)
+        if pristine is None or current is None:
+            return
+        if pristine.shape != current.shape:
+            return
+        import cv2
+        alpha = value / 100.0
+        blended = cv2.addWeighted(current, alpha, pristine, 1.0 - alpha, 0)
+        label.display_base_image = blended
+        label.update()
 
     def _sync_to_label(self):
         """현재 설정을 InteractiveLabel에 동기화"""

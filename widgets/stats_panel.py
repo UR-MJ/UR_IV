@@ -1,6 +1,8 @@
 # widgets/stats_panel.py
 """생성 통계 대시보드 다이얼로그"""
+import os
 from collections import Counter
+from datetime import datetime
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTextEdit, QLabel, QPushButton, QProgressBar
 )
@@ -50,6 +52,7 @@ class StatsWorker(QThread):
         sampler_counter = Counter()
         tag_counter = Counter()
         resolution_counter = Counter()
+        date_counter = Counter()
         steps_list: list[int] = []
         cfg_list: list[float] = []
         total = len(self._rows)
@@ -91,6 +94,17 @@ class StatsWorker(QThread):
                 for tag in tags:
                     tag_counter[tag] += 1
 
+            # 날짜 (파일 수정 시간 기반)
+            try:
+                real_path = path.replace('/', os.sep)
+                if not os.path.isabs(real_path) and real_path.startswith(os.sep):
+                    real_path = real_path[1:]  # normalize_path 보정
+                mtime = os.path.getmtime(real_path)
+                date_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d')
+                date_counter[date_str] += 1
+            except Exception:
+                pass
+
         result = {
             'total_images': total,
             'models': model_counter.most_common(),
@@ -99,6 +113,7 @@ class StatsWorker(QThread):
             'resolutions': resolution_counter.most_common(),
             'steps': steps_list,
             'cfg': cfg_list,
+            'timeline': sorted(date_counter.items()),
         }
         self.finished.emit(result)
 
@@ -206,6 +221,23 @@ class StatsPanel(QDialog):
         html += self._make_table("샘플러별 사용 횟수", r['samplers'])
         html += self._make_table("해상도 분포", r['resolutions'])
         html += self._make_table("자주 쓴 태그 Top 30", r['tags_top30'])
+
+        # 타임라인
+        timeline = r.get('timeline', [])
+        if timeline:
+            html += "<h3 style='color:#AAA; margin-top:12px;'>날짜별 생성 타임라인</h3>"
+            max_count = max(c for _, c in timeline) if timeline else 1
+            for date_str, count in timeline[-30:]:  # 최근 30일만
+                bar_w = int(count / max_count * 300)
+                html += (
+                    f"<div style='margin:1px 0; display:flex; align-items:center;'>"
+                    f"<span style='color:#888; width:90px; display:inline-block; "
+                    f"font-size:11px;'>{date_str}</span>"
+                    f"<span style='background:#5865F2; height:16px; width:{max(2, bar_w)}px; "
+                    f"display:inline-block; border-radius:3px; margin:0 6px;'></span>"
+                    f"<span style='color:#AAA; font-size:11px;'>{count}장</span>"
+                    f"</div>"
+                )
 
         self.stats_text.setHtml(html)
 

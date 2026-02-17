@@ -277,6 +277,7 @@ class MosaicEditor(QWidget):
 
         # 그리기 패널 — 스포이트 색상 연결
         self.image_label.color_picked.connect(self.draw_panel.set_color_from_bgr)
+        self.draw_panel.btn_flatten.clicked.connect(self._on_flatten_layer)
 
         # 이동 패널
         self.move_panel.btn_start_move.clicked.connect(self._on_start_move)
@@ -878,6 +879,15 @@ class MosaicEditor(QWidget):
             )
         else:
             QMessageBox.critical(self, "오류", f"자동 감지 실패:\n{error_msg}")
+
+    # ── 레이어 ──
+
+    def _on_flatten_layer(self):
+        """현재 블렌딩 상태를 pristine에 병합"""
+        if self.image_label.display_base_image is not None:
+            self.image_label.push_undo_stack()
+            self.image_label.pristine_image = self.image_label.display_base_image.copy()
+            self.draw_panel.slider_layer_opacity.setValue(100)
 
     # ── 이동 ──
 

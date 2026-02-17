@@ -14,6 +14,7 @@ from widgets.common_widgets import (
     NoScrollComboBox, AutomationWidget, ResolutionItemWidget, FlowLayout
 )
 from widgets.sliders import NumericSlider
+from widgets.favorite_tags import FavoriteTagsBar
 from widgets.common_widgets import NoScrollComboBox, AutomationWidget, ResolutionItemWidget
 from tabs.browser_tab import BrowserTab
 from tabs.settings_tab import SettingsTab
@@ -302,8 +303,19 @@ class UISetupMixin:
         self.total_prompt_display.document().contentsChanged.connect(
             self._adjust_total_prompt_height
         )
+        self.total_prompt_display.textChanged.connect(self._update_token_count)
         self._create_group(layout, "최종 프롬프트", self.total_prompt_display)
-        
+
+        # 토큰 카운터
+        self.token_count_label = QLabel("토큰: 0 / 75")
+        self.token_count_label.setStyleSheet(
+            "color: #888; font-size: 11px; font-weight: bold; padding: 0 4px;"
+        )
+        self.token_count_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        layout.addWidget(self.token_count_label)
+
         # 생성 버튼 그룹
         gen_btns = QHBoxLayout()
         gen_btns.setSpacing(5)
@@ -331,8 +343,28 @@ class UISetupMixin:
         )
         self.btn_prompt_history.clicked.connect(self._show_prompt_history)
 
+        self.btn_shuffle = QPushButton("🔀")
+        self.btn_shuffle.setFixedSize(45, 45)
+        self.btn_shuffle.setToolTip("메인 프롬프트 태그 순서 셔플")
+        self.btn_shuffle.setStyleSheet(
+            "font-size: 16px; background-color: #333; color: #DDD; "
+            "border: 1px solid #555; border-radius: 5px;"
+        )
+        self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
+
+        self.btn_ab_test = QPushButton("A/B")
+        self.btn_ab_test.setFixedSize(45, 45)
+        self.btn_ab_test.setToolTip("A/B 프롬프트 비교 테스트")
+        self.btn_ab_test.setStyleSheet(
+            "font-size: 12px; font-weight: bold; background-color: #333; color: #DDD; "
+            "border: 1px solid #555; border-radius: 5px;"
+        )
+        self.btn_ab_test.clicked.connect(self._open_ab_test)
+
         gen_btns.addWidget(self.btn_random_prompt, 1)
         gen_btns.addWidget(self.btn_prompt_history)
+        gen_btns.addWidget(self.btn_shuffle)
+        gen_btns.addWidget(self.btn_ab_test)
         gen_btns.addWidget(self.btn_generate, 1)
         layout.addLayout(gen_btns)
 
@@ -463,6 +495,24 @@ class UISetupMixin:
         self.main_prompt_text = self._create_group(layout, "메인", TagInputWidget())
         self.main_prompt_text.setMinimumHeight(80)
 
+        # 즐겨찾기 태그 바
+        self.fav_tags_bar = FavoriteTagsBar()
+        self.fav_tags_bar.tag_insert_requested.connect(self._insert_fav_tag)
+        layout.addWidget(self.fav_tags_bar)
+
+        # LoRA + 가중치 편집 버튼 행
+        lora_row = QHBoxLayout()
+        lora_row.setSpacing(4)
+
+        self.btn_tag_weights = QPushButton("⚖️ 가중치")
+        self.btn_tag_weights.setFixedHeight(28)
+        self.btn_tag_weights.setStyleSheet(
+            "background-color: #2C6B2F; color: white; border-radius: 4px; "
+            "font-size: 12px; font-weight: bold; padding: 0 10px;"
+        )
+        self.btn_tag_weights.setToolTip("메인 프롬프트 태그 가중치 슬라이더 편집")
+        self.btn_tag_weights.clicked.connect(self._open_tag_weight_editor)
+
         # LoRA 삽입 버튼
         self.btn_lora_manager = QPushButton("📦 LoRA")
         self.btn_lora_manager.setFixedHeight(28)
@@ -472,7 +522,10 @@ class UISetupMixin:
         )
         self.btn_lora_manager.setToolTip("LoRA 브라우저 열기")
         self.btn_lora_manager.clicked.connect(self._open_lora_manager)
-        layout.addWidget(self.btn_lora_manager)
+
+        lora_row.addWidget(self.btn_tag_weights)
+        lora_row.addWidget(self.btn_lora_manager)
+        layout.addLayout(lora_row)
 
         # 후행 프롬프트 (자동완성 지원)
         self.suffix_prompt_text = TagInputWidget()
@@ -1247,6 +1300,85 @@ class UISetupMixin:
             self.main_prompt_text.setPlainText(f"{current}, {lora_text}")
         else:
             self.main_prompt_text.setPlainText(lora_text)
+
+    def _update_token_count(self):
+        """최종 프롬프트 토큰 수 추정 (CLIP 기준 근사)"""
+        text = self.total_prompt_display.toPlainText().strip()
+        if not text:
+            self.token_count_label.setText("토큰: 0 / 75")
+            self.token_count_label.setStyleSheet(
+                "color: #888; font-size: 11px; font-weight: bold; padding: 0 4px;"
+            )
+            return
+        # CLIP 토큰 근사: 단어/서브워드 기준 (영어 ~0.75 토큰/단어, 태그 ~1 토큰/태그)
+        import re
+        tags = [t.strip() for t in text.split(",") if t.strip()]
+        token_est = 0
+        for tag in tags:
+            words = re.findall(r'[a-zA-Z]+|[^ ,():\[\]]+', tag)
+            token_est += max(1, len(words))
+        if token_est <= 75:
+            color = "#4CAF50"
+        elif token_est <= 150:
+            color = "#FFA726"
+        else:
+            color = "#E74C3C"
+        self.token_count_label.setText(f"토큰: ~{token_est} / 75")
+        self.token_count_label.setStyleSheet(
+            f"color: {color}; font-size: 11px; font-weight: bold; padding: 0 4px;"
+        )
+
+    def _open_tag_weight_editor(self):
+        """태그 가중치 슬라이더 편집"""
+        from widgets.tag_weight_editor import TagWeightEditorDialog
+        text = self.main_prompt_text.toPlainText().strip()
+        if not text:
+            return
+        dlg = TagWeightEditorDialog(text, parent=self)
+        if dlg.exec() == dlg.DialogCode.Accepted:
+            result = dlg.get_result()
+            if result is not None:
+                self.main_prompt_text.setPlainText(result)
+
+    def _open_ab_test(self):
+        """A/B 프롬프트 비교 테스트"""
+        from widgets.ab_test_dialog import ABTestDialog
+        prompt = self.main_prompt_text.toPlainText().strip()
+        negative = self.neg_prompt_text.toPlainText().strip()
+        dlg = ABTestDialog(prompt, negative, parent=self)
+        if dlg.exec() != dlg.DialogCode.Accepted:
+            return
+        result = dlg.get_result()
+        if not result:
+            return
+        # 프롬프트 A를 대기열에, 프롬프트 B를 대기열에 — 같은 시드
+        for label, key in [("A", "prompt_a"), ("B", "prompt_b")]:
+            payload = {
+                'prompt': result[key],
+                'negative_prompt': result['negative'],
+                'seed': result['seed'],
+            }
+            if hasattr(self, 'queue_panel'):
+                self.queue_panel.add_single_item(payload)
+        self.show_status(f"A/B 테스트 대기열 추가 (시드: {result['seed']})")
+
+    def _shuffle_main_prompt(self):
+        """메인 프롬프트 태그 순서 랜덤 셔플"""
+        import random
+        text = self.main_prompt_text.toPlainText().strip()
+        if not text:
+            return
+        tags = [t.strip() for t in text.split(",") if t.strip()]
+        random.shuffle(tags)
+        self.main_prompt_text.setPlainText(", ".join(tags))
+
+    def _insert_fav_tag(self, tags: str):
+        """즐겨찾기 태그를 메인 프롬프트에 삽입"""
+        current = self.main_prompt_text.toPlainText().strip()
+        if current:
+            self.main_prompt_text.setPlainText(f"{current}, {tags}")
+        else:
+            self.main_prompt_text.setPlainText(tags)
 
     def _create_favorites_tab(self):
         """즐겨찾기 탭 생성"""
