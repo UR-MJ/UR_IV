@@ -620,13 +620,57 @@ class WebUIMixin:
 
         dialog = QDialog(self)
         dialog.setWindowTitle("API 백엔드 관리")
-        dialog.setMinimumWidth(450)
-        dialog.setStyleSheet("QDialog { background-color: #1e1e1e; color: #ddd; }")
+        dialog.setMinimumWidth(480)
+        dialog.setStyleSheet("""
+            QDialog { background-color: #1e1e1e; color: #ddd; }
+            QGroupBox {
+                border: 1px solid #444; border-radius: 8px;
+                margin-top: 14px; padding: 14px; padding-top: 28px;
+                font-weight: bold; color: #ccc; font-size: 13px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin; left: 14px; padding: 0 8px;
+            }
+            QGroupBox:!enabled {
+                border-color: #333; color: #666;
+            }
+            QLabel { color: #bbb; }
+            QLabel:disabled { color: #555; }
+            QLineEdit {
+                background: #252525; border: 1px solid #444; border-radius: 4px;
+                padding: 6px 10px; color: #ddd; font-size: 12px;
+            }
+            QLineEdit:focus { border: 1px solid #5865F2; }
+            QLineEdit:disabled { background: #1a1a1a; color: #555; border-color: #333; }
+            QRadioButton {
+                color: #ccc; spacing: 8px; font-size: 13px; padding: 6px 4px;
+            }
+            QRadioButton::indicator {
+                width: 18px; height: 18px; border-radius: 9px;
+                border: 2px solid #666; background: #252525;
+            }
+            QRadioButton::indicator:hover {
+                border-color: #5865F2;
+            }
+            QRadioButton::indicator:checked {
+                border-color: #5865F2; background: #5865F2;
+            }
+            QRadioButton:hover { color: #fff; }
+            QPushButton {
+                background: #333; border: 1px solid #555; border-radius: 5px;
+                padding: 6px 16px; color: #ddd; font-size: 12px;
+            }
+            QPushButton:hover { background: #444; border-color: #666; }
+            QPushButton:pressed { background: #2a2a2a; }
+        """)
         main_layout = QVBoxLayout(dialog)
+        main_layout.setContentsMargins(20, 16, 20, 16)
+        main_layout.setSpacing(12)
 
         # 백엔드 선택
         select_group = QGroupBox("백엔드 선택")
         select_layout = QVBoxLayout(select_group)
+        select_layout.setSpacing(4)
 
         btn_group = QButtonGroup(dialog)
         radio_webui = QRadioButton("WebUI (A1111 / Forge)")
@@ -774,9 +818,14 @@ class WebUIMixin:
 
         btn_apply = QPushButton("✅ 적용")
         btn_apply.setFixedHeight(35)
-        btn_apply.setStyleSheet(
-            "background-color: #4A90E2; color: white; font-weight: bold; border-radius: 5px;"
-        )
+        btn_apply.setStyleSheet("""
+            QPushButton {
+                background: #5865F2; border: none; border-radius: 5px;
+                color: white; font-weight: bold; font-size: 13px;
+            }
+            QPushButton:hover { background: #6975FF; }
+            QPushButton:pressed { background: #4752C4; }
+        """)
 
         def apply_settings():
             if radio_comfyui.isChecked():

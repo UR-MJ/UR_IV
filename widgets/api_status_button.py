@@ -32,10 +32,12 @@ class ApiStatusButton(QPushButton):
         self.setFixedHeight(38)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.setMouseTracking(True)
 
         self._state = self.STATE_IDLE
         self._backend_name = "WebUI"
         self._label_text = "연결 대기"
+        self._hovered = False
 
         self._frame = 0
         self._anim_timer = QTimer(self)
@@ -57,6 +59,18 @@ class ApiStatusButton(QPushButton):
 
         # 배경
         self._bg_shift = 0.0
+
+    # ── 호버 ──
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self.update()
+        super().leaveEvent(event)
 
     # ── 공개 API ──
 
@@ -197,25 +211,26 @@ class ApiStatusButton(QPushButton):
 
     def _draw_background(self, p: QPainter, w: int, h: int):
         r = 6
+        hv = 20 if self._hovered else 0  # 호버 시 밝기 증가
         if self._state == self.STATE_CONNECTING:
             grad = QLinearGradient(self._bg_shift * w - w * 0.3, 0,
                                    self._bg_shift * w + w * 0.7, h)
-            grad.setColorAt(0, QColor(70, 70, 30))
-            grad.setColorAt(0.5, QColor(90, 85, 35))
-            grad.setColorAt(1, QColor(70, 70, 30))
+            grad.setColorAt(0, QColor(70 + hv, 70 + hv, 30))
+            grad.setColorAt(0.5, QColor(90 + hv, 85 + hv, 35))
+            grad.setColorAt(1, QColor(70 + hv, 70 + hv, 30))
             p.setBrush(QBrush(grad))
-            p.setPen(QPen(QColor(140, 140, 60), 1))
+            p.setPen(QPen(QColor(140 + hv, 140 + hv, 60), 1))
         elif self._state == self.STATE_CONNECTED:
             pulse = math.sin(self._pulse_phase * math.pi * 2) * 0.15 if self._pulse_phase else 0
             base_g = int(90 + pulse * 60)
-            p.setBrush(QColor(35, min(base_g, 120), 35))
-            p.setPen(QPen(QColor(70, 180, 70), 1))
+            p.setBrush(QColor(35 + hv, min(base_g + hv, 140), 35 + hv))
+            p.setPen(QPen(QColor(70 + hv, 180 + min(hv, 30), 70 + hv), 1))
         elif self._state == self.STATE_FAILED:
-            p.setBrush(QColor(80, 35, 35))
-            p.setPen(QPen(QColor(180, 70, 70), 1))
+            p.setBrush(QColor(80 + hv, 35 + hv, 35 + hv))
+            p.setPen(QPen(QColor(180 + min(hv, 30), 70 + hv, 70 + hv), 1))
         else:
-            p.setBrush(QColor(50, 50, 50))
-            p.setPen(QPen(QColor(80, 80, 80), 1))
+            p.setBrush(QColor(50 + hv, 50 + hv, 50 + hv))
+            p.setPen(QPen(QColor(80 + hv, 80 + hv, 80 + hv), 1))
         p.drawRoundedRect(QRectF(0, 0, w, h), r, r)
 
     def _draw_hourglass(self, p: QPainter, rect: QRectF):
