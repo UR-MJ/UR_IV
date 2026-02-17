@@ -110,13 +110,18 @@ class LoraManagerDialog(QDialog):
             "QSlider::handle:horizontal { background: #5865F2; width: 14px; margin: -4px 0; "
             "border-radius: 7px; }"
         )
-        self.weight_slider.valueChanged.connect(self._update_weight_label)
+        self.weight_slider.valueChanged.connect(self._update_weight_input)
         bottom.addWidget(self.weight_slider)
 
-        self.weight_label = QLabel("0.80")
-        self.weight_label.setFixedWidth(40)
-        self.weight_label.setStyleSheet("color: #DDD; font-weight: bold;")
-        bottom.addWidget(self.weight_label)
+        self.weight_input = QLineEdit("0.80")
+        self.weight_input.setFixedWidth(50)
+        self.weight_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.weight_input.setStyleSheet(
+            "background-color: #2A2A2A; color: #DDD; border: 1px solid #444; "
+            "border-radius: 3px; font-weight: bold; font-size: 12px;"
+        )
+        self.weight_input.editingFinished.connect(self._update_slider_from_input)
+        bottom.addWidget(self.weight_input)
 
         self.btn_insert = QPushButton("삽입")
         self.btn_insert.setFixedSize(70, 35)
@@ -129,8 +134,18 @@ class LoraManagerDialog(QDialog):
 
         layout.addLayout(bottom)
 
-    def _update_weight_label(self, value: int):
-        self.weight_label.setText(f"{value / 100:.2f}")
+    def _update_weight_input(self, value: int):
+        """슬라이더 → 입력 필드 동기화"""
+        self.weight_input.setText(f"{value / 100:.2f}")
+
+    def _update_slider_from_input(self):
+        """입력 필드 → 슬라이더 동기화"""
+        try:
+            val = float(self.weight_input.text())
+            val = max(0.0, min(2.0, val))
+            self.weight_slider.setValue(int(val * 100))
+        except ValueError:
+            pass
 
     def _refresh(self):
         """LoRA 목록 새로고침"""

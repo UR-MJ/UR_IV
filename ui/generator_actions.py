@@ -271,23 +271,18 @@ class ActionsMixin:
             self.random_res_label.clear()
     
     def add_resolution_item(self):
-        """해상도 추가"""
+        """해상도 추가 (이름 자동 생성: WxH)"""
         try:
-            desc = self.res_desc_input.text().strip()
             width = int(self.res_width_input.text())
             height = int(self.res_height_input.text())
-            
-            if not desc:
-                QMessageBox.warning(self, "경고", "설명을 입력해주세요.")
-                return
-            
+
+            desc = f"{width}x{height}"
             self.random_resolutions.append((width, height, desc))
             self._update_resolution_list()
-            
-            self.res_desc_input.clear()
+
             self.res_width_input.clear()
             self.res_height_input.clear()
-            
+
         except ValueError:
             QMessageBox.warning(self, "오류", "올바른 숫자를 입력해주세요.")
     

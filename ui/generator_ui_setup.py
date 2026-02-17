@@ -696,8 +696,17 @@ class UISetupMixin:
         res_layout = QHBoxLayout()
         self.width_input = QLineEdit("1024")
         self.height_input = QLineEdit("1024")
+        btn_swap_res = QPushButton("↔")
+        btn_swap_res.setFixedSize(30, 30)
+        btn_swap_res.setToolTip("W ↔ H 교환")
+        btn_swap_res.setStyleSheet(
+            "QPushButton { background-color: #333; color: #DDD; border: 1px solid #555; "
+            "border-radius: 4px; font-weight: bold; font-size: 13px; }"
+            "QPushButton:hover { background-color: #444; border-color: #5865F2; }"
+        )
+        btn_swap_res.clicked.connect(self._swap_resolution)
         res_layout.addWidget(self.width_input)
-        res_layout.addWidget(QLabel("x"))
+        res_layout.addWidget(btn_swap_res)
         res_layout.addWidget(self.height_input)
         self._create_group(layout, "해상도", res_layout)
 
@@ -746,15 +755,17 @@ class UISetupMixin:
         # 해상도 편집기
         self.resolution_editor_container = QWidget()
         res_edit_layout = QVBoxLayout(self.resolution_editor_container)
-        
+
         input_res_layout = QHBoxLayout()
         self.res_width_input = QLineEdit()
+        self.res_width_input.setPlaceholderText("W")
         self.res_height_input = QLineEdit()
-        self.res_desc_input = QLineEdit()
+        self.res_height_input.setPlaceholderText("H")
         self.btn_add_res = QPushButton("+")
-        
-        input_res_layout.addWidget(self.res_desc_input)
+
+        input_res_layout.addWidget(QLabel("W:"))
         input_res_layout.addWidget(self.res_width_input)
+        input_res_layout.addWidget(QLabel("H:"))
         input_res_layout.addWidget(self.res_height_input)
         input_res_layout.addWidget(self.btn_add_res)
         res_edit_layout.addLayout(input_res_layout)
@@ -1368,7 +1379,7 @@ class UISetupMixin:
         
     def _on_res_preset_context(self, idx: int, btn):
         """해상도 프리셋 우클릭 메뉴"""
-        from PyQt6.QtWidgets import QMenu, QInputDialog
+        from PyQt6.QtWidgets import QMenu, QDialog, QDialogButtonBox, QSpinBox
         menu = QMenu(self)
         menu.setStyleSheet(
             "QMenu { background-color: #2C2C2C; color: #DDD; border: 1px solid #555; }"
@@ -1381,26 +1392,63 @@ class UISetupMixin:
         if not chosen:
             return
         if chosen == act_edit:
-            current = f"{self._res_presets[idx][1]}x{self._res_presets[idx][2]}"
-            text, ok = QInputDialog.getText(
-                self, "해상도 변경",
-                "해상도 입력 (예: 768x1024):",
-                text=current
+            dlg = QDialog(self)
+            dlg.setWindowTitle("해상도 변경")
+            dlg.setFixedSize(280, 120)
+            dlg.setStyleSheet("background-color: #1E1E1E; color: #EEE;")
+            dl = QVBoxLayout(dlg)
+            row = QHBoxLayout()
+            w_spin = QSpinBox()
+            w_spin.setRange(64, 4096)
+            w_spin.setSingleStep(64)
+            w_spin.setValue(self._res_presets[idx][1])
+            w_spin.setStyleSheet("background:#2C2C2C; color:#EEE; border:1px solid #555; padding:4px;")
+            h_spin = QSpinBox()
+            h_spin.setRange(64, 4096)
+            h_spin.setSingleStep(64)
+            h_spin.setValue(self._res_presets[idx][2])
+            h_spin.setStyleSheet("background:#2C2C2C; color:#EEE; border:1px solid #555; padding:4px;")
+            swap_btn = QPushButton("↔")
+            swap_btn.setFixedSize(32, 32)
+            swap_btn.setToolTip("W ↔ H 교환")
+            swap_btn.setStyleSheet("background:#333; color:#DDD; border-radius:4px; font-weight:bold;")
+            swap_btn.clicked.connect(lambda: (
+                w_spin.setValue(h_spin.value()) or True) if (
+                    _tw := w_spin.value()) and (w_spin.setValue(h_spin.value()) or True) and h_spin.setValue(_tw) is None else None
             )
-            if ok and 'x' in text.lower():
-                try:
-                    parts = text.lower().split('x')
-                    w, h = int(parts[0].strip()), int(parts[1].strip())
-                    label = f"{w}x{h}" if w != h else f"{w}²"
-                    self._res_presets[idx] = [label, w, h]
-                    btn.setText(label)
-                except (ValueError, IndexError):
-                    pass
+            # simpler swap
+            def _swap_wh():
+                _w, _h = w_spin.value(), h_spin.value()
+                w_spin.setValue(_h)
+                h_spin.setValue(_w)
+            swap_btn.clicked.disconnect()
+            swap_btn.clicked.connect(_swap_wh)
+            row.addWidget(QLabel("W:"))
+            row.addWidget(w_spin)
+            row.addWidget(swap_btn)
+            row.addWidget(QLabel("H:"))
+            row.addWidget(h_spin)
+            dl.addLayout(row)
+            bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            bb.accepted.connect(dlg.accept)
+            bb.rejected.connect(dlg.reject)
+            dl.addWidget(bb)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                w, h = w_spin.value(), h_spin.value()
+                label = f"{w}x{h}" if w != h else f"{w}\u00b2"
+                self._res_presets[idx] = [label, w, h]
+                btn.setText(label)
         elif chosen == act_reset:
             if idx < len(self._DEFAULT_RES_PRESETS):
                 default = list(self._DEFAULT_RES_PRESETS[idx])
                 self._res_presets[idx] = default
                 btn.setText(default[0])
+
+    def _swap_resolution(self):
+        """W ↔ H 해상도 교환"""
+        w, h = self.width_input.text(), self.height_input.text()
+        self.width_input.setText(h)
+        self.height_input.setText(w)
 
     def _open_lora_manager(self):
         """LoRA 브라우저 다이얼로그 열기"""

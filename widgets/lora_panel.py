@@ -1,7 +1,8 @@
 # widgets/lora_panel.py
-"""LoRA 활성 목록 패널 — 선택된 LoRA를 토글/삭제할 수 있는 위젯"""
+"""LoRA 활성 목록 패널 — 선택된 LoRA를 토글/삭제/강도 조절할 수 있는 위젯"""
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QPushButton, QLabel
+    QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QPushButton,
+    QLabel, QSlider, QMessageBox
 )
 from PyQt6.QtCore import Qt
 
@@ -9,18 +10,19 @@ from PyQt6.QtCore import Qt
 class LoraActivePanel(QWidget):
     """활성 LoRA 목록 패널
 
-    각 항목: [☑ name (weight)] [×]
+    각 항목: [☑ name] [슬라이더 weight] [✕ 삭제]
     - 체크 ON: 생성 시 포함
     - 체크 OFF: 생성 시 제외
-    - × 버튼: 목록에서 제거
+    - 슬라이더: 강도 조절 (0.00~2.00)
+    - ✕ 버튼: 확인 후 제거
     """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._entries: list[dict] = []  # {'name': str, 'weight': float, 'enabled': bool}
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 2, 0, 2)
-        self._layout.setSpacing(2)
+        self._layout.setContentsMargins(0, 4, 0, 4)
+        self._layout.setSpacing(3)
         self.hide()  # 비어있으면 숨김
 
     def add_lora(self, name: str, weight: float):
@@ -35,9 +37,16 @@ class LoraActivePanel(QWidget):
         self._rebuild_ui()
 
     def remove_lora(self, name: str):
-        """LoRA 제거"""
-        self._entries = [e for e in self._entries if e['name'] != name]
-        self._rebuild_ui()
+        """LoRA 제거 (확인 후)"""
+        reply = QMessageBox.question(
+            self, "LoRA 제거",
+            f"'{name}'을(를) 제거하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._entries = [e for e in self._entries if e['name'] != name]
+            self._rebuild_ui()
 
     def get_active_lora_text(self) -> str:
         """활성(enabled) LoRA들의 문법 문자열 반환"""
@@ -78,27 +87,58 @@ class LoraActivePanel(QWidget):
         self.show()
         for entry in self._entries:
             row = QWidget()
+            row.setFixedHeight(32)
             row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(4, 0, 4, 0)
-            row_layout.setSpacing(4)
+            row_layout.setContentsMargins(6, 2, 6, 2)
+            row_layout.setSpacing(6)
 
-            chk = QCheckBox(f"{entry['name']}  ({entry['weight']:.2f})")
+            # 체크박스 (이름만)
+            chk = QCheckBox(entry['name'])
             chk.setChecked(entry['enabled'])
             chk.setStyleSheet(
-                "QCheckBox { color: #DDD; font-size: 11px; }"
-                "QCheckBox::indicator { width: 14px; height: 14px; }"
+                "QCheckBox { color: #DDD; font-size: 12px; font-weight: bold; }"
+                "QCheckBox::indicator { width: 16px; height: 16px; }"
             )
             chk.toggled.connect(
                 lambda checked, name=entry['name']: self._on_toggle(name, checked)
             )
-            row_layout.addWidget(chk, 1)
+            row_layout.addWidget(chk)
 
-            btn_del = QPushButton("×")
-            btn_del.setFixedSize(20, 20)
+            # 강도 슬라이더
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(0, 200)
+            slider.setValue(int(entry['weight'] * 100))
+            slider.setFixedWidth(80)
+            slider.setStyleSheet(
+                "QSlider::groove:horizontal { background: #333; height: 4px; border-radius: 2px; }"
+                "QSlider::handle:horizontal { background: #5865F2; width: 10px; "
+                "margin: -3px 0; border-radius: 5px; }"
+            )
+            row_layout.addWidget(slider)
+
+            # 강도 라벨
+            weight_label = QLabel(f"{entry['weight']:.2f}")
+            weight_label.setFixedWidth(36)
+            weight_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            weight_label.setStyleSheet("color: #AAA; font-size: 11px;")
+            row_layout.addWidget(weight_label)
+
+            # 슬라이더 ↔ 라벨/데이터 연결
+            slider.valueChanged.connect(
+                lambda val, name=entry['name'], lbl=weight_label: (
+                    lbl.setText(f"{val / 100:.2f}"),
+                    self._on_weight_change(name, val / 100.0),
+                )
+            )
+
+            # ✕ 삭제 버튼
+            btn_del = QPushButton("✕")
+            btn_del.setFixedSize(24, 24)
+            btn_del.setToolTip("LoRA 제거")
             btn_del.setStyleSheet(
-                "QPushButton { background: #444; color: #AAA; border: none; "
-                "border-radius: 10px; font-size: 12px; font-weight: bold; }"
-                "QPushButton:hover { background: #C0392B; color: white; }"
+                "QPushButton { background: transparent; color: #666; border: none; "
+                "font-size: 14px; font-weight: bold; }"
+                "QPushButton:hover { color: #E74C3C; }"
             )
             btn_del.clicked.connect(
                 lambda _, name=entry['name']: self.remove_lora(name)
@@ -115,4 +155,11 @@ class LoraActivePanel(QWidget):
         for e in self._entries:
             if e['name'] == name:
                 e['enabled'] = checked
+                break
+
+    def _on_weight_change(self, name: str, weight: float):
+        """슬라이더로 강도 변경"""
+        for e in self._entries:
+            if e['name'] == name:
+                e['weight'] = weight
                 break
