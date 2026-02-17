@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QListWidget, QListWidgetItem, QScrollArea, QWidget,
-    QTextEdit, QSplitter, QAbstractItemView
+    QSplitter, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, QTimer
 from widgets.common_widgets import FlowLayout
@@ -18,12 +18,6 @@ QLineEdit {
     padding: 8px 12px; font-size: 13px;
 }
 QLineEdit:focus { border: 1px solid #5865F2; }
-QTextEdit {
-    background-color: #2A2A2A; color: #DDD;
-    border: 1px solid #444; border-radius: 6px;
-    padding: 6px 10px; font-size: 12px;
-}
-QTextEdit:focus { border: 1px solid #5865F2; }
 QListWidget {
     background-color: #252525; color: #DDD;
     border: 1px solid #333; border-radius: 6px;
@@ -58,6 +52,18 @@ _TAG_EXISTS = (
     "QPushButton { background-color: #2C2C2C; color: #555; "
     "border: 1px solid #3A3A3A; border-radius: 11px; padding: 4px 12px; "
     "font-size: 11px; }"
+)
+_TAG_CUSTOM = (
+    "QPushButton { background-color: #D35400; color: white; "
+    "border: none; border-radius: 11px; padding: 4px 12px; "
+    "font-size: 11px; font-weight: bold; }"
+    "QPushButton:hover { background-color: #E67E22; }"
+)
+_TAG_CUSTOM_UNCHECKED = (
+    "QPushButton { background-color: #4A3000; color: #999; "
+    "border: none; border-radius: 11px; padding: 4px 12px; "
+    "font-size: 11px; text-decoration: line-through; }"
+    "QPushButton:hover { background-color: #5A3A00; }"
 )
 
 
@@ -112,7 +118,7 @@ class CharacterPresetDialog(QDialog):
 
         desc = QLabel(
             "캐릭터를 검색하고 특징 태그를 선택하여 프롬프트에 삽입합니다. "
-            "추가 프롬프트도 함께 입력할 수 있습니다."
+            "커스텀 프롬프트도 태그로 추가하여 on/off 할 수 있습니다."
         )
         desc.setStyleSheet("color: #888; font-size: 12px;")
         root.addWidget(desc)
@@ -202,13 +208,34 @@ class CharacterPresetDialog(QDialog):
         self._tag_scroll.setWidget(self._tag_container)
         right_layout.addWidget(self._tag_scroll, 1)
 
-        # 추가 프롬프트 입력 (프리셋 저장 대상)
-        extra_header = QHBoxLayout()
-        extra_header.addWidget(QLabel("커스텀 프롬프트 (프리셋 저장 & 삽입)"))
-        extra_header.addStretch()
+        # 프롬프트 추가 입력 행
+        add_row = QHBoxLayout()
+        add_row.setSpacing(4)
+        self._add_prompt_input = QLineEdit()
+        self._add_prompt_input.setPlaceholderText(
+            "프롬프트 추가 (쉼표로 여러 개 가능)"
+        )
+        self._add_prompt_input.setFixedHeight(30)
+        self._add_prompt_input.returnPressed.connect(self._add_custom_prompts)
+        add_row.addWidget(self._add_prompt_input, 1)
+
+        btn_add = QPushButton("+ 추가")
+        btn_add.setFixedSize(70, 30)
+        btn_add.setStyleSheet(
+            "QPushButton { background-color: #D35400; color: white; "
+            "border-radius: 4px; font-weight: bold; font-size: 11px; }"
+            "QPushButton:hover { background-color: #E67E22; }"
+        )
+        btn_add.clicked.connect(self._add_custom_prompts)
+        add_row.addWidget(btn_add)
+        right_layout.addLayout(add_row)
+
+        # 프리셋 저장/삭제 + 상태
+        preset_row = QHBoxLayout()
+        preset_row.setSpacing(4)
 
         btn_save_preset = QPushButton("프리셋 저장")
-        btn_save_preset.setFixedHeight(24)
+        btn_save_preset.setFixedHeight(26)
         btn_save_preset.setStyleSheet(
             "QPushButton { background-color: #D35400; color: white; "
             "border-radius: 4px; font-weight: bold; font-size: 11px; "
@@ -216,10 +243,10 @@ class CharacterPresetDialog(QDialog):
             "QPushButton:hover { background-color: #E67E22; }"
         )
         btn_save_preset.clicked.connect(self._save_preset)
-        extra_header.addWidget(btn_save_preset)
+        preset_row.addWidget(btn_save_preset)
 
         btn_del_preset = QPushButton("프리셋 삭제")
-        btn_del_preset.setFixedHeight(24)
+        btn_del_preset.setFixedHeight(26)
         btn_del_preset.setStyleSheet(
             "QPushButton { background-color: #C0392B; color: white; "
             "border-radius: 4px; font-weight: bold; font-size: 11px; "
@@ -227,20 +254,13 @@ class CharacterPresetDialog(QDialog):
             "QPushButton:hover { background-color: #E74C3C; }"
         )
         btn_del_preset.clicked.connect(self._delete_preset)
-        extra_header.addWidget(btn_del_preset)
-
-        right_layout.addLayout(extra_header)
-
-        self._extra_prompt = QTextEdit()
-        self._extra_prompt.setPlaceholderText(
-            "캐릭터별 커스텀 프롬프트를 입력하세요 (프리셋 저장 시 함께 저장됨)"
-        )
-        self._extra_prompt.setMaximumHeight(60)
-        right_layout.addWidget(self._extra_prompt)
+        preset_row.addWidget(btn_del_preset)
 
         self._preset_status = QLabel("")
         self._preset_status.setStyleSheet("color: #888; font-size: 11px;")
-        right_layout.addWidget(self._preset_status)
+        preset_row.addWidget(self._preset_status)
+        preset_row.addStretch()
+        right_layout.addLayout(preset_row)
 
         splitter.addWidget(right)
         splitter.setSizes([280, 550])
@@ -334,15 +354,26 @@ class CharacterPresetDialog(QDialog):
 
         self._populate_tags(name, features)
 
-        # 저장된 프리셋 자동 로드
+        # 저장된 프리셋 자동 로드 → 커스텀 태그로 복원
         from utils.character_presets import get_character_preset
         saved = get_character_preset(name)
         if saved:
-            self._extra_prompt.setPlainText(saved)
+            # 저장된 태그 중 danbooru 특징에 없는 것만 커스텀 태그로 추가
+            feature_norms = set()
+            for t in features.split(","):
+                n = t.strip().lower().replace("_", " ")
+                if n:
+                    feature_norms.add(n)
+
+            for t in saved.split(","):
+                tag = t.strip()
+                norm = tag.lower().replace("_", " ")
+                if norm and norm not in feature_norms:
+                    self._add_single_custom_tag(tag)
+
             self._preset_status.setText("★ 저장된 프리셋 로드됨")
             self._preset_status.setStyleSheet("color: #D35400; font-size: 11px;")
         else:
-            self._extra_prompt.clear()
             self._preset_status.setText("")
 
     def _populate_tags(self, char_name: str, features_str: str):
@@ -401,31 +432,61 @@ class CharacterPresetDialog(QDialog):
             if not is_existing:
                 btn.setChecked(False)
 
+    # ── 커스텀 프롬프트 추가 ──
+
+    def _add_custom_prompts(self):
+        """입력창에서 프롬프트를 읽어 커스텀 태그 버튼으로 추가"""
+        text = self._add_prompt_input.text().strip()
+        if not text:
+            return
+
+        for t in text.split(","):
+            tag = t.strip()
+            if tag:
+                self._add_single_custom_tag(tag)
+
+        self._add_prompt_input.clear()
+
+    def _add_single_custom_tag(self, tag: str):
+        """커스텀 프롬프트를 태그 버튼으로 추가 (중복 무시)"""
+        norm = tag.strip().lower().replace("_", " ")
+
+        # 이미 존재하는 태그인지 확인
+        for btn, existing_tag, is_existing in self._tag_buttons:
+            if existing_tag.strip().lower().replace("_", " ") == norm:
+                # 이미 있으면 체크만 켬
+                if not is_existing:
+                    btn.setChecked(True)
+                return
+
+        btn = QPushButton(tag)
+        btn.setCheckable(True)
+        btn.setChecked(True)
+        btn.setStyleSheet(_TAG_CUSTOM)
+        btn.toggled.connect(
+            lambda checked, b=btn: b.setStyleSheet(
+                _TAG_CUSTOM if checked else _TAG_CUSTOM_UNCHECKED
+            )
+        )
+        self._tag_flow.addWidget(btn)
+        self._tag_buttons.append((btn, tag, False))
+
     # ── 프리셋 저장/삭제 ──
 
     def _save_preset(self):
-        """현재 캐릭터의 체크된 태그 + 추가 프롬프트를 프리셋으로 저장"""
+        """현재 캐릭터의 체크된 태그를 프리셋으로 저장"""
         if not self._current_char_key:
             return
 
-        # 체크된 태그 수집
         checked_tags = []
         for btn, tag, is_existing in self._tag_buttons:
             if not is_existing and btn.isChecked():
                 checked_tags.append(tag)
 
-        extra = self._extra_prompt.toPlainText().strip()
-        # 체크된 태그 + 추가 프롬프트를 합침
-        parts = []
-        if checked_tags:
-            parts.append(", ".join(checked_tags))
-        if extra:
-            parts.append(extra)
-        combined = ", ".join(parts)
-
+        combined = ", ".join(checked_tags)
         from utils.character_presets import save_character_preset
         save_character_preset(self._current_char_key, combined)
-        self._preset_status.setText(f"★ 프리셋 저장 완료: {self._current_char_key}")
+        self._preset_status.setText(f"★ 저장 완료")
         self._preset_status.setStyleSheet("color: #27AE60; font-size: 11px;")
 
     def _delete_preset(self):
@@ -434,11 +495,10 @@ class CharacterPresetDialog(QDialog):
             return
         from utils.character_presets import delete_character_preset, has_preset
         if not has_preset(self._current_char_key):
-            self._preset_status.setText("저장된 프리셋이 없습니다")
+            self._preset_status.setText("프리셋 없음")
             self._preset_status.setStyleSheet("color: #E74C3C; font-size: 11px;")
             return
         delete_character_preset(self._current_char_key)
-        self._extra_prompt.clear()
         self._preset_status.setText("프리셋 삭제됨")
         self._preset_status.setStyleSheet("color: #E74C3C; font-size: 11px;")
 
@@ -450,14 +510,6 @@ class CharacterPresetDialog(QDialog):
         for btn, tag, is_existing in self._tag_buttons:
             if not is_existing and btn.isChecked():
                 selected_tags.append(tag)
-
-        # 추가 프롬프트
-        extra = self._extra_prompt.toPlainText().strip()
-        if extra:
-            for t in extra.split(","):
-                t = t.strip()
-                if t:
-                    selected_tags.append(t)
 
         char_name = self._current_char_key
         if not char_name or char_name == "캐릭터를 선택하세요":
