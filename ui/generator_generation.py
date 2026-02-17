@@ -243,7 +243,21 @@ class GenerationMixin:
         if isinstance(result, bytes):
             self._process_new_image(result, gen_info)
             self.show_status("✅ 이미지 생성 완료!")
-            
+
+            # 프롬프트 히스토리 기록
+            try:
+                from utils.prompt_history import add_entry
+                add_entry(
+                    self.total_prompt_display.toPlainText(),
+                    self.neg_prompt_text.toPlainText()
+                )
+            except Exception:
+                pass
+
+            # 비활성 창이면 알림 (단일 생성, 비자동화)
+            if not self.is_automating and not self.isActiveWindow():
+                self._notify_generation_done()
+
             # 자동화 중이면 카운트 증가
             if self.is_automating:
                 self.auto_gen_count += 1
@@ -402,6 +416,27 @@ class GenerationMixin:
             "is_api": []
         }
     
+    def _notify_generation_done(self):
+        """생성 완료 알림 (비활성 창일 때)"""
+        # 트레이 알림
+        if hasattr(self, '_tray_manager'):
+            self._tray_manager.notify("생성 완료", "이미지 생성이 완료되었습니다!")
+
+        # 작업 표시줄 깜박임 (Windows)
+        try:
+            import ctypes
+            hwnd = int(self.winId())
+            ctypes.windll.user32.FlashWindow(hwnd, True)
+        except Exception:
+            pass
+
+        # 사운드 알림
+        try:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        except Exception:
+            pass
+
     def _build_empty_adetailer_slot(self):
         """빈 ADetailer 슬롯"""
         return {

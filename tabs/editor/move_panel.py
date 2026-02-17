@@ -2,7 +2,7 @@
 """영역 이동 도구 패널"""
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFrame, QComboBox
+    QFrame, QComboBox, QTextEdit
 )
 from PyQt6.QtCore import Qt
 from widgets.sliders import NumericSlider
@@ -99,6 +99,14 @@ class MovePanel(QWidget):
         self.slider_scale = NumericSlider("크기 (%)", 10, 500, 100)
         layout.addWidget(self.slider_scale)
 
+        # 되돌리기 버튼
+        self.btn_undo_move = QPushButton("↩️  이동 되돌리기")
+        self.btn_undo_move.setFixedHeight(36)
+        self.btn_undo_move.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_undo_move.setStyleSheet(_BTN_STYLE)
+        self.btn_undo_move.setEnabled(False)
+        layout.addWidget(self.btn_undo_move)
+
         # 이동 시작 버튼
         self.btn_start_move = QPushButton("✂️  이동 시작")
         self.btn_start_move.setFixedHeight(40)
@@ -132,13 +140,40 @@ class MovePanel(QWidget):
         line2.setStyleSheet("color: #333;")
         layout.addWidget(line2)
 
-        # Inpaint 전송
-        self.btn_send_inpaint = QPushButton("🎨  Inpaint 전송")
+        # 인페인트
+        self.btn_send_inpaint = QPushButton("🎨  인페인트")
         self.btn_send_inpaint.setFixedHeight(40)
         self.btn_send_inpaint.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_send_inpaint.setStyleSheet(_INPAINT_BTN)
         self.btn_send_inpaint.setEnabled(False)
         layout.addWidget(self.btn_send_inpaint)
+
+        # 프롬프트
+        prompt_label = QLabel("Prompt")
+        prompt_label.setStyleSheet("color: #999; font-size: 12px; font-weight: bold;")
+        layout.addWidget(prompt_label)
+
+        self.prompt_text = QTextEdit()
+        self.prompt_text.setFixedHeight(50)
+        self.prompt_text.setPlaceholderText("인페인트할 내용 (비우면 메인 프롬프트 사용)")
+        self.prompt_text.setStyleSheet(
+            "background-color: #1E1E1E; color: #CCC; border: 1px solid #444; "
+            "border-radius: 4px; padding: 4px; font-size: 12px;"
+        )
+        layout.addWidget(self.prompt_text)
+
+        neg_label = QLabel("Negative Prompt")
+        neg_label.setStyleSheet("color: #999; font-size: 12px; font-weight: bold;")
+        layout.addWidget(neg_label)
+
+        self.neg_prompt_text = QTextEdit()
+        self.neg_prompt_text.setFixedHeight(35)
+        self.neg_prompt_text.setPlaceholderText("네거티브 (비우면 메인 네거티브 사용)")
+        self.neg_prompt_text.setStyleSheet(
+            "background-color: #1E1E1E; color: #CCC; border: 1px solid #444; "
+            "border-radius: 4px; padding: 4px; font-size: 12px;"
+        )
+        layout.addWidget(self.neg_prompt_text)
 
         layout.addStretch(1)
 

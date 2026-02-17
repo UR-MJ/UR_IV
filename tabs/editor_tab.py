@@ -1,18 +1,26 @@
 # tabs/editor_tab.py
 import os
+import time
+import random
+import base64
 import cv2
 import numpy as np
+from io import BytesIO
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTabWidget,
     QFileDialog, QMessageBox, QDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QPixmap, QImage
+from PIL import Image
 from widgets.interactive_label import InteractiveLabel
 from utils.shortcut_manager import get_shortcut_manager
 from tabs.editor.mosaic_panel import MosaicPanel, ResizeDialog
 from tabs.editor.color_panel import ColorAdjustPanel
 from tabs.editor.watermark_panel import WatermarkPanel
 from tabs.editor.move_panel import MovePanel
+from workers.generation_worker import Img2ImgFlowWorker
+from config import OUTPUT_DIR
 
 
 class YOLODetectWorker(QThread):
@@ -274,6 +282,8 @@ class MosaicEditor(QWidget):
         self.move_panel.btn_start_move.clicked.connect(self._on_start_move)
         self.move_panel.btn_confirm.clicked.connect(self._on_confirm_move)
         self.move_panel.btn_cancel.clicked.connect(self._on_cancel_move)
+        self.move_panel.btn_undo_move.clicked.connect(self._on_undo_move)
+        self._move_snapshot = None
         self.move_panel.btn_send_inpaint.clicked.connect(self._on_send_to_inpaint)
         self.move_panel.slider_rotation.valueChanged.connect(
             lambda v: self._on_move_transform_changed()
@@ -876,12 +886,15 @@ class MosaicEditor(QWidget):
         if self.image_label.display_base_image is None:
             self.move_panel.update_status("이미지를 먼저 로드하세요")
             return
+        # 이동 전 스냅샷 저장
+        self._move_snapshot = self.image_label.display_base_image.copy()
         fill_color = self.move_panel.fill_combo.currentData()
         ok = self.image_label.start_move(fill_color)
         if ok:
             self.move_panel.set_moving_state(True)
             self.move_panel.update_status("드래그로 영역을 이동하세요")
         else:
+            self._move_snapshot = None
             self.move_panel.update_status("마스킹을 먼저 해주세요")
 
     def _on_move_transform_changed(self):
@@ -896,7 +909,20 @@ class MosaicEditor(QWidget):
         self.move_panel.set_confirmed_state()
         self.move_panel.slider_rotation.setValue(0)
         self.move_panel.slider_scale.setValue(100)
-        self.move_panel.update_status("이동 완료! Inpaint 전송 가능")
+        self.move_panel.btn_undo_move.setEnabled(self._move_snapshot is not None)
+        self.move_panel.update_status("이동 완료! Inpaint 전송 가능 (되돌리기 가능)")
+
+    def _on_undo_move(self):
+        """이동 되돌리기 — 이동 시작 전 이미지로 복원"""
+        if self._move_snapshot is None:
+            return
+        self.image_label.display_base_image = self._move_snapshot
+        self.image_label._mask_layer = None
+        self.image_label.update()
+        self._move_snapshot = None
+        self.move_panel.btn_undo_move.setEnabled(False)
+        self.move_panel.btn_send_inpaint.setEnabled(False)
+        self.move_panel.update_status("이동이 되돌려졌습니다")
 
     def _on_cancel_move(self):
         """이동 취소"""
@@ -910,27 +936,100 @@ class MosaicEditor(QWidget):
         self.move_panel.update_status("이동이 취소되었습니다")
 
     def _on_send_to_inpaint(self):
-        """현재 이미지 + 구멍 마스크를 Inpaint 탭으로 전송"""
+        """현재 이미지 + 구멍 마스크로 바로 인페인트 실행"""
         if self.image_label.display_base_image is None:
             return
 
-        # 이미지를 QPixmap으로 변환
+        hole_mask = self.image_label.get_move_hole_mask()
+        if hole_mask is None:
+            QMessageBox.warning(self, "경고", "마스크가 없습니다. 이동 후 확정해주세요.")
+            return
+
+        # 이미지를 base64로 변환
         img = self.image_label.display_base_image
         h, w = img.shape[:2]
         rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        from PyQt6.QtGui import QPixmap, QImage
-        q_img = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
-        pixmap = QPixmap.fromImage(q_img.copy())
+        pil_img = Image.fromarray(rgb)
+        buffer = BytesIO()
+        pil_img.save(buffer, format='PNG')
+        img_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-        # 구멍 마스크 가져오기
-        hole_mask = self.image_label.get_move_hole_mask()
+        # 마스크를 base64로 변환 (흰색=마스크 영역)
+        mask_bw = np.zeros((h, w, 3), dtype=np.uint8)
+        mask_bw[hole_mask > 0] = [255, 255, 255]
+        mask_pil = Image.fromarray(mask_bw)
+        mask_buffer = BytesIO()
+        mask_pil.save(mask_buffer, format='PNG')
+        mask_b64 = base64.b64encode(mask_buffer.getvalue()).decode('utf-8')
 
-        # Inpaint 탭으로 전송
+        # 프롬프트 가져오기
+        prompt = self.move_panel.prompt_text.toPlainText().strip()
+        neg_prompt = self.move_panel.neg_prompt_text.toPlainText().strip()
         main_window = self.window()
-        if hasattr(main_window, 'inpaint_tab'):
-            main_window.inpaint_tab.set_image_and_mask(pixmap, hole_mask)
-            # Inpaint 탭으로 전환
-            if hasattr(main_window, 'center_tabs'):
-                idx = main_window.center_tabs.indexOf(main_window.inpaint_tab)
-                if idx >= 0:
-                    main_window.center_tabs.setCurrentIndex(idx)
+        if not prompt and main_window and hasattr(main_window, 'total_prompt_display'):
+            prompt = main_window.total_prompt_display.toPlainText()
+        if not neg_prompt and main_window and hasattr(main_window, 'neg_prompt_text'):
+            neg_prompt = main_window.neg_prompt_text.toPlainText()
+
+        payload = {
+            "init_images": [img_b64],
+            "mask": mask_b64,
+            "prompt": prompt,
+            "negative_prompt": neg_prompt,
+            "denoising_strength": 0.75,
+            "inpainting_fill": 1,
+            "inpaint_full_res": True,
+            "inpaint_full_res_padding": 32,
+            "mask_blur": 4,
+            "inpainting_mask_invert": 0,
+            "resize_mode": 0,
+            "steps": 20,
+            "cfg_scale": 7.0,
+            "seed": -1,
+            "width": w,
+            "height": h,
+            "send_images": True,
+            "save_images": True,
+            "alwayson_scripts": {},
+        }
+
+        model_name = ""
+        if main_window and hasattr(main_window, 'model_combo'):
+            model_name = main_window.model_combo.currentText()
+
+        self.move_panel.btn_send_inpaint.setText("⏳ 생성 중...")
+        self.move_panel.btn_send_inpaint.setEnabled(False)
+        self.move_panel.update_status("🎨 인페인트 생성 중...")
+
+        self._inpaint_worker = Img2ImgFlowWorker(model_name, payload)
+        self._inpaint_worker.finished.connect(self._on_inpaint_finished)
+        self._inpaint_worker.start()
+
+    def _on_inpaint_finished(self, result, gen_info):
+        """인페인트 생성 완료"""
+        self.move_panel.btn_send_inpaint.setText("🎨  인페인트")
+        self.move_panel.btn_send_inpaint.setEnabled(True)
+
+        if isinstance(result, bytes):
+            # 결과를 에디터 캔버스에 적용
+            nparr = np.frombuffer(result, np.uint8)
+            new_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if new_img is not None:
+                self.image_label.display_base_image = new_img
+                self.image_label._last_hole_mask = None
+                self.image_label.update_display()
+                self._push_undo()
+                self.move_panel.update_status("✅ 인페인트 완료")
+
+                # 파일 저장
+                filename = f"inpaint_{int(time.time())}_{random.randint(100, 999)}.png"
+                filepath = os.path.join(OUTPUT_DIR, filename)
+                os.makedirs(OUTPUT_DIR, exist_ok=True)
+                with open(filepath, "wb") as f:
+                    f.write(result)
+
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'add_image_to_gallery'):
+                    main_window.add_image_to_gallery(filepath)
+        else:
+            self.move_panel.update_status(f"❌ 인페인트 실패: {result}")

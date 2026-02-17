@@ -5,7 +5,7 @@ GeneratorMainUI의 UI 구성 부분 (전체)
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QLineEdit, QGroupBox, QCheckBox, QTabWidget,
-    QSplitter, QScrollArea, QListWidget,
+    QSplitter, QScrollArea, QListWidget, QMenu, QMessageBox,
     QSizePolicy, QListWidgetItem, QFrame, QStackedWidget
 )
 from PyQt6.QtCore import Qt, QSize
@@ -274,7 +274,25 @@ class UISetupMixin:
             "background-color: #5865F2; color: white; "
             "font-weight: bold; border-radius: 5px; padding: 4px;"
         )
-        top_btns.addWidget(self.btn_save_settings) 
+        self.btn_preset_save = QPushButton("📥 프리셋 저장")
+        self.btn_preset_save.setFixedHeight(40)
+        self.btn_preset_save.setStyleSheet(
+            "background-color: #2A6A3A; color: white; "
+            "font-weight: bold; border-radius: 5px; padding: 4px;"
+        )
+        self.btn_preset_save.clicked.connect(self._save_prompt_preset)
+
+        self.btn_preset_load = QPushButton("📤 프리셋 불러오기")
+        self.btn_preset_load.setFixedHeight(40)
+        self.btn_preset_load.setStyleSheet(
+            "background-color: #8A5CF5; color: white; "
+            "font-weight: bold; border-radius: 5px; padding: 4px;"
+        )
+        self.btn_preset_load.clicked.connect(self._load_prompt_preset)
+
+        top_btns.addWidget(self.btn_save_settings)
+        top_btns.addWidget(self.btn_preset_save)
+        top_btns.addWidget(self.btn_preset_load)
         layout.addLayout(top_btns)
 
         # 프롬프트 표시창
@@ -304,7 +322,17 @@ class UISetupMixin:
             "border-radius: 5px; padding: 4px;"
         )
         
+        self.btn_prompt_history = QPushButton("📋")
+        self.btn_prompt_history.setFixedSize(45, 45)
+        self.btn_prompt_history.setToolTip("최근 프롬프트 히스토리")
+        self.btn_prompt_history.setStyleSheet(
+            "font-size: 16px; background-color: #333; color: #DDD; "
+            "border: 1px solid #555; border-radius: 5px;"
+        )
+        self.btn_prompt_history.clicked.connect(self._show_prompt_history)
+
         gen_btns.addWidget(self.btn_random_prompt, 1)
+        gen_btns.addWidget(self.btn_prompt_history)
         gen_btns.addWidget(self.btn_generate, 1)
         layout.addLayout(gen_btns)
 
@@ -993,6 +1021,120 @@ class UISetupMixin:
             self.btn_refresh_gallery.setEnabled(True)
         ))
         
+    def _save_prompt_preset(self):
+        """현재 프롬프트를 프리셋으로 저장"""
+        from PyQt6.QtWidgets import QInputDialog
+        from utils.prompt_preset import save_preset, list_presets
+
+        name, ok = QInputDialog.getText(self, "프리셋 저장", "프리셋 이름:")
+        if not ok or not name.strip():
+            return
+        name = name.strip()
+
+        data = {
+            "character": self.character_input.text(),
+            "copyright": self.copyright_input.text(),
+            "artist": self.artist_input.text(),
+            "main_prompt": self.main_prompt_text.toPlainText(),
+            "prefix": self.prefix_prompt_text.toPlainText(),
+            "suffix": self.suffix_prompt_text.toPlainText(),
+            "negative": self.neg_prompt_text.toPlainText(),
+        }
+        save_preset(name, data)
+        QMessageBox.information(self, "저장 완료", f"프리셋 '{name}'이 저장되었습니다.")
+
+    def _load_prompt_preset(self):
+        """저장된 프리셋 불러오기"""
+        from utils.prompt_preset import list_presets, get_preset, delete_preset
+
+        names = list_presets()
+        if not names:
+            QMessageBox.information(self, "프리셋", "저장된 프리셋이 없습니다.")
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2a2a2a; color: #ddd; border: 1px solid #555;
+                padding: 4px;
+            }
+            QMenu::item { padding: 6px 12px; border-radius: 3px; }
+            QMenu::item:selected { background-color: #5865F2; }
+        """)
+
+        for name in names:
+            sub = menu.addMenu(name)
+            act_apply = sub.addAction("적용")
+            act_apply.setData(("apply", name))
+            act_del = sub.addAction("삭제")
+            act_del.setData(("delete", name))
+
+        chosen = menu.exec(self.btn_preset_load.mapToGlobal(
+            self.btn_preset_load.rect().bottomLeft()
+        ))
+        if not chosen:
+            return
+
+        action_type, preset_name = chosen.data()
+        if action_type == "delete":
+            delete_preset(preset_name)
+            self.show_status(f"프리셋 '{preset_name}' 삭제됨")
+            return
+
+        data = get_preset(preset_name)
+        if not data:
+            return
+
+        if data.get("character"):
+            self.character_input.setText(data["character"])
+        if data.get("copyright"):
+            self.copyright_input.setText(data["copyright"])
+        if data.get("artist"):
+            self.artist_input.setText(data["artist"])
+        if data.get("main_prompt"):
+            self.main_prompt_text.setPlainText(data["main_prompt"])
+        if data.get("prefix"):
+            self.prefix_prompt_text.setPlainText(data["prefix"])
+        if data.get("suffix"):
+            self.suffix_prompt_text.setPlainText(data["suffix"])
+        if data.get("negative"):
+            self.neg_prompt_text.setPlainText(data["negative"])
+        self.show_status(f"프리셋 '{preset_name}' 적용됨")
+
+    def _show_prompt_history(self):
+        """최근 프롬프트 히스토리 팝업"""
+        from utils.prompt_history import get_history
+        history = get_history()
+        if not history:
+            QMessageBox.information(self, "히스토리", "저장된 프롬프트가 없습니다.")
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2a2a2a; color: #ddd; border: 1px solid #555;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 12px; border-radius: 3px;
+            }
+            QMenu::item:selected { background-color: #5865F2; }
+        """)
+        for i, entry in enumerate(history[:30]):
+            prompt_preview = entry.get("prompt", "")[:80]
+            if len(entry.get("prompt", "")) > 80:
+                prompt_preview += "..."
+            action = menu.addAction(f"{i+1}. {prompt_preview}")
+            action.setData(entry)
+
+        chosen = menu.exec(self.btn_prompt_history.mapToGlobal(
+            self.btn_prompt_history.rect().bottomLeft()
+        ))
+        if chosen:
+            data = chosen.data()
+            self.main_prompt_text.setPlainText(data.get("prompt", ""))
+            self.neg_prompt_text.setPlainText(data.get("negative", ""))
+
     def _adjust_total_prompt_height(self):
         """최종 프롬프트 칸 내용에 맞춰 높이 자동 조절"""
         doc = self.total_prompt_display.document()

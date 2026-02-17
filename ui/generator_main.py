@@ -175,9 +175,21 @@ class GeneratorMainUI(
     def _on_queue_completed(self, total_count: int):
         """대기열 완료"""
         self.is_automation_running = False
-        # 창이 비활성이면 트레이 알림
-        if not self.isActiveWindow() and hasattr(self, '_tray_manager'):
-            self._tray_manager.notify("생성 완료", f"총 {total_count}장 생성 완료!")
+        # 창이 비활성이면 트레이 알림 + 소리 + 깜박임
+        if not self.isActiveWindow():
+            if hasattr(self, '_tray_manager'):
+                self._tray_manager.notify("생성 완료", f"총 {total_count}장 생성 완료!")
+            try:
+                import ctypes
+                hwnd = int(self.winId())
+                ctypes.windll.user32.FlashWindow(hwnd, True)
+            except Exception:
+                pass
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            except Exception:
+                pass
         # 배치 리포트 표시
         from widgets.batch_report_dialog import BatchReportDialog
         report = self.queue_manager.get_batch_report()

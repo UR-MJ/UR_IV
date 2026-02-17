@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QLineEdit, QGroupBox, QCheckBox, QTextEdit,
     QScrollArea, QFrame, QTabWidget, QGridLayout
 )
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor, QImage
 from PyQt6.QtCore import Qt, pyqtSignal
 
 
@@ -186,6 +186,19 @@ class XYZPlotTab(QWidget):
         self.results_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFC107;")
         header.addWidget(self.results_title)
         header.addStretch()
+
+        self.btn_export_grid = QPushButton("그리드 이미지 저장")
+        self.btn_export_grid.setStyleSheet("""
+            QPushButton {
+                background-color: #2980b9; color: white; border-radius: 4px;
+                padding: 5px 10px; font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3498db; }
+            QPushButton:disabled { background-color: #555; color: #888; }
+        """)
+        self.btn_export_grid.setEnabled(False)
+        self.btn_export_grid.clicked.connect(self._export_grid_image)
+        header.addWidget(self.btn_export_grid)
 
         btn_clear_results = QPushButton("결과 비우기")
         btn_clear_results.setStyleSheet("""
@@ -480,6 +493,7 @@ class XYZPlotTab(QWidget):
 
         count = len(self._batch_results)
         self.results_title.setText(f"결과 이미지 ({count})")
+        self.btn_export_grid.setEnabled(count > 0)
 
         if not self._batch_results:
             self.results_empty_label = QLabel("결과가 없습니다.")
@@ -552,6 +566,130 @@ class XYZPlotTab(QWidget):
             self.results_grid.addWidget(container, row, col)
 
         self.results_container.adjustSize()
+
+    def _export_grid_image(self):
+        """결과 그리드를 하나의 이미지로 내보내기"""
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+        if not self._batch_results:
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "그리드 이미지 저장", "xyz_grid.png",
+            "PNG (*.png);;JPEG (*.jpg)"
+        )
+        if not file_path:
+            return
+
+        try:
+            # 축 정보 파악
+            first_info = self._batch_results[0][1]
+            axes = first_info.get('axes', [])
+
+            # X축 값 / Y축 값 수집 (순서 유지)
+            x_vals, y_vals = [], []
+            seen_x, seen_y = set(), set()
+            for _, info in self._batch_results:
+                ax = info.get('axes', [])
+                if ax:
+                    xv = ax[0][1]
+                    if xv not in seen_x:
+                        seen_x.add(xv)
+                        x_vals.append(xv)
+                if len(ax) >= 2:
+                    yv = ax[1][1]
+                    if yv not in seen_y:
+                        seen_y.add(yv)
+                        y_vals.append(yv)
+
+            if not y_vals:
+                y_vals = ['']
+
+            cols = len(x_vals) if x_vals else len(self._batch_results)
+            rows = len(y_vals)
+
+            # 셀 크기 결정 (원본 이미지 기준)
+            cell_w, cell_h = 256, 256
+            sample_path = self._batch_results[0][0]
+            if os.path.exists(sample_path):
+                sp = QPixmap(sample_path)
+                if not sp.isNull():
+                    cell_w = min(sp.width(), 512)
+                    cell_h = min(sp.height(), 512)
+
+            # 라벨 영역
+            label_h = 30  # X축 라벨 (상단)
+            label_w = 80  # Y축 라벨 (좌측)
+            has_y = len(axes) >= 2
+            left_margin = label_w if has_y else 0
+            padding = 4
+
+            total_w = left_margin + cols * (cell_w + padding) + padding
+            total_h = label_h + rows * (cell_h + padding) + padding
+
+            # QImage 생성
+            grid_img = QImage(total_w, total_h, QImage.Format.Format_RGB32)
+            grid_img.fill(QColor(30, 30, 30))
+
+            painter = QPainter(grid_img)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            # X축 라벨 (상단)
+            font = QFont("Arial", 10, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.setPen(QColor(200, 200, 200))
+
+            for ci, xv in enumerate(x_vals):
+                x = left_margin + padding + ci * (cell_w + padding)
+                painter.drawText(x, 0, cell_w, label_h,
+                                 Qt.AlignmentFlag.AlignCenter, str(xv))
+
+            # Y축 라벨 (좌측)
+            if has_y:
+                for ri, yv in enumerate(y_vals):
+                    y = label_h + padding + ri * (cell_h + padding)
+                    painter.drawText(0, y, label_w, cell_h,
+                                     Qt.AlignmentFlag.AlignCenter, str(yv))
+
+            # 이미지 배치 (lookup by xyz_info)
+            result_map: dict[tuple, str] = {}
+            for filepath, info in self._batch_results:
+                ax = info.get('axes', [])
+                key_x = ax[0][1] if ax else ''
+                key_y = ax[1][1] if len(ax) >= 2 else ''
+                result_map[(key_x, key_y)] = filepath
+
+            for ri, yv in enumerate(y_vals):
+                for ci, xv in enumerate(x_vals):
+                    fp = result_map.get((xv, yv), '')
+                    if not fp or not os.path.exists(fp):
+                        continue
+
+                    pix = QPixmap(fp)
+                    if pix.isNull():
+                        continue
+
+                    scaled = pix.scaled(
+                        cell_w, cell_h,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+
+                    x = left_margin + padding + ci * (cell_w + padding)
+                    y = label_h + padding + ri * (cell_h + padding)
+
+                    # 중앙 정렬
+                    ox = x + (cell_w - scaled.width()) // 2
+                    oy = y + (cell_h - scaled.height()) // 2
+                    painter.drawPixmap(ox, oy, scaled)
+
+            painter.end()
+            grid_img.save(file_path)
+            QMessageBox.information(self, "저장 완료",
+                                    f"그리드 이미지가 저장되었습니다.\n{file_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"그리드 이미지 저장 실패: {e}")
 
     def _clear_results(self):
         """결과 비우기"""

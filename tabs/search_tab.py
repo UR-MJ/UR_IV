@@ -7,8 +7,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTextEdit, QGroupBox, QCheckBox, QFileDialog, QMessageBox, QScrollArea
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QStringListModel
+from PyQt6.QtWidgets import QCompleter
 from workers.search_worker import PandasSearchWorker
+from utils.tag_completer import get_tag_completer
 from widgets.search_preview import SearchPreviewCard  # ← 추가!
 from config import PARQUET_DIR
 
@@ -248,6 +250,93 @@ class SearchTab(QWidget):
         layout.addWidget(bottom_group)
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area)
+
+        # 자동완성 설정
+        self._setup_autocomplete()
+
+    def _setup_autocomplete(self):
+        """각 검색 필드에 카테고리별 자동완성 설정"""
+        # 카테고리별 태그 목록 로드
+        tag_sources: dict[str, list[str]] = {}
+        try:
+            from tags_db.copyright_dictionary import copyright_list
+            tag_sources['copyright'] = copyright_list
+        except Exception:
+            tag_sources['copyright'] = []
+        try:
+            from tags_db.character_dictionary import character_dictionary
+            tag_sources['character'] = list(character_dictionary.keys())
+        except Exception:
+            tag_sources['character'] = []
+        try:
+            from tags_db.artist_dictionary import artist_dict
+            tag_sources['artist'] = list(artist_dict.keys())
+        except Exception:
+            tag_sources['artist'] = []
+
+        general_tags = get_tag_completer().get_all_tags()
+        tag_sources['general'] = general_tags
+
+        # 포함/제외 필드 모두에 설정
+        field_map = {
+            'copyright': [self.input_copyright, self.exclude_copyright],
+            'character': [self.input_character, self.exclude_character],
+            'artist': [self.input_artist, self.exclude_artist],
+            'general': [self.input_general, self.exclude_general,
+                        self.focus_include, self.focus_exclude],
+        }
+
+        for category, fields in field_map.items():
+            tags = tag_sources.get(category, [])
+            if not tags:
+                continue
+            model = QStringListModel(tags)
+            for field in fields:
+                self._attach_comma_completer(field, model)
+
+    def _attach_comma_completer(self, line_edit: QLineEdit, model: QStringListModel):
+        """QLineEdit에 콤마 구분 자동완성 부착"""
+        completer = QCompleter()
+        completer.setModel(model)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        completer.setMaxVisibleItems(12)
+        completer.popup().setStyleSheet(
+            "QListView { background-color: #2A2A2A; color: #EEE; "
+            "border: 1px solid #5865F2; font-size: 13px; }"
+            "QListView::item:selected { background-color: #5865F2; }"
+        )
+
+        # activated: 선택 시 콤마 뒤 현재 단어만 교체
+        completer.activated.connect(
+            lambda text, le=line_edit: self._on_completer_activated(le, text)
+        )
+
+        line_edit.setCompleter(completer)
+
+        # textChanged: 현재 입력 중인 단어로 completionPrefix 갱신
+        line_edit.textChanged.connect(
+            lambda text, c=completer: self._update_completion_prefix(c, text)
+        )
+
+    def _update_completion_prefix(self, completer: QCompleter, text: str):
+        """콤마 뒤의 현재 단어로 prefix 갱신"""
+        # 마지막 콤마 이후 텍스트
+        current = text.rsplit(',', 1)[-1].strip()
+        if current != completer.completionPrefix():
+            completer.setCompletionPrefix(current)
+
+    def _on_completer_activated(self, line_edit: QLineEdit, text: str):
+        """자동완성 선택 시 현재 단어만 교체"""
+        current_text = line_edit.text()
+        parts = current_text.rsplit(',', 1)
+        if len(parts) > 1:
+            new_text = parts[0] + ', ' + text
+        else:
+            new_text = text
+        line_edit.setText(new_text)
+        line_edit.setCursorPosition(len(new_text))
 
     def _get_criteria_dict(self) -> dict:
         """현재 검색 조건을 딕셔너리로 반환"""

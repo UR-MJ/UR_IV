@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QFileDialog, QScrollArea, QProgressBar,
     QSizePolicy, QFrame, QMenu, QApplication, QDialog,
-    QTextEdit, QSplitter
+    QTextEdit, QSplitter, QSlider
 )
 from PyQt6.QtGui import QPixmap, QFont, QCursor, QAction, QDrag
 
@@ -522,12 +522,13 @@ class GalleryTab(QWidget):
     send_to_queue_signal = pyqtSignal(dict)     # → 대기열에 추가
     send_to_compare = pyqtSignal(str, str)      # → PNG Info 비교 (path_a, path_b)
 
-    COLS = 10
     ROWS = 4
-    IMAGES_PER_PAGE = COLS * ROWS
+    DEFAULT_COLS = 10
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.COLS = self.DEFAULT_COLS
+        self.IMAGES_PER_PAGE = self.COLS * self.ROWS
         self._current_folder = ""
         self._all_paths: list[str] = []
         self._filtered_paths: list[str] = []
@@ -745,6 +746,16 @@ class GalleryTab(QWidget):
         self.btn_prev.clicked.connect(self._on_prev_page)
         bottom_bar.addWidget(self.btn_prev)
 
+        self.btn_slideshow = QPushButton("▶ 슬라이드쇼")
+        self.btn_slideshow.setFixedSize(100, 35)
+        self.btn_slideshow.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_slideshow.setStyleSheet(
+            "background-color: #5865F2; color: white; border-radius: 4px; "
+            "font-size: 12px; font-weight: bold;"
+        )
+        self.btn_slideshow.clicked.connect(self._start_slideshow)
+        bottom_bar.addWidget(self.btn_slideshow)
+
         bottom_bar.addStretch()
 
         self.label_page = QLabel("페이지 0/0 (총 0개)")
@@ -762,6 +773,30 @@ class GalleryTab(QWidget):
         )
         self.btn_next.clicked.connect(self._on_next_page)
         bottom_bar.addWidget(self.btn_next)
+
+        # 그리드 크기 슬라이더
+        bottom_bar.addWidget(QLabel("  🔍"))
+        self.grid_slider = QSlider(Qt.Orientation.Horizontal)
+        self.grid_slider.setRange(3, 20)
+        self.grid_slider.setValue(self.DEFAULT_COLS)
+        self.grid_slider.setFixedWidth(120)
+        self.grid_slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.grid_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                background: #333; height: 6px; border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #5865F2; width: 14px; height: 14px;
+                margin: -4px 0; border-radius: 7px;
+            }
+        """)
+        self.grid_slider.valueChanged.connect(self._on_grid_size_changed)
+        bottom_bar.addWidget(self.grid_slider)
+
+        self.label_grid_size = QLabel(f"{self.DEFAULT_COLS}열")
+        self.label_grid_size.setFixedWidth(30)
+        self.label_grid_size.setStyleSheet("color: #AAA; font-size: 11px;")
+        bottom_bar.addWidget(self.label_grid_size)
 
         layout.addLayout(bottom_bar)
 
@@ -948,6 +983,16 @@ class GalleryTab(QWidget):
         self.filter_artist_combo.setCurrentIndex(0)
         self._filtered_paths = list(self._all_paths)
         self._apply_sort()
+        self._current_page = 0
+        self._update_pagination()
+        self._display_current_page()
+
+    # ── 그리드 크기 ──
+    def _on_grid_size_changed(self, value: int):
+        """그리드 열 수 변경"""
+        self.COLS = value
+        self.IMAGES_PER_PAGE = self.COLS * self.ROWS
+        self.label_grid_size.setText(f"{value}열")
         self._current_page = 0
         self._update_pagination()
         self._display_current_page()
@@ -1352,6 +1397,140 @@ class GalleryTab(QWidget):
         self._filtered_paths = [p for p in self._filtered_paths if os.path.normpath(p) != norm]
         self._update_pagination()
         self._display_current_page()
+
+    def _start_slideshow(self):
+        """슬라이드쇼 시작"""
+        if not self._filtered_paths:
+            return
+        dlg = SlideshowDialog(self._filtered_paths, self)
+        dlg.exec()
+
+
+# ─────────────────────────────────────────────────────────
+# 슬라이드쇼 다이얼로그
+# ─────────────────────────────────────────────────────────
+class SlideshowDialog(QDialog):
+    """전체화면 슬라이드쇼"""
+
+    def __init__(self, image_paths: list[str], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("슬라이드쇼")
+        self.setWindowFlags(
+            Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.showFullScreen()
+
+        self._paths = image_paths
+        self._index = 0
+        self._paused = False
+        self._interval = 3000  # ms
+
+        # UI
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._image_label = QLabel()
+        self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._image_label.setStyleSheet("background-color: #000;")
+        self._image_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        layout.addWidget(self._image_label)
+
+        # 하단 컨트롤 바
+        bar = QFrame()
+        bar.setFixedHeight(50)
+        bar.setStyleSheet("background-color: rgba(0,0,0,180);")
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(20, 5, 20, 5)
+
+        self._btn_prev = QPushButton("◀")
+        self._btn_pause = QPushButton("⏸ 일시정지")
+        self._btn_next = QPushButton("▶")
+        self._btn_close = QPushButton("✕ 닫기")
+        self._lbl_counter = QLabel("1 / 1")
+        self._lbl_counter.setStyleSheet("color: #CCC; font-size: 13px;")
+
+        for btn in [self._btn_prev, self._btn_pause, self._btn_next, self._btn_close]:
+            btn.setFixedHeight(35)
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.setStyleSheet(
+                "QPushButton { background-color: #333; color: #EEE; "
+                "border-radius: 4px; padding: 0 12px; font-size: 13px; }"
+                "QPushButton:hover { background-color: #555; }"
+            )
+
+        self._btn_prev.clicked.connect(self._prev)
+        self._btn_next.clicked.connect(self._next)
+        self._btn_pause.clicked.connect(self._toggle_pause)
+        self._btn_close.clicked.connect(self.close)
+
+        bar_layout.addWidget(self._btn_prev)
+        bar_layout.addWidget(self._btn_pause)
+        bar_layout.addWidget(self._btn_next)
+        bar_layout.addStretch()
+        bar_layout.addWidget(self._lbl_counter)
+        bar_layout.addStretch()
+        bar_layout.addWidget(self._btn_close)
+        layout.addWidget(bar)
+
+        # 타이머
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._next)
+        self._timer.start(self._interval)
+
+        self._show_image()
+
+    def _show_image(self):
+        """현재 이미지 표시"""
+        if not self._paths:
+            return
+        path = self._paths[self._index]
+        pix = QPixmap(path)
+        if not pix.isNull():
+            scaled = pix.scaled(
+                self._image_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self._image_label.setPixmap(scaled)
+        self._lbl_counter.setText(f"{self._index + 1} / {len(self._paths)}")
+
+    def _next(self):
+        self._index = (self._index + 1) % len(self._paths)
+        self._show_image()
+
+    def _prev(self):
+        self._index = (self._index - 1) % len(self._paths)
+        self._show_image()
+
+    def _toggle_pause(self):
+        self._paused = not self._paused
+        if self._paused:
+            self._timer.stop()
+            self._btn_pause.setText("▶ 재생")
+        else:
+            self._timer.start(self._interval)
+            self._btn_pause.setText("⏸ 일시정지")
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key == Qt.Key.Key_Escape:
+            self.close()
+        elif key == Qt.Key.Key_Space:
+            self._toggle_pause()
+        elif key in (Qt.Key.Key_Right, Qt.Key.Key_Down):
+            self._next()
+        elif key in (Qt.Key.Key_Left, Qt.Key.Key_Up):
+            self._prev()
+        else:
+            super().keyPressEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._show_image()
 
 
 # ─────────────────────────────────────────────────────────
