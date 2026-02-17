@@ -163,12 +163,11 @@ class CompareGifWorker(QThread):
     error = pyqtSignal(str)
 
     def __init__(self, pixmap_a: QPixmap, pixmap_b: QPixmap,
-                 save_path: str, width: int = 800, duration_ms: int = 80):
+                 save_path: str, duration_ms: int = 80):
         super().__init__()
         self._pixmap_a = pixmap_a
         self._pixmap_b = pixmap_b
         self._save_path = save_path
-        self._width = width
         self._duration = duration_ms
 
     def _render_frame(self, ratio: float, w: int, h: int) -> Image.Image:
@@ -206,19 +205,9 @@ class CompareGifWorker(QThread):
         p.setClipping(False)
 
         # 분할선
-        pen = QPen(QColor(255, 60, 60), 2)
+        pen = QPen(QColor(255, 60, 60), max(2, w // 400))
         p.setPen(pen)
         p.drawLine(split_x, 0, split_x, h)
-
-        # A/B 라벨
-        p.setPen(QColor(255, 255, 255))
-        font = QGFont()
-        font.setBold(True)
-        font.setPointSize(12)
-        p.setFont(font)
-        p.setOpacity(0.7)
-        p.drawText(15, 30, "A")
-        p.drawText(w - 25, 30, "B")
         p.end()
 
         # QImage → PIL Image
@@ -234,9 +223,9 @@ class CompareGifWorker(QThread):
                 self.error.emit("이미지가 없습니다.")
                 return
 
-            aspect = ref.height() / max(ref.width(), 1)
-            w = self._width
-            h = int(w * aspect)
+            # 원본 해상도 사용
+            w = ref.width()
+            h = ref.height()
             # 짝수로 맞춤
             w = w if w % 2 == 0 else w + 1
             h = h if h % 2 == 0 else h + 1
@@ -548,7 +537,7 @@ class ImageCompareWidget(QWidget):
     # ── 저장 기능 ──
 
     def _save_compare_png(self):
-        """현재 비교 화면을 PNG로 저장"""
+        """현재 비교 화면을 원본 해상도 PNG로 저장"""
         if not self.pixmap_a and not self.pixmap_b:
             QMessageBox.warning(self, "저장 실패", "비교할 이미지가 없습니다.")
             return
@@ -560,11 +549,39 @@ class ImageCompareWidget(QWidget):
         if not path:
             return
 
-        # 현재 오버레이 위젯을 그대로 캡처
-        widget = self.overlay_widget
-        pixmap = QPixmap(widget.size())
-        widget.render(pixmap)
-        pixmap.save(path)
+        # 원본 해상도로 렌더링
+        ref = self.pixmap_a or self.pixmap_b
+        w, h = ref.width(), ref.height()
+        ratio = self.overlay_widget.slider_ratio
+
+        result = QImage(w, h, QImage.Format.Format_RGB32)
+        result.fill(QColor(26, 26, 26))
+        p = QPainter(result)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+        split_x = int(w * ratio)
+
+        if self.pixmap_a:
+            sa = self.pixmap_a.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
+                                      Qt.TransformationMode.SmoothTransformation)
+            ox, oy = (w - sa.width()) // 2, (h - sa.height()) // 2
+            p.setClipRect(QRect(0, 0, split_x, h))
+            p.drawPixmap(ox, oy, sa)
+
+        if self.pixmap_b:
+            sb = self.pixmap_b.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
+                                      Qt.TransformationMode.SmoothTransformation)
+            ox, oy = (w - sb.width()) // 2, (h - sb.height()) // 2
+            p.setClipRect(QRect(split_x, 0, w - split_x, h))
+            p.drawPixmap(ox, oy, sb)
+
+        p.setClipping(False)
+        pen = QPen(QColor(255, 60, 60), max(2, w // 400))
+        p.setPen(pen)
+        p.drawLine(split_x, 0, split_x, h)
+        p.end()
+
+        QPixmap.fromImage(result).save(path)
         QMessageBox.information(self, "저장 완료", f"비교 이미지를 저장했습니다.\n{path}")
 
     def _save_compare_gif(self):
@@ -584,7 +601,7 @@ class ImageCompareWidget(QWidget):
         self.btn_save_gif.setText("🎞️ 생성 중...")
 
         self._gif_worker = CompareGifWorker(
-            self.pixmap_a, self.pixmap_b, path, width=800, duration_ms=80
+            self.pixmap_a, self.pixmap_b, path, duration_ms=80
         )
         self._gif_worker.progress.connect(
             lambda v: self.btn_save_gif.setText(f"🎞️ {v}%")
