@@ -284,10 +284,181 @@ class PromptHandlingMixin:
         self.main_prompt_text.setPlainText(", ".join(escape(final_general)))
 
         self.is_programmatic_change = False
-        
-        # 8. 최종 프롬프트 업데이트
+
+        # 9. 캐릭터 특징 자동 추가
+        if (hasattr(self, 'chk_auto_char_features') and
+                self.chk_auto_char_features.isChecked() and character_list):
+            self._auto_insert_character_features(character_list)
+
+        # 10. 조건부 프롬프트 적용
+        if hasattr(self, 'cond_prompt_check') and self.cond_prompt_check.isChecked():
+            self._apply_conditional_prompts()
+
+        # 11. 조건부 네거티브 적용
+        if hasattr(self, 'cond_neg_check') and self.cond_neg_check.isChecked():
+            self._apply_conditional_negatives()
+
+        # 12. 최종 프롬프트 업데이트
         self.update_total_prompt_display()
-        
+
+    def _auto_insert_character_features(self, character_list: list[str]):
+        """캐릭터 특징 자동 삽입 (프리셋 + danbooru 사전)"""
+        from utils.character_features import CharacterFeatureLookup
+        from utils.character_presets import get_character_preset
+
+        # 기존 태그 수집
+        all_existing: set[str] = set()
+        for src in (self.main_prompt_text.toPlainText(),
+                    self.prefix_prompt_text.toPlainText(),
+                    self.suffix_prompt_text.toPlainText(),
+                    self.character_input.text()):
+            for t in src.split(","):
+                n = t.strip().lower().replace("_", " ")
+                if n:
+                    all_existing.add(n)
+                    all_existing.add(n.replace(r"\(", "(").replace(r"\)", ")"))
+
+        lookup = CharacterFeatureLookup()
+        new_tags: list[str] = []
+
+        for char_raw in character_list:
+            char_name = char_raw.strip().replace(r"\(", "(").replace(r"\)", ")")
+            char_norm = char_name.lower().replace("_", " ").replace("(", "").replace(")", "").strip()
+
+            # 1. 커스텀 프리셋 조회
+            preset_extra = get_character_preset(char_name)
+            if preset_extra:
+                for t in preset_extra.split(","):
+                    tag = t.strip()
+                    norm = tag.lower().replace("_", " ")
+                    if norm and norm not in all_existing and norm != char_norm:
+                        new_tags.append(tag)
+                        all_existing.add(norm)
+
+            # 2. danbooru 특징 사전 조회
+            features = lookup.lookup(char_name)
+            if features:
+                for tag in features:
+                    norm = tag.strip().lower().replace("_", " ")
+                    if norm and norm not in all_existing and norm != char_norm:
+                        new_tags.append(tag)
+                        all_existing.add(norm)
+
+        if new_tags:
+            self.is_programmatic_change = True
+            current = self.main_prompt_text.toPlainText().strip()
+            insert = ", ".join(new_tags)
+            if current:
+                self.main_prompt_text.setPlainText(f"{insert}, {current}")
+            else:
+                self.main_prompt_text.setPlainText(insert)
+            self.is_programmatic_change = False
+
+    def _apply_conditional_prompts(self):
+        """조건부 프롬프트 규칙 적용"""
+        from utils.conditional_prompt import parse_rules, apply_conditional_rules
+
+        rules_text = self.cond_prompt_input.toPlainText().strip()
+        if not rules_text:
+            return
+
+        rules = parse_rules(rules_text)
+        if not rules:
+            return
+
+        # 전체 태그 수집 (조건 매칭용)
+        all_tags: set[str] = set()
+        for field in [self.character_input, self.copyright_input,
+                      self.main_prompt_text, self.prefix_prompt_text,
+                      self.suffix_prompt_text]:
+            text = field.text() if hasattr(field, 'text') else field.toPlainText()
+            for t in text.split(","):
+                n = t.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
+                if n:
+                    all_tags.add(n)
+
+        # 위치별 기존 태그 수집
+        widget_map = {
+            "main": self.main_prompt_text,
+            "prefix": self.prefix_prompt_text,
+            "suffix": self.suffix_prompt_text,
+            "neg": self.neg_prompt_text,
+        }
+        existing_by_location: dict[str, set[str]] = {}
+        for loc, widget in widget_map.items():
+            text = widget.toPlainText()
+            existing_by_location[loc] = set()
+            for t in text.split(","):
+                n = t.strip().lower().replace("_", " ")
+                if n:
+                    existing_by_location[loc].add(n)
+
+        prevent_dupe = self.cond_prevent_dupe_check.isChecked()
+        result = apply_conditional_rules(rules, all_tags, prevent_dupe, existing_by_location)
+
+        if not result:
+            return
+
+        self.is_programmatic_change = True
+        for location, tags in result.items():
+            if not tags:
+                continue
+            widget = widget_map.get(location)
+            if not widget:
+                continue
+            current = widget.toPlainText().strip()
+            insert = ", ".join(tags)
+            if current:
+                widget.setPlainText(f"{current}, {insert}")
+            else:
+                widget.setPlainText(insert)
+        self.is_programmatic_change = False
+
+    def _apply_conditional_negatives(self):
+        """조건부 네거티브 규칙 적용"""
+        from utils.conditional_prompt import parse_neg_rules, apply_neg_rules
+
+        rules_text = self.cond_neg_input.toPlainText().strip()
+        if not rules_text:
+            return
+
+        rules = parse_neg_rules(rules_text)
+        if not rules:
+            return
+
+        # 전체 태그 수집
+        all_tags: set[str] = set()
+        for field in [self.character_input, self.copyright_input,
+                      self.main_prompt_text, self.prefix_prompt_text,
+                      self.suffix_prompt_text]:
+            text = field.text() if hasattr(field, 'text') else field.toPlainText()
+            for t in text.split(","):
+                n = t.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
+                if n:
+                    all_tags.add(n)
+
+        # 기존 neg 태그
+        existing_neg: set[str] = set()
+        for t in self.neg_prompt_text.toPlainText().split(","):
+            n = t.strip().lower().replace("_", " ")
+            if n:
+                existing_neg.add(n)
+
+        prevent_dupe = self.cond_prevent_dupe_check.isChecked()
+        new_tags = apply_neg_rules(rules, all_tags, existing_neg, prevent_dupe)
+
+        if not new_tags:
+            return
+
+        self.is_programmatic_change = True
+        current = self.neg_prompt_text.toPlainText().strip()
+        insert = ", ".join(new_tags)
+        if current:
+            self.neg_prompt_text.setPlainText(f"{current}, {insert}")
+        else:
+            self.neg_prompt_text.setPlainText(insert)
+        self.is_programmatic_change = False
+
     def apply_random_prompt(self):
         """랜덤 프롬프트 적용"""
         if not self.shuffled_prompt_deck:

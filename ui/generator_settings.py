@@ -79,6 +79,8 @@ class SettingsMixin:
             "remove_copyright": self.chk_remove_copyright.isChecked(),
             "remove_meta": self.chk_remove_meta.isChecked(),
             
+            "auto_char_features": self.chk_auto_char_features.isChecked() if hasattr(self, 'chk_auto_char_features') else False,
+
             "cond_prompt_enabled": self.cond_prompt_check.isChecked(),
             "cond_prompt_rules": self.cond_prompt_input.toPlainText(),
             "cond_prevent_dupe": self.cond_prevent_dupe_check.isChecked(),
@@ -246,6 +248,10 @@ class SettingsMixin:
             if web_home and hasattr(self.web_tab, 'set_home_url'):
                 self.web_tab.set_home_url(web_home)
             
+            # 캐릭터 특징 자동 추가
+            if hasattr(self, 'chk_auto_char_features'):
+                self.chk_auto_char_features.setChecked(settings.get("auto_char_features", False))
+
             # 조건부 프롬프트
             self.cond_prompt_check.setChecked(settings.get("cond_prompt_enabled", False))
             self.cond_prompt_input.setPlainText(settings.get("cond_prompt_rules", ""))

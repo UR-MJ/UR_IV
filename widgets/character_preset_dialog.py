@@ -202,14 +202,45 @@ class CharacterPresetDialog(QDialog):
         self._tag_scroll.setWidget(self._tag_container)
         right_layout.addWidget(self._tag_scroll, 1)
 
-        # 추가 프롬프트 입력
-        right_layout.addWidget(QLabel("추가 프롬프트 (함께 삽입)"))
+        # 추가 프롬프트 입력 (프리셋 저장 대상)
+        extra_header = QHBoxLayout()
+        extra_header.addWidget(QLabel("커스텀 프롬프트 (프리셋 저장 & 삽입)"))
+        extra_header.addStretch()
+
+        btn_save_preset = QPushButton("프리셋 저장")
+        btn_save_preset.setFixedHeight(24)
+        btn_save_preset.setStyleSheet(
+            "QPushButton { background-color: #D35400; color: white; "
+            "border-radius: 4px; font-weight: bold; font-size: 11px; "
+            "padding: 0 10px; }"
+            "QPushButton:hover { background-color: #E67E22; }"
+        )
+        btn_save_preset.clicked.connect(self._save_preset)
+        extra_header.addWidget(btn_save_preset)
+
+        btn_del_preset = QPushButton("프리셋 삭제")
+        btn_del_preset.setFixedHeight(24)
+        btn_del_preset.setStyleSheet(
+            "QPushButton { background-color: #C0392B; color: white; "
+            "border-radius: 4px; font-weight: bold; font-size: 11px; "
+            "padding: 0 10px; }"
+            "QPushButton:hover { background-color: #E74C3C; }"
+        )
+        btn_del_preset.clicked.connect(self._delete_preset)
+        extra_header.addWidget(btn_del_preset)
+
+        right_layout.addLayout(extra_header)
+
         self._extra_prompt = QTextEdit()
         self._extra_prompt.setPlaceholderText(
-            "추가로 삽입할 프롬프트를 입력하세요 (쉼표 구분)"
+            "캐릭터별 커스텀 프롬프트를 입력하세요 (프리셋 저장 시 함께 저장됨)"
         )
         self._extra_prompt.setMaximumHeight(60)
         right_layout.addWidget(self._extra_prompt)
+
+        self._preset_status = QLabel("")
+        self._preset_status.setStyleSheet("color: #888; font-size: 11px;")
+        right_layout.addWidget(self._preset_status)
 
         splitter.addWidget(right)
         splitter.setSizes([280, 550])
@@ -268,9 +299,15 @@ class CharacterPresetDialog(QDialog):
         lookup = self._get_lookup()
         results = lookup.search(query, limit=100)
 
+        # 저장된 프리셋 목록 (★ 표시용)
+        from utils.character_presets import list_character_presets
+        saved_presets = list_character_presets()
+
         self._result_list.clear()
         for orig_key, features, count in results:
-            item = QListWidgetItem(f"{orig_key}  ({count:,})")
+            norm = orig_key.strip().lower().replace("_", " ")
+            mark = "★ " if norm in saved_presets else ""
+            item = QListWidgetItem(f"{mark}{orig_key}  ({count:,})")
             item.setData(Qt.ItemDataRole.UserRole, {
                 "key": orig_key, "features": features, "count": count
             })
@@ -296,6 +333,17 @@ class CharacterPresetDialog(QDialog):
         self._char_count_label.setText(f"Danbooru 게시물: {count:,}개")
 
         self._populate_tags(name, features)
+
+        # 저장된 프리셋 자동 로드
+        from utils.character_presets import get_character_preset
+        saved = get_character_preset(name)
+        if saved:
+            self._extra_prompt.setPlainText(saved)
+            self._preset_status.setText("★ 저장된 프리셋 로드됨")
+            self._preset_status.setStyleSheet("color: #D35400; font-size: 11px;")
+        else:
+            self._extra_prompt.clear()
+            self._preset_status.setText("")
 
     def _populate_tags(self, char_name: str, features_str: str):
         """태그 버튼 생성 (캐릭터 이름과 동일한 태그는 제외)"""
@@ -352,6 +400,47 @@ class CharacterPresetDialog(QDialog):
         for btn, tag, is_existing in self._tag_buttons:
             if not is_existing:
                 btn.setChecked(False)
+
+    # ── 프리셋 저장/삭제 ──
+
+    def _save_preset(self):
+        """현재 캐릭터의 체크된 태그 + 추가 프롬프트를 프리셋으로 저장"""
+        if not self._current_char_key:
+            return
+
+        # 체크된 태그 수집
+        checked_tags = []
+        for btn, tag, is_existing in self._tag_buttons:
+            if not is_existing and btn.isChecked():
+                checked_tags.append(tag)
+
+        extra = self._extra_prompt.toPlainText().strip()
+        # 체크된 태그 + 추가 프롬프트를 합침
+        parts = []
+        if checked_tags:
+            parts.append(", ".join(checked_tags))
+        if extra:
+            parts.append(extra)
+        combined = ", ".join(parts)
+
+        from utils.character_presets import save_character_preset
+        save_character_preset(self._current_char_key, combined)
+        self._preset_status.setText(f"★ 프리셋 저장 완료: {self._current_char_key}")
+        self._preset_status.setStyleSheet("color: #27AE60; font-size: 11px;")
+
+    def _delete_preset(self):
+        """현재 캐릭터의 프리셋 삭제"""
+        if not self._current_char_key:
+            return
+        from utils.character_presets import delete_character_preset, has_preset
+        if not has_preset(self._current_char_key):
+            self._preset_status.setText("저장된 프리셋이 없습니다")
+            self._preset_status.setStyleSheet("color: #E74C3C; font-size: 11px;")
+            return
+        delete_character_preset(self._current_char_key)
+        self._extra_prompt.clear()
+        self._preset_status.setText("프리셋 삭제됨")
+        self._preset_status.setStyleSheet("color: #E74C3C; font-size: 11px;")
 
     # ── 적용 ──
 

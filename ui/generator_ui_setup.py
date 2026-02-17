@@ -426,10 +426,20 @@ class UISetupMixin:
 
         # 입력 필드들
         self.char_count_input = self._create_group(layout, "인물 수", QLineEdit())
-        # 캐릭터 입력 + 특징 프리셋 버튼
+        # 캐릭터 입력 + 특징 프리셋 버튼 + 자동 추가 토글
         char_header = QHBoxLayout()
         char_header.addWidget(QLabel("캐릭터 (Character)"))
         char_header.addStretch()
+
+        self.chk_auto_char_features = QCheckBox("특징 자동 추가")
+        self.chk_auto_char_features.setStyleSheet(
+            "QCheckBox { color: #FFA726; font-size: 11px; font-weight: bold; }"
+        )
+        self.chk_auto_char_features.setToolTip(
+            "자동화 중 캐릭터 불러올 때 특징 태그 자동 삽입"
+        )
+        char_header.addWidget(self.chk_auto_char_features)
+
         self.btn_char_preset = QPushButton("특징 프리셋")
         self.btn_char_preset.setFixedHeight(24)
         self.btn_char_preset.setStyleSheet(
