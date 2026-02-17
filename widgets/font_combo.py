@@ -1,8 +1,15 @@
 # widgets/font_combo.py
 """시스템 폰트 미리보기가 포함된 콤보박스"""
-from PyQt6.QtWidgets import QComboBox, QStyledItemDelegate, QStyleOptionViewItem
-from PyQt6.QtCore import Qt, QModelIndex, QSize
-from PyQt6.QtGui import QFont, QFontDatabase
+from PyQt6.QtWidgets import QComboBox, QStyledItemDelegate
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QFont, QFontDatabase, QColor
+
+
+_TEXT_COLOR = QColor(220, 220, 220)
+_TEXT_DIM = QColor(160, 160, 160)
+_BG_NORMAL = QColor(42, 42, 42)
+_BG_SELECTED = QColor(88, 101, 242)
+_BG_HOVER = QColor(55, 55, 55)
 
 
 class _FontPreviewDelegate(QStyledItemDelegate):
@@ -17,21 +24,24 @@ class _FontPreviewDelegate(QStyledItemDelegate):
             return
 
         painter.save()
+        painter.setRenderHint(painter.RenderHint.Antialiasing)
 
-        # 배경 (선택/호버)
-        style = option.widget.style() if option.widget else None
-        if style:
-            style.drawPrimitive(
-                style.PrimitiveElement.PE_PanelItemViewItem, option, painter, option.widget
-            )
+        # 배경
+        is_selected = option.state & option.State.State_Selected
+        is_hover = option.state & option.State.State_MouseOver
+        if is_selected:
+            painter.fillRect(option.rect, _BG_SELECTED)
+        elif is_hover:
+            painter.fillRect(option.rect, _BG_HOVER)
 
         # 폰트 이름 (기본 폰트)
         name_font = QFont(painter.font())
         name_font.setPointSize(10)
+        name_font.setBold(True)
         painter.setFont(name_font)
-        painter.setPen(option.palette.text().color())
+        painter.setPen(_TEXT_COLOR)
 
-        text_rect = option.rect.adjusted(6, 0, 0, 0)
+        text_rect = option.rect.adjusted(8, 0, -4, 0)
         top_rect = text_rect.adjusted(0, 2, 0, -text_rect.height() // 2)
         painter.drawText(top_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, family)
 
@@ -39,7 +49,7 @@ class _FontPreviewDelegate(QStyledItemDelegate):
         preview_font = QFont(family)
         preview_font.setPointSize(10)
         painter.setFont(preview_font)
-        painter.setPen(option.palette.text().color())
+        painter.setPen(_TEXT_DIM if not is_selected else _TEXT_COLOR)
 
         bot_rect = text_rect.adjusted(0, text_rect.height() // 2, 0, -2)
         painter.drawText(
@@ -50,7 +60,7 @@ class _FontPreviewDelegate(QStyledItemDelegate):
         painter.restore()
 
     def sizeHint(self, option, index):
-        return QSize(0, 42)
+        return QSize(0, 44)
 
 
 class FontPreviewComboBox(QComboBox):
@@ -61,10 +71,31 @@ class FontPreviewComboBox(QComboBox):
         self.setEditable(True)
         self.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setMaxVisibleItems(12)
+        self.setMaxVisibleItems(15)
 
         self._delegate = _FontPreviewDelegate(self)
         self.setItemDelegate(self._delegate)
+
+        # 드롭다운 팝업 스타일 (다크 테마 호환)
+        self.setStyleSheet("""
+            FontPreviewComboBox QAbstractItemView {
+                background-color: #2A2A2A;
+                border: 1px solid #5865F2;
+                border-radius: 4px;
+                outline: none;
+                padding: 2px;
+            }
+            FontPreviewComboBox QAbstractItemView::item {
+                min-height: 44px;
+                padding: 2px;
+            }
+            FontPreviewComboBox QAbstractItemView::item:selected {
+                background-color: #5865F2;
+            }
+            FontPreviewComboBox QAbstractItemView::item:hover {
+                background-color: #373737;
+            }
+        """)
 
         # 시스템 폰트 로드
         self._all_families = sorted(QFontDatabase.families())
