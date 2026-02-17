@@ -271,17 +271,25 @@ class PromptHandlingMixin:
                     result.append(escape_parentheses(t))
             return result
 
-        # 8. UI 업데이트
+        # 8. UI 업데이트 (prefix/suffix/neg는 base에서 복원 → 조건부 누적 방지 + 와일드카드 템플릿 보존)
         self.is_programmatic_change = True
-        
+
         self.char_count_input.setText(", ".join(escape(final_count)))
         self.character_input.setText(", ".join(escape(character_list)))
         self.copyright_input.setText(", ".join(escape(copyright_list)))
-        
+
         if not keep_current_artist:
             self.artist_input.setText(", ".join(escape(artist_list)))
-        
+
         self.main_prompt_text.setPlainText(", ".join(escape(final_general)))
+
+        # prefix/suffix/neg를 base 값에서 복원 (매 사이클 시작 시 원본 템플릿)
+        if hasattr(self, 'base_prefix_prompt'):
+            self.prefix_prompt_text.setPlainText(self.base_prefix_prompt)
+        if hasattr(self, 'base_suffix_prompt'):
+            self.suffix_prompt_text.setPlainText(self.base_suffix_prompt)
+        if hasattr(self, 'base_neg_prompt'):
+            self.neg_prompt_text.setPlainText(self.base_neg_prompt)
 
         self.is_programmatic_change = False
 
@@ -298,7 +306,25 @@ class PromptHandlingMixin:
         if hasattr(self, 'cond_neg_check') and self.cond_neg_check.isChecked():
             self._apply_conditional_negatives()
 
-        # 12. 최종 프롬프트 업데이트
+        # 12. 와일드카드 치환 (프롬프트 적용 시점에 확정)
+        wc_enabled = (hasattr(self, 'settings_tab') and
+                      hasattr(self.settings_tab, 'chk_wildcard_enabled') and
+                      self.settings_tab.chk_wildcard_enabled.isChecked())
+        if wc_enabled:
+            from utils.file_wildcard import resolve_file_wildcards
+            from utils.wildcard import process_wildcards
+            self.is_programmatic_change = True
+            for widget in (self.main_prompt_text, self.prefix_prompt_text,
+                           self.suffix_prompt_text, self.neg_prompt_text):
+                text = widget.toPlainText()
+                if not text.strip():
+                    continue
+                resolved = process_wildcards(resolve_file_wildcards(text))
+                if resolved != text:
+                    widget.setPlainText(resolved)
+            self.is_programmatic_change = False
+
+        # 13. 최종 프롬프트 업데이트
         self.update_total_prompt_display()
 
     def _auto_insert_character_features(self, character_list: list[str]):
