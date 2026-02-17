@@ -36,14 +36,19 @@ class GeneratorMainUI(
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AI Studio Pro")
-        
+
         self.prompt_cleaner = get_prompt_cleaner()
-        
+
+        # 백엔드 선택 다이얼로그를 UI 빌드 전에 먼저 표시 (빠른 응답)
+        self._startup_backend_result = self._startup_backend_check_early()
+
         self._setup_ui()
         self.apply_stylesheet()
         self.connect_signals()
         self.load_settings()
-        self._startup_backend_check()
+
+        # UI 완성 후 백엔드 선택 결과 적용
+        self._apply_startup_backend_result()
         
         # 초기화
         self.is_automating = False
