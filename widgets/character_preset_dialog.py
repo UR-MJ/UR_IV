@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QListWidget, QListWidgetItem, QScrollArea, QWidget,
-    QFrame, QSplitter, QAbstractItemView
+    QTextEdit, QSplitter, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, QTimer
 from widgets.common_widgets import FlowLayout
@@ -18,6 +18,12 @@ QLineEdit {
     padding: 8px 12px; font-size: 13px;
 }
 QLineEdit:focus { border: 1px solid #5865F2; }
+QTextEdit {
+    background-color: #2A2A2A; color: #DDD;
+    border: 1px solid #444; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px;
+}
+QTextEdit:focus { border: 1px solid #5865F2; }
 QListWidget {
     background-color: #252525; color: #DDD;
     border: 1px solid #333; border-radius: 6px;
@@ -55,6 +61,11 @@ _TAG_EXISTS = (
 )
 
 
+def _unescape(text: str) -> str:
+    """이스케이프 문자 제거: \\( → (, \\) → )"""
+    return text.replace(r"\(", "(").replace(r"\)", ")")
+
+
 class CharacterPresetDialog(QDialog):
     """캐릭터 검색 + 특징 프리셋 삽입 다이얼로그"""
 
@@ -62,13 +73,14 @@ class CharacterPresetDialog(QDialog):
                  current_character: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("캐릭터 특징 프리셋")
-        self.setMinimumSize(850, 550)
-        self.resize(950, 600)
+        self.setMinimumSize(850, 600)
+        self.resize(950, 650)
         self.setStyleSheet(_STYLE)
 
         self._existing_tags = existing_tags or set()
         self._lookup = None
         self._tag_buttons: list[tuple[QPushButton, str, bool]] = []
+        self._current_char_key: str = ""
         self._result: dict | None = None
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
@@ -77,9 +89,10 @@ class CharacterPresetDialog(QDialog):
 
         self._init_ui()
 
-        # 현재 캐릭터가 있으면 검색
+        # 현재 캐릭터가 있으면 이스케이프 제거 후 검색
         if current_character.strip():
-            self._search_input.setText(current_character.split(",")[0].strip())
+            first_char = _unescape(current_character.split(",")[0].strip())
+            self._search_input.setText(first_char)
 
     def _get_lookup(self):
         if self._lookup is None:
@@ -97,13 +110,18 @@ class CharacterPresetDialog(QDialog):
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #EEE;")
         root.addWidget(title)
 
-        desc = QLabel("캐릭터를 검색하고 특징 태그를 선택하여 프롬프트에 삽입합니다.")
+        desc = QLabel(
+            "캐릭터를 검색하고 특징 태그를 선택하여 프롬프트에 삽입합니다. "
+            "추가 프롬프트도 함께 입력할 수 있습니다."
+        )
         desc.setStyleSheet("color: #888; font-size: 12px;")
         root.addWidget(desc)
 
         # 검색 입력
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("캐릭터 이름 검색 (예: hatsune miku, remilia scarlet)")
+        self._search_input.setPlaceholderText(
+            "캐릭터 이름 검색 (예: hatsune miku, remilia scarlet)"
+        )
         self._search_input.textChanged.connect(self._on_search_changed)
         root.addWidget(self._search_input)
 
@@ -184,6 +202,15 @@ class CharacterPresetDialog(QDialog):
         self._tag_scroll.setWidget(self._tag_container)
         right_layout.addWidget(self._tag_scroll, 1)
 
+        # 추가 프롬프트 입력
+        right_layout.addWidget(QLabel("추가 프롬프트 (함께 삽입)"))
+        self._extra_prompt = QTextEdit()
+        self._extra_prompt.setPlaceholderText(
+            "추가로 삽입할 프롬프트를 입력하세요 (쉼표 구분)"
+        )
+        self._extra_prompt.setMaximumHeight(60)
+        right_layout.addWidget(self._extra_prompt)
+
         splitter.addWidget(right)
         splitter.setSizes([280, 550])
         root.addWidget(splitter, 1)
@@ -192,7 +219,6 @@ class CharacterPresetDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        # 캐릭터 이름 + 특징 함께 적용
         btn_apply_both = QPushButton("캐릭터 + 특징 적용")
         btn_apply_both.setFixedSize(160, 38)
         btn_apply_both.setStyleSheet(
@@ -203,7 +229,6 @@ class CharacterPresetDialog(QDialog):
         btn_apply_both.clicked.connect(lambda: self._on_apply(include_name=True))
         btn_row.addWidget(btn_apply_both)
 
-        # 특징만 적용
         btn_apply_features = QPushButton("특징만 적용")
         btn_apply_features.setFixedSize(120, 38)
         btn_apply_features.setStyleSheet(
@@ -233,6 +258,8 @@ class CharacterPresetDialog(QDialog):
 
     def _do_search(self):
         query = self._search_input.text().strip()
+        # 이스케이프 제거하여 검색
+        query = _unescape(query)
         if not query:
             self._result_list.clear()
             self._result_label.setText("검색 결과")
@@ -264,14 +291,14 @@ class CharacterPresetDialog(QDialog):
         features = data["features"]
         count = data["count"]
 
+        self._current_char_key = name
         self._char_name_label.setText(name)
         self._char_count_label.setText(f"Danbooru 게시물: {count:,}개")
 
-        self._populate_tags(features)
+        self._populate_tags(name, features)
 
-    def _populate_tags(self, features_str: str):
-        """태그 버튼 생성"""
-        # 기존 버튼 제거
+    def _populate_tags(self, char_name: str, features_str: str):
+        """태그 버튼 생성 (캐릭터 이름과 동일한 태그는 제외)"""
         self._tag_buttons.clear()
         while self._tag_flow.count():
             item = self._tag_flow.takeAt(0)
@@ -279,10 +306,22 @@ class CharacterPresetDialog(QDialog):
             if w:
                 w.deleteLater()
 
+        # 캐릭터 이름 정규화 (중복 제외용)
+        char_norm = char_name.strip().lower().replace("_", " ")
+
         tags = [t.strip() for t in features_str.split(",") if t.strip()]
         for tag in tags:
             norm = tag.strip().lower().replace("_", " ")
+
+            # 캐릭터 이름 자체와 동일한 태그 건너뛰기
+            if norm == char_norm:
+                continue
+
             is_existing = norm in self._existing_tags
+            # 이스케이프 버전도 체크
+            escaped = norm.replace("(", r"\(").replace(")", r"\)")
+            if escaped in self._existing_tags:
+                is_existing = True
 
             btn = QPushButton(tag if not is_existing else f"{tag} (존재)")
             btn.setCheckable(True)
@@ -323,8 +362,16 @@ class CharacterPresetDialog(QDialog):
             if not is_existing and btn.isChecked():
                 selected_tags.append(tag)
 
-        char_name = self._char_name_label.text()
-        if char_name == "캐릭터를 선택하세요":
+        # 추가 프롬프트
+        extra = self._extra_prompt.toPlainText().strip()
+        if extra:
+            for t in extra.split(","):
+                t = t.strip()
+                if t:
+                    selected_tags.append(t)
+
+        char_name = self._current_char_key
+        if not char_name or char_name == "캐릭터를 선택하세요":
             char_name = ""
 
         self._result = {

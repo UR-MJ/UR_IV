@@ -1405,15 +1405,20 @@ class UISetupMixin:
 
     def _open_character_preset(self):
         """캐릭터 특징 프리셋 다이얼로그 열기"""
-        # 기존 태그 수집 (중복 표시용)
+        # 기존 태그 수집 (중복 표시용) — 이스케이프/비이스케이프 모두 등록
         existing: set[str] = set()
         for src in (self.main_prompt_text.toPlainText(),
                     self.prefix_prompt_text.toPlainText(),
-                    self.suffix_prompt_text.toPlainText()):
+                    self.suffix_prompt_text.toPlainText(),
+                    self.character_input.text()):
             for t in src.split(","):
                 norm = t.strip().lower().replace("_", " ")
                 if norm:
                     existing.add(norm)
+                    # 이스케이프 제거 버전도 등록
+                    unesc = norm.replace(r"\(", "(").replace(r"\)", ")")
+                    if unesc != norm:
+                        existing.add(unesc)
 
         current_char = self.character_input.text().strip()
         dlg = CharacterPresetDialog(
@@ -1433,20 +1438,38 @@ class UISetupMixin:
         if char_name:
             cur = self.character_input.text().strip()
             if cur:
-                # 이미 있는지 체크
-                existing_chars = {c.strip().lower().replace("_", " ")
-                                  for c in cur.split(",")}
+                existing_chars = set()
+                for c in cur.split(","):
+                    n = c.strip().lower().replace("_", " ")
+                    existing_chars.add(n)
+                    existing_chars.add(
+                        n.replace(r"\(", "(").replace(r"\)", ")")
+                    )
                 if char_name.lower().replace("_", " ") not in existing_chars:
                     self.character_input.setText(f"{cur}, {char_name}")
             else:
                 self.character_input.setText(char_name)
 
-        # 특징 태그 삽입
+        # 특징 태그 삽입 (중복 제거)
         tags = result.get("tags", [])
         if tags:
+            # 삽입 시점의 전체 태그 재수집
+            all_existing: set[str] = set()
+            for src in (self.main_prompt_text.toPlainText(),
+                        self.prefix_prompt_text.toPlainText(),
+                        self.suffix_prompt_text.toPlainText(),
+                        self.character_input.text()):
+                for t in src.split(","):
+                    n = t.strip().lower().replace("_", " ")
+                    if n:
+                        all_existing.add(n)
+                        all_existing.add(
+                            n.replace(r"\(", "(").replace(r"\)", ")")
+                        )
+
             new_tags = [
                 t for t in tags
-                if t.strip().lower().replace("_", " ") not in existing
+                if t.strip().lower().replace("_", " ") not in all_existing
             ]
             if new_tags:
                 insert_str = ", ".join(new_tags)

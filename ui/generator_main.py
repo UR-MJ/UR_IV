@@ -2,7 +2,7 @@
 """
 GeneratorMainUI - 메인 윈도우 클래스
 """
-from PyQt6.QtWidgets import QMessageBox, QLineEdit, QTextEdit
+from PyQt6.QtWidgets import QMessageBox, QLineEdit, QTextEdit, QApplication
 from PyQt6.QtCore import QTimer, QEvent
 
 from ui.generator_base import GeneratorBase
@@ -63,7 +63,55 @@ class GeneratorMainUI(
 
         # 시스템 트레이
         self._setup_tray()
+
+        # 실시간 프롬프트 정리 디바운스 타이머
+        self._clean_timer = QTimer()
+        self._clean_timer.setSingleShot(True)
+        self._clean_timer.setInterval(500)
+        self._clean_timer.timeout.connect(self._deferred_clean_all)
+        self._setup_realtime_cleaning()
+
+        # UI 시작 시 최종 프롬프트 자동 채우기
+        QTimer.singleShot(100, self.update_total_prompt_display)
     
+    def _setup_realtime_cleaning(self):
+        """프롬프트 변경 시 실시간 정리 연결 (디바운스)"""
+        def _schedule_clean():
+            if not self.is_programmatic_change:
+                self._clean_timer.start()
+
+        # QLineEdit
+        for w in [self.char_count_input, self.character_input,
+                  self.copyright_input, self.artist_input]:
+            w.textChanged.connect(_schedule_clean)
+        # QTextEdit
+        for w in [self.prefix_prompt_text, self.main_prompt_text,
+                  self.suffix_prompt_text, self.neg_prompt_text]:
+            w.textChanged.connect(_schedule_clean)
+
+    def _deferred_clean_all(self):
+        """디바운스된 프롬프트 전체 정리"""
+        if self.is_programmatic_change:
+            return
+        self.is_programmatic_change = True
+        try:
+            for w in [self.char_count_input, self.character_input,
+                      self.copyright_input, self.artist_input]:
+                orig = w.text()
+                if orig.strip():
+                    cleaned = self.prompt_cleaner.clean(orig)
+                    if orig != cleaned:
+                        w.setText(cleaned)
+            for w in [self.prefix_prompt_text, self.main_prompt_text,
+                      self.suffix_prompt_text, self.neg_prompt_text]:
+                orig = w.toPlainText()
+                if orig.strip():
+                    cleaned = self.prompt_cleaner.clean(orig)
+                    if orig != cleaned:
+                        w.setPlainText(cleaned)
+        finally:
+            self.is_programmatic_change = False
+
     def _clean_widget_text(self, widget):
         """위젯의 텍스트를 정리하는 헬퍼 메서드"""
         if self.is_programmatic_change:
