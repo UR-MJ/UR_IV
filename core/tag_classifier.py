@@ -315,6 +315,7 @@ class TagClassifier:
 
     def classify_tag(self, tag):
         """태그 분류"""
+        tag_clean = tag.strip().lower()
         variants = self._tag_variants(tag)
 
         if any(v in self.characters for v in variants):

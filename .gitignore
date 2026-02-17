@@ -21,9 +21,12 @@ env/
 # Caches
 image_cache/
 web_cache/
+backend_ui_cache/
 
 # User-specific config (절대 경로, 개인 설정 포함)
 prompt_settings.json
+prompt_presets.json
+favorite_tags.json
 favorites.json
 event_gen_settings.json
 search_tab_settings.json
