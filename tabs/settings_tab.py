@@ -1014,19 +1014,13 @@ class SettingsTab(QWidget):
         font_group = QGroupBox("글꼴 설정")
         fl = QVBoxLayout(font_group)
 
-        from PyQt6.QtGui import QFontDatabase
-        families = sorted(QFontDatabase.families())
+        from widgets.font_combo import FontPreviewComboBox
 
         font_h = QHBoxLayout()
         font_h.addWidget(QLabel("글꼴:"))
-        self.font_combo = NoScrollComboBox()
-        self.font_combo.setEditable(True)
-        self.font_combo.addItems(families)
+        self.font_combo = FontPreviewComboBox()
         default_font = tm.get_font_family_name()
-        if default_font in families:
-            self.font_combo.setCurrentText(default_font)
-        else:
-            self.font_combo.setCurrentText('Malgun Gothic')
+        self.font_combo.set_current_font(default_font)
         self.font_combo.currentTextChanged.connect(self._on_font_changed)
         font_h.addWidget(self.font_combo, stretch=1)
         fl.addLayout(font_h)

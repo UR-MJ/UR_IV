@@ -8,8 +8,8 @@ from PyQt6.QtWidgets import (
     QFileDialog, QMessageBox, QSplitter, QGroupBox, QGridLayout, QFrame,
     QCheckBox, QTabWidget, QStackedWidget
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor
+from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint, QThread
+from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QImage, QFont as QGFont
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
@@ -153,6 +153,124 @@ class CompareOverlayWidget(QWidget):
 
 
 # ──────────────────────────────────────────────────────
+#  비교 GIF 생성 워커
+# ──────────────────────────────────────────────────────
+
+class CompareGifWorker(QThread):
+    """비교 이미지를 GIF 애니메이션으로 저장하는 워커"""
+    progress = pyqtSignal(int)   # 진행률 (0~100)
+    finished = pyqtSignal(str)   # 완료 시 저장 경로
+    error = pyqtSignal(str)
+
+    def __init__(self, pixmap_a: QPixmap, pixmap_b: QPixmap,
+                 save_path: str, width: int = 800, duration_ms: int = 80):
+        super().__init__()
+        self._pixmap_a = pixmap_a
+        self._pixmap_b = pixmap_b
+        self._save_path = save_path
+        self._width = width
+        self._duration = duration_ms
+
+    def _render_frame(self, ratio: float, w: int, h: int) -> Image.Image:
+        """특정 slider_ratio에서 비교 프레임을 렌더링"""
+        img = QImage(w, h, QImage.Format.Format_RGB32)
+        img.fill(QColor(26, 26, 26))
+        p = QPainter(img)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+        scaled_a = self._pixmap_a.scaled(
+            w, h, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        ) if self._pixmap_a else None
+        scaled_b = self._pixmap_b.scaled(
+            w, h, Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        ) if self._pixmap_b else None
+
+        def offset(pm):
+            if pm is None:
+                return 0, 0
+            return (w - pm.width()) // 2, (h - pm.height()) // 2
+
+        split_x = int(w * ratio)
+
+        if scaled_a:
+            ox, oy = offset(scaled_a)
+            p.setClipRect(QRect(0, 0, split_x, h))
+            p.drawPixmap(ox, oy, scaled_a)
+        if scaled_b:
+            ox, oy = offset(scaled_b)
+            p.setClipRect(QRect(split_x, 0, w - split_x, h))
+            p.drawPixmap(ox, oy, scaled_b)
+
+        p.setClipping(False)
+
+        # 분할선
+        pen = QPen(QColor(255, 60, 60), 2)
+        p.setPen(pen)
+        p.drawLine(split_x, 0, split_x, h)
+
+        # A/B 라벨
+        p.setPen(QColor(255, 255, 255))
+        font = QGFont()
+        font.setBold(True)
+        font.setPointSize(12)
+        p.setFont(font)
+        p.setOpacity(0.7)
+        p.drawText(15, 30, "A")
+        p.drawText(w - 25, 30, "B")
+        p.end()
+
+        # QImage → PIL Image
+        ptr = img.bits()
+        ptr.setsize(img.sizeInBytes())
+        pil_img = Image.frombytes("RGBA", (w, h), bytes(ptr), "raw", "BGRA")
+        return pil_img.convert("RGB")
+
+    def run(self):
+        try:
+            ref = self._pixmap_a or self._pixmap_b
+            if ref is None:
+                self.error.emit("이미지가 없습니다.")
+                return
+
+            aspect = ref.height() / max(ref.width(), 1)
+            w = self._width
+            h = int(w * aspect)
+            # 짝수로 맞춤
+            w = w if w % 2 == 0 else w + 1
+            h = h if h % 2 == 0 else h + 1
+
+            # 0→1→0 스윕 (총 50프레임: 25 정방향 + 25 역방향)
+            steps_half = 25
+            total = steps_half * 2
+            frames = []
+
+            for i in range(steps_half):
+                ratio = i / (steps_half - 1)
+                frames.append(self._render_frame(ratio, w, h))
+                self.progress.emit(int((i + 1) / total * 100))
+
+            for i in range(steps_half):
+                ratio = 1.0 - i / (steps_half - 1)
+                frames.append(self._render_frame(ratio, w, h))
+                self.progress.emit(int((steps_half + i + 1) / total * 100))
+
+            # GIF 저장
+            frames[0].save(
+                self._save_path,
+                save_all=True,
+                append_images=frames[1:],
+                duration=self._duration,
+                loop=0,
+                optimize=True
+            )
+            self.finished.emit(self._save_path)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+# ──────────────────────────────────────────────────────
 #  드롭 가능한 이미지 라벨
 # ──────────────────────────────────────────────────────
 
@@ -265,10 +383,32 @@ class ImageCompareWidget(QWidget):
         """)
         self.btn_mode.clicked.connect(self._toggle_mode)
 
+        _save_btn_style = """
+            QPushButton {
+                background-color: #2A6A3A; color: white;
+                border-radius: 4px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3A7A4A; }
+            QPushButton:disabled { background-color: #333; color: #666; }
+        """
+        self.btn_save_png = QPushButton("💾 비교 저장")
+        self.btn_save_png.setFixedHeight(35)
+        self.btn_save_png.setToolTip("현재 비교 화면을 PNG로 저장")
+        self.btn_save_png.setStyleSheet(_save_btn_style)
+        self.btn_save_png.clicked.connect(self._save_compare_png)
+
+        self.btn_save_gif = QPushButton("🎞️ GIF 저장")
+        self.btn_save_gif.setFixedHeight(35)
+        self.btn_save_gif.setToolTip("슬라이더 스윕 비교 GIF 저장")
+        self.btn_save_gif.setStyleSheet(_save_btn_style)
+        self.btn_save_gif.clicked.connect(self._save_compare_gif)
+
         toolbar.addWidget(self.btn_open_a)
         toolbar.addWidget(self.btn_open_b)
         toolbar.addWidget(self.btn_swap)
         toolbar.addStretch()
+        toolbar.addWidget(self.btn_save_png)
+        toolbar.addWidget(self.btn_save_gif)
         toolbar.addWidget(self.btn_mode)
         layout.addLayout(toolbar)
 
@@ -404,6 +544,64 @@ class ImageCompareWidget(QWidget):
             self.current_mode = self.MODE_SLIDER
             self.view_stack.setCurrentIndex(0)
             self.btn_mode.setText("📐 나란히 보기")
+
+    # ── 저장 기능 ──
+
+    def _save_compare_png(self):
+        """현재 비교 화면을 PNG로 저장"""
+        if not self.pixmap_a and not self.pixmap_b:
+            QMessageBox.warning(self, "저장 실패", "비교할 이미지가 없습니다.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "비교 이미지 저장", "compare.png",
+            "PNG (*.png);;JPEG (*.jpg)"
+        )
+        if not path:
+            return
+
+        # 현재 오버레이 위젯을 그대로 캡처
+        widget = self.overlay_widget
+        pixmap = QPixmap(widget.size())
+        widget.render(pixmap)
+        pixmap.save(path)
+        QMessageBox.information(self, "저장 완료", f"비교 이미지를 저장했습니다.\n{path}")
+
+    def _save_compare_gif(self):
+        """슬라이더 스윕 비교 GIF 저장"""
+        if not self.pixmap_a or not self.pixmap_b:
+            QMessageBox.warning(self, "저장 실패", "이미지 A, B가 모두 필요합니다.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "비교 GIF 저장", "compare.gif",
+            "GIF (*.gif)"
+        )
+        if not path:
+            return
+
+        self.btn_save_gif.setEnabled(False)
+        self.btn_save_gif.setText("🎞️ 생성 중...")
+
+        self._gif_worker = CompareGifWorker(
+            self.pixmap_a, self.pixmap_b, path, width=800, duration_ms=80
+        )
+        self._gif_worker.progress.connect(
+            lambda v: self.btn_save_gif.setText(f"🎞️ {v}%")
+        )
+        self._gif_worker.finished.connect(self._on_gif_saved)
+        self._gif_worker.error.connect(self._on_gif_error)
+        self._gif_worker.start()
+
+    def _on_gif_saved(self, path: str):
+        self.btn_save_gif.setEnabled(True)
+        self.btn_save_gif.setText("🎞️ GIF 저장")
+        QMessageBox.information(self, "저장 완료", f"비교 GIF를 저장했습니다.\n{path}")
+
+    def _on_gif_error(self, msg: str):
+        self.btn_save_gif.setEnabled(True)
+        self.btn_save_gif.setText("🎞️ GIF 저장")
+        QMessageBox.critical(self, "저장 실패", f"GIF 생성 중 오류: {msg}")
 
     # 슬라이더 모드에서의 드래그 앤 드롭
     def dragEnterEvent(self, event):
