@@ -328,27 +328,17 @@ class ImageCompareWidget(QWidget):
         toolbar = QHBoxLayout()
         toolbar.setSpacing(8)
 
-        self.btn_open_a = QPushButton("📂 이미지 A 열기")
-        self.btn_open_a.setFixedHeight(35)
-        self.btn_open_a.setStyleSheet("""
+        self.btn_open_ab = QPushButton("📂 이미지 A·B 열기")
+        self.btn_open_ab.setFixedHeight(35)
+        self.btn_open_ab.setStyleSheet("""
             QPushButton {
-                background-color: #2A5A8A; color: white;
+                background-color: #5865F2; color: white;
                 border-radius: 4px; font-weight: bold;
             }
-            QPushButton:hover { background-color: #3A6A9A; }
+            QPushButton:hover { background-color: #6975FF; }
         """)
-        self.btn_open_a.clicked.connect(lambda: self._open_image('a'))
-
-        self.btn_open_b = QPushButton("📂 이미지 B 열기")
-        self.btn_open_b.setFixedHeight(35)
-        self.btn_open_b.setStyleSheet("""
-            QPushButton {
-                background-color: #8A2A2A; color: white;
-                border-radius: 4px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #9A3A3A; }
-        """)
-        self.btn_open_b.clicked.connect(lambda: self._open_image('b'))
+        self.btn_open_ab.setToolTip("이미지 2개를 한 번에 선택")
+        self.btn_open_ab.clicked.connect(self._open_images_ab)
 
         self.btn_swap = QPushButton("🔄 A↔B")
         self.btn_swap.setFixedHeight(35)
@@ -392,8 +382,7 @@ class ImageCompareWidget(QWidget):
         self.btn_save_gif.setStyleSheet(_save_btn_style)
         self.btn_save_gif.clicked.connect(self._save_compare_gif)
 
-        toolbar.addWidget(self.btn_open_a)
-        toolbar.addWidget(self.btn_open_b)
+        toolbar.addWidget(self.btn_open_ab)
         toolbar.addWidget(self.btn_swap)
         toolbar.addStretch()
         toolbar.addWidget(self.btn_save_png)
@@ -452,13 +441,21 @@ class ImageCompareWidget(QWidget):
         self.main_splitter.setSizes([500, 200])
         main_layout.addWidget(self.main_splitter)
 
-    def _open_image(self, which):
-        path, _ = QFileDialog.getOpenFileName(
-            self, f"이미지 {which.upper()} 열기", "",
+    def _open_images_ab(self):
+        """이미지 2개를 한 번에 선택하여 A·B로 로드"""
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "비교할 이미지 2개 선택", "",
             "Images (*.png *.jpg *.jpeg *.webp *.bmp)"
         )
-        if path:
-            self._load_image(path, which)
+        if len(paths) >= 2:
+            self._load_image(paths[0], 'a')
+            self._load_image(paths[1], 'b')
+        elif len(paths) == 1:
+            # 1개만 선택한 경우 A가 비어있으면 A에, 아니면 B에
+            if self.pixmap_a is None:
+                self._load_image(paths[0], 'a')
+            else:
+                self._load_image(paths[0], 'b')
 
     def _load_image(self, path, which):
         pixmap = QPixmap(path)
