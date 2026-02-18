@@ -110,7 +110,7 @@ class LoraManagerDialog(QDialog):
         bottom.addWidget(QLabel("가중치:"))
 
         self.weight_slider = QSlider(Qt.Orientation.Horizontal)
-        self.weight_slider.setRange(0, 1000)
+        self.weight_slider.setRange(-500, 1000)
         self.weight_slider.setValue(80)
         self.weight_slider.setStyleSheet(
             "QSlider::groove:horizontal { background: #333; height: 6px; border-radius: 3px; }"
@@ -190,7 +190,7 @@ class LoraManagerDialog(QDialog):
         """입력 필드 → 슬라이더 동기화"""
         try:
             val = float(self.weight_input.text())
-            val = max(0.0, min(10.0, val))
+            val = max(-5.0, min(10.0, val))
             self.weight_slider.setValue(int(val * 100))
         except ValueError:
             pass

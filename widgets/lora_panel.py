@@ -14,7 +14,7 @@ class LoraActivePanel(QWidget):
     각 항목: [☑ name] [슬라이더 weight] [✕ 삭제]
     - 체크 ON: 생성 시 포함
     - 체크 OFF: 생성 시 제외
-    - 슬라이더: 강도 조절 (0.00~10.00)
+    - 슬라이더: 강도 조절 (-5.00~10.00)
     - ✕ 버튼: 확인 후 제거
     """
 
@@ -122,7 +122,7 @@ class LoraActivePanel(QWidget):
 
             # 강도 슬라이더
             slider = QSlider(Qt.Orientation.Horizontal)
-            slider.setRange(0, 1000)
+            slider.setRange(-500, 1000)
             slider.setValue(int(entry['weight'] * 100))
             slider.setFixedWidth(80)
             slider.setStyleSheet(
