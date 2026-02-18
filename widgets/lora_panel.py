@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QLabel, QSlider, QMessageBox
 )
 from PyQt6.QtCore import Qt
+import re
 
 
 class LoraActivePanel(QWidget):
@@ -35,6 +36,20 @@ class LoraActivePanel(QWidget):
                 return
         self._entries.append({'name': name, 'weight': weight, 'enabled': True, 'locked': False})
         self._rebuild_ui()
+
+    def parse_and_add_loras(self, text: str) -> int:
+        """텍스트에서 <lora:name:weight> 패턴을 파싱하여 일괄 추가. 추가된 개수 반환"""
+        pattern = re.compile(r'<lora:([^:>]+):([\d.]+)>')
+        matches = pattern.findall(text)
+        count = 0
+        for name, weight_str in matches:
+            try:
+                weight = float(weight_str)
+            except ValueError:
+                continue
+            self.add_lora(name.strip(), weight)
+            count += 1
+        return count
 
     def remove_lora(self, name: str):
         """LoRA 제거 (확인 후)"""
