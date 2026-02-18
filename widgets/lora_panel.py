@@ -33,7 +33,7 @@ class LoraActivePanel(QWidget):
                 entry['enabled'] = True
                 self._rebuild_ui()
                 return
-        self._entries.append({'name': name, 'weight': weight, 'enabled': True})
+        self._entries.append({'name': name, 'weight': weight, 'enabled': True, 'locked': False})
         self._rebuild_ui()
 
     def remove_lora(self, name: str):
@@ -68,6 +68,7 @@ class LoraActivePanel(QWidget):
                 'name': e.get('name', ''),
                 'weight': e.get('weight', 0.8),
                 'enabled': e.get('enabled', True),
+                'locked': e.get('locked', False),
             })
         self._rebuild_ui()
 
@@ -131,6 +132,23 @@ class LoraActivePanel(QWidget):
                 )
             )
 
+            # 🔒 잠금 버튼
+            btn_lock = QPushButton("🔓")
+            btn_lock.setFixedSize(24, 24)
+            btn_lock.setToolTip("가중치 잠금")
+            locked = entry.get('locked', False)
+            if locked:
+                btn_lock.setText("🔒")
+                slider.setEnabled(False)
+            btn_lock.setStyleSheet(
+                "QPushButton { background: transparent; border: none; font-size: 13px; }"
+                "QPushButton:hover { background: #333; border-radius: 4px; }"
+            )
+            btn_lock.clicked.connect(
+                lambda _, name=entry['name'], btn=btn_lock, sl=slider: self._on_lock_toggle(name, btn, sl)
+            )
+            row_layout.addWidget(btn_lock)
+
             # ✕ 삭제 버튼
             btn_del = QPushButton("✕")
             btn_del.setFixedSize(24, 24)
@@ -155,6 +173,19 @@ class LoraActivePanel(QWidget):
         for e in self._entries:
             if e['name'] == name:
                 e['enabled'] = checked
+                break
+
+    def _on_lock_toggle(self, name: str, btn: QPushButton, slider: QSlider):
+        """가중치 잠금 토글"""
+        for e in self._entries:
+            if e['name'] == name:
+                e['locked'] = not e.get('locked', False)
+                if e['locked']:
+                    btn.setText("🔒")
+                    slider.setEnabled(False)
+                else:
+                    btn.setText("🔓")
+                    slider.setEnabled(True)
                 break
 
     def _on_weight_change(self, name: str, weight: float):
