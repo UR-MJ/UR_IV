@@ -160,31 +160,60 @@ class LoraActivePanel(QWidget):
             self.hide()
             return
 
+        _BTN_STYLE = """
+            QPushButton {
+                border: 1px solid #555; border-radius: 4px;
+                font-size: 11px; background-color: #333; color: #AAA;
+            }
+        """
+        _BTN_LOCK_STYLE = """
+            QPushButton {
+                border: 1px solid #555; border-radius: 4px;
+                font-size: 11px; background-color: #333; color: #AAA;
+            }
+            QPushButton:checked {
+                background-color: #d35400; color: white;
+                border: 1px solid #e67e22;
+            }
+        """
+        _BTN_DEL_STYLE = """
+            QPushButton {
+                border: 1px solid #555; border-radius: 4px;
+                font-size: 11px; background-color: #333; color: #AAA;
+            }
+            QPushButton:hover {
+                background-color: #C0392B; color: white;
+                border-color: #E74C3C;
+            }
+        """
+        BTN_W = 52  # 잠금/삭제 버튼 고정 너비
+        BTN_H = 22  # 잠금/삭제 버튼 고정 높이
+
         self.show()
         for entry in self._entries:
             row = QWidget()
-            row.setFixedHeight(36)
             row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(6, 4, 6, 4)
-            row_layout.setSpacing(6)
+            row_layout.setContentsMargins(6, 3, 6, 3)
+            row_layout.setSpacing(4)
 
-            # 체크박스 (이름만)
+            # 체크박스 (이름 — 긴 이름은 tooltip으로 전체 표시)
             chk = QCheckBox(entry['name'])
             chk.setChecked(entry['enabled'])
+            chk.setToolTip(entry['name'])
             chk.setStyleSheet(
                 "QCheckBox { color: #DDD; font-size: 12px; font-weight: bold; }"
-                "QCheckBox::indicator { width: 16px; height: 16px; }"
+                "QCheckBox::indicator { width: 14px; height: 14px; }"
             )
             chk.toggled.connect(
                 lambda checked, name=entry['name']: self._on_toggle(name, checked)
             )
-            row_layout.addWidget(chk)
+            row_layout.addWidget(chk, stretch=1)
 
             # 강도 슬라이더
             slider = QSlider(Qt.Orientation.Horizontal)
             slider.setRange(-500, 1000)
             slider.setValue(int(entry['weight'] * 100))
-            slider.setFixedWidth(80)
+            slider.setFixedWidth(70)
             slider.setStyleSheet(
                 "QSlider::groove:horizontal { background: #333; height: 4px; border-radius: 2px; }"
                 "QSlider::handle:horizontal { background: #5865F2; width: 10px; "
@@ -212,24 +241,13 @@ class LoraActivePanel(QWidget):
                     self._apply_label_edit(val, name, sl)
             )
 
-            # 잠금 버튼
-            btn_lock = QPushButton("🔒 잠금" if locked else "🔓 해제")
-            btn_lock.setFixedHeight(28)
-            btn_lock.setMinimumWidth(65)
+            # 잠금 버튼 — 고정 크기
+            btn_lock = QPushButton("잠금" if locked else "해제")
+            btn_lock.setFixedSize(BTN_W, BTN_H)
             btn_lock.setToolTip("가중치 잠금/해제")
             btn_lock.setCheckable(True)
             btn_lock.setChecked(locked)
-            btn_lock.setStyleSheet("""
-                QPushButton {
-                    border: 1px solid #555; border-radius: 4px;
-                    font-size: 11px; background-color: #333; color: #AAA;
-                    padding: 2px 6px;
-                }
-                QPushButton:checked {
-                    background-color: #d35400; color: white;
-                    border: 1px solid #e67e22;
-                }
-            """)
+            btn_lock.setStyleSheet(_BTN_LOCK_STYLE)
             if locked:
                 slider.setEnabled(False)
             btn_lock.clicked.connect(
@@ -238,16 +256,11 @@ class LoraActivePanel(QWidget):
             )
             row_layout.addWidget(btn_lock)
 
-            # 삭제 버튼
-            btn_del = QPushButton("✕ 삭제")
-            btn_del.setFixedHeight(28)
-            btn_del.setMinimumWidth(55)
+            # 삭제 버튼 — 고정 크기 (잠금과 동일)
+            btn_del = QPushButton("삭제")
+            btn_del.setFixedSize(BTN_W, BTN_H)
             btn_del.setToolTip("LoRA 제거")
-            btn_del.setStyleSheet(
-                "QPushButton { background-color: #333; color: #AAA; border: 1px solid #555; "
-                "border-radius: 4px; font-size: 11px; padding: 2px 6px; }"
-                "QPushButton:hover { background-color: #C0392B; color: white; border-color: #E74C3C; }"
-            )
+            btn_del.setStyleSheet(_BTN_DEL_STYLE)
             btn_del.clicked.connect(
                 lambda _, name=entry['name']: self.remove_lora(name)
             )
@@ -281,12 +294,12 @@ class LoraActivePanel(QWidget):
             if e['name'] == name:
                 e['locked'] = not e.get('locked', False)
                 if e['locked']:
-                    btn.setText("🔒 잠금")
+                    btn.setText("잠금")
                     btn.setChecked(True)
                     slider.setEnabled(False)
                     weight_label.set_locked(True)
                 else:
-                    btn.setText("🔓 해제")
+                    btn.setText("해제")
                     btn.setChecked(False)
                     slider.setEnabled(True)
                     weight_label.set_locked(False)
