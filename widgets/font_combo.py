@@ -1,8 +1,8 @@
 # widgets/font_combo.py
 """시스템 폰트 선택 콤보박스 (QComboBox + QFontDatabase 기반)"""
-from PyQt6.QtWidgets import QComboBox, QCompleter, QStyledItemDelegate
+from PyQt6.QtWidgets import QComboBox, QCompleter, QStyledItemDelegate, QStyle
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QFontDatabase
+from PyQt6.QtGui import QFont, QFontDatabase, QColor
 
 
 class FontItemDelegate(QStyledItemDelegate):
@@ -10,28 +10,28 @@ class FontItemDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index):
         font_family = index.data(Qt.ItemDataRole.DisplayRole)
-        if font_family:
-            font = QFont(font_family, 11)
-            painter.save()
-            # 선택/호버 배경 처리
-            self.initStyleOption(option, index)
-            if option.state & option.State.State_Selected:
-                painter.fillRect(option.rect, option.palette.highlight())
-                painter.setPen(option.palette.highlightedText().color())
-            elif option.state & option.State.State_MouseOver:
-                painter.fillRect(option.rect, option.palette.midlight())
-                painter.setPen(option.palette.text().color())
-            else:
-                painter.setPen(option.palette.text().color())
-            painter.setFont(font)
-            painter.drawText(
-                option.rect.adjusted(8, 0, -4, 0),
-                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                font_family,
-            )
-            painter.restore()
-        else:
+        if not font_family:
             super().paint(painter, option, index)
+            return
+
+        painter.save()
+        # 선택/호버 배경
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(option.rect, QColor("#5865F2"))
+            painter.setPen(QColor("#FFFFFF"))
+        elif option.state & QStyle.StateFlag.State_MouseOver:
+            painter.fillRect(option.rect, QColor("#373737"))
+            painter.setPen(QColor("#DDD"))
+        else:
+            painter.setPen(QColor("#DDD"))
+
+        painter.setFont(QFont(font_family, 11))
+        painter.drawText(
+            option.rect.adjusted(8, 0, -4, 0),
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+            font_family,
+        )
+        painter.restore()
 
     def sizeHint(self, option, index) -> QSize:
         return QSize(option.rect.width(), 28)

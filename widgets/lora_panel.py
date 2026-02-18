@@ -207,36 +207,37 @@ class LoraActivePanel(QWidget):
                 )
             )
 
-            # 잠금 버튼 (작가 고정 버튼과 동일 방식)
+            # 잠금 버튼 (작가 고정 버튼과 동일 방식 — 텍스트 라벨)
             locked = entry.get('locked', False)
-            btn_lock = QPushButton("🔒" if locked else "🔓")
-            btn_lock.setFixedSize(28, 28)
-            btn_lock.setToolTip("가중치 잠금")
+            btn_lock = QPushButton("잠금" if locked else "해제")
+            btn_lock.setFixedSize(40, 24)
+            btn_lock.setToolTip("가중치 잠금/해제")
+            btn_lock.setCheckable(True)
+            btn_lock.setChecked(locked)
+            btn_lock.setStyleSheet("""
+                QPushButton {
+                    border: 1px solid #555; border-radius: 4px;
+                    font-size: 11px; background-color: #333; color: #AAA;
+                }
+                QPushButton:checked {
+                    background-color: #d35400; color: white;
+                    border: 1px solid #e67e22;
+                }
+            """)
             if locked:
-                btn_lock.setStyleSheet(
-                    "QPushButton { background-color: #d35400; border: 1px solid #e67e22; "
-                    "border-radius: 4px; font-size: 14px; }"
-                    "QPushButton:hover { background-color: #e67e22; }"
-                )
                 slider.setEnabled(False)
-            else:
-                btn_lock.setStyleSheet(
-                    "QPushButton { background-color: #333; border: 1px solid #555; "
-                    "border-radius: 4px; font-size: 14px; }"
-                    "QPushButton:hover { background-color: #444; }"
-                )
             btn_lock.clicked.connect(
                 lambda _, name=entry['name'], btn=btn_lock, sl=slider: self._on_lock_toggle(name, btn, sl)
             )
             row_layout.addWidget(btn_lock)
 
-            # ✕ 삭제 버튼
-            btn_del = QPushButton("✕")
-            btn_del.setFixedSize(28, 28)
+            # 삭제 버튼
+            btn_del = QPushButton("삭제")
+            btn_del.setFixedSize(40, 24)
             btn_del.setToolTip("LoRA 제거")
             btn_del.setStyleSheet(
                 "QPushButton { background-color: #333; color: #AAA; border: 1px solid #555; "
-                "border-radius: 4px; font-size: 13px; font-weight: bold; }"
+                "border-radius: 4px; font-size: 11px; }"
                 "QPushButton:hover { background-color: #C0392B; color: white; border-color: #E74C3C; }"
             )
             btn_del.clicked.connect(
@@ -262,20 +263,12 @@ class LoraActivePanel(QWidget):
             if e['name'] == name:
                 e['locked'] = not e.get('locked', False)
                 if e['locked']:
-                    btn.setText("🔒")
-                    btn.setStyleSheet(
-                        "QPushButton { background-color: #d35400; border: 1px solid #e67e22; "
-                        "border-radius: 4px; font-size: 14px; }"
-                        "QPushButton:hover { background-color: #e67e22; }"
-                    )
+                    btn.setText("잠금")
+                    btn.setChecked(True)
                     slider.setEnabled(False)
                 else:
-                    btn.setText("🔓")
-                    btn.setStyleSheet(
-                        "QPushButton { background-color: #333; border: 1px solid #555; "
-                        "border-radius: 4px; font-size: 14px; }"
-                        "QPushButton:hover { background-color: #444; }"
-                    )
+                    btn.setText("해제")
+                    btn.setChecked(False)
                     slider.setEnabled(True)
                 break
 
