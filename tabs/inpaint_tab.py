@@ -219,12 +219,11 @@ class InpaintTab(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # --- 왼쪽: 도구 패널 ---
-        left_scroll = QScrollArea()
-        left_scroll.setWidgetResizable(True)
-        left_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        left_scroll.setFixedWidth(340)
-        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # --- 왼쪽: 도구 패널 (left_stack에 삽입됨) ---
+        self.left_scroll = QScrollArea()
+        self.left_scroll.setWidgetResizable(True)
+        self.left_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
@@ -444,10 +443,9 @@ class InpaintTab(QWidget):
         right_layout.addWidget(self.info_text)
 
         # 스크롤 영역에 왼쪽 패널 설정
-        left_scroll.setWidget(left_panel)
+        self.left_scroll.setWidget(left_panel)
 
-        # 고정 레이아웃 (드래그 리사이즈 불가)
-        main_layout.addWidget(left_scroll)
+        # 왼쪽 패널은 left_stack에서 관리 — 여기서는 캔버스+결과만 배치
         main_layout.addWidget(self.canvas, 1)
         main_layout.addWidget(right_panel, 1)
 

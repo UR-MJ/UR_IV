@@ -8,10 +8,11 @@ class NumericSlider(QWidget):
 
     def __init__(self, label_text, min_val, max_val, default_val, parent=None):
         super().__init__(parent)
-        
-        # 위젯 자체에 배경색 추가
+        self.setObjectName("numericSlider")
+
+        # 위젯 자체에 배경색 추가 (ID 셀렉터로 자식 위젯 간섭 방지)
         self.setStyleSheet("""
-            QWidget {
+            QWidget#numericSlider {
                 background-color: #252525;
                 border-radius: 6px;
                 padding: 5px;
@@ -110,6 +111,6 @@ class NumericSlider(QWidget):
         self.slider.setEnabled(enabled)
         self.input.setEnabled(enabled)
         if not enabled:
-            self.setStyleSheet("QWidget { opacity: 0.5; }")
+            self.setStyleSheet("QWidget#numericSlider { opacity: 0.5; }")
         else:
             self.setStyleSheet("")

@@ -79,13 +79,13 @@ class QueueItemCard(QFrame):
         btn_layout.setSpacing(2)
 
         self.btn_delete = QPushButton("✕")
-        self.btn_delete.setFixedSize(20, 20)
+        self.btn_delete.setFixedSize(24, 24)
         self.btn_delete.setToolTip("삭제")
         self.btn_delete.setStyleSheet("""
             QPushButton {
                 background-color: #3A2A2A;
                 border: 1px solid #5A3A3A;
-                border-radius: 10px;
+                border-radius: 12px;
                 color: #E74C3C;
                 font-size: 12px;
                 font-weight: bold;

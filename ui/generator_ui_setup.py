@@ -50,11 +50,13 @@ class UISetupMixin:
         # 에디터 도구 패널 (center_tabs 생성 후 mosaic_editor 참조 가능)
         self.editor_tools_scroll = self._create_editor_tools_panel()
 
-        # 왼쪽 패널 스택 (생성 설정 ↔ 에디터 도구)
+        # 왼쪽 패널 스택 (생성 설정 / 에디터 도구 / I2I / Inpaint)
         self.left_stack = QStackedWidget()
         self.left_stack.setFixedWidth(450)
         self.left_stack.addWidget(self.left_panel_scroll)    # index 0: 생성 설정
         self.left_stack.addWidget(self.editor_tools_scroll)  # index 1: 에디터 도구
+        self.left_stack.addWidget(self.i2i_tab.left_scroll)  # index 2: I2I 설정
+        self.left_stack.addWidget(self.inpaint_tab.left_scroll)  # index 3: Inpaint 설정
 
         # 오른쪽 히스토리
         self.history_panel = self._create_history_panel()

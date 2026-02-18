@@ -514,12 +514,16 @@ class ActionsMixin:
             return
         current_widget = self.center_tabs.widget(index)
 
-        # 에디터 탭 전환 시 왼쪽 패널을 도구 패널로 교체
-        if hasattr(self, 'left_stack') and hasattr(self, 'mosaic_editor'):
-            if current_widget == self.mosaic_editor:
-                self.left_stack.setCurrentIndex(1)
+        # 탭에 따라 왼쪽 패널 전환
+        if hasattr(self, 'left_stack'):
+            if hasattr(self, 'mosaic_editor') and current_widget == self.mosaic_editor:
+                self.left_stack.setCurrentIndex(1)  # 에디터 도구
+            elif hasattr(self, 'i2i_tab') and current_widget == self.i2i_tab:
+                self.left_stack.setCurrentIndex(2)  # I2I 설정
+            elif hasattr(self, 'inpaint_tab') and current_widget == self.inpaint_tab:
+                self.left_stack.setCurrentIndex(3)  # Inpaint 설정
             else:
-                self.left_stack.setCurrentIndex(0)
+                self.left_stack.setCurrentIndex(0)  # 기본 생성 설정
                 # 왼쪽 패널 스크롤 최상단으로 리셋
                 if hasattr(self, 'left_panel_scroll'):
                     self.left_panel_scroll.verticalScrollBar().setValue(0)
