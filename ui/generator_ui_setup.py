@@ -717,12 +717,12 @@ class UISetupMixin:
         res_layout = QHBoxLayout()
         self.width_input = QLineEdit("1024")
         self.height_input = QLineEdit("1024")
-        btn_swap_res = QPushButton("⇄")
-        btn_swap_res.setFixedSize(32, 30)
+        btn_swap_res = QPushButton("🔄")
+        btn_swap_res.setFixedSize(36, 32)
         btn_swap_res.setToolTip("W ↔ H 교환")
         btn_swap_res.setStyleSheet(
             "QPushButton { background-color: #5865F2; color: white; border: none; "
-            "border-radius: 4px; font-weight: bold; font-size: 16px; }"
+            "border-radius: 4px; font-size: 18px; }"
             "QPushButton:hover { background-color: #6975F3; }"
         )
         btn_swap_res.clicked.connect(self._swap_resolution)

@@ -161,20 +161,20 @@ class LoraManagerDialog(QDialog):
         btn_col = QVBoxLayout()
         btn_col.setSpacing(4)
 
-        self.btn_clipboard = QPushButton("붙여넣기")
-        self.btn_clipboard.setFixedSize(70, 22)
+        self.btn_clipboard = QPushButton("📋 붙여넣기")
+        self.btn_clipboard.setFixedSize(80, 24)
         self.btn_clipboard.setStyleSheet(
-            "background-color: #444; color: #DDD; border-radius: 3px; font-size: 11px;"
+            "background-color: #444; color: #DDD; border-radius: 3px; font-size: 12px;"
         )
         self.btn_clipboard.setToolTip("클립보드에서 붙여넣기")
         self.btn_clipboard.clicked.connect(self._fill_from_clipboard)
         btn_col.addWidget(self.btn_clipboard)
 
-        self.btn_batch_insert = QPushButton("일괄 추가")
-        self.btn_batch_insert.setFixedSize(70, 22)
+        self.btn_batch_insert = QPushButton("📥 일괄 추가")
+        self.btn_batch_insert.setFixedSize(80, 24)
         self.btn_batch_insert.setStyleSheet(
             "background-color: #5865F2; color: white; border-radius: 3px; "
-            "font-size: 11px; font-weight: bold;"
+            "font-size: 12px; font-weight: bold;"
         )
         self.btn_batch_insert.clicked.connect(self._on_batch_insert)
         btn_col.addWidget(self.btn_batch_insert)
