@@ -2,10 +2,63 @@
 """LoRA 활성 목록 패널 — 선택된 LoRA를 토글/삭제/강도 조절할 수 있는 위젯"""
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QPushButton,
-    QLabel, QSlider, QMessageBox
+    QLabel, QSlider, QMessageBox, QLineEdit, QStackedWidget
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 import re
+
+
+class ClickableWeightLabel(QStackedWidget):
+    """더블클릭으로 직접 편집 가능한 가중치 라벨"""
+    value_changed = pyqtSignal(float)
+
+    def __init__(self, value: float, parent=None):
+        super().__init__(parent)
+        self.setFixedWidth(44)
+        self.setFixedHeight(20)
+
+        # 라벨 (표시용)
+        self._label = QLabel(f"{value:.2f}")
+        self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._label.setStyleSheet("color: #AAA; font-size: 11px;")
+
+        # 입력 필드 (편집용)
+        self._edit = QLineEdit(f"{value:.2f}")
+        self._edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._edit.setStyleSheet(
+            "background: #333; color: #FFF; border: 1px solid #5865F2; "
+            "border-radius: 2px; font-size: 11px; padding: 0px;"
+        )
+        self._edit.editingFinished.connect(self._finish_edit)
+
+        self.addWidget(self._label)
+        self.addWidget(self._edit)
+        self.setCurrentIndex(0)
+
+    def mouseDoubleClickEvent(self, event):
+        """더블클릭 시 편집 모드 진입"""
+        self._edit.setText(self._label.text())
+        self.setCurrentIndex(1)
+        self._edit.setFocus()
+        self._edit.selectAll()
+
+    def set_text(self, text: str):
+        """외부에서 값 업데이트 (슬라이더 연동)"""
+        self._label.setText(text)
+        if self.currentIndex() == 0:
+            self._edit.setText(text)
+
+    def _finish_edit(self):
+        """편집 완료 — 값 검증 후 시그널 발사"""
+        try:
+            val = float(self._edit.text())
+            val = max(-5.0, min(10.0, val))
+        except ValueError:
+            val = float(self._label.text())
+        self._label.setText(f"{val:.2f}")
+        self._edit.setText(f"{val:.2f}")
+        self.setCurrentIndex(0)
+        self.value_changed.emit(val)
 
 
 class LoraActivePanel(QWidget):
@@ -132,18 +185,25 @@ class LoraActivePanel(QWidget):
             )
             row_layout.addWidget(slider)
 
-            # 강도 라벨
-            weight_label = QLabel(f"{entry['weight']:.2f}")
-            weight_label.setFixedWidth(36)
-            weight_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            weight_label.setStyleSheet("color: #AAA; font-size: 11px;")
+            # 강도 라벨 (더블클릭 편집 가능)
+            weight_label = ClickableWeightLabel(entry['weight'])
             row_layout.addWidget(weight_label)
 
-            # 슬라이더 ↔ 라벨/데이터 연결
+            # 슬라이더 → 라벨/데이터 연동
             slider.valueChanged.connect(
                 lambda val, name=entry['name'], lbl=weight_label: (
-                    lbl.setText(f"{val / 100:.2f}"),
+                    lbl.set_text(f"{val / 100:.2f}"),
                     self._on_weight_change(name, val / 100.0),
+                )
+            )
+
+            # 라벨 직접 편집 → 슬라이더/데이터 연동
+            weight_label.value_changed.connect(
+                lambda val, name=entry['name'], sl=slider: (
+                    sl.blockSignals(True),
+                    sl.setValue(int(val * 100)),
+                    sl.blockSignals(False),
+                    self._on_weight_change(name, val),
                 )
             )
 
