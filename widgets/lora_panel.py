@@ -14,7 +14,7 @@ class LoraActivePanel(QWidget):
     각 항목: [☑ name] [슬라이더 weight] [✕ 삭제]
     - 체크 ON: 생성 시 포함
     - 체크 OFF: 생성 시 제외
-    - 슬라이더: 강도 조절 (0.00~2.00)
+    - 슬라이더: 강도 조절 (0.00~10.00)
     - ✕ 버튼: 확인 후 제거
     """
 
@@ -122,7 +122,7 @@ class LoraActivePanel(QWidget):
 
             # 강도 슬라이더
             slider = QSlider(Qt.Orientation.Horizontal)
-            slider.setRange(0, 200)
+            slider.setRange(0, 1000)
             slider.setValue(int(entry['weight'] * 100))
             slider.setFixedWidth(80)
             slider.setStyleSheet(
@@ -147,18 +147,24 @@ class LoraActivePanel(QWidget):
                 )
             )
 
-            # 🔒 잠금 버튼
-            btn_lock = QPushButton("🔓")
+            # 잠금 버튼
+            locked = entry.get('locked', False)
+            btn_lock = QPushButton("L" if locked else "U")
             btn_lock.setFixedSize(24, 24)
             btn_lock.setToolTip("가중치 잠금")
-            locked = entry.get('locked', False)
             if locked:
-                btn_lock.setText("🔒")
                 slider.setEnabled(False)
-            btn_lock.setStyleSheet(
-                "QPushButton { background: transparent; border: none; font-size: 13px; }"
-                "QPushButton:hover { background: #333; border-radius: 4px; }"
-            )
+                btn_lock.setStyleSheet(
+                    "QPushButton { background: #D44; color: white; border: none; "
+                    "border-radius: 4px; font-size: 11px; font-weight: bold; }"
+                    "QPushButton:hover { background: #E55; }"
+                )
+            else:
+                btn_lock.setStyleSheet(
+                    "QPushButton { background: #444; color: #AAA; border: none; "
+                    "border-radius: 4px; font-size: 11px; font-weight: bold; }"
+                    "QPushButton:hover { background: #555; }"
+                )
             btn_lock.clicked.connect(
                 lambda _, name=entry['name'], btn=btn_lock, sl=slider: self._on_lock_toggle(name, btn, sl)
             )
@@ -196,10 +202,20 @@ class LoraActivePanel(QWidget):
             if e['name'] == name:
                 e['locked'] = not e.get('locked', False)
                 if e['locked']:
-                    btn.setText("🔒")
+                    btn.setText("L")
+                    btn.setStyleSheet(
+                        "QPushButton { background: #D44; color: white; border: none; "
+                        "border-radius: 4px; font-size: 11px; font-weight: bold; }"
+                        "QPushButton:hover { background: #E55; }"
+                    )
                     slider.setEnabled(False)
                 else:
-                    btn.setText("🔓")
+                    btn.setText("U")
+                    btn.setStyleSheet(
+                        "QPushButton { background: #444; color: #AAA; border: none; "
+                        "border-radius: 4px; font-size: 11px; font-weight: bold; }"
+                        "QPushButton:hover { background: #555; }"
+                    )
                     slider.setEnabled(True)
                 break
 

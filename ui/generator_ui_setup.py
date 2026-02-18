@@ -585,19 +585,8 @@ class UISetupMixin:
         self.btn_lora_manager.setToolTip("LoRA 브라우저 열기")
         self.btn_lora_manager.clicked.connect(self._open_lora_manager)
 
-        # LoRA 텍스트 붙여넣기 버튼
-        self.btn_lora_paste = QPushButton("📋 LoRA 붙여넣기")
-        self.btn_lora_paste.setFixedHeight(32)
-        self.btn_lora_paste.setStyleSheet(
-            "background-color: #5E3F8A; color: white; border-radius: 4px; "
-            "font-size: 12px; font-weight: bold; padding: 2px 10px;"
-        )
-        self.btn_lora_paste.setToolTip("클립보드에서 <lora:name:weight> 형식 일괄 추가")
-        self.btn_lora_paste.clicked.connect(self._paste_lora_text)
-
         lora_row.addWidget(self.btn_tag_weights)
         lora_row.addWidget(self.btn_lora_manager)
-        lora_row.addWidget(self.btn_lora_paste)
         layout.addLayout(lora_row)
 
         # LoRA 활성 목록 패널
@@ -1495,6 +1484,7 @@ class UISetupMixin:
             backend = None
         dlg = LoraManagerDialog(backend=backend, parent=self)
         dlg.lora_inserted.connect(self._on_lora_inserted)
+        dlg.loras_batch_inserted.connect(self._on_lora_batch_inserted)
         dlg.exec()
 
     def _on_lora_inserted(self, lora_text: str):
@@ -1505,27 +1495,9 @@ class UISetupMixin:
             name, weight = m.group(1), float(m.group(2))
             self.lora_active_panel.add_lora(name, weight)
 
-    def _paste_lora_text(self):
-        """클립보드에서 <lora:name:weight> 형식을 파싱하여 일괄 추가"""
-        from PyQt6.QtWidgets import QApplication, QInputDialog
-        clipboard = QApplication.clipboard()
-        clip_text = clipboard.text().strip() if clipboard else ""
-
-        text, ok = QInputDialog.getMultiLineText(
-            self, "LoRA 일괄 추가",
-            "<lora:name:weight> 형식의 텍스트를 입력하세요:",
-            clip_text,
-        )
-        if not ok or not text.strip():
-            return
-
-        count = self.lora_active_panel.parse_and_add_loras(text)
-        if count == 0:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.information(
-                self, "LoRA 붙여넣기",
-                "유효한 <lora:name:weight> 패턴을 찾지 못했습니다.",
-            )
+    def _on_lora_batch_inserted(self, text: str):
+        """다이얼로그에서 일괄 붙여넣기된 LoRA 텍스트를 패널에 추가"""
+        self.lora_active_panel.parse_and_add_loras(text)
 
     def _update_token_count(self):
         """최종 프롬프트 토큰 수 추정 (CLIP 기준 근사)"""

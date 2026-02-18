@@ -2,9 +2,11 @@
 """LoRA 브라우저 다이얼로그"""
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
-    QListWidget, QListWidgetItem, QLabel, QSlider, QWidget
+    QListWidget, QListWidgetItem, QLabel, QSlider, QWidget,
+    QApplication, QTextEdit, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
+import re
 
 
 class LoraLoadWorker(QThread):
@@ -33,6 +35,7 @@ class LoraLoadWorker(QThread):
 class LoraManagerDialog(QDialog):
     """LoRA 브라우저 다이얼로그"""
     lora_inserted = pyqtSignal(str)  # <lora:name:weight> 문자열
+    loras_batch_inserted = pyqtSignal(str)  # 여러 <lora:...> 텍스트 일괄
     _lora_cache: list[dict] = []  # 클래스 레벨 캐시 (한 번 로드 후 재사용)
 
     def __init__(self, backend=None, parent=None):
@@ -107,7 +110,7 @@ class LoraManagerDialog(QDialog):
         bottom.addWidget(QLabel("가중치:"))
 
         self.weight_slider = QSlider(Qt.Orientation.Horizontal)
-        self.weight_slider.setRange(0, 200)
+        self.weight_slider.setRange(0, 1000)
         self.weight_slider.setValue(80)
         self.weight_slider.setStyleSheet(
             "QSlider::groove:horizontal { background: #333; height: 6px; border-radius: 3px; }"
@@ -138,6 +141,47 @@ class LoraManagerDialog(QDialog):
 
         layout.addLayout(bottom)
 
+        # 텍스트 붙여넣기 영역
+        paste_label = QLabel("텍스트로 일괄 추가:")
+        paste_label.setStyleSheet("color: #AAA; font-size: 11px; margin-top: 4px;")
+        layout.addWidget(paste_label)
+
+        paste_row = QHBoxLayout()
+        paste_row.setSpacing(6)
+
+        self.paste_input = QTextEdit()
+        self.paste_input.setFixedHeight(50)
+        self.paste_input.setPlaceholderText("<lora:name1:0.8> <lora:name2:0.5> ...")
+        self.paste_input.setStyleSheet(
+            "background-color: #2C2C2C; color: #EEE; border: 1px solid #555; "
+            "border-radius: 4px; padding: 4px 8px; font-size: 12px;"
+        )
+        paste_row.addWidget(self.paste_input)
+
+        btn_col = QVBoxLayout()
+        btn_col.setSpacing(4)
+
+        self.btn_clipboard = QPushButton("붙여넣기")
+        self.btn_clipboard.setFixedSize(70, 22)
+        self.btn_clipboard.setStyleSheet(
+            "background-color: #444; color: #DDD; border-radius: 3px; font-size: 11px;"
+        )
+        self.btn_clipboard.setToolTip("클립보드에서 붙여넣기")
+        self.btn_clipboard.clicked.connect(self._fill_from_clipboard)
+        btn_col.addWidget(self.btn_clipboard)
+
+        self.btn_batch_insert = QPushButton("일괄 추가")
+        self.btn_batch_insert.setFixedSize(70, 22)
+        self.btn_batch_insert.setStyleSheet(
+            "background-color: #5865F2; color: white; border-radius: 3px; "
+            "font-size: 11px; font-weight: bold;"
+        )
+        self.btn_batch_insert.clicked.connect(self._on_batch_insert)
+        btn_col.addWidget(self.btn_batch_insert)
+
+        paste_row.addLayout(btn_col)
+        layout.addLayout(paste_row)
+
     def _update_weight_input(self, value: int):
         """슬라이더 → 입력 필드 동기화"""
         self.weight_input.setText(f"{value / 100:.2f}")
@@ -146,7 +190,7 @@ class LoraManagerDialog(QDialog):
         """입력 필드 → 슬라이더 동기화"""
         try:
             val = float(self.weight_input.text())
-            val = max(0.0, min(2.0, val))
+            val = max(0.0, min(10.0, val))
             self.weight_slider.setValue(int(val * 100))
         except ValueError:
             pass
@@ -192,6 +236,31 @@ class LoraManagerDialog(QDialog):
             or text_lower in l.get('alias', '').lower()
         ]
         self._populate_list(filtered)
+
+    def _fill_from_clipboard(self):
+        """클립보드 내용을 텍스트 영역에 붙여넣기"""
+        clipboard = QApplication.clipboard()
+        if clipboard:
+            text = clipboard.text().strip()
+            if text:
+                self.paste_input.setPlainText(text)
+
+    def _on_batch_insert(self):
+        """텍스트 영역에서 <lora:name:weight> 패턴 일괄 파싱 후 시그널 발사"""
+        text = self.paste_input.toPlainText().strip()
+        if not text:
+            return
+        pattern = re.compile(r'<lora:([^:>]+):([\d.]+)>')
+        matches = pattern.findall(text)
+        if not matches:
+            QMessageBox.information(
+                self, "LoRA 붙여넣기",
+                "유효한 <lora:name:weight> 패턴을 찾지 못했습니다.",
+            )
+            return
+        self.loras_batch_inserted.emit(text)
+        self.paste_input.clear()
+        self.close()
 
     def _on_insert(self):
         item = self.lora_list.currentItem()
