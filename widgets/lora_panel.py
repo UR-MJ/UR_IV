@@ -186,8 +186,8 @@ class LoraActivePanel(QWidget):
                 border-color: #E74C3C;
             }
         """
-        BTN_W = 52  # 잠금/삭제 버튼 고정 너비
-        BTN_H = 22  # 잠금/삭제 버튼 고정 높이
+        BTN_W = 60  # 잠금/삭제 버튼 고정 너비
+        BTN_H = 26  # 잠금/삭제 버튼 고정 높이
 
         self.show()
         for entry in self._entries:
@@ -242,7 +242,7 @@ class LoraActivePanel(QWidget):
             )
 
             # 잠금 버튼 — 고정 크기
-            btn_lock = QPushButton("잠금" if locked else "해제")
+            btn_lock = QPushButton("🔒잠금" if locked else "🔓해제")
             btn_lock.setFixedSize(BTN_W, BTN_H)
             btn_lock.setToolTip("가중치 잠금/해제")
             btn_lock.setCheckable(True)
@@ -257,7 +257,7 @@ class LoraActivePanel(QWidget):
             row_layout.addWidget(btn_lock)
 
             # 삭제 버튼 — 고정 크기 (잠금과 동일)
-            btn_del = QPushButton("삭제")
+            btn_del = QPushButton("✕삭제")
             btn_del.setFixedSize(BTN_W, BTN_H)
             btn_del.setToolTip("LoRA 제거")
             btn_del.setStyleSheet(_BTN_DEL_STYLE)
@@ -294,12 +294,12 @@ class LoraActivePanel(QWidget):
             if e['name'] == name:
                 e['locked'] = not e.get('locked', False)
                 if e['locked']:
-                    btn.setText("잠금")
+                    btn.setText("🔒잠금")
                     btn.setChecked(True)
                     slider.setEnabled(False)
                     weight_label.set_locked(True)
                 else:
-                    btn.setText("해제")
+                    btn.setText("🔓해제")
                     btn.setChecked(False)
                     slider.setEnabled(True)
                     weight_label.set_locked(False)
