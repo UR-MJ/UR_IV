@@ -207,17 +207,15 @@ class LoraActivePanel(QWidget):
                 )
             )
 
-            # 잠금 버튼
+            # 잠금 버튼 (작가 고정과 동일한 방식)
             locked = entry.get('locked', False)
-            btn_lock = QPushButton("\U0001F512" if locked else "\U0001F513")
-            btn_lock.setFixedSize(24, 24)
+            btn_lock = QPushButton("🔒" if locked else "🔓")
+            btn_lock.setFixedSize(28, 24)
             btn_lock.setToolTip("가중치 잠금")
-            lock_base = (
-                "QPushButton { background: transparent; border: none; "
-                "font-family: 'Segoe UI Emoji'; font-size: 14px; }"
+            btn_lock.setStyleSheet(
+                "QPushButton { background: transparent; border: none; font-size: 13px; }"
                 "QPushButton:hover { background: #333; border-radius: 4px; }"
             )
-            btn_lock.setStyleSheet(lock_base)
             if locked:
                 slider.setEnabled(False)
             btn_lock.clicked.connect(
@@ -257,10 +255,10 @@ class LoraActivePanel(QWidget):
             if e['name'] == name:
                 e['locked'] = not e.get('locked', False)
                 if e['locked']:
-                    btn.setText("\U0001F512")
+                    btn.setText("🔒")
                     slider.setEnabled(False)
                 else:
-                    btn.setText("\U0001F513")
+                    btn.setText("🔓")
                     slider.setEnabled(True)
                 break
 
