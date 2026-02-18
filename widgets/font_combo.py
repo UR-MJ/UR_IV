@@ -1,12 +1,44 @@
 # widgets/font_combo.py
 """시스템 폰트 선택 콤보박스 (QComboBox + QFontDatabase 기반)"""
-from PyQt6.QtWidgets import QComboBox, QCompleter
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QComboBox, QCompleter, QStyledItemDelegate
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QFontDatabase
 
 
+class FontItemDelegate(QStyledItemDelegate):
+    """각 글꼴 항목을 해당 글꼴로 렌더링하는 델리게이트"""
+
+    def paint(self, painter, option, index):
+        font_family = index.data(Qt.ItemDataRole.DisplayRole)
+        if font_family:
+            font = QFont(font_family, 11)
+            painter.save()
+            # 선택/호버 배경 처리
+            self.initStyleOption(option, index)
+            if option.state & option.State.State_Selected:
+                painter.fillRect(option.rect, option.palette.highlight())
+                painter.setPen(option.palette.highlightedText().color())
+            elif option.state & option.State.State_MouseOver:
+                painter.fillRect(option.rect, option.palette.midlight())
+                painter.setPen(option.palette.text().color())
+            else:
+                painter.setPen(option.palette.text().color())
+            painter.setFont(font)
+            painter.drawText(
+                option.rect.adjusted(8, 0, -4, 0),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                font_family,
+            )
+            painter.restore()
+        else:
+            super().paint(painter, option, index)
+
+    def sizeHint(self, option, index) -> QSize:
+        return QSize(option.rect.width(), 28)
+
+
 class FontPreviewComboBox(QComboBox):
-    """시스템 글꼴 이름만 깔끔하게 표시하는 콤보박스"""
+    """시스템 글꼴 이름을 해당 글꼴로 미리보기하는 콤보박스"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -18,6 +50,9 @@ class FontPreviewComboBox(QComboBox):
         self.setEditable(True)
         self.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.setMinimumWidth(200)
+
+        # 드롭다운 항목을 해당 글꼴로 표시
+        self.setItemDelegate(FontItemDelegate(self))
 
         # 자동완성 (대소문자 무시, 부분 일치)
         completer = QCompleter(families, self)
