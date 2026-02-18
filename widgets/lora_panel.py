@@ -14,6 +14,7 @@ class ClickableWeightLabel(QStackedWidget):
 
     def __init__(self, value: float, parent=None):
         super().__init__(parent)
+        self._locked = False
         self.setFixedWidth(44)
         self.setFixedHeight(20)
 
@@ -35,8 +36,14 @@ class ClickableWeightLabel(QStackedWidget):
         self.addWidget(self._edit)
         self.setCurrentIndex(0)
 
+    def set_locked(self, locked: bool):
+        """잠금 상태 설정"""
+        self._locked = locked
+
     def mouseDoubleClickEvent(self, event):
-        """더블클릭 시 편집 모드 진입"""
+        """더블클릭 시 편집 모드 진입 (잠금 시 무시)"""
+        if self._locked:
+            return
         self._edit.setText(self._label.text())
         self.setCurrentIndex(1)
         self._edit.setFocus()
@@ -92,7 +99,7 @@ class LoraActivePanel(QWidget):
 
     def parse_and_add_loras(self, text: str) -> int:
         """텍스트에서 <lora:name:weight> 패턴을 파싱하여 일괄 추가. 추가된 개수 반환"""
-        pattern = re.compile(r'<lora:([^:>]+):([\d.]+)>')
+        pattern = re.compile(r'<lora:([^:>]+):(-?[\d.]+)>')
         matches = pattern.findall(text)
         count = 0
         for name, weight_str in matches:
@@ -186,7 +193,9 @@ class LoraActivePanel(QWidget):
             row_layout.addWidget(slider)
 
             # 강도 라벨 (더블클릭 편집 가능)
+            locked = entry.get('locked', False)
             weight_label = ClickableWeightLabel(entry['weight'])
+            weight_label.set_locked(locked)
             row_layout.addWidget(weight_label)
 
             # 슬라이더 → 라벨/데이터 연동
@@ -197,20 +206,16 @@ class LoraActivePanel(QWidget):
                 )
             )
 
-            # 라벨 직접 편집 → 슬라이더/데이터 연동
+            # 라벨 직접 편집 → 슬라이더/데이터 연동 (blockSignals 예외 안전)
             weight_label.value_changed.connect(
-                lambda val, name=entry['name'], sl=slider: (
-                    sl.blockSignals(True),
-                    sl.setValue(int(val * 100)),
-                    sl.blockSignals(False),
-                    self._on_weight_change(name, val),
-                )
+                lambda val, name=entry['name'], sl=slider:
+                    self._apply_label_edit(val, name, sl)
             )
 
-            # 잠금 버튼 (작가 고정 버튼과 동일 방식 — 텍스트 라벨)
-            locked = entry.get('locked', False)
-            btn_lock = QPushButton("잠금" if locked else "해제")
-            btn_lock.setFixedSize(40, 24)
+            # 잠금 버튼
+            btn_lock = QPushButton("🔒 잠금" if locked else "🔓 해제")
+            btn_lock.setFixedHeight(28)
+            btn_lock.setMinimumWidth(65)
             btn_lock.setToolTip("가중치 잠금/해제")
             btn_lock.setCheckable(True)
             btn_lock.setChecked(locked)
@@ -218,6 +223,7 @@ class LoraActivePanel(QWidget):
                 QPushButton {
                     border: 1px solid #555; border-radius: 4px;
                     font-size: 11px; background-color: #333; color: #AAA;
+                    padding: 2px 6px;
                 }
                 QPushButton:checked {
                     background-color: #d35400; color: white;
@@ -227,17 +233,19 @@ class LoraActivePanel(QWidget):
             if locked:
                 slider.setEnabled(False)
             btn_lock.clicked.connect(
-                lambda _, name=entry['name'], btn=btn_lock, sl=slider: self._on_lock_toggle(name, btn, sl)
+                lambda _, name=entry['name'], btn=btn_lock, sl=slider, lbl=weight_label:
+                    self._on_lock_toggle(name, btn, sl, lbl)
             )
             row_layout.addWidget(btn_lock)
 
             # 삭제 버튼
-            btn_del = QPushButton("삭제")
-            btn_del.setFixedSize(40, 24)
+            btn_del = QPushButton("✕ 삭제")
+            btn_del.setFixedHeight(28)
+            btn_del.setMinimumWidth(55)
             btn_del.setToolTip("LoRA 제거")
             btn_del.setStyleSheet(
                 "QPushButton { background-color: #333; color: #AAA; border: 1px solid #555; "
-                "border-radius: 4px; font-size: 11px; }"
+                "border-radius: 4px; font-size: 11px; padding: 2px 6px; }"
                 "QPushButton:hover { background-color: #C0392B; color: white; border-color: #E74C3C; }"
             )
             btn_del.clicked.connect(
@@ -257,19 +265,31 @@ class LoraActivePanel(QWidget):
                 e['enabled'] = checked
                 break
 
-    def _on_lock_toggle(self, name: str, btn: QPushButton, slider: QSlider):
+    def _apply_label_edit(self, val: float, name: str, slider: QSlider):
+        """라벨 직접 편집 → 슬라이더/데이터 연동 (blockSignals 예외 안전)"""
+        slider.blockSignals(True)
+        try:
+            slider.setValue(int(val * 100))
+        finally:
+            slider.blockSignals(False)
+        self._on_weight_change(name, val)
+
+    def _on_lock_toggle(self, name: str, btn: QPushButton, slider: QSlider,
+                        weight_label: ClickableWeightLabel):
         """가중치 잠금 토글"""
         for e in self._entries:
             if e['name'] == name:
                 e['locked'] = not e.get('locked', False)
                 if e['locked']:
-                    btn.setText("잠금")
+                    btn.setText("🔒 잠금")
                     btn.setChecked(True)
                     slider.setEnabled(False)
+                    weight_label.set_locked(True)
                 else:
-                    btn.setText("해제")
+                    btn.setText("🔓 해제")
                     btn.setChecked(False)
                     slider.setEnabled(True)
+                    weight_label.set_locked(False)
                 break
 
     def _on_weight_change(self, name: str, weight: float):

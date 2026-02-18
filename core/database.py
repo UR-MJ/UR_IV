@@ -8,10 +8,18 @@ def normalize_path(path):
 
 class MetadataManager:
     """이미지 메타데이터 관리 클래스"""
-    
+
+    _ALLOWED_TOGGLE_FIELDS = {'is_favorite', 'pending_command', 'pending_delete'}
+
     def __init__(self, db_path):
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.create_table()
+
+    def close(self):
+        """DB 연결 종료"""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
 
     def create_table(self):
         with self.conn:
@@ -43,6 +51,8 @@ class MetadataManager:
         return cur.fetchone()
 
     def toggle_status(self, path, field):
+        if field not in self._ALLOWED_TOGGLE_FIELDS:
+            raise ValueError(f"허용되지 않는 필드: {field}")
         norm_path = normalize_path(path)
         with self.conn:
             self.conn.execute("INSERT OR IGNORE INTO images (path) VALUES (?)", (norm_path,))

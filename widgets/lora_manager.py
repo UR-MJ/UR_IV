@@ -250,7 +250,7 @@ class LoraManagerDialog(QDialog):
         text = self.paste_input.toPlainText().strip()
         if not text:
             return
-        pattern = re.compile(r'<lora:([^:>]+):([\d.]+)>')
+        pattern = re.compile(r'<lora:([^:>]+):(-?[\d.]+)>')
         matches = pattern.findall(text)
         if not matches:
             QMessageBox.information(

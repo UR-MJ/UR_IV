@@ -441,6 +441,12 @@ class GeneratorMainUI(
                 self.save_settings()
             except Exception as e:
                 get_logger('main').error(f"종료 시 설정 저장 실패: {e}")
+            # DB 연결 종료
+            if hasattr(self, 'db') and self.db:
+                try:
+                    self.db.close()
+                except Exception:
+                    pass
             self._tray_manager.hide()
             event.accept()
             os._exit(0)
