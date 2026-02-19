@@ -71,14 +71,14 @@ class Img2ImgTab(QWidget):
 
         btn_row = QHBoxLayout()
         self.btn_open = QPushButton("이미지 열기")
-        self.btn_open.setFixedHeight(34)
-        self.btn_open.setMinimumWidth(100)
+        self.btn_open.setFixedHeight(38)
+        self.btn_open.setMinimumWidth(110)
         self.btn_open.clicked.connect(self._open_image)
         btn_row.addWidget(self.btn_open)
 
         self.btn_paste_from_t2i = QPushButton("T2I 결과 가져오기")
-        self.btn_paste_from_t2i.setFixedHeight(34)
-        self.btn_paste_from_t2i.setMinimumWidth(140)
+        self.btn_paste_from_t2i.setFixedHeight(38)
+        self.btn_paste_from_t2i.setMinimumWidth(150)
         self.btn_paste_from_t2i.clicked.connect(self._paste_from_t2i)
         btn_row.addWidget(self.btn_paste_from_t2i)
 

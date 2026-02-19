@@ -108,15 +108,17 @@ class MosaicEditor(QWidget):
 
         # ── 상단 툴바 (공유) ──
         top_toolbar = QHBoxLayout()
-        self.btn_load_pc = QPushButton("📂 PC에서 열기")
-        self.btn_save = QPushButton("💾 저장")
-        self.btn_undo = QPushButton("↩ UNDO")
-        self.btn_redo = QPushButton("↪ REDO")
+        self.btn_load_pc = QPushButton("PC에서 열기")
+        self.btn_save = QPushButton("저장")
+        self.btn_undo = QPushButton("UNDO")
+        self.btn_redo = QPushButton("REDO")
         self.btn_undo.setEnabled(False)
         self.btn_redo.setEnabled(False)
 
+        self.btn_load_pc.setMinimumWidth(100)
+        self.btn_save.setMinimumWidth(60)
         for btn in [self.btn_load_pc, self.btn_save, self.btn_undo, self.btn_redo]:
-            btn.setFixedHeight(35)
+            btn.setFixedHeight(38)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             top_toolbar.addWidget(btn)
         layout.addLayout(top_toolbar)

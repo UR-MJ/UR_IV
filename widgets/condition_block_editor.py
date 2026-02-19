@@ -302,7 +302,7 @@ class ConditionBlockEditor(QWidget):
 
         # + 규칙 추가 버튼
         btn_add = QPushButton("+ 추가")
-        btn_add.setFixedHeight(26)
+        btn_add.setFixedHeight(32)
         btn_add.setStyleSheet(
             "QPushButton { background-color: #333; color: #AAA; "
             "border: 1px dashed #555; border-radius: 4px; "
