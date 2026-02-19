@@ -210,7 +210,7 @@ class CharacterPresetDialog(QDialog):
         sel_row.addStretch()
         right_layout.addLayout(sel_row)
 
-        # 태그 영역
+        # 태그 영역 (핵심/의상 2섹션)
         self._tag_scroll = QScrollArea()
         self._tag_scroll.setWidgetResizable(True)
         self._tag_scroll.setStyleSheet(
@@ -218,8 +218,35 @@ class CharacterPresetDialog(QDialog):
         )
         self._tag_container = QWidget()
         self._tag_container.setStyleSheet("background: transparent;")
-        self._tag_flow = FlowLayout(self._tag_container)
-        self._tag_flow.setSpacing(5)
+        self._tag_main_layout = QVBoxLayout(self._tag_container)
+        self._tag_main_layout.setContentsMargins(0, 0, 0, 0)
+        self._tag_main_layout.setSpacing(8)
+
+        # 핵심 특징 섹션
+        self._core_label = QLabel("핵심 특징")
+        self._core_label.setStyleSheet(
+            "color: #5865F2; font-weight: bold; font-size: 12px; padding: 2px 0;"
+        )
+        self._tag_main_layout.addWidget(self._core_label)
+        self._core_flow_container = QWidget()
+        self._core_flow_container.setStyleSheet("background: transparent;")
+        self._core_flow = FlowLayout(self._core_flow_container)
+        self._core_flow.setSpacing(5)
+        self._tag_main_layout.addWidget(self._core_flow_container)
+
+        # 의상 · 추가 특징 섹션
+        self._costume_label = QLabel("의상 · 추가 특징")
+        self._costume_label.setStyleSheet(
+            "color: #D35400; font-weight: bold; font-size: 12px; padding: 2px 0;"
+        )
+        self._tag_main_layout.addWidget(self._costume_label)
+        self._costume_flow_container = QWidget()
+        self._costume_flow_container.setStyleSheet("background: transparent;")
+        self._costume_flow = FlowLayout(self._costume_flow_container)
+        self._costume_flow.setSpacing(5)
+        self._tag_main_layout.addWidget(self._costume_flow_container)
+
+        self._tag_main_layout.addStretch()
         self._tag_scroll.setWidget(self._tag_container)
         right_layout.addWidget(self._tag_scroll, 1)
 
@@ -298,37 +325,14 @@ class CharacterPresetDialog(QDialog):
         root.addWidget(self._cond_toggle)
 
         self._cond_container = QWidget()
-        cond_layout = QHBoxLayout(self._cond_container)
+        cond_layout = QVBoxLayout(self._cond_container)
         cond_layout.setContentsMargins(0, 0, 0, 0)
-        cond_layout.setSpacing(8)
+        cond_layout.setSpacing(4)
 
-        # 조건부 프롬프트
-        cond_pos_group = QGroupBox("조건부 프롬프트")
-        cond_pos_l = QVBoxLayout(cond_pos_group)
-        self._cond_rules_input = QTextEdit()
-        self._cond_rules_input.setPlaceholderText(
-            "문법: (조건태그):/위치+=추가태그\n"
-            "예시:\n"
-            "(night):/main+=moon, stars\n"
-            "(beach):/suffix+=waves, sand\n\n"
-            "위치: /main /prefix /suffix /neg"
-        )
-        self._cond_rules_input.setFixedHeight(100)
-        cond_pos_l.addWidget(self._cond_rules_input)
-        cond_layout.addWidget(cond_pos_group)
-
-        # 조건부 네거티브
-        cond_neg_group = QGroupBox("조건부 네거티브")
-        cond_neg_l = QVBoxLayout(cond_neg_group)
-        self._cond_neg_rules_input = QTextEdit()
-        self._cond_neg_rules_input.setPlaceholderText(
-            "문법: (조건태그)+=네거티브태그\n"
-            "예시:\n"
-            "(1girl)+=bad anatomy, extra limbs"
-        )
-        self._cond_neg_rules_input.setFixedHeight(100)
-        cond_neg_l.addWidget(self._cond_neg_rules_input)
-        cond_layout.addWidget(cond_neg_group)
+        from widgets.condition_block_editor import ConditionBlockEditor
+        self._cond_block_editor = ConditionBlockEditor()
+        self._cond_block_editor.setMinimumHeight(150)
+        cond_layout.addWidget(self._cond_block_editor)
 
         self._cond_container.hide()
         root.addWidget(self._cond_container)
@@ -448,60 +452,92 @@ class CharacterPresetDialog(QDialog):
                     if norm and norm not in feature_norms:
                         self._add_single_custom_tag(tag)
 
-            # 조건부 규칙 복원
-            self._cond_rules_input.setPlainText(preset.get("cond_rules", ""))
-            self._cond_neg_rules_input.setPlainText(preset.get("cond_neg_rules", ""))
+            # 조건부 규칙 복원 (새 JSON 포맷 우선, 기존 텍스트 포맷 마이그레이션)
+            cond_json = preset.get("cond_rules_json", "")
+            if cond_json:
+                self._cond_block_editor.set_rules_json(cond_json)
+            else:
+                from utils.condition_block import migrate_old_rules
+                rules = []
+                old_pos = preset.get("cond_rules", "")
+                old_neg = preset.get("cond_neg_rules", "")
+                if old_pos:
+                    rules.extend(migrate_old_rules(old_pos))
+                if old_neg:
+                    neg_rules = migrate_old_rules(old_neg)
+                    for r in neg_rules:
+                        r.location = "neg"
+                    rules.extend(neg_rules)
+                self._cond_block_editor.set_rules(rules)
 
             self._preset_status.setText("★ 저장된 프리셋 로드됨")
             self._preset_status.setStyleSheet("color: #D35400; font-size: 11px;")
         else:
-            self._cond_rules_input.clear()
-            self._cond_neg_rules_input.clear()
+            self._cond_block_editor.clear()
             self._preset_status.setText("")
 
     def _populate_tags(self, char_name: str, features_str: str):
-        """태그 버튼 생성 (캐릭터 이름과 동일한 태그는 제외)"""
+        """태그 버튼 생성 — 핵심/의상 2섹션 분리"""
         self._tag_buttons.clear()
-        while self._tag_flow.count():
-            item = self._tag_flow.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
+        for flow in [self._core_flow, self._costume_flow]:
+            while flow.count():
+                item = flow.takeAt(0)
+                w = item.widget()
+                if w:
+                    w.deleteLater()
 
-        # 캐릭터 이름 정규화 (중복 제외용)
         char_norm = char_name.strip().lower().replace("_", " ")
 
-        tags = [t.strip() for t in features_str.split(",") if t.strip()]
-        for tag in tags:
-            norm = tag.strip().lower().replace("_", " ")
+        # 핵심/의상 분리 조회
+        lookup = self._get_lookup()
+        core_result = lookup.lookup_core(char_name)
+        costume_result = lookup.lookup_costume(char_name)
 
-            # 캐릭터 이름 자체와 동일한 태그 건너뛰기
-            if norm == char_norm:
-                continue
+        core_tags = []
+        if core_result:
+            core_tags = [t.strip() for t in core_result[0].split(",") if t.strip()]
+        costume_tags = []
+        if costume_result:
+            costume_tags = [t.strip() for t in costume_result[0].split(",") if t.strip()]
 
-            is_existing = norm in self._existing_tags
-            # 이스케이프 버전도 체크
-            escaped = norm.replace("(", r"\(").replace(")", r"\)")
-            if escaped in self._existing_tags:
-                is_existing = True
+        # core/costume 모두 없으면 features_str을 전부 핵심으로 표시
+        if not core_tags and not costume_tags:
+            core_tags = [t.strip() for t in features_str.split(",") if t.strip()]
 
-            btn = QPushButton(tag if not is_existing else f"{tag} (존재)")
-            btn.setCheckable(True)
-            btn.setChecked(not is_existing)
-            btn.setEnabled(not is_existing)
+        self._core_label.setText(f"핵심 특징 ({len(core_tags)})")
+        self._costume_label.setText(f"의상 · 추가 특징 ({len(costume_tags)})")
+        self._costume_label.setVisible(bool(costume_tags))
+        self._costume_flow_container.setVisible(bool(costume_tags))
 
-            if is_existing:
-                btn.setStyleSheet(_TAG_EXISTS)
-            else:
-                btn.setStyleSheet(_TAG_CHECKED)
-                btn.toggled.connect(
-                    lambda checked, b=btn: b.setStyleSheet(
-                        _TAG_CHECKED if checked else _TAG_UNCHECKED
+        for tag_list, flow in [(core_tags, self._core_flow),
+                                (costume_tags, self._costume_flow)]:
+            for tag in tag_list:
+                norm = tag.strip().lower().replace("_", " ")
+                if norm == char_norm:
+                    continue
+
+                is_existing = norm in self._existing_tags
+                escaped = norm.replace("(", r"\(").replace(")", r"\)")
+                if escaped in self._existing_tags:
+                    is_existing = True
+
+                btn = QPushButton(tag if not is_existing else f"{tag} (존재)")
+                btn.setCheckable(True)
+                btn.setChecked(not is_existing)
+                btn.setEnabled(not is_existing)
+
+                if is_existing:
+                    btn.setStyleSheet(_TAG_EXISTS)
+                else:
+                    btn.setStyleSheet(_TAG_CHECKED)
+                    btn.toggled.connect(
+                        lambda checked, b=btn: b.setStyleSheet(
+                            _TAG_CHECKED if checked else _TAG_UNCHECKED
+                        )
                     )
-                )
 
-            self._tag_flow.addWidget(btn)
-            self._tag_buttons.append((btn, tag, is_existing))
+                flow.addWidget(btn)
+                self._tag_buttons.append((btn, tag, is_existing))
 
     # ── 전체 선택/해제 ──
 
@@ -551,7 +587,7 @@ class CharacterPresetDialog(QDialog):
                 _TAG_CUSTOM if checked else _TAG_CUSTOM_UNCHECKED
             )
         )
-        self._tag_flow.addWidget(btn)
+        self._core_flow.addWidget(btn)
         self._tag_buttons.append((btn, tag, False))
 
     # ── 프리셋 저장/삭제 ──
@@ -567,12 +603,11 @@ class CharacterPresetDialog(QDialog):
                 checked_tags.append(tag)
 
         combined = ", ".join(checked_tags)
-        cond_rules = self._cond_rules_input.toPlainText().strip()
-        cond_neg_rules = self._cond_neg_rules_input.toPlainText().strip()
+        cond_rules_json = self._cond_block_editor.get_rules_json()
 
         from utils.character_presets import save_character_preset
         save_character_preset(
-            self._current_char_key, combined, cond_rules, cond_neg_rules
+            self._current_char_key, combined, cond_rules_json
         )
         self._preset_status.setText(f"★ 저장 완료")
         self._preset_status.setStyleSheet("color: #27AE60; font-size: 11px;")

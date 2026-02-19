@@ -105,7 +105,7 @@ class CharacterFeaturePanel(QWidget):
 
     def show_features(self, results: dict[str, tuple[str, int]],
                       existing_tags: set[str]):
-        """캐릭터 특징 표시.
+        """캐릭터 특징 표시 (핵심/의상 분리).
         Args:
             results: {표시이름: (특징문자열, 게시물수)}
             existing_tags: 이미 프롬프트에 존재하는 태그 (정규화됨)
@@ -117,7 +117,9 @@ class CharacterFeaturePanel(QWidget):
             self.hide()
             return
 
-        # 타이틀 업데이트
+        from utils.character_features import get_character_features
+        lookup = get_character_features()
+
         names = list(results.keys())
         self._title_label.setText(
             f"캐릭터 특징 ({len(names)}명 감지)"
@@ -132,38 +134,69 @@ class CharacterFeaturePanel(QWidget):
             )
             self._tag_layout.addWidget(name_label)
 
-            # 태그 FlowLayout
-            flow_container = QWidget()
-            flow = FlowLayout(flow_container)
-            flow.setSpacing(4)
+            # 핵심/의상 분리
+            core_result = lookup.lookup_core(char_name)
+            costume_result = lookup.lookup_costume(char_name)
 
-            tags = [t.strip() for t in features_str.split(",") if t.strip()]
-            for tag in tags:
-                norm = tag.strip().lower().replace("_", " ")
-                is_existing = norm in existing_tags
+            core_tags = [t.strip() for t in core_result[0].split(",") if t.strip()] if core_result else []
+            costume_tags = [t.strip() for t in costume_result[0].split(",") if t.strip()] if costume_result else []
 
-                btn = QPushButton(tag if not is_existing else f"{tag} (존재)")
-                btn.setCheckable(True)
-                btn.setChecked(not is_existing)
-                btn.setEnabled(not is_existing)
+            # 분리 불가 시 전부 핵심으로
+            if not core_tags and not costume_tags:
+                core_tags = [t.strip() for t in features_str.split(",") if t.strip()]
 
-                if is_existing:
-                    btn.setStyleSheet(_TAG_EXISTS)
-                else:
-                    btn.setStyleSheet(_TAG_CHECKED)
-                    btn.toggled.connect(
-                        lambda checked, b=btn: b.setStyleSheet(
-                            _TAG_CHECKED if checked else _TAG_UNCHECKED
-                        )
-                    )
+            # 핵심 섹션
+            if core_tags:
+                sec_label = QLabel("핵심")
+                sec_label.setStyleSheet(
+                    "color: #5865F2; font-size: 10px; font-weight: bold; "
+                    "background: transparent;"
+                )
+                self._tag_layout.addWidget(sec_label)
+                self._add_tag_flow(core_tags, existing_tags)
 
-                flow.addWidget(btn)
-                self._buttons.append((btn, tag, is_existing))
-
-            self._tag_layout.addWidget(flow_container)
+            # 의상 섹션
+            if costume_tags:
+                sec_label = QLabel("의상")
+                sec_label.setStyleSheet(
+                    "color: #D35400; font-size: 10px; font-weight: bold; "
+                    "background: transparent;"
+                )
+                self._tag_layout.addWidget(sec_label)
+                self._add_tag_flow(costume_tags, existing_tags)
 
         self._tag_layout.addStretch()
         self.show()
+
+    def _add_tag_flow(self, tags: list[str], existing_tags: set[str]):
+        """태그 버튼 FlowLayout 추가"""
+        flow_container = QWidget()
+        flow = FlowLayout(flow_container)
+        flow.setSpacing(4)
+
+        for tag in tags:
+            norm = tag.strip().lower().replace("_", " ")
+            is_existing = norm in existing_tags
+
+            btn = QPushButton(tag if not is_existing else f"{tag} (존재)")
+            btn.setCheckable(True)
+            btn.setChecked(not is_existing)
+            btn.setEnabled(not is_existing)
+
+            if is_existing:
+                btn.setStyleSheet(_TAG_EXISTS)
+            else:
+                btn.setStyleSheet(_TAG_CHECKED)
+                btn.toggled.connect(
+                    lambda checked, b=btn: b.setStyleSheet(
+                        _TAG_CHECKED if checked else _TAG_UNCHECKED
+                    )
+                )
+
+            flow.addWidget(btn)
+            self._buttons.append((btn, tag, is_existing))
+
+        self._tag_layout.addWidget(flow_container)
 
     def hide_features(self):
         """패널 숨기기"""

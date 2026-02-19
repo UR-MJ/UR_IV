@@ -16,50 +16,69 @@ class TagClassifier:
         self.characters = set()
         self.copyrights = set()
         self.artists = set()
+        self.meta_tags = set()
         self.clothes = set()
         self.characteristics = set()
         self.colors = set()
-        
+
         # Wiki 그룹
         self.wiki_groups = {}
         self.tag_to_category = {}
-        
+
         # 특수 태그
         self.censorship_tags = set()
         self.text_tags = set()
-        
+
         # 경로 설정
         self.tags_db_dir = str(TAGS_DB_PATH)
-        
-        # 로드
-        self._load_all_python_dicts()
+
+        # TagData에서 태그 세트 로드 (parquet 기반)
+        self._load_from_tag_data()
         self._load_text_files()
         self._load_wiki_groups()
         self._load_special_tags()
     
-    def _load_all_python_dicts(self):
-        """딕셔너리 파일에서 태그 로드"""
-        # 캐릭터: character_dictionary.py 또는 danbooru_character.py
+    def _load_from_tag_data(self):
+        """TagData(parquet)에서 태그 세트 로드"""
+        try:
+            from utils.tag_data import get_tag_data
+            td = get_tag_data()
+            if td.is_loaded:
+                self.characters = td.character_set.copy()
+                self.copyrights = td.copyright_set.copy()
+                self.artists = td.artist_set.copy()
+                self.meta_tags = td.meta_set.copy()
+                print(f"✅ TagData 연동: 캐릭터={len(self.characters):,}, "
+                      f"작품={len(self.copyrights):,}, "
+                      f"작가={len(self.artists):,}, "
+                      f"메타={len(self.meta_tags):,}")
+                return
+        except Exception as e:
+            print(f"⚠️ TagData 연동 실패, dict 파일로 폴백: {e}")
+
+        # 폴백: 기존 Python dict 파일에서 로드
+        self._load_all_python_dicts_fallback()
+
+    def _load_all_python_dicts_fallback(self):
+        """폴백: 딕셔너리 파일에서 태그 로드"""
         for name in ["character_dictionary.py", "danbooru_character.py"]:
             char_path = TAGS_DB_PATH / name
             if char_path.exists():
                 self.characters = self._load_python_dict_keys(char_path)
-                print(f"✅ 캐릭터: {name} → {len(self.characters)}개 로드")
+                print(f"✅ 캐릭터(폴백): {name} → {len(self.characters)}개 로드")
                 break
 
-        # 작품: copyright_dictionary.py 또는 copyright_list_reformatted.py
         for name in ["copyright_dictionary.py", "copyright_list_reformatted.py"]:
             copy_path = TAGS_DB_PATH / name
             if copy_path.exists():
                 self.copyrights = self._load_python_dict_keys(copy_path)
-                print(f"✅ 작품: {name} → {len(self.copyrights)}개 로드")
+                print(f"✅ 작품(폴백): {name} → {len(self.copyrights)}개 로드")
                 break
 
-        # 작가: artist_dictionary.py
         artist_path = TAGS_DB_PATH / "artist_dictionary.py"
         if artist_path.exists():
             self.artists = self._load_python_dict_keys(artist_path)
-            print(f"✅ 작가: artist_dictionary.py → {len(self.artists)}개 로드")
+            print(f"✅ 작가(폴백): → {len(self.artists)}개 로드")
 
     def _load_python_dict_keys(self, filepath):
         """Python 파일에서 dict 키 또는 list 항목을 로드"""
@@ -312,6 +331,23 @@ class TagClassifier:
         
         return False
         
+    def is_meta_tag(self, tag: str) -> bool:
+        """메타 태그인지 확인 (parquet 773개 + art_style 분류)"""
+        tag_lower = tag.lower().strip()
+        tag_space = tag_lower.replace('_', ' ')
+        tag_under = tag_lower.replace(' ', '_')
+
+        if tag_lower in self.meta_tags or tag_space in self.meta_tags or tag_under in self.meta_tags:
+            return True
+
+        # art_style도 메타로 취급
+        if tag_lower in self.tag_to_category:
+            groups_info = self.tag_to_category[tag_lower]
+            if any(info['category'] == 'art_style' for info in groups_info):
+                return True
+
+        return False
+
     def _tag_variants(self, tag: str) -> list:
         """태그의 모든 변형 생성 (공백/언더스코어, 이스케이프 괄호)"""
         tag_clean = tag.strip().lower()

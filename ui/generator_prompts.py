@@ -152,7 +152,7 @@ class PromptHandlingMixin:
             copyright_list = []
 
         # 캐릭터 제거
-        if hasattr(self, 'chk_remove_character') and self.chk_remove_character.isChecked():
+        if self.chk_remove_character.isChecked():
             character_list = []
         
         # ★★★ 디버그: 토글 상태 및 태그 개수 ★★★
@@ -164,16 +164,11 @@ class PromptHandlingMixin:
         _logger.debug(f"censorship_tags 개수: {len(self.tag_classifier.censorship_tags)}")
         _logger.debug(f"text_tags 개수: {len(self.tag_classifier.text_tags)}")
         
-        # 메타 제거 (original 포함)
+        # 메타 제거 (parquet 773개 meta 태그 + art_style 기반)
         if self.chk_remove_meta.isChecked():
             before = len(general_list)
-            meta_tags = {'original', 'highres', 'absurdres', 'incredibly_absurdres', 
-                        'huge_filesize', 'commentary', 'commentary_request',
-                        'translated', 'translation_request', 'check_translation',
-                        'partial_commentary', 'english_commentary', 'japanese_commentary'}
-            general_list = [t for t in general_list if t.lower() not in meta_tags]
-            general_list = [t for t in general_list 
-                           if self.tag_classifier.classify_tag(t) != "art_style"]
+            general_list = [t for t in general_list
+                           if not self.tag_classifier.is_meta_tag(t)]
             _logger.debug(f"메타 제거: {before} → {len(general_list)}")
 
         # 검열 제거
@@ -298,13 +293,9 @@ class PromptHandlingMixin:
                 self.chk_auto_char_features.isChecked() and character_list):
             self._auto_insert_character_features(character_list)
 
-        # 10. 조건부 프롬프트 적용
+        # 10. 조건부 프롬프트 적용 (통합 — positive/negative 모두 처리)
         if hasattr(self, 'cond_prompt_check') and self.cond_prompt_check.isChecked():
             self._apply_conditional_prompts()
-
-        # 11. 조건부 네거티브 적용
-        if hasattr(self, 'cond_neg_check') and self.cond_neg_check.isChecked():
-            self._apply_conditional_negatives()
 
         # 12. 와일드카드 치환 (프롬프트 적용 시점에 확정)
         wc_enabled = (hasattr(self, 'settings_tab') and
@@ -328,9 +319,14 @@ class PromptHandlingMixin:
         self.update_total_prompt_display()
 
     def _auto_insert_character_features(self, character_list: list[str]):
-        """캐릭터 특징 자동 삽입 (프리셋 + danbooru 사전 + 캐릭터별 조건부)"""
-        from utils.character_features import CharacterFeatureLookup
+        """캐릭터 특징 자동 삽입 (핵심/전체 모드 지원)"""
+        from utils.character_features import get_character_features
         from utils.character_presets import get_character_preset_full
+
+        # 핵심만 vs 핵심+의상 모드
+        core_only = True
+        if hasattr(self, 'combo_char_feature_mode'):
+            core_only = self.combo_char_feature_mode.currentIndex() == 0
 
         # 기존 태그 수집
         all_existing: set[str] = set()
@@ -344,10 +340,11 @@ class PromptHandlingMixin:
                     all_existing.add(n)
                     all_existing.add(n.replace(r"\(", "(").replace(r"\)", ")"))
 
-        lookup = CharacterFeatureLookup()
+        from utils.condition_block import rules_from_json, migrate_old_rules as _migrate_rules
+
+        lookup = get_character_features()
         new_tags: list[str] = []
-        char_cond_rules: list[str] = []
-        char_cond_neg_rules: list[str] = []
+        char_cond_all_rules = []
 
         for char_raw in character_list:
             char_name = char_raw.strip().replace(r"\(", "(").replace(r"\)", ")")
@@ -364,19 +361,33 @@ class PromptHandlingMixin:
                         if norm and norm not in all_existing and norm != char_norm:
                             new_tags.append(tag)
                             all_existing.add(norm)
-                # 캐릭터별 조건부 규칙 수집
-                cr = preset.get("cond_rules", "")
-                if cr:
-                    char_cond_rules.append(cr)
-                cnr = preset.get("cond_neg_rules", "")
-                if cnr:
-                    char_cond_neg_rules.append(cnr)
 
-            # 2. danbooru 특징 사전 조회
-            features = lookup.lookup(char_name)
-            if features:
-                for tag in features:
-                    norm = tag.strip().lower().replace("_", " ")
+                # 조건부 규칙 수집 (새 JSON 포맷 우선)
+                cond_json = preset.get("cond_rules_json", "")
+                if cond_json:
+                    char_cond_all_rules.extend(rules_from_json(cond_json))
+                else:
+                    cr = preset.get("cond_rules", "")
+                    if cr:
+                        char_cond_all_rules.extend(_migrate_rules(cr))
+                    cnr = preset.get("cond_neg_rules", "")
+                    if cnr:
+                        neg_rules = _migrate_rules(cnr)
+                        for r in neg_rules:
+                            r.location = "neg"
+                        char_cond_all_rules.extend(neg_rules)
+
+            # 2. 캐릭터 특징 사전 조회 (모드에 따라 분기)
+            if core_only:
+                result = lookup.lookup_core(char_name)
+            else:
+                result = lookup.lookup(char_name)
+
+            if result:
+                features_str = result[0]
+                for tag in features_str.split(","):
+                    tag = tag.strip()
+                    norm = tag.lower().replace("_", " ")
                     if norm and norm not in all_existing and norm != char_norm:
                         new_tags.append(tag)
                         all_existing.add(norm)
@@ -392,23 +403,14 @@ class PromptHandlingMixin:
             self.is_programmatic_change = False
 
         # 3. 캐릭터별 조건부 프롬프트 적용
-        if char_cond_rules:
-            self._apply_char_conditional(
-                "\n".join(char_cond_rules), is_negative=False
-            )
-        if char_cond_neg_rules:
-            self._apply_char_conditional(
-                "\n".join(char_cond_neg_rules), is_negative=True
-            )
+        if char_cond_all_rules:
+            from utils.condition_block import apply_rules
+            all_tags = self._collect_all_tags()
+            result = apply_rules(char_cond_all_rules, all_tags, prevent_dupe=True)
+            self._apply_condition_result(result)
 
-    def _apply_char_conditional(self, rules_text: str, is_negative: bool = False):
-        """캐릭터 프리셋 전용 조건부 규칙 적용"""
-        from utils.conditional_prompt import (
-            parse_rules, apply_conditional_rules,
-            parse_neg_rules, apply_neg_rules,
-        )
-
-        # 전체 태그 수집
+    def _collect_all_tags(self) -> set[str]:
+        """모든 위치의 태그를 정규화하여 수집"""
         all_tags: set[str] = set()
         for field in [self.character_input, self.copyright_input,
                       self.main_prompt_text, self.prefix_prompt_text,
@@ -418,107 +420,22 @@ class PromptHandlingMixin:
                 n = t.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
                 if n:
                     all_tags.add(n)
+        return all_tags
 
-        self.is_programmatic_change = True
-
-        if is_negative:
-            rules = parse_neg_rules(rules_text)
-            if rules:
-                existing_neg: set[str] = set()
-                for t in self.neg_prompt_text.toPlainText().split(","):
-                    n = t.strip().lower().replace("_", " ")
-                    if n:
-                        existing_neg.add(n)
-                new_tags = apply_neg_rules(rules, all_tags, existing_neg, True)
-                if new_tags:
-                    current = self.neg_prompt_text.toPlainText().strip()
-                    insert = ", ".join(new_tags)
-                    if current:
-                        self.neg_prompt_text.setPlainText(f"{current}, {insert}")
-                    else:
-                        self.neg_prompt_text.setPlainText(insert)
-        else:
-            rules = parse_rules(rules_text)
-            if rules:
-                widget_map = {
-                    "main": self.main_prompt_text,
-                    "prefix": self.prefix_prompt_text,
-                    "suffix": self.suffix_prompt_text,
-                    "neg": self.neg_prompt_text,
-                }
-                existing_by_location: dict[str, set[str]] = {}
-                for loc, widget in widget_map.items():
-                    existing_by_location[loc] = set()
-                    for t in widget.toPlainText().split(","):
-                        n = t.strip().lower().replace("_", " ")
-                        if n:
-                            existing_by_location[loc].add(n)
-
-                result = apply_conditional_rules(
-                    rules, all_tags, True, existing_by_location
-                )
-                for location, tags in result.items():
-                    if not tags:
-                        continue
-                    widget = widget_map.get(location)
-                    if not widget:
-                        continue
-                    current = widget.toPlainText().strip()
-                    insert = ", ".join(tags)
-                    if current:
-                        widget.setPlainText(f"{current}, {insert}")
-                    else:
-                        widget.setPlainText(insert)
-
-        self.is_programmatic_change = False
-
-    def _apply_conditional_prompts(self):
-        """조건부 프롬프트 규칙 적용"""
-        from utils.conditional_prompt import parse_rules, apply_conditional_rules
-
-        rules_text = self.cond_prompt_input.toPlainText().strip()
-        if not rules_text:
-            return
-
-        rules = parse_rules(rules_text)
-        if not rules:
-            return
-
-        # 전체 태그 수집 (조건 매칭용)
-        all_tags: set[str] = set()
-        for field in [self.character_input, self.copyright_input,
-                      self.main_prompt_text, self.prefix_prompt_text,
-                      self.suffix_prompt_text]:
-            text = field.text() if hasattr(field, 'text') else field.toPlainText()
-            for t in text.split(","):
-                n = t.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
-                if n:
-                    all_tags.add(n)
-
-        # 위치별 기존 태그 수집
+    def _apply_condition_result(self, result: dict):
+        """apply_rules() 결과를 UI 위젯에 적용"""
         widget_map = {
             "main": self.main_prompt_text,
             "prefix": self.prefix_prompt_text,
             "suffix": self.suffix_prompt_text,
             "neg": self.neg_prompt_text,
         }
-        existing_by_location: dict[str, set[str]] = {}
-        for loc, widget in widget_map.items():
-            text = widget.toPlainText()
-            existing_by_location[loc] = set()
-            for t in text.split(","):
-                n = t.strip().lower().replace("_", " ")
-                if n:
-                    existing_by_location[loc].add(n)
-
-        prevent_dupe = self.cond_prevent_dupe_check.isChecked()
-        result = apply_conditional_rules(rules, all_tags, prevent_dupe, existing_by_location)
-
-        if not result:
-            return
 
         self.is_programmatic_change = True
-        for location, tags in result.items():
+
+        # add 동작: 태그 추가
+        for location in ("main", "prefix", "suffix", "neg"):
+            tags = result.get(location, [])
             if not tags:
                 continue
             widget = widget_map.get(location)
@@ -530,52 +447,53 @@ class PromptHandlingMixin:
                 widget.setPlainText(f"{current}, {insert}")
             else:
                 widget.setPlainText(insert)
+
+        # remove 동작: 태그 제거
+        for location in ("main", "prefix", "suffix", "neg"):
+            remove_tags = result.get(f"_remove_{location}", [])
+            if not remove_tags:
+                continue
+            widget = widget_map.get(location)
+            if not widget:
+                continue
+            current_text = widget.toPlainText()
+            current_tags = [t.strip() for t in current_text.split(",") if t.strip()]
+            remove_norms = {t.strip().lower().replace("_", " ") for t in remove_tags}
+            filtered = [t for t in current_tags
+                       if t.strip().lower().replace("_", " ") not in remove_norms]
+            widget.setPlainText(", ".join(filtered))
+
+        # replace 동작: 태그 교체
+        replacements = result.get("_replace", [])
+        if replacements:
+            for widget in widget_map.values():
+                text = widget.toPlainText()
+                for old_tag, new_tag in replacements:
+                    old_norm = old_tag.strip().lower().replace("_", " ")
+                    tags = [t.strip() for t in text.split(",") if t.strip()]
+                    new_tags = []
+                    for t in tags:
+                        if t.strip().lower().replace("_", " ") == old_norm:
+                            new_tags.append(new_tag)
+                        else:
+                            new_tags.append(t)
+                    text = ", ".join(new_tags)
+                widget.setPlainText(text)
+
         self.is_programmatic_change = False
 
-    def _apply_conditional_negatives(self):
-        """조건부 네거티브 규칙 적용"""
-        from utils.conditional_prompt import parse_neg_rules, apply_neg_rules
+    def _apply_conditional_prompts(self):
+        """조건부 프롬프트 규칙 적용 (블록 에디터 기반)"""
+        from utils.condition_block import apply_rules
 
-        rules_text = self.cond_neg_input.toPlainText().strip()
-        if not rules_text:
-            return
-
-        rules = parse_neg_rules(rules_text)
+        rules = self.cond_block_editor.get_rules()
         if not rules:
             return
 
-        # 전체 태그 수집
-        all_tags: set[str] = set()
-        for field in [self.character_input, self.copyright_input,
-                      self.main_prompt_text, self.prefix_prompt_text,
-                      self.suffix_prompt_text]:
-            text = field.text() if hasattr(field, 'text') else field.toPlainText()
-            for t in text.split(","):
-                n = t.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
-                if n:
-                    all_tags.add(n)
-
-        # 기존 neg 태그
-        existing_neg: set[str] = set()
-        for t in self.neg_prompt_text.toPlainText().split(","):
-            n = t.strip().lower().replace("_", " ")
-            if n:
-                existing_neg.add(n)
-
+        all_tags = self._collect_all_tags()
         prevent_dupe = self.cond_prevent_dupe_check.isChecked()
-        new_tags = apply_neg_rules(rules, all_tags, existing_neg, prevent_dupe)
-
-        if not new_tags:
-            return
-
-        self.is_programmatic_change = True
-        current = self.neg_prompt_text.toPlainText().strip()
-        insert = ", ".join(new_tags)
-        if current:
-            self.neg_prompt_text.setPlainText(f"{current}, {insert}")
-        else:
-            self.neg_prompt_text.setPlainText(insert)
-        self.is_programmatic_change = False
+        result = apply_rules(rules, all_tags, prevent_dupe=prevent_dupe)
+        self._apply_condition_result(result)
 
     def apply_random_prompt(self):
         """랜덤 프롬프트 적용"""

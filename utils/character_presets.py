@@ -36,17 +36,15 @@ def _normalize(name: str) -> str:
 
 
 def save_character_preset(name: str, extra_prompt: str,
-                          cond_rules: str = "", cond_neg_rules: str = ""):
-    """캐릭터 프리셋 저장 (조건부 규칙 포함)"""
+                          cond_rules_json: str = ""):
+    """캐릭터 프리셋 저장 (조건부 규칙 JSON 포함)"""
     data = _load()
     entry = {
         "extra_prompt": extra_prompt,
         "display_name": name,
     }
-    if cond_rules:
-        entry["cond_rules"] = cond_rules
-    if cond_neg_rules:
-        entry["cond_neg_rules"] = cond_neg_rules
+    if cond_rules_json:
+        entry["cond_rules_json"] = cond_rules_json
     data[_normalize(name)] = entry
     _save(data)
 
@@ -62,7 +60,8 @@ def get_character_preset(name: str) -> str | None:
 
 def get_character_preset_full(name: str) -> dict | None:
     """캐릭터 프리셋 전체 데이터 로드. 없으면 None.
-    Returns: {extra_prompt, cond_rules, cond_neg_rules, display_name}
+    Returns: {extra_prompt, cond_rules_json, display_name}
+    (기존 포맷: cond_rules, cond_neg_rules — 마이그레이션용)
     """
     data = _load()
     return data.get(_normalize(name))

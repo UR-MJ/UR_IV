@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt, QStringListModel
 from PyQt6.QtWidgets import QCompleter
 from workers.search_worker import PandasSearchWorker
 from utils.tag_completer import get_tag_completer
+from utils.tag_data import get_tag_data
 from widgets.search_preview import SearchPreviewCard  # ← 추가!
 from config import PARQUET_DIR
 
@@ -255,27 +256,14 @@ class SearchTab(QWidget):
         self._setup_autocomplete()
 
     def _setup_autocomplete(self):
-        """각 검색 필드에 카테고리별 자동완성 설정"""
-        # 카테고리별 태그 목록 로드
-        tag_sources: dict[str, list[str]] = {}
-        try:
-            from tags_db.copyright_dictionary import copyright_list
-            tag_sources['copyright'] = copyright_list
-        except Exception:
-            tag_sources['copyright'] = []
-        try:
-            from tags_db.character_dictionary import character_dictionary
-            tag_sources['character'] = list(character_dictionary.keys())
-        except Exception:
-            tag_sources['character'] = []
-        try:
-            from tags_db.artist_dictionary import artist_dict
-            tag_sources['artist'] = list(artist_dict.keys())
-        except Exception:
-            tag_sources['artist'] = []
-
-        general_tags = get_tag_completer().get_all_tags()
-        tag_sources['general'] = general_tags
+        """각 검색 필드에 카테고리별 자동완성 설정 (TagData 기반)"""
+        td = get_tag_data()
+        tag_sources: dict[str, list[str]] = {
+            'copyright': td.copyright_tags,
+            'character': td.character_tags,
+            'artist': td.artist_tags,
+            'general': td.general_tags,
+        }
 
         # 포함/제외 필드 모두에 설정
         field_map = {

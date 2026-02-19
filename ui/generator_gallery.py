@@ -523,38 +523,36 @@ class GalleryMixin:
     def _apply_removal_filters(self, tags: list) -> list:
         """제거 토글에 따라 태그 필터링"""
         filtered = []
-        
+
         for tag in tags:
             tag_lower = tag.lower().strip()
-            
+
             if self.chk_remove_artist.isChecked():
                 if tag_lower.startswith('artist:') or tag_lower in self._get_known_artists():
                     continue
-            
+
             if self.chk_remove_copyright.isChecked():
                 if self.tag_classifier.classify_tag(tag) == "copyright":
                     continue
-            
+
+            if hasattr(self, 'chk_remove_character') and self.chk_remove_character.isChecked():
+                if tag_lower in self.tag_classifier.characters:
+                    continue
+
             if self.chk_remove_meta.isChecked():
-                meta_tags = {'original', 'highres', 'absurdres', 'incredibly_absurdres', 
-                            'huge_filesize', 'commentary', 'commentary_request',
-                            'translated', 'translation_request', 'check_translation',
-                            'partial_commentary', 'english_commentary', 'japanese_commentary'}
-                if tag_lower in meta_tags:
+                if self.tag_classifier.is_meta_tag(tag):
                     continue
-                if self.tag_classifier.classify_tag(tag) == "art_style":
-                    continue
-            
+
             if hasattr(self, 'chk_remove_censorship') and self.chk_remove_censorship.isChecked():
                 if self.tag_classifier.is_censorship_tag(tag):
                     continue
-            
+
             if hasattr(self, 'chk_remove_text') and self.chk_remove_text.isChecked():
                 if self.tag_classifier.is_text_tag(tag):
                     continue
-            
+
             filtered.append(tag)
-        
+
         return filtered
 
     def _get_known_artists(self) -> set:

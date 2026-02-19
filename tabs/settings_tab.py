@@ -196,49 +196,37 @@ class SettingsTab(QWidget):
 
     def _create_logic_page(self):
         """프롬프트 로직 페이지"""
-        w, l = self._create_container()
+        w = QWidget()
+        l = QVBoxLayout(w)
+        l.setContentsMargins(30, 30, 30, 30)
+        l.setSpacing(20)
+
         l.addWidget(self._create_header("프롬프트 로직 설정"))
-        
-        # 조건부 프롬프트
+
+        # 조건부 프롬프트 (통합 블록 에디터)
         group = QGroupBox("조건부 프롬프트")
         gl = QVBoxLayout(group)
-        
+
         self.cond_prompt_check = QCheckBox("조건부 프롬프트 활성화")
         self.cond_prevent_dupe_check = QCheckBox(
             "중복 태그 방지 (이미 있으면 추가 안 함)"
         )
         self.cond_prevent_dupe_check.setChecked(True)
         self.cond_prevent_dupe_check.setStyleSheet("color: #FFD700;")
-        
-        self.cond_prompt_input = QTextEdit()
-        self.cond_prompt_input.setPlaceholderText(
-            "문법: (조건):/위치+=태그\n예시: (night):/r+=moon, stars"
-        )
-        self.cond_prompt_input.setFixedHeight(80)
-        
+
+        from widgets.condition_block_editor import ConditionBlockEditor
+        self.cond_block_editor = ConditionBlockEditor()
+
         gl.addWidget(self.cond_prompt_check)
         gl.addWidget(self.cond_prevent_dupe_check)
-        gl.addWidget(self.cond_prompt_input)
-        l.addWidget(group)
-        
-        # 조건부 네거티브
-        group2 = QGroupBox("조건부 네거티브")
-        gl2 = QVBoxLayout(group2)
-        
-        self.cond_neg_check = QCheckBox("조건부 네거티브 활성화")
-        self.cond_neg_input = QTextEdit()
-        self.cond_neg_input.setPlaceholderText("문법: (조건)+=네거티브태그")
-        self.cond_neg_input.setFixedHeight(60)
-        
-        gl2.addWidget(self.cond_neg_check)
-        gl2.addWidget(self.cond_neg_input)
-        l.addWidget(group2)
-        
+        gl.addWidget(self.cond_block_editor, 1)
+        l.addWidget(group, 1)
+
         # 저장 버튼
         self.btn_save_logic = QPushButton("💾 설정 저장")
         self.btn_save_logic.clicked.connect(self.save_all_settings)
         l.addWidget(self.btn_save_logic)
-        
+
         return w
 
     def _create_autocomplete_page(self):

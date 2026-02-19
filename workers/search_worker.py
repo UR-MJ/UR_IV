@@ -126,7 +126,7 @@ class PandasSearchWorker(QThread):
         dfs = []
         
         for rating in self.selected_ratings:
-            file_name = f"danbooru_2025_{rating}.parquet"
+            file_name = f"danbooru_2026_{rating}.parquet"
             path = os.path.join(self.parquet_dir, file_name)
             
             if os.path.exists(path):

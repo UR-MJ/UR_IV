@@ -110,48 +110,42 @@ class GeneratorBase(QMainWindow):
 def _apply_removal_filters(self, tags_list):
         """제거 옵션 적용 (공통)"""
         result = []
-        
-        # 메타 태그 목록
-        meta_tags = {
-            'original', 'highres', 'absurdres', 'incredibly_absurdres', 
-            'huge_filesize', 'commentary', 'commentary_request',
-            'translated', 'translation_request', 'check_translation',
-            'partial_commentary', 'english_commentary', 'japanese_commentary',
-            'bad_id', 'bad_pixiv_id', 'bad_twitter_id'
-        }
-        
+
         for tag in tags_list:
             tag_lower = tag.lower().strip()
-            
+
             # 작가명 제거
             if self.chk_remove_artist.isChecked():
                 if tag_lower in self.tag_classifier.artists:
                     continue
                 if tag_lower.startswith('artist:'):
                     continue
-            
+
             # 작품명 제거
             if self.chk_remove_copyright.isChecked():
                 if tag_lower in self.tag_classifier.copyrights:
                     continue
-            
-            # 메타 제거 (original 포함!)
+
+            # 캐릭터 제거
+            if hasattr(self, 'chk_remove_character') and self.chk_remove_character.isChecked():
+                if tag_lower in self.tag_classifier.characters:
+                    continue
+
+            # 메타 제거 (parquet 기반)
             if self.chk_remove_meta.isChecked():
-                if tag_lower in meta_tags:
+                if self.tag_classifier.is_meta_tag(tag):
                     continue
-                if self.tag_classifier.classify_tag(tag) == "art_style":
-                    continue
-            
+
             # 검열 제거
             if hasattr(self, 'chk_remove_censorship') and self.chk_remove_censorship.isChecked():
                 if self.tag_classifier.is_censorship_tag(tag):
                     continue
-            
+
             # 텍스트 제거
             if hasattr(self, 'chk_remove_text') and self.chk_remove_text.isChecked():
                 if self.tag_classifier.is_text_tag(tag):
                     continue
-            
+
             result.append(tag)
-        
+
         return result        

@@ -104,15 +104,15 @@ class SettingsMixin:
             
             "remove_artist": self.chk_remove_artist.isChecked(),
             "remove_copyright": self.chk_remove_copyright.isChecked(),
+            "remove_character": self.chk_remove_character.isChecked(),
             "remove_meta": self.chk_remove_meta.isChecked(),
-            
+
             "auto_char_features": self.chk_auto_char_features.isChecked() if hasattr(self, 'chk_auto_char_features') else False,
+            "char_feature_mode": self.combo_char_feature_mode.currentIndex() if hasattr(self, 'combo_char_feature_mode') else 0,
 
             "cond_prompt_enabled": self.cond_prompt_check.isChecked(),
-            "cond_prompt_rules": self.cond_prompt_input.toPlainText(),
+            "cond_rules_json": self.cond_block_editor.get_rules_json(),
             "cond_prevent_dupe": self.cond_prevent_dupe_check.isChecked(),
-            "cond_neg_enabled": self.cond_neg_check.isChecked(),
-            "cond_neg_rules": self.cond_neg_input.toPlainText(),
             
             "base_prefix_prompt": self.base_prefix_prompt,
             "base_suffix_prompt": self.base_suffix_prompt,
@@ -120,9 +120,10 @@ class SettingsMixin:
             
             "remove_artist": self.chk_remove_artist.isChecked(),
             "remove_copyright": self.chk_remove_copyright.isChecked(),
+            "remove_character": self.chk_remove_character.isChecked(),
             "remove_meta": self.chk_remove_meta.isChecked(),
-            "remove_censorship": self.chk_remove_censorship.isChecked(),  # ← 추가!
-            "remove_text": self.chk_remove_text.isChecked(),  # ← 추가!
+            "remove_censorship": self.chk_remove_censorship.isChecked(),
+            "remove_text": self.chk_remove_text.isChecked(),
             
             # 웹 설정 추가!
             "web_home_url": self.web_tab.home_url if hasattr(self.web_tab, 'home_url') else "",
@@ -281,12 +282,10 @@ class SettingsMixin:
             # 제거 옵션
             self.chk_remove_artist.setChecked(settings.get("remove_artist", False))
             self.chk_remove_copyright.setChecked(settings.get("remove_copyright", False))
+            self.chk_remove_character.setChecked(settings.get("remove_character", False))
             self.chk_remove_meta.setChecked(settings.get("remove_meta", False))
-            self.chk_remove_artist.setChecked(settings.get("remove_artist", False))
-            self.chk_remove_copyright.setChecked(settings.get("remove_copyright", False))
-            self.chk_remove_meta.setChecked(settings.get("remove_meta", False))
-            self.chk_remove_censorship.setChecked(settings.get("remove_censorship", False))  # ← 추가!
-            self.chk_remove_text.setChecked(settings.get("remove_text", False))  # ← 추가!
+            self.chk_remove_censorship.setChecked(settings.get("remove_censorship", False))
+            self.chk_remove_text.setChecked(settings.get("remove_text", False))
 
             # 웹 설정 불러오기
             web_home = settings.get("web_home_url", "")
@@ -296,13 +295,32 @@ class SettingsMixin:
             # 캐릭터 특징 자동 추가
             if hasattr(self, 'chk_auto_char_features'):
                 self.chk_auto_char_features.setChecked(settings.get("auto_char_features", False))
+            if hasattr(self, 'combo_char_feature_mode'):
+                self.combo_char_feature_mode.setCurrentIndex(settings.get("char_feature_mode", 0))
 
             # 조건부 프롬프트
             self.cond_prompt_check.setChecked(settings.get("cond_prompt_enabled", False))
-            self.cond_prompt_input.setPlainText(settings.get("cond_prompt_rules", ""))
             self.cond_prevent_dupe_check.setChecked(settings.get("cond_prevent_dupe", True))
-            self.cond_neg_check.setChecked(settings.get("cond_neg_enabled", False))
-            self.cond_neg_input.setPlainText(settings.get("cond_neg_rules", ""))
+
+            # 새 JSON 포맷 우선, 없으면 기존 텍스트 포맷 마이그레이션
+            cond_json = settings.get("cond_rules_json", "")
+            if cond_json:
+                self.cond_block_editor.set_rules_json(cond_json)
+            else:
+                old_pos = settings.get("cond_prompt_rules", "")
+                old_neg = settings.get("cond_neg_rules", "")
+                if old_pos or old_neg:
+                    from utils.condition_block import migrate_old_rules
+                    rules = []
+                    if old_pos:
+                        rules.extend(migrate_old_rules(old_pos))
+                    if old_neg:
+                        neg_rules = migrate_old_rules(old_neg)
+                        for r in neg_rules:
+                            r.location = "neg"
+                        rules.extend(neg_rules)
+                    if rules:
+                        self.cond_block_editor.set_rules(rules)
             
             # 베이스 프롬프트
             self.base_prefix_prompt = settings.get("base_prefix_prompt", "")

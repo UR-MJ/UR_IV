@@ -254,9 +254,7 @@ class UISetupMixin:
         # 설정 위젯 링크 (조건부 프롬프트 등)
         self.cond_prompt_check = self.settings_tab.cond_prompt_check
         self.cond_prevent_dupe_check = self.settings_tab.cond_prevent_dupe_check
-        self.cond_prompt_input = self.settings_tab.cond_prompt_input
-        self.cond_neg_check = self.settings_tab.cond_neg_check
-        self.cond_neg_input = self.settings_tab.cond_neg_input
+        self.cond_block_editor = self.settings_tab.cond_block_editor
         
         # 검색 결과 디스플레이 링크
         self.exclude_artist_checkbox = QCheckBox() 
@@ -430,10 +428,11 @@ class UISetupMixin:
 
         self.chk_remove_artist = QCheckBox("작가명 제거")
         self.chk_remove_copyright = QCheckBox("작품명 제거")
+        self.chk_remove_character = QCheckBox("캐릭터 제거")
         self.chk_remove_meta = QCheckBox("메타 제거")
 
         for chk in [self.chk_remove_artist, self.chk_remove_copyright,
-                    self.chk_remove_meta]:
+                    self.chk_remove_character, self.chk_remove_meta]:
             chk.setStyleSheet("font-weight: bold; color: #DDD;")
             remove_opts_layout.addWidget(chk)
         remove_opts_layout.addStretch()
@@ -470,6 +469,16 @@ class UISetupMixin:
             "자동화 중 캐릭터 불러올 때 특징 태그 자동 삽입"
         )
         char_header.addWidget(self.chk_auto_char_features)
+
+        self.combo_char_feature_mode = QComboBox()
+        self.combo_char_feature_mode.addItems(["핵심만", "핵심+의상"])
+        self.combo_char_feature_mode.setFixedSize(90, 24)
+        self.combo_char_feature_mode.setStyleSheet(
+            "QComboBox { background-color: #2A2A2A; color: #DDD; "
+            "border: 1px solid #444; border-radius: 4px; font-size: 11px; padding: 1px 4px; }"
+        )
+        self.combo_char_feature_mode.setToolTip("핵심만: 눈색/머리색 등\n핵심+의상: 의상/소품 포함")
+        char_header.addWidget(self.combo_char_feature_mode)
 
         self.btn_char_preset = QPushButton("특징 프리셋")
         self.btn_char_preset.setFixedHeight(28)
