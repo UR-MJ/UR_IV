@@ -470,7 +470,7 @@ class UISetupMixin:
         )
         char_header.addWidget(self.chk_auto_char_features)
 
-        self.combo_char_feature_mode = QComboBox()
+        self.combo_char_feature_mode = NoScrollComboBox()
         self.combo_char_feature_mode.addItems(["핵심만", "핵심+의상"])
         self.combo_char_feature_mode.setFixedSize(90, 24)
         self.combo_char_feature_mode.setStyleSheet(
