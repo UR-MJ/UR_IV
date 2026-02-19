@@ -106,6 +106,8 @@ class SettingsMixin:
             "remove_copyright": self.chk_remove_copyright.isChecked(),
             "remove_character": self.chk_remove_character.isChecked(),
             "remove_meta": self.chk_remove_meta.isChecked(),
+            "remove_censorship": self.chk_remove_censorship.isChecked(),
+            "remove_text": self.chk_remove_text.isChecked(),
 
             "auto_char_features": self.chk_auto_char_features.isChecked() if hasattr(self, 'chk_auto_char_features') else False,
             "char_feature_mode": self.combo_char_feature_mode.currentIndex() if hasattr(self, 'combo_char_feature_mode') else 0,
@@ -113,17 +115,10 @@ class SettingsMixin:
             "cond_prompt_enabled": self.cond_prompt_check.isChecked(),
             "cond_rules_json": self.cond_block_editor.get_rules_json(),
             "cond_prevent_dupe": self.cond_prevent_dupe_check.isChecked(),
-            
+
             "base_prefix_prompt": self.base_prefix_prompt,
             "base_suffix_prompt": self.base_suffix_prompt,
             "base_neg_prompt": self.base_neg_prompt,
-            
-            "remove_artist": self.chk_remove_artist.isChecked(),
-            "remove_copyright": self.chk_remove_copyright.isChecked(),
-            "remove_character": self.chk_remove_character.isChecked(),
-            "remove_meta": self.chk_remove_meta.isChecked(),
-            "remove_censorship": self.chk_remove_censorship.isChecked(),
-            "remove_text": self.chk_remove_text.isChecked(),
             
             # 웹 설정 추가!
             "web_home_url": self.web_tab.home_url if hasattr(self.web_tab, 'home_url') else "",

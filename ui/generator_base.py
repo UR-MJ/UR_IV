@@ -107,7 +107,8 @@ class GeneratorBase(QMainWindow):
                 100, 
                 lambda w=editor: self._auto_adjust_text_edit_height(w)
             )
-def _apply_removal_filters(self, tags_list):
+
+    def _apply_removal_filters(self, tags_list):
         """제거 옵션 적용 (공통)"""
         result = []
 

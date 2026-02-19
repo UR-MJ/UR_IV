@@ -416,11 +416,11 @@ class PromptHandlingMixin:
             self._apply_condition_result(result)
 
     def _collect_all_tags(self) -> set[str]:
-        """모든 위치의 태그를 정규화하여 수집"""
+        """모든 위치의 태그를 정규화하여 수집 (네거티브 포함)"""
         all_tags: set[str] = set()
         for field in [self.character_input, self.copyright_input,
                       self.main_prompt_text, self.prefix_prompt_text,
-                      self.suffix_prompt_text]:
+                      self.suffix_prompt_text, self.neg_prompt_text]:
             text = field.text() if hasattr(field, 'text') else field.toPlainText()
             for t in text.split(","):
                 n = t.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
