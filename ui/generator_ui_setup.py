@@ -176,20 +176,22 @@ class UISetupMixin:
         from tabs.backend_ui_tab import BackendUITab
 
         center_tabs = QTabWidget()
+        center_tabs.setUsesScrollButtons(True)
+        center_tabs.tabBar().setExpanding(False)
         center_tabs.setStyleSheet("""
-            QTabWidget::pane { 
-                border: none; background-color: #121212; 
+            QTabWidget::pane {
+                border: none; background-color: #121212;
             }
-            QTabBar::tab { 
-                background: #1E1E1E; color: #888; 
-                padding: 10px 20px; 
-                border-top-left-radius: 8px; 
-                border-top-right-radius: 8px; 
-                margin-right: 2px; font-weight: bold; 
+            QTabBar::tab {
+                background: #1E1E1E; color: #888;
+                padding: 8px 12px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                margin-right: 2px; font-weight: bold;
             }
-            QTabBar::tab:selected { 
-                background: #2A2A2A; color: #E0E0E0; 
-                border-bottom: 2px solid #5865F2; 
+            QTabBar::tab:selected {
+                background: #2A2A2A; color: #E0E0E0;
+                border-bottom: 2px solid #5865F2;
             }
         """)
         
@@ -422,18 +424,18 @@ class UISetupMixin:
         util_btns.addWidget(self.btn_ab_test)
         layout.addLayout(util_btns)
 
-        # 제거 옵션 버튼
+        # 제거 옵션 버튼 (3+3 배치)
+        _chk_style = "font-weight: bold; color: #DDD; font-size: 11px;"
         remove_opts_layout = QHBoxLayout()
         remove_opts_layout.setContentsMargins(0, 5, 0, 0)
 
         self.chk_remove_artist = QCheckBox("작가명 제거")
         self.chk_remove_copyright = QCheckBox("작품명 제거")
         self.chk_remove_character = QCheckBox("캐릭터 제거")
-        self.chk_remove_meta = QCheckBox("메타 제거")
 
         for chk in [self.chk_remove_artist, self.chk_remove_copyright,
-                    self.chk_remove_character, self.chk_remove_meta]:
-            chk.setStyleSheet("font-weight: bold; color: #DDD;")
+                    self.chk_remove_character]:
+            chk.setStyleSheet(_chk_style)
             remove_opts_layout.addWidget(chk)
         remove_opts_layout.addStretch()
         layout.addLayout(remove_opts_layout)
@@ -442,13 +444,14 @@ class UISetupMixin:
         remove_opts_layout2 = QHBoxLayout()
         remove_opts_layout2.setContentsMargins(0, 0, 0, 5)
 
+        self.chk_remove_meta = QCheckBox("메타 제거")
         self.chk_remove_censorship = QCheckBox("검열 제거")
         self.chk_remove_text = QCheckBox("텍스트 제거")
 
-        for chk in [self.chk_remove_censorship, self.chk_remove_text]:
-            chk.setStyleSheet("font-weight: bold; color: #DDD;")
+        for chk in [self.chk_remove_meta, self.chk_remove_censorship,
+                    self.chk_remove_text]:
+            chk.setStyleSheet(_chk_style)
             remove_opts_layout2.addWidget(chk)
-        
         remove_opts_layout2.addStretch()
         layout.addLayout(remove_opts_layout2)
 
@@ -728,12 +731,12 @@ class UISetupMixin:
         res_layout = QHBoxLayout()
         self.width_input = QLineEdit("1024")
         self.height_input = QLineEdit("1024")
-        btn_swap_res = QPushButton("🔄")
+        btn_swap_res = QPushButton("↔")
         btn_swap_res.setFixedSize(36, 32)
         btn_swap_res.setToolTip("W ↔ H 교환")
         btn_swap_res.setStyleSheet(
             "QPushButton { background-color: #5865F2; color: white; border: none; "
-            "border-radius: 4px; font-size: 18px; }"
+            "border-radius: 4px; font-size: 16px; font-weight: bold; }"
             "QPushButton:hover { background-color: #6975F3; }"
         )
         btn_swap_res.clicked.connect(self._swap_resolution)

@@ -68,6 +68,7 @@ class ConditionBlockRow(QFrame):
 
     def _init_ui(self):
         self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setMaximumWidth(720)
         self.setStyleSheet(
             "ConditionBlockRow { background-color: #252525; "
             "border: 1px solid #3A3A3A; border-radius: 6px; }"
