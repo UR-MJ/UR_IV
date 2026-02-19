@@ -165,8 +165,8 @@ class LoraActivePanel(QWidget):
             row = QWidget()
             row.setObjectName("loraRow")
             row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(6, 4, 6, 4)
-            row_layout.setSpacing(4)
+            row_layout.setContentsMargins(6, 6, 6, 6)
+            row_layout.setSpacing(5)
 
             # 체크박스 (이름 — 긴 이름은 tooltip으로 전체 표시)
             chk = QCheckBox(entry['name'])
@@ -215,13 +215,14 @@ class LoraActivePanel(QWidget):
 
             # 잠금 버튼 — 고정 크기
             btn_lock = QPushButton("잠금" if locked else "해제")
-            btn_lock.setFixedSize(52, 26)
+            btn_lock.setFixedSize(58, 28)
             btn_lock.setToolTip("가중치 잠금/해제")
             btn_lock.setCheckable(True)
             btn_lock.setChecked(locked)
             btn_lock.setStyleSheet(
                 "QPushButton { border: 1px solid #555; border-radius: 4px; "
-                "font-size: 12px; background-color: #333; color: #AAA; }"
+                "font-size: 11px; background-color: #333; color: #AAA; "
+                "padding: 0px 4px; }"
                 "QPushButton:checked { background-color: #d35400; color: white; "
                 "border: 1px solid #e67e22; }"
             )
@@ -233,13 +234,14 @@ class LoraActivePanel(QWidget):
             )
             row_layout.addWidget(btn_lock)
 
-            # 삭제 버튼 — 고정 크기 (잠금과 동일)
+            # 삭제 버튼 — 고정 크기
             btn_del = QPushButton("삭제")
-            btn_del.setFixedSize(46, 26)
+            btn_del.setFixedSize(52, 28)
             btn_del.setToolTip("LoRA 제거")
             btn_del.setStyleSheet(
                 "QPushButton { border: 1px solid #555; border-radius: 4px; "
-                "font-size: 12px; background-color: #333; color: #AAA; }"
+                "font-size: 11px; background-color: #333; color: #AAA; "
+                "padding: 0px 4px; }"
                 "QPushButton:hover { background-color: #C0392B; color: white; "
                 "border-color: #E74C3C; }"
             )
