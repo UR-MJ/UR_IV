@@ -12,9 +12,10 @@ from io import BytesIO
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit,
-    QLineEdit, QGroupBox, QComboBox, QFileDialog, QMessageBox,
+    QLineEdit, QGroupBox, QFileDialog, QMessageBox,
     QFrame, QSlider, QCheckBox, QScrollArea
 )
+from widgets.common_widgets import NoScrollComboBox
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRect
 from PyQt6.QtGui import (
     QPixmap, QFont, QImage, QPainter, QPen, QColor, QBrush, QCursor
@@ -241,12 +242,12 @@ class InpaintTab(QWidget):
 
         btn_row = QHBoxLayout()
         self.btn_open = QPushButton("📂 열기")
-        self.btn_open.setFixedHeight(35)
+        self.btn_open.setFixedHeight(38)
         self.btn_open.clicked.connect(self._open_image)
         btn_row.addWidget(self.btn_open)
 
         self.btn_from_t2i = QPushButton("📋 T2I 결과")
-        self.btn_from_t2i.setFixedHeight(35)
+        self.btn_from_t2i.setFixedHeight(38)
         self.btn_from_t2i.clicked.connect(self._paste_from_t2i)
         btn_row.addWidget(self.btn_from_t2i)
 
@@ -262,13 +263,13 @@ class InpaintTab(QWidget):
         self.btn_brush.setCheckable(True)
         self.btn_brush.setChecked(True)
         self.btn_brush.clicked.connect(lambda: self._set_tool(False))
-        self.btn_brush.setFixedHeight(35)
+        self.btn_brush.setFixedHeight(38)
         tool_row.addWidget(self.btn_brush)
 
         self.btn_eraser = QPushButton("🧹 지우개")
         self.btn_eraser.setCheckable(True)
         self.btn_eraser.clicked.connect(lambda: self._set_tool(True))
-        self.btn_eraser.setFixedHeight(35)
+        self.btn_eraser.setFixedHeight(38)
         tool_row.addWidget(self.btn_eraser)
         brush_layout.addLayout(tool_row)
 
@@ -304,13 +305,13 @@ class InpaintTab(QWidget):
         prompt_group = QGroupBox("프롬프트")
         prompt_layout = QVBoxLayout(prompt_group)
 
-        prompt_layout.addWidget(QLabel("Prompt:"))
+        prompt_layout.addWidget(QLabel("프롬프트:"))
         self.prompt_text = QTextEdit()
         self.prompt_text.setFixedHeight(50)
         self.prompt_text.setPlaceholderText("인페인트할 내용")
         prompt_layout.addWidget(self.prompt_text)
 
-        prompt_layout.addWidget(QLabel("Negative:"))
+        prompt_layout.addWidget(QLabel("네거티브:"))
         self.neg_prompt_text = QTextEdit()
         self.neg_prompt_text.setFixedHeight(35)
         prompt_layout.addWidget(self.neg_prompt_text)
@@ -321,50 +322,50 @@ class InpaintTab(QWidget):
         settings_group = QGroupBox("설정")
         settings_layout = QVBoxLayout(settings_group)
 
-        # Denoising
+        # 디노이징
         d_row = QHBoxLayout()
-        d_row.addWidget(QLabel("Denoise:"))
+        d_row.addWidget(QLabel("디노이징:"))
         self.denoise_input = QLineEdit("0.75")
         self.denoise_input.setFixedWidth(60)
         d_row.addWidget(self.denoise_input)
         d_row.addStretch()
         settings_layout.addLayout(d_row)
 
-        # Inpaint Fill
+        # 인페인트 채우기
         fill_row = QHBoxLayout()
-        fill_row.addWidget(QLabel("Fill:"))
-        self.fill_combo = QComboBox()
-        self.fill_combo.addItems(["fill", "original", "latent noise", "latent nothing"])
+        fill_row.addWidget(QLabel("채우기:"))
+        self.fill_combo = NoScrollComboBox()
+        self.fill_combo.addItems(["채우기", "원본", "잠재 노이즈", "잠재 빈값"])
         self.fill_combo.setCurrentIndex(1)
         fill_row.addWidget(self.fill_combo)
         settings_layout.addLayout(fill_row)
 
-        # Mask Blur
+        # 마스크 블러
         blur_row = QHBoxLayout()
-        blur_row.addWidget(QLabel("Mask blur:"))
+        blur_row.addWidget(QLabel("마스크 블러:"))
         self.mask_blur_input = QLineEdit("4")
         self.mask_blur_input.setFixedWidth(40)
         blur_row.addWidget(self.mask_blur_input)
         blur_row.addStretch()
         settings_layout.addLayout(blur_row)
 
-        # Inpaint Full Res
-        self.chk_full_res = QCheckBox("Inpaint at full resolution")
+        # 원본 해상도 인페인트
+        self.chk_full_res = QCheckBox("원본 해상도로 인페인트")
         self.chk_full_res.setChecked(True)
         settings_layout.addWidget(self.chk_full_res)
 
-        # Full Res Padding
+        # 패딩
         pad_row = QHBoxLayout()
-        pad_row.addWidget(QLabel("Padding:"))
+        pad_row.addWidget(QLabel("패딩:"))
         self.padding_input = QLineEdit("32")
         self.padding_input.setFixedWidth(50)
         pad_row.addWidget(self.padding_input)
         pad_row.addStretch()
         settings_layout.addLayout(pad_row)
 
-        # Steps/CFG/Seed
+        # 스텝/CFG/시드
         param_row = QHBoxLayout()
-        param_row.addWidget(QLabel("Steps:"))
+        param_row.addWidget(QLabel("스텝:"))
         self.steps_input = QLineEdit("20")
         self.steps_input.setFixedWidth(40)
         param_row.addWidget(self.steps_input)
@@ -375,7 +376,7 @@ class InpaintTab(QWidget):
         settings_layout.addLayout(param_row)
 
         seed_row = QHBoxLayout()
-        seed_row.addWidget(QLabel("Seed:"))
+        seed_row.addWidget(QLabel("시드:"))
         self.seed_input = QLineEdit("-1")
         self.seed_input.setFixedWidth(80)
         seed_row.addWidget(self.seed_input)
@@ -385,7 +386,7 @@ class InpaintTab(QWidget):
         left_layout.addWidget(settings_group)
 
         # 생성 버튼
-        self.btn_generate = QPushButton("🎨 Inpaint 생성")
+        self.btn_generate = QPushButton("🎨 인페인트 생성")
         self.btn_generate.setFixedHeight(50)
         self.btn_generate.setStyleSheet("""
             QPushButton {
@@ -426,7 +427,7 @@ class InpaintTab(QWidget):
         result_title.setStyleSheet("color: #E0E0E0;")
         right_layout.addWidget(result_title)
 
-        self.result_label = QLabel("Inpaint 결과")
+        self.result_label = QLabel("인페인트 결과")
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.result_label.setStyleSheet(
             "background-color: #1A1A1A; border-radius: 8px; color: #777;"
@@ -600,7 +601,7 @@ class InpaintTab(QWidget):
 
         self.btn_generate.setText("⏳ 생성 중...")
         self.btn_generate.setEnabled(False)
-        self.result_label.setText("🎨 Inpaint 생성 중...")
+        self.result_label.setText("🎨 인페인트 생성 중...")
 
         self.gen_worker = Img2ImgFlowWorker(model_name, payload)
         self.gen_worker.finished.connect(self._on_generation_finished)
@@ -633,7 +634,7 @@ class InpaintTab(QWidget):
                 self.main_window.show_status("📋 Inpaint 설정이 대기열에 추가되었습니다.")
 
     def _on_generation_finished(self, result, gen_info):
-        self.btn_generate.setText("🎨 Inpaint 생성")
+        self.btn_generate.setText("🎨 인페인트 생성")
         self.btn_generate.setEnabled(True)
 
         if isinstance(result, bytes):
