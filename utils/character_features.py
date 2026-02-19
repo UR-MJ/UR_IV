@@ -117,6 +117,7 @@ class CharacterFeatureLookup:
                 print(f"⚠️ characterization.json 로드 실패: {e}")
 
         # 2. danbooru_character.py 로드 (보충 — 의상 포함 전체)
+        self._full_norm_to_key: dict[str, str] = {}  # normalized → original key
         py_path = os.path.join(base, "danbooru_character.py")
         if os.path.exists(py_path):
             try:
@@ -125,11 +126,25 @@ class CharacterFeatureLookup:
                     exec(f.read(), ns)
                 self._full_dict = ns.get("character_dict", {})
                 self._full_count = ns.get("character_dict_count", {})
+                # 정규화 인덱스 빌드 (O(1) 조회용)
+                for k in self._full_dict:
+                    norm = k.strip().lower().replace("_", " ")
+                    self._full_norm_to_key[norm] = k
                 print(f"✅ danbooru_character.py: {len(self._full_dict)}개 캐릭터 (전체 특징)")
             except Exception as e:
                 print(f"⚠️ danbooru_character.py 로드 실패: {e}")
 
-        # 3. 인덱스 빌드 (양쪽 소스 병합)
+        # 3. 통합 카운트 인덱스 (정규화 키 → count)
+        self._count_index: dict[str, int] = {}
+        for key, count in self._post_count.items():
+            self._count_index[key] = count
+        if self._full_count:
+            for k, v in self._full_count.items():
+                norm_k = k.strip().lower().replace("_", " ")
+                if norm_k not in self._count_index:
+                    self._count_index[norm_k] = v
+
+        # 4. 이름 인덱스 빌드 (양쪽 소스 병합)
         all_keys = set()
         if self._core_dict:
             all_keys.update(self._core_dict.keys())
@@ -159,17 +174,15 @@ class CharacterFeatureLookup:
         return None
 
     def _get_full_features_for(self, key: str) -> str:
-        """danbooru_character.py에서 전체 특징 문자열 가져오기"""
+        """danbooru_character.py에서 전체 특징 문자열 가져오기 (O(1))"""
         if not self._full_dict:
             return ""
         # 직접 키 매칭
         if key in self._full_dict:
             return self._full_dict[key]
-        # 정규화 매칭
-        for k, v in self._full_dict.items():
-            if k.strip().lower().replace("_", " ") == key:
-                return v
-        return ""
+        # 정규화 인덱스로 O(1) 조회
+        orig = self._full_norm_to_key.get(key, "")
+        return self._full_dict.get(orig, "") if orig else ""
 
     def lookup_core(self, name: str) -> tuple[str, int] | None:
         """핵심 특징 조회 (characterization.json core + danbooru 비의상 태그)"""
@@ -240,12 +253,7 @@ class CharacterFeatureLookup:
         # full에서 가져오기
         full_str = self._get_full_features_for(key)
         if full_str:
-            count = self._post_count.get(key, 0)
-            if not count and self._full_count:
-                for k, v in self._full_count.items():
-                    if k.strip().lower().replace("_", " ") == key:
-                        count = v
-                        break
+            count = self._count_index.get(key, 0)
             return (full_str, count)
 
         # core만 있는 경우
@@ -306,30 +314,41 @@ class CharacterFeatureLookup:
         return self._gender.get(key) if key else None
 
     def search(self, query: str, limit: int = 50) -> list[tuple[str, str, int]]:
-        """캐릭터 이름 검색. Returns: [(원본키, 특징문자열, 게시물수), ...]"""
+        """캐릭터 이름 검색 (2단계 최적화).
+        Phase 1: 키 매칭 + 우선순위/카운트만 (O(1) 카운트 조회)
+        Phase 2: 상위 limit개만 feature lookup (무거운 연산 최소화)
+        """
         self._ensure_loaded()
         if not query.strip():
             return []
 
         q = self._normalize(query)
-        results: list[tuple[str, str, int, int]] = []
 
+        # Phase 1: 빠른 키 매칭 (feature lookup 없이)
+        candidates: list[tuple[str, str, int, int]] = []  # (orig_key, norm_key, count, priority)
         for norm_key, orig_key in self._norm_index.items():
-            if q in norm_key:
-                # lookup으로 특징 가져오기
-                result = self.lookup(orig_key)
-                features = result[0] if result else ""
-                count = result[1] if result else self._post_count.get(orig_key, 0)
-                if norm_key == q:
-                    priority = 0
-                elif norm_key.startswith(q):
-                    priority = 1
-                else:
-                    priority = 2
-                results.append((orig_key, features, count, priority))
+            if q not in norm_key:
+                continue
+            count = self._count_index.get(norm_key, 0)
+            if norm_key == q:
+                priority = 0
+            elif norm_key.startswith(q):
+                priority = 1
+            else:
+                priority = 2
+            candidates.append((orig_key, norm_key, count, priority))
 
-        results.sort(key=lambda x: (x[3], -x[2]))
-        return [(r[0], r[1], r[2]) for r in results[:limit]]
+        # Phase 2: 정렬 후 상위 limit개만 feature lookup
+        candidates.sort(key=lambda x: (x[3], -x[2]))
+        results: list[tuple[str, str, int]] = []
+        for orig_key, _, count, _ in candidates[:limit]:
+            result = self.lookup(orig_key)
+            features = result[0] if result else ""
+            if result and result[1]:
+                count = result[1]
+            results.append((orig_key, features, count))
+
+        return results
 
     def all_keys(self) -> list[str]:
         """모든 캐릭터 키 반환"""

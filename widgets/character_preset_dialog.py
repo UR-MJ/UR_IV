@@ -395,6 +395,12 @@ class CharacterPresetDialog(QDialog):
             self._result_label.setText("검색 결과")
             return
 
+        # 최소 2글자 이상 (1글자 검색 시 수천 개 매칭 → 프리징 방지)
+        if len(query) < 2:
+            self._result_list.clear()
+            self._result_label.setText("2글자 이상 입력하세요")
+            return
+
         lookup = self._get_lookup()
         results = lookup.search(query, limit=100)
 
