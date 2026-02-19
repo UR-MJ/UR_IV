@@ -284,7 +284,7 @@ class GeneratorMainUI(
             'general': self.main_prompt_text.toPlainText(),
             'character': self.character_input.text(),
             'copyright': self.copyright_input.text(),
-            'artist': self.artist_input.text(),
+            'artist': self.artist_input.toPlainText(),
             'person_count': self.char_count_input.text(),
         }
         
@@ -321,7 +321,7 @@ class GeneratorMainUI(
                 self.copyright_input.setText(payload['copyright'])
             
             if payload.get('artist') and not self.btn_lock_artist.isChecked():
-                self.artist_input.setText(payload['artist'])
+                self.artist_input.setPlainText(payload['artist'])
             
             if payload.get('general'):
                 self.main_prompt_text.setPlainText(payload['general'])

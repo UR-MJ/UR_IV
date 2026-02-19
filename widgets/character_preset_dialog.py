@@ -94,8 +94,8 @@ class CharacterPresetDialog(QDialog):
                  current_character: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("캐릭터 특징 프리셋")
-        self.setMinimumSize(950, 750)
-        self.resize(1050, 850)
+        self.setMinimumSize(1100, 800)
+        self.resize(1250, 900)
         self.setStyleSheet(_STYLE)
 
         self._existing_tags = existing_tags or set()
@@ -305,7 +305,7 @@ class CharacterPresetDialog(QDialog):
         right_layout.addLayout(preset_row)
 
         splitter.addWidget(right)
-        splitter.setSizes([280, 650])
+        splitter.setSizes([350, 850])
         root.addWidget(splitter, 1)
 
         # 캐릭터 조건부 프롬프트

@@ -1,11 +1,11 @@
 # widgets/similar_group_dialog.py
-"""유사 이미지 그룹핑 다이얼로그"""
+"""유사 이미지 그룹핑 다이얼로그 — dHash + EXIF 메타데이터 비교"""
 import os
 import cv2
 import numpy as np
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QWidget, QProgressBar, QSlider
+    QScrollArea, QWidget, QProgressBar, QSlider, QCheckBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap
@@ -29,14 +29,59 @@ def _hamming(h1: int, h2: int) -> int:
     return bin(h1 ^ h2).count('1')
 
 
-class HashWorker(QThread):
-    """이미지 해시 계산 워커"""
-    progress = pyqtSignal(int, int)
-    finished = pyqtSignal(list)  # [(path, hash), ...]
+def _extract_prompt(image_path: str) -> str:
+    """이미지에서 프롬프트 텍스트 추출 (PNG parameters / EXIF)"""
+    try:
+        from PIL import Image
+        img = Image.open(image_path)
+        # PNG text chunks
+        if hasattr(img, 'text'):
+            params = img.text.get('parameters', '')
+            if params:
+                # 첫 줄이 프롬프트 (Negative prompt: 앞까지)
+                lines = params.split('\n')
+                prompt_parts = []
+                for line in lines:
+                    if line.startswith('Negative prompt:') or line.startswith('Steps:'):
+                        break
+                    prompt_parts.append(line)
+                return ' '.join(prompt_parts).strip()
+        # EXIF UserComment
+        exif = img.getexif()
+        if exif:
+            user_comment = exif.get(0x9286, '')  # UserComment tag
+            if isinstance(user_comment, bytes):
+                user_comment = user_comment.decode('utf-8', errors='ignore')
+            if user_comment:
+                return user_comment[:500]
+    except Exception:
+        pass
+    return ''
 
-    def __init__(self, paths: list[str]):
+
+def _prompt_similarity(p1: str, p2: str) -> float:
+    """두 프롬프트의 Jaccard 유사도 (0~1)"""
+    if not p1 or not p2:
+        return 0.0
+    # 태그 단위 분리 (쉼표 + 공백)
+    tokens1 = set(t.strip().lower() for t in p1.replace(',', ' ').split() if t.strip())
+    tokens2 = set(t.strip().lower() for t in p2.replace(',', ' ').split() if t.strip())
+    if not tokens1 or not tokens2:
+        return 0.0
+    intersection = tokens1 & tokens2
+    union = tokens1 | tokens2
+    return len(intersection) / len(union)
+
+
+class HashWorker(QThread):
+    """이미지 해시 + 메타데이터 계산 워커"""
+    progress = pyqtSignal(int, int)
+    finished = pyqtSignal(list)  # [(path, hash, prompt), ...]
+
+    def __init__(self, paths: list[str], extract_meta: bool = False):
         super().__init__()
         self._paths = paths
+        self._extract_meta = extract_meta
 
     def run(self):
         results = []
@@ -46,7 +91,8 @@ class HashWorker(QThread):
                 self.progress.emit(i, total)
             h = _dhash(path)
             if h is not None:
-                results.append((path, h))
+                prompt = _extract_prompt(path) if self._extract_meta else ''
+                results.append((path, h, prompt))
         self.finished.emit(results)
 
 
@@ -62,7 +108,7 @@ QProgressBar::chunk { background-color: #5865F2; border-radius: 3px; }
 
 
 class SimilarGroupDialog(QDialog):
-    """유사 이미지 그룹핑"""
+    """유사 이미지 그룹핑 — 시각 유사도 + 메타데이터 비교"""
 
     def __init__(self, image_paths: list[str], parent=None):
         super().__init__(parent)
@@ -72,7 +118,7 @@ class SimilarGroupDialog(QDialog):
         self.setStyleSheet(_STYLE)
 
         self._paths = image_paths
-        self._hashes: list[tuple[str, int]] = []
+        self._hashes: list[tuple[str, int, str]] = []  # (path, hash, prompt)
         self._worker: HashWorker | None = None
         self._init_ui()
         self._start_hash()
@@ -102,13 +148,25 @@ class SimilarGroupDialog(QDialog):
             lambda v: self._thresh_label.setText(str(v))
         )
 
+        # EXIF 비교 토글
+        self._chk_exif = QCheckBox("메타데이터(프롬프트) 비교")
+        self._chk_exif.setChecked(True)
+        self._chk_exif.setStyleSheet(
+            "QCheckBox { color: #FFA726; font-weight: bold; font-size: 12px; }"
+        )
+        self._chk_exif.setToolTip(
+            "활성화 시 이미지의 프롬프트 메타데이터도 비교하여\n"
+            "같은 프롬프트로 생성된 이미지끼리 더 잘 묶입니다"
+        )
+        thresh_row.addWidget(self._chk_exif)
+
         btn_regroup = QPushButton("다시 그룹핑")
         btn_regroup.setFixedHeight(28)
         btn_regroup.setStyleSheet(
             "background-color: #5865F2; color: white; border-radius: 4px; "
             "font-weight: bold; padding: 0 12px;"
         )
-        btn_regroup.clicked.connect(self._run_grouping)
+        btn_regroup.clicked.connect(self._on_regroup_clicked)
         thresh_row.addWidget(btn_regroup)
         thresh_row.addStretch()
         root.addLayout(thresh_row)
@@ -140,7 +198,8 @@ class SimilarGroupDialog(QDialog):
 
     def _start_hash(self):
         self._progress.setRange(0, len(self._paths))
-        self._worker = HashWorker(self._paths)
+        self._progress.show()
+        self._worker = HashWorker(self._paths, extract_meta=True)
         self._worker.progress.connect(lambda i, t: self._progress.setValue(i))
         self._worker.finished.connect(self._on_hash_done)
         self._worker.start()
@@ -150,31 +209,63 @@ class SimilarGroupDialog(QDialog):
         self._progress.hide()
         self._run_grouping()
 
+    def _on_regroup_clicked(self):
+        """다시 그룹핑 — 메타데이터 옵션 변경 시 해시 재계산"""
+        if self._hashes:
+            self._run_grouping()
+
     def _run_grouping(self):
-        """해밍 거리 기반 그룹핑"""
+        """해밍 거리 + 프롬프트 유사도 기반 그룹핑"""
         threshold = self._slider_thresh.value()
+        use_exif = self._chk_exif.isChecked()
         n = len(self._hashes)
         visited = [False] * n
-        groups: list[list[str]] = []
+        groups: list[list[tuple[str, str]]] = []  # [(path, reason), ...]
 
         for i in range(n):
             if visited[i]:
                 continue
-            group = [self._hashes[i][0]]
+            group = [(self._hashes[i][0], "기준")]
             visited[i] = True
             for j in range(i + 1, n):
                 if visited[j]:
                     continue
+                # 시각 유사도
                 dist = _hamming(self._hashes[i][1], self._hashes[j][1])
-                if dist <= threshold:
-                    group.append(self._hashes[j][0])
+                is_visual_similar = dist <= threshold
+
+                # 프롬프트 유사도
+                is_prompt_similar = False
+                prompt_sim = 0.0
+                if use_exif and self._hashes[i][2] and self._hashes[j][2]:
+                    prompt_sim = _prompt_similarity(
+                        self._hashes[i][2], self._hashes[j][2]
+                    )
+                    # 프롬프트 유사도 70% 이상이면 유사로 판단
+                    is_prompt_similar = prompt_sim >= 0.7
+
+                if is_visual_similar and is_prompt_similar:
+                    reason = f"시각+프롬프트 (거리:{dist}, 유사:{prompt_sim:.0%})"
+                    group.append((self._hashes[j][0], reason))
                     visited[j] = True
+                elif is_visual_similar:
+                    reason = f"시각 유사 (거리:{dist})"
+                    group.append((self._hashes[j][0], reason))
+                    visited[j] = True
+                elif is_prompt_similar:
+                    # 프롬프트만 유사한 경우 — 시각 거리가 많이 다르면 묶지 않음
+                    # 시각 거리 임계값의 2배 이내일 때만 프롬프트 유사도로 묶음
+                    if dist <= threshold * 2:
+                        reason = f"프롬프트 유사 ({prompt_sim:.0%}, 거리:{dist})"
+                        group.append((self._hashes[j][0], reason))
+                        visited[j] = True
+
             if len(group) >= 2:
                 groups.append(group)
 
         self._display_groups(groups)
 
-    def _display_groups(self, groups: list[list[str]]):
+    def _display_groups(self, groups: list[list[tuple[str, str]]]):
         """그룹 결과 표시"""
         # 기존 위젯 제거
         while self._result_layout.count() > 1:
@@ -204,7 +295,7 @@ class SimilarGroupDialog(QDialog):
 
             row = QHBoxLayout()
             row.setSpacing(6)
-            for path in group[:10]:  # 최대 10장
+            for path, reason in group[:10]:  # 최대 10장
                 thumb = QLabel()
                 thumb.setFixedSize(100, 100)
                 thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -215,7 +306,8 @@ class SimilarGroupDialog(QDialog):
                         96, 96, Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation
                     ))
-                thumb.setToolTip(os.path.basename(path))
+                tooltip = f"{os.path.basename(path)}\n{reason}"
+                thumb.setToolTip(tooltip)
                 row.addWidget(thumb)
             if len(group) > 10:
                 more = QLabel(f"+{len(group) - 10}장")

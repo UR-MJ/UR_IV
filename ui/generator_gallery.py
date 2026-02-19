@@ -557,7 +557,7 @@ class GalleryMixin:
 
     def _get_known_artists(self) -> set:
         """알려진 작가 목록 반환"""
-        current_artist = self.artist_input.text().strip().lower()
+        current_artist = self.artist_input.toPlainText().strip().lower()
         artists = set()
         if current_artist:
             artists.add(current_artist)

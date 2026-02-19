@@ -54,7 +54,7 @@ class SettingsMixin:
             "char_count": self.char_count_input.text(),
             "character": self.character_input.text(),
             "copyright": self.copyright_input.text(),
-            "artist": self.artist_input.text(),
+            "artist": self.artist_input.toPlainText(),
             "artist_locked": self.btn_lock_artist.isChecked(),
             "prefix_prompt": self.prefix_prompt_text.toPlainText(),
             "main_prompt": self.main_prompt_text.toPlainText(),
@@ -169,7 +169,7 @@ class SettingsMixin:
             self.char_count_input.setText(settings.get("char_count", ""))
             self.character_input.setText(settings.get("character", ""))
             self.copyright_input.setText(settings.get("copyright", ""))
-            self.artist_input.setText(settings.get("artist", ""))
+            self.artist_input.setPlainText(settings.get("artist", ""))
             self.btn_lock_artist.setChecked(settings.get("artist_locked", False))
             
             # 프롬프트

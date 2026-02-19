@@ -92,8 +92,9 @@ class UpscaleTab(QWidget):
         scale_group = QGroupBox("스케일 모드")
         scale_group.setStyleSheet("""
             QGroupBox { border: 1px solid #444; border-radius: 6px;
-                        margin-top: 8px; padding-top: 5px;
+                        margin-top: 12px; padding-top: 18px;
                         font-weight: bold; color: #888; }
+            QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; }
         """)
         sg_layout = QVBoxLayout(scale_group)
 
@@ -128,8 +129,9 @@ class UpscaleTab(QWidget):
         mode_group = QGroupBox("처리 모드")
         mode_group.setStyleSheet("""
             QGroupBox { border: 1px solid #444; border-radius: 6px;
-                        margin-top: 8px; padding-top: 5px;
+                        margin-top: 12px; padding-top: 18px;
                         font-weight: bold; color: #888; }
+            QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; }
         """)
         mg_layout = QVBoxLayout(mode_group)
 
@@ -157,8 +159,9 @@ class UpscaleTab(QWidget):
         self.ad_group.setChecked(False)
         self.ad_group.setStyleSheet("""
             QGroupBox { border: 1px solid #444; border-radius: 6px;
-                        margin-top: 8px; padding-top: 5px;
+                        margin-top: 12px; padding-top: 18px;
                         font-weight: bold; color: #888; }
+            QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; }
             QGroupBox::indicator { width: 16px; height: 16px; }
         """)
         ad_layout = QVBoxLayout(self.ad_group)

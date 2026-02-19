@@ -546,7 +546,7 @@ class ActionsMixin:
         existing_tags = set()
         
         # 작가 입력창
-        artist_text = self.artist_input.text().strip()
+        artist_text = self.artist_input.toPlainText().strip()
         if artist_text:
             for t in artist_text.split(','):
                 existing_tags.add(t.strip().lower())

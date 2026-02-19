@@ -169,12 +169,17 @@ class LoraActivePanel(QWidget):
             row_layout.setSpacing(5)
 
             # 체크박스 (이름 — 긴 이름은 tooltip으로 전체 표시)
-            chk = QCheckBox(entry['name'])
+            display_name = entry['name']
+            if len(display_name) > 20:
+                display_name = display_name[:18] + "…"
+            chk = QCheckBox(display_name)
             chk.setChecked(entry['enabled'])
             chk.setToolTip(entry['name'])
             chk.setStyleSheet(
                 "QCheckBox { color: #DDD; font-size: 12px; font-weight: bold; }"
                 "QCheckBox::indicator { width: 14px; height: 14px; }"
+                "QToolTip { background-color: #333; color: #FFF; "
+                "border: 1px solid #555; padding: 4px; font-size: 12px; }"
             )
             chk.toggled.connect(
                 lambda checked, name=entry['name']: self._on_toggle(name, checked)

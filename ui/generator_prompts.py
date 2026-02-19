@@ -30,8 +30,8 @@ class PromptHandlingMixin:
             parts.append(self.copyright_input.text().strip())
 
         # 4. 작가 (Artist) - 작가 필드 내용 추가!
-        if self.artist_input.text().strip():
-            parts.append(self.artist_input.text().strip())
+        if self.artist_input.toPlainText().strip():
+            parts.append(self.artist_input.toPlainText().strip())
 
         # 5. 선행 (Prefix) - 접기와 무관하게 항상 포함
         if self.prefix_prompt_text.toPlainText().strip():
@@ -274,7 +274,7 @@ class PromptHandlingMixin:
         self.copyright_input.setText(", ".join(escape(copyright_list)))
 
         if not keep_current_artist:
-            self.artist_input.setText(", ".join(escape(artist_list)))
+            self.artist_input.setPlainText(", ".join(escape(artist_list)))
 
         self.main_prompt_text.setPlainText(", ".join(escape(final_general)))
 
@@ -551,8 +551,8 @@ class PromptHandlingMixin:
         if self.copyright_input.text().strip():
             parts.append(self.copyright_input.text().strip())
 
-        if self.artist_input.text().strip():
-            parts.append(self.artist_input.text().strip())
+        if self.artist_input.toPlainText().strip():
+            parts.append(self.artist_input.toPlainText().strip())
             
         if self.main_prompt_text.toPlainText().strip():
             parts.append(self.main_prompt_text.toPlainText().strip())

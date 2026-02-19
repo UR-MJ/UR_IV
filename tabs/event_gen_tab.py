@@ -976,7 +976,7 @@ class EventGenTab(QWidget):
         if use_t2i:
             prefix_prompt = mw.prefix_prompt_text.toPlainText().strip()
             suffix_prompt = mw.suffix_prompt_text.toPlainText().strip()
-            artist_prompt = mw.artist_input.text().strip()
+            artist_prompt = mw.artist_input.toPlainText().strip()
             negative_prompt = mw.neg_prompt_text.toPlainText().strip()
 
         try:

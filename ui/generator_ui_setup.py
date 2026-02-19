@@ -88,6 +88,9 @@ class UISetupMixin:
         self.main_splitter.setSizes([700, 230])
         self.main_splitter.setStretchFactor(0, 1)
         self.main_splitter.setStretchFactor(1, 0)
+        # 대기열 크기 고정 — splitter 핸들 비활성화
+        self.main_splitter.setHandleWidth(0)
+        self._bottom_container.setFixedHeight(230)
 
         # 상태 메시지 라벨은 _setup_queue()에서 하단 컨테이너에 추가
         self.status_message_label = QLabel("")
@@ -425,7 +428,7 @@ class UISetupMixin:
         util_btns.addWidget(self.btn_ab_test)
         layout.addLayout(util_btns)
 
-        # 제거 옵션 버튼 (3+3 배치)
+        # 제거 옵션 버튼 (3+3 배치, 가운데 정렬)
         _chk_style = "font-weight: bold; color: #DDD; font-size: 11px;"
         remove_opts_layout = QHBoxLayout()
         remove_opts_layout.setContentsMargins(0, 5, 0, 0)
@@ -434,6 +437,7 @@ class UISetupMixin:
         self.chk_remove_copyright = QCheckBox("작품명 제거")
         self.chk_remove_character = QCheckBox("캐릭터 제거")
 
+        remove_opts_layout.addStretch()
         for chk in [self.chk_remove_artist, self.chk_remove_copyright,
                     self.chk_remove_character]:
             chk.setStyleSheet(_chk_style)
@@ -449,6 +453,7 @@ class UISetupMixin:
         self.chk_remove_censorship = QCheckBox("검열 제거")
         self.chk_remove_text = QCheckBox("텍스트 제거")
 
+        remove_opts_layout2.addStretch()
         for chk in [self.chk_remove_meta, self.chk_remove_censorship,
                     self.chk_remove_text]:
             chk.setStyleSheet(_chk_style)
@@ -462,7 +467,7 @@ class UISetupMixin:
         self.char_count_input = self._create_group(layout, "인물 수", QLineEdit())
         # 캐릭터 입력 + 특징 프리셋 버튼 + 자동 추가 토글
         char_header = QHBoxLayout()
-        char_header.addWidget(QLabel("캐릭터 (Character)"))
+        char_header.addWidget(QLabel("캐릭터"))
         char_header.addStretch()
 
         self.chk_auto_char_features = QCheckBox("특징 자동 추가")
@@ -530,11 +535,9 @@ class UISetupMixin:
         h_artist.addWidget(self.btn_lock_artist)
         
         artist_layout.addLayout(h_artist)
-        self.artist_input = QLineEdit() 
-        self.artist_input.setStyleSheet(
-            "background-color: #252525; border: none; "
-            "border-radius: 8px; padding: 8px 10px; color: #FFFFFF;"
-        )
+        self.artist_input = TagInputWidget()
+        self.artist_input.setMinimumHeight(36)
+        self.artist_input.setMaximumHeight(80)
         artist_layout.addWidget(self.artist_input)
         layout.addWidget(artist_group)
 
@@ -1216,7 +1219,7 @@ class UISetupMixin:
         data = {
             "character": self.character_input.text(),
             "copyright": self.copyright_input.text(),
-            "artist": self.artist_input.text(),
+            "artist": self.artist_input.toPlainText(),
             "main_prompt": self.main_prompt_text.toPlainText(),
             "prefix": self.prefix_prompt_text.toPlainText(),
             "suffix": self.suffix_prompt_text.toPlainText(),
@@ -1246,7 +1249,7 @@ class UISetupMixin:
         _field_map = {
             "character":    lambda v: self.character_input.setText(v),
             "copyright":    lambda v: self.copyright_input.setText(v),
-            "artist":       lambda v: self.artist_input.setText(v),
+            "artist":       lambda v: self.artist_input.setPlainText(v),
             "main_prompt":  lambda v: self.main_prompt_text.setPlainText(v),
             "prefix":       lambda v: self.prefix_prompt_text.setPlainText(v),
             "suffix":       lambda v: self.suffix_prompt_text.setPlainText(v),
