@@ -256,7 +256,8 @@ class UISetupMixin:
         # 설정 위젯 링크 (조건부 프롬프트 등)
         self.cond_prompt_check = self.settings_tab.cond_prompt_check
         self.cond_prevent_dupe_check = self.settings_tab.cond_prevent_dupe_check
-        self.cond_block_editor = self.settings_tab.cond_block_editor
+        self.cond_block_editor_pos = self.settings_tab.cond_block_editor_pos
+        self.cond_block_editor_neg = self.settings_tab.cond_block_editor_neg
         
         # 검색 결과 디스플레이 링크
         self.exclude_artist_checkbox = QCheckBox() 
@@ -732,11 +733,12 @@ class UISetupMixin:
         self.width_input = QLineEdit("1024")
         self.height_input = QLineEdit("1024")
         btn_swap_res = QPushButton("↔")
-        btn_swap_res.setFixedSize(36, 32)
+        btn_swap_res.setFixedSize(38, 36)
         btn_swap_res.setToolTip("W ↔ H 교환")
         btn_swap_res.setStyleSheet(
             "QPushButton { background-color: #5865F2; color: white; border: none; "
-            "border-radius: 4px; font-size: 16px; font-weight: bold; }"
+            "border-radius: 4px; font-size: 18px; font-weight: bold; "
+            "padding: 0px; line-height: 36px; }"
             "QPushButton:hover { background-color: #6975F3; }"
         )
         btn_swap_res.clicked.connect(self._swap_resolution)

@@ -492,7 +492,7 @@ class PromptHandlingMixin:
         """조건부 프롬프트 규칙 적용 (블록 에디터 기반)"""
         from utils.condition_block import apply_rules
 
-        rules = self.cond_block_editor.get_rules()
+        rules = self.cond_block_editor_pos.get_rules() + self.cond_block_editor_neg.get_rules()
         if not rules:
             return
 

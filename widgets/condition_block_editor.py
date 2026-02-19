@@ -43,7 +43,13 @@ _TARGET_NEG_STYLE = (
 
 
 class ConditionBlockRow(QFrame):
-    """단일 조건부 규칙 블록"""
+    """단일 조건부 규칙 블록
+
+    Args:
+        rule: 초기 규칙
+        fixed_target: None=모두 표시, "pos"=Positive 고정(위치 선택 가능),
+                       "neg"=Negative 고정(위치 숨김)
+    """
 
     removed = pyqtSignal(object)  # self
     changed = pyqtSignal()
@@ -60,23 +66,24 @@ class ConditionBlockRow(QFrame):
     ACTION_MAP = {"추가한다": "add", "제거한다": "remove", "대체한다": "replace"}
     ACTION_REVERSE = {v: k for k, v in ACTION_MAP.items()}
 
-    def __init__(self, rule: ConditionRule = None, parent=None):
+    def __init__(self, rule: ConditionRule = None, fixed_target: str | None = None,
+                 parent=None):
         super().__init__(parent)
         self._rule = rule or ConditionRule()
+        self._fixed_target = fixed_target  # None / "pos" / "neg"
         self._init_ui()
         self._load_from_rule()
 
     def _init_ui(self):
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setMaximumWidth(720)
         self.setStyleSheet(
             "ConditionBlockRow { background-color: #252525; "
             "border: 1px solid #3A3A3A; border-radius: 6px; }"
         )
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(4)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(3)
 
         # 1줄: [활성화] [만약] [조건태그] [이/가] [있다/없다]
         row1 = QHBoxLayout()
@@ -96,10 +103,8 @@ class ConditionBlockRow(QFrame):
         self._input_condition = QLineEdit()
         self._input_condition.setPlaceholderText("조건 태그")
         self._input_condition.setStyleSheet(_INPUT_STYLE)
-        self._input_condition.setMaximumWidth(160)
-        self._input_condition.setMinimumWidth(80)
         self._input_condition.textChanged.connect(self._on_changed)
-        row1.addWidget(self._input_condition)
+        row1.addWidget(self._input_condition, 1)
 
         lbl_particle = QLabel("이/가")
         lbl_particle.setStyleSheet(_LABEL_STYLE)
@@ -115,7 +120,7 @@ class ConditionBlockRow(QFrame):
 
         layout.addLayout(row1)
 
-        # 2줄: [대상태그] 를 [Positive/Negative] [위치] 에 [동작] [삭제]
+        # 2줄: [대상태그] 를 [위치(Positive만)] 에 [동작] [삭제]
         row2 = QHBoxLayout()
         row2.setSpacing(4)
 
@@ -127,36 +132,47 @@ class ConditionBlockRow(QFrame):
         self._input_tags = QLineEdit()
         self._input_tags.setPlaceholderText("대상 태그 (쉼표 구분)")
         self._input_tags.setStyleSheet(_INPUT_STYLE)
-        self._input_tags.setMaximumWidth(200)
-        self._input_tags.setMinimumWidth(100)
         self._input_tags.textChanged.connect(self._on_changed)
-        row2.addWidget(self._input_tags)
+        row2.addWidget(self._input_tags, 1)
 
         lbl_to = QLabel("를")
         lbl_to.setStyleSheet(_LABEL_STYLE)
         lbl_to.setFixedWidth(14)
         row2.addWidget(lbl_to)
 
-        # 적용 대상: Positive / Negative
+        # 적용 대상: Positive / Negative (fixed_target이면 숨김)
         self._combo_target = QComboBox()
         self._combo_target.addItems(self.TARGET_OPTIONS)
         self._combo_target.setStyleSheet(_TARGET_POS_STYLE)
         self._combo_target.setFixedWidth(80)
         self._combo_target.currentIndexChanged.connect(self._on_target_changed)
-        row2.addWidget(self._combo_target)
 
-        # 위치 (Positive일 때만 의미 있음)
+        # 위치 (Positive일 때만 표시)
         self._combo_location = QComboBox()
         self._combo_location.addItems(self.LOCATION_OPTIONS)
         self._combo_location.setStyleSheet(_COMBO_STYLE)
         self._combo_location.setFixedWidth(80)
         self._combo_location.currentIndexChanged.connect(self._on_changed)
-        row2.addWidget(self._combo_location)
 
-        lbl_at = QLabel("에")
-        lbl_at.setStyleSheet(_LABEL_STYLE)
-        lbl_at.setFixedWidth(12)
-        row2.addWidget(lbl_at)
+        self._lbl_at = QLabel("에")
+        self._lbl_at.setStyleSheet(_LABEL_STYLE)
+        self._lbl_at.setFixedWidth(12)
+
+        if self._fixed_target is None:
+            # 모두 표시 (캐릭터 프리셋 다이얼로그용)
+            row2.addWidget(self._combo_target)
+            row2.addWidget(self._combo_location)
+            row2.addWidget(self._lbl_at)
+        elif self._fixed_target == "pos":
+            # Positive 고정 — 위치 선택만 표시
+            self._combo_target.hide()
+            row2.addWidget(self._combo_location)
+            row2.addWidget(self._lbl_at)
+        else:  # "neg"
+            # Negative 고정 — 위치/타겟 모두 숨김
+            self._combo_target.hide()
+            self._combo_location.hide()
+            self._lbl_at.hide()
 
         self._combo_action = QComboBox()
         self._combo_action.addItems(self.ACTION_OPTIONS)
@@ -166,7 +182,7 @@ class ConditionBlockRow(QFrame):
         row2.addWidget(self._combo_action)
 
         btn_del = QPushButton("X")
-        btn_del.setFixedSize(24, 24)
+        btn_del.setFixedSize(22, 22)
         btn_del.setStyleSheet(
             "QPushButton { background-color: #C0392B; color: white; "
             "border-radius: 4px; font-weight: bold; font-size: 11px; }"
@@ -182,6 +198,7 @@ class ConditionBlockRow(QFrame):
         is_negative = (index == 1)
         self._combo_location.setEnabled(not is_negative)
         self._combo_location.setVisible(not is_negative)
+        self._lbl_at.setVisible(not is_negative)
         self._combo_target.setStyleSheet(
             _TARGET_NEG_STYLE if is_negative else _TARGET_POS_STYLE
         )
@@ -195,13 +212,19 @@ class ConditionBlockRow(QFrame):
         self._input_tags.setText(", ".join(self._rule.target_tags))
 
         # 타겟 & 위치 설정
-        if self._rule.location == "neg":
-            self._combo_target.setCurrentIndex(1)  # Negative
-        else:
-            self._combo_target.setCurrentIndex(0)  # Positive
+        if self._fixed_target is None:
+            if self._rule.location == "neg":
+                self._combo_target.setCurrentIndex(1)  # Negative
+            else:
+                self._combo_target.setCurrentIndex(0)  # Positive
+                loc_display = self.LOCATION_REVERSE.get(self._rule.location, "main")
+                idx = self.LOCATION_OPTIONS.index(loc_display) if loc_display in self.LOCATION_OPTIONS else 0
+                self._combo_location.setCurrentIndex(idx)
+        elif self._fixed_target == "pos":
             loc_display = self.LOCATION_REVERSE.get(self._rule.location, "main")
             idx = self.LOCATION_OPTIONS.index(loc_display) if loc_display in self.LOCATION_OPTIONS else 0
             self._combo_location.setCurrentIndex(idx)
+        # neg fixed: no location to set
 
         act_display = self.ACTION_REVERSE.get(self._rule.action, "추가한다")
         idx = self.ACTION_OPTIONS.index(act_display) if act_display in self.ACTION_OPTIONS else 0
@@ -213,13 +236,20 @@ class ConditionBlockRow(QFrame):
         tags = [t.strip() for t in tags_text.split(",") if t.strip()]
         act_text = self._combo_action.currentText()
 
-        # 타겟에 따라 위치 결정
-        is_negative = (self._combo_target.currentIndex() == 1)
-        if is_negative:
+        # 위치 결정
+        if self._fixed_target == "neg":
             location = "neg"
-        else:
+        elif self._fixed_target == "pos":
             loc_text = self._combo_location.currentText()
             location = self.LOCATION_MAP.get(loc_text, "main")
+        else:
+            # 자유 모드
+            is_negative = (self._combo_target.currentIndex() == 1)
+            if is_negative:
+                location = "neg"
+            else:
+                loc_text = self._combo_location.currentText()
+                location = self.LOCATION_MAP.get(loc_text, "main")
 
         return ConditionRule(
             condition_tag=self._input_condition.text().strip(),
@@ -235,12 +265,18 @@ class ConditionBlockRow(QFrame):
 
 
 class ConditionBlockEditor(QWidget):
-    """블록 기반 조건부 프롬프트 에디터"""
+    """블록 기반 조건부 프롬프트 에디터
+
+    Args:
+        fixed_target: None=자유모드(타겟 선택 표시), "pos"=Positive 고정,
+                       "neg"=Negative 고정
+    """
 
     rules_changed = pyqtSignal()  # 규칙 변경 시
 
-    def __init__(self, parent=None):
+    def __init__(self, fixed_target: str | None = None, parent=None):
         super().__init__(parent)
+        self._fixed_target = fixed_target
         self._blocks: list[ConditionBlockRow] = []
         self._init_ui()
 
@@ -265,20 +301,23 @@ class ConditionBlockEditor(QWidget):
         root.addWidget(self._scroll, 1)
 
         # + 규칙 추가 버튼
-        btn_add = QPushButton("+ 규칙 추가")
-        btn_add.setFixedHeight(30)
+        btn_add = QPushButton("+ 추가")
+        btn_add.setFixedHeight(26)
         btn_add.setStyleSheet(
             "QPushButton { background-color: #333; color: #AAA; "
-            "border: 1px dashed #555; border-radius: 6px; "
-            "font-size: 12px; font-weight: bold; }"
+            "border: 1px dashed #555; border-radius: 4px; "
+            "font-size: 11px; font-weight: bold; }"
             "QPushButton:hover { background-color: #444; color: #DDD; }"
         )
-        btn_add.clicked.connect(lambda: self.add_rule(ConditionRule()))
+        default_loc = "neg" if self._fixed_target == "neg" else "main"
+        btn_add.clicked.connect(
+            lambda: self.add_rule(ConditionRule(location=default_loc))
+        )
         root.addWidget(btn_add)
 
     def add_rule(self, rule: ConditionRule):
         """규칙 블록 추가"""
-        block = ConditionBlockRow(rule)
+        block = ConditionBlockRow(rule, fixed_target=self._fixed_target)
         block.removed.connect(self._on_block_removed)
         block.changed.connect(self._on_block_changed)
         self._blocks.append(block)

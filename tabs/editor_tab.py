@@ -109,7 +109,7 @@ class MosaicEditor(QWidget):
         # ── 상단 툴바 (공유) ──
         top_toolbar = QHBoxLayout()
         self.btn_load_pc = QPushButton("📂 PC에서 열기")
-        self.btn_save = QPushButton("■ 저장")
+        self.btn_save = QPushButton("💾 저장")
         self.btn_undo = QPushButton("↩ UNDO")
         self.btn_redo = QPushButton("↪ REDO")
         self.btn_undo.setEnabled(False)

@@ -215,11 +215,41 @@ class SettingsTab(QWidget):
         self.cond_prevent_dupe_check.setStyleSheet("color: #FFD700;")
 
         from widgets.condition_block_editor import ConditionBlockEditor
-        self.cond_block_editor = ConditionBlockEditor()
 
         gl.addWidget(self.cond_prompt_check)
         gl.addWidget(self.cond_prevent_dupe_check)
-        gl.addWidget(self.cond_block_editor, 1)
+
+        # 2단 레이아웃: 왼쪽 Positive / 오른쪽 Negative
+        editors_container = QWidget()
+        editors_hl = QHBoxLayout(editors_container)
+        editors_hl.setContentsMargins(0, 0, 0, 0)
+        editors_hl.setSpacing(6)
+
+        # Positive 에디터
+        pos_w = QWidget()
+        pos_vl = QVBoxLayout(pos_w)
+        pos_vl.setContentsMargins(0, 0, 0, 0)
+        pos_vl.setSpacing(4)
+        pos_lbl = QLabel("Positive")
+        pos_lbl.setStyleSheet("color: #4CAF50; font-weight: bold; font-size: 12px;")
+        pos_vl.addWidget(pos_lbl)
+        self.cond_block_editor_pos = ConditionBlockEditor(fixed_target="pos")
+        pos_vl.addWidget(self.cond_block_editor_pos, 1)
+        editors_hl.addWidget(pos_w)
+
+        # Negative 에디터
+        neg_w = QWidget()
+        neg_vl = QVBoxLayout(neg_w)
+        neg_vl.setContentsMargins(0, 0, 0, 0)
+        neg_vl.setSpacing(4)
+        neg_lbl = QLabel("Negative")
+        neg_lbl.setStyleSheet("color: #F44336; font-weight: bold; font-size: 12px;")
+        neg_vl.addWidget(neg_lbl)
+        self.cond_block_editor_neg = ConditionBlockEditor(fixed_target="neg")
+        neg_vl.addWidget(self.cond_block_editor_neg, 1)
+        editors_hl.addWidget(neg_w)
+
+        gl.addWidget(editors_container, 1)
         l.addWidget(group, 1)
 
         # 저장 버튼

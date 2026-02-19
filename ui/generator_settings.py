@@ -113,7 +113,7 @@ class SettingsMixin:
             "char_feature_mode": self.combo_char_feature_mode.currentIndex() if hasattr(self, 'combo_char_feature_mode') else 0,
 
             "cond_prompt_enabled": self.cond_prompt_check.isChecked(),
-            "cond_rules_json": self.cond_block_editor.get_rules_json(),
+            "cond_rules_json": self._get_combined_cond_rules_json(),
             "cond_prevent_dupe": self.cond_prevent_dupe_check.isChecked(),
 
             "base_prefix_prompt": self.base_prefix_prompt,
@@ -299,23 +299,27 @@ class SettingsMixin:
 
             # 새 JSON 포맷 우선, 없으면 기존 텍스트 포맷 마이그레이션
             cond_json = settings.get("cond_rules_json", "")
+            all_rules = []
             if cond_json:
-                self.cond_block_editor.set_rules_json(cond_json)
+                from utils.condition_block import rules_from_json
+                all_rules = rules_from_json(cond_json)
             else:
                 old_pos = settings.get("cond_prompt_rules", "")
                 old_neg = settings.get("cond_neg_rules", "")
                 if old_pos or old_neg:
                     from utils.condition_block import migrate_old_rules
-                    rules = []
                     if old_pos:
-                        rules.extend(migrate_old_rules(old_pos))
+                        all_rules.extend(migrate_old_rules(old_pos))
                     if old_neg:
                         neg_rules = migrate_old_rules(old_neg)
                         for r in neg_rules:
                             r.location = "neg"
-                        rules.extend(neg_rules)
-                    if rules:
-                        self.cond_block_editor.set_rules(rules)
+                        all_rules.extend(neg_rules)
+            if all_rules:
+                pos_rules = [r for r in all_rules if r.location != "neg"]
+                neg_rules = [r for r in all_rules if r.location == "neg"]
+                self.cond_block_editor_pos.set_rules(pos_rules)
+                self.cond_block_editor_neg.set_rules(neg_rules)
             
             # 베이스 프롬프트
             self.base_prefix_prompt = settings.get("base_prefix_prompt", "")
@@ -444,6 +448,13 @@ class SettingsMixin:
             from utils.app_logger import get_logger
             get_logger('settings').error(f"설정 불러오기 실패: {e}")
     
+    def _get_combined_cond_rules_json(self) -> str:
+        """Positive/Negative 에디터의 규칙을 합쳐 JSON으로 반환"""
+        from utils.condition_block import rules_to_json
+        pos_rules = self.cond_block_editor_pos.get_rules()
+        neg_rules = self.cond_block_editor_neg.get_rules()
+        return rules_to_json(pos_rules + neg_rules)
+
     def _get_slot_settings(self, widgets):
         """ADetailer 슬롯 설정 가져오기"""
         return {
