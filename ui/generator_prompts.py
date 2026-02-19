@@ -293,11 +293,13 @@ class PromptHandlingMixin:
                 self.chk_auto_char_features.isChecked() and character_list):
             self._auto_insert_character_features(character_list)
 
-        # 10. 조건부 프롬프트 적용 (통합 — positive/negative 모두 처리)
-        if hasattr(self, 'cond_prompt_check') and self.cond_prompt_check.isChecked():
+        # 10. 조건부 프롬프트 1차 적용 (와일드카드 해석 전)
+        cond_enabled = (hasattr(self, 'cond_prompt_check') and
+                        self.cond_prompt_check.isChecked())
+        if cond_enabled:
             self._apply_conditional_prompts()
 
-        # 12. 와일드카드 치환 (프롬프트 적용 시점에 확정)
+        # 11. 와일드카드 치환
         wc_enabled = (hasattr(self, 'settings_tab') and
                       hasattr(self.settings_tab, 'chk_wildcard_enabled') and
                       self.settings_tab.chk_wildcard_enabled.isChecked())
@@ -314,6 +316,10 @@ class PromptHandlingMixin:
                 if resolved != text:
                     widget.setPlainText(resolved)
             self.is_programmatic_change = False
+
+        # 12. 조건부 프롬프트 2차 적용 (와일드카드 해석 후 새 태그에 대해)
+        if cond_enabled and wc_enabled:
+            self._apply_conditional_prompts()
 
         # 13. 최종 프롬프트 업데이트
         self.update_total_prompt_display()

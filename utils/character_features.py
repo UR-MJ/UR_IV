@@ -8,6 +8,61 @@ import re
 import json
 from typing import Optional
 
+# ── 의상/액세서리 키워드 (word-level 매칭) ──
+# 태그를 단어로 분리한 뒤, 이 집합과 교집합이 있으면 의상으로 분류
+_COSTUME_WORDS: set[str] = {
+    # 상의
+    "shirt", "blouse", "sweater", "hoodie", "cardigan", "vest", "jacket",
+    "coat", "blazer", "tunic", "camisole", "bustier", "corset", "crop",
+    # 하의
+    "skirt", "pants", "shorts", "jeans", "trousers", "leggings",
+    # 원피스/전신
+    "dress", "gown", "robe", "kimono", "yukata", "uniform", "suit",
+    "leotard", "bodysuit", "jumpsuit", "overalls", "toga", "bikini",
+    "swimsuit", "nightgown", "pajamas", "costume", "outfit", "clothes",
+    "clothing", "garment", "attire", "hanfu", "cheongsam", "qipao",
+    # 갑옷/군복
+    "armor", "armour", "cape", "cloak", "tabard", "pauldrons", "greaves",
+    "breastplate", "vambraces", "cuirass", "chainmail",
+    # 속옷
+    "bra", "panties", "underwear", "lingerie", "thong",
+    # 다리/발
+    "stockings", "thighhighs", "kneehighs", "socks", "tights", "pantyhose",
+    "legwear", "garter", "boots", "shoes", "sandals", "heels", "slippers",
+    "sneakers", "loafers", "footwear", "pumps", "tabi",
+    # 손/팔
+    "gloves", "gauntlets", "mittens", "cuffs", "warmers", "wraps",
+    # 머리 장식(액세서리)
+    "hat", "cap", "crown", "tiara", "helmet", "beret", "headwear",
+    "hood", "veil", "headpiece", "headband", "hairband", "hairpin",
+    "hairclip", "headphones", "headdress",
+    # 목 장식
+    "choker", "collar", "necklace", "necktie", "scarf", "bowtie",
+    "neckerchief", "cravat", "ascot",
+    # 귀/보석
+    "earrings", "bracelet", "anklet", "pendant", "brooch", "amulet",
+    # 허리
+    "belt", "sash", "obi",
+    # 눈 액세서리
+    "glasses", "sunglasses", "goggles", "eyepatch", "monocle", "eyewear",
+    # 가방/소지품
+    "bag", "purse", "backpack", "handbag",
+    # 기타 액세서리
+    "mask", "apron", "ribbon", "bow", "sleeves", "ornament",
+    "frills", "lace", "epaulettes", "armband", "wristband",
+    # 무기/장비
+    "sword", "gun", "shield", "wand", "staff", "weapon", "spear",
+    "axe", "dagger", "lance", "halberd", "pistol", "rifle", "scythe",
+    # 일본 전통
+    "hakama", "haori", "fundoshi", "sarashi",
+}
+
+
+def _is_costume_tag(tag: str) -> bool:
+    """태그가 의상/액세서리/장비인지 판별 (word-level 매칭)"""
+    words = set(tag.strip().lower().replace("_", " ").split())
+    return bool(words & _COSTUME_WORDS)
+
 
 class CharacterFeatureLookup:
     """캐릭터 이름 → 핵심/의상 특징 분리 조회 (lazy loading, singleton)"""
@@ -117,19 +172,35 @@ class CharacterFeatureLookup:
         return ""
 
     def lookup_core(self, name: str) -> tuple[str, int] | None:
-        """핵심 특징만 조회 (characterization.json core_tags)"""
+        """핵심 특징 조회 (characterization.json core + danbooru 비의상 태그)"""
         self._ensure_loaded()
         key = self._resolve_key(name)
         if key is None:
             return None
-        core_tags = self._core_dict.get(key, [])
+
+        # 1. characterization.json core_tags
+        core_tags = list(self._core_dict.get(key, []))
+        core_set = {t.strip().lower() for t in core_tags}
+
+        # 2. danbooru_character에서 core에 없는 비의상 태그 추가
+        full_str = self._get_full_features_for(key)
+        if full_str:
+            for t in full_str.split(","):
+                t = t.strip()
+                t_norm = t.lower()
+                if not t or t_norm in core_set or t_norm == key:
+                    continue
+                if not _is_costume_tag(t):
+                    core_tags.append(t)
+                    core_set.add(t_norm)
+
         if not core_tags:
             return None
         count = self._post_count.get(key, 0)
         return (", ".join(core_tags), count)
 
     def lookup_costume(self, name: str) -> tuple[str, int] | None:
-        """의상/추가 특징만 조회 (full에서 core를 빈 나머지)"""
+        """의상/액세서리 특징만 조회 (danbooru에서 의상 키워드 매칭되는 태그)"""
         self._ensure_loaded()
         key = self._resolve_key(name)
         if key is None:
@@ -145,15 +216,14 @@ class CharacterFeatureLookup:
             return None
 
         full_tags = [t.strip() for t in full_str.split(",") if t.strip()]
-        # full에서 core와 캐릭터명 자체를 제외
+        # full에서 core를 제외한 뒤, 의상 키워드 매칭만 남김
         costume_tags = []
         for t in full_tags:
             t_norm = t.strip().lower()
-            if t_norm in core_set:
+            if t_norm in core_set or t_norm == key:
                 continue
-            if t_norm == key:
-                continue
-            costume_tags.append(t)
+            if _is_costume_tag(t):
+                costume_tags.append(t)
 
         if not costume_tags:
             return None

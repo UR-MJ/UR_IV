@@ -14,19 +14,31 @@ _INPUT_STYLE = (
     "border: 1px solid #444; border-radius: 4px; padding: 2px 6px; font-size: 11px; }"
     "QLineEdit:focus { border: 1px solid #5865F2; }"
 )
+# 드롭다운 팝업 항목 스타일 (다크모드 대응)
+_COMBO_POPUP = (
+    "QComboBox QAbstractItemView { background-color: #2A2A2A; color: #DDD; "
+    "selection-background-color: #3A3A5A; selection-color: #FFF; "
+    "border: 1px solid #555; }"
+)
 _COMBO_STYLE = (
     "QComboBox { background-color: #2A2A2A; color: #DDD; "
     "border: 1px solid #444; border-radius: 4px; padding: 2px 4px; font-size: 11px; }"
+    "QComboBox::drop-down { border: none; }"
+    "QComboBox::down-arrow { image: none; border: none; width: 8px; }" + _COMBO_POPUP
 )
 _TARGET_POS_STYLE = (
     "QComboBox { background-color: #1A3A1A; color: #4CAF50; "
     "border: 1px solid #4CAF50; border-radius: 4px; padding: 2px 4px; "
     "font-size: 11px; font-weight: bold; }"
+    "QComboBox::drop-down { border: none; }"
+    "QComboBox::down-arrow { image: none; border: none; width: 8px; }" + _COMBO_POPUP
 )
 _TARGET_NEG_STYLE = (
     "QComboBox { background-color: #3A1A1A; color: #F44336; "
     "border: 1px solid #F44336; border-radius: 4px; padding: 2px 4px; "
     "font-size: 11px; font-weight: bold; }"
+    "QComboBox::drop-down { border: none; }"
+    "QComboBox::down-arrow { image: none; border: none; width: 8px; }" + _COMBO_POPUP
 )
 
 
@@ -83,9 +95,10 @@ class ConditionBlockRow(QFrame):
         self._input_condition = QLineEdit()
         self._input_condition.setPlaceholderText("조건 태그")
         self._input_condition.setStyleSheet(_INPUT_STYLE)
-        self._input_condition.setMinimumWidth(120)
+        self._input_condition.setMaximumWidth(160)
+        self._input_condition.setMinimumWidth(80)
         self._input_condition.textChanged.connect(self._on_changed)
-        row1.addWidget(self._input_condition, 1)
+        row1.addWidget(self._input_condition)
 
         lbl_particle = QLabel("이/가")
         lbl_particle.setStyleSheet(_LABEL_STYLE)
@@ -113,9 +126,10 @@ class ConditionBlockRow(QFrame):
         self._input_tags = QLineEdit()
         self._input_tags.setPlaceholderText("대상 태그 (쉼표 구분)")
         self._input_tags.setStyleSheet(_INPUT_STYLE)
-        self._input_tags.setMinimumWidth(120)
+        self._input_tags.setMaximumWidth(200)
+        self._input_tags.setMinimumWidth(100)
         self._input_tags.textChanged.connect(self._on_changed)
-        row2.addWidget(self._input_tags, 1)
+        row2.addWidget(self._input_tags)
 
         lbl_to = QLabel("를")
         lbl_to.setStyleSheet(_LABEL_STYLE)
