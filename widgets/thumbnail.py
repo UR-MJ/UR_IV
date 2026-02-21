@@ -6,6 +6,7 @@ from PyQt6.QtGui import (
     QPixmap, QAction, QPainter, QPainterPath, QBrush, QColor, QPen, QFont
 )
 from core.image_utils import get_thumb_path
+from utils.theme_manager import get_color
 
 
 class ThumbnailItem(QWidget):
@@ -72,11 +73,11 @@ class ThumbnailItem(QWidget):
         path.addRoundedRect(0, 0, self.width(), self.height(), 12, 12)
         painter.setClipPath(path)
 
-        # 배경
+        # 배경 (테마 인식)
         if self.is_selected:
-            painter.fillRect(self.rect(), QBrush(QColor("#3a3a3a")))
+            painter.fillRect(self.rect(), QBrush(QColor(get_color('bg_button_hover'))))
         else:
-            painter.fillRect(self.rect(), QBrush(QColor("#232323")))
+            painter.fillRect(self.rect(), QBrush(QColor(get_color('bg_secondary'))))
 
         # 이미지 그리기 (꽉 채우기 - 캐싱된 스케일 결과 사용)
         if self.pixmap and not self.pixmap.isNull():
@@ -113,7 +114,7 @@ class ThumbnailItem(QWidget):
             painter.setPen(pen)
             painter.drawRoundedRect(1, 1, self.width()-2, self.height()-2, 11, 11)
         else:
-            pen = QPen(QColor("#444444"), 1)
+            pen = QPen(QColor(get_color('border')), 1)
             painter.setPen(pen)
             painter.drawRoundedRect(0, 0, self.width()-1, self.height()-1, 12, 12)
 
@@ -152,12 +153,15 @@ class ThumbnailItem(QWidget):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2C2C2C; border: 1px solid #555; color: white;
-            }
-            QMenu::item { padding: 5px 20px; }
-            QMenu::item:selected { background-color: #5865F2; }
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {get_color('bg_secondary')};
+                border: 1px solid {get_color('border')};
+                color: {get_color('text_primary')};
+                border-radius: 8px; padding: 4px;
+            }}
+            QMenu::item {{ padding: 6px 20px; border-radius: 4px; }}
+            QMenu::item:selected {{ background-color: {get_color('accent')}; color: white; }}
         """)
 
         action_load = QAction("📝 설정 불러오기", self)

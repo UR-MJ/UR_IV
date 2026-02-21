@@ -94,41 +94,68 @@ class KeyCaptureButton(QPushButton):
 
 class SettingsTab(QWidget):
     """설정 탭"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_ui = parent
-        
+        self._is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
+
         # 사이드바
         self.sidebar = QListWidget()
-        self.sidebar.setFixedWidth(180)
+        self.sidebar.setFixedWidth(180 if not self._is_modern else 200)
         self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.sidebar.setStyleSheet(f"""
-            QListWidget {{
-                background-color: {get_color('bg_primary')};
-                border: none;
-                border-right: 1px solid {get_color('bg_input')};
-                outline: none;
-            }}
-            QListWidget::item {{
-                color: {get_color('text_secondary')};
-                padding: 15px 20px;
-                font-weight: bold;
-                border-bottom: 1px solid {get_color('bg_secondary')};
-            }}
-            QListWidget::item:selected {{
-                background-color: {get_color('bg_tertiary')};
-                color: {get_color('text_primary')};
-                border-left: 3px solid #5865F2;
-            }}
-            QListWidget::item:hover {{
-                background-color: {get_color('bg_secondary')};
-            }}
-        """)
+
+        if self._is_modern:
+            self.sidebar.setStyleSheet(f"""
+                QListWidget {{
+                    background-color: {get_color('bg_primary')};
+                    border: none;
+                    border-right: 1px solid {get_color('border')};
+                    outline: none;
+                    padding: 8px 6px;
+                }}
+                QListWidget::item {{
+                    color: {get_color('text_secondary')};
+                    padding: 12px 16px;
+                    font-weight: 600;
+                    border-radius: 10px;
+                    margin: 2px 0;
+                }}
+                QListWidget::item:selected {{
+                    background-color: {get_color('bg_tertiary')};
+                    color: {get_color('text_primary')};
+                }}
+                QListWidget::item:hover {{
+                    background-color: {get_color('bg_secondary')};
+                }}
+            """)
+        else:
+            self.sidebar.setStyleSheet(f"""
+                QListWidget {{
+                    background-color: {get_color('bg_primary')};
+                    border: none;
+                    border-right: 1px solid {get_color('bg_input')};
+                    outline: none;
+                }}
+                QListWidget::item {{
+                    color: {get_color('text_secondary')};
+                    padding: 15px 20px;
+                    font-weight: bold;
+                    border-bottom: 1px solid {get_color('bg_secondary')};
+                }}
+                QListWidget::item:selected {{
+                    background-color: {get_color('bg_tertiary')};
+                    color: {get_color('text_primary')};
+                    border-left: 3px solid #5865F2;
+                }}
+                QListWidget::item:hover {{
+                    background-color: {get_color('bg_secondary')};
+                }}
+            """)
         
         items = [
             "📝 프롬프트 로직",
@@ -183,18 +210,36 @@ class SettingsTab(QWidget):
 
     def _create_header(self, text):
         """헤더 라벨 생성"""
-        lbl = QLabel(f"<h2>{text}</h2>")
-        lbl.setStyleSheet("color: white; margin-bottom: 10px;")
+        if self._is_modern:
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"color: {get_color('text_primary')}; font-size: 20px; "
+                f"font-weight: bold; margin-bottom: 12px; background: transparent;"
+            )
+        else:
+            lbl = QLabel(f"<h2>{text}</h2>")
+            lbl.setStyleSheet("color: white; margin-bottom: 10px;")
         return lbl
 
     def _create_container(self):
         """컨테이너 위젯 생성"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
         w = QWidget()
         l = QVBoxLayout(w)
-        l.setContentsMargins(30, 30, 30, 30)
-        l.setSpacing(20)
+        if self._is_modern:
+            l.setContentsMargins(36, 30, 36, 30)
+            l.setSpacing(16)
+        else:
+            l.setContentsMargins(30, 30, 30, 30)
+            l.setSpacing(20)
         l.setAlignment(Qt.AlignmentFlag.AlignTop)
-        return w, l
+
+        scroll.setWidget(w)
+        return scroll, l
 
     def _create_logic_page(self):
         """프롬프트 로직 페이지"""

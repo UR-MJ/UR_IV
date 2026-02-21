@@ -314,7 +314,21 @@ class GenerationMixin:
         
         from core.image_utils import exif_for_display
         self.exif_display.setPlainText(exif_for_display(gen_info))
-        
+
+        # 뷰어 정보 바 업데이트 (모던 UI)
+        if hasattr(self, 'viewer_info_bar') and isinstance(gen_info, dict):
+            w = gen_info.get('width', 0)
+            h = gen_info.get('height', 0)
+            seed = gen_info.get('seed', '')
+            info_parts = []
+            if w and h:
+                info_parts.append(f"해상도 {w}×{h}")
+            if seed:
+                info_parts.append(f"시드 {seed}")
+            if info_parts:
+                self.viewer_info_bar.setText("  |  ".join(info_parts))
+                self.viewer_info_bar.show()
+
         # XYZ Plot 결과 전달
         xyz_info = gen_info.get('_xyz_info') if isinstance(gen_info, dict) else None
         if not xyz_info and hasattr(self, 'generation_data'):

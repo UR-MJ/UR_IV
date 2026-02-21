@@ -149,8 +149,9 @@ def setup_modern_ui(self):
     # ── 왼쪽 패널 (모던) ──
     self.left_panel_scroll = _build_modern_left_panel(self)
 
-    # ── 중앙 탭 (기존 로직 재사용) ──
+    # ── 중앙 탭 (기존 로직 재사용 + 모던 스타일 오버라이드) ──
     self.center_tabs = self._create_center_tabs()
+    _apply_modern_center_styling(self)
 
     # ── 에디터 도구 패널 (center_tabs 이후에 생성) ──
     self.editor_tools_scroll = self._create_editor_tools_panel()
@@ -163,8 +164,8 @@ def setup_modern_ui(self):
     self.left_stack.addWidget(self.i2i_tab.left_scroll)     # 2: I2I 설정
     self.left_stack.addWidget(self.inpaint_tab.left_scroll) # 3: Inpaint 설정
 
-    # ── 히스토리 패널 (기존 로직 재사용) ──
-    self.history_panel = self._create_history_panel()
+    # ── 히스토리 패널 (모던 스타일) ──
+    self.history_panel = _build_modern_history_panel(self)
     self.history_panel.setFixedWidth(240)
 
     upper_layout.addWidget(self.left_stack)
@@ -912,3 +913,215 @@ def _build_modern_left_panel(self) -> QScrollArea:
 
     scroll.setWidget(container)
     return scroll
+
+
+# ===========================================================================
+# Phase 4: 모던 중앙 패널 스타일링
+# ===========================================================================
+def _apply_modern_center_styling(self):
+    """중앙 탭과 뷰어에 모던 스타일 오버라이드 적용"""
+
+    # ── 탭바: 인라인 스타일 제거 → 모던 QSS 템플릿이 pill 스타일 적용 ──
+    self.center_tabs.setStyleSheet("")
+
+    # ── 뷰어 라벨 모던 스타일 ──
+    self.viewer_label.setStyleSheet(
+        f"background-color: {get_color('bg_primary')}; "
+        f"border-radius: 12px; color: {get_color('text_muted')};"
+    )
+
+    # ── EXIF 디스플레이 모던 스타일 ──
+    self.exif_display.setStyleSheet(f"""
+        QTextEdit {{
+            background-color: {get_color('bg_secondary')};
+            color: {get_color('text_secondary')};
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 9pt;
+        }}
+    """)
+
+    # ── 프로그레스 바 모던 스타일 ──
+    self.gen_progress_bar.setStyleSheet(f"""
+        QProgressBar {{
+            background-color: {get_color('bg_secondary')};
+            border: none;
+            border-radius: 4px;
+            color: {get_color('text_primary')};
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+        }}
+        QProgressBar::chunk {{
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 {get_color('accent')}, stop:1 #7289DA);
+            border-radius: 4px;
+        }}
+    """)
+
+    # ── 뷰어 정보 바 (이미지 아래, 해상도/시드 표시) ──
+    viewer_container = self.viewer_panel.widget(0)
+    vc_layout = viewer_container.layout()
+
+    self.viewer_info_bar = QLabel("")
+    self.viewer_info_bar.setFixedHeight(26)
+    self.viewer_info_bar.setAlignment(
+        Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+    )
+    self.viewer_info_bar.setStyleSheet(
+        f"background-color: {get_color('bg_secondary')}; "
+        f"color: {get_color('text_muted')}; font-size: 11px; "
+        f"font-weight: bold; border-radius: 6px; margin: 2px 8px;"
+    )
+    self.viewer_info_bar.hide()
+    # viewer_label(0) 과 progress_bar 사이에 삽입
+    vc_layout.insertWidget(1, self.viewer_info_bar)
+
+
+# ===========================================================================
+# Phase 4: 모던 히스토리 패널
+# ===========================================================================
+def _build_modern_history_panel(self) -> QWidget:
+    """모던 스타일 히스토리 패널"""
+
+    panel = QWidget()
+    panel.setObjectName("modernHistoryPanel")
+    panel.setStyleSheet(f"""
+        #modernHistoryPanel {{
+            background-color: {get_color('bg_primary')};
+            border-left: 1px solid {get_color('border')};
+        }}
+    """)
+    layout = QVBoxLayout(panel)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+
+    # ── 헤더 ──
+    header_w = QWidget()
+    header_w.setObjectName("histHeader")
+    header_w.setFixedHeight(44)
+    header_w.setStyleSheet(
+        f"#histHeader {{ background-color: {get_color('bg_secondary')}; }}"
+    )
+    header_layout = QHBoxLayout(header_w)
+    header_layout.setContentsMargins(12, 0, 8, 0)
+
+    title = QLabel("히스토리")
+    title.setStyleSheet(
+        f"font-weight: bold; color: {get_color('text_primary')}; "
+        f"font-size: 13px; background: transparent;"
+    )
+    header_layout.addWidget(title)
+    header_layout.addStretch()
+
+    self.btn_refresh_gallery = QPushButton("🔄")
+    self.btn_refresh_gallery.setFixedSize(30, 30)
+    self.btn_refresh_gallery.setToolTip("목록 새로고침")
+    self.btn_refresh_gallery.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_refresh_gallery.setStyleSheet(f"""
+        QPushButton {{
+            background: transparent; border: none;
+            border-radius: 15px; font-size: 14px;
+        }}
+        QPushButton:hover {{
+            background-color: {get_color('bg_button_hover')};
+        }}
+    """)
+    self.btn_refresh_gallery.clicked.connect(self._on_refresh_gallery)
+    header_layout.addWidget(self.btn_refresh_gallery)
+    layout.addWidget(header_w)
+
+    # ── 이전 버튼 ──
+    self.btn_history_up = QPushButton("▲")
+    self.btn_history_up.setFixedHeight(24)
+    self.btn_history_up.clicked.connect(self.select_prev_image)
+    self.btn_history_up.setStyleSheet(f"""
+        QPushButton {{
+            background: transparent; border: none;
+            color: {get_color('text_muted')}; font-size: 11px;
+        }}
+        QPushButton:hover {{
+            background-color: {get_color('bg_secondary')};
+            color: {get_color('text_primary')};
+        }}
+    """)
+    layout.addWidget(self.btn_history_up)
+
+    # ── 갤러리 스크롤 ──
+    self.gallery_scroll_area = QScrollArea()
+    self.gallery_scroll_area.setWidgetResizable(True)
+    self.gallery_scroll_area.setHorizontalScrollBarPolicy(
+        Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    )
+    self.gallery_scroll_area.setStyleSheet(f"""
+        QScrollArea {{ border: none; background: transparent; }}
+        QScrollBar:vertical {{
+            width: 4px; background: transparent;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {get_color('scrollbar_handle')};
+            border-radius: 2px; min-height: 40px;
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+            height: 0px; background: none;
+        }}
+    """)
+
+    scroll_content = QWidget()
+    self.gallery_layout = QVBoxLayout(scroll_content)
+    self.gallery_layout.setAlignment(
+        Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
+    )
+    self.gallery_layout.setSpacing(8)
+    self.gallery_layout.setContentsMargins(8, 6, 8, 6)
+    self.gallery_scroll_area.setWidget(scroll_content)
+
+    layout.addWidget(self.gallery_scroll_area, 1)
+
+    # ── 다음 버튼 ──
+    self.btn_history_down = QPushButton("▼")
+    self.btn_history_down.setFixedHeight(24)
+    self.btn_history_down.clicked.connect(self.select_next_image)
+    self.btn_history_down.setStyleSheet(f"""
+        QPushButton {{
+            background: transparent; border: none;
+            color: {get_color('text_muted')}; font-size: 11px;
+        }}
+        QPushButton:hover {{
+            background-color: {get_color('bg_secondary')};
+            color: {get_color('text_primary')};
+        }}
+    """)
+    layout.addWidget(self.btn_history_down)
+
+    # ── 즐겨찾기 버튼 (pill 스타일) ──
+    self.btn_add_favorite = QPushButton("⭐ 즐겨찾기 추가")
+    self.btn_add_favorite.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_add_favorite.setFixedHeight(34)
+    self.btn_add_favorite.setEnabled(False)
+    self.btn_add_favorite.setStyleSheet(f"""
+        QPushButton {{
+            background-color: transparent;
+            border: 1px solid #FFC107;
+            color: #FFC107;
+            font-weight: bold;
+            font-size: 12px;
+            border-radius: 17px;
+            margin: 4px 8px;
+        }}
+        QPushButton:hover {{
+            background-color: #FFC107;
+            color: {get_color('bg_primary')};
+        }}
+        QPushButton:disabled {{
+            background-color: transparent;
+            border: 1px solid {get_color('border')};
+            color: {get_color('disabled_text')};
+        }}
+    """)
+    layout.addWidget(self.btn_add_favorite)
+
+    return panel

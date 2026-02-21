@@ -17,6 +17,7 @@ class ToggleSwitch(QWidget):
     """iOS 스타일 토글 스위치"""
 
     toggled = pyqtSignal(bool)
+    stateChanged = pyqtSignal(int)   # QCheckBox 호환 (0=unchecked, 2=checked)
 
     def __init__(self, parent=None, checked: bool = False):
         super().__init__(parent)
@@ -54,6 +55,15 @@ class ToggleSwitch(QWidget):
         self._checked = checked
         self._animate(checked)
         self.toggled.emit(checked)
+        self.stateChanged.emit(2 if checked else 0)
+
+    def checkState(self):
+        """QCheckBox 호환"""
+        return Qt.CheckState.Checked if self._checked else Qt.CheckState.Unchecked
+
+    def setCheckState(self, state):
+        """QCheckBox 호환"""
+        self.setChecked(state == Qt.CheckState.Checked or state == 2)
 
     def toggle(self):
         self.setChecked(not self._checked)
