@@ -34,11 +34,12 @@ class WebUIBackend(AbstractBackend):
 
     def get_info(self) -> BackendInfo:
         """WebUI API에서 모델, 샘플러 등 정보 가져오기"""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         headers = {"accept": "application/json"}
         timeout = 5
         info = BackendInfo()
 
-        # 모델 목록 (필수)
+        # 모델 목록 (필수 - 동기 호출)
         res = requests.get(
             f'{self.api_url}/sdapi/v1/sd-models',
             headers=headers, timeout=timeout
@@ -51,59 +52,58 @@ class WebUIBackend(AbstractBackend):
                 m.get('model_name', '') for m in sd_models
             ]
 
-        # 샘플러
-        try:
-            r = requests.get(
-                f'{self.api_url}/sdapi/v1/samplers',
+        def _fetch(endpoint):
+            return requests.get(
+                f'{self.api_url}{endpoint}',
                 headers=headers, timeout=timeout
             ).json()
-            info.samplers = [s.get('name', '') for s in r] if isinstance(r, list) else []
-        except Exception:
-            pass
 
-        # 스케줄러
-        try:
-            r = requests.get(
-                f'{self.api_url}/sdapi/v1/schedulers',
-                headers=headers, timeout=timeout
-            ).json()
-            info.schedulers = (
-                [s.get('name', '') for s in r] if isinstance(r, list) else ["Automatic"]
-            )
-        except Exception:
-            pass
+        # 나머지 5개 병렬 호출
+        tasks = {
+            'samplers': '/sdapi/v1/samplers',
+            'schedulers': '/sdapi/v1/schedulers',
+            'upscalers': '/sdapi/v1/upscalers',
+            'vae': '/sdapi/v1/sd-vae',
+            'options': '/sdapi/v1/options',
+        }
 
-        # 업스케일러
-        try:
-            r = requests.get(
-                f'{self.api_url}/sdapi/v1/upscalers',
-                headers=headers, timeout=timeout
-            ).json()
-            info.upscalers = [u.get('name', '') for u in r] if isinstance(r, list) else []
-        except Exception:
-            pass
-
-        # VAE
-        try:
-            r = requests.get(
-                f'{self.api_url}/sdapi/v1/sd-vae',
-                headers=headers, timeout=timeout
-            ).json()
-            if isinstance(r, list):
-                info.vae = ["Use same VAE"] + [v.get('model_name', '') for v in r]
-        except Exception:
-            pass
-
-        # 옵션
-        try:
-            info.options = requests.get(
-                f'{self.api_url}/sdapi/v1/options',
-                headers=headers, timeout=timeout
-            ).json()
-        except Exception:
-            pass
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(_fetch, ep): name for name, ep in tasks.items()}
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    r = future.result()
+                    if name == 'samplers' and isinstance(r, list):
+                        info.samplers = [s.get('name', '') for s in r]
+                    elif name == 'schedulers' and isinstance(r, list):
+                        info.schedulers = [s.get('name', '') for s in r] or ["Automatic"]
+                    elif name == 'upscalers' and isinstance(r, list):
+                        info.upscalers = [u.get('name', '') for u in r]
+                    elif name == 'vae' and isinstance(r, list):
+                        info.vae = ["Use same VAE"] + [v.get('model_name', '') for v in r]
+                    elif name == 'options':
+                        info.options = r
+                except Exception:
+                    pass
 
         return info
+
+    def get_system_stats(self) -> dict:
+        """GPU/VRAM 상태 조회"""
+        try:
+            r = requests.get(f'{self.api_url}/sdapi/v1/memory', timeout=3)
+            if r.status_code == 200:
+                data = r.json()
+                cuda = data.get('cuda', {})
+                sys_info = cuda.get('system', {})
+                return {
+                    'vram_used': sys_info.get('used', 0),
+                    'vram_total': sys_info.get('total', 0),
+                    'vram_free': sys_info.get('free', 0),
+                }
+        except Exception:
+            pass
+        return {}
 
     def get_loras(self) -> list:
         """WebUI LoRA 목록 반환"""

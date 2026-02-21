@@ -136,7 +136,6 @@ class ComfyUIBackend(AbstractBackend):
 
     def __init__(self, api_url: str):
         super().__init__(api_url)
-        self.client_id = str(uuid.uuid4())
 
     def get_backend_type(self) -> str:
         return "comfyui"
@@ -198,6 +197,24 @@ class ComfyUIBackend(AbstractBackend):
             pass
 
         return info
+
+    def get_system_stats(self) -> dict:
+        """GPU/VRAM 상태 조회"""
+        try:
+            r = requests.get(f'{self.api_url}/system_stats', timeout=3)
+            if r.status_code == 200:
+                data = r.json()
+                devices = data.get('devices', [])
+                if devices:
+                    dev = devices[0]
+                    return {
+                        'vram_used': dev.get('vram_total', 0) - dev.get('vram_free', 0),
+                        'vram_total': dev.get('vram_total', 0),
+                        'vram_free': dev.get('vram_free', 0),
+                    }
+        except Exception:
+            pass
+        return {}
 
     def get_loras(self) -> list:
         """ComfyUI LoRA 목록 반환"""
@@ -503,11 +520,14 @@ class ComfyUIBackend(AbstractBackend):
         """워크플로우를 큐에 넣고 WebSocket으로 결과 대기"""
         ws = None
         try:
+            # ★ 요청마다 고유 client_id 생성
+            client_id = str(uuid.uuid4())
+
             # ★ WebSocket 먼저 연결 (프롬프트 제출 전에 연결해야 메시지를 놓치지 않음)
             ws_url = self.api_url.replace('http://', 'ws://').replace('https://', 'wss://')
-            _logger.info(f"WebSocket 연결: {ws_url}/ws?clientId={self.client_id}")
+            _logger.info(f"WebSocket 연결: {ws_url}/ws?clientId={client_id}")
             ws = websocket.create_connection(
-                f'{ws_url}/ws?clientId={self.client_id}',
+                f'{ws_url}/ws?clientId={client_id}',
                 timeout=600
             )
 
@@ -515,7 +535,7 @@ class ComfyUIBackend(AbstractBackend):
             _logger.info("프롬프트 제출 중...")
             prompt_response = requests.post(
                 f'{self.api_url}/prompt',
-                json={'prompt': workflow, 'client_id': self.client_id},
+                json={'prompt': workflow, 'client_id': client_id},
                 timeout=30
             )
 

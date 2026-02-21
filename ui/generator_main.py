@@ -2,7 +2,7 @@
 """
 GeneratorMainUI - 메인 윈도우 클래스
 """
-from PyQt6.QtWidgets import QMessageBox, QLineEdit, QTextEdit, QApplication
+from PyQt6.QtWidgets import QMessageBox, QLineEdit, QTextEdit, QApplication, QHBoxLayout, QWidget
 from PyQt6.QtCore import QTimer, QEvent
 
 from ui.generator_base import GeneratorBase
@@ -63,6 +63,13 @@ class GeneratorMainUI(
 
         # 시스템 트레이
         self._setup_tray()
+
+        # VRAM 모니터링 타이머
+        self._vram_timer = QTimer()
+        self._vram_timer.setInterval(30000)  # 30초
+        self._vram_timer.timeout.connect(self._update_vram_status)
+        self._vram_timer.start()
+        QTimer.singleShot(3000, self._update_vram_status)  # 시작 3초 후 첫 조회
 
         # 실시간 프롬프트 정리 디바운스 타이머
         self._clean_timer = QTimer()
@@ -164,7 +171,17 @@ class GeneratorMainUI(
 
         # 하단 컨테이너에 대기열 + 상태 메시지 배치
         self._bottom_layout.addWidget(self.queue_panel)
-        self._bottom_layout.addWidget(self.status_message_label)
+
+        # 상태바 행: 상태 메시지 + VRAM 라벨
+        status_row = QWidget()
+        status_row.setFixedHeight(24)
+        status_row.setStyleSheet("background-color: #1A1A1A; border-top: 1px solid #2C2C2C;")
+        status_row_layout = QHBoxLayout(status_row)
+        status_row_layout.setContentsMargins(0, 0, 0, 0)
+        status_row_layout.setSpacing(0)
+        status_row_layout.addWidget(self.status_message_label, 1)
+        status_row_layout.addWidget(self.vram_label, 0)
+        self._bottom_layout.addWidget(status_row)
 
         # 시그널 연결
         self.queue_panel.btn_add_current.clicked.connect(self._add_current_to_queue)
@@ -395,11 +412,65 @@ class GeneratorMainUI(
         self._tray_manager.quit_requested.connect(self._quit_app)
         self._tray_manager.show()
 
+    def _update_vram_status(self):
+        """VRAM 상태 업데이트"""
+        try:
+            from backends import get_backend
+            backend = get_backend()
+            if backend is None:
+                return
+            stats = backend.get_system_stats()
+            if stats and stats.get('vram_total', 0) > 0:
+                used_gb = stats['vram_used'] / (1024**3)
+                total_gb = stats['vram_total'] / (1024**3)
+                pct = (stats['vram_used'] / stats['vram_total']) * 100
+                self.vram_label.setText(f"VRAM: {used_gb:.1f}/{total_gb:.1f}GB ({pct:.0f}%)")
+                if pct > 90:
+                    self.vram_label.setStyleSheet("color: #FF4444; font-size: 10px;")
+                elif pct > 70:
+                    self.vram_label.setStyleSheet("color: #FFA500; font-size: 10px;")
+                else:
+                    self.vram_label.setStyleSheet("color: #44FF44; font-size: 10px;")
+            else:
+                self.vram_label.setText("")
+        except Exception:
+            pass
+
     def _restore_from_tray(self):
         """트레이에서 창 복원"""
         self.showNormal()
         self.activateWindow()
         self.raise_()
+
+    def _cleanup_workers(self):
+        """실행 중인 워커 스레드 정리"""
+        workers_to_clean = []
+
+        # 생성 워커
+        if hasattr(self, 'gen_worker') and self.gen_worker is not None:
+            workers_to_clean.append(self.gen_worker)
+
+        # 갤러리 워커
+        if hasattr(self, 'gallery_tab'):
+            for attr in ('_scan_worker', '_cache_worker'):
+                w = getattr(self.gallery_tab, attr, None)
+                if w is not None:
+                    workers_to_clean.append(w)
+
+        # 자동화 중지
+        if hasattr(self, 'queue_manager'):
+            try:
+                self.queue_manager.stop()
+            except Exception:
+                pass
+
+        for w in workers_to_clean:
+            try:
+                if w.isRunning():
+                    w.quit()
+                    w.wait(3000)
+            except Exception:
+                pass
 
     def _quit_app(self):
         """앱 완전 종료"""
@@ -409,6 +480,12 @@ class GeneratorMainUI(
             self.save_settings()
         except Exception as e:
             get_logger('main').error(f"종료 시 설정 저장 실패: {e}")
+        self._cleanup_workers()
+        if hasattr(self, 'db') and self.db:
+            try:
+                self.db.close()
+            except Exception:
+                pass
         self._tray_manager.hide()
         os._exit(0)
 
@@ -441,6 +518,8 @@ class GeneratorMainUI(
                 self.save_settings()
             except Exception as e:
                 get_logger('main').error(f"종료 시 설정 저장 실패: {e}")
+            # 워커 스레드 정리
+            self._cleanup_workers()
             # DB 연결 종료
             if hasattr(self, 'db') and self.db:
                 try:

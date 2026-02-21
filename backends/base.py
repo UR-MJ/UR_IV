@@ -72,6 +72,10 @@ class AbstractBackend(ABC):
         """LoRA 목록 반환. 각 항목: {'name': str, 'alias': str, 'path': str}"""
         return []
 
+    def get_system_stats(self) -> Dict:
+        """GPU/VRAM 상태 조회. 기본 구현은 빈 dict 반환"""
+        return {}
+
     @abstractmethod
     def get_backend_type(self) -> str:
         """백엔드 이름 반환 ('webui' 또는 'comfyui')"""
