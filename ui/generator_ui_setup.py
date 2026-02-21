@@ -66,31 +66,16 @@ class UISetupMixin:
         upper_layout.addWidget(self.center_tabs)
         upper_layout.addWidget(self.history_panel)
 
-        # 메인 스플리터 (상단 작업 영역 + 하단 대기열)
-        from PyQt6.QtWidgets import QSplitter as _Splitter
-        self.main_splitter = _Splitter(Qt.Orientation.Vertical)
-        self.main_splitter.setChildrenCollapsible(False)
-        self.main_splitter.setHandleWidth(5)
-        self.main_splitter.setStyleSheet(
-            "QSplitter::handle:vertical { background: #333; border-radius: 2px; }"
-        )
-        self.main_splitter.addWidget(upper_area)
+        # 상단 작업 영역 + 하단 대기열 (고정 높이)
+        main_layout.addWidget(upper_area, 1)
 
         # 하단 컨테이너 (대기열 + 상태바, _setup_queue에서 채움)
         self._bottom_container = QWidget()
         self._bottom_layout = QVBoxLayout(self._bottom_container)
         self._bottom_layout.setContentsMargins(0, 0, 0, 0)
         self._bottom_layout.setSpacing(0)
-        self._bottom_container.setMinimumHeight(100)
-        self.main_splitter.addWidget(self._bottom_container)
-
-        main_layout.addWidget(self.main_splitter)
-        self.main_splitter.setSizes([700, 230])
-        self.main_splitter.setStretchFactor(0, 1)
-        self.main_splitter.setStretchFactor(1, 0)
-        # 대기열 크기 고정 — splitter 핸들 비활성화
-        self.main_splitter.setHandleWidth(0)
         self._bottom_container.setFixedHeight(230)
+        main_layout.addWidget(self._bottom_container, 0)
 
         # 상태 메시지 라벨은 _setup_queue()에서 하단 컨테이너에 추가
         self.status_message_label = QLabel("")
@@ -536,8 +521,10 @@ class UISetupMixin:
         
         artist_layout.addLayout(h_artist)
         self.artist_input = TagInputWidget()
-        self.artist_input.setMinimumHeight(36)
-        self.artist_input.setMaximumHeight(80)
+        self.artist_input.setMinimumHeight(60)
+        self.artist_input.document().contentsChanged.connect(
+            self._adjust_artist_height
+        )
         artist_layout.addWidget(self.artist_input)
         layout.addWidget(artist_group)
 
@@ -1304,6 +1291,15 @@ class UISetupMixin:
         # 높이 차이가 3px 이상일 때만 업데이트 (진동 방지)
         if abs(current_h - new_h) > 3:
             self.total_prompt_display.setFixedHeight(new_h)
+
+    def _adjust_artist_height(self):
+        """작가 입력칸 내용에 맞춰 높이 자동 조절"""
+        doc = self.artist_input.document()
+        doc_height = int(doc.size().height()) + 10
+        new_h = max(60, min(doc_height, 200))
+        current_h = self.artist_input.height()
+        if abs(current_h - new_h) > 3:
+            self.artist_input.setFixedHeight(new_h)
 
     def _create_group(self, parent_layout, title, widget_or_layout):
         """그룹 생성 헬퍼"""
