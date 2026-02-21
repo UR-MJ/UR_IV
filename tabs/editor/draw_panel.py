@@ -66,6 +66,9 @@ class DrawPanel(QWidget):
             (4, "🎨  채우기"),
             (5, "💉  스포이트"),
             (6, "🖨️  클론 스탬프"),
+            (7, "📝  텍스트"),
+            (8, "🌈  그라디언트"),
+            (9, "🩹  복원 브러시"),
         ]
 
         for id_val, text in tools:
@@ -128,6 +131,50 @@ class DrawPanel(QWidget):
         color_row.addWidget(btn_custom)
 
         main_layout.addLayout(color_row)
+
+        # 그라디언트용 두 번째 색상
+        self._gradient_end_frame = QWidget()
+        grad_row = QHBoxLayout(self._gradient_end_frame)
+        grad_row.setContentsMargins(0, 0, 0, 0)
+        grad_row.setSpacing(6)
+
+        grad_label = QLabel("끝 색상:")
+        grad_label.setStyleSheet("color: #999; font-size: 12px;")
+        grad_row.addWidget(grad_label)
+
+        self._gradient_end_color = QColor("#000000")
+        self.gradient_end_preview = QLabel()
+        self.gradient_end_preview.setFixedSize(32, 32)
+        self.gradient_end_preview.setStyleSheet(
+            f"background-color: #000000; border: 2px solid #666; border-radius: 4px;"
+        )
+        grad_row.addWidget(self.gradient_end_preview)
+
+        btn_grad_color = QPushButton("선택")
+        btn_grad_color.setFixedHeight(32)
+        btn_grad_color.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        btn_grad_color.setStyleSheet(
+            "background: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            "border-radius: 4px; font-size: 12px;"
+        )
+        btn_grad_color.clicked.connect(self._on_gradient_end_color)
+        grad_row.addWidget(btn_grad_color)
+        grad_row.addStretch()
+
+        self._gradient_end_frame.setVisible(False)
+        main_layout.addWidget(self._gradient_end_frame)
+
+        # 복원 브러시 적용 버튼
+        self.btn_heal_apply = QPushButton("🩹 복원 적용")
+        self.btn_heal_apply.setFixedHeight(36)
+        self.btn_heal_apply.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_heal_apply.setStyleSheet(
+            "QPushButton { background-color: #2D8C4E; color: white; border-radius: 6px; "
+            "font-size: 13px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #3AA05E; }"
+        )
+        self.btn_heal_apply.setVisible(False)
+        main_layout.addWidget(self.btn_heal_apply)
 
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
@@ -198,7 +245,11 @@ class DrawPanel(QWidget):
 
     def current_draw_tool(self) -> str:
         """현재 그리기 도구 이름"""
-        _map = {0: 'pen', 1: 'line', 2: 'rect', 3: 'ellipse', 4: 'fill', 5: 'eyedropper', 6: 'clone_stamp'}
+        _map = {
+            0: 'pen', 1: 'line', 2: 'rect', 3: 'ellipse',
+            4: 'fill', 5: 'eyedropper', 6: 'clone_stamp',
+            7: 'text_overlay', 8: 'gradient', 9: 'heal',
+        }
         return _map.get(self.tool_group.checkedId(), 'pen')
 
     def current_color_bgr(self) -> tuple:
@@ -241,6 +292,9 @@ class DrawPanel(QWidget):
             self._sync_to_label()
 
     def _on_tool_changed(self, btn):
+        tool = self.current_draw_tool()
+        self._gradient_end_frame.setVisible(tool == 'gradient')
+        self.btn_heal_apply.setVisible(tool == 'heal')
         self._sync_to_label()
         if self.parent_editor and hasattr(self.parent_editor, 'image_label'):
             self.parent_editor.image_label.setFocus()
@@ -266,6 +320,19 @@ class DrawPanel(QWidget):
         blended = cv2.addWeighted(current, alpha, pristine, 1.0 - alpha, 0)
         label.display_base_image = blended
         label.update()
+
+    def _on_gradient_end_color(self):
+        color = QColorDialog.getColor(self._gradient_end_color, self, "끝 색상 선택")
+        if color.isValid():
+            self._gradient_end_color = color
+            self.gradient_end_preview.setStyleSheet(
+                f"background-color: {color.name()}; border: 2px solid #666; border-radius: 4px;"
+            )
+
+    def gradient_end_color_bgr(self) -> tuple:
+        """그라디언트 끝 색상 (BGR)"""
+        return (self._gradient_end_color.blue(), self._gradient_end_color.green(),
+                self._gradient_end_color.red())
 
     def _sync_to_label(self):
         """현재 설정을 InteractiveLabel에 동기화"""

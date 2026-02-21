@@ -347,9 +347,11 @@ class MosaicPanel(QWidget):
         )
 
         self.slider_strength = NumericSlider("효과 강도", 1, 100, 15)
+        self.slider_feather = NumericSlider("페더링", 0, 50, 0)
 
         action_layout.addWidget(self.size_stack)
         action_layout.addWidget(self.slider_strength)
+        action_layout.addWidget(self.slider_feather)
 
         btn_layout = QHBoxLayout()
         self.btn_apply = QPushButton("✨ 적용 (Enter)")
@@ -392,8 +394,17 @@ class MosaicPanel(QWidget):
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
 
+        self.btn_perspective = QPushButton("📐 원근보정")
+        self.btn_perspective.setFixedHeight(35)
+        self.btn_perspective.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_perspective.setStyleSheet(
+            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            "border-radius: 4px; font-size: 13px; font-weight: bold;"
+        )
+
         crop_resize_layout.addWidget(self.btn_crop)
         crop_resize_layout.addWidget(self.btn_resize)
+        crop_resize_layout.addWidget(self.btn_perspective)
         action_layout.addLayout(crop_resize_layout)
 
         # 회전/뒤집기 버튼

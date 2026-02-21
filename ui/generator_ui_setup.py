@@ -212,6 +212,11 @@ class UISetupMixin:
         self.mosaic_editor = MosaicEditor()
         center_tabs.addTab(self.mosaic_editor, "🎨 Editor")
 
+        # 5-1. 배치 처리 탭
+        from tabs.batch_tab import BatchTab
+        self.batch_tab = BatchTab(self)
+        center_tabs.addTab(self.batch_tab, "📦 배치 처리")
+
         # 6-1. 업스케일 탭
         self.upscale_tab = UpscaleTab(self)
         center_tabs.addTab(self.upscale_tab, "🔍 Upscale")

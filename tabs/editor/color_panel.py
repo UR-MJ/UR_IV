@@ -86,6 +86,12 @@ class ColorAdjustPanel(QWidget):
             ("🔥 따뜻하게", "warm"),
             ("❄️ 차갑게", "cool"),
             ("🌫️ 소프트", "soft"),
+            ("🔄 반전", "invert"),
+            ("🎭 엠보스", "emboss"),
+            ("✏️ 스케치", "sketch"),
+            ("🎨 포스터", "posterize"),
+            ("🌙 비네트", "vignette"),
+            ("🔇 노이즈제거", "denoise"),
         ]
 
         for i, (label, name) in enumerate(presets):
@@ -95,12 +101,12 @@ class ColorAdjustPanel(QWidget):
             btn.setStyleSheet("""
                 QPushButton {
                     background-color: #2C2C2C; color: #DDD; border: 1px solid #555;
-                    border-radius: 4px; font-size: 13px; font-weight: bold;
+                    border-radius: 4px; font-size: 12px; font-weight: bold;
                 }
                 QPushButton:hover { background-color: #3C3C3C; border: 1px solid #777; }
             """)
             btn.clicked.connect(lambda checked, n=name: self.filter_apply_requested.emit(n))
-            preset_grid.addWidget(btn, i // 3, i % 3)
+            preset_grid.addWidget(btn, i // 4, i % 4)
 
         layout.addLayout(preset_grid)
         layout.addStretch()
@@ -184,6 +190,42 @@ class ColorAdjustPanel(QWidget):
 
         elif filter_name == "soft":
             return cv2.GaussianBlur(img, (5, 5), 0)
+
+        elif filter_name == "invert":
+            return cv2.bitwise_not(img)
+
+        elif filter_name == "emboss":
+            kernel = np.array([
+                [-2, -1, 0],
+                [-1,  1, 1],
+                [ 0,  1, 2]
+            ], dtype=np.float32)
+            embossed = cv2.filter2D(img, -1, kernel)
+            return np.clip(embossed.astype(np.int16) + 128, 0, 255).astype(np.uint8)
+
+        elif filter_name == "sketch":
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            inv = cv2.bitwise_not(gray)
+            blur = cv2.GaussianBlur(inv, (21, 21), 0)
+            sketch = cv2.divide(gray, 255 - blur, scale=256)
+            return cv2.cvtColor(sketch, cv2.COLOR_GRAY2BGR)
+
+        elif filter_name == "posterize":
+            n = 6
+            table = np.arange(256, dtype=np.uint8)
+            table = (table // (256 // n)) * (256 // n)
+            return cv2.LUT(img, table)
+
+        elif filter_name == "vignette":
+            rows, cols = img.shape[:2]
+            X = cv2.getGaussianKernel(cols, cols * 0.5)
+            Y = cv2.getGaussianKernel(rows, rows * 0.5)
+            mask = Y * X.T
+            mask = mask / mask.max()
+            return (img.astype(np.float32) * mask[:, :, np.newaxis]).astype(np.uint8)
+
+        elif filter_name == "denoise":
+            return cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
 
         return img
 

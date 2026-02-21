@@ -158,7 +158,7 @@ class MosaicEditor(QWidget):
             }
         """
         self._subtab_buttons = []
-        tab_names = ["🔲 모자이크", "🎨 색감", "💧 워터마크", "✏️ 그리기", "✂️ 이동"]
+        tab_names = ["🔲 모자이크", "🎨 색감", "🔧 고급색감", "💧 워터마크", "✏️ 그리기", "✂️ 이동"]
         for name in tab_names:
             btn = QPushButton(name)
             btn.setCheckable(True)
@@ -187,6 +187,11 @@ class MosaicEditor(QWidget):
         # 색감 조절 패널
         self.color_panel = ColorAdjustPanel(self)
         self._subtab_stack.addWidget(self.color_panel)
+
+        # 고급 색감 패널
+        from tabs.editor.advanced_color_panel import AdvancedColorPanel
+        self.adv_color_panel = AdvancedColorPanel(self)
+        self._subtab_stack.addWidget(self.adv_color_panel)
 
         # 워터마크 패널
         self.watermark_panel = WatermarkPanel(self)
@@ -253,6 +258,7 @@ class MosaicEditor(QWidget):
         self.mosaic_panel.btn_flip_h.clicked.connect(self._flip_horizontal)
         self.mosaic_panel.btn_flip_v.clicked.connect(self._flip_vertical)
         self.mosaic_panel.btn_remove_bg.clicked.connect(self._on_remove_bg)
+        self.mosaic_panel.btn_perspective.clicked.connect(self._on_perspective)
 
         # 색감 조절 패널
         self.color_panel.adjustment_changed.connect(
@@ -267,6 +273,13 @@ class MosaicEditor(QWidget):
         self.color_panel.filter_apply_requested.connect(self._apply_filter_preset)
         self.color_panel.auto_correct_requested.connect(self._apply_auto_correct)
 
+        # 고급 색감 패널
+        self.adv_color_panel.adjustment_preview.connect(self._on_adv_color_preview)
+        self.adv_color_panel.apply_requested.connect(self._on_adv_color_apply)
+        self.adv_color_panel.reset_requested.connect(
+            lambda: self.image_label.clear_adjustment_preview()
+        )
+
         # 워터마크 패널
         self.watermark_panel.text_watermark_requested.connect(self._apply_text_watermark)
         self.watermark_panel.image_watermark_requested.connect(self._apply_image_watermark)
@@ -280,6 +293,7 @@ class MosaicEditor(QWidget):
         # 그리기 패널 — 스포이트 색상 연결
         self.image_label.color_picked.connect(self.draw_panel.set_color_from_bgr)
         self.draw_panel.btn_flatten.clicked.connect(self._on_flatten_layer)
+        self.draw_panel.btn_heal_apply.clicked.connect(self._on_heal_apply)
 
         # 이동 패널
         self.move_panel.btn_start_move.clicked.connect(self._on_start_move)
@@ -444,10 +458,18 @@ class MosaicEditor(QWidget):
                 effect_img = cv2.GaussianBlur(effect_img, (k, k), 0)
 
             _, binary_mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
-            inv_mask = cv2.bitwise_not(binary_mask)
-            img_bg = cv2.bitwise_and(img, img, mask=inv_mask)
-            img_fg = cv2.bitwise_and(effect_img, effect_img, mask=binary_mask)
-            dst = cv2.add(img_bg, img_fg)
+
+            # 페더링 적용
+            feather = self.mosaic_panel.slider_feather.value()
+            if feather > 0:
+                k = feather * 2 + 1
+                binary_mask = cv2.GaussianBlur(binary_mask, (k, k), 0)
+
+            # 알파 블렌딩 (페더링 시 부드러운 경계)
+            alpha = binary_mask.astype(np.float32) / 255.0
+            alpha_3 = np.stack([alpha] * 3, axis=-1)
+            dst = (effect_img.astype(np.float32) * alpha_3 +
+                   img.astype(np.float32) * (1.0 - alpha_3)).astype(np.uint8)
 
             self.image_label.update_image_keep_view(dst)
             self.image_label.clear_selection()
@@ -521,6 +543,22 @@ class MosaicEditor(QWidget):
             return
         self.image_label.push_undo_stack()
         self.image_label.flip_vertical()
+        self.image_label.setFocus()
+
+    # ── 원근 보정 ──
+
+    def _on_perspective(self):
+        """원근 보정 다이얼로그 표시 및 적용"""
+        if self.image_label.display_base_image is None:
+            QMessageBox.warning(self, "알림", "이미지를 먼저 로드하세요.")
+            return
+        from tabs.editor.perspective_dialog import PerspectiveDialog
+        dlg = PerspectiveDialog(self.image_label.display_base_image, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            result = dlg.get_result()
+            if result is not None:
+                self.image_label.push_undo_stack()
+                self.image_label.update_image_keep_view(result)
         self.image_label.setFocus()
 
     # ── 배경 제거 ──
@@ -600,6 +638,25 @@ class MosaicEditor(QWidget):
         self.image_label.update_image_keep_view(filtered)
         self.image_label.setFocus()
 
+    # ── 고급 색감 ──
+
+    def _on_adv_color_preview(self, adjusted_img: np.ndarray):
+        """고급 색감 조정 프리뷰"""
+        if self.image_label.display_base_image is None:
+            return
+        self.image_label.cv_image = adjusted_img.copy()
+        self.image_label.update()
+
+    def _on_adv_color_apply(self, adjusted_img: np.ndarray):
+        """고급 색감 조정 적용"""
+        if self.image_label.display_base_image is None:
+            return
+        self.image_label.push_undo_stack()
+        self.image_label.update_image_keep_view(adjusted_img)
+        # 히스토그램 갱신
+        self.adv_color_panel.set_source_image(self.image_label.display_base_image)
+        self.image_label.setFocus()
+
     def _apply_auto_correct(self):
         """자동 색감 보정"""
         if self.image_label.display_base_image is None:
@@ -622,6 +679,11 @@ class MosaicEditor(QWidget):
         is_wm_tab = (current_widget == self.watermark_panel)
         self.image_label.set_wm_mode(is_wm_tab)
         self.watermark_panel.set_preview_active(is_wm_tab)
+
+        # 고급 색감 탭 전환 시 히스토그램 갱신
+        is_adv_color_tab = (current_widget == self.adv_color_panel)
+        if is_adv_color_tab and self.image_label.display_base_image is not None:
+            self.adv_color_panel.set_source_image(self.image_label.display_base_image)
 
         is_draw_tab = (current_widget == self.draw_panel)
         self.image_label.set_draw_mode(is_draw_tab)
@@ -881,6 +943,13 @@ class MosaicEditor(QWidget):
             )
         else:
             QMessageBox.critical(self, "오류", f"자동 감지 실패:\n{error_msg}")
+
+    # ── 힐링 브러시 ──
+
+    def _on_heal_apply(self):
+        """힐링 브러시 적용"""
+        self.image_label.apply_heal()
+        self.image_label.setFocus()
 
     # ── 레이어 ──
 

@@ -998,6 +998,19 @@ class InteractiveLabel(QLabel):
                     self.last_draw_pos = event.pos()
                     self._apply_clone_at(bx_i, by_i)
                     self.rotate_image(0)
+            elif self.draw_tool == 'text_overlay':
+                self._on_text_overlay_click(bx_i, by_i)
+            elif self.draw_tool == 'gradient':
+                self._draw_start = (bx_i, by_i)
+                self._draw_preview_end = (bx_i, by_i)
+            elif self.draw_tool == 'heal':
+                self.push_undo_stack()
+                self._draw_pen_active = True
+                self.last_draw_pos = event.pos()
+                # 힐링 마스크 초기화 (없으면)
+                if not hasattr(self, '_heal_mask') or self._heal_mask is None:
+                    h, w = self.display_base_image.shape[:2]
+                    self._heal_mask = np.zeros((h, w), dtype=np.uint8)
             elif self.draw_tool == 'pen':
                 self.push_undo_stack()
                 self._draw_pen_active = True
@@ -1116,16 +1129,22 @@ class InteractiveLabel(QLabel):
                 self.rotate_image(0)
                 self.last_draw_pos = event.pos()
             elif self._draw_pen_active and self.last_draw_pos:
-                # 펜: 이전점→현재점 연결
                 prev_bx, prev_by = self.map_to_base_coordinates(self.last_draw_pos)
                 cur_bx, cur_by = self.map_to_base_coordinates(event.pos())
                 pt1 = (int(round(prev_bx)), int(round(prev_by)))
                 pt2 = (int(round(cur_bx)), int(round(cur_by)))
-                self._draw_on_image(
-                    self.display_base_image, pt1, pt2, 'pen',
-                    self.draw_color, self.draw_size, self.draw_opacity, False
-                )
-                self.rotate_image(0)
+
+                if self.draw_tool == 'heal':
+                    # 힐링 브러시: 마스크에만 칠하기 (빨간 오버레이로 표시)
+                    if hasattr(self, '_heal_mask') and self._heal_mask is not None:
+                        cv2.line(self._heal_mask, pt1, pt2, 255, self.draw_size)
+                else:
+                    # 펜: 이전점→현재점 연결
+                    self._draw_on_image(
+                        self.display_base_image, pt1, pt2, 'pen',
+                        self.draw_color, self.draw_size, self.draw_opacity, False
+                    )
+                    self.rotate_image(0)
                 self.last_draw_pos = event.pos()
             elif self._draw_start is not None:
                 # 직선/사각형/원: 미리보기 갱신
@@ -1216,17 +1235,23 @@ class InteractiveLabel(QLabel):
                 self._clone_active = False
                 self.last_draw_pos = None
             elif self._draw_pen_active:
+                if self.draw_tool == 'heal':
+                    # 힐링 브러시: 그려진 마스크에 점 추가
+                    pass  # 마스크 누적은 mouseMoveEvent에서 처리됨
                 self._draw_pen_active = False
                 self.last_draw_pos = None
             elif self._draw_start is not None and self._draw_preview_end is not None:
-                self.push_undo_stack()
-                self._draw_on_image(
-                    self.display_base_image,
-                    self._draw_start, self._draw_preview_end,
-                    self.draw_tool, self.draw_color,
-                    self.draw_size, self.draw_opacity, self.draw_filled
-                )
-                self.rotate_image(0)
+                if self.draw_tool == 'gradient':
+                    self._apply_gradient(self._draw_start, self._draw_preview_end)
+                else:
+                    self.push_undo_stack()
+                    self._draw_on_image(
+                        self.display_base_image,
+                        self._draw_start, self._draw_preview_end,
+                        self.draw_tool, self.draw_color,
+                        self.draw_size, self.draw_opacity, self.draw_filled
+                    )
+                    self.rotate_image(0)
                 self._draw_start = None
                 self._draw_preview_end = None
             self.update()
@@ -1483,6 +1508,19 @@ class InteractiveLabel(QLabel):
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawEllipse(self.cursor_pos, screen_radius, screen_radius)
 
+        # ── 힐링 마스크 오버레이 (초록색 반투명) ──
+        if (self.draw_mode and self.draw_tool == 'heal'
+                and hasattr(self, '_heal_mask') and self._heal_mask is not None
+                and self.display_base_image is not None):
+            hm_h, hm_w = self._heal_mask.shape[:2]
+            heal_display = np.zeros((hm_h, hm_w, 4), dtype=np.uint8)
+            heal_display[self._heal_mask > 0] = [0, 200, 0, 120]
+            q_heal = QImage(
+                heal_display.data, hm_w, hm_h,
+                hm_w * 4, QImage.Format.Format_RGBA8888
+            )
+            painter.drawImage(img_rect, q_heal)
+
         # ── 그리기 모드 미리보기 ──
         if self.draw_mode and self._draw_start is not None and self._draw_preview_end is not None:
             # 이미지 좌표 → 스크린 좌표 변환
@@ -1495,7 +1533,15 @@ class InteractiveLabel(QLabel):
             painter.setPen(preview_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
 
-            if self.draw_tool == 'line':
+            if self.draw_tool == 'gradient':
+                # 그라디언트 방향 화살표 미리보기
+                painter.drawLine(s1x, s1y, s2x, s2y)
+                # 시작점 표시
+                painter.setBrush(QBrush(QColor(88, 101, 242, 150)))
+                painter.drawEllipse(s1x - 5, s1y - 5, 10, 10)
+                # 끝점 표시
+                painter.drawEllipse(s2x - 5, s2y - 5, 10, 10)
+            elif self.draw_tool == 'line':
                 painter.drawLine(s1x, s1y, s2x, s2y)
             elif self.draw_tool == 'rect':
                 from PyQt6.QtCore import QRect as QR
@@ -1510,8 +1556,8 @@ class InteractiveLabel(QLabel):
                     abs(s2x - s1x), abs(s2y - s1y)
                 ))
 
-        # 그리기 모드 커서 미리보기 (펜 크기)
-        if self.draw_mode and self.draw_tool == 'pen' and self.cursor_pos:
+        # 그리기 모드 커서 미리보기 (펜/힐링 크기)
+        if self.draw_mode and self.draw_tool in ('pen', 'heal') and self.cursor_pos:
             screen_r = int(self.draw_size * scale / 2)
             painter.setPen(QPen(Qt.GlobalColor.cyan, 1, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -1630,6 +1676,98 @@ class InteractiveLabel(QLabel):
         self.selection_mask = np.zeros((img_h, img_w), dtype=np.uint8)
         self._edge_map_dirty = True
         self.cv_image = self.display_base_image.copy()
+        self.update()
+
+    # ── 텍스트 오버레이 ──
+
+    def _on_text_overlay_click(self, bx: int, by: int):
+        """텍스트 오버레이 도구 — 클릭 위치에 텍스트 합성"""
+        from tabs.editor.text_overlay_dialog import TextOverlayDialog
+        dlg = TextOverlayDialog(self.parent_editor)
+        if dlg.exec() == 1:  # QDialog.DialogCode.Accepted
+            config = dlg.get_config()
+            if config['text'].strip():
+                img_h, img_w = self.display_base_image.shape[:2]
+                x_pct = bx / img_w * 100.0
+                y_pct = by / img_h * 100.0
+                self.push_undo_stack()
+                result = TextOverlayDialog.render_text_on_image(
+                    self.display_base_image, config, x_pct, y_pct
+                )
+                self.update_image_keep_view(result)
+
+    # ── 그라디언트 ──
+
+    def _apply_gradient(self, pt1: tuple, pt2: tuple):
+        """선형 그라디언트 적용"""
+        if self.display_base_image is None:
+            return
+
+        self.push_undo_stack()
+        img = self.display_base_image
+        h, w = img.shape[:2]
+
+        # 시작/끝 색상 (BGR)
+        start_color = np.array(self.draw_color, dtype=np.float32)
+        end_color = np.array(start_color, dtype=np.float32)
+
+        # DrawPanel에서 그라디언트 끝 색상 가져오기
+        if hasattr(self.parent_editor, 'draw_panel'):
+            end_color = np.array(
+                self.parent_editor.draw_panel.gradient_end_color_bgr(),
+                dtype=np.float32
+            )
+
+        # 그라디언트 방향 벡터
+        dx = pt2[0] - pt1[0]
+        dy = pt2[1] - pt1[1]
+        length = max(1, np.sqrt(dx * dx + dy * dy))
+
+        # 각 픽셀의 그라디언트 위치 계산
+        yy, xx = np.mgrid[0:h, 0:w]
+        proj = ((xx - pt1[0]) * dx + (yy - pt1[1]) * dy) / (length * length)
+        proj = np.clip(proj, 0, 1)
+
+        # 그라디언트 이미지 생성
+        gradient = np.zeros_like(img, dtype=np.float32)
+        for c in range(3):
+            gradient[:, :, c] = start_color[c] + (end_color[c] - start_color[c]) * proj
+        gradient = gradient.astype(np.uint8)
+
+        # 선택 영역이 있으면 해당 영역에만 적용
+        if self.selection_mask is not None and cv2.countNonZero(self.selection_mask) > 0:
+            alpha = self.selection_mask.astype(np.float32) / 255.0
+            alpha_3 = np.stack([alpha] * 3, axis=-1)
+            result = (gradient.astype(np.float32) * alpha_3 +
+                      img.astype(np.float32) * (1.0 - alpha_3)).astype(np.uint8)
+        else:
+            # 투명도 적용
+            opacity = self.draw_opacity
+            result = cv2.addWeighted(gradient, opacity, img, 1.0 - opacity, 0)
+
+        self.update_image_keep_view(result)
+
+    # ── 힐링 브러시 ──
+
+    def apply_heal(self):
+        """힐링 브러시 적용 — 마스크 영역을 cv2.inpaint로 복원"""
+        if self.display_base_image is None:
+            return
+        if not hasattr(self, '_heal_mask') or self._heal_mask is None:
+            return
+        if cv2.countNonZero(self._heal_mask) == 0:
+            return
+
+        self.push_undo_stack()
+        result = cv2.inpaint(
+            self.display_base_image, self._heal_mask, 3, cv2.INPAINT_TELEA
+        )
+        self.update_image_keep_view(result)
+        self._heal_mask = None
+
+    def clear_heal_mask(self):
+        """힐링 마스크 초기화"""
+        self._heal_mask = None
         self.update()
 
     @staticmethod
