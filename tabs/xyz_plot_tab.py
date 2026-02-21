@@ -144,26 +144,26 @@ class XYZPlotTab(QWidget):
         self.btn_add_queue = QPushButton("대기열에 추가")
         self.btn_add_queue.setFixedHeight(45)
         self.btn_add_queue.setEnabled(False)
-        self.btn_add_queue.setStyleSheet("""
-            QPushButton {
+        self.btn_add_queue.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #27ae60; color: white;
                 font-weight: bold; font-size: 13px; border-radius: 5px;
-            }
-            QPushButton:hover { background-color: #2ecc71; }
-            QPushButton:disabled { background-color: #555; color: #888; }
+            }}
+            QPushButton:hover {{ background-color: #2ecc71; }}
+            QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_add_queue.clicked.connect(self._on_add_to_queue)
 
         self.btn_start_now = QPushButton("바로 생성 시작")
         self.btn_start_now.setFixedHeight(45)
         self.btn_start_now.setEnabled(False)
-        self.btn_start_now.setStyleSheet("""
-            QPushButton {
+        self.btn_start_now.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #9b59b6; color: white;
                 font-weight: bold; font-size: 13px; border-radius: 5px;
-            }
-            QPushButton:hover { background-color: #8e44ad; }
-            QPushButton:disabled { background-color: #555; color: #888; }
+            }}
+            QPushButton:hover {{ background-color: #8e44ad; }}
+            QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_start_now.clicked.connect(self._on_start_now)
 
@@ -189,13 +189,13 @@ class XYZPlotTab(QWidget):
         header.addStretch()
 
         self.btn_export_grid = QPushButton("그리드 이미지 저장")
-        self.btn_export_grid.setStyleSheet("""
-            QPushButton {
+        self.btn_export_grid.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #2980b9; color: white; border-radius: 4px;
                 padding: 5px 10px; font-size: 11px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #3498db; }
-            QPushButton:disabled { background-color: #555; color: #888; }
+            }}
+            QPushButton:hover {{ background-color: #3498db; }}
+            QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_export_grid.setEnabled(False)
         self.btn_export_grid.clicked.connect(self._export_grid_image)

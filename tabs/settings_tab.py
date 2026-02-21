@@ -218,7 +218,7 @@ class SettingsTab(QWidget):
             )
         else:
             lbl = QLabel(f"<h2>{text}</h2>")
-            lbl.setStyleSheet("color: white; margin-bottom: 10px;")
+            lbl.setStyleSheet(f"color: {get_color('text_primary')}; margin-bottom: 10px;")
         return lbl
 
     def _create_container(self):

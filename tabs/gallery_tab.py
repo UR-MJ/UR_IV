@@ -1776,7 +1776,7 @@ class SlideshowDialog(QDialog):
 
         self._image_label = QLabel()
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._image_label.setStyleSheet("background-color: #000;")
+        self._image_label.setStyleSheet(f"background-color: {get_color('bg_primary')};")
         self._image_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -1785,7 +1785,7 @@ class SlideshowDialog(QDialog):
         # 하단 컨트롤 바
         bar = QFrame()
         bar.setFixedHeight(50)
-        bar.setStyleSheet("background-color: rgba(0,0,0,180);")
+        bar.setStyleSheet(f"background-color: {get_color('bg_primary')};")
         bar_layout = QHBoxLayout(bar)
         bar_layout.setContentsMargins(20, 5, 20, 5)
 

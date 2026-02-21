@@ -3,6 +3,7 @@
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
 from PyQt6.QtCore import QObject, pyqtSignal
+from utils.theme_manager import get_color
 
 
 def _create_default_icon() -> QIcon:
@@ -33,7 +34,7 @@ class TrayManager(QObject):
         # 컨텍스트 메뉴
         menu = QMenu()
         menu.setStyleSheet(
-            "QMenu { background-color: #2C2C2C; color: #EEE; border: 1px solid #555; }"
+            f"QMenu {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; }}"
             "QMenu::item { padding: 6px 20px; }"
             "QMenu::item:selected { background-color: #5865F2; }"
         )

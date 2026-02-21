@@ -10,6 +10,7 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile, QWebEnginePage
 
 from config import CURRENT_DIR
+from utils.theme_manager import get_color
 
 
 class _QuietPage(QWebEnginePage):
@@ -38,7 +39,7 @@ class BackendUITab(QWidget):
 
         self._status_label = QLabel("백엔드 UI")
         self._status_label.setStyleSheet(
-            "color: #ccc; font-weight: bold; font-size: 13px;"
+            f"color: {get_color('text_secondary')}; font-weight: bold; font-size: 13px;"
         )
         top_bar.addWidget(self._status_label)
 
@@ -47,7 +48,7 @@ class BackendUITab(QWidget):
         self._url_display = QLineEdit()
         self._url_display.setReadOnly(True)
         self._url_display.setStyleSheet(
-            "background: #1a1a1a; color: #888; border: 1px solid #333; "
+            f"background: {get_color('bg_secondary')}; color: {get_color('text_muted')}; border: 1px solid {get_color('bg_button_hover')}; "
             "border-radius: 4px; padding: 3px 8px; font-size: 11px;"
         )
         self._url_display.setFixedWidth(300)
@@ -247,15 +248,15 @@ class BackendUITab(QWidget):
             QDesktopServices.openUrl(QUrl(self._current_url))
 
     def _placeholder_html(self) -> str:
-        return """
+        return f"""
         <html>
-        <body style="background:#121212; color:#666; display:flex;
+        <body style="background:{get_color('bg_primary')}; color:{get_color('text_muted')}; display:flex;
                      align-items:center; justify-content:center; height:100vh;
                      font-family:sans-serif; margin:0;">
           <div style="text-align:center;">
             <div style="font-size:48px; margin-bottom:16px;">🖥️</div>
             <div style="font-size:16px;">백엔드에 연결되면 UI가 여기에 표시됩니다</div>
-            <div style="font-size:13px; color:#555; margin-top:8px;">
+            <div style="font-size:13px; color:{get_color('border')}; margin-top:8px;">
               WebUI &nbsp;|&nbsp; ComfyUI
             </div>
           </div>

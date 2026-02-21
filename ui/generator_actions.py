@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 
 from config import OUTPUT_DIR
+from utils.theme_manager import get_color
 from core.image_utils import exif_for_display
 from utils.app_logger import get_logger
 
@@ -222,13 +223,13 @@ class ActionsMixin:
             # 자동화 패널 숨기기
             self.automation_widget.hide()
             self.btn_auto_toggle.setText("⏹️ 자동화 모드: 꺼짐 (OFF)")
-            self.btn_auto_toggle.setStyleSheet("""
-                QPushButton { 
-                    background-color: #252525; color: #AAA; 
-                    border: 1px solid #444; border-radius: 5px; 
-                    font-weight: bold; font-size: 13px; 
-                }
-                QPushButton:hover { border: 1px solid #666; }
+            self.btn_auto_toggle.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_tertiary')}; color: {get_color('text_secondary')};
+                    border: 1px solid {get_color('border')}; border-radius: 5px;
+                    font-weight: bold; font-size: 13px;
+                }}
+                QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}
             """)
             
             # 생성 버튼 복구

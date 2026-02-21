@@ -221,7 +221,7 @@ class StepCard(QWidget):
 
         self.chk_carry_appearance = QCheckBox("외모 유지")
         self.chk_carry_appearance.setChecked(True)
-        self.chk_carry_appearance.setStyleSheet("color: #DDD; font-size: 10px;")
+        self.chk_carry_appearance.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 10px;")
         self.chk_carry_appearance.toggled.connect(lambda: self.carry_changed.emit(self.step_index))
         layout.addWidget(self.chk_carry_appearance)
 
@@ -244,9 +244,9 @@ class StepCard(QWidget):
             self.edit_area.hide()
             self.btn_apply_edit.hide()
             self.btn_edit.setText("✏️")
-            self.btn_edit.setStyleSheet("""
-                QPushButton { border: 1px solid #555; border-radius: 4px; font-size: 12px; background: #2a2a2a; }
-                QPushButton:hover { background: #3a3a3a; border-color: #777; }
+            self.btn_edit.setStyleSheet(f"""
+                QPushButton {{ border: 1px solid {get_color('border')}; border-radius: 4px; font-size: 12px; background: {get_color('bg_tertiary')}; }}
+                QPushButton:hover {{ background: {get_color('bg_button_hover')}; border-color: #777; }}
             """)
 
     def _apply_edit(self):

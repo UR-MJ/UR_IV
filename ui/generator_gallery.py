@@ -11,6 +11,7 @@ from PyQt6.QtGui import QPixmap, QGuiApplication, QAction
 from PyQt6.QtWidgets import QApplication
 
 from config import OUTPUT_DIR, FAVORITES_FILE
+from utils.theme_manager import get_color
 from core.image_utils import exif_for_display, move_to_trash
 from widgets.thumbnail import ThumbnailItem
 from widgets.image_viewer import FullScreenImageViewer
@@ -35,12 +36,12 @@ class GalleryMixin:
             return
 
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2C2C2C; border: 1px solid #555; color: white;
-            }
-            QMenu::item { padding: 6px 24px; }
-            QMenu::item:selected { background-color: #5865F2; }
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')}; color: {get_color('text_primary')};
+            }}
+            QMenu::item {{ padding: 6px 24px; }}
+            QMenu::item:selected {{ background-color: #5865F2; }}
         """)
 
         action_i2i = QAction("🖼️ I2I로 보내기", self)
@@ -324,30 +325,30 @@ class GalleryMixin:
         """즐겨찾기 버튼 상태 업데이트"""
         if is_favorite:
             self.btn_add_favorite.setText("💛 즐겨찾기 제거")
-            self.btn_add_favorite.setStyleSheet("""
-                QPushButton {
+            self.btn_add_favorite.setStyleSheet(f"""
+                QPushButton {{
                     background-color: #FFC107;
                     border: 1px solid #FFA000;
-                    color: #121212;
+                    color: {get_color('bg_primary')};
                     font-weight: bold;
                     border-radius: 0px;
-                }
-                QPushButton:hover { background-color: #FFD54F; }
+                }}
+                QPushButton:hover {{ background-color: #FFD54F; }}
             """)
         else:
             self.btn_add_favorite.setText("⭐ 즐겨찾기 추가 (FAV)")
-            self.btn_add_favorite.setStyleSheet("""
-                QPushButton {
-                    background-color: #2C2C2C;
+            self.btn_add_favorite.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_button')};
                     border: 1px solid #FFC107;
                     color: #FFC107;
                     font-weight: bold;
                     border-radius: 0px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #FFC107;
-                    color: #121212;
-                }
+                    color: {get_color('bg_primary')};
+                }}
             """)
 
     def _add_favorite_thumbnail(self, filepath):
