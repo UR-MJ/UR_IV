@@ -82,28 +82,30 @@ class TagClassifier:
 
     def _load_python_dict_keys(self, filepath):
         """Python 파일에서 dict 키 또는 list 항목을 로드"""
+        import ast
+        import re
         tags = set()
         try:
-            namespace = {}
             with open(filepath, 'r', encoding='utf-8') as f:
-                exec(f.read(), namespace)
+                content = f.read()
 
-            # namespace에서 dict/list 찾기
-            for key, val in namespace.items():
-                if key.startswith('_'):
-                    continue
-                if isinstance(val, dict):
-                    for k in val.keys():
-                        tag = str(k).lower().strip()
-                        if tag:
-                            tags.add(tag)
-                    break
-                elif isinstance(val, (list, tuple)):
-                    for item in val:
-                        tag = str(item).lower().strip()
-                        if tag:
-                            tags.add(tag)
-                    break
+            # '변수명 = {..}' 또는 '변수명 = [..]' 패턴에서 리터럴 추출
+            match = re.search(r'=\s*(\{.*\}|\[.*\])', content, re.DOTALL)
+            if not match:
+                return tags
+
+            data = ast.literal_eval(match.group(1))
+
+            if isinstance(data, dict):
+                for k in data.keys():
+                    tag = str(k).lower().strip()
+                    if tag:
+                        tags.add(tag)
+            elif isinstance(data, (list, tuple)):
+                for item in data:
+                    tag = str(item).lower().strip()
+                    if tag:
+                        tags.add(tag)
         except Exception as e:
             print(f"⚠️ {filepath} 로드 실패: {e}")
 

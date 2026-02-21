@@ -3,6 +3,7 @@
 태그 자동완성 시스템
 TagData(parquet) 기반 + CSV 별칭 폴백
 """
+import bisect
 import csv
 from pathlib import Path
 from typing import List, Optional
@@ -16,8 +17,11 @@ class TagCompleter:
         self.all_tags: List[str] = []
         self.tags_set: set = set()
         self.alias_map: dict = {}  # alias → tag_name
+        self._sorted_lower_tags: List[tuple] = []  # (lowercase_tag, original_tag)
+        self._lower_keys: List[str] = []  # lowercase keys only (for bisect)
 
         self._load_tags()
+        self._build_sorted_index()
 
     def _find_tags_db_path(self) -> Path:
         """tags_db 경로 찾기"""
@@ -108,6 +112,13 @@ class TagCompleter:
         except Exception as e:
             print(f"❌ auto_tags.csv 로드 실패: {e}")
 
+    def _build_sorted_index(self):
+        """이진 검색용 정렬된 인덱스 생성"""
+        pairs = [(tag.lower().replace(' ', '_'), tag) for tag in self.all_tags]
+        pairs.sort(key=lambda x: x[0])
+        self._sorted_lower_tags = pairs
+        self._lower_keys = [p[0] for p in pairs]
+
     def get_suggestions(self, prefix: str, max_count: int = 10) -> List[str]:
         """입력 접두사로 태그 추천 (별칭 포함)"""
         if not prefix or not self.all_tags:
@@ -120,14 +131,19 @@ class TagCompleter:
         seen = set()
         suggestions = []
 
-        # 1. 접두사로 시작하는 태그 (우선)
-        for tag in self.all_tags:
-            if tag.lower().replace(' ', '_').startswith(prefix_lower):
-                if tag.lower() not in seen:
-                    seen.add(tag.lower())
-                    suggestions.append(tag)
-                    if len(suggestions) >= max_count:
-                        return suggestions
+        # 1. 접두사로 시작하는 태그 (이진 검색, O(log n + k))
+        start = bisect.bisect_left(self._lower_keys, prefix_lower)
+        for i in range(start, len(self._lower_keys)):
+            lower_tag = self._lower_keys[i]
+            if not lower_tag.startswith(prefix_lower):
+                break
+            orig_tag = self._sorted_lower_tags[i][1]
+            tag_key = orig_tag.lower()
+            if tag_key not in seen:
+                seen.add(tag_key)
+                suggestions.append(orig_tag)
+                if len(suggestions) >= max_count:
+                    return suggestions
 
         # 2. 별칭으로 시작하는 태그
         for alias, tag_name in self.alias_map.items():

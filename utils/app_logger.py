@@ -4,6 +4,7 @@
 """
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 
 _LOG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _LOG_FILE = os.path.join(_LOG_DIR, 'app.log')
@@ -23,8 +24,8 @@ def _init_root():
     fmt = logging.Formatter('[%(asctime)s] %(name)s %(levelname)s: %(message)s',
                             datefmt='%H:%M:%S')
 
-    # 파일 핸들러
-    fh = logging.FileHandler(_LOG_FILE, encoding='utf-8')
+    # 파일 핸들러 (10MB 로테이션, 최대 5개 백업)
+    fh = RotatingFileHandler(_LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(fmt)
     root.addHandler(fh)

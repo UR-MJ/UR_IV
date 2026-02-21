@@ -29,6 +29,7 @@ DARK_THEME = {
     'scrollbar_handle': '#3E3E3E',
     'disabled_bg': '#1E1E1E',
     'disabled_text': '#666666',
+    'bg_status_bar': '#1A1A1A',
 }
 
 LIGHT_THEME = {
@@ -54,6 +55,7 @@ LIGHT_THEME = {
     'scrollbar_handle': '#BBBBBB',
     'disabled_bg': '#E0E0E0',
     'disabled_text': '#AAAAAA',
+    'bg_status_bar': '#E0E0E0',
 }
 
 THEMES = {
@@ -173,6 +175,123 @@ _QSS_TEMPLATE = """
         color: {text_secondary};
         background: transparent;
     }}
+
+    QCheckBox {{
+        color: {text_primary};
+        background: transparent;
+        spacing: 6px;
+    }}
+    QCheckBox::indicator {{
+        width: 16px; height: 16px;
+        border: 2px solid {border};
+        border-radius: 3px;
+        background-color: {bg_input};
+    }}
+    QCheckBox::indicator:checked {{
+        background-color: {accent};
+        border-color: {accent};
+    }}
+
+    QMenu {{
+        background-color: {bg_secondary};
+        border: 1px solid {border};
+        border-radius: 6px;
+        padding: 4px;
+        color: {text_primary};
+    }}
+    QMenu::item {{
+        padding: 6px 20px;
+        border-radius: 4px;
+    }}
+    QMenu::item:selected {{
+        background-color: {accent};
+        color: white;
+    }}
+    QMenu::separator {{
+        height: 1px;
+        background: {border};
+        margin: 4px 8px;
+    }}
+
+    QToolTip {{
+        background-color: {bg_tertiary};
+        color: {text_primary};
+        border: 1px solid {border};
+        border-radius: 4px;
+        padding: 4px 8px;
+    }}
+
+    QProgressBar {{
+        background-color: {bg_input};
+        border: none;
+        border-radius: 4px;
+        text-align: center;
+        color: {text_primary};
+    }}
+    QProgressBar::chunk {{
+        background-color: {accent};
+        border-radius: 4px;
+    }}
+
+    QDialog {{
+        background-color: {bg_primary};
+        color: {text_primary};
+    }}
+
+    QListWidget {{
+        background-color: {bg_input};
+        border: 1px solid {border};
+        border-radius: 6px;
+        color: {text_primary};
+    }}
+    QListWidget::item {{
+        padding: 4px 8px;
+    }}
+    QListWidget::item:selected {{
+        background-color: {accent};
+        color: white;
+    }}
+
+    QSpinBox, QDoubleSpinBox {{
+        background-color: {bg_input};
+        border: none;
+        border-radius: 8px;
+        padding: 8px 10px;
+        color: {text_primary};
+    }}
+    QSpinBox:focus, QDoubleSpinBox:focus {{
+        background-color: {bg_tertiary};
+        border: 1px solid {border_input_focus};
+    }}
+
+    QSlider::groove:horizontal {{
+        height: 6px;
+        background: {bg_input};
+        border-radius: 3px;
+    }}
+    QSlider::handle:horizontal {{
+        width: 16px; height: 16px;
+        margin: -5px 0;
+        background: {accent};
+        border-radius: 8px;
+    }}
+    QSlider::sub-page:horizontal {{
+        background: {accent};
+        border-radius: 3px;
+    }}
+
+    QSplitter::handle {{
+        background-color: {bg_splitter};
+    }}
+
+    QFrame {{
+        color: {text_primary};
+    }}
+
+    QStatusBar {{
+        background-color: {bg_secondary};
+        color: {text_secondary};
+    }}
 """
 
 
@@ -213,6 +332,10 @@ class ThemeManager:
     def get_font_size_value(self) -> float:
         """스핀박스 복원용: pt 값만 추출"""
         return float(self._font_size.replace('pt', ''))
+
+    def get_colors(self) -> dict:
+        """현재 테마 색상 딕셔너리 반환"""
+        return THEMES.get(self._current, DARK_THEME)
 
     def get_stylesheet(self, theme_name: str | None = None) -> str:
         """테마 이름에 대응하는 QSS 문자열 반환"""
