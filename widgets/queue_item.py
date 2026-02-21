@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QMimeData
 from PyQt6.QtGui import QFont, QDrag, QPixmap, QPainter
+from utils.theme_manager import get_color
 
 
 class QueueItemCard(QFrame):
@@ -43,8 +44,8 @@ class QueueItemCard(QFrame):
         self.char_label = QLabel(self._get_display_name())
         self.char_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.char_label.setWordWrap(True)
-        self.char_label.setStyleSheet("""
-            color: #EEE;
+        self.char_label.setStyleSheet(f"""
+            color: {get_color('text_primary')};
             font-size: 11px;
             font-weight: bold;
         """)
@@ -57,10 +58,10 @@ class QueueItemCard(QFrame):
 
         group_text = self._get_group_badge()
         self.group_label = QLabel(group_text)
-        self.group_label.setStyleSheet("""
-            color: #AAA;
+        self.group_label.setStyleSheet(f"""
+            color: {get_color('text_secondary')};
             font-size: 9px;
-            background-color: #333;
+            background-color: {get_color('bg_button_hover')};
             padding: 1px 4px;
             border-radius: 3px;
         """)
@@ -141,19 +142,19 @@ class QueueItemCard(QFrame):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2A2A2A;
-                border: 1px solid #444;
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {get_color('bg_tertiary')};
+                border: 1px solid {get_color('border')};
                 padding: 4px;
-            }
-            QMenu::item {
+            }}
+            QMenu::item {{
                 padding: 6px 20px;
-                color: #DDD;
-            }
-            QMenu::item:selected {
+                color: {get_color('text_primary')};
+            }}
+            QMenu::item:selected {{
                 background-color: #5865F2;
-            }
+            }}
         """)
 
         action_edit = menu.addAction("✏️ 편집")
@@ -172,15 +173,15 @@ class QueueItemCard(QFrame):
     # ========== 스타일 / 표시 ==========
 
     def _get_style(self):
-        return """
-            QFrame {
-                background-color: #2A2A2A;
-                border: 1px solid #3A3A3A;
+        return f"""
+            QFrame {{
+                background-color: {get_color('bg_tertiary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 6px;
-            }
-            QFrame:hover {
+            }}
+            QFrame:hover {{
                 border: 1px solid #5865F2;
-            }
+            }}
         """
 
     def _get_group_color(self):
@@ -190,7 +191,7 @@ class QueueItemCard(QFrame):
             '#ED4245', '#9B59B6', '#E67E22', '#1ABC9C',
         ]
         if not group_id:
-            return '#666'
+            return get_color('text_muted')
         return colors[hash(group_id) % len(colors)]
 
     def _get_display_name(self):
@@ -255,13 +256,13 @@ class QueueItemCard(QFrame):
             self.char_label.setText(self._get_display_name())
 
     def set_completed(self):
-        self.setStyleSheet("""
-            QFrame {
-                background-color: #2A2A2A;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {get_color('bg_tertiary')};
                 border: 1px solid #27ae60;
                 border-radius: 6px;
                 opacity: 0.7;
-            }
+            }}
         """)
         self.color_bar.setStyleSheet("background-color: #27ae60;")
 

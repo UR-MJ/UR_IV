@@ -52,11 +52,11 @@ class _CollapsibleSection(QWidget):
                 background-color: {get_color('bg_secondary')};
                 color: {get_color('text_secondary')};
                 border: none;
-                border-radius: 10px;
+                border-radius: 16px;
                 text-align: left;
                 font-weight: bold;
                 font-size: 11px;
-                padding-left: 12px;
+                padding-left: 14px;
             }}
             QPushButton:checked {{
                 background-color: {get_color('bg_tertiary')};
@@ -200,7 +200,8 @@ def setup_modern_ui(self):
     self.vram_label = QLabel("")
     self.vram_label.setFixedHeight(24)
     self.vram_label.setStyleSheet(
-        "color: #44FF44; font-size: 10px; padding-right: 10px;"
+        f"color: #44FF44; font-size: 10px; padding-right: 10px; "
+        f"background: transparent;"
     )
 
 
@@ -274,8 +275,9 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.btn_tag_weights = QPushButton("⚖️ 가중치")
     self.btn_tag_weights.setFixedHeight(32)
     self.btn_tag_weights.setStyleSheet(
-        "background-color: #2C6B2F; color: white; border-radius: 4px; "
-        "font-size: 12px; font-weight: bold; padding: 2px 10px;"
+        "QPushButton { background-color: #2C6B2F; color: white; border-radius: 16px; "
+        "font-size: 12px; font-weight: bold; padding: 4px 14px; border: none; }"
+        "QPushButton:hover { background-color: #38874A; }"
     )
     self.btn_tag_weights.setToolTip("메인 프롬프트 태그 가중치 슬라이더 편집")
     self.btn_tag_weights.clicked.connect(self._open_tag_weight_editor)
@@ -283,8 +285,9 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.btn_lora_manager = QPushButton("📦 LoRA")
     self.btn_lora_manager.setFixedHeight(32)
     self.btn_lora_manager.setStyleSheet(
-        "background-color: #8A5CF5; color: white; border-radius: 4px; "
-        "font-size: 12px; font-weight: bold; padding: 2px 10px;"
+        "QPushButton { background-color: #8A5CF5; color: white; border-radius: 16px; "
+        "font-size: 12px; font-weight: bold; padding: 4px 14px; border: none; }"
+        "QPushButton:hover { background-color: #9B73F6; }"
     )
     self.btn_lora_manager.setToolTip("LoRA 브라우저 열기")
     self.btn_lora_manager.clicked.connect(self._open_lora_manager)
@@ -306,15 +309,7 @@ def _build_modern_left_panel(self) -> QScrollArea:
         self._adjust_total_prompt_height
     )
     self.total_prompt_display.textChanged.connect(self._update_token_count)
-    self.total_prompt_display.setStyleSheet(f"""
-        QTextEdit {{
-            background-color: {get_color('bg_secondary')};
-            border: none; border-radius: 10px;
-            padding: 8px 10px;
-            color: {get_color('text_primary')};
-            font-size: 11px;
-        }}
-    """)
+    # 모던 QSS 템플릿의 QTextEdit 스타일 적용 (inline 제거)
     root.addWidget(self.total_prompt_display)
 
     # 토큰 카운터
@@ -377,13 +372,7 @@ def _build_modern_left_panel(self) -> QScrollArea:
     detail_section.addWidget(_section_label("인물 수"))
     self.char_count_input = QLineEdit()
     self.char_count_input.setPlaceholderText("예: 1")
-    self.char_count_input.setStyleSheet(f"""
-        QLineEdit {{
-            background-color: {get_color('bg_input')};
-            border: none; border-radius: 8px;
-            padding: 8px 10px; color: {get_color('text_primary')};
-        }}
-    """)
+    # 모던 QSS 템플릿의 QLineEdit 스타일 적용 (inline 제거)
     detail_section.addWidget(self.char_count_input)
 
     # --- 캐릭터 ---
@@ -393,7 +382,8 @@ def _build_modern_left_panel(self) -> QScrollArea:
 
     self.chk_auto_char_features = QCheckBox("특징 자동 추가")
     self.chk_auto_char_features.setStyleSheet(
-        "QCheckBox { color: #FFA726; font-size: 11px; font-weight: bold; }"
+        f"QCheckBox {{ color: #FFA726; font-size: 11px; font-weight: bold; "
+        f"background: transparent; }}"
     )
     self.chk_auto_char_features.setToolTip(
         "자동화 중 캐릭터 불러올 때 특징 태그 자동 삽입"
@@ -405,8 +395,8 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.combo_char_feature_mode.setFixedSize(90, 24)
     self.combo_char_feature_mode.setStyleSheet(
         f"QComboBox {{ background-color: {get_color('bg_tertiary')}; "
-        f"color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
-        f"border-radius: 4px; font-size: 11px; padding: 1px 4px; }}"
+        f"color: {get_color('text_primary')}; border: none; "
+        f"border-radius: 12px; font-size: 11px; padding: 2px 8px; }}"
     )
     self.combo_char_feature_mode.setToolTip("핵심만: 눈색/머리색 등\n핵심+의상: 의상/소품 포함")
     char_header.addWidget(self.combo_char_feature_mode)
@@ -414,29 +404,23 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.btn_char_preset = QPushButton("특징 프리셋")
     self.btn_char_preset.setFixedHeight(28)
     self.btn_char_preset.setStyleSheet(
-        "QPushButton { background-color: #5865F2; color: white; "
-        "border-radius: 4px; font-weight: bold; font-size: 11px; "
-        "padding: 0 10px; }"
-        "QPushButton:hover { background-color: #6975F3; }"
+        f"QPushButton {{ background-color: {get_color('accent')}; color: white; "
+        f"border-radius: 14px; font-weight: bold; font-size: 11px; "
+        f"padding: 0 14px; border: none; }}"
+        f"QPushButton:hover {{ background-color: #7289DA; }}"
     )
     self.btn_char_preset.clicked.connect(self._open_character_preset)
     char_header.addWidget(self.btn_char_preset)
     detail_section.addLayout(char_header)
 
     self.character_input = QLineEdit()
-    self.character_input.setStyleSheet(
-        f"background-color: {get_color('bg_input')}; border: none; "
-        f"border-radius: 8px; padding: 8px 10px; color: {get_color('text_primary')};"
-    )
+    # 모던 QSS 템플릿의 QLineEdit 스타일 적용 (inline 제거)
     detail_section.addWidget(self.character_input)
 
     # --- 작품 ---
     detail_section.addWidget(_section_label("작품 (Copyright)"))
     self.copyright_input = QLineEdit()
-    self.copyright_input.setStyleSheet(
-        f"background-color: {get_color('bg_input')}; border: none; "
-        f"border-radius: 8px; padding: 8px 10px; color: {get_color('text_primary')};"
-    )
+    # 모던 QSS 템플릿의 QLineEdit 스타일 적용 (inline 제거)
     detail_section.addWidget(self.copyright_input)
 
     # --- 작가 + 고정 버튼 ---
@@ -448,14 +432,14 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.btn_lock_artist.setFixedWidth(80)
     self.btn_lock_artist.setStyleSheet(f"""
         QPushButton {{
-            border: 1px solid {get_color('border')}; border-radius: 4px;
+            border: none; border-radius: 14px;
             font-size: 11px; background-color: {get_color('bg_button')};
-            color: {get_color('text_secondary')};
+            color: {get_color('text_secondary')}; padding: 4px 10px;
         }}
         QPushButton:checked {{
             background-color: #d35400; color: white;
-            border: 1px solid #e67e22;
         }}
+        QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
     """)
     artist_header.addStretch()
     artist_header.addWidget(self.btn_lock_artist)
@@ -545,10 +529,10 @@ def _build_modern_left_panel(self) -> QScrollArea:
     btn_swap_res.setFixedSize(38, 36)
     btn_swap_res.setToolTip("W ↔ H 교환")
     btn_swap_res.setStyleSheet(
-        "QPushButton { background-color: #5865F2; color: white; border: none; "
-        "border-radius: 4px; font-size: 18px; font-weight: bold; "
-        "padding: 0px; line-height: 36px; }"
-        "QPushButton:hover { background-color: #6975F3; }"
+        f"QPushButton {{ background-color: {get_color('accent')}; color: white; border: none; "
+        f"border-radius: 12px; font-size: 18px; font-weight: bold; "
+        f"padding: 0px; }}"
+        f"QPushButton:hover {{ background-color: #7289DA; }}"
     )
     btn_swap_res.clicked.connect(self._swap_resolution)
     res_row.addWidget(self.width_input)
@@ -570,10 +554,9 @@ def _build_modern_left_panel(self) -> QScrollArea:
     res_preset_row.setContentsMargins(0, 0, 0, 0)
     _res_btn_style = (
         f"QPushButton {{ background-color: {get_color('bg_button')}; "
-        f"color: {get_color('text_secondary')}; border: 1px solid {get_color('border')}; "
-        f"border-radius: 3px; padding: 2px 4px; font-size: 10px; }}"
-        f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; "
-        f"border-color: {get_color('accent')}; }}"
+        f"color: {get_color('text_secondary')}; border: none; "
+        f"border-radius: 12px; padding: 4px 8px; font-size: 10px; }}"
+        f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
     )
     for i, (_label, _w, _h) in enumerate(self._res_presets):
         _btn = QPushButton(_label)
@@ -627,10 +610,24 @@ def _build_modern_left_panel(self) -> QScrollArea:
     detail_section.addWidget(self.resolution_editor_container)
     self.resolution_editor_container.hide()
 
-    # --- Hires.fix ---
+    # --- Hires.fix (모던 카드 스타일) ---
     self.hires_options_group = QGroupBox("Hires.fix")
     self.hires_options_group.setCheckable(True)
     self.hires_options_group.setChecked(False)
+    self.hires_options_group.setStyleSheet(f"""
+        QGroupBox {{
+            background-color: {get_color('bg_secondary')};
+            border: none; border-radius: 16px;
+            margin-top: 8px; padding: 20px 14px 14px 14px;
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin; subcontrol-position: top left;
+            left: 16px; top: 4px;
+            color: {get_color('text_primary')}; font-weight: bold;
+            font-size: 11pt; background: transparent;
+        }}
+        QGroupBox::indicator {{ width: 18px; height: 18px; }}
+    """)
     hires_l = QVBoxLayout(self.hires_options_group)
 
     self.upscaler_combo = NoScrollComboBox()
@@ -681,12 +678,7 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.hires_prompt_text = QTextEdit()
     self.hires_prompt_text.setFixedHeight(50)
     self.hires_prompt_text.setPlaceholderText("비워두면 메인 프롬프트 사용")
-    self.hires_prompt_text.setStyleSheet(
-        f"background-color: {get_color('bg_button')}; "
-        f"color: {get_color('text_primary')}; "
-        f"border: 1px solid {get_color('border')}; "
-        f"border-radius: 4px; padding: 4px; font-size: 12px;"
-    )
+    # 모던 QSS 템플릿의 QTextEdit 스타일 적용
     hires_l.addWidget(self.hires_prompt_text)
 
     # Hires Negative Prompt
@@ -698,32 +690,52 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.hires_neg_prompt_text = QTextEdit()
     self.hires_neg_prompt_text.setFixedHeight(50)
     self.hires_neg_prompt_text.setPlaceholderText("비워두면 메인 네거티브 사용")
-    self.hires_neg_prompt_text.setStyleSheet(
-        f"background-color: {get_color('bg_button')}; "
-        f"color: {get_color('text_primary')}; "
-        f"border: 1px solid {get_color('border')}; "
-        f"border-radius: 4px; padding: 4px; font-size: 12px;"
-    )
+    # 모던 QSS 템플릿의 QTextEdit 스타일 적용
     hires_l.addWidget(self.hires_neg_prompt_text)
     detail_section.addWidget(self.hires_options_group)
 
-    # --- NegPiP ---
+    # --- NegPiP (모던 카드 스타일) ---
     self.negpip_group = QGroupBox("NegPiP 확장")
     self.negpip_group.setCheckable(True)
     self.negpip_group.setChecked(False)
-    self.negpip_group.setStyleSheet(
-        "QGroupBox::indicator { width: 16px; height: 16px; }"
-    )
+    self.negpip_group.setStyleSheet(f"""
+        QGroupBox {{
+            background-color: {get_color('bg_secondary')};
+            border: none; border-radius: 16px;
+            margin-top: 8px; padding: 20px 14px 14px 14px;
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin; subcontrol-position: top left;
+            left: 16px; top: 4px;
+            color: {get_color('text_primary')}; font-weight: bold;
+            font-size: 11pt; background: transparent;
+        }}
+        QGroupBox::indicator {{ width: 18px; height: 18px; }}
+    """)
     np_layout = QVBoxLayout(self.negpip_group)
     np_layout.addWidget(
         QLabel("활성화 시 (keyword:-1.0) 네거티브 가중치 문법 사용 가능")
     )
     detail_section.addWidget(self.negpip_group)
 
-    # --- ADetailer ---
+    # --- ADetailer (모던 카드 스타일) ---
     self.adetailer_group = QGroupBox("ADetailer")
     self.adetailer_group.setCheckable(True)
     self.adetailer_group.setChecked(False)
+    self.adetailer_group.setStyleSheet(f"""
+        QGroupBox {{
+            background-color: {get_color('bg_secondary')};
+            border: none; border-radius: 16px;
+            margin-top: 8px; padding: 20px 14px 14px 14px;
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin; subcontrol-position: top left;
+            left: 16px; top: 4px;
+            color: {get_color('text_primary')}; font-weight: bold;
+            font-size: 11pt; background: transparent;
+        }}
+        QGroupBox::indicator {{ width: 18px; height: 18px; }}
+    """)
     ad_layout = QVBoxLayout(self.adetailer_group)
 
     self.ad_toggle_button = QPushButton("설정 보기")
@@ -763,22 +775,25 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.btn_save_settings = QPushButton("💾 설정 저장")
     self.btn_save_settings.setFixedHeight(36)
     self.btn_save_settings.setStyleSheet(
-        "background-color: #5865F2; color: white; "
-        "font-weight: bold; border-radius: 5px; padding: 4px;"
+        f"QPushButton {{ background-color: {get_color('accent')}; color: white; "
+        f"font-weight: bold; border-radius: 18px; padding: 4px 16px; border: none; }}"
+        f"QPushButton:hover {{ background-color: #7289DA; }}"
     )
     self.btn_preset_save = QPushButton("📥 프리셋 저장")
     self.btn_preset_save.setFixedHeight(36)
     self.btn_preset_save.setStyleSheet(
-        "background-color: #2A6A3A; color: white; "
-        "font-weight: bold; border-radius: 5px; padding: 4px;"
+        "QPushButton { background-color: #2A6A3A; color: white; "
+        "font-weight: bold; border-radius: 18px; padding: 4px 16px; border: none; }"
+        "QPushButton:hover { background-color: #38874A; }"
     )
     self.btn_preset_save.clicked.connect(self._save_prompt_preset)
 
     self.btn_preset_load = QPushButton("📤 프리셋 불러오기")
     self.btn_preset_load.setFixedHeight(36)
     self.btn_preset_load.setStyleSheet(
-        "background-color: #8A5CF5; color: white; "
-        "font-weight: bold; border-radius: 5px; padding: 4px;"
+        "QPushButton { background-color: #8A5CF5; color: white; "
+        "font-weight: bold; border-radius: 18px; padding: 4px 16px; border: none; }"
+        "QPushButton:hover { background-color: #9B73F6; }"
     )
     self.btn_preset_load.clicked.connect(self._load_prompt_preset)
 
@@ -792,9 +807,10 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.btn_shuffle.setFixedHeight(36)
     self.btn_shuffle.setToolTip("메인 프롬프트 태그 순서 셔플")
     self.btn_shuffle.setStyleSheet(
-        f"font-size: 12px; background-color: {get_color('bg_button')}; "
-        f"color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
-        f"border-radius: 5px; font-weight: bold;"
+        f"QPushButton {{ font-size: 12px; background-color: {get_color('bg_button')}; "
+        f"color: {get_color('text_primary')}; border: none; "
+        f"border-radius: 18px; font-weight: bold; padding: 4px 14px; }}"
+        f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
     )
     self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
 
@@ -802,10 +818,11 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.btn_ab_test.setFixedHeight(36)
     self.btn_ab_test.setToolTip("A/B 프롬프트 비교 테스트")
     self.btn_ab_test.setStyleSheet(
-        f"font-size: 12px; font-weight: bold; "
+        f"QPushButton {{ font-size: 12px; font-weight: bold; "
         f"background-color: {get_color('bg_button')}; "
         f"color: {get_color('text_primary')}; "
-        f"border: 1px solid {get_color('border')}; border-radius: 5px;"
+        f"border: none; border-radius: 18px; padding: 4px 14px; }}"
+        f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
     )
     self.btn_ab_test.clicked.connect(self._open_ab_test)
 
@@ -824,14 +841,13 @@ def _build_modern_left_panel(self) -> QScrollArea:
         QPushButton {{
             background-color: {get_color('bg_tertiary')};
             color: {get_color('text_secondary')};
-            border: 1px solid {get_color('border')}; border-radius: 5px;
-            font-weight: bold; font-size: 13px; padding: 4px;
+            border: none; border-radius: 20px;
+            font-weight: bold; font-size: 13px; padding: 6px 16px;
         }}
         QPushButton:checked {{
             background-color: #27ae60; color: white;
-            border: 1px solid #2ecc71;
         }}
-        QPushButton:hover {{ border: 1px solid {get_color('bg_button_hover')}; }}
+        QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
     """)
     self.btn_auto_toggle.toggled.connect(self.toggle_automation_ui)
     util_section.addWidget(self.btn_auto_toggle)

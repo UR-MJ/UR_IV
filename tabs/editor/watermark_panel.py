@@ -102,7 +102,7 @@ class WatermarkPanel(QWidget):
         self.btn_apply_text.setFixedHeight(35)
         self.btn_apply_text.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_apply_text.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
         )
         self.btn_apply_text.clicked.connect(self._on_apply_text)
@@ -152,7 +152,7 @@ class WatermarkPanel(QWidget):
         self.btn_apply_img.setFixedHeight(35)
         self.btn_apply_img.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_apply_img.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
         )
         self.btn_apply_img.clicked.connect(self._on_apply_image)

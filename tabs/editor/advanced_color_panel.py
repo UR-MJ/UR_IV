@@ -108,7 +108,7 @@ class AdvancedColorPanel(QWidget):
         self.btn_apply.setFixedHeight(36)
         self.btn_apply.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_apply.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
         )
         self.btn_apply.clicked.connect(self._on_apply)

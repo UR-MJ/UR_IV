@@ -154,11 +154,11 @@ class MosaicPanel(QWidget):
                 text-align: left; padding-left: 12px;
             }}
             QPushButton:checked {{
-                background-color: #5865F2; color: white;
-                border: 1px solid #5865F2;
+                background-color: {get_color('accent')}; color: white;
+                border: 1px solid {get_color('accent')};
             }}
             QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
-            QPushButton:checked:hover {{ background-color: #6975F3; }}
+            QPushButton:checked:hover {{ background-color: {get_color('accent')}; }}
         """
 
         def create_tool_btn(text, id_val):
@@ -200,11 +200,11 @@ class MosaicPanel(QWidget):
                 text-align: left; padding-left: 12px;
             }}
             QPushButton:checked {{
-                background-color: #4A90E2; color: white;
-                border: 1px solid #4A90E2;
+                background-color: {get_color('accent')}; color: white;
+                border: 1px solid {get_color('accent')};
             }}
             QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
-            QPushButton:checked:hover {{ background-color: #5A9FF0; }}
+            QPushButton:checked:hover {{ background-color: {get_color('accent')}; }}
         """
 
         def create_effect_btn(text, id_val):
@@ -357,7 +357,7 @@ class MosaicPanel(QWidget):
         btn_layout = QHBoxLayout()
         self.btn_apply = QPushButton("✨ 적용 (Enter)")
         self.btn_apply.setStyleSheet(
-            "background-color: #5865F2; font-weight: bold; "
+            f"background-color: {get_color('accent')}; font-weight: bold; "
             "color: white; border-radius: 6px; font-size: 14px;"
         )
         self.btn_apply.setFixedHeight(40)
@@ -537,11 +537,11 @@ class MosaicPanel(QWidget):
                 text-align: left; padding-left: 12px;
             }}
             QPushButton:checked {{
-                background-color: #5865F2; color: white;
-                border: 1px solid #5865F2;
+                background-color: {get_color('accent')}; color: white;
+                border: 1px solid {get_color('accent')};
             }}
             QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
-            QPushButton:checked:hover {{ background-color: #6975F3; }}
+            QPushButton:checked:hover {{ background-color: {get_color('accent')}; }}
         """
         if id_val != 3:
             self.btn_tool_eraser.setText("🧹  지우기")
@@ -581,11 +581,11 @@ class MosaicPanel(QWidget):
                     text-align: left; padding-left: 12px;
                 }}
                 QPushButton:checked {{
-                    background-color: #5865F2; color: white;
-                    border: 1px solid #5865F2;
+                    background-color: {get_color('accent')}; color: white;
+                    border: 1px solid {get_color('accent')};
                 }}
                 QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
-                QPushButton:checked:hover {{ background-color: #6975F3; }}
+                QPushButton:checked:hover {{ background-color: {get_color('accent')}; }}
             """)
 
     def update_lasso_visual(self):
@@ -615,11 +615,11 @@ class MosaicPanel(QWidget):
                     text-align: left; padding-left: 12px;
                 }}
                 QPushButton:checked {{
-                    background-color: #5865F2; color: white;
-                    border: 1px solid #5865F2;
+                    background-color: {get_color('accent')}; color: white;
+                    border: 1px solid {get_color('accent')};
                 }}
                 QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
-                QPushButton:checked:hover {{ background-color: #6975F3; }}
+                QPushButton:checked:hover {{ background-color: {get_color('accent')}; }}
             """)
 
     def on_effect_changed(self):

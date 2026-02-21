@@ -41,7 +41,7 @@ class GalleryMixin:
                 background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')}; color: {get_color('text_primary')};
             }}
             QMenu::item {{ padding: 6px 24px; }}
-            QMenu::item:selected {{ background-color: #5865F2; }}
+            QMenu::item:selected {{ background-color: {get_color('accent')}; }}
         """)
 
         action_i2i = QAction("🖼️ I2I로 보내기", self)

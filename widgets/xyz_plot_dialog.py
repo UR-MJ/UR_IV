@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from utils.xyz_plot import XYZPlotGenerator, AxisConfig, AxisType
+from utils.theme_manager import get_color
 
 
 class XYZPlotDialog(QDialog):
@@ -43,14 +44,14 @@ class XYZPlotDialog(QDialog):
         self.base_prompt_text = QTextEdit()
         self.base_prompt_text.setMaximumHeight(80)
         self.base_prompt_text.setPlaceholderText("현재 설정의 프롬프트가 표시됩니다...")
-        self.base_prompt_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #1E1E1E;
-                border: 1px solid #333;
+        self.base_prompt_text.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {get_color('bg_secondary')};
+                border: 1px solid {get_color('bg_button_hover')};
                 border-radius: 4px;
-                color: #AAA;
+                color: {get_color('text_secondary')};
                 font-size: 11px;
-            }
+            }}
         """)
         prompt_layout.addWidget(self.base_prompt_text)
         layout.addWidget(prompt_group)
@@ -97,21 +98,21 @@ class XYZPlotDialog(QDialog):
         self.preview_table.setHorizontalHeaderLabels(['#', 'X', 'Y', 'Z', '프롬프트 미리보기'])
         self.preview_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         self.preview_table.setMaximumHeight(200)
-        self.preview_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #1E1E1E;
-                border: 1px solid #333;
-                gridline-color: #333;
-            }
-            QTableWidget::item {
+        self.preview_table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {get_color('bg_secondary')};
+                border: 1px solid {get_color('bg_button_hover')};
+                gridline-color: {get_color('bg_button_hover')};
+            }}
+            QTableWidget::item {{
                 padding: 5px;
-            }
-            QHeaderView::section {
-                background-color: #2A2A2A;
+            }}
+            QHeaderView::section {{
+                background-color: {get_color('bg_tertiary')};
                 padding: 5px;
                 border: none;
-                border-right: 1px solid #333;
-            }
+                border-right: 1px solid {get_color('bg_button_hover')};
+            }}
         """)
         preview_layout.addWidget(self.preview_table)
         
@@ -122,15 +123,15 @@ class XYZPlotDialog(QDialog):
         
         self.btn_refresh = QPushButton("🔄 미리보기 갱신")
         self.btn_refresh.clicked.connect(self._refresh_preview)
-        self.btn_refresh.setStyleSheet("""
-            QPushButton {
-                background-color: #333;
-                border: 1px solid #444;
+        self.btn_refresh.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button_hover')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
                 padding: 8px 15px;
-                color: #DDD;
-            }
-            QPushButton:hover { background-color: #444; }
+                color: {get_color('text_primary')};
+            }}
+            QPushButton:hover {{ background-color: {get_color('border')}; }}
         """)
         btn_layout.addWidget(self.btn_refresh)
         
@@ -138,14 +139,14 @@ class XYZPlotDialog(QDialog):
         
         self.btn_cancel = QPushButton("취소")
         self.btn_cancel.clicked.connect(self.reject)
-        self.btn_cancel.setStyleSheet("""
-            QPushButton {
-                background-color: #555;
+        self.btn_cancel.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('border')};
                 border-radius: 4px;
                 padding: 8px 20px;
-                color: #DDD;
-            }
-            QPushButton:hover { background-color: #666; }
+                color: {get_color('text_primary')};
+            }}
+            QPushButton:hover {{ background-color: {get_color('text_muted')}; }}
         """)
         btn_layout.addWidget(self.btn_cancel)
         
@@ -180,13 +181,13 @@ class XYZPlotDialog(QDialog):
         combo.setFixedWidth(180)
         for axis_type in AxisType:
             combo.addItem(axis_type.value, axis_type)
-        combo.setStyleSheet("""
-            QComboBox {
-                background-color: #2A2A2A;
-                border: 1px solid #444;
+        combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {get_color('bg_tertiary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
                 padding: 5px;
-            }
+            }}
         """)
         layout.addWidget(combo)
         
@@ -198,13 +199,13 @@ class XYZPlotDialog(QDialog):
         target_input = QLineEdit()
         target_input.setFixedWidth(100)
         target_input.setPlaceholderText("교체할 단어")
-        target_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2A2A2A;
-                border: 1px solid #444;
+        target_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {get_color('bg_tertiary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
                 padding: 5px;
-            }
+            }}
         """)
         layout.addWidget(target_input)
         
@@ -215,13 +216,13 @@ class XYZPlotDialog(QDialog):
         
         values_input = QLineEdit()
         values_input.setPlaceholderText("값1, 값2, 값3 또는 5-10:1")
-        values_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2A2A2A;
-                border: 1px solid #444;
+        values_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {get_color('bg_tertiary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
                 padding: 5px;
-            }
+            }}
         """)
         layout.addWidget(values_input, 1)
         

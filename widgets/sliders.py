@@ -1,6 +1,7 @@
 # widgets/sliders.py
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSlider, QLineEdit
 from PyQt6.QtCore import Qt, pyqtSignal
+from utils.theme_manager import get_color
 
 class NumericSlider(QWidget):
     """숫자 입력 슬라이더 위젯"""
@@ -11,12 +12,12 @@ class NumericSlider(QWidget):
         self.setObjectName("numericSlider")
 
         # 위젯 자체에 배경색 추가 (ID 셀렉터로 자식 위젯 간섭 방지)
-        self.setStyleSheet("""
-            QWidget#numericSlider {
-                background-color: #252525;
+        self.setStyleSheet(f"""
+            QWidget#numericSlider {{
+                background-color: {get_color('bg_tertiary')};
                 border-radius: 6px;
                 padding: 5px;
-            }
+            }}
         """)
         
         layout = QHBoxLayout(self)
@@ -27,7 +28,7 @@ class NumericSlider(QWidget):
         self.label = QLabel(f"{label_text}: {default_val}")
         self.label.setMinimumWidth(120)
         self.label.setStyleSheet(
-            "color: #E0E0E0; font-weight: bold; background: transparent;"
+            f"color: {get_color('text_primary')}; font-weight: bold; background: transparent;"
         )
         self.base_text = label_text
 
@@ -37,43 +38,43 @@ class NumericSlider(QWidget):
         self.slider.wheelEvent = lambda event: event.ignore()
         self.slider.setRange(min_val, max_val)
         self.slider.setValue(default_val)
-        self.slider.setStyleSheet("""
-            QSlider {
+        self.slider.setStyleSheet(f"""
+            QSlider {{
                 background: transparent;
-            }
-            QSlider::groove:horizontal {
-                background: #1A1A1A;
+            }}
+            QSlider::groove:horizontal {{
+                background: {get_color('bg_secondary')};
                 height: 8px;
                 border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
+            }}
+            QSlider::handle:horizontal {{
                 background: #5865F2;
                 width: 18px;
                 height: 18px;
                 margin: -5px 0;
                 border-radius: 9px;
-            }
-            QSlider::handle:horizontal:hover {
+            }}
+            QSlider::handle:horizontal:hover {{
                 background: #7289DA;
-            }
+            }}
         """)
         
         # 입력창
         self.input = QLineEdit(str(default_val))
         self.input.setFixedWidth(60)
         self.input.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.input.setStyleSheet("""
-            QLineEdit {
-                background-color: #1A1A1A; 
-                color: white; 
-                border: 1px solid #444; 
+        self.input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {get_color('bg_secondary')};
+                color: {get_color('text_primary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
                 padding: 4px;
                 font-weight: bold;
-            }
-            QLineEdit:focus {
+            }}
+            QLineEdit:focus {{
                 border: 1px solid #5865F2;
-            }
+            }}
         """)
 
         layout.addWidget(self.label)
@@ -111,6 +112,6 @@ class NumericSlider(QWidget):
         self.slider.setEnabled(enabled)
         self.input.setEnabled(enabled)
         if not enabled:
-            self.setStyleSheet("QWidget#numericSlider { opacity: 0.5; }")
+            self.setStyleSheet(f"QWidget#numericSlider {{ background-color: {get_color('bg_tertiary')}; border-radius: 6px; padding: 5px; opacity: 0.5; }}")
         else:
-            self.setStyleSheet("")
+            self.setStyleSheet(f"QWidget#numericSlider {{ background-color: {get_color('bg_tertiary')}; border-radius: 6px; padding: 5px; }}")

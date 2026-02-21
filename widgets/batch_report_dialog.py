@@ -27,7 +27,7 @@ class BatchReportDialog(QDialog):
 
         # 제목
         title = QLabel("배치 생성 완료")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #FFF;")
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {get_color('text_primary')};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 

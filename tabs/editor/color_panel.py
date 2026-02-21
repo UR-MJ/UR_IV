@@ -47,7 +47,7 @@ class ColorAdjustPanel(QWidget):
         self.btn_apply.setFixedHeight(35)
         self.btn_apply.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_apply.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
         )
 
@@ -109,7 +109,7 @@ class ColorAdjustPanel(QWidget):
                 }}
                 QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; border: 1px solid {get_color('text_muted')}; }}
                 QPushButton:checked {{
-                    background-color: #5865F2; color: white; border: 1px solid #5865F2;
+                    background-color: {get_color('accent')}; color: white; border: 1px solid {get_color('accent')};
                 }}
             """)
             btn.setCheckable(True)
@@ -132,7 +132,7 @@ class ColorAdjustPanel(QWidget):
         self.btn_filter_apply.setFixedHeight(35)
         self.btn_filter_apply.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_filter_apply.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
         )
         self.btn_filter_apply.clicked.connect(self._on_filter_apply)

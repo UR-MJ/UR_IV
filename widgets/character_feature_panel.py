@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from widgets.common_widgets import FlowLayout
+from utils.theme_manager import get_color
 
 
 _TAG_CHECKED = (
@@ -14,17 +15,19 @@ _TAG_CHECKED = (
     "font-size: 11px; font-weight: bold; }"
     "QPushButton:hover { background-color: #6975F3; }"
 )
-_TAG_UNCHECKED = (
-    "QPushButton { background-color: #333; color: #888; "
-    "border: none; border-radius: 10px; padding: 3px 10px; "
-    "font-size: 11px; text-decoration: line-through; }"
-    "QPushButton:hover { background-color: #444; }"
-)
-_TAG_EXISTS = (
-    "QPushButton { background-color: #2C2C2C; color: #555; "
-    "border: 1px solid #3A3A3A; border-radius: 10px; padding: 3px 10px; "
-    "font-size: 11px; }"
-)
+def _tag_unchecked():
+    return (
+        f"QPushButton {{ background-color: {get_color('bg_button_hover')}; color: {get_color('text_muted')}; "
+        f"border: none; border-radius: 10px; padding: 3px 10px; "
+        f"font-size: 11px; text-decoration: line-through; }}"
+        f"QPushButton:hover {{ background-color: {get_color('border')}; }}"
+    )
+def _tag_exists():
+    return (
+        f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('border')}; "
+        f"border: 1px solid {get_color('border')}; border-radius: 10px; padding: 3px 10px; "
+        f"font-size: 11px; }}"
+    )
 
 
 class CharacterFeaturePanel(QWidget):
@@ -46,7 +49,7 @@ class CharacterFeaturePanel(QWidget):
         # 컨텐츠 프레임
         self._frame = QFrame()
         self._frame.setStyleSheet(
-            "QFrame { background-color: #1A1A1A; border-radius: 6px; }"
+            f"QFrame {{ background-color: {get_color('bg_secondary')}; border-radius: 6px; }}"
         )
         frame_layout = QVBoxLayout(self._frame)
         frame_layout.setContentsMargins(8, 6, 8, 6)
@@ -77,9 +80,9 @@ class CharacterFeaturePanel(QWidget):
         btn_clear = QPushButton("X")
         btn_clear.setFixedSize(28, 28)
         btn_clear.setStyleSheet(
-            "QPushButton { background-color: #444; color: #AAA; "
-            "border-radius: 4px; font-weight: bold; font-size: 11px; }"
-            "QPushButton:hover { background-color: #555; }"
+            f"QPushButton {{ background-color: {get_color('border')}; color: {get_color('text_secondary')}; "
+            f"border-radius: 4px; font-weight: bold; font-size: 11px; }}"
+            f"QPushButton:hover {{ background-color: {get_color('border')}; }}"
         )
         btn_clear.clicked.connect(self.hide_features)
         header.addWidget(btn_clear)
@@ -129,8 +132,8 @@ class CharacterFeaturePanel(QWidget):
             # 캐릭터 이름 헤더
             name_label = QLabel(f"{char_name}  ({count:,})")
             name_label.setStyleSheet(
-                "color: #CCC; font-weight: bold; font-size: 11px; "
-                "background: transparent; padding: 2px 0;"
+                f"color: {get_color('text_secondary')}; font-weight: bold; font-size: 11px; "
+                f"background: transparent; padding: 2px 0;"
             )
             self._tag_layout.addWidget(name_label)
 
@@ -184,12 +187,12 @@ class CharacterFeaturePanel(QWidget):
             btn.setEnabled(not is_existing)
 
             if is_existing:
-                btn.setStyleSheet(_TAG_EXISTS)
+                btn.setStyleSheet(_tag_exists())
             else:
                 btn.setStyleSheet(_TAG_CHECKED)
                 btn.toggled.connect(
                     lambda checked, b=btn: b.setStyleSheet(
-                        _TAG_CHECKED if checked else _TAG_UNCHECKED
+                        _TAG_CHECKED if checked else _tag_unchecked()
                     )
                 )
 

@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPoint
 from PyQt6.QtGui import QKeyEvent, QFocusEvent
 from utils.tag_completer import get_tag_completer
+from utils.theme_manager import get_color
 
 
 class TagInputWidget(QTextEdit):
@@ -47,25 +48,25 @@ class TagInputWidget(QTextEdit):
         self.popup.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.popup.setMaximumHeight(200)
         self.popup.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.popup.setStyleSheet("""
-            QListWidget {
-                background-color: #2A2A2A;
+        self.popup.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {get_color('bg_tertiary')};
                 border: 1px solid #5865F2;
                 border-radius: 4px;
                 padding: 2px;
-            }
-            QListWidget::item {
-                color: #EEE;
+            }}
+            QListWidget::item {{
+                color: {get_color('text_primary')};
                 padding: 5px 10px;
                 border-radius: 2px;
-            }
-            QListWidget::item:hover {
-                background-color: #3A3A3A;
-            }
-            QListWidget::item:selected {
+            }}
+            QListWidget::item:hover {{
+                background-color: {get_color('bg_button_hover')};
+            }}
+            QListWidget::item:selected {{
                 background-color: #5865F2;
                 color: white;
-            }
+            }}
         """)
 
         self.popup.itemClicked.connect(self._on_item_clicked)

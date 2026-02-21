@@ -25,11 +25,11 @@ def _get_tool_btn_style():
         text-align: left; padding-left: 12px;
     }}
     QPushButton:checked {{
-        background-color: #5865F2; color: white;
-        border: 1px solid #5865F2;
+        background-color: {get_color('accent')}; color: white;
+        border: 1px solid {get_color('accent')};
     }}
     QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
-    QPushButton:checked:hover {{ background-color: #6975F3; }}
+    QPushButton:checked:hover {{ background-color: {get_color('accent')}; }}
 """
 
 
@@ -202,7 +202,7 @@ class DrawPanel(QWidget):
                 border-radius: 6px; font-size: 13px; font-weight: bold;
             }}
             QPushButton:checked {{
-                background-color: #4A90E2; color: white; border: 1px solid #4A90E2;
+                background-color: {get_color('accent')}; color: white; border: 1px solid {get_color('accent')};
             }}
             QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}
         """)

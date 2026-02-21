@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QInputDialog, QMenu, QScrollArea, QSizePolicy, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from utils.theme_manager import get_color
 
 _FAV_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "favorite_tags.json")
 
@@ -96,10 +97,10 @@ class FavoriteTagsBar(QWidget):
             btn = QPushButton(fav.get("name", "?"))
             btn.setFixedHeight(28)
             btn.setStyleSheet(
-                "QPushButton { background-color: #2C2C2C; color: #DDD; "
-                "border: 1px solid #555; border-radius: 12px; "
-                "padding: 0 10px; font-size: 12px; font-weight: bold; }"
-                "QPushButton:hover { background-color: #444; border-color: #5865F2; }"
+                f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; "
+                f"border: 1px solid {get_color('border')}; border-radius: 12px; "
+                f"padding: 0 10px; font-size: 12px; font-weight: bold; }}"
+                f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; border-color: #5865F2; }}"
             )
             btn.setToolTip(fav.get("tags", ""))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -127,9 +128,9 @@ class FavoriteTagsBar(QWidget):
         """우클릭 메뉴: 편집, 삭제"""
         menu = QMenu(self)
         menu.setStyleSheet(
-            "QMenu { background-color: #2a2a2a; color: #ddd; border: 1px solid #555; }"
-            "QMenu::item { padding: 6px 16px; }"
-            "QMenu::item:selected { background-color: #5865F2; }"
+            f"QMenu {{ background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; }}"
+            f"QMenu::item {{ padding: 6px 16px; }}"
+            f"QMenu::item:selected {{ background-color: #5865F2; }}"
         )
         act_edit = menu.addAction("편집")
         act_del = menu.addAction("삭제")

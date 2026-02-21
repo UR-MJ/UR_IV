@@ -36,7 +36,7 @@ class TrayManager(QObject):
         menu.setStyleSheet(
             f"QMenu {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; }}"
             "QMenu::item { padding: 6px 20px; }"
-            "QMenu::item:selected { background-color: #5865F2; }"
+            f"QMenu::item:selected {{ background-color: {get_color('accent')}; }}"
         )
         act_open = menu.addAction("열기")
         act_open.triggered.connect(self.show_window_requested.emit)

@@ -21,18 +21,20 @@ def _btn_style():
     QPushButton:disabled {{ color: {get_color('border')}; background-color: {get_color('bg_secondary')}; }}
 """
 
-_ACCENT_BTN = """
-    QPushButton {
-        background-color: #5865F2; border: 1px solid #5865F2;
+def _accent_btn():
+    return f"""
+    QPushButton {{
+        background-color: {get_color('accent')}; border: 1px solid {get_color('accent')};
         border-radius: 6px; color: white;
         font-size: 13px; font-weight: bold;
         padding: 8px 12px;
-    }
-    QPushButton:hover { background-color: #6975F3; }
-    QPushButton:disabled { background-color: #3A3A5C; color: #777; }
+    }}
+    QPushButton:hover {{ background-color: {get_color('accent')}; }}
+    QPushButton:disabled {{ background-color: {get_color('bg_tertiary')}; color: {get_color('text_muted')}; }}
 """
 
-_INPAINT_BTN = """
+def _inpaint_btn():
+    return """
     QPushButton {
         background-color: #e67e22; border: 1px solid #e67e22;
         border-radius: 6px; color: white;
@@ -113,7 +115,7 @@ class MovePanel(QWidget):
         self.btn_start_move = QPushButton("✂️  이동 시작")
         self.btn_start_move.setFixedHeight(40)
         self.btn_start_move.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_start_move.setStyleSheet(_ACCENT_BTN)
+        self.btn_start_move.setStyleSheet(_accent_btn())
         layout.addWidget(self.btn_start_move)
 
         # 확정 / 취소
@@ -146,7 +148,7 @@ class MovePanel(QWidget):
         self.btn_send_inpaint = QPushButton("🎨  인페인트")
         self.btn_send_inpaint.setFixedHeight(40)
         self.btn_send_inpaint.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_send_inpaint.setStyleSheet(_INPAINT_BTN)
+        self.btn_send_inpaint.setStyleSheet(_inpaint_btn())
         self.btn_send_inpaint.setEnabled(False)
         layout.addWidget(self.btn_send_inpaint)
 

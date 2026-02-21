@@ -150,7 +150,7 @@ class SettingsTab(QWidget):
                 QListWidget::item:selected {{
                     background-color: {get_color('bg_tertiary')};
                     color: {get_color('text_primary')};
-                    border-left: 3px solid #5865F2;
+                    border-left: 3px solid {get_color('accent')};
                 }}
                 QListWidget::item:hover {{
                     background-color: {get_color('bg_secondary')};
@@ -1078,6 +1078,18 @@ class SettingsTab(QWidget):
         style_gl.addLayout(style_h)
 
         style_gl.addWidget(QLabel("※ UI 스타일 변경 시 앱을 재시작해야 적용됩니다."))
+
+        self.btn_restart_app = QPushButton("🔄 앱 재시작")
+        self.btn_restart_app.setFixedHeight(36)
+        self.btn_restart_app.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_restart_app.setStyleSheet(
+            f"QPushButton {{ background-color: #e67e22; color: white; "
+            f"font-weight: bold; border-radius: 8px; font-size: 12px; padding: 4px 16px; }}"
+            f"QPushButton:hover {{ background-color: #f39c12; }}"
+        )
+        self.btn_restart_app.clicked.connect(self._restart_application)
+        style_gl.addWidget(self.btn_restart_app)
+
         l.addWidget(style_group)
 
         # 테마 선택
@@ -1153,8 +1165,36 @@ class SettingsTab(QWidget):
         QMessageBox.information(
             self, "UI 스타일 변경",
             "UI 스타일을 변경하려면 앱을 재시작해야 합니다.\n"
-            "설정을 저장한 후 앱을 다시 시작해주세요."
+            "아래 '앱 재시작' 버튼을 누르면 설정 저장 후 자동 재시작됩니다."
         )
+
+    def _restart_application(self):
+        """설정 저장 후 앱 재시작"""
+        import sys
+        import os
+        import subprocess
+
+        reply = QMessageBox.question(
+            self, "앱 재시작",
+            "현재 설정을 저장하고 앱을 재시작합니다.\n계속하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # 설정 저장
+        try:
+            self.apply_settings()
+        except Exception:
+            pass
+
+        # 새 프로세스 실행 후 현재 프로세스 종료
+        python = sys.executable
+        script = os.path.abspath(sys.argv[0])
+        args = sys.argv[1:]
+        subprocess.Popen([python, script] + args)
+        os._exit(0)
 
     def apply_api_url(self):
         """API URL 적용"""

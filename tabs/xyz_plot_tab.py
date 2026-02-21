@@ -87,12 +87,12 @@ class XYZPlotTab(QWidget):
 
         self.btn_load_current = QPushButton("현재 T2I 설정 불러오기")
         self.btn_load_current.setFixedHeight(40)
-        self.btn_load_current.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db; color: white;
+        self.btn_load_current.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('accent')}; color: white;
                 font-weight: bold; border-radius: 5px;
-            }
-            QPushButton:hover { background-color: #2980b9; }
+            }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
         """)
         self.btn_load_current.clicked.connect(self._load_current_settings)
         load_layout.addWidget(self.btn_load_current)
@@ -150,7 +150,7 @@ class XYZPlotTab(QWidget):
                 font-weight: bold; font-size: 13px; border-radius: 5px;
             }}
             QPushButton:hover {{ background-color: #2ecc71; }}
-            QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_add_queue.clicked.connect(self._on_add_to_queue)
 
@@ -163,7 +163,7 @@ class XYZPlotTab(QWidget):
                 font-weight: bold; font-size: 13px; border-radius: 5px;
             }}
             QPushButton:hover {{ background-color: #8e44ad; }}
-            QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_start_now.clicked.connect(self._on_start_now)
 
@@ -191,11 +191,11 @@ class XYZPlotTab(QWidget):
         self.btn_export_grid = QPushButton("그리드 이미지 저장")
         self.btn_export_grid.setStyleSheet(f"""
             QPushButton {{
-                background-color: #2980b9; color: white; border-radius: 4px;
+                background-color: {get_color('accent')}; color: white; border-radius: 4px;
                 padding: 5px 10px; font-size: 11px; font-weight: bold;
             }}
-            QPushButton:hover {{ background-color: #3498db; }}
-            QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_export_grid.setEnabled(False)
         self.btn_export_grid.clicked.connect(self._export_grid_image)
@@ -207,7 +207,7 @@ class XYZPlotTab(QWidget):
                 background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border-radius: 4px;
                 padding: 5px 10px; font-size: 11px;
             }}
-            QPushButton:hover {{ background-color: #5A2A2A; }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
         """)
         btn_clear_results.clicked.connect(self._clear_results)
         header.addWidget(btn_clear_results)

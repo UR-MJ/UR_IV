@@ -160,7 +160,7 @@ class PerspectiveDialog(QDialog):
         btn_ok = QPushButton("적용")
         btn_ok.setFixedHeight(36)
         btn_ok.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
         )
         btn_ok.clicked.connect(self._on_accept)

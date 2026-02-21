@@ -78,12 +78,13 @@ _TAG_CUSTOM = (
     "font-size: 11px; font-weight: bold; }"
     "QPushButton:hover { background-color: #E67E22; }"
 )
-_TAG_CUSTOM_UNCHECKED = (
-    "QPushButton { background-color: #4A3000; color: #999; "
-    "border: none; border-radius: 11px; padding: 4px 12px; "
-    "font-size: 11px; text-decoration: line-through; }"
-    "QPushButton:hover { background-color: #5A3A00; }"
-)
+def _tag_custom_unchecked():
+    return (
+        f"QPushButton {{ background-color: #4A3000; color: {get_color('text_muted')}; "
+        f"border: none; border-radius: 11px; padding: 4px 12px; "
+        f"font-size: 11px; text-decoration: line-through; }}"
+        f"QPushButton:hover {{ background-color: #5A3A00; }}"
+    )
 
 
 def _unescape(text: str) -> str:
@@ -594,7 +595,7 @@ class CharacterPresetDialog(QDialog):
         btn.setStyleSheet(_TAG_CUSTOM)
         btn.toggled.connect(
             lambda checked, b=btn: b.setStyleSheet(
-                _TAG_CUSTOM if checked else _TAG_CUSTOM_UNCHECKED
+                _TAG_CUSTOM if checked else _tag_custom_unchecked()
             )
         )
         self._core_flow.addWidget(btn)

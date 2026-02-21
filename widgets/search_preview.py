@@ -42,12 +42,12 @@ class SearchPreviewCard(QWidget):
         
         # 카드 프레임
         self.card_frame = QFrame()
-        self.card_frame.setStyleSheet("""
-            QFrame {
-                background-color: #2A2A2A;
-                border: 1px solid #3A3A3A;
+        self.card_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {get_color('bg_tertiary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 8px;
-            }
+            }}
         """)
         card_layout = QVBoxLayout(self.card_frame)
         card_layout.setContentsMargins(10, 8, 10, 8)

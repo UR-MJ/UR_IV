@@ -3,6 +3,7 @@
 from PyQt6.QtWidgets import QComboBox, QCompleter, QStyledItemDelegate, QStyle
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QFontDatabase, QColor
+from utils.theme_manager import get_color
 
 
 class FontItemDelegate(QStyledItemDelegate):
@@ -18,12 +19,12 @@ class FontItemDelegate(QStyledItemDelegate):
         # 선택/호버 배경
         if option.state & QStyle.StateFlag.State_Selected:
             painter.fillRect(option.rect, QColor("#5865F2"))
-            painter.setPen(QColor("#FFFFFF"))
+            painter.setPen(QColor(get_color('text_primary')))
         elif option.state & QStyle.StateFlag.State_MouseOver:
-            painter.fillRect(option.rect, QColor("#373737"))
-            painter.setPen(QColor("#DDD"))
+            painter.fillRect(option.rect, QColor(get_color('bg_button_hover')))
+            painter.setPen(QColor(get_color('text_primary')))
         else:
-            painter.setPen(QColor("#DDD"))
+            painter.setPen(QColor(get_color('text_primary')))
 
         painter.setFont(QFont(font_family, 11))
         painter.drawText(
@@ -62,52 +63,52 @@ class FontPreviewComboBox(QComboBox):
         self.setCompleter(completer)
 
         # 다크 테마 스타일
-        self.setStyleSheet("""
-            QComboBox {
-                background-color: #2A2A2A;
-                color: #DDD;
-                border: 1px solid #444;
+        self.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {get_color('bg_tertiary')};
+                color: {get_color('text_primary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
                 padding: 4px 28px 4px 8px;
                 min-height: 24px;
-            }
-            QComboBox:hover {
+            }}
+            QComboBox:hover {{
                 border-color: #5865F2;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
                 width: 24px;
-                border-left: 1px solid #444;
+                border-left: 1px solid {get_color('border')};
                 border-top-right-radius: 4px;
                 border-bottom-right-radius: 4px;
-                background-color: #333;
-            }
-            QComboBox::drop-down:hover {
-                background-color: #444;
-            }
-            QComboBox::down-arrow {
+                background-color: {get_color('bg_button_hover')};
+            }}
+            QComboBox::drop-down:hover {{
+                background-color: {get_color('border')};
+            }}
+            QComboBox::down-arrow {{
                 image: none;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
-                border-top: 6px solid #AAA;
+                border-top: 6px solid {get_color('text_secondary')};
                 width: 0;
                 height: 0;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #2A2A2A;
-                color: #DDD;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {get_color('bg_tertiary')};
+                color: {get_color('text_primary')};
                 border: 1px solid #5865F2;
                 selection-background-color: #5865F2;
                 outline: none;
-            }
-            QComboBox QAbstractItemView::item {
+            }}
+            QComboBox QAbstractItemView::item {{
                 min-height: 24px;
                 padding: 4px;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #373737;
-            }
+            }}
+            QComboBox QAbstractItemView::item:hover {{
+                background-color: {get_color('bg_button_hover')};
+            }}
         """)
 
     def set_current_font(self, family: str):

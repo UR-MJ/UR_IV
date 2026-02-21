@@ -231,16 +231,16 @@ class ActionsMixin:
                 }}
                 QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}
             """)
-            
+
             # 생성 버튼 복구
             self.btn_generate.setText("✨ 이미지 생성")
-            self.btn_generate.setStyleSheet("""
-                QPushButton {
+            self.btn_generate.setStyleSheet(f"""
+                QPushButton {{
                     font-size: 15px; font-weight: bold;
-                    background-color: #4A90E2; color: white;
+                    background-color: {get_color('accent')}; color: white;
                     border-radius: 5px; padding: 4px;
-                }
-                QPushButton:hover { background-color: #5A9FF2; }
+                }}
+                QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
             """)
             
     def _on_automation_generation_finished(self, result, gen_info):
@@ -473,15 +473,15 @@ class ActionsMixin:
             """)
         else:
             self.btn_generate.setText("✨ 이미지 생성")
-            self.btn_generate.setStyleSheet("""
-                QPushButton {
+            self.btn_generate.setStyleSheet(f"""
+                QPushButton {{
                     font-size: 15px; font-weight: bold;
-                    background-color: #4A90E2; color: white;
+                    background-color: {get_color('accent')}; color: white;
                     border-radius: 5px; padding: 4px;
-                }
-                QPushButton:hover { background-color: #5A9FF2; }
+                }}
+                QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
             """)
-        
+
         self.btn_generate.setEnabled(True)
         
         if message:

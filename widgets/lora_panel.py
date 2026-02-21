@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 import re
+from utils.theme_manager import get_color
 
 
 class ClickableWeightLabel(QStackedWidget):
@@ -21,14 +22,14 @@ class ClickableWeightLabel(QStackedWidget):
         # 라벨 (표시용)
         self._label = QLabel(f"{value:.2f}")
         self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._label.setStyleSheet("color: #AAA; font-size: 11px;")
+        self._label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 11px;")
 
         # 입력 필드 (편집용)
         self._edit = QLineEdit(f"{value:.2f}")
         self._edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._edit.setStyleSheet(
-            "background: #333; color: #FFF; border: 1px solid #5865F2; "
-            "border-radius: 2px; font-size: 11px; padding: 0px;"
+            f"background: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; border: 1px solid #5865F2; "
+            f"border-radius: 2px; font-size: 11px; padding: 0px;"
         )
         self._edit.editingFinished.connect(self._finish_edit)
 
@@ -176,10 +177,10 @@ class LoraActivePanel(QWidget):
             chk.setChecked(entry['enabled'])
             chk.setToolTip(entry['name'])
             chk.setStyleSheet(
-                "QCheckBox { color: #DDD; font-size: 12px; font-weight: bold; }"
-                "QCheckBox::indicator { width: 14px; height: 14px; }"
-                "QToolTip { background-color: #333; color: #FFF; "
-                "border: 1px solid #555; padding: 4px; font-size: 12px; }"
+                f"QCheckBox {{ color: {get_color('text_primary')}; font-size: 12px; font-weight: bold; }}"
+                f"QCheckBox::indicator {{ width: 14px; height: 14px; }}"
+                f"QToolTip {{ background-color: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; "
+                f"border: 1px solid {get_color('border')}; padding: 4px; font-size: 12px; }}"
             )
             chk.toggled.connect(
                 lambda checked, name=entry['name']: self._on_toggle(name, checked)
@@ -192,9 +193,9 @@ class LoraActivePanel(QWidget):
             slider.setValue(int(entry['weight'] * 100))
             slider.setFixedWidth(70)
             slider.setStyleSheet(
-                "QSlider::groove:horizontal { background: #333; height: 4px; border-radius: 2px; }"
-                "QSlider::handle:horizontal { background: #5865F2; width: 10px; "
-                "margin: -3px 0; border-radius: 5px; }"
+                f"QSlider::groove:horizontal {{ background: {get_color('bg_button_hover')}; height: 4px; border-radius: 2px; }}"
+                f"QSlider::handle:horizontal {{ background: #5865F2; width: 10px; "
+                f"margin: -3px 0; border-radius: 5px; }}"
             )
             row_layout.addWidget(slider)
 
@@ -225,11 +226,11 @@ class LoraActivePanel(QWidget):
             btn_lock.setCheckable(True)
             btn_lock.setChecked(locked)
             btn_lock.setStyleSheet(
-                "QPushButton { border: 1px solid #555; border-radius: 4px; "
-                "font-size: 11px; background-color: #333; color: #AAA; "
-                "padding: 0px 4px; }"
-                "QPushButton:checked { background-color: #d35400; color: white; "
-                "border: 1px solid #e67e22; }"
+                f"QPushButton {{ border: 1px solid {get_color('border')}; border-radius: 4px; "
+                f"font-size: 11px; background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; "
+                f"padding: 0px 4px; }}"
+                f"QPushButton:checked {{ background-color: #d35400; color: white; "
+                f"border: 1px solid #e67e22; }}"
             )
             if locked:
                 slider.setEnabled(False)
@@ -244,11 +245,11 @@ class LoraActivePanel(QWidget):
             btn_del.setFixedSize(62, 32)
             btn_del.setToolTip("LoRA 제거")
             btn_del.setStyleSheet(
-                "QPushButton { border: 1px solid #555; border-radius: 4px; "
-                "font-size: 11px; background-color: #333; color: #AAA; "
-                "padding: 0px 4px; }"
-                "QPushButton:hover { background-color: #C0392B; color: white; "
-                "border-color: #E74C3C; }"
+                f"QPushButton {{ border: 1px solid {get_color('border')}; border-radius: 4px; "
+                f"font-size: 11px; background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; "
+                f"padding: 0px 4px; }}"
+                f"QPushButton:hover {{ background-color: #C0392B; color: white; "
+                f"border-color: #E74C3C; }}"
             )
             btn_del.clicked.connect(
                 lambda _, name=entry['name']: self.remove_lora(name)
@@ -257,7 +258,7 @@ class LoraActivePanel(QWidget):
 
             # objectName 셀렉터로 자식 위젯 스타일 간섭 방지
             row.setStyleSheet(
-                "QWidget#loraRow { background-color: #252525; border-radius: 4px; }"
+                f"QWidget#loraRow {{ background-color: {get_color('bg_tertiary')}; border-radius: 4px; }}"
             )
             self._layout.addWidget(row)
 

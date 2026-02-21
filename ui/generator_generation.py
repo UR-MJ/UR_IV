@@ -12,12 +12,24 @@ from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
 
+import config
 from config import OUTPUT_DIR
 from workers.generation_worker import GenerationFlowWorker
 from utils.file_wildcard import resolve_file_wildcards
 from utils.wildcard import process_wildcards
 from utils.app_logger import get_logger
 from utils.theme_manager import get_theme_manager
+
+
+def _gen_btn_style(bg_color: str) -> str:
+    """생성 버튼 스타일 (UI 모드별 border-radius 적용)"""
+    is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
+    radius = '24px' if is_modern else '5px'
+    return (
+        f"QPushButton {{ font-size: 15px; font-weight: bold; "
+        f"background-color: {bg_color}; color: white; "
+        f"border: none; border-radius: {radius}; padding: 4px; }}"
+    )
 
 _logger = get_logger('generation')
 
@@ -31,13 +43,7 @@ class GenerationMixin:
         self.setWindowTitle("AI Studio - Pro [생성 중...]")        
         self.btn_generate.setText("⏳ 생성 중...")
         self.btn_generate.setEnabled(False)
-        self.btn_generate.setStyleSheet("""
-            QPushButton {
-                font-size: 15px; font-weight: bold;
-                background-color: #e67e22; color: white;
-                border-radius: 5px; padding: 4px;
-            }
-        """)
+        self.btn_generate.setStyleSheet(_gen_btn_style('#e67e22'))
         
         # 상태바 업데이트
         self.show_status("🎨 이미지 생성 중...")
@@ -204,31 +210,13 @@ class GenerationMixin:
         if self.btn_auto_toggle.isChecked():
             if self.is_automating:
                 self.btn_generate.setText("⏸️ 자동화 중지")
-                self.btn_generate.setStyleSheet("""
-                    QPushButton {
-                        font-size: 15px; font-weight: bold;
-                        background-color: #e74c3c; color: white;
-                        border-radius: 5px; padding: 4px;
-                    }
-                """)
+                self.btn_generate.setStyleSheet(_gen_btn_style('#e74c3c'))
             else:
                 self.btn_generate.setText("🚀 자동화 시작")
-                self.btn_generate.setStyleSheet("""
-                    QPushButton {
-                        font-size: 15px; font-weight: bold;
-                        background-color: #27ae60; color: white;
-                        border-radius: 5px; padding: 4px;
-                    }
-                """)
+                self.btn_generate.setStyleSheet(_gen_btn_style('#27ae60'))
         else:
             self.btn_generate.setText("✨ 이미지 생성")
-            self.btn_generate.setStyleSheet("""
-                QPushButton {
-                    font-size: 15px; font-weight: bold;
-                    background-color: #4A90E2; color: white;
-                    border-radius: 5px; padding: 4px;
-                }
-            """)
+            self.btn_generate.setStyleSheet(_gen_btn_style('#4A90E2'))
         
         self.btn_generate.setEnabled(True)
 

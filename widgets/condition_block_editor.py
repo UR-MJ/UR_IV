@@ -6,40 +6,51 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from utils.condition_block import ConditionRule, rules_to_json, rules_from_json, migrate_old_rules
+from utils.theme_manager import get_color
 
 
-_LABEL_STYLE = "color: #888; font-size: 11px; font-weight: bold;"
-_INPUT_STYLE = (
-    "QLineEdit { background-color: #2A2A2A; color: #DDD; "
-    "border: 1px solid #444; border-radius: 4px; padding: 2px 6px; font-size: 11px; }"
-    "QLineEdit:focus { border: 1px solid #5865F2; }"
-)
-# 드롭다운 팝업 항목 스타일 (다크모드 대응)
-_COMBO_POPUP = (
-    "QComboBox QAbstractItemView { background-color: #2A2A2A; color: #DDD; "
-    "selection-background-color: #3A3A5A; selection-color: #FFF; "
-    "border: 1px solid #555; }"
-)
-_COMBO_STYLE = (
-    "QComboBox { background-color: #2A2A2A; color: #DDD; "
-    "border: 1px solid #444; border-radius: 4px; padding: 2px 4px; font-size: 11px; }"
-    "QComboBox::drop-down { border: none; }"
-    "QComboBox::down-arrow { image: none; border: none; width: 8px; }" + _COMBO_POPUP
-)
-_TARGET_POS_STYLE = (
-    "QComboBox { background-color: #1A3A1A; color: #4CAF50; "
-    "border: 1px solid #4CAF50; border-radius: 4px; padding: 2px 4px; "
-    "font-size: 11px; font-weight: bold; }"
-    "QComboBox::drop-down { border: none; }"
-    "QComboBox::down-arrow { image: none; border: none; width: 8px; }" + _COMBO_POPUP
-)
-_TARGET_NEG_STYLE = (
-    "QComboBox { background-color: #3A1A1A; color: #F44336; "
-    "border: 1px solid #F44336; border-radius: 4px; padding: 2px 4px; "
-    "font-size: 11px; font-weight: bold; }"
-    "QComboBox::drop-down { border: none; }"
-    "QComboBox::down-arrow { image: none; border: none; width: 8px; }" + _COMBO_POPUP
-)
+def _label_style():
+    return f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold;"
+
+def _input_style():
+    return (
+        f"QLineEdit {{ background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')}; "
+        f"border: 1px solid {get_color('border')}; border-radius: 4px; padding: 2px 6px; font-size: 11px; }}"
+        f"QLineEdit:focus {{ border: 1px solid #5865F2; }}"
+    )
+
+def _combo_popup():
+    return (
+        f"QComboBox QAbstractItemView {{ background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')}; "
+        f"selection-background-color: #3A3A5A; selection-color: {get_color('text_primary')}; "
+        f"border: 1px solid {get_color('border')}; }}"
+    )
+
+def _combo_style():
+    return (
+        f"QComboBox {{ background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')}; "
+        f"border: 1px solid {get_color('border')}; border-radius: 4px; padding: 2px 4px; font-size: 11px; }}"
+        f"QComboBox::drop-down {{ border: none; }}"
+        f"QComboBox::down-arrow {{ image: none; border: none; width: 8px; }}" + _combo_popup()
+    )
+
+def _target_pos_style():
+    return (
+        f"QComboBox {{ background-color: #1A3A1A; color: #4CAF50; "
+        f"border: 1px solid #4CAF50; border-radius: 4px; padding: 2px 4px; "
+        f"font-size: 11px; font-weight: bold; }}"
+        f"QComboBox::drop-down {{ border: none; }}"
+        f"QComboBox::down-arrow {{ image: none; border: none; width: 8px; }}" + _combo_popup()
+    )
+
+def _target_neg_style():
+    return (
+        f"QComboBox {{ background-color: #3A1A1A; color: #F44336; "
+        f"border: 1px solid #F44336; border-radius: 4px; padding: 2px 4px; "
+        f"font-size: 11px; font-weight: bold; }}"
+        f"QComboBox::drop-down {{ border: none; }}"
+        f"QComboBox::down-arrow {{ image: none; border: none; width: 8px; }}" + _combo_popup()
+    )
 
 
 class ConditionBlockRow(QFrame):
@@ -77,8 +88,8 @@ class ConditionBlockRow(QFrame):
     def _init_ui(self):
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet(
-            "ConditionBlockRow { background-color: #252525; "
-            "border: 1px solid #3A3A3A; border-radius: 6px; }"
+            f"ConditionBlockRow {{ background-color: {get_color('bg_tertiary')}; "
+            f"border: 1px solid {get_color('border')}; border-radius: 6px; }}"
         )
 
         layout = QVBoxLayout(self)
@@ -102,18 +113,18 @@ class ConditionBlockRow(QFrame):
 
         self._input_condition = QLineEdit()
         self._input_condition.setPlaceholderText("조건 태그")
-        self._input_condition.setStyleSheet(_INPUT_STYLE)
+        self._input_condition.setStyleSheet(_input_style())
         self._input_condition.textChanged.connect(self._on_changed)
         row1.addWidget(self._input_condition, 1)
 
         lbl_particle = QLabel("이/가")
-        lbl_particle.setStyleSheet(_LABEL_STYLE)
+        lbl_particle.setStyleSheet(_label_style())
         lbl_particle.setFixedWidth(28)
         row1.addWidget(lbl_particle)
 
         self._combo_exists = QComboBox()
         self._combo_exists.addItems(self.EXIST_OPTIONS)
-        self._combo_exists.setStyleSheet(_COMBO_STYLE)
+        self._combo_exists.setStyleSheet(_combo_style())
         self._combo_exists.setFixedWidth(55)
         self._combo_exists.currentIndexChanged.connect(self._on_changed)
         row1.addWidget(self._combo_exists)
@@ -131,31 +142,31 @@ class ConditionBlockRow(QFrame):
 
         self._input_tags = QLineEdit()
         self._input_tags.setPlaceholderText("대상 태그 (쉼표 구분)")
-        self._input_tags.setStyleSheet(_INPUT_STYLE)
+        self._input_tags.setStyleSheet(_input_style())
         self._input_tags.textChanged.connect(self._on_changed)
         row2.addWidget(self._input_tags, 1)
 
         lbl_to = QLabel("를")
-        lbl_to.setStyleSheet(_LABEL_STYLE)
+        lbl_to.setStyleSheet(_label_style())
         lbl_to.setFixedWidth(14)
         row2.addWidget(lbl_to)
 
         # 적용 대상: Positive / Negative (fixed_target이면 숨김)
         self._combo_target = QComboBox()
         self._combo_target.addItems(self.TARGET_OPTIONS)
-        self._combo_target.setStyleSheet(_TARGET_POS_STYLE)
+        self._combo_target.setStyleSheet(_target_pos_style())
         self._combo_target.setFixedWidth(80)
         self._combo_target.currentIndexChanged.connect(self._on_target_changed)
 
         # 위치 (Positive일 때만 표시)
         self._combo_location = QComboBox()
         self._combo_location.addItems(self.LOCATION_OPTIONS)
-        self._combo_location.setStyleSheet(_COMBO_STYLE)
+        self._combo_location.setStyleSheet(_combo_style())
         self._combo_location.setFixedWidth(80)
         self._combo_location.currentIndexChanged.connect(self._on_changed)
 
         self._lbl_at = QLabel("에")
-        self._lbl_at.setStyleSheet(_LABEL_STYLE)
+        self._lbl_at.setStyleSheet(_label_style())
         self._lbl_at.setFixedWidth(12)
 
         if self._fixed_target is None:
@@ -176,7 +187,7 @@ class ConditionBlockRow(QFrame):
 
         self._combo_action = QComboBox()
         self._combo_action.addItems(self.ACTION_OPTIONS)
-        self._combo_action.setStyleSheet(_COMBO_STYLE)
+        self._combo_action.setStyleSheet(_combo_style())
         self._combo_action.setFixedWidth(72)
         self._combo_action.currentIndexChanged.connect(self._on_changed)
         row2.addWidget(self._combo_action)
@@ -200,7 +211,7 @@ class ConditionBlockRow(QFrame):
         self._combo_location.setVisible(not is_negative)
         self._lbl_at.setVisible(not is_negative)
         self._combo_target.setStyleSheet(
-            _TARGET_NEG_STYLE if is_negative else _TARGET_POS_STYLE
+            _target_neg_style() if is_negative else _target_pos_style()
         )
         self._on_changed()
 
@@ -304,10 +315,10 @@ class ConditionBlockEditor(QWidget):
         btn_add = QPushButton("+ 추가")
         btn_add.setFixedHeight(32)
         btn_add.setStyleSheet(
-            "QPushButton { background-color: #333; color: #AAA; "
-            "border: 1px dashed #555; border-radius: 4px; "
-            "font-size: 11px; font-weight: bold; }"
-            "QPushButton:hover { background-color: #444; color: #DDD; }"
+            f"QPushButton {{ background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; "
+            f"border: 1px dashed {get_color('border')}; border-radius: 4px; "
+            f"font-size: 11px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; }}"
         )
         default_loc = "neg" if self._fixed_target == "neg" else "main"
         btn_add.clicked.connect(

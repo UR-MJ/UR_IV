@@ -3,6 +3,7 @@ import os
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QScrollArea, QLabel
 from PyQt6.QtCore import Qt, QEvent, QPoint, QTimer
 from PyQt6.QtGui import QPixmap
+from utils.theme_manager import get_color
 
 class FullScreenImageViewer(QDialog):
     """전체 화면 이미지 뷰어"""
@@ -17,7 +18,7 @@ class FullScreenImageViewer(QDialog):
         self.setWindowFlags(Qt.WindowType.Window)
         self.setWindowTitle("Image Viewer")
         self.resize(1200, 900)
-        self.setStyleSheet("background-color: rgba(30, 30, 30, 1.0);")
+        self.setStyleSheet(f"background-color: {get_color('bg_primary')};")
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -52,7 +53,7 @@ class FullScreenImageViewer(QDialog):
 
         if self.pixmap.isNull():
             self.label.setText("이미지를 불러올 수 없습니다.")
-            self.label.setStyleSheet("color: white; font-size: 20px;")
+            self.label.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 20px;")
             self.label.adjustSize()
         
         self.show()

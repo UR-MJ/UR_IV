@@ -89,7 +89,7 @@ class StepCard(QWidget):
         is_parent = self.step_data.get('is_parent', False)
 
         if is_parent:
-            border_color = "#5865F2"
+            border_color = get_color('accent')
             header_text = "Step 0 (Parent)"
         else:
             border_color = get_color('border')
@@ -136,7 +136,7 @@ class StepCard(QWidget):
 
         if is_parent:
             tags_label = QLabel("베이스 태그:")
-            tags_label.setStyleSheet("color: #5865F2; font-size: 10px;")
+            tags_label.setStyleSheet(f"color: {get_color('accent')}; font-size: 10px;")
             layout.addWidget(tags_label)
 
             tags_preview = self.step_data.get('tags_str', '')[:120]
@@ -236,9 +236,9 @@ class StepCard(QWidget):
             self.edit_area.show()
             self.btn_apply_edit.show()
             self.btn_edit.setText("❌")
-            self.btn_edit.setStyleSheet("""
-                QPushButton { border: 2px solid #e74c3c; border-radius: 4px; font-size: 12px; background: #4a2020; }
-                QPushButton:hover { background: #5a2a2a; }
+            self.btn_edit.setStyleSheet(f"""
+                QPushButton {{ border: 2px solid #e74c3c; border-radius: 4px; font-size: 12px; background: {get_color('bg_tertiary')}; }}
+                QPushButton:hover {{ background: {get_color('bg_button_hover')}; }}
             """)
         else:
             self.edit_area.hide()
@@ -246,7 +246,7 @@ class StepCard(QWidget):
             self.btn_edit.setText("✏️")
             self.btn_edit.setStyleSheet(f"""
                 QPushButton {{ border: 1px solid {get_color('border')}; border-radius: 4px; font-size: 12px; background: {get_color('bg_tertiary')}; }}
-                QPushButton:hover {{ background: {get_color('bg_button_hover')}; border-color: #777; }}
+                QPushButton:hover {{ background: {get_color('bg_button_hover')}; border-color: {get_color('text_muted')}; }}
             """)
 
     def _apply_edit(self):
@@ -320,7 +320,7 @@ class EventGenTab(QWidget):
 
         title = QLabel("🎬 스토리 모드 - 이벤트 시퀀스")
         title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        title.setStyleSheet("color: #5865F2;")
+        title.setStyleSheet(f"color: {get_color('accent')};")
         layout.addWidget(title)
 
         # 데이터 로드
@@ -342,8 +342,8 @@ class EventGenTab(QWidget):
         self.btn_load_data = QPushButton("📥 데이터 로드")
         self.btn_load_data.setFixedHeight(35)
         self.btn_load_data.setStyleSheet(f"""
-            QPushButton {{ background-color: #5865F2; color: white; font-weight: bold; border-radius: 5px; }}
-            QPushButton:hover {{ background-color: #4752C4; }}
+            QPushButton {{ background-color: {get_color('accent')}; color: white; font-weight: bold; border-radius: 5px; }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
             QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         load_layout.addWidget(self.btn_load_data)
@@ -454,7 +454,7 @@ class EventGenTab(QWidget):
         self.btn_search.setStyleSheet(f"""
             QPushButton {{ background-color: #27ae60; color: white; font-weight: bold; font-size: 14px; border-radius: 5px; }}
             QPushButton:hover {{ background-color: #2ecc71; }}
-            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         btn_row.addWidget(self.btn_search)
 
@@ -466,7 +466,7 @@ class EventGenTab(QWidget):
         self.btn_random.setStyleSheet(f"""
             QPushButton {{ background-color: #e67e22; color: white; font-weight: bold; font-size: 18px; border-radius: 5px; }}
             QPushButton:hover {{ background-color: #f39c12; }}
-            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         btn_row.addWidget(self.btn_random)
 
@@ -510,7 +510,7 @@ class EventGenTab(QWidget):
         self.result_list.setStyleSheet(f"""
             QListWidget {{ background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')}; border-radius: 5px; }}
             QListWidget::item {{ padding: 6px; border-bottom: 1px solid {get_color('bg_input')}; }}
-            QListWidget::item:selected {{ background-color: #5865F2; }}
+            QListWidget::item:selected {{ background-color: {get_color('accent')}; }}
         """)
         result_layout.addWidget(self.result_list)
         layout.addWidget(result_group)
@@ -543,7 +543,7 @@ class EventGenTab(QWidget):
         bottom_tabs.setStyleSheet(f"""
             QTabWidget::pane {{ border: 1px solid {get_color('border')}; background: {get_color('bg_primary')}; border-radius: 5px; }}
             QTabBar::tab {{ background: {get_color('bg_tertiary')}; color: {get_color('text_muted')}; padding: 6px 15px; }}
-            QTabBar::tab:selected {{ background: {get_color('bg_button')}; color: {get_color('text_primary')}; border-bottom: 2px solid #5865F2; }}
+            QTabBar::tab:selected {{ background: {get_color('bg_button')}; color: {get_color('text_primary')}; border-bottom: 2px solid {get_color('accent')}; }}
         """)
 
         # 탭 1: 생성 옵션
@@ -579,9 +579,9 @@ class EventGenTab(QWidget):
         self.btn_add_to_queue.setFixedHeight(40)
         self.btn_add_to_queue.setEnabled(False)
         self.btn_add_to_queue.setStyleSheet(f"""
-            QPushButton {{ background-color: #5865F2; color: white; font-weight: bold; border-radius: 5px; }}
-            QPushButton:hover {{ background-color: #4752C4; }}
-            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
+            QPushButton {{ background-color: {get_color('accent')}; color: white; font-weight: bold; border-radius: 5px; }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         gen_btn_row.addWidget(self.btn_add_to_queue)
 
@@ -591,7 +591,7 @@ class EventGenTab(QWidget):
         self.btn_generate_now.setStyleSheet(f"""
             QPushButton {{ background-color: #27ae60; color: white; font-weight: bold; border-radius: 5px; }}
             QPushButton:hover {{ background-color: #2ecc71; }}
-            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         gen_btn_row.addWidget(self.btn_generate_now)
         options_layout.addLayout(gen_btn_row)
@@ -773,7 +773,7 @@ class EventGenTab(QWidget):
 
         cards_per_row = 4
         current_row = None
-        arrow_style = "color: #5865F2; font-size: 18px; font-weight: bold;"
+        arrow_style = f"color: {get_color('accent')}; font-size: 18px; font-weight: bold;"
 
         for i, step_data in enumerate(self.steps):
             col_in_row = i % cards_per_row

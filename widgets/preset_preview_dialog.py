@@ -135,7 +135,7 @@ class PresetPreviewDialog(QDialog):
         left_layout.setSpacing(6)
 
         list_label = QLabel("프리셋 목록")
-        list_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #999;")
+        list_label.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {get_color('text_muted')};")
         left_layout.addWidget(list_label)
 
         self._list = QListWidget()
@@ -151,7 +151,7 @@ class PresetPreviewDialog(QDialog):
         right_layout.setSpacing(0)
 
         detail_label = QLabel("프리셋 내용")
-        detail_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #999; padding-bottom: 4px;")
+        detail_label.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {get_color('text_muted')}; padding-bottom: 4px;")
         right_layout.addWidget(detail_label)
 
         # 스크롤 영역

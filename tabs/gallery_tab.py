@@ -171,7 +171,7 @@ class ImagePreviewDialog(QDialog):
         btn_send.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         btn_send.setEnabled(has_prompt)
         btn_send.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
             if has_prompt else
             f"background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; border-radius: 4px; "
@@ -414,10 +414,11 @@ class ThumbnailWidget(QFrame):
 
     def _update_selection_style(self):
         c = getattr(self, '_tc', None) or get_theme_manager().get_colors()
+        accent = get_color('accent')
         if self._is_selected:
             self.setStyleSheet(f"""
                 ThumbnailWidget {{
-                    background-color: {c['bg_button']}; border: 2px solid #5865F2;
+                    background-color: {c['bg_button']}; border: 2px solid {accent};
                     border-radius: 6px;
                 }}
             """)
@@ -428,7 +429,7 @@ class ThumbnailWidget(QFrame):
                     border-radius: 6px;
                 }}
                 ThumbnailWidget:hover {{
-                    border: 2px solid #5865F2;
+                    border: 2px solid {accent};
                 }}
             """)
 
@@ -480,7 +481,7 @@ class ThumbnailWidget(QFrame):
                 font-size: 13px; padding: 4px;
             }}
             QMenu::item {{ padding: 6px 20px; }}
-            QMenu::item:selected {{ background-color: #5865F2; }}
+            QMenu::item:selected {{ background-color: {get_color('accent')}; }}
             QMenu::separator {{ height: 1px; background: {get_color('border')}; margin: 4px 8px; }}
         """)
 
@@ -637,7 +638,7 @@ class GalleryTab(QWidget):
         self.btn_folder.setFixedHeight(35)
         self.btn_folder.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_folder.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold; padding: 0 12px;"
         )
         self.btn_folder.clicked.connect(self._on_select_folder)
@@ -652,7 +653,7 @@ class GalleryTab(QWidget):
         self.btn_stats.setFixedHeight(35)
         self.btn_stats.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_stats.setStyleSheet(
-            "background-color: #8A5CF5; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold; padding: 0 12px;"
         )
         self.btn_stats.clicked.connect(self._on_open_stats)
@@ -692,7 +693,7 @@ class GalleryTab(QWidget):
         self.btn_search.setFixedSize(70, 35)
         self.btn_search.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_search.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
         )
         self.btn_search.clicked.connect(self._on_search)
@@ -735,7 +736,7 @@ class GalleryTab(QWidget):
         self.btn_apply_filter = QPushButton("적용")
         self.btn_apply_filter.setFixedSize(60, 30)
         self.btn_apply_filter.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 12px; font-weight: bold;"
         )
         self.btn_apply_filter.clicked.connect(self._on_apply_tag_filter)
@@ -777,7 +778,7 @@ class GalleryTab(QWidget):
                 background-color: {get_color('bg_input')}; border: 1px solid {get_color('border')};
                 border-radius: 4px; text-align: center; color: {get_color('text_secondary')}; font-size: 11px;
             }}
-            QProgressBar::chunk {{ background-color: #5865F2; border-radius: 3px; }}
+            QProgressBar::chunk {{ background-color: {get_color('accent')}; border-radius: 3px; }}
         """)
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
@@ -819,7 +820,7 @@ class GalleryTab(QWidget):
         self.btn_slideshow.setFixedSize(100, 35)
         self.btn_slideshow.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_slideshow.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 4px; "
             "font-size: 12px; font-weight: bold;"
         )
         self.btn_slideshow.clicked.connect(self._start_slideshow)
@@ -837,7 +838,7 @@ class GalleryTab(QWidget):
 
         # 다중 선택 일괄 작업 버튼
         self._multi_label = QLabel("")
-        self._multi_label.setStyleSheet("color: #5865F2; font-size: 12px; font-weight: bold;")
+        self._multi_label.setStyleSheet(f"color: {get_color('accent')}; font-size: 12px; font-weight: bold;")
         bottom_bar.addWidget(self._multi_label)
 
         self.btn_batch_delete = QPushButton("일괄 삭제")
@@ -902,7 +903,7 @@ class GalleryTab(QWidget):
                 background: {get_color('bg_button')}; height: 6px; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
-                background: #5865F2; width: 14px; height: 14px;
+                background: {get_color('accent')}; width: 14px; height: 14px;
                 margin: -4px 0; border-radius: 7px;
             }}
         """)

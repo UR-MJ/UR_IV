@@ -285,7 +285,7 @@ class CropDialog(QDialog):
         btn_confirm = QPushButton("✅ 크롭 적용")
         btn_confirm.setFixedHeight(38)
         btn_confirm.setStyleSheet(
-            "background-color: #5865F2; color: white; border-radius: 6px; "
+            f"background-color: {get_color('accent')}; color: white; border-radius: 6px; "
             "font-size: 14px; font-weight: bold; padding: 0 20px;"
         )
         btn_confirm.clicked.connect(self.accept)

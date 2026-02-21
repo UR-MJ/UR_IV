@@ -1704,8 +1704,8 @@ class PngInfoTab(QWidget):
         self.btn_save_meta.setEnabled(checked)
         if checked:
             self.info_text.setStyleSheet(
-                "font-family: 'Consolas'; font-size: 10pt; line-height: 1.4;"
-                "border: 2px solid #5865F2; background-color: #1A1A2E;"
+                f"font-family: 'Consolas'; font-size: 10pt; line-height: 1.4;"
+                f"border: 2px solid {get_color('accent')}; background-color: {get_color('bg_secondary')};"
             )
         else:
             self.info_text.setStyleSheet(
