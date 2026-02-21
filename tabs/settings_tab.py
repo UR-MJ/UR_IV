@@ -1169,6 +1169,61 @@ class SettingsTab(QWidget):
         w, l = self._create_container()
         l.addWidget(self._create_header("📦 설정 백업 / 복원"))
 
+        # ── 프리셋 공유 섹션 ──
+        preset_group = QGroupBox("프리셋 공유")
+        pg_layout = QVBoxLayout(preset_group)
+        pg_layout.setSpacing(8)
+
+        pg_layout.addWidget(QLabel(
+            "캐릭터 프리셋 또는 프롬프트 프리셋을\n"
+            "JSON 파일로 내보내거나 가져올 수 있습니다."
+        ))
+
+        # 캐릭터 프리셋
+        char_row = QHBoxLayout()
+        btn_export_char = QPushButton("📤 캐릭터 프리셋 내보내기")
+        btn_export_char.setFixedHeight(36)
+        btn_export_char.setStyleSheet(
+            "background-color: #5865F2; color: white; "
+            "font-weight: bold; border-radius: 5px; font-size: 12px;"
+        )
+        btn_export_char.clicked.connect(self._export_character_presets)
+        char_row.addWidget(btn_export_char)
+
+        btn_import_char = QPushButton("📥 캐릭터 프리셋 가져오기")
+        btn_import_char.setFixedHeight(36)
+        btn_import_char.setStyleSheet(
+            "background-color: #27ae60; color: white; "
+            "font-weight: bold; border-radius: 5px; font-size: 12px;"
+        )
+        btn_import_char.clicked.connect(self._import_character_presets)
+        char_row.addWidget(btn_import_char)
+        pg_layout.addLayout(char_row)
+
+        # 프롬프트 프리셋
+        prompt_row = QHBoxLayout()
+        btn_export_prompt = QPushButton("📤 프롬프트 프리셋 내보내기")
+        btn_export_prompt.setFixedHeight(36)
+        btn_export_prompt.setStyleSheet(
+            "background-color: #5865F2; color: white; "
+            "font-weight: bold; border-radius: 5px; font-size: 12px;"
+        )
+        btn_export_prompt.clicked.connect(self._export_prompt_presets)
+        prompt_row.addWidget(btn_export_prompt)
+
+        btn_import_prompt = QPushButton("📥 프롬프트 프리셋 가져오기")
+        btn_import_prompt.setFixedHeight(36)
+        btn_import_prompt.setStyleSheet(
+            "background-color: #27ae60; color: white; "
+            "font-weight: bold; border-radius: 5px; font-size: 12px;"
+        )
+        btn_import_prompt.clicked.connect(self._import_prompt_presets)
+        prompt_row.addWidget(btn_import_prompt)
+        pg_layout.addLayout(prompt_row)
+
+        l.addWidget(preset_group)
+
+        # ── ZIP 백업 섹션 ──
         group = QGroupBox("내보내기 / 가져오기")
         gl = QVBoxLayout(group)
         gl.setSpacing(10)
@@ -1274,5 +1329,125 @@ class SettingsTab(QWidget):
                 self, "복원 완료",
                 "설정이 복원되었습니다.\n일부 설정은 앱을 재시작해야 적용됩니다."
             )
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"가져오기 실패: {e}")
+
+    # ── 프리셋 공유 ──
+
+    def _export_character_presets(self):
+        """캐릭터 프리셋 내보내기"""
+        import json
+        import os
+        base = os.path.dirname(os.path.dirname(__file__))
+        src = os.path.join(base, 'character_presets.json')
+        if not os.path.exists(src):
+            QMessageBox.warning(self, "알림", "캐릭터 프리셋 파일이 없습니다.")
+            return
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "캐릭터 프리셋 내보내기", "character_presets.json", "JSON (*.json)"
+        )
+        if save_path:
+            import shutil
+            shutil.copy2(src, save_path)
+            QMessageBox.information(self, "완료", f"캐릭터 프리셋이 저장되었습니다:\n{save_path}")
+
+    def _import_character_presets(self):
+        """캐릭터 프리셋 가져오기"""
+        import json
+        import os
+        path, _ = QFileDialog.getOpenFileName(self, "캐릭터 프리셋 가져오기", "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                new_data = json.load(f)
+            if not isinstance(new_data, dict):
+                QMessageBox.warning(self, "오류", "올바른 프리셋 파일이 아닙니다.")
+                return
+
+            base = os.path.dirname(os.path.dirname(__file__))
+            target = os.path.join(base, 'character_presets.json')
+
+            # 기존 파일이 있으면 병합 옵션 제공
+            if os.path.exists(target):
+                reply = QMessageBox.question(
+                    self, "가져오기 방식",
+                    f"새 프리셋 {len(new_data)}개를 발견했습니다.\n\n"
+                    "Yes = 기존에 병합 (중복 시 새 것으로 교체)\n"
+                    "No = 전체 덮어쓰기",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if reply == QMessageBox.StandardButton.Cancel:
+                    return
+                if reply == QMessageBox.StandardButton.Yes:
+                    # 병합
+                    with open(target, 'r', encoding='utf-8') as f:
+                        existing = json.load(f)
+                    existing.update(new_data)
+                    new_data = existing
+
+            with open(target, 'w', encoding='utf-8') as f:
+                json.dump(new_data, f, ensure_ascii=False, indent=2)
+            QMessageBox.information(self, "완료", f"캐릭터 프리셋을 가져왔습니다. ({len(new_data)}개)")
+        except Exception as e:
+            QMessageBox.warning(self, "오류", f"가져오기 실패: {e}")
+
+    def _export_prompt_presets(self):
+        """프롬프트 프리셋 내보내기"""
+        import json
+        import os
+        base = os.path.dirname(os.path.dirname(__file__))
+        src = os.path.join(base, 'prompt_presets.json')
+        if not os.path.exists(src):
+            QMessageBox.warning(self, "알림", "프롬프트 프리셋 파일이 없습니다.")
+            return
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "프롬프트 프리셋 내보내기", "prompt_presets.json", "JSON (*.json)"
+        )
+        if save_path:
+            import shutil
+            shutil.copy2(src, save_path)
+            QMessageBox.information(self, "완료", f"프롬프트 프리셋이 저장되었습니다:\n{save_path}")
+
+    def _import_prompt_presets(self):
+        """프롬프트 프리셋 가져오기"""
+        import json
+        import os
+        path, _ = QFileDialog.getOpenFileName(self, "프롬프트 프리셋 가져오기", "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                new_data = json.load(f)
+            if not isinstance(new_data, dict):
+                QMessageBox.warning(self, "오류", "올바른 프리셋 파일이 아닙니다.")
+                return
+
+            base = os.path.dirname(os.path.dirname(__file__))
+            target = os.path.join(base, 'prompt_presets.json')
+
+            # 기존 파일이 있으면 병합 옵션 제공
+            if os.path.exists(target):
+                reply = QMessageBox.question(
+                    self, "가져오기 방식",
+                    f"새 프리셋 {len(new_data)}개를 발견했습니다.\n\n"
+                    "Yes = 기존에 병합 (중복 시 새 것으로 교체)\n"
+                    "No = 전체 덮어쓰기",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if reply == QMessageBox.StandardButton.Cancel:
+                    return
+                if reply == QMessageBox.StandardButton.Yes:
+                    # 병합
+                    with open(target, 'r', encoding='utf-8') as f:
+                        existing = json.load(f)
+                    existing.update(new_data)
+                    new_data = existing
+
+            with open(target, 'w', encoding='utf-8') as f:
+                json.dump(new_data, f, ensure_ascii=False, indent=2)
+            QMessageBox.information(self, "완료", f"프롬프트 프리셋을 가져왔습니다. ({len(new_data)}개)")
         except Exception as e:
             QMessageBox.warning(self, "오류", f"가져오기 실패: {e}")
