@@ -17,6 +17,7 @@ from workers.generation_worker import GenerationFlowWorker
 from utils.file_wildcard import resolve_file_wildcards
 from utils.wildcard import process_wildcards
 from utils.app_logger import get_logger
+from utils.theme_manager import get_theme_manager
 
 _logger = get_logger('generation')
 
@@ -43,14 +44,15 @@ class GenerationMixin:
         
         # 뷰어에 로딩 표시
         self.viewer_label.setText("🎨 이미지 생성 중...\n\n잠시만 기다려주세요.")
-        self.viewer_label.setStyleSheet("""
-            QLabel {
-                background-color: #1A1A1A;
+        c = get_theme_manager().get_colors()
+        self.viewer_label.setStyleSheet(f"""
+            QLabel {{
+                background-color: {c['bg_secondary']};
                 border-radius: 8px;
                 color: #e67e22;
                 font-size: 16px;
                 font-weight: bold;
-            }
+            }}
         """)
         
         # 해상도 결정
@@ -238,12 +240,13 @@ class GenerationMixin:
         self.gen_progress_bar.setValue(0)
 
         # 뷰어 스타일 복구
-        self.viewer_label.setStyleSheet("""
-            QLabel {
-                background-color: #1A1A1A;
+        c = get_theme_manager().get_colors()
+        self.viewer_label.setStyleSheet(f"""
+            QLabel {{
+                background-color: {c['bg_secondary']};
                 border-radius: 8px;
-                color: #888;
-            }
+                color: {c['text_muted']};
+            }}
         """)
         
         if isinstance(result, bytes):

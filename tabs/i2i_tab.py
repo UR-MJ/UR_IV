@@ -21,6 +21,7 @@ from PIL import Image
 
 from config import OUTPUT_DIR, WEBUI_API_URL
 from workers.generation_worker import Img2ImgFlowWorker
+from utils.theme_manager import get_theme_manager
 
 
 class Img2ImgTab(QWidget):
@@ -62,8 +63,9 @@ class Img2ImgTab(QWidget):
 
         self.input_image_label = QLabel("이미지를 드래그하거나\n더블클릭 또는 '열기' 버튼을 누르세요.")
         self.input_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c = get_theme_manager().get_colors()
         self.input_image_label.setStyleSheet(
-            "border: 2px dashed #444; border-radius: 10px; color: #777; min-height: 200px;"
+            f"border: 2px dashed {c['border']}; border-radius: 10px; color: {c['text_muted']}; min-height: 200px;"
         )
         self.input_image_label.setMinimumHeight(200)
         self.input_image_label.mouseDoubleClickEvent = lambda e: self._open_image()
@@ -166,13 +168,13 @@ class Img2ImgTab(QWidget):
         # 생성 버튼
         self.btn_generate = QPushButton("🎨 img2img 생성")
         self.btn_generate.setFixedHeight(50)
-        self.btn_generate.setStyleSheet("""
-            QPushButton {
+        self.btn_generate.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #5865F2; color: white;
                 font-weight: bold; font-size: 14px; border-radius: 8px;
-            }
-            QPushButton:hover { background-color: #4752C4; }
-            QPushButton:disabled { background-color: #1E1E1E; color: #666; }
+            }}
+            QPushButton:hover {{ background-color: #4752C4; }}
+            QPushButton:disabled {{ background-color: {c['disabled_bg']}; color: {c['disabled_text']}; }}
         """)
         self.btn_generate.clicked.connect(self._on_generate)
         left_layout.addWidget(self.btn_generate)
@@ -199,13 +201,13 @@ class Img2ImgTab(QWidget):
 
         result_title = QLabel("생성 결과")
         result_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        result_title.setStyleSheet("color: #E0E0E0;")
+        result_title.setStyleSheet(f"color: {c['text_primary']};")
         right_layout.addWidget(result_title)
 
         self.result_label = QLabel("생성된 이미지가 여기에 표시됩니다.")
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.result_label.setStyleSheet(
-            "background-color: #1A1A1A; border-radius: 8px; color: #777;"
+            f"background-color: {c['bg_secondary']}; border-radius: 8px; color: {c['text_muted']};"
         )
         self.result_label.setMinimumSize(400, 400)
         right_layout.addWidget(self.result_label, 1)

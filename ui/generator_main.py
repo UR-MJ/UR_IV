@@ -33,9 +33,12 @@ class GeneratorMainUI(
     WebUIMixin,
     SearchMixin
 ):
+    _IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.webp', '.bmp')
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AI Studio Pro")
+        self.setAcceptDrops(True)
 
         self.prompt_cleaner = get_prompt_cleaner()
 
@@ -175,7 +178,9 @@ class GeneratorMainUI(
         # 상태바 행: 상태 메시지 + VRAM 라벨
         status_row = QWidget()
         status_row.setFixedHeight(24)
-        status_row.setStyleSheet("background-color: #1A1A1A; border-top: 1px solid #2C2C2C;")
+        tm = get_theme_manager()
+        c = tm.get_colors()
+        status_row.setStyleSheet(f"background-color: {c['bg_secondary']}; border-top: 1px solid {c['border']};")
         status_row_layout = QHBoxLayout(status_row)
         status_row_layout.setContentsMargins(0, 0, 0, 0)
         status_row_layout.setSpacing(0)
@@ -493,6 +498,29 @@ class GeneratorMainUI(
         """트레이 알림 (외부 호출용)"""
         if hasattr(self, '_tray_manager'):
             self._tray_manager.notify(title, message)
+
+    # ========== 드래그 앤 드롭 → img2img ==========
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                if url.toLocalFile().lower().endswith(self._IMAGE_EXTS):
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+
+    def dropEvent(self, event):
+        """외부 이미지 드롭 → img2img 탭으로 전환"""
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            if path.lower().endswith(self._IMAGE_EXTS):
+                if hasattr(self, 'i2i_tab') and hasattr(self.i2i_tab, '_load_image'):
+                    self.i2i_tab._load_image(path)
+                    idx = self.center_tabs.indexOf(self.i2i_tab)
+                    if idx >= 0:
+                        self.center_tabs.setCurrentIndex(idx)
+                    self.show_status(f"📂 I2I에 이미지 로드: {path}")
+                break
 
     def closeEvent(self, event):
         """앱 종료 시 트레이 최소화 / 종료 선택"""

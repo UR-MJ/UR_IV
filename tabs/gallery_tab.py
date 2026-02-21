@@ -29,6 +29,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QThread, QTimer, QEvent, QMimeDa
 from widgets.common_widgets import FlowLayout, NoScrollComboBox
 from core.database import MetadataManager, normalize_path
 from workers.gallery_worker import GalleryScanWorker, GalleryCacheWorker, IMAGE_EXTENSIONS
+from utils.theme_manager import get_theme_manager
 
 try:
     from watchdog.observers import Observer
@@ -350,6 +351,7 @@ class ThumbnailWidget(QFrame):
         super().__init__(parent)
         self.image_path = image_path
         self._is_selected = False
+        self._tc = get_theme_manager().get_colors()
 
         ts = thumb_size if thumb_size > 0 else self.THUMB_SIZE
         total_h = self.MARGIN * 2 + ts + self.SPACING + self.LABEL_H
@@ -365,20 +367,33 @@ class ThumbnailWidget(QFrame):
         self.image_label = QLabel()
         self.image_label.setFixedSize(ts, ts)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setStyleSheet("background-color: #1E1E1E; border-radius: 4px;")
+        self.image_label.setStyleSheet(f"background-color: {self._tc['bg_tertiary']}; border-radius: 4px;")
 
-        thumb_path = _get_thumb_path(image_path, thumb_dir)
-        pix = None
-        if os.path.exists(thumb_path):
-            pix = QPixmap(thumb_path)
-        if pix is None or pix.isNull():
-            pix = QPixmap(image_path)
-        if pix and not pix.isNull():
-            self.image_label.setPixmap(pix.scaled(
-                ts, ts,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            ))
+        try:
+            from PyQt6.QtGui import QPixmapCache
+            cache_key = f"thumb_{ts}_{image_path}"
+            cached_pix = QPixmapCache.find(cache_key)
+            if cached_pix and not cached_pix.isNull():
+                self.image_label.setPixmap(cached_pix)
+            else:
+                thumb_path = _get_thumb_path(image_path, thumb_dir)
+                pix = None
+                if os.path.exists(thumb_path):
+                    pix = QPixmap(thumb_path)
+                if pix is None or pix.isNull():
+                    pix = QPixmap(image_path)
+                if pix and not pix.isNull():
+                    scaled = pix.scaled(
+                        ts, ts,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    QPixmapCache.insert(cache_key, scaled)
+                    self.image_label.setPixmap(scaled)
+                else:
+                    self.image_label.setText("⚠")
+        except Exception:
+            self.image_label.setText("⚠")
 
         layout.addWidget(self.image_label)
 
@@ -388,7 +403,7 @@ class ThumbnailWidget(QFrame):
         name_label.setFixedHeight(self.LABEL_H)
         name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         name_label.setStyleSheet(
-            "color: #AAA; font-size: 10px; background: transparent;"
+            f"color: {self._tc['text_muted']}; font-size: 10px; background: transparent;"
         )
         name_label.setToolTip(image_path)
         layout.addWidget(name_label)
@@ -398,22 +413,23 @@ class ThumbnailWidget(QFrame):
         self._update_selection_style()
 
     def _update_selection_style(self):
+        c = getattr(self, '_tc', None) or get_theme_manager().get_colors()
         if self._is_selected:
-            self.setStyleSheet("""
-                ThumbnailWidget {
-                    background-color: #2C2C2C; border: 2px solid #5865F2;
+            self.setStyleSheet(f"""
+                ThumbnailWidget {{
+                    background-color: {c['bg_button']}; border: 2px solid #5865F2;
                     border-radius: 6px;
-                }
+                }}
             """)
         else:
-            self.setStyleSheet("""
-                ThumbnailWidget {
-                    background-color: #2C2C2C; border: 2px solid transparent;
+            self.setStyleSheet(f"""
+                ThumbnailWidget {{
+                    background-color: {c['bg_button']}; border: 2px solid transparent;
                     border-radius: 6px;
-                }
-                ThumbnailWidget:hover {
+                }}
+                ThumbnailWidget:hover {{
                     border: 2px solid #5865F2;
-                }
+                }}
             """)
 
     def mousePressEvent(self, event):
