@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from widgets.sliders import NumericSlider
+from utils.theme_manager import get_color
 
 
 class ColorAdjustPanel(QWidget):
@@ -75,7 +76,7 @@ class ColorAdjustPanel(QWidget):
 
         # ── 필터 프리셋 ──
         preset_label = QLabel("필터 프리셋")
-        preset_label.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
+        preset_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px; font-weight: bold;")
         layout.addWidget(preset_label)
 
         preset_grid = QGridLayout()

@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from widgets.sliders import NumericSlider
 from tabs.editor.histogram_widget import HistogramWidget
 from tabs.editor.curves_widget import CurvesWidget
+from utils.theme_manager import get_color
 
 
 class AdvancedColorPanel(QWidget):
@@ -40,7 +41,7 @@ class AdvancedColorPanel(QWidget):
 
         line1 = QFrame()
         line1.setFrameShape(QFrame.Shape.HLine)
-        line1.setStyleSheet("color: #333;")
+        line1.setStyleSheet(f"color: {get_color('border')};")
         layout.addWidget(line1)
 
         # ── 커브 ──
@@ -56,7 +57,7 @@ class AdvancedColorPanel(QWidget):
 
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setStyleSheet("color: #333;")
+        line2.setStyleSheet(f"color: {get_color('border')};")
         layout.addWidget(line2)
 
         # ── 레벨 (Levels) ──
@@ -80,7 +81,7 @@ class AdvancedColorPanel(QWidget):
 
         line3 = QFrame()
         line3.setFrameShape(QFrame.Shape.HLine)
-        line3.setStyleSheet("color: #333;")
+        line3.setStyleSheet(f"color: {get_color('border')};")
         layout.addWidget(line3)
 
         # ── 색온도 / 틴트 ──

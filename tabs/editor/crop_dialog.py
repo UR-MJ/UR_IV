@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QRect, QPoint, QRectF
 from PyQt6.QtGui import QPainter, QImage, QPen, QColor, QBrush, QPixmap, QCursor
+from utils.theme_manager import get_color
 
 
 class CropWidget(QWidget):
@@ -264,7 +265,7 @@ class CropDialog(QDialog):
         self.setWindowTitle("이미지 크롭")
         self.setMinimumSize(600, 500)
         self.resize(900, 700)
-        self.setStyleSheet("background-color: #1E1E1E; color: #EEE;")
+        self.setStyleSheet(f"background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)

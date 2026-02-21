@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTextEdit, QLabel, QPushButton, QProgressBar
 )
 from PyQt6.QtCore import QThread, pyqtSignal
+from utils.theme_manager import get_color
 
 
 def _is_valid_tag(tag: str) -> bool:
@@ -146,7 +147,7 @@ class StatsPanel(QDialog):
         self.setWindowTitle("생성 통계")
         self.setMinimumSize(600, 700)
         self.resize(700, 800)
-        self.setStyleSheet("background-color: #1E1E1E; color: #EEE;")
+        self.setStyleSheet(f"background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')};")
 
         self._db = db
         self._folder = folder
@@ -166,27 +167,27 @@ class StatsPanel(QDialog):
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(20)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #2C2C2C; border: 1px solid #555;
-                border-radius: 4px; text-align: center; color: #AAA; font-size: 11px;
-            }
-            QProgressBar::chunk { background-color: #5865F2; border-radius: 3px; }
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')};
+                border-radius: 4px; text-align: center; color: {get_color('text_secondary')}; font-size: 11px;
+            }}
+            QProgressBar::chunk {{ background-color: {get_color('accent')}; border-radius: 3px; }}
         """)
         layout.addWidget(self.progress_bar)
 
         self.stats_text = QTextEdit()
         self.stats_text.setReadOnly(True)
         self.stats_text.setStyleSheet(
-            "background-color: #252525; color: #DDD; border: 1px solid #444; "
-            "border-radius: 4px; font-family: 'Consolas'; font-size: 11px; padding: 8px;"
+            f"background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 4px; font-family: 'Consolas'; font-size: 11px; padding: 8px;"
         )
         layout.addWidget(self.stats_text, stretch=1)
 
         btn_close = QPushButton("닫기")
         btn_close.setFixedHeight(35)
         btn_close.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border-radius: 4px; font-size: 13px;"
         )
         btn_close.clicked.connect(self.close)
         layout.addWidget(btn_close)
@@ -198,7 +199,7 @@ class StatsPanel(QDialog):
 
         if not rows:
             self.stats_text.setHtml(
-                "<span style='color:#888;'>EXIF 데이터가 있는 이미지가 없습니다.</span>"
+                f"<span style='color:{get_color('text_muted')};'>EXIF 데이터가 있는 이미지가 없습니다.</span>"
             )
             self.progress_bar.hide()
             return
@@ -245,17 +246,17 @@ class StatsPanel(QDialog):
         # 타임라인
         timeline = r.get('timeline', [])
         if timeline:
-            html += "<h3 style='color:#AAA; margin-top:12px;'>날짜별 생성 타임라인</h3>"
+            html += f"<h3 style='color:{get_color('text_secondary')}; margin-top:12px;'>날짜별 생성 타임라인</h3>"
             max_count = max(c for _, c in timeline) if timeline else 1
             for date_str, count in timeline[-30:]:  # 최근 30일만
                 bar_w = int(count / max_count * 300)
                 html += (
                     f"<div style='margin:1px 0; display:flex; align-items:center;'>"
-                    f"<span style='color:#888; width:90px; display:inline-block; "
+                    f"<span style='color:{get_color('text_muted')}; width:90px; display:inline-block; "
                     f"font-size:11px;'>{date_str}</span>"
-                    f"<span style='background:#5865F2; height:16px; width:{max(2, bar_w)}px; "
+                    f"<span style='background:{get_color('accent')}; height:16px; width:{max(2, bar_w)}px; "
                     f"display:inline-block; border-radius:3px; margin:0 6px;'></span>"
-                    f"<span style='color:#AAA; font-size:11px;'>{count}장</span>"
+                    f"<span style='color:{get_color('text_secondary')}; font-size:11px;'>{count}장</span>"
                     f"</div>"
                 )
 
@@ -264,17 +265,17 @@ class StatsPanel(QDialog):
     def _make_table(self, title: str, items: list) -> str:
         if not items:
             return ""
-        html = f"<h3 style='color:#AAA; margin-top:12px;'>{title}</h3>"
+        html = f"<h3 style='color:{get_color('text_secondary')}; margin-top:12px;'>{title}</h3>"
         html += (
-            "<table style='width:100%; border-collapse:collapse;'>"
-            "<tr style='border-bottom:1px solid #555;'>"
-            "<th style='text-align:left; padding:3px 6px; color:#888;'>항목</th>"
-            "<th style='text-align:right; padding:3px 6px; color:#888;'>횟수</th>"
-            "</tr>"
+            f"<table style='width:100%; border-collapse:collapse;'>"
+            f"<tr style='border-bottom:1px solid {get_color('border')};'>"
+            f"<th style='text-align:left; padding:3px 6px; color:{get_color('text_muted')};'>항목</th>"
+            f"<th style='text-align:right; padding:3px 6px; color:{get_color('text_muted')};'>횟수</th>"
+            f"</tr>"
         )
         for name, count in items:
             html += (
-                f"<tr style='border-bottom:1px solid #333;'>"
+                f"<tr style='border-bottom:1px solid {get_color('border')};'>"
                 f"<td style='padding:2px 6px;'>{name}</td>"
                 f"<td style='text-align:right; padding:2px 6px; color:#5865F2;'>{count}</td>"
                 f"</tr>"

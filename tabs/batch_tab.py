@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from widgets.sliders import NumericSlider
 from widgets.common_widgets import NoScrollSpinBox, NoScrollComboBox
+from utils.theme_manager import get_color
 
 
 class BatchTab(QWidget):
@@ -30,14 +31,14 @@ class BatchTab(QWidget):
 
         file_header = QLabel("처리할 파일")
         file_header.setStyleSheet(
-            "color: #CCC; font-size: 16px; font-weight: bold;"
+            f"color: {get_color('text_secondary')}; font-size: 16px; font-weight: bold;"
         )
         left.addWidget(file_header)
 
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.file_list.setStyleSheet(
-            "QListWidget { background: #1E1E1E; color: #DDD; border: 1px solid #444; "
+            f"QListWidget {{ background: {get_color('bg_primary')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; }"
             "QListWidget::item { padding: 4px; }"
             "QListWidget::item:selected { background: #5865F2; }"
@@ -50,9 +51,9 @@ class BatchTab(QWidget):
         file_btn_row.setSpacing(4)
 
         _btn_style = (
-            "QPushButton { background: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"QPushButton {{ background: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; font-weight: bold; }"
-            "QPushButton:hover { background: #3C3C3C; }"
+            f"QPushButton:hover {{ background: {get_color('bg_button_hover')}; }}"
         )
 
         btn_add_files = QPushButton("📂 파일 추가")
@@ -82,7 +83,7 @@ class BatchTab(QWidget):
         left.addLayout(file_btn_row)
 
         self.file_count_label = QLabel("0개 파일")
-        self.file_count_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.file_count_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         left.addWidget(self.file_count_label)
 
         main_layout.addLayout(left, 3)
@@ -93,7 +94,7 @@ class BatchTab(QWidget):
 
         op_header = QLabel("작업 설정")
         op_header.setStyleSheet(
-            "color: #CCC; font-size: 16px; font-weight: bold;"
+            f"color: {get_color('text_secondary')}; font-size: 16px; font-weight: bold;"
         )
         right.addWidget(op_header)
 
@@ -102,7 +103,7 @@ class BatchTab(QWidget):
         self.op_combo.addItems(["리사이즈", "포맷 변환", "필터 적용", "워터마크"])
         self.op_combo.setFixedHeight(34)
         self.op_combo.setStyleSheet(
-            "background: #2C2C2C; color: #EEE; border: 1px solid #555; "
+            f"background: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; padding: 4px 8px;"
         )
         self.op_combo.currentIndexChanged.connect(self._on_op_changed)
@@ -110,7 +111,7 @@ class BatchTab(QWidget):
 
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("color: #333;")
+        line.setStyleSheet(f"color: {get_color('border')};")
         right.addWidget(line)
 
         # 작업별 설정 스택
@@ -124,18 +125,18 @@ class BatchTab(QWidget):
         # 출력 폴더
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setStyleSheet("color: #333;")
+        line2.setStyleSheet(f"color: {get_color('border')};")
         right.addWidget(line2)
 
         out_row = QHBoxLayout()
         out_label = QLabel("출력 폴더:")
-        out_label.setStyleSheet("color: #AAA; font-size: 12px;")
+        out_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         out_row.addWidget(out_label)
 
         self.output_path_label = QLabel("(선택 안 됨)")
         self.output_path_label.setStyleSheet(
-            "color: #DDD; font-size: 12px; background: #2C2C2C; "
-            "border: 1px solid #444; border-radius: 4px; padding: 4px 8px;"
+            f"color: {get_color('text_primary')}; font-size: 12px; background: {get_color('bg_input')}; "
+            f"border: 1px solid {get_color('border')}; border-radius: 4px; padding: 4px 8px;"
         )
         out_row.addWidget(self.output_path_label, 1)
 
@@ -151,19 +152,19 @@ class BatchTab(QWidget):
         # 프로그레스
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(24)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background: #1E1E1E; border: 1px solid #444;
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background: {get_color('bg_primary')}; border: 1px solid {get_color('border')};
                 border-radius: 4px; text-align: center;
-                color: #EEE; font-size: 12px;
-            }
-            QProgressBar::chunk { background: #5865F2; border-radius: 3px; }
+                color: {get_color('text_primary')}; font-size: 12px;
+            }}
+            QProgressBar::chunk {{ background: #5865F2; border-radius: 3px; }}
         """)
         self.progress_bar.setValue(0)
         right.addWidget(self.progress_bar)
 
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.status_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         right.addWidget(self.status_label)
 
         # 시작/취소 버튼
@@ -174,7 +175,7 @@ class BatchTab(QWidget):
             "QPushButton { background: #5865F2; color: white; border-radius: 6px; "
             "font-size: 14px; font-weight: bold; }"
             "QPushButton:hover { background: #6975F3; }"
-            "QPushButton:disabled { background: #333; color: #666; }"
+            f"QPushButton:disabled {{ background: {get_color('bg_button')}; color: {get_color('text_muted')}; }}"
         )
         self.btn_start.clicked.connect(self._start_batch)
 
@@ -185,7 +186,7 @@ class BatchTab(QWidget):
             "QPushButton { background: #8B0000; color: white; border-radius: 6px; "
             "font-size: 14px; font-weight: bold; }"
             "QPushButton:hover { background: #A52A2A; }"
-            "QPushButton:disabled { background: #333; color: #666; }"
+            f"QPushButton:disabled {{ background: {get_color('bg_button')}; color: {get_color('text_muted')}; }}"
         )
         self.btn_cancel.clicked.connect(self._cancel_batch)
 
@@ -208,7 +209,7 @@ class BatchTab(QWidget):
         self.resize_mode_combo.addItems(["고정 크기", "비율(%)", "장축 기준"])
         self.resize_mode_combo.setFixedHeight(30)
         self.resize_mode_combo.setStyleSheet(
-            "background: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; padding: 2px 6px;"
         )
         layout.addWidget(self.resize_mode_combo)
@@ -238,7 +239,7 @@ class BatchTab(QWidget):
         self.format_combo.addItems(["PNG (.png)", "JPEG (.jpg)", "WebP (.webp)"])
         self.format_combo.setFixedHeight(30)
         self.format_combo.setStyleSheet(
-            "background: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; padding: 2px 6px;"
         )
         layout.addWidget(self.format_combo)
@@ -276,7 +277,7 @@ class BatchTab(QWidget):
             self.filter_combo.addItem(f, f.split(" — ")[0])
         self.filter_combo.setFixedHeight(30)
         self.filter_combo.setStyleSheet(
-            "background: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; padding: 2px 6px;"
         )
         layout.addWidget(self.filter_combo)
@@ -296,7 +297,7 @@ class BatchTab(QWidget):
         self.wm_text_input = QLineEdit()
         self.wm_text_input.setPlaceholderText("워터마크 텍스트 입력")
         self.wm_text_input.setStyleSheet(
-            "background: #2C2C2C; color: #EEE; border: 1px solid #555; "
+            f"background: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 6px; font-size: 13px;"
         )
         layout.addWidget(self.wm_text_input)
@@ -314,7 +315,7 @@ class BatchTab(QWidget):
         ])
         self.wm_position_combo.setFixedHeight(30)
         self.wm_position_combo.setStyleSheet(
-            "background: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; padding: 2px 6px;"
         )
         layout.addWidget(self.wm_position_combo)

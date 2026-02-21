@@ -12,6 +12,7 @@ from utils.shortcut_manager import (
     get_shortcut_manager, SHORTCUT_LABELS, key_event_to_string
 )
 from utils.file_wildcard import get_file_wildcard_manager
+from utils.theme_manager import get_color
 
 
 class KeyCaptureButton(QPushButton):
@@ -25,13 +26,13 @@ class KeyCaptureButton(QPushButton):
         self.setText(sm.get(shortcut_id))
         self.setFixedHeight(30)
         self.setMinimumWidth(120)
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #2C2C2C; border: 1px solid #555;
-                border-radius: 4px; color: #DDD; font-size: 12px;
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_input')}; border: 1px solid {get_color('border')};
+                border-radius: 4px; color: {get_color('text_primary')}; font-size: 12px;
                 padding: 2px 10px;
-            }
-            QPushButton:hover { border: 1px solid #888; }
+            }}
+            QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}
         """)
         self.clicked.connect(self._start_capture)
 
@@ -60,13 +61,13 @@ class KeyCaptureButton(QPushButton):
         sm.set(self.shortcut_id, key_str)
         self.setText(key_str)
         self._capturing = False
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #2C2C2C; border: 1px solid #555;
-                border-radius: 4px; color: #DDD; font-size: 12px;
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_input')}; border: 1px solid {get_color('border')};
+                border-radius: 4px; color: {get_color('text_primary')}; font-size: 12px;
                 padding: 2px 10px;
-            }
-            QPushButton:hover { border: 1px solid #888; }
+            }}
+            QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}
         """)
 
     def focusOutEvent(self, event):
@@ -74,13 +75,13 @@ class KeyCaptureButton(QPushButton):
             self._capturing = False
             sm = get_shortcut_manager()
             self.setText(sm.get(self.shortcut_id))
-            self.setStyleSheet("""
-                QPushButton {
-                    background-color: #2C2C2C; border: 1px solid #555;
-                    border-radius: 4px; color: #DDD; font-size: 12px;
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_input')}; border: 1px solid {get_color('border')};
+                    border-radius: 4px; color: {get_color('text_primary')}; font-size: 12px;
                     padding: 2px 10px;
-                }
-                QPushButton:hover { border: 1px solid #888; }
+                }}
+                QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}
             """)
         super().focusOutEvent(event)
 
@@ -105,27 +106,27 @@ class SettingsTab(QWidget):
         self.sidebar = QListWidget()
         self.sidebar.setFixedWidth(180)
         self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.sidebar.setStyleSheet("""
-            QListWidget {
-                background-color: #181818;
+        self.sidebar.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {get_color('bg_primary')};
                 border: none;
-                border-right: 1px solid #2A2A2A;
+                border-right: 1px solid {get_color('bg_input')};
                 outline: none;
-            }
-            QListWidget::item {
-                color: #B0B0B0;
+            }}
+            QListWidget::item {{
+                color: {get_color('text_secondary')};
                 padding: 15px 20px;
                 font-weight: bold;
-                border-bottom: 1px solid #222;
-            }
-            QListWidget::item:selected {
-                background-color: #252525;
-                color: #FFFFFF;
+                border-bottom: 1px solid {get_color('bg_secondary')};
+            }}
+            QListWidget::item:selected {{
+                background-color: {get_color('bg_tertiary')};
+                color: {get_color('text_primary')};
                 border-left: 3px solid #5865F2;
-            }
-            QListWidget::item:hover {
-                background-color: #202020;
-            }
+            }}
+            QListWidget::item:hover {{
+                background-color: {get_color('bg_secondary')};
+            }}
         """)
         
         items = [
@@ -148,7 +149,7 @@ class SettingsTab(QWidget):
         
         # 페이지 스택
         self.pages = QStackedWidget()
-        self.pages.setStyleSheet("background-color: #121212;")
+        self.pages.setStyleSheet(f"background-color: {get_color('bg_primary')};")
         layout.addWidget(self.pages)
         
         # 각 페이지 생성
@@ -400,13 +401,13 @@ class SettingsTab(QWidget):
 
         left_layout.addWidget(QLabel("와일드카드 목록"))
         self.wildcard_list = QListWidget()
-        self.wildcard_list.setStyleSheet("""
-            QListWidget {
-                background-color: #1E1E1E; border: 1px solid #333;
-                border-radius: 4px; color: #DDD;
-            }
-            QListWidget::item { padding: 6px; }
-            QListWidget::item:selected { background-color: #333; color: #FFF; }
+        self.wildcard_list.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')};
+                border-radius: 4px; color: {get_color('text_primary')};
+            }}
+            QListWidget::item {{ padding: 6px; }}
+            QListWidget::item:selected {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; }}
         """)
         self.wildcard_list.currentRowChanged.connect(self._on_wildcard_selected)
         left_layout.addWidget(self.wildcard_list)
@@ -431,7 +432,7 @@ class SettingsTab(QWidget):
 
         # 파일명 표시
         self._wc_name_label = QLabel("파일을 선택하세요")
-        self._wc_name_label.setStyleSheet("color: #AAA; font-size: 13px;")
+        self._wc_name_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 13px;")
         right_layout.addWidget(self._wc_name_label)
 
         self.wildcard_editor = QTextEdit()
@@ -443,12 +444,12 @@ class SettingsTab(QWidget):
             "ponytail, twintails, braid\n"
             "[short|long] sleeves, bare arms"
         )
-        self.wildcard_editor.setStyleSheet("""
-            QTextEdit {
-                background-color: #1E1E1E; border: 1px solid #333;
-                border-radius: 4px; color: #DDD; font-family: Consolas;
+        self.wildcard_editor.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')};
+                border-radius: 4px; color: {get_color('text_primary')}; font-family: Consolas;
                 font-size: 12px;
-            }
+            }}
         """)
         right_layout.addWidget(self.wildcard_editor)
 
@@ -466,8 +467,8 @@ class SettingsTab(QWidget):
         self._wc_preview_label = QLabel("")
         self._wc_preview_label.setWordWrap(True)
         self._wc_preview_label.setStyleSheet(
-            "color: #8BC34A; background-color: #1A1A1A; "
-            "border: 1px solid #333; border-radius: 4px; padding: 8px;"
+            f"color: #8BC34A; background-color: {get_color('bg_primary')}; "
+            f"border: 1px solid {get_color('border')}; border-radius: 4px; padding: 8px;"
         )
         self._wc_preview_label.setMinimumHeight(40)
         right_layout.addWidget(self._wc_preview_label)
@@ -493,7 +494,7 @@ class SettingsTab(QWidget):
             "<code>#</code>으로 시작하는 줄은 주석 (무시됨)"
         )
         help_text.setWordWrap(True)
-        help_text.setStyleSheet("color: #999; font-size: 11px;")
+        help_text.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 11px;")
         help_text.setTextFormat(Qt.TextFormat.RichText)
         help_layout.addWidget(help_text)
         main_layout.addWidget(help_group)
@@ -639,7 +640,7 @@ class SettingsTab(QWidget):
         row = 0
         for sc_id, label_text in SHORTCUT_LABELS.items():
             lbl = QLabel(label_text)
-            lbl.setStyleSheet("color: #CCC;")
+            lbl.setStyleSheet(f"color: {get_color('text_secondary')};")
             btn = KeyCaptureButton(sc_id)
             self._key_capture_buttons[sc_id] = btn
             grid.addWidget(lbl, row, 0)
@@ -650,10 +651,10 @@ class SettingsTab(QWidget):
 
         btn_reset = QPushButton("🔄 기본값 복원")
         btn_reset.setFixedHeight(30)
-        btn_reset.setStyleSheet("""
-            QPushButton { background-color: #333; border: 1px solid #666;
-                          border-radius: 4px; color: #DDD; }
-            QPushButton:hover { background-color: #444; }
+        btn_reset.setStyleSheet(f"""
+            QPushButton {{ background-color: {get_color('bg_button')}; border: 1px solid {get_color('text_muted')};
+                          border-radius: 4px; color: {get_color('text_primary')}; }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
         """)
         btn_reset.clicked.connect(self._reset_shortcuts)
         sg_layout.addWidget(btn_reset)

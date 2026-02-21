@@ -24,6 +24,7 @@ from PIL import Image
 
 from config import OUTPUT_DIR
 from workers.generation_worker import Img2ImgFlowWorker
+from utils.theme_manager import get_color
 
 
 class MaskCanvas(QLabel):
@@ -33,7 +34,7 @@ class MaskCanvas(QLabel):
         super().__init__(parent)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setMinimumSize(400, 400)
-        self.setStyleSheet("background-color: #1A1A1A; border-radius: 8px;")
+        self.setStyleSheet(f"background-color: {get_color('bg_primary')}; border-radius: 8px;")
 
         self.source_pixmap = None
         self.mask_image = None  # QImage (ARGB)
@@ -388,13 +389,13 @@ class InpaintTab(QWidget):
         # 생성 버튼
         self.btn_generate = QPushButton("🎨 인페인트 생성")
         self.btn_generate.setFixedHeight(50)
-        self.btn_generate.setStyleSheet("""
-            QPushButton {
+        self.btn_generate.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #27ae60; color: white;
                 font-weight: bold; font-size: 14px; border-radius: 8px;
-            }
-            QPushButton:hover { background-color: #2ecc71; }
-            QPushButton:disabled { background-color: #1E1E1E; color: #666; }
+            }}
+            QPushButton:hover {{ background-color: #2ecc71; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_generate.clicked.connect(self._on_generate)
         left_layout.addWidget(self.btn_generate)
@@ -424,13 +425,13 @@ class InpaintTab(QWidget):
 
         result_title = QLabel("결과")
         result_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        result_title.setStyleSheet("color: #E0E0E0;")
+        result_title.setStyleSheet(f"color: {get_color('text_primary')};")
         right_layout.addWidget(result_title)
 
         self.result_label = QLabel("인페인트 결과")
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.result_label.setStyleSheet(
-            "background-color: #1A1A1A; border-radius: 8px; color: #777;"
+            f"background-color: {get_color('bg_primary')}; border-radius: 8px; color: {get_color('text_muted')};"
         )
         self.result_label.setMinimumHeight(300)
         self.result_label.setScaledContents(False)

@@ -12,6 +12,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint, QThread
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QImage, QFont as QGFont
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+from utils.theme_manager import get_color
 
 
 # ──────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ class CompareOverlayWidget(QWidget):
         self._dragging = False
         self.setMouseTracking(True)
         self.setMinimumSize(200, 200)
-        self.setStyleSheet("background-color: #1A1A1A;")
+        self.setStyleSheet(f"background-color: {get_color('bg_primary')};")
 
     def set_image_a(self, pixmap: QPixmap):
         self.pixmap_a = pixmap
@@ -272,7 +273,7 @@ class DropImageLabel(QLabel):
         self.setAcceptDrops(True)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet(
-            "border: 2px dashed #444; border-radius: 10px; color: #777;"
+            f"border: 2px dashed {get_color('border')}; border-radius: 10px; color: {get_color('text_muted')};"
         )
         self.setMinimumSize(200, 200)
 
@@ -342,33 +343,33 @@ class ImageCompareWidget(QWidget):
 
         self.btn_swap = QPushButton("🔄 A↔B")
         self.btn_swap.setFixedHeight(35)
-        self.btn_swap.setStyleSheet("""
-            QPushButton {
-                background-color: #333; color: #DDD;
-                border: 1px solid #555; border-radius: 4px;
-            }
-            QPushButton:hover { background-color: #444; }
+        self.btn_swap.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; color: {get_color('text_primary')};
+                border: 1px solid {get_color('border')}; border-radius: 4px;
+            }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
         """)
         self.btn_swap.clicked.connect(self._swap_images)
 
         self.btn_mode = QPushButton("📐 나란히 보기")
         self.btn_mode.setFixedHeight(35)
-        self.btn_mode.setStyleSheet("""
-            QPushButton {
-                background-color: #333; color: #DDD;
-                border: 1px solid #555; border-radius: 4px;
-            }
-            QPushButton:hover { background-color: #444; }
+        self.btn_mode.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; color: {get_color('text_primary')};
+                border: 1px solid {get_color('border')}; border-radius: 4px;
+            }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
         """)
         self.btn_mode.clicked.connect(self._toggle_mode)
 
-        _save_btn_style = """
-            QPushButton {
+        _save_btn_style = f"""
+            QPushButton {{
                 background-color: #2A6A3A; color: white;
                 border-radius: 4px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #3A7A4A; }
-            QPushButton:disabled { background-color: #333; color: #666; }
+            }}
+            QPushButton:hover {{ background-color: #3A7A4A; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """
         self.btn_save_png = QPushButton("💾 비교 저장")
         self.btn_save_png.setFixedHeight(35)
@@ -661,13 +662,13 @@ class ParamDiffWidget(QWidget):
         layout.setSpacing(4)
 
         header = QLabel("📊 파라미터 비교 (Diff)")
-        header.setStyleSheet("color: #DDD; font-weight: bold; font-size: 13px;")
+        header.setStyleSheet(f"color: {get_color('text_primary')}; font-weight: bold; font-size: 13px;")
         layout.addWidget(header)
 
         self.diff_text = QTextEdit()
         self.diff_text.setReadOnly(True)
         self.diff_text.setStyleSheet(
-            "background-color: #1A1A1A; color: #DDD; border: 1px solid #444; "
+            f"background-color: {get_color('bg_primary')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-family: 'Consolas'; font-size: 11px; padding: 6px;"
         )
         layout.addWidget(self.diff_text)
@@ -750,13 +751,13 @@ class ParamDiffWidget(QWidget):
         """HTML 기반 diff 렌더링"""
         a, b = self.params_a, self.params_b
         if not a and not b:
-            self.diff_text.setHtml("<span style='color:#888;'>파라미터 정보 없음</span>")
+            self.diff_text.setHtml(f"<span style='color:{get_color('text_muted')};'>파라미터 정보 없음</span>")
             return
 
         html = "<table style='width:100%; border-collapse:collapse;'>"
         html += (
-            "<tr style='border-bottom:1px solid #555;'>"
-            "<th style='text-align:left; padding:4px; color:#AAA;'>항목</th>"
+            f"<tr style='border-bottom:1px solid {get_color('border')};'>"
+            f"<th style='text-align:left; padding:4px; color:{get_color('text_secondary')};'>항목</th>"
             "<th style='text-align:left; padding:4px; color:#6AA0D0;'>A</th>"
             "<th style='text-align:left; padding:4px; color:#D06A6A;'>B</th>"
             "</tr>"
@@ -775,14 +776,14 @@ class ParamDiffWidget(QWidget):
                 continue
 
             if va == vb:
-                color_a = color_b = "#888"
+                color_a = color_b = get_color('text_muted')
             else:
                 color_a = "#6AA0D0"
                 color_b = "#D06A6A"
 
             html += (
-                f"<tr style='border-bottom:1px solid #333;'>"
-                f"<td style='padding:3px 6px; color:#AAA;'>{key}</td>"
+                f"<tr style='border-bottom:1px solid {get_color('border')};'>"
+                f"<td style='padding:3px 6px; color:{get_color('text_secondary')};'>{key}</td>"
                 f"<td style='padding:3px 6px; color:{color_a};'>{va or '-'}</td>"
                 f"<td style='padding:3px 6px; color:{color_b};'>{vb or '-'}</td>"
                 f"</tr>"
@@ -797,23 +798,24 @@ class ParamDiffWidget(QWidget):
             only_b = set_b - set_a
             common = set_a & set_b
 
+            _muted = get_color('text_muted')
             prompt_html = ""
             for tag in prompt_a:
                 if tag in only_a:
                     prompt_html += f"<span style='color:#6AA0D0;'>{tag}</span>, "
                 else:
-                    prompt_html += f"<span style='color:#888;'>{tag}</span>, "
+                    prompt_html += f"<span style='color:{_muted};'>{tag}</span>, "
 
             prompt_html_b = ""
             for tag in prompt_b:
                 if tag in only_b:
                     prompt_html_b += f"<span style='color:#D06A6A;'>{tag}</span>, "
                 else:
-                    prompt_html_b += f"<span style='color:#888;'>{tag}</span>, "
+                    prompt_html_b += f"<span style='color:{_muted};'>{tag}</span>, "
 
             html += (
-                f"<tr style='border-bottom:1px solid #333;'>"
-                f"<td style='padding:3px 6px; color:#AAA; vertical-align:top;'>Prompt</td>"
+                f"<tr style='border-bottom:1px solid {get_color('border')};'>"
+                f"<td style='padding:3px 6px; color:{get_color('text_secondary')}; vertical-align:top;'>Prompt</td>"
                 f"<td style='padding:3px 6px; font-size:10px;'>{prompt_html.rstrip(', ')}</td>"
                 f"<td style='padding:3px 6px; font-size:10px;'>{prompt_html_b.rstrip(', ')}</td>"
                 f"</tr>"
@@ -842,19 +844,19 @@ class PngInfoTab(QWidget):
 
         # Child 탭 위젯
         self.child_tabs = QTabWidget()
-        self.child_tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #333; background: #1E1E1E; border-radius: 5px;
-            }
-            QTabBar::tab {
-                background: #252525; color: #888; padding: 8px 20px;
+        self.child_tabs.setStyleSheet(f"""
+            QTabWidget::pane {{
+                border: 1px solid {get_color('border')}; background: {get_color('bg_primary')}; border-radius: 5px;
+            }}
+            QTabBar::tab {{
+                background: {get_color('bg_tertiary')}; color: {get_color('text_muted')}; padding: 8px 20px;
                 border-top-left-radius: 5px; border-top-right-radius: 5px;
-            }
-            QTabBar::tab:selected {
-                background: #333; color: #E0E0E0;
+            }}
+            QTabBar::tab:selected {{
+                background: {get_color('bg_button')}; color: {get_color('text_primary')};
                 border-bottom: 2px solid #5865F2;
-            }
-            QTabBar::tab:hover { background: #2A2A2A; }
+            }}
+            QTabBar::tab:hover {{ background: {get_color('bg_input')}; }}
         """)
 
         # ── Tab 1: PNG Info (기존) ──
@@ -889,7 +891,7 @@ class PngInfoTab(QWidget):
         self.image_label = QLabel("이미지를 드래그하거나\n더블클릭 또는 '열기' 버튼을 누르세요.")
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setStyleSheet(
-            "border: 2px dashed #444; border-radius: 10px; color: #777;"
+            f"border: 2px dashed {get_color('border')}; border-radius: 10px; color: {get_color('text_muted')};"
         )
         self.image_label.setMinimumSize(300, 300)
         self.image_label.mouseDoubleClickEvent = lambda e: self.open_image_dialog()
@@ -933,7 +935,7 @@ class PngInfoTab(QWidget):
         self.chk_random_seed = QCheckBox("🎲 랜덤 시드 적용 (Random Seed)")
         self.chk_random_seed.setChecked(True)
         self.chk_random_seed.setStyleSheet(
-            "color: #DDD; font-weight: bold; margin-left: 5px;"
+            f"color: {get_color('text_primary')}; font-weight: bold; margin-left: 5px;"
         )
 
         self.btn_add_queue = QPushButton("📋 대기열에 추가")
@@ -955,7 +957,7 @@ class PngInfoTab(QWidget):
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
-        line.setStyleSheet("background-color: #444; margin: 5px 0;")
+        line.setStyleSheet(f"background-color: {get_color('border')}; margin: 5px 0;")
         group_layout.addWidget(line)
 
         transfer_layout = QGridLayout()
@@ -967,12 +969,12 @@ class PngInfoTab(QWidget):
 
         for btn in [self.btn_send_t2i, self.btn_send_i2i, self.btn_send_inpaint]:
             btn.setFixedHeight(40)
-            btn.setStyleSheet("""
-                QPushButton {
-                    font-weight: bold; background-color: #333;
-                    border: 1px solid #555; border-radius: 5px;
-                }
-                QPushButton:hover { background-color: #444; }
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    font-weight: bold; background-color: {get_color('bg_button')};
+                    border: 1px solid {get_color('border')}; border-radius: 5px;
+                }}
+                QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
             """)
 
         self.btn_send_t2i.clicked.connect(self.on_send_to_prompt)
@@ -1000,28 +1002,28 @@ class PngInfoTab(QWidget):
         self.btn_edit_meta = QPushButton("✏️ 편집")
         self.btn_edit_meta.setFixedHeight(32)
         self.btn_edit_meta.setCheckable(True)
-        self.btn_edit_meta.setStyleSheet("""
-            QPushButton {
-                background-color: #333; color: #DDD;
-                border: 1px solid #555; border-radius: 4px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #444; }
-            QPushButton:checked {
+        self.btn_edit_meta.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; color: {get_color('text_primary')};
+                border: 1px solid {get_color('border')}; border-radius: 4px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
+            QPushButton:checked {{
                 background-color: #5865F2; color: white; border-color: #5865F2;
-            }
+            }}
         """)
         self.btn_edit_meta.toggled.connect(self._toggle_edit_mode)
 
         self.btn_save_meta = QPushButton("💾 메타데이터 저장")
         self.btn_save_meta.setFixedHeight(32)
         self.btn_save_meta.setEnabled(False)
-        self.btn_save_meta.setStyleSheet("""
-            QPushButton {
+        self.btn_save_meta.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #2A8A2A; color: white;
                 border-radius: 4px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #3A9A3A; }
-            QPushButton:disabled { background-color: #333; color: #666; }
+            }}
+            QPushButton:hover {{ background-color: #3A9A3A; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_save_meta.clicked.connect(self._save_metadata)
 

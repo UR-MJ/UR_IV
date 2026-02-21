@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from widgets.sliders import NumericSlider
+from utils.theme_manager import get_color
 
 
 _PALETTE_COLORS = [
@@ -84,7 +85,7 @@ class DrawPanel(QWidget):
 
         line1 = QFrame()
         line1.setFrameShape(QFrame.Shape.HLine)
-        line1.setStyleSheet("color: #333;")
+        line1.setStyleSheet(f"color: {get_color('border')};")
         main_layout.addWidget(line1)
 
         # ── 팔레트 ──
@@ -178,7 +179,7 @@ class DrawPanel(QWidget):
 
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setStyleSheet("color: #333;")
+        line2.setStyleSheet(f"color: {get_color('border')};")
         main_layout.addWidget(line2)
 
         # ── 설정 슬라이더 ──
@@ -208,7 +209,7 @@ class DrawPanel(QWidget):
 
         line3 = QFrame()
         line3.setFrameShape(QFrame.Shape.HLine)
-        line3.setStyleSheet("color: #333;")
+        line3.setStyleSheet(f"color: {get_color('border')};")
         main_layout.addWidget(line3)
 
         # ── 그리기 레이어 투명도 ──

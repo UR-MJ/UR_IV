@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
 import re
+from utils.theme_manager import get_color
 
 
 class LoraLoadWorker(QThread):
@@ -43,7 +44,7 @@ class LoraManagerDialog(QDialog):
         self.setWindowTitle("LoRA 관리자")
         self.setMinimumSize(500, 600)
         self.resize(550, 700)
-        self.setStyleSheet("background-color: #1E1E1E; color: #EEE;")
+        self.setStyleSheet(f"background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')};")
 
         self._backend = backend
         self._all_loras: list[dict] = []
@@ -68,8 +69,8 @@ class LoraManagerDialog(QDialog):
         self.search_input.setPlaceholderText("LoRA 검색...")
         self.search_input.setFixedHeight(35)
         self.search_input.setStyleSheet(
-            "background-color: #2C2C2C; color: #EEE; border: 1px solid #555; "
-            "border-radius: 4px; padding: 0 8px; font-size: 13px;"
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 4px; padding: 0 8px; font-size: 13px;"
         )
         self.search_input.textChanged.connect(self._filter_list)
         top_bar.addWidget(self.search_input)
@@ -77,8 +78,8 @@ class LoraManagerDialog(QDialog):
         self.btn_refresh = QPushButton("새로고침")
         self.btn_refresh.setFixedHeight(35)
         self.btn_refresh.setStyleSheet(
-            "background-color: #333; color: #DDD; border-radius: 4px; "
-            "font-size: 12px; padding: 0 10px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 4px; "
+            f"font-size: 12px; padding: 0 10px;"
         )
         self.btn_refresh.clicked.connect(self._refresh)
         top_bar.addWidget(self.btn_refresh)
@@ -90,17 +91,17 @@ class LoraManagerDialog(QDialog):
         self.lora_list.setWordWrap(True)
         self.lora_list.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.lora_list.setStyleSheet(
-            "QListWidget { background-color: #252525; border: 1px solid #444; "
-            "border-radius: 4px; font-size: 12px; }"
-            "QListWidget::item { padding: 6px 8px; }"
-            "QListWidget::item:selected { background-color: #5865F2; }"
-            "QListWidget::item:hover { background-color: #333; }"
+            f"QListWidget {{ background-color: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 4px; font-size: 12px; }}"
+            f"QListWidget::item {{ padding: 6px 8px; }}"
+            f"QListWidget::item:selected {{ background-color: {get_color('accent')}; }}"
+            f"QListWidget::item:hover {{ background-color: {get_color('bg_button')}; }}"
         )
         layout.addWidget(self.lora_list, stretch=1)
 
         # 상태
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.status_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         layout.addWidget(self.status_label)
 
         # 하단: 가중치 + 삽입 버튼
@@ -113,9 +114,9 @@ class LoraManagerDialog(QDialog):
         self.weight_slider.setRange(-500, 1000)
         self.weight_slider.setValue(80)
         self.weight_slider.setStyleSheet(
-            "QSlider::groove:horizontal { background: #333; height: 6px; border-radius: 3px; }"
-            "QSlider::handle:horizontal { background: #5865F2; width: 14px; margin: -4px 0; "
-            "border-radius: 7px; }"
+            f"QSlider::groove:horizontal {{ background: {get_color('bg_button')}; height: 6px; border-radius: 3px; }}"
+            f"QSlider::handle:horizontal {{ background: {get_color('accent')}; width: 14px; margin: -4px 0; "
+            f"border-radius: 7px; }}"
         )
         self.weight_slider.valueChanged.connect(self._update_weight_input)
         bottom.addWidget(self.weight_slider)
@@ -124,8 +125,8 @@ class LoraManagerDialog(QDialog):
         self.weight_input.setFixedWidth(50)
         self.weight_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.weight_input.setStyleSheet(
-            "background-color: #2A2A2A; color: #DDD; border: 1px solid #444; "
-            "border-radius: 3px; font-weight: bold; font-size: 12px;"
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 3px; font-weight: bold; font-size: 12px;"
         )
         self.weight_input.editingFinished.connect(self._update_slider_from_input)
         bottom.addWidget(self.weight_input)
@@ -143,7 +144,7 @@ class LoraManagerDialog(QDialog):
 
         # 텍스트 붙여넣기 영역
         paste_label = QLabel("텍스트로 일괄 추가:")
-        paste_label.setStyleSheet("color: #AAA; font-size: 11px; margin-top: 4px;")
+        paste_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 11px; margin-top: 4px;")
         layout.addWidget(paste_label)
 
         paste_row = QHBoxLayout()
@@ -153,8 +154,8 @@ class LoraManagerDialog(QDialog):
         self.paste_input.setFixedHeight(50)
         self.paste_input.setPlaceholderText("<lora:name1:0.8> <lora:name2:0.5> ...")
         self.paste_input.setStyleSheet(
-            "background-color: #2C2C2C; color: #EEE; border: 1px solid #555; "
-            "border-radius: 4px; padding: 4px 8px; font-size: 12px;"
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 4px; padding: 4px 8px; font-size: 12px;"
         )
         paste_row.addWidget(self.paste_input)
 
@@ -164,7 +165,7 @@ class LoraManagerDialog(QDialog):
         self.btn_clipboard = QPushButton("📋 붙여넣기")
         self.btn_clipboard.setFixedSize(90, 30)
         self.btn_clipboard.setStyleSheet(
-            "background-color: #444; color: #DDD; border-radius: 3px; font-size: 12px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 3px; font-size: 12px;"
         )
         self.btn_clipboard.setToolTip("클립보드에서 붙여넣기")
         self.btn_clipboard.clicked.connect(self._fill_from_clipboard)

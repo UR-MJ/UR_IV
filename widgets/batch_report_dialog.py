@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QPushButton, QFrame, QHBoxLayout
 )
 from PyQt6.QtCore import Qt
+from utils.theme_manager import get_color
 
 
 class BatchReportDialog(QDialog):
@@ -15,9 +16,9 @@ class BatchReportDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("배치 생성 완료")
         self.setMinimumWidth(380)
-        self.setStyleSheet("""
-            QDialog { background-color: #1E1E1E; color: #E0E0E0; }
-            QLabel { background: transparent; }
+        self.setStyleSheet(f"""
+            QDialog {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; }}
+            QLabel {{ background: transparent; }}
         """)
 
         layout = QVBoxLayout(self)
@@ -33,7 +34,7 @@ class BatchReportDialog(QDialog):
         # 구분선
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("color: #444;")
+        line.setStyleSheet(f"color: {get_color('border')};")
         layout.addWidget(line)
 
         total = report.get('total', 0)
@@ -74,7 +75,7 @@ class BatchReportDialog(QDialog):
         h.setContentsMargins(0, 0, 0, 0)
 
         lbl = QLabel(label)
-        lbl.setStyleSheet("color: #AAA; font-size: 14px;")
+        lbl.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 14px;")
         h.addWidget(lbl)
 
         h.addStretch()

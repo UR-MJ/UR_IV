@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor, QImage
 from PyQt6.QtCore import Qt, pyqtSignal
+from utils.theme_manager import get_color
 
 
 class XYZPlotTab(QWidget):
@@ -77,7 +78,7 @@ class XYZPlotTab(QWidget):
         layout.addWidget(title)
 
         desc = QLabel("파라미터 조합을 생성하여 다양한 설정을 비교할 수 있습니다.")
-        desc.setStyleSheet("color: #888; margin-bottom: 10px;")
+        desc.setStyleSheet(f"color: {get_color('text_muted')}; margin-bottom: 10px;")
         layout.addWidget(desc)
 
         # 기본 설정 불러오기
@@ -126,11 +127,11 @@ class XYZPlotTab(QWidget):
         self.preview_text = QTextEdit()
         self.preview_text.setReadOnly(True)
         self.preview_text.setMaximumHeight(150)
-        self.preview_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #1E1E1E; border: 1px solid #333;
-                border-radius: 5px; color: #AAA; font-size: 11px;
-            }
+        self.preview_text.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')};
+                border-radius: 5px; color: {get_color('text_secondary')}; font-size: 11px;
+            }}
         """)
         preview_layout.addWidget(self.preview_text)
 
@@ -201,12 +202,12 @@ class XYZPlotTab(QWidget):
         header.addWidget(self.btn_export_grid)
 
         btn_clear_results = QPushButton("결과 비우기")
-        btn_clear_results.setStyleSheet("""
-            QPushButton {
-                background-color: #333; color: #AAA; border-radius: 4px;
+        btn_clear_results.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border-radius: 4px;
                 padding: 5px 10px; font-size: 11px;
-            }
-            QPushButton:hover { background-color: #5A2A2A; }
+            }}
+            QPushButton:hover {{ background-color: #5A2A2A; }}
         """)
         btn_clear_results.clicked.connect(self._clear_results)
         header.addWidget(btn_clear_results)
@@ -215,14 +216,14 @@ class XYZPlotTab(QWidget):
 
         # 축 라벨 행 (동적으로 채워짐)
         self.axis_label = QLabel("")
-        self.axis_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.axis_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         layout.addWidget(self.axis_label)
 
         # 스크롤 영역 + 그리드
         self.results_scroll = QScrollArea()
         self.results_scroll.setWidgetResizable(True)
-        self.results_scroll.setStyleSheet("""
-            QScrollArea { background-color: #1E1E1E; border: 1px solid #333; border-radius: 4px; }
+        self.results_scroll.setStyleSheet(f"""
+            QScrollArea {{ background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')}; border-radius: 4px; }}
         """)
 
         self.results_container = QWidget()
@@ -235,7 +236,7 @@ class XYZPlotTab(QWidget):
 
         # 빈 상태
         self.results_empty_label = QLabel("결과가 없습니다. '바로 생성 시작'을 눌러 XYZ 조합을 생성하세요.")
-        self.results_empty_label.setStyleSheet("color: #666; padding: 40px;")
+        self.results_empty_label.setStyleSheet(f"color: {get_color('text_muted')}; padding: 40px;")
         self.results_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.results_grid.addWidget(self.results_empty_label, 0, 0)
 
@@ -269,7 +270,7 @@ class XYZPlotTab(QWidget):
         layout.addLayout(value_layout)
 
         hint = QLabel("쉼표로 구분, 범위 (시작-끝:간격), S/R: 검색어, 대체1, 대체2")
-        hint.setStyleSheet("color: #666; font-size: 10px;")
+        hint.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 10px;")
         layout.addWidget(hint)
 
         combo.currentTextChanged.connect(
@@ -497,7 +498,7 @@ class XYZPlotTab(QWidget):
 
         if not self._batch_results:
             self.results_empty_label = QLabel("결과가 없습니다.")
-            self.results_empty_label.setStyleSheet("color: #666; padding: 40px;")
+            self.results_empty_label.setStyleSheet(f"color: {get_color('text_muted')}; padding: 40px;")
             self.results_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.results_grid.addWidget(self.results_empty_label, 0, 0)
             self.axis_label.setText("")
@@ -528,11 +529,11 @@ class XYZPlotTab(QWidget):
 
             # 이미지 + 라벨 컨테이너
             container = QFrame()
-            container.setStyleSheet("""
-                QFrame {
-                    background-color: #252525; border: 1px solid #333;
+            container.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')};
                     border-radius: 4px;
-                }
+                }}
             """)
             c_layout = QVBoxLayout(container)
             c_layout.setContentsMargins(4, 4, 4, 4)
@@ -542,7 +543,7 @@ class XYZPlotTab(QWidget):
             img_label = QLabel()
             img_label.setFixedSize(THUMB_SIZE, THUMB_SIZE)
             img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            img_label.setStyleSheet("background-color: #1E1E1E; border-radius: 4px;")
+            img_label.setStyleSheet(f"background-color: {get_color('bg_primary')}; border-radius: 4px;")
 
             if os.path.exists(filepath):
                 pix = QPixmap(filepath)
@@ -558,7 +559,7 @@ class XYZPlotTab(QWidget):
             axes_info = xyz_info.get('axes', [])
             label_parts = [f"{val}" for _, val in axes_info]
             info_label = QLabel(" | ".join(label_parts))
-            info_label.setStyleSheet("color: #AAA; font-size: 10px;")
+            info_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 10px;")
             info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             info_label.setWordWrap(True)
             c_layout.addWidget(info_label)

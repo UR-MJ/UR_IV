@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 from widgets.common_widgets import NoScrollSpinBox
 from PyQt6.QtCore import Qt
 from widgets.sliders import NumericSlider
+from utils.theme_manager import get_color
 
 
 # YOLO 모델 경로 설정 파일
@@ -178,7 +179,7 @@ class MosaicPanel(QWidget):
 
         line1 = QFrame()
         line1.setFrameShape(QFrame.Shape.HLine)
-        line1.setStyleSheet("color: #333;")
+        line1.setStyleSheet(f"color: {get_color('border')};")
         main_layout.addWidget(line1)
 
         # ── 효과 선택 ──
@@ -223,7 +224,7 @@ class MosaicPanel(QWidget):
 
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setStyleSheet("color: #333;")
+        line2.setStyleSheet(f"color: {get_color('border')};")
         main_layout.addWidget(line2)
 
         # ── 자동 검열 (YOLO) ──
@@ -298,7 +299,7 @@ class MosaicPanel(QWidget):
         ac_layout.addWidget(self.btn_auto_detect)
 
         self.auto_detect_status = QLabel("")
-        self.auto_detect_status.setStyleSheet("color: #888; font-size: 10px;")
+        self.auto_detect_status.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 10px;")
         self.auto_detect_status.setFixedHeight(18)
         ac_layout.addWidget(self.auto_detect_status)
 
@@ -442,7 +443,7 @@ class MosaicPanel(QWidget):
         # 배경 제거
         line_bg = QFrame()
         line_bg.setFrameShape(QFrame.Shape.HLine)
-        line_bg.setStyleSheet("color: #333;")
+        line_bg.setStyleSheet(f"color: {get_color('border')};")
         action_layout.addWidget(line_bg)
 
         from widgets.common_widgets import NoScrollComboBox

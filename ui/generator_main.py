@@ -449,18 +449,11 @@ class GeneratorMainUI(
 
     def _cleanup_workers(self):
         """실행 중인 워커 스레드 정리"""
-        workers_to_clean = []
-
-        # 생성 워커
-        if hasattr(self, 'gen_worker') and self.gen_worker is not None:
-            workers_to_clean.append(self.gen_worker)
-
-        # 갤러리 워커
-        if hasattr(self, 'gallery_tab'):
-            for attr in ('_scan_worker', '_cache_worker'):
-                w = getattr(self.gallery_tab, attr, None)
-                if w is not None:
-                    workers_to_clean.append(w)
+        # 타이머 정지
+        if hasattr(self, '_vram_timer'):
+            self._vram_timer.stop()
+        if hasattr(self, '_clean_timer'):
+            self._clean_timer.stop()
 
         # 자동화 중지
         if hasattr(self, 'queue_manager'):
@@ -469,11 +462,30 @@ class GeneratorMainUI(
             except Exception:
                 pass
 
+        # 워커 스레드 quit 요청 (먼저 전부 보냄)
+        workers_to_clean = []
+        if hasattr(self, 'gen_worker') and self.gen_worker is not None:
+            workers_to_clean.append(self.gen_worker)
+        if hasattr(self, 'info_worker') and self.info_worker is not None:
+            workers_to_clean.append(self.info_worker)
+        if hasattr(self, 'gallery_tab'):
+            for attr in ('_scan_worker', '_cache_worker'):
+                w = getattr(self.gallery_tab, attr, None)
+                if w is not None:
+                    workers_to_clean.append(w)
+
         for w in workers_to_clean:
             try:
                 if w.isRunning():
                     w.quit()
-                    w.wait(3000)
+            except Exception:
+                pass
+
+        # 짧은 대기 (전체 합산 500ms)
+        for w in workers_to_clean:
+            try:
+                if w.isRunning():
+                    w.wait(500)
             except Exception:
                 pass
 

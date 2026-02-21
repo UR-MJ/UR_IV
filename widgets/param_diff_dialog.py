@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QFont
 from PIL import Image
+from utils.theme_manager import get_color
 
 
 def _parse_png_params(path: str) -> dict:
@@ -50,14 +51,15 @@ def _parse_png_params(path: str) -> dict:
     return params
 
 
-_STYLE = """
-QDialog { background-color: #1E1E1E; color: #DDD; }
-QLabel { color: #CCC; }
-QTextEdit {
-    background-color: #252525; color: #DDD;
-    border: 1px solid #444; border-radius: 4px;
+def _get_style():
+    return f"""
+QDialog {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; }}
+QLabel {{ color: {get_color('text_primary')}; }}
+QTextEdit {{
+    background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')};
+    border: 1px solid {get_color('border')}; border-radius: 4px;
     font-family: Consolas, monospace; font-size: 12px;
-}
+}}
 """
 
 
@@ -69,7 +71,7 @@ class ParamDiffDialog(QDialog):
         self.setWindowTitle("생성 파라미터 비교")
         self.setMinimumSize(900, 600)
         self.resize(1000, 650)
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_get_style())
 
         self._path_a = path_a
         self._path_b = path_b
@@ -88,7 +90,7 @@ class ParamDiffDialog(QDialog):
         root.setSpacing(8)
 
         title = QLabel("생성 파라미터 비교")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #EEE;")
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {get_color('text_primary')};")
         root.addWidget(title)
 
         # 상단: 이미지 A / B 선택
@@ -102,19 +104,19 @@ class ParamDiffDialog(QDialog):
             btn = QPushButton(f"이미지 {side} 선택...")
             btn.setFixedHeight(32)
             btn.setStyleSheet(
-                "QPushButton { background-color: #333; color: #DDD; border: 1px solid #555; "
-                "border-radius: 4px; font-weight: bold; }"
-                "QPushButton:hover { background-color: #444; }"
+                f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+                f"border-radius: 4px; font-weight: bold; }}"
+                f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
             )
             btn.clicked.connect(lambda _, s=side: self._pick_image(s))
 
             thumb = QLabel()
             thumb.setFixedSize(120, 120)
             thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            thumb.setStyleSheet("background-color: #1A1A1A; border: 1px solid #444; border-radius: 4px;")
+            thumb.setStyleSheet(f"background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')}; border-radius: 4px;")
 
             name_lbl = QLabel("파일 없음")
-            name_lbl.setStyleSheet("font-size: 11px; color: #888;")
+            name_lbl.setStyleSheet(f"font-size: 11px; color: {get_color('text_muted')};")
             name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             col.addWidget(btn)
@@ -154,9 +156,9 @@ class ParamDiffDialog(QDialog):
         btn_close = QPushButton("닫기")
         btn_close.setFixedSize(100, 36)
         btn_close.setStyleSheet(
-            "QPushButton { background-color: #444; color: #DDD; border-radius: 6px; "
-            "font-weight: bold; }"
-            "QPushButton:hover { background-color: #555; }"
+            f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 6px; "
+            f"font-weight: bold; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
         )
         btn_close.clicked.connect(self.reject)
         btn_row.addWidget(btn_close)
@@ -206,9 +208,9 @@ class ParamDiffDialog(QDialog):
             val_b = params_b.get(key, "")
             if val_a == val_b:
                 lines.append(
-                    f"<div style='margin:2px 0; padding:4px 8px; background:#252525; border-radius:4px;'>"
-                    f"<b style='color:#888;'>{key}</b>: "
-                    f"<span style='color:#AAA;'>{_escape(val_a)}</span></div>"
+                    f"<div style='margin:2px 0; padding:4px 8px; background:{get_color('bg_tertiary')}; border-radius:4px;'>"
+                    f"<b style='color:{get_color('text_muted')};'>{key}</b>: "
+                    f"<span style='color:{get_color('text_secondary')};'>{_escape(val_a)}</span></div>"
                 )
             else:
                 lines.append(

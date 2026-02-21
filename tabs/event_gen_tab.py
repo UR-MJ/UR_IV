@@ -26,6 +26,7 @@ from PyQt6.QtGui import QFont
 
 from core.event_data_loader import EventDataLoader
 from widgets.common_widgets import NoScrollSpinBox
+from utils.theme_manager import get_color
 
 
 # ──────────────────────────────────────────────────────
@@ -91,12 +92,12 @@ class StepCard(QWidget):
             border_color = "#5865F2"
             header_text = "Step 0 (Parent)"
         else:
-            border_color = "#3a3a3a"
+            border_color = get_color('border')
             header_text = f"Step {self.step_index}"
 
         self.setStyleSheet(f"""
             StepCard {{
-                background-color: #252525;
+                background-color: {get_color('bg_tertiary')};
                 border: 2px solid {border_color};
                 border-radius: 8px;
             }}
@@ -111,9 +112,9 @@ class StepCard(QWidget):
         # ★ E. 편집 버튼
         self.btn_edit = QPushButton("✏️")
         self.btn_edit.setFixedSize(34, 34)
-        self.btn_edit.setStyleSheet("""
-            QPushButton { border: 1px solid #555; border-radius: 4px; font-size: 12px; background: #2a2a2a; }
-            QPushButton:hover { background: #3a3a3a; border-color: #777; }
+        self.btn_edit.setStyleSheet(f"""
+            QPushButton {{ border: 1px solid {get_color('border')}; border-radius: 4px; font-size: 12px; background: {get_color('bg_input')}; }}
+            QPushButton:hover {{ background: {get_color('bg_button_hover')}; border-color: {get_color('text_muted')}; }}
         """)
         self.btn_edit.setToolTip("태그 편집")
         self.btn_edit.clicked.connect(self._toggle_edit)
@@ -124,13 +125,13 @@ class StepCard(QWidget):
         rating = self.step_data.get('rating', '?')
         score = self.step_data.get('score', 0)
         info_label = QLabel(f"Rating: {rating.upper()}  Score: {score}")
-        info_label.setStyleSheet("color: #888; font-size: 9px;")
+        info_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 9px;")
         layout.addWidget(info_label)
 
         # 구분선
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("background-color: #3a3a3a;")
+        line.setStyleSheet(f"background-color: {get_color('border')};")
         layout.addWidget(line)
 
         if is_parent:
@@ -144,7 +145,7 @@ class StepCard(QWidget):
 
             self.tags_display = QLabel(tags_preview)
             self.tags_display.setWordWrap(True)
-            self.tags_display.setStyleSheet("color: #888; font-size: 9px;")
+            self.tags_display.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 9px;")
             self.tags_display.setMaximumHeight(60)
             layout.addWidget(self.tags_display)
         else:
@@ -161,7 +162,7 @@ class StepCard(QWidget):
                 added_preview += f' ... (+{len(added) - 6})'
             self.added_text = QLabel(added_preview or "(없음)")
             self.added_text.setWordWrap(True)
-            self.added_text.setStyleSheet("color: #888; font-size: 9px;")
+            self.added_text.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 9px;")
             self.added_text.setMaximumHeight(35)
             layout.addWidget(self.added_text)
 
@@ -174,7 +175,7 @@ class StepCard(QWidget):
                 removed_preview += f' ... (+{len(removed) - 6})'
             self.removed_text = QLabel(removed_preview or "(없음)")
             self.removed_text.setWordWrap(True)
-            self.removed_text.setStyleSheet("color: #888; font-size: 9px;")
+            self.removed_text.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 9px;")
             self.removed_text.setMaximumHeight(35)
             layout.addWidget(self.removed_text)
 
@@ -183,7 +184,7 @@ class StepCard(QWidget):
         # ★ E. 편집용 텍스트 에디터 (기본 숨김)
         self.edit_area = QTextEdit()
         self.edit_area.setPlaceholderText("태그를 쉼표로 구분하여 편집")
-        self.edit_area.setStyleSheet("font-size: 9px; background: #1A1A1A; color: #DDD;")
+        self.edit_area.setStyleSheet(f"font-size: 9px; background: {get_color('bg_primary')}; color: {get_color('text_primary')};")
         self.edit_area.setMaximumHeight(60)
         self.edit_area.hide()
         layout.addWidget(self.edit_area)
@@ -198,7 +199,7 @@ class StepCard(QWidget):
         # 구분선
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setStyleSheet("background-color: #3a3a3a;")
+        line2.setStyleSheet(f"background-color: {get_color('border')};")
         layout.addWidget(line2)
 
         # 캐리 옵션
@@ -208,13 +209,13 @@ class StepCard(QWidget):
 
         self.chk_carry_costume = QCheckBox("의상 유지")
         self.chk_carry_costume.setChecked(True)
-        self.chk_carry_costume.setStyleSheet("color: #DDD; font-size: 10px;")
+        self.chk_carry_costume.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 10px;")
         self.chk_carry_costume.toggled.connect(lambda: self.carry_changed.emit(self.step_index))
         layout.addWidget(self.chk_carry_costume)
 
         self.chk_carry_background = QCheckBox("배경 유지")
         self.chk_carry_background.setChecked(True)
-        self.chk_carry_background.setStyleSheet("color: #DDD; font-size: 10px;")
+        self.chk_carry_background.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 10px;")
         self.chk_carry_background.toggled.connect(lambda: self.carry_changed.emit(self.step_index))
         layout.addWidget(self.chk_carry_background)
 
@@ -340,15 +341,15 @@ class EventGenTab(QWidget):
 
         self.btn_load_data = QPushButton("📥 데이터 로드")
         self.btn_load_data.setFixedHeight(35)
-        self.btn_load_data.setStyleSheet("""
-            QPushButton { background-color: #5865F2; color: white; font-weight: bold; border-radius: 5px; }
-            QPushButton:hover { background-color: #4752C4; }
-            QPushButton:disabled { background-color: #333; color: #666; }
+        self.btn_load_data.setStyleSheet(f"""
+            QPushButton {{ background-color: #5865F2; color: white; font-weight: bold; border-radius: 5px; }}
+            QPushButton:hover {{ background-color: #4752C4; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
         """)
         load_layout.addWidget(self.btn_load_data)
 
         self.load_status_label = QLabel("데이터 미로드")
-        self.load_status_label.setStyleSheet("color: #888;")
+        self.load_status_label.setStyleSheet(f"color: {get_color('text_muted')};")
         load_layout.addWidget(self.load_status_label)
 
         layout.addWidget(load_group)
@@ -377,7 +378,7 @@ class EventGenTab(QWidget):
         # Child 필터 (접힌 상태)
         self.child_filter_toggle = QCheckBox("Child 필터 (고급)")
         self.child_filter_toggle.setStyleSheet(
-            "color: #AAA; font-size: 11px; font-weight: bold;"
+            f"color: {get_color('text_secondary')}; font-size: 11px; font-weight: bold;"
         )
         search_layout.addWidget(self.child_filter_toggle)
 
@@ -394,7 +395,7 @@ class EventGenTab(QWidget):
         self.child_include_input = QLineEdit()
         self.child_include_input.setPlaceholderText("sex, penetration")
         self.child_include_input.setStyleSheet(
-            "background-color: #2C2C2C; color: #EEE; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px 6px;"
         )
         cf_inc_row.addWidget(self.child_include_input)
@@ -408,7 +409,7 @@ class EventGenTab(QWidget):
         self.child_exclude_input = QLineEdit()
         self.child_exclude_input.setPlaceholderText("futanari, yaoi")
         self.child_exclude_input.setStyleSheet(
-            "background-color: #2C2C2C; color: #EEE; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px 6px;"
         )
         cf_exc_row.addWidget(self.child_exclude_input)
@@ -441,7 +442,7 @@ class EventGenTab(QWidget):
         # 결과 제한 옵션
         self.chk_limit_results = QCheckBox("상위 100개만 표시")
         self.chk_limit_results.setChecked(True)
-        self.chk_limit_results.setStyleSheet("color: #AAA; font-size: 10px;")
+        self.chk_limit_results.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 10px;")
         layout.addWidget(self.chk_limit_results)
 
         # 검색 버튼 행
@@ -450,10 +451,10 @@ class EventGenTab(QWidget):
         self.btn_search = QPushButton("🔍 유사도 검색")
         self.btn_search.setFixedHeight(45)
         self.btn_search.setEnabled(False)
-        self.btn_search.setStyleSheet("""
-            QPushButton { background-color: #27ae60; color: white; font-weight: bold; font-size: 14px; border-radius: 5px; }
-            QPushButton:hover { background-color: #2ecc71; }
-            QPushButton:disabled { background-color: #1E1E1E; color: #666; }
+        self.btn_search.setStyleSheet(f"""
+            QPushButton {{ background-color: #27ae60; color: white; font-weight: bold; font-size: 14px; border-radius: 5px; }}
+            QPushButton:hover {{ background-color: #2ecc71; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
         """)
         btn_row.addWidget(self.btn_search)
 
@@ -462,17 +463,17 @@ class EventGenTab(QWidget):
         self.btn_random.setFixedSize(45, 45)
         self.btn_random.setEnabled(False)
         self.btn_random.setToolTip("검색 결과에서 랜덤 선택")
-        self.btn_random.setStyleSheet("""
-            QPushButton { background-color: #e67e22; color: white; font-weight: bold; font-size: 18px; border-radius: 5px; }
-            QPushButton:hover { background-color: #f39c12; }
-            QPushButton:disabled { background-color: #1E1E1E; color: #666; }
+        self.btn_random.setStyleSheet(f"""
+            QPushButton {{ background-color: #e67e22; color: white; font-weight: bold; font-size: 18px; border-radius: 5px; }}
+            QPushButton:hover {{ background-color: #f39c12; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
         """)
         btn_row.addWidget(self.btn_random)
 
         layout.addLayout(btn_row)
 
         self.search_status_label = QLabel("검색 결과: 0개")
-        self.search_status_label.setStyleSheet("color: #888;")
+        self.search_status_label.setStyleSheet(f"color: {get_color('text_muted')};")
         layout.addWidget(self.search_status_label)
 
         layout.addStretch()
@@ -506,10 +507,10 @@ class EventGenTab(QWidget):
 
         self.result_list = QListWidget()
         self.result_list.setMinimumHeight(180)
-        self.result_list.setStyleSheet("""
-            QListWidget { background-color: #1E1E1E; border: 1px solid #333; border-radius: 5px; }
-            QListWidget::item { padding: 6px; border-bottom: 1px solid #2a2a2a; }
-            QListWidget::item:selected { background-color: #5865F2; }
+        self.result_list.setStyleSheet(f"""
+            QListWidget {{ background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')}; border-radius: 5px; }}
+            QListWidget::item {{ padding: 6px; border-bottom: 1px solid {get_color('bg_input')}; }}
+            QListWidget::item:selected {{ background-color: #5865F2; }}
         """)
         result_layout.addWidget(self.result_list)
         layout.addWidget(result_group)
@@ -522,8 +523,8 @@ class EventGenTab(QWidget):
         self.steps_scroll.setWidgetResizable(True)
         self.steps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.steps_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.steps_scroll.setStyleSheet("""
-            QScrollArea { background-color: #1A1A1A; border: 1px solid #333; border-radius: 5px; }
+        self.steps_scroll.setStyleSheet(f"""
+            QScrollArea {{ background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')}; border-radius: 5px; }}
         """)
 
         self.steps_container = QWidget()
@@ -539,10 +540,10 @@ class EventGenTab(QWidget):
         # ★ D. 최종 프롬프트 미리보기 + 생성 옵션
         bottom_tabs = QTabWidget()
         bottom_tabs.setFixedHeight(180)
-        bottom_tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #333; background: #1E1E1E; border-radius: 5px; }
-            QTabBar::tab { background: #252525; color: #888; padding: 6px 15px; }
-            QTabBar::tab:selected { background: #333; color: #E0E0E0; border-bottom: 2px solid #5865F2; }
+        bottom_tabs.setStyleSheet(f"""
+            QTabWidget::pane {{ border: 1px solid {get_color('border')}; background: {get_color('bg_primary')}; border-radius: 5px; }}
+            QTabBar::tab {{ background: {get_color('bg_tertiary')}; color: {get_color('text_muted')}; padding: 6px 15px; }}
+            QTabBar::tab:selected {{ background: {get_color('bg_button')}; color: {get_color('text_primary')}; border-bottom: 2px solid #5865F2; }}
         """)
 
         # 탭 1: 생성 옵션
@@ -577,20 +578,20 @@ class EventGenTab(QWidget):
         self.btn_add_to_queue = QPushButton("🚀 대기열에 추가")
         self.btn_add_to_queue.setFixedHeight(40)
         self.btn_add_to_queue.setEnabled(False)
-        self.btn_add_to_queue.setStyleSheet("""
-            QPushButton { background-color: #5865F2; color: white; font-weight: bold; border-radius: 5px; }
-            QPushButton:hover { background-color: #4752C4; }
-            QPushButton:disabled { background-color: #1E1E1E; color: #666; }
+        self.btn_add_to_queue.setStyleSheet(f"""
+            QPushButton {{ background-color: #5865F2; color: white; font-weight: bold; border-radius: 5px; }}
+            QPushButton:hover {{ background-color: #4752C4; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
         """)
         gen_btn_row.addWidget(self.btn_add_to_queue)
 
         self.btn_generate_now = QPushButton("▶ 바로 생성")
         self.btn_generate_now.setFixedHeight(40)
         self.btn_generate_now.setEnabled(False)
-        self.btn_generate_now.setStyleSheet("""
-            QPushButton { background-color: #27ae60; color: white; font-weight: bold; border-radius: 5px; }
-            QPushButton:hover { background-color: #2ecc71; }
-            QPushButton:disabled { background-color: #1E1E1E; color: #666; }
+        self.btn_generate_now.setStyleSheet(f"""
+            QPushButton {{ background-color: #27ae60; color: white; font-weight: bold; border-radius: 5px; }}
+            QPushButton:hover {{ background-color: #2ecc71; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_primary')}; color: {get_color('text_muted')}; }}
         """)
         gen_btn_row.addWidget(self.btn_generate_now)
         options_layout.addLayout(gen_btn_row)
@@ -605,7 +606,7 @@ class EventGenTab(QWidget):
         self.prompt_preview = QTextEdit()
         self.prompt_preview.setReadOnly(True)
         self.prompt_preview.setStyleSheet(
-            "font-family: Consolas; font-size: 9pt; background: #1A1A1A; color: #AAA;"
+            f"font-family: Consolas; font-size: 9pt; background: {get_color('bg_primary')}; color: {get_color('text_secondary')};"
         )
         self.prompt_preview.setPlaceholderText(
             "이벤트를 선택하면 각 스텝의 최종 프롬프트가 여기에 표시됩니다."

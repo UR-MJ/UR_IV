@@ -19,6 +19,7 @@ from widgets.character_preset_dialog import CharacterPresetDialog
 from widgets.common_widgets import NoScrollComboBox, AutomationWidget, ResolutionItemWidget
 from config import OUTPUT_DIR
 from widgets.tag_input import TagInputWidget
+from utils.theme_manager import get_color
 
 class UISetupMixin:
     """UI 구성을 담당하는 Mixin 클래스"""
@@ -81,14 +82,14 @@ class UISetupMixin:
         self.status_message_label = QLabel("")
         self.status_message_label.setObjectName("statusMessageLabel")
         self.status_message_label.setFixedHeight(24)
-        self.status_message_label.setStyleSheet("""
-            #statusMessageLabel {
-                background-color: #1A1A1A;
+        self.status_message_label.setStyleSheet(f"""
+            #statusMessageLabel {{
+                background-color: {get_color('bg_status_bar')};
                 color: #8BC34A;
                 padding-left: 10px;
                 font-size: 10pt;
-                border-top: 1px solid #2C2C2C;
-            }
+                border-top: 1px solid {get_color('border')};
+            }}
         """)
 
         # VRAM 상태 라벨 (상태바 오른쪽에 표시)
@@ -103,18 +104,18 @@ class UISetupMixin:
         left_panel_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        left_panel_scroll.setStyleSheet("""
-            QScrollArea { 
-                background-color: #181818; 
-                border-right: 1px solid #2A2A2A; 
-                border: none; 
-            }
-            QScrollBar:vertical { 
-                width: 10px; background: #121212; 
-            }
-            QScrollBar::handle:vertical { 
-                background: #333; border-radius: 5px; 
-            }
+        left_panel_scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: {get_color('bg_primary')};
+                border-right: 1px solid {get_color('border')};
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                width: 10px; background: {get_color('bg_primary')};
+            }}
+            QScrollBar::handle:vertical {{
+                background: {get_color('bg_button')}; border-radius: 5px;
+            }}
         """)
         
         left_container = QWidget()
@@ -135,18 +136,18 @@ class UISetupMixin:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                background-color: #181818;
-                border-right: 1px solid #2A2A2A;
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: {get_color('bg_primary')};
+                border-right: 1px solid {get_color('border')};
                 border: none;
-            }
-            QScrollBar:vertical {
-                width: 10px; background: #121212;
-            }
-            QScrollBar::handle:vertical {
-                background: #333; border-radius: 5px;
-            }
+            }}
+            QScrollBar:vertical {{
+                width: 10px; background: {get_color('bg_primary')};
+            }}
+            QScrollBar::handle:vertical {{
+                background: {get_color('bg_button')}; border-radius: 5px;
+            }}
         """)
 
         # mosaic_editor의 bottom_tabs를 스크롤 영역에 배치
@@ -171,21 +172,21 @@ class UISetupMixin:
         center_tabs = QTabWidget()
         center_tabs.setUsesScrollButtons(True)
         center_tabs.tabBar().setExpanding(False)
-        center_tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: none; background-color: #121212;
-            }
-            QTabBar::tab {
-                background: #1E1E1E; color: #888;
+        center_tabs.setStyleSheet(f"""
+            QTabWidget::pane {{
+                border: none; background-color: {get_color('bg_primary')};
+            }}
+            QTabBar::tab {{
+                background: {get_color('bg_tab')}; color: {get_color('text_tab')};
                 padding: 8px 12px;
                 border-top-left-radius: 8px;
                 border-top-right-radius: 8px;
                 margin-right: 2px; font-weight: bold;
-            }
-            QTabBar::tab:selected {
-                background: #2A2A2A; color: #E0E0E0;
-                border-bottom: 2px solid #5865F2;
-            }
+            }}
+            QTabBar::tab:selected {{
+                background: {get_color('bg_tab_selected')}; color: {get_color('text_tab_selected')};
+                border-bottom: 2px solid {get_color('accent')};
+            }}
         """)
         
         # 1. 뷰어 패널 (T2I)
@@ -333,7 +334,7 @@ class UISetupMixin:
         # 토큰 카운터
         self.token_count_label = QLabel("토큰: 0 / 75")
         self.token_count_label.setStyleSheet(
-            "color: #888; font-size: 11px; font-weight: bold; padding: 0 4px;"
+            f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold; padding: 0 4px;"
         )
         self.token_count_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -362,8 +363,8 @@ class UISetupMixin:
         self.btn_prompt_history.setFixedSize(45, 45)
         self.btn_prompt_history.setToolTip("최근 프롬프트 히스토리")
         self.btn_prompt_history.setStyleSheet(
-            "font-size: 16px; background-color: #333; color: #DDD; "
-            "border: 1px solid #555; border-radius: 5px;"
+            f"font-size: 16px; background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; "
+            f"border: 1px solid {get_color('border')}; border-radius: 5px;"
         )
         self.btn_prompt_history.clicked.connect(self._show_prompt_history)
 
@@ -377,17 +378,17 @@ class UISetupMixin:
         self.btn_auto_toggle.setCheckable(True)
         self.btn_auto_toggle.setFixedHeight(45)
         self.btn_auto_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_auto_toggle.setStyleSheet("""
-            QPushButton { 
-                background-color: #252525; color: #AAA; 
-                border: 1px solid #444; border-radius: 5px; 
-                font-weight: bold; font-size: 13px; padding: 4px; 
-            }
-            QPushButton:checked { 
-                background-color: #27ae60; color: white; 
-                border: 1px solid #2ecc71; 
-            }
-            QPushButton:hover { border: 1px solid #666; }
+        self.btn_auto_toggle.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_tertiary')}; color: {get_color('text_secondary')};
+                border: 1px solid {get_color('border')}; border-radius: 5px;
+                font-weight: bold; font-size: 13px; padding: 4px;
+            }}
+            QPushButton:checked {{
+                background-color: #27ae60; color: white;
+                border: 1px solid #2ecc71;
+            }}
+            QPushButton:hover {{ border: 1px solid {get_color('bg_button_hover')}; }}
         """)
         self.btn_auto_toggle.toggled.connect(self.toggle_automation_ui)
         layout.addWidget(self.btn_auto_toggle)
@@ -402,8 +403,8 @@ class UISetupMixin:
         self.btn_shuffle.setFixedHeight(36)
         self.btn_shuffle.setToolTip("메인 프롬프트 태그 순서 셔플")
         self.btn_shuffle.setStyleSheet(
-            "font-size: 12px; background-color: #333; color: #DDD; "
-            "border: 1px solid #555; border-radius: 5px; font-weight: bold;"
+            f"font-size: 12px; background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; "
+            f"border: 1px solid {get_color('border')}; border-radius: 5px; font-weight: bold;"
         )
         self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
 
@@ -411,8 +412,8 @@ class UISetupMixin:
         self.btn_ab_test.setFixedHeight(36)
         self.btn_ab_test.setToolTip("A/B 프롬프트 비교 테스트")
         self.btn_ab_test.setStyleSheet(
-            "font-size: 12px; font-weight: bold; background-color: #333; color: #DDD; "
-            "border: 1px solid #555; border-radius: 5px;"
+            f"font-size: 12px; font-weight: bold; background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; "
+            f"border: 1px solid {get_color('border')}; border-radius: 5px;"
         )
         self.btn_ab_test.clicked.connect(self._open_ab_test)
 
@@ -424,7 +425,7 @@ class UISetupMixin:
         layout.addLayout(util_btns)
 
         # 제거 옵션 버튼 (3+3 배치, 가운데 정렬)
-        _chk_style = "font-weight: bold; color: #DDD; font-size: 11px;"
+        _chk_style = f"font-weight: bold; color: {get_color('text_primary')}; font-size: 11px;"
         remove_opts_layout = QHBoxLayout()
         remove_opts_layout.setContentsMargins(0, 5, 0, 0)
 
@@ -478,8 +479,8 @@ class UISetupMixin:
         self.combo_char_feature_mode.addItems(["핵심만", "핵심+의상"])
         self.combo_char_feature_mode.setFixedSize(90, 24)
         self.combo_char_feature_mode.setStyleSheet(
-            "QComboBox { background-color: #2A2A2A; color: #DDD; "
-            "border: 1px solid #444; border-radius: 4px; font-size: 11px; padding: 1px 4px; }"
+            f"QComboBox {{ background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')}; "
+            f"border: 1px solid {get_color('border')}; border-radius: 4px; font-size: 11px; padding: 1px 4px; }}"
         )
         self.combo_char_feature_mode.setToolTip("핵심만: 눈색/머리색 등\n핵심+의상: 의상/소품 포함")
         char_header.addWidget(self.combo_char_feature_mode)
@@ -498,8 +499,8 @@ class UISetupMixin:
 
         self.character_input = QLineEdit()
         self.character_input.setStyleSheet(
-            "background-color: #252525; border: none; "
-            "border-radius: 8px; padding: 8px 10px; color: #FFFFFF;"
+            f"background-color: {get_color('bg_input')}; border: none; "
+            f"border-radius: 8px; padding: 8px 10px; color: {get_color('text_primary')};"
         )
         layout.addWidget(self.character_input)
 
@@ -516,15 +517,15 @@ class UISetupMixin:
         self.btn_lock_artist = QPushButton("🔒 고정")
         self.btn_lock_artist.setCheckable(True)
         self.btn_lock_artist.setFixedWidth(80)
-        self.btn_lock_artist.setStyleSheet("""
-            QPushButton { 
-                border: 1px solid #555; border-radius: 4px; 
-                font-size: 11px; background-color: #333; color: #AAA; 
-            }
-            QPushButton:checked { 
-                background-color: #d35400; color: white; 
-                border: 1px solid #e67e22; 
-            }
+        self.btn_lock_artist.setStyleSheet(f"""
+            QPushButton {{
+                border: 1px solid {get_color('border')}; border-radius: 4px;
+                font-size: 11px; background-color: {get_color('bg_button')}; color: {get_color('text_secondary')};
+            }}
+            QPushButton:checked {{
+                background-color: #d35400; color: white;
+                border: 1px solid #e67e22;
+            }}
         """)
         h_artist.addStretch()
         h_artist.addWidget(self.btn_lock_artist)
@@ -545,23 +546,23 @@ class UISetupMixin:
         self.prefix_toggle_button = QPushButton("▼ 선행 고정 프롬프트")
         self.prefix_toggle_button.setCheckable(True)
         self.prefix_toggle_button.setChecked(True)
-        self.prefix_toggle_button.setStyleSheet("""
-            QPushButton {
-                background-color: #5865F2;
-                border: 1px solid #5865F2;
+        self.prefix_toggle_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('accent')};
+                border: 1px solid {get_color('accent')};
                 border-radius: 6px;
                 color: white;
                 font-weight: bold;
                 padding: 8px;
                 text-align: left;
-            }
-            QPushButton:!checked {
-                background-color: #2A2A2A;
-                color: #5865F2;
-            }
-            QPushButton:hover {
-                background-color: #3A3A3A;
-            }
+            }}
+            QPushButton:!checked {{
+                background-color: {get_color('bg_tertiary')};
+                color: {get_color('accent')};
+            }}
+            QPushButton:hover {{
+                background-color: {get_color('bg_button_hover')};
+            }}
         """)
         self.prefix_toggle_button.toggled.connect(self._on_prefix_toggle)
         
@@ -616,8 +617,8 @@ class UISetupMixin:
         self.suffix_toggle_button = QPushButton("▼ 후행 고정 프롬프트")
         self.suffix_toggle_button.setCheckable(True)
         self.suffix_toggle_button.setChecked(True)
-        self.suffix_toggle_button.setStyleSheet("""
-            QPushButton {
+        self.suffix_toggle_button.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #27ae60;
                 border: 1px solid #27ae60;
                 border-radius: 6px;
@@ -625,14 +626,14 @@ class UISetupMixin:
                 font-weight: bold;
                 padding: 8px;
                 text-align: left;
-            }
-            QPushButton:!checked {
-                background-color: #2A2A2A;
+            }}
+            QPushButton:!checked {{
+                background-color: {get_color('bg_tertiary')};
                 color: #27ae60;
-            }
-            QPushButton:hover {
-                background-color: #3A3A3A;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {get_color('bg_button_hover')};
+            }}
         """)
         self.suffix_toggle_button.toggled.connect(self._on_suffix_toggle)
         
@@ -646,8 +647,8 @@ class UISetupMixin:
         self.neg_toggle_button = QPushButton("▼ 부정 프롬프트 (Negative)")
         self.neg_toggle_button.setCheckable(True)
         self.neg_toggle_button.setChecked(True)
-        self.neg_toggle_button.setStyleSheet("""
-            QPushButton {
+        self.neg_toggle_button.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #e74c3c;
                 border: 1px solid #e74c3c;
                 border-radius: 6px;
@@ -655,14 +656,14 @@ class UISetupMixin:
                 font-weight: bold;
                 padding: 8px;
                 text-align: left;
-            }
-            QPushButton:!checked {
-                background-color: #2A2A2A;
+            }}
+            QPushButton:!checked {{
+                background-color: {get_color('bg_tertiary')};
                 color: #e74c3c;
-            }
-            QPushButton:hover {
-                background-color: #3A3A3A;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {get_color('bg_button_hover')};
+            }}
         """)
         self.neg_toggle_button.toggled.connect(self._on_neg_toggle)
 
@@ -679,8 +680,8 @@ class UISetupMixin:
         self.exclude_toggle_button = QPushButton("▼ 제외 프롬프트 (Local)")
         self.exclude_toggle_button.setCheckable(True)
         self.exclude_toggle_button.setChecked(True)
-        self.exclude_toggle_button.setStyleSheet("""
-            QPushButton {
+        self.exclude_toggle_button.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #e67e22;
                 border: 1px solid #e67e22;
                 border-radius: 6px;
@@ -688,14 +689,14 @@ class UISetupMixin:
                 font-weight: bold;
                 padding: 8px;
                 text-align: left;
-            }
-            QPushButton:!checked {
-                background-color: #2A2A2A;
+            }}
+            QPushButton:!checked {{
+                background-color: {get_color('bg_tertiary')};
                 color: #e67e22;
-            }
-            QPushButton:hover {
-                background-color: #3A3A3A;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {get_color('bg_button_hover')};
+            }}
         """)
         self.exclude_toggle_button.toggled.connect(self._on_exclude_toggle)
 
@@ -760,9 +761,9 @@ class UISetupMixin:
         res_preset_row.setSpacing(3)
         res_preset_row.setContentsMargins(0, 0, 0, 0)
         _res_btn_style = (
-            "QPushButton { background-color: #333; color: #CCC; border: 1px solid #555; "
-            "border-radius: 3px; padding: 2px 4px; font-size: 10px; }"
-            "QPushButton:hover { background-color: #444; border-color: #5865F2; }"
+            f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 3px; padding: 2px 4px; font-size: 10px; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; border-color: {get_color('accent')}; }}"
         )
         for i, (_label, _w, _h) in enumerate(self._res_presets):
             _btn = QPushButton(_label)
@@ -843,7 +844,7 @@ class UISetupMixin:
 
         # Hires Checkpoint
         hr_ckpt_label = QLabel("Checkpoint")
-        hr_ckpt_label.setStyleSheet("color: #999; font-size: 11px;")
+        hr_ckpt_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         hires_l.addWidget(hr_ckpt_label)
         self.hires_checkpoint_combo = NoScrollComboBox()
         hires_l.addWidget(self.hires_checkpoint_combo)
@@ -857,27 +858,27 @@ class UISetupMixin:
 
         # Hires Prompt
         hr_prompt_label = QLabel("Hires Prompt")
-        hr_prompt_label.setStyleSheet("color: #999; font-size: 11px;")
+        hr_prompt_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         hires_l.addWidget(hr_prompt_label)
         self.hires_prompt_text = QTextEdit()
         self.hires_prompt_text.setFixedHeight(50)
         self.hires_prompt_text.setPlaceholderText("비워두면 메인 프롬프트 사용")
         self.hires_prompt_text.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #444; "
-            "border-radius: 4px; padding: 4px; font-size: 12px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 4px; padding: 4px; font-size: 12px;"
         )
         hires_l.addWidget(self.hires_prompt_text)
 
         # Hires Negative Prompt
         hr_neg_label = QLabel("Hires Negative")
-        hr_neg_label.setStyleSheet("color: #999; font-size: 11px;")
+        hr_neg_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         hires_l.addWidget(hr_neg_label)
         self.hires_neg_prompt_text = QTextEdit()
         self.hires_neg_prompt_text.setFixedHeight(50)
         self.hires_neg_prompt_text.setPlaceholderText("비워두면 메인 네거티브 사용")
         self.hires_neg_prompt_text.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #444; "
-            "border-radius: 4px; padding: 4px; font-size: 12px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 4px; padding: 4px; font-size: 12px;"
         )
         hires_l.addWidget(self.hires_neg_prompt_text)
 
@@ -1034,7 +1035,7 @@ class UISetupMixin:
         self.viewer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.viewer_label.setMinimumSize(400, 400)
         self.viewer_label.setStyleSheet(
-            "background-color: #1A1A1A; border-radius: 8px; color: #888;"
+            f"background-color: {get_color('bg_secondary')}; border-radius: 8px; color: {get_color('text_muted')};"
         )
         vc_layout.addWidget(self.viewer_label, 1)
 
@@ -1045,21 +1046,21 @@ class UISetupMixin:
         self.gen_progress_bar.setFixedHeight(20)
         self.gen_progress_bar.setTextVisible(True)
         self.gen_progress_bar.setFormat("%v / %m steps")
-        self.gen_progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #1a1a1a;
-                border: 1px solid #333;
+        self.gen_progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: {get_color('bg_status_bar')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
-                color: #ddd;
+                color: {get_color('text_primary')};
                 font-size: 11px;
                 font-weight: bold;
                 text-align: center;
-            }
-            QProgressBar::chunk {
+            }}
+            QProgressBar::chunk {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #5865F2, stop:1 #7289DA);
+                    stop:0 {get_color('accent')}, stop:1 #7289DA);
                 border-radius: 3px;
-            }
+            }}
         """)
         self.gen_progress_bar.hide()
         vc_layout.addWidget(self.gen_progress_bar)
@@ -1067,15 +1068,15 @@ class UISetupMixin:
         # 하단: EXIF 정보
         self.exif_display = QTextEdit()
         self.exif_display.setReadOnly(True)
-        self.exif_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #1E1E1E; color: #B0B0B0;
-                border: 1px solid #333;
+        self.exif_display.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {get_color('bg_secondary')}; color: {get_color('text_secondary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 8px;
                 padding: 10px;
                 font-family: 'Consolas', monospace;
                 font-size: 9pt;
-            }
+            }}
         """)
 
         splitter.addWidget(viewer_container)
@@ -1089,7 +1090,7 @@ class UISetupMixin:
         """히스토리 패널 생성"""
         panel = QWidget()
         panel.setStyleSheet(
-            "background-color: #181818; border-left: 1px solid #2A2A2A;"
+            f"background-color: {get_color('bg_primary')}; border-left: 1px solid {get_color('border')};"
         )
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1099,8 +1100,8 @@ class UISetupMixin:
         header = QLabel("📜 히스토리")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header.setStyleSheet(
-            "padding: 15px; font-weight: bold; color: #FFC107; "
-            "font-size: 14px; background-color: #1E1E1E;"
+            f"padding: 15px; font-weight: bold; color: #FFC107; "
+            f"font-size: 14px; background-color: {get_color('bg_secondary')};"
         )
         layout.addWidget(header)
         
@@ -1108,7 +1109,7 @@ class UISetupMixin:
         self.btn_history_up = QPushButton("▲ 이전 이미지")
         self.btn_history_up.clicked.connect(self.select_prev_image)
         self.btn_history_up.setStyleSheet(
-            "background-color: #2C2C2C; border: none; padding: 8px; color: #AAA;"
+            f"background-color: {get_color('bg_button')}; border: none; padding: 8px; color: {get_color('text_secondary')};"
         )
         layout.addWidget(self.btn_history_up)
 
@@ -1137,7 +1138,7 @@ class UISetupMixin:
         self.btn_history_down = QPushButton("▼ 다음 이미지")
         self.btn_history_down.clicked.connect(self.select_next_image)
         self.btn_history_down.setStyleSheet(
-            "background-color: #2C2C2C; border: none; padding: 8px; color: #AAA;"
+            f"background-color: {get_color('bg_button')}; border: none; padding: 8px; color: {get_color('text_secondary')};"
         )
         layout.addWidget(self.btn_history_down)
 
@@ -1146,23 +1147,23 @@ class UISetupMixin:
         self.btn_add_favorite.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_add_favorite.setFixedHeight(40)
         self.btn_add_favorite.setEnabled(False)  # ← 기본 비활성화!
-        self.btn_add_favorite.setStyleSheet("""
-            QPushButton {
-                background-color: #2C2C2C;
+        self.btn_add_favorite.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')};
                 border: 1px solid #FFC107;
                 color: #FFC107;
                 font-weight: bold;
                 border-radius: 0px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #FFC107;
-                color: #121212;
-            }
-            QPushButton:disabled {
-                background-color: #1E1E1E;
-                border: 1px solid #444;
-                color: #666;
-            }
+                color: {get_color('bg_primary')};
+            }}
+            QPushButton:disabled {{
+                background-color: {get_color('disabled_bg')};
+                border: 1px solid {get_color('border')};
+                color: {get_color('disabled_text')};
+            }}
         """)
         layout.addWidget(self.btn_add_favorite)
         
@@ -1170,22 +1171,22 @@ class UISetupMixin:
         self.btn_refresh_gallery = QPushButton("🔄 목록 새로고침")
         self.btn_refresh_gallery.setFixedHeight(35)
         self.btn_refresh_gallery.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_refresh_gallery.setStyleSheet("""
-            QPushButton {
-                background-color: #252525;
+        self.btn_refresh_gallery.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_tertiary')};
                 border: none;
                 padding: 8px;
-                color: #AAA;
+                color: {get_color('text_secondary')};
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #333;
-                color: #FFF;
-            }
-            QPushButton:pressed {
-                background-color: #5865F2;
+            }}
+            QPushButton:hover {{
+                background-color: {get_color('bg_button')};
+                color: {get_color('text_primary')};
+            }}
+            QPushButton:pressed {{
+                background-color: {get_color('accent')};
                 color: white;
-            }
+            }}
         """)
         self.btn_refresh_gallery.clicked.connect(self._on_refresh_gallery)
         layout.addWidget(self.btn_refresh_gallery)
@@ -1272,15 +1273,15 @@ class UISetupMixin:
             return
 
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2a2a2a; color: #ddd; border: 1px solid #555;
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')};
                 padding: 4px;
-            }
-            QMenu::item {
+            }}
+            QMenu::item {{
                 padding: 6px 12px; border-radius: 3px;
-            }
-            QMenu::item:selected { background-color: #5865F2; }
+            }}
+            QMenu::item:selected {{ background-color: {get_color('accent')}; }}
         """)
         for i, entry in enumerate(history[:30]):
             prompt_preview = entry.get("prompt", "")[:80]
@@ -1433,9 +1434,9 @@ class UISetupMixin:
         from PyQt6.QtWidgets import QMenu, QDialog, QDialogButtonBox, QSpinBox
         menu = QMenu(self)
         menu.setStyleSheet(
-            "QMenu { background-color: #2C2C2C; color: #DDD; border: 1px solid #555; }"
-            "QMenu::item { padding: 6px 16px; }"
-            "QMenu::item:selected { background-color: #5865F2; }"
+            f"QMenu {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; }}"
+            f"QMenu::item {{ padding: 6px 16px; }}"
+            f"QMenu::item:selected {{ background-color: {get_color('accent')}; }}"
         )
         act_edit = menu.addAction("✏️ 해상도 변경")
         act_reset = menu.addAction("↩️ 기본값 복원")
@@ -1446,25 +1447,25 @@ class UISetupMixin:
             dlg = QDialog(self)
             dlg.setWindowTitle("해상도 변경")
             dlg.setFixedSize(280, 120)
-            dlg.setStyleSheet("background-color: #1E1E1E; color: #EEE;")
+            dlg.setStyleSheet(f"background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')};")
             dl = QVBoxLayout(dlg)
             row = QHBoxLayout()
             w_spin = QSpinBox()
             w_spin.setRange(64, 4096)
             w_spin.setSingleStep(64)
             w_spin.setValue(self._res_presets[idx][1])
-            w_spin.setStyleSheet("background:#2C2C2C; color:#EEE; border:1px solid #555; padding:4px;")
+            w_spin.setStyleSheet(f"background:{get_color('bg_button')}; color:{get_color('text_primary')}; border:1px solid {get_color('border')}; padding:4px;")
             h_spin = QSpinBox()
             h_spin.setRange(64, 4096)
             h_spin.setSingleStep(64)
             h_spin.setValue(self._res_presets[idx][2])
-            h_spin.setStyleSheet("background:#2C2C2C; color:#EEE; border:1px solid #555; padding:4px;")
+            h_spin.setStyleSheet(f"background:{get_color('bg_button')}; color:{get_color('text_primary')}; border:1px solid {get_color('border')}; padding:4px;")
             swap_btn = QPushButton("⇄")
             swap_btn.setFixedSize(32, 32)
             swap_btn.setToolTip("W ↔ H 교환")
             swap_btn.setStyleSheet(
-                "background:#5865F2; color:white; border:none; "
-                "border-radius:4px; font-weight:bold; font-size:16px;"
+                f"background:{get_color('accent')}; color:white; border:none; "
+                f"border-radius:4px; font-weight:bold; font-size:16px;"
             )
             swap_btn.clicked.connect(lambda: (
                 w_spin.setValue(h_spin.value()) or True) if (
@@ -1535,7 +1536,7 @@ class UISetupMixin:
         if not text:
             self.token_count_label.setText("토큰: 0 / 75")
             self.token_count_label.setStyleSheet(
-                "color: #888; font-size: 11px; font-weight: bold; padding: 0 4px;"
+                f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold; padding: 0 4px;"
             )
             return
         # CLIP 토큰 근사: 단어/서브워드 기준 (영어 ~0.75 토큰/단어, 태그 ~1 토큰/태그)
@@ -1703,7 +1704,7 @@ class UISetupMixin:
         self.btn_fav_refresh = QPushButton("🔄 새로고침")
         self.btn_fav_refresh.clicked.connect(self.refresh_favorites)
         self.btn_fav_refresh.setStyleSheet(
-            "padding: 5px 10px; background-color: #333; border-radius: 4px;"
+            f"padding: 5px 10px; background-color: {get_color('bg_button')}; border-radius: 4px;"
         )
         header_layout.addWidget(self.btn_fav_refresh)
         
@@ -1719,7 +1720,7 @@ class UISetupMixin:
         # 스크롤 영역 (썸네일 그리드)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("border: none; background: #1A1A1A;")
+        scroll.setStyleSheet(f"border: none; background: {get_color('bg_primary')};")
         
         scroll_content = QWidget()
         scroll_content_layout = QVBoxLayout(scroll_content)

@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from utils.feature_extractor import get_feature_extractor
+from utils.theme_manager import get_color
 
 
 class SearchPreviewCard(QWidget):
@@ -100,7 +101,7 @@ class SearchPreviewCard(QWidget):
         # 구분선 1
         line1 = QFrame()
         line1.setFrameShape(QFrame.Shape.HLine)
-        line1.setStyleSheet("background-color: #444;")
+        line1.setStyleSheet(f"background-color: {get_color('border')};")
         line1.setFixedHeight(1)
         card_layout.addWidget(line1)
         
@@ -136,14 +137,14 @@ class SearchPreviewCard(QWidget):
         # 구분선 2
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setStyleSheet("background-color: #444;")
+        line2.setStyleSheet(f"background-color: {get_color('border')};")
         line2.setFixedHeight(1)
         card_layout.addWidget(line2)
         
         # 일반 태그 헤더
         tags_header = QLabel("📝 일반 태그:")
-        tags_header.setStyleSheet("""
-            color: #888;
+        tags_header.setStyleSheet(f"""
+            color: {get_color('text_muted')};
             font-size: 10px;
         """)
         card_layout.addWidget(tags_header)
@@ -152,15 +153,15 @@ class SearchPreviewCard(QWidget):
         self.tags_text = QTextEdit()
         self.tags_text.setReadOnly(True)
         self.tags_text.setMaximumHeight(80)
-        self.tags_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #1E1E1E;
-                border: 1px solid #333;
+        self.tags_text.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {get_color('bg_secondary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
-                color: #AAA;
+                color: {get_color('text_secondary')};
                 font-size: 10px;
                 padding: 5px;
-            }
+            }}
         """)
         card_layout.addWidget(self.tags_text)
         
@@ -172,19 +173,19 @@ class SearchPreviewCard(QWidget):
         
         # 다른 결과 보기
         self.btn_next = QPushButton("👁️ 다른 결과")
-        self.btn_next.setStyleSheet("""
-            QPushButton {
-                background-color: #333;
-                border: 1px solid #444;
+        self.btn_next.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
                 padding: 6px 10px;
-                color: #DDD;
+                color: {get_color('text_primary')};
                 font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #444;
-                border-color: #5865F2;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {get_color('bg_button_hover')};
+                border-color: {get_color('accent')};
+            }}
         """)
         self.btn_next.clicked.connect(lambda: self.next_clicked.emit())
         btn_layout.addWidget(self.btn_next)
@@ -230,8 +231,8 @@ class SearchPreviewCard(QWidget):
         # 빈 상태 라벨
         self.empty_label = QLabel("검색 후 결과를 미리볼 수 있습니다.")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.setStyleSheet("""
-            color: #666;
+        self.empty_label.setStyleSheet(f"""
+            color: {get_color('text_muted')};
             padding: 30px;
             font-size: 11px;
         """)

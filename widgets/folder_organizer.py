@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 from core.database import normalize_path
+from utils.theme_manager import get_color
 
 
 class HashScanWorker(QThread):
@@ -62,7 +63,7 @@ class FolderOrganizerDialog(QDialog):
         self.setWindowTitle("폴더 정리 도구")
         self.setMinimumSize(600, 500)
         self.resize(700, 600)
-        self.setStyleSheet("background-color: #1E1E1E; color: #EEE;")
+        self.setStyleSheet(f"background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')};")
 
         self._db = db
         self._folder = folder
@@ -81,22 +82,22 @@ class FolderOrganizerDialog(QDialog):
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(20)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #2C2C2C; border: 1px solid #555;
-                border-radius: 4px; text-align: center; color: #AAA; font-size: 11px;
-            }
-            QProgressBar::chunk { background-color: #E67E22; border-radius: 3px; }
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')};
+                border-radius: 4px; text-align: center; color: {get_color('text_secondary')}; font-size: 11px;
+            }}
+            QProgressBar::chunk {{ background-color: #E67E22; border-radius: 3px; }}
         """)
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
         # 탭
         tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #333; background: #1E1E1E; }
-            QTabBar::tab { background: #252525; color: #888; padding: 8px 16px; }
-            QTabBar::tab:selected { background: #333; color: #E0E0E0; border-bottom: 2px solid #E67E22; }
+        tabs.setStyleSheet(f"""
+            QTabWidget::pane {{ border: 1px solid {get_color('border')}; background: {get_color('bg_secondary')}; }}
+            QTabBar::tab {{ background: {get_color('bg_tertiary')}; color: {get_color('text_muted')}; padding: 8px 16px; }}
+            QTabBar::tab:selected {{ background: {get_color('bg_button')}; color: {get_color('text_primary')}; border-bottom: 2px solid #E67E22; }}
         """)
 
         # 중복 탭
@@ -114,14 +115,14 @@ class FolderOrganizerDialog(QDialog):
 
         self.dup_list = QListWidget()
         self.dup_list.setStyleSheet(
-            "QListWidget { background-color: #252525; border: 1px solid #444; border-radius: 4px; }"
-            "QListWidget::item { padding: 4px; }"
-            "QListWidget::item:selected { background-color: #5865F2; }"
+            f"QListWidget {{ background-color: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')}; border-radius: 4px; }}"
+            f"QListWidget::item {{ padding: 4px; }}"
+            f"QListWidget::item:selected {{ background-color: {get_color('accent')}; }}"
         )
         dup_layout.addWidget(self.dup_list, stretch=1)
 
         self.dup_status = QLabel("")
-        self.dup_status.setStyleSheet("color: #888; font-size: 11px;")
+        self.dup_status.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         dup_layout.addWidget(self.dup_status)
 
         btn_delete_dups = QPushButton("🗑️ 선택 그룹의 중복 삭제 (첫 번째 유지)")
@@ -140,20 +141,20 @@ class FolderOrganizerDialog(QDialog):
         fav_layout = QVBoxLayout(fav_tab)
 
         fav_label = QLabel("즐겨찾기 이미지를 별도 폴더로 복사합니다.")
-        fav_label.setStyleSheet("color: #AAA; font-size: 12px;")
+        fav_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         fav_layout.addWidget(fav_label)
 
         btn_copy_favs = QPushButton("⭐ 즐겨찾기 이미지 복사")
         btn_copy_favs.setFixedHeight(40)
         btn_copy_favs.setStyleSheet(
-            "background-color: #FFC107; color: #1E1E1E; border-radius: 4px; "
+            f"background-color: #FFC107; color: {get_color('bg_secondary')}; border-radius: 4px; "
             "font-size: 14px; font-weight: bold;"
         )
         btn_copy_favs.clicked.connect(self._copy_favorites)
         fav_layout.addWidget(btn_copy_favs)
 
         self.fav_status = QLabel("")
-        self.fav_status.setStyleSheet("color: #888; font-size: 12px;")
+        self.fav_status.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
         fav_layout.addWidget(self.fav_status)
         fav_layout.addStretch()
 
@@ -164,7 +165,7 @@ class FolderOrganizerDialog(QDialog):
         btn_close = QPushButton("닫기")
         btn_close.setFixedHeight(35)
         btn_close.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border-radius: 4px; font-size: 13px;"
         )
         btn_close.clicked.connect(self.close)
         layout.addWidget(btn_close)

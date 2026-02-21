@@ -14,6 +14,7 @@ from utils.tag_completer import get_tag_completer
 from utils.tag_data import get_tag_data
 from widgets.search_preview import SearchPreviewCard  # ← 추가!
 from config import PARQUET_DIR
+from utils.theme_manager import get_color
 
 
 class SearchTab(QWidget):
@@ -178,14 +179,14 @@ class SearchTab(QWidget):
             "[A|B]는 <b>OR (A 또는 B)</b> 입니다. "
             "제외 칸에 입력 시 해당 조건이 <b>포함된</b> 결과가 제외됩니다."
         )
-        tip_label.setStyleSheet("color: #AAA; font-size: 12px; margin-bottom: 5px;")
+        tip_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px; margin-bottom: 5px;")
         tip_label.setWordWrap(True)
         pv_layout.addWidget(tip_label)
 
         # 인덱스 표시
         self.lbl_preview_index = QLabel("[ 0 / 0 ]")
         self.lbl_preview_index.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_preview_index.setStyleSheet("color: #888; font-size: 12px;")
+        self.lbl_preview_index.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
         pv_layout.addWidget(self.lbl_preview_index)
 
         # 카드형 미리보기 위젯
@@ -291,9 +292,9 @@ class SearchTab(QWidget):
         completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
         completer.setMaxVisibleItems(12)
         completer.popup().setStyleSheet(
-            "QListView { background-color: #2A2A2A; color: #EEE; "
-            "border: 1px solid #5865F2; font-size: 13px; }"
-            "QListView::item:selected { background-color: #5865F2; }"
+            f"QListView {{ background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; "
+            f"border: 1px solid #5865F2; font-size: 13px; }}"
+            f"QListView::item:selected {{ background-color: #5865F2; }}"
         )
 
         # activated: 선택 시 콤마 뒤 현재 단어만 교체

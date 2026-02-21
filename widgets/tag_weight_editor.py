@@ -6,19 +6,21 @@ from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QSlider, QFrame
 )
 from PyQt6.QtCore import Qt
+from utils.theme_manager import get_color
 
 
-_STYLE = """
-QDialog { background-color: #1E1E1E; color: #DDD; }
-QLabel { color: #CCC; }
-QSlider::groove:horizontal {
-    height: 6px; background: #333; border-radius: 3px;
-}
-QSlider::handle:horizontal {
+def _get_style():
+    return f"""
+QDialog {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; }}
+QLabel {{ color: {get_color('text_primary')}; }}
+QSlider::groove:horizontal {{
+    height: 6px; background: {get_color('bg_button')}; border-radius: 3px;
+}}
+QSlider::handle:horizontal {{
     width: 14px; height: 14px; margin: -4px 0;
-    background: #5865F2; border-radius: 7px;
-}
-QSlider::sub-page:horizontal { background: #5865F2; border-radius: 3px; }
+    background: {get_color('accent')}; border-radius: 7px;
+}}
+QSlider::sub-page:horizontal {{ background: {get_color('accent')}; border-radius: 3px; }}
 """
 
 
@@ -74,7 +76,7 @@ class TagWeightEditorDialog(QDialog):
         self.setWindowTitle("태그 가중치 편집")
         self.setMinimumSize(600, 400)
         self.resize(650, 500)
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_get_style())
 
         self._tags = _parse_tags_with_weights(prompt_text)
         self._sliders: list[tuple[str, QSlider, QLabel]] = []
@@ -87,11 +89,11 @@ class TagWeightEditorDialog(QDialog):
         root.setSpacing(8)
 
         title = QLabel("태그 가중치 편집")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #EEE;")
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {get_color('text_primary')};")
         root.addWidget(title)
 
         desc = QLabel("슬라이더로 각 태그의 가중치를 조절하세요. (0.50 ~ 2.00)")
-        desc.setStyleSheet("color: #888; font-size: 12px;")
+        desc.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
         root.addWidget(desc)
 
         # 스크롤 영역
@@ -109,7 +111,7 @@ class TagWeightEditorDialog(QDialog):
 
             lbl_tag = QLabel(tag)
             lbl_tag.setFixedWidth(200)
-            lbl_tag.setStyleSheet("font-size: 12px; color: #DDD;")
+            lbl_tag.setStyleSheet(f"font-size: 12px; color: {get_color('text_primary')};")
             lbl_tag.setToolTip(tag)
             row.addWidget(lbl_tag)
 
@@ -142,9 +144,9 @@ class TagWeightEditorDialog(QDialog):
         btn_reset = QPushButton("모두 1.0으로")
         btn_reset.setFixedHeight(34)
         btn_reset.setStyleSheet(
-            "QPushButton { background-color: #555; color: #DDD; border-radius: 4px; "
-            "font-weight: bold; }"
-            "QPushButton:hover { background-color: #666; }"
+            f"QPushButton {{ background-color: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; border-radius: 4px; "
+            f"font-weight: bold; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
         )
         btn_reset.clicked.connect(self._reset_all)
         btn_row.addWidget(btn_reset)
@@ -164,9 +166,9 @@ class TagWeightEditorDialog(QDialog):
         btn_close = QPushButton("취소")
         btn_close.setFixedSize(100, 38)
         btn_close.setStyleSheet(
-            "QPushButton { background-color: #444; color: #DDD; border-radius: 6px; "
-            "font-weight: bold; }"
-            "QPushButton:hover { background-color: #555; }"
+            f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 6px; "
+            f"font-weight: bold; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
         )
         btn_close.clicked.connect(self.reject)
         btn_row.addWidget(btn_close)

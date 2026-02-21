@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from widgets.sliders import NumericSlider
 from workers.upscale_worker import BatchUpscaleWorker
 from config import WEBUI_API_URL
+from utils.theme_manager import get_color
 
 
 class UpscaleTab(QWidget):
@@ -40,12 +41,12 @@ class UpscaleTab(QWidget):
             btn.setFixedHeight(35)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.setStyleSheet(
-                "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+                f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
                 "border-radius: 4px; font-size: 13px; font-weight: bold;"
             )
 
         self.lbl_count = QLabel("입력: 0개")
-        self.lbl_count.setStyleSheet("color: #888; font-size: 12px;")
+        self.lbl_count.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
 
         input_toolbar.addWidget(self.btn_open_files)
         input_toolbar.addWidget(self.btn_open_folder)
@@ -60,11 +61,11 @@ class UpscaleTab(QWidget):
 
         # 파일 목록
         self.file_list = QListWidget()
-        self.file_list.setStyleSheet("""
-            QListWidget {
-                background-color: #1a1a1a; color: #DDD; border: 1px solid #444;
+        self.file_list.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {get_color('bg_primary')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')};
                 border-radius: 4px; font-size: 12px;
-            }
+            }}
         """)
         splitter.addWidget(self.file_list)
 
@@ -77,10 +78,10 @@ class UpscaleTab(QWidget):
         # 업스케일러 선택
         upscaler_row = QHBoxLayout()
         upscaler_label = QLabel("업스케일러:")
-        upscaler_label.setStyleSheet("color: #AAA; font-size: 13px; font-weight: bold;")
+        upscaler_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 13px; font-weight: bold;")
         self.combo_upscaler = QComboBox()
         self.combo_upscaler.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 6px; font-size: 12px;"
         )
         self.combo_upscaler.addItem("(로드 필요)")
@@ -90,19 +91,19 @@ class UpscaleTab(QWidget):
 
         # 스케일 모드
         scale_group = QGroupBox("스케일 모드")
-        scale_group.setStyleSheet("""
-            QGroupBox { border: 1px solid #444; border-radius: 6px;
+        scale_group.setStyleSheet(f"""
+            QGroupBox {{ border: 1px solid {get_color('border')}; border-radius: 6px;
                         margin-top: 12px; padding-top: 18px;
-                        font-weight: bold; color: #888; }
-            QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; }
+                        font-weight: bold; color: {get_color('text_muted')}; }}
+            QGroupBox::title {{ subcontrol-origin: margin; padding: 0 6px; }}
         """)
         sg_layout = QVBoxLayout(scale_group)
 
         self.radio_factor = QRadioButton("배율")
         self.radio_factor.setChecked(True)
-        self.radio_factor.setStyleSheet("color: #DDD; font-size: 13px;")
+        self.radio_factor.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
         self.radio_size = QRadioButton("크기 지정")
-        self.radio_size.setStyleSheet("color: #DDD; font-size: 13px;")
+        self.radio_size.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
 
         self.scale_btn_group = QButtonGroup(self)
         self.scale_btn_group.addButton(self.radio_factor, 0)
@@ -127,21 +128,21 @@ class UpscaleTab(QWidget):
 
         # 처리 모드
         mode_group = QGroupBox("처리 모드")
-        mode_group.setStyleSheet("""
-            QGroupBox { border: 1px solid #444; border-radius: 6px;
+        mode_group.setStyleSheet(f"""
+            QGroupBox {{ border: 1px solid {get_color('border')}; border-radius: 6px;
                         margin-top: 12px; padding-top: 18px;
-                        font-weight: bold; color: #888; }
-            QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; }
+                        font-weight: bold; color: {get_color('text_muted')}; }}
+            QGroupBox::title {{ subcontrol-origin: margin; padding: 0 6px; }}
         """)
         mg_layout = QVBoxLayout(mode_group)
 
         self.radio_upscale_only = QRadioButton("업스케일만")
         self.radio_upscale_only.setChecked(True)
-        self.radio_upscale_only.setStyleSheet("color: #DDD; font-size: 13px;")
+        self.radio_upscale_only.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
         self.radio_ad_only = QRadioButton("ADetailer만")
-        self.radio_ad_only.setStyleSheet("color: #DDD; font-size: 13px;")
+        self.radio_ad_only.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
         self.radio_both = QRadioButton("둘 다 (업스케일 → ADetailer)")
-        self.radio_both.setStyleSheet("color: #DDD; font-size: 13px;")
+        self.radio_both.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
 
         self.mode_btn_group = QButtonGroup(self)
         self.mode_btn_group.addButton(self.radio_upscale_only, 0)
@@ -157,21 +158,21 @@ class UpscaleTab(QWidget):
         self.ad_group = QGroupBox("ADetailer 설정")
         self.ad_group.setCheckable(True)
         self.ad_group.setChecked(False)
-        self.ad_group.setStyleSheet("""
-            QGroupBox { border: 1px solid #444; border-radius: 6px;
+        self.ad_group.setStyleSheet(f"""
+            QGroupBox {{ border: 1px solid {get_color('border')}; border-radius: 6px;
                         margin-top: 12px; padding-top: 18px;
-                        font-weight: bold; color: #888; }
-            QGroupBox::title { subcontrol-origin: margin; padding: 0 6px; }
-            QGroupBox::indicator { width: 16px; height: 16px; }
+                        font-weight: bold; color: {get_color('text_muted')}; }}
+            QGroupBox::title {{ subcontrol-origin: margin; padding: 0 6px; }}
+            QGroupBox::indicator {{ width: 16px; height: 16px; }}
         """)
         ad_layout = QVBoxLayout(self.ad_group)
 
         ad_model_row = QHBoxLayout()
         ad_model_label = QLabel("모델:")
-        ad_model_label.setStyleSheet("color: #AAA; font-size: 12px;")
+        ad_model_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         self.txt_ad_model = QLineEdit("face_yolov8s.pt")
         self.txt_ad_model.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px; font-size: 12px;"
         )
         ad_model_row.addWidget(ad_model_label)
@@ -185,11 +186,11 @@ class UpscaleTab(QWidget):
 
         ad_prompt_row = QHBoxLayout()
         ad_prompt_label = QLabel("Prompt:")
-        ad_prompt_label.setStyleSheet("color: #AAA; font-size: 12px;")
+        ad_prompt_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         self.txt_ad_prompt = QLineEdit()
         self.txt_ad_prompt.setPlaceholderText("(비워두면 원본 유지)")
         self.txt_ad_prompt.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px; font-size: 12px;"
         )
         ad_prompt_row.addWidget(ad_prompt_label)
@@ -206,10 +207,10 @@ class UpscaleTab(QWidget):
         # ── 출력 폴더 ──
         output_row = QHBoxLayout()
         output_label = QLabel("출력 폴더:")
-        output_label.setStyleSheet("color: #AAA; font-size: 13px; font-weight: bold;")
+        output_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 13px; font-weight: bold;")
         self.txt_output_folder = QLineEdit()
         self.txt_output_folder.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 6px; font-size: 12px;"
         )
         self.txt_output_folder.setReadOnly(True)
@@ -217,14 +218,14 @@ class UpscaleTab(QWidget):
         self.btn_select_output.setFixedHeight(35)
         self.btn_select_output.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_select_output.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
         self.btn_open_output = QPushButton("📂 열기")
         self.btn_open_output.setFixedHeight(35)
         self.btn_open_output.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_open_output.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
 
@@ -236,14 +237,14 @@ class UpscaleTab(QWidget):
 
         # ── 진행률 ──
         self.progress_bar = QProgressBar()
-        self.progress_bar.setStyleSheet("""
-            QProgressBar { background-color: #1a1a1a; border: 1px solid #444;
-                           border-radius: 4px; text-align: center; color: #DDD; font-size: 12px; }
-            QProgressBar::chunk { background-color: #5865F2; border-radius: 3px; }
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{ background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')};
+                           border-radius: 4px; text-align: center; color: {get_color('text_primary')}; font-size: 12px; }}
+            QProgressBar::chunk {{ background-color: #5865F2; border-radius: 3px; }}
         """)
         self.progress_bar.setValue(0)
         self.lbl_progress = QLabel("")
-        self.lbl_progress.setStyleSheet("color: #888; font-size: 12px;")
+        self.lbl_progress.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
 
         progress_row = QHBoxLayout()
         progress_row.addWidget(self.progress_bar, 1)

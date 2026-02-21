@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from widgets.sliders import NumericSlider
+from utils.theme_manager import get_color
 
 
 _BTN_STYLE = """
@@ -74,7 +75,7 @@ class MovePanel(QWidget):
         # 구분선
         line1 = QFrame()
         line1.setFrameShape(QFrame.Shape.HLine)
-        line1.setStyleSheet("color: #333;")
+        line1.setStyleSheet(f"color: {get_color('border')};")
         layout.addWidget(line1)
 
         # 채우기 색상
@@ -137,7 +138,7 @@ class MovePanel(QWidget):
         # 구분선
         line2 = QFrame()
         line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setStyleSheet("color: #333;")
+        line2.setStyleSheet(f"color: {get_color('border')};")
         layout.addWidget(line2)
 
         # 인페인트

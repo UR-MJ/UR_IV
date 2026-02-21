@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap
+from utils.theme_manager import get_color
 
 
 def _dhash(image_path: str, hash_size: int = 16) -> int | None:
@@ -96,14 +97,15 @@ class HashWorker(QThread):
         self.finished.emit(results)
 
 
-_STYLE = """
-QDialog { background-color: #1E1E1E; color: #DDD; }
-QLabel { color: #CCC; }
-QProgressBar {
-    background-color: #2C2C2C; border: 1px solid #444;
-    border-radius: 4px; text-align: center; color: #AAA;
-}
-QProgressBar::chunk { background-color: #5865F2; border-radius: 3px; }
+def _get_style():
+    return f"""
+QDialog {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; }}
+QLabel {{ color: {get_color('text_primary')}; }}
+QProgressBar {{
+    background-color: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')};
+    border-radius: 4px; text-align: center; color: {get_color('text_secondary')};
+}}
+QProgressBar::chunk {{ background-color: {get_color('accent')}; border-radius: 3px; }}
 """
 
 
@@ -115,7 +117,7 @@ class SimilarGroupDialog(QDialog):
         self.setWindowTitle("유사 이미지 그룹")
         self.setMinimumSize(800, 600)
         self.resize(900, 650)
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_get_style())
 
         self._paths = image_paths
         self._hashes: list[tuple[str, int, str]] = []  # (path, hash, prompt)
@@ -129,7 +131,7 @@ class SimilarGroupDialog(QDialog):
         root.setSpacing(8)
 
         title = QLabel("유사 이미지 그룹")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #EEE;")
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {get_color('text_primary')};")
         root.addWidget(title)
 
         # 유사도 임계값 슬라이더
@@ -191,7 +193,7 @@ class SimilarGroupDialog(QDialog):
         btn_close = QPushButton("닫기")
         btn_close.setFixedHeight(36)
         btn_close.setStyleSheet(
-            "background-color: #444; color: #DDD; border-radius: 6px; font-weight: bold;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 6px; font-weight: bold;"
         )
         btn_close.clicked.connect(self.reject)
         root.addWidget(btn_close)
@@ -276,14 +278,14 @@ class SimilarGroupDialog(QDialog):
 
         if not groups:
             lbl = QLabel("유사한 이미지 그룹이 없습니다.")
-            lbl.setStyleSheet("color: #888; font-size: 14px; padding: 20px;")
+            lbl.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 14px; padding: 20px;")
             self._result_layout.insertWidget(0, lbl)
             return
 
         for gi, group in enumerate(groups):
             frame = QWidget()
             frame.setStyleSheet(
-                "background-color: #252525; border-radius: 6px; padding: 4px;"
+                f"background-color: {get_color('bg_tertiary')}; border-radius: 6px; padding: 4px;"
             )
             fl = QVBoxLayout(frame)
             fl.setContentsMargins(8, 8, 8, 8)
@@ -299,7 +301,7 @@ class SimilarGroupDialog(QDialog):
                 thumb = QLabel()
                 thumb.setFixedSize(100, 100)
                 thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                thumb.setStyleSheet("background-color: #1A1A1A; border-radius: 4px;")
+                thumb.setStyleSheet(f"background-color: {get_color('bg_primary')}; border-radius: 4px;")
                 pix = QPixmap(path)
                 if not pix.isNull():
                     thumb.setPixmap(pix.scaled(
@@ -311,7 +313,7 @@ class SimilarGroupDialog(QDialog):
                 row.addWidget(thumb)
             if len(group) > 10:
                 more = QLabel(f"+{len(group) - 10}장")
-                more.setStyleSheet("color: #888;")
+                more.setStyleSheet(f"color: {get_color('text_muted')};")
                 row.addWidget(more)
             row.addStretch()
             fl.addLayout(row)

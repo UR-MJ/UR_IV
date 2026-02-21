@@ -5,28 +5,30 @@ from PyQt6.QtWidgets import (
     QTextEdit, QSpinBox, QGroupBox
 )
 from PyQt6.QtCore import Qt
+from utils.theme_manager import get_color
 
 
-_STYLE = """
-QDialog { background-color: #1E1E1E; color: #DDD; }
-QLabel { color: #CCC; }
-QTextEdit {
-    background-color: #2A2A2A; color: #DDD;
-    border: 1px solid #444; border-radius: 4px;
+def _get_style():
+    return f"""
+QDialog {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; }}
+QLabel {{ color: {get_color('text_primary')}; }}
+QTextEdit {{
+    background-color: {get_color('bg_input')}; color: {get_color('text_primary')};
+    border: 1px solid {get_color('border')}; border-radius: 4px;
     font-size: 12px; padding: 4px;
-}
-QTextEdit:focus { border: 1px solid #5865F2; }
-QGroupBox {
-    color: #BBB; font-weight: bold; border: 1px solid #444;
+}}
+QTextEdit:focus {{ border: 1px solid {get_color('accent')}; }}
+QGroupBox {{
+    color: {get_color('text_secondary')}; font-weight: bold; border: 1px solid {get_color('border')};
     border-radius: 6px; margin-top: 6px; padding-top: 10px;
-}
-QGroupBox::title {
+}}
+QGroupBox::title {{
     subcontrol-origin: margin; padding: 0 6px;
-}
-QSpinBox {
-    background-color: #2A2A2A; color: #DDD; border: 1px solid #444;
+}}
+QSpinBox {{
+    background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')};
     border-radius: 4px; padding: 4px;
-}
+}}
 """
 
 
@@ -39,7 +41,7 @@ class ABTestDialog(QDialog):
         self.setWindowTitle("A/B 프롬프트 테스트")
         self.setMinimumSize(700, 500)
         self.resize(750, 550)
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_get_style())
 
         self._result = None
         self._init_ui(current_prompt, current_negative, current_seed)
@@ -50,11 +52,11 @@ class ABTestDialog(QDialog):
         root.setSpacing(10)
 
         title = QLabel("A/B 프롬프트 테스트")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #EEE;")
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {get_color('text_primary')};")
         root.addWidget(title)
 
         desc = QLabel("동일한 시드로 두 프롬프트를 생성하여 비교합니다.")
-        desc.setStyleSheet("color: #888; font-size: 12px;")
+        desc.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
         root.addWidget(desc)
 
         # 시드
@@ -113,9 +115,9 @@ class ABTestDialog(QDialog):
         btn_close = QPushButton("취소")
         btn_close.setFixedSize(100, 38)
         btn_close.setStyleSheet(
-            "QPushButton { background-color: #444; color: #DDD; border-radius: 6px; "
-            "font-weight: bold; }"
-            "QPushButton:hover { background-color: #555; }"
+            f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 6px; "
+            f"font-weight: bold; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
         )
         btn_close.clicked.connect(self.reject)
         btn_row.addWidget(btn_close)

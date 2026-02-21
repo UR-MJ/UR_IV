@@ -2,10 +2,6 @@
 """
 다크/라이트 테마 관리
 """
-import os
-
-_ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'icons')
-
 DEFAULT_FONT_FAMILY = "'Pretendard', 'Malgun Gothic', sans-serif"
 DEFAULT_FONT_SIZE = "10.5pt"
 
@@ -179,31 +175,6 @@ _QSS_TEMPLATE = """
         background: transparent;
     }}
 
-    QCheckBox {{
-        color: {text_primary};
-        background: transparent;
-        spacing: 8px;
-    }}
-    QCheckBox::indicator {{
-        width: 18px; height: 18px;
-        border: 2px solid {scrollbar_handle};
-        border-radius: 4px;
-        background-color: {bg_input};
-    }}
-    QCheckBox::indicator:hover {{
-        border-color: {accent};
-    }}
-    QCheckBox::indicator:checked {{
-        background-color: {accent};
-        border-color: {accent};
-        image: url({check_icon_path});
-    }}
-    QCheckBox::indicator:checked:hover {{
-        background-color: {border_input_focus};
-        border-color: {border_input_focus};
-        image: url({check_icon_path});
-    }}
-
     QMenu {{
         background-color: {bg_secondary};
         border: 1px solid {border};
@@ -354,12 +325,10 @@ class ThemeManager:
         name = theme_name or self._current
         colors = THEMES.get(name, DARK_THEME)
         self._current = name
-        check_path = os.path.join(_ASSETS_DIR, 'check.svg').replace('\\', '/')
         fmt_vars = {
             **colors,
             'font_family': self._font_family,
             'font_size': self._font_size,
-            'check_icon_path': check_path,
         }
         return _QSS_TEMPLATE.format(**fmt_vars)
 
@@ -377,3 +346,8 @@ def get_theme_manager() -> ThemeManager:
     if _instance is None:
         _instance = ThemeManager()
     return _instance
+
+
+def get_color(key: str) -> str:
+    """테마 색상 단축 접근 헬퍼"""
+    return get_theme_manager().get_colors().get(key, '#888888')

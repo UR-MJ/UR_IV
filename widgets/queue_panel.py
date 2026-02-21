@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QMimeData
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from widgets.queue_item import QueueItemCard
+from utils.theme_manager import get_color
 
 PRESET_DIR = "queue_presets"
 
@@ -25,16 +26,16 @@ class QueueItemEditDialog(QDialog):
         self.setWindowTitle("대기열 항목 편집")
         self.setMinimumSize(700, 600)
         self.resize(750, 650)
-        self.setStyleSheet("""
-            QDialog { background-color: #1E1E1E; color: #E0E0E0; }
-            QLabel { color: #B0B0B0; font-size: 12px; }
-            QLineEdit, QTextEdit {
-                background-color: #252525; border: 1px solid #444;
-                border-radius: 6px; padding: 6px; color: #FFF; font-size: 12px;
-            }
-            QLineEdit:focus, QTextEdit:focus {
-                border: 1px solid #5865F2;
-            }
+        self.setStyleSheet(f"""
+            QDialog {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; }}
+            QLabel {{ color: {get_color('text_secondary')}; font-size: 12px; }}
+            QLineEdit, QTextEdit {{
+                background-color: {get_color('bg_input')}; border: 1px solid {get_color('border')};
+                border-radius: 6px; padding: 6px; color: {get_color('text_primary')}; font-size: 12px;
+            }}
+            QLineEdit:focus, QTextEdit:focus {{
+                border: 1px solid {get_color('accent')};
+            }}
         """)
 
         layout = QVBoxLayout(self)
@@ -42,7 +43,7 @@ class QueueItemEditDialog(QDialog):
 
         # Prompt (큰 영역)
         prompt_label = QLabel("Prompt")
-        prompt_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #DDD;")
+        prompt_label.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {get_color('text_primary')};")
         layout.addWidget(prompt_label)
         self.prompt_edit = QTextEdit()
         self.prompt_edit.setPlainText(item_data.get('prompt', ''))
@@ -50,7 +51,7 @@ class QueueItemEditDialog(QDialog):
 
         # Negative (중간 영역)
         neg_label = QLabel("Negative Prompt")
-        neg_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #DDD;")
+        neg_label.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {get_color('text_primary')};")
         layout.addWidget(neg_label)
         self.neg_edit = QTextEdit()
         self.neg_edit.setPlainText(item_data.get('negative_prompt', ''))
@@ -58,11 +59,11 @@ class QueueItemEditDialog(QDialog):
 
         # 파라미터 (2줄로 압축)
         param_group = QFrame()
-        param_group.setStyleSheet("""
-            QFrame {
-                background-color: #252525; border: 1px solid #3A3A3A;
+        param_group.setStyleSheet(f"""
+            QFrame {{
+                background-color: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')};
                 border-radius: 6px; padding: 4px;
-            }
+            }}
         """)
         param_layout = QVBoxLayout(param_group)
         param_layout.setContentsMargins(10, 8, 10, 8)
@@ -258,13 +259,13 @@ class QueuePanel(QWidget):
 
         # 시작/중지
         self.btn_start = QPushButton("▶ 자동 시작")
-        self.btn_start.setStyleSheet("""
-            QPushButton {
+        self.btn_start.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #27ae60; color: white;
                 border-radius: 4px; padding: 5px 15px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #2ecc71; }
-            QPushButton:disabled { background-color: #555; color: #888; }
+            }}
+            QPushButton:hover {{ background-color: #2ecc71; }}
+            QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_start.clicked.connect(self._on_start_clicked)
         header_layout.addWidget(self.btn_start)
@@ -285,12 +286,12 @@ class QueuePanel(QWidget):
         self.btn_clear = QPushButton("🧹")
         self.btn_clear.setToolTip("전체 비우기")
         self.btn_clear.setFixedWidth(35)
-        self.btn_clear.setStyleSheet("""
-            QPushButton {
-                background-color: #333; border: 1px solid #444;
+        self.btn_clear.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
                 border-radius: 4px; padding: 5px;
-            }
-            QPushButton:hover { background-color: #5A2A2A; }
+            }}
+            QPushButton:hover {{ background-color: #5A2A2A; }}
         """)
         self.btn_clear.clicked.connect(self.clear_all)
         header_layout.addWidget(self.btn_clear)
@@ -303,12 +304,12 @@ class QueuePanel(QWidget):
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll_area.setFixedHeight(140)
-        self.scroll_area.setStyleSheet("""
-            QScrollArea {
-                background-color: #1E1E1E;
-                border: 1px solid #333;
+        self.scroll_area.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: {get_color('bg_secondary')};
+                border: 1px solid {get_color('border')};
                 border-radius: 4px;
-            }
+            }}
         """)
 
         # 드롭 가능한 카드 컨테이너
@@ -320,7 +321,7 @@ class QueuePanel(QWidget):
         self.card_layout.setSpacing(8)
 
         self.empty_label = QLabel("대기열이 비어있습니다")
-        self.empty_label.setStyleSheet("color: #666; padding: 20px;")
+        self.empty_label.setStyleSheet(f"color: {get_color('text_muted')}; padding: 20px;")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.card_layout.addWidget(self.empty_label)
 
@@ -331,31 +332,31 @@ class QueuePanel(QWidget):
         bottom_layout = QHBoxLayout()
 
         self.info_label = QLabel("총 0장 예정")
-        self.info_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.info_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         bottom_layout.addWidget(self.info_label)
 
         bottom_layout.addStretch()
 
         self.btn_add_current = QPushButton("➕ 현재 설정")
-        self.btn_add_current.setStyleSheet("""
-            QPushButton {
-                background-color: #333; border: 1px solid #444;
+        self.btn_add_current.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
                 border-radius: 4px; padding: 5px 10px;
-                color: #DDD; font-size: 11px;
-            }
-            QPushButton:hover { background-color: #444; }
+                color: {get_color('text_primary')}; font-size: 11px;
+            }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
         """)
         bottom_layout.addWidget(self.btn_add_current)
 
         layout.addLayout(bottom_layout)
 
     def _small_btn_style(self):
-        return """
-            QPushButton {
-                background-color: #333; border: 1px solid #444;
+        return f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
                 border-radius: 4px; padding: 5px;
-            }
-            QPushButton:hover { background-color: #444; }
+            }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
         """
 
     # ========== ID 생성 ==========

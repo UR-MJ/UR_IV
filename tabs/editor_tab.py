@@ -21,6 +21,7 @@ from tabs.editor.watermark_panel import WatermarkPanel
 from tabs.editor.move_panel import MovePanel
 from workers.generation_worker import Img2ImgFlowWorker
 from config import OUTPUT_DIR
+from utils.theme_manager import get_color
 
 
 class YOLODetectWorker(QThread):
@@ -125,7 +126,7 @@ class MosaicEditor(QWidget):
 
         # ── 이미지 캔버스 (공유) ──
         self.image_container = QWidget()
-        self.image_container.setStyleSheet("background-color: #222; border-radius: 8px;")
+        self.image_container.setStyleSheet(f"background-color: {get_color('bg_secondary')}; border-radius: 8px;")
         container_layout = QVBoxLayout(self.image_container)
         container_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -145,17 +146,17 @@ class MosaicEditor(QWidget):
         btn_row.setContentsMargins(4, 4, 4, 4)
         btn_row.setSpacing(3)
 
-        _TAB_BTN = """
-            QPushButton {
-                background: #1E1E1E; color: #888; padding: 6px 4px;
+        _TAB_BTN = f"""
+            QPushButton {{
+                background: {get_color('bg_primary')}; color: {get_color('text_muted')}; padding: 6px 4px;
                 border: none; border-radius: 4px;
                 font-size: 12px; font-weight: bold;
-            }
-            QPushButton:hover { color: #BBB; background: #252525; }
-            QPushButton:checked {
-                color: #E0E0E0; background: #2A2A2A;
+            }}
+            QPushButton:hover {{ color: {get_color('text_secondary')}; background: {get_color('bg_tertiary')}; }}
+            QPushButton:checked {{
+                color: {get_color('text_primary')}; background: {get_color('bg_input')};
                 border-bottom: 2px solid #5865F2;
-            }
+            }}
         """
         self._subtab_buttons = []
         tab_names = ["🔲 모자이크", "🎨 색감", "🔧 고급색감", "💧 워터마크", "✏️ 그리기", "✂️ 이동"]
@@ -173,7 +174,7 @@ class MosaicEditor(QWidget):
         # 구분선
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #333;")
+        sep.setStyleSheet(f"color: {get_color('border')};")
         bt_layout.addWidget(sep)
 
         # 스택 위젯

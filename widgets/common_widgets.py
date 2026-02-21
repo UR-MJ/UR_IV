@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QDoubleSpinBox
 )
 from PyQt6.QtCore import Qt, QObject, QEvent, pyqtSignal, QRect, QSize, Qt
+from utils.theme_manager import get_color
 
 class WheelEventFilter(QObject):
     """마우스 휠 이벤트 필터"""
@@ -70,8 +71,8 @@ class ResolutionItemWidget(QWidget):
         self.info_label = QLabel(text)
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.info_label.setStyleSheet(
-            "font-size: 10pt; color: #ccc; border: 1px solid #444; "
-            "border-radius: 6px; background-color: #252525;"
+            f"font-size: 10pt; color: {get_color('text_secondary')}; border: 1px solid {get_color('border')}; "
+            f"border-radius: 6px; background-color: {get_color('bg_tertiary')};"
         )
         
         layout.addWidget(delete_button)
@@ -85,31 +86,31 @@ class AutomationWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        self.setStyleSheet("""
-            QWidget { 
-                background-color: #232323; border-radius: 8px; 
-            }
-            QLabel { 
-                font-size: 12px; color: #CCC; border: none; 
-            }
-            QLineEdit { 
-                padding: 4px; border-radius: 4px; 
-                background-color: #333; color: white; 
-                border: 1px solid #555; font-size: 12px;
-            }
-            QCheckBox { 
-                font-size: 12px; spacing: 5px; color: #CCC; 
-            }
-            QPushButton {
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {get_color('bg_tertiary')}; border-radius: 8px;
+            }}
+            QLabel {{
+                font-size: 12px; color: {get_color('text_secondary')}; border: none;
+            }}
+            QLineEdit {{
+                padding: 4px; border-radius: 4px;
+                background-color: {get_color('bg_button')}; color: {get_color('text_primary')};
+                border: 1px solid {get_color('border')}; font-size: 12px;
+            }}
+            QCheckBox {{
+                font-size: 12px; spacing: 5px; color: {get_color('text_secondary')};
+            }}
+            QPushButton {{
                 font-size: 12px; font-weight: bold; padding: 6px;
-                border-radius: 4px; background-color: #444; 
-                color: #AAA; border: 1px solid #555;
-            }
-            QPushButton:checked {
-                background-color: #27ae60; color: white; 
+                border-radius: 4px; background-color: {get_color('bg_button')};
+                color: {get_color('text_secondary')}; border: 1px solid {get_color('border')};
+            }}
+            QPushButton:checked {{
+                background-color: #27ae60; color: white;
                 border: 1px solid #2ecc71;
-            }
-            QPushButton:hover { background-color: #555; }
+            }}
+            QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
         """)
 
         layout = QVBoxLayout(self)  # ← self.layout 대신 layout 사용
@@ -210,22 +211,22 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("환경 설정")
         self.setFixedSize(400, 200)
-        self.setStyleSheet("""
-            QDialog { 
-                background-color: #1E1E1E; color: #E0E0E0; 
-            }
-            QLabel { 
-                color: #E0E0E0; font-weight: bold; 
-            }
-            QLineEdit { 
-                background-color: #2C2C2C; border: 1px solid #3E3E3E; 
-                color: white; padding: 5px; border-radius: 4px; 
-            }
-            QPushButton { 
-                background-color: #5865F2; color: white; 
-                border-radius: 4px; padding: 8px; 
-            }
-            QPushButton:hover { background-color: #4752C4; }
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')};
+            }}
+            QLabel {{
+                color: {get_color('text_primary')}; font-weight: bold;
+            }}
+            QLineEdit {{
+                background-color: {get_color('bg_input')}; border: 1px solid {get_color('border')};
+                color: {get_color('text_primary')}; padding: 5px; border-radius: 4px;
+            }}
+            QPushButton {{
+                background-color: {get_color('accent')}; color: white;
+                border-radius: 4px; padding: 8px;
+            }}
+            QPushButton:hover {{ background-color: #4752C4; }}
         """)
         
         layout = QVBoxLayout(self)
@@ -247,7 +248,7 @@ class SettingsDialog(QDialog):
         btn_layout = QHBoxLayout()
         self.btn_save = QPushButton("저장")
         self.btn_cancel = QPushButton("취소")
-        self.btn_cancel.setStyleSheet("background-color: #444;")
+        self.btn_cancel.setStyleSheet(f"background-color: {get_color('bg_button')};")
         
         self.btn_save.clicked.connect(self.accept)
         self.btn_cancel.clicked.connect(self.reject)

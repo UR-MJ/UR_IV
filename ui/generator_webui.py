@@ -14,6 +14,7 @@ from PyQt6.QtGui import QFont, QIcon, QPixmap
 
 from backends import get_backend, set_backend, get_backend_type, BackendType
 from workers.generation_worker import WebUIInfoWorker
+from utils.theme_manager import get_color
 
 
 class WebUIMixin:
@@ -34,22 +35,22 @@ class WebUIMixin:
         dialog.setWindowFlags(
             dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )
-        dialog.setStyleSheet("""
-            QDialog { background-color: #1a1a1a; color: #ddd; }
-            QGroupBox {
-                border: 1px solid #333; border-radius: 8px;
+        dialog.setStyleSheet(f"""
+            QDialog {{ background-color: {get_color('bg_primary')}; color: {get_color('text_primary')}; }}
+            QGroupBox {{
+                border: 1px solid {get_color('border')}; border-radius: 8px;
                 margin-top: 12px; padding: 16px; padding-top: 28px;
-                font-weight: bold; color: #ccc;
-            }
-            QGroupBox::title {
+                font-weight: bold; color: {get_color('text_secondary')};
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin; left: 16px; padding: 0 8px;
-            }
-            QLineEdit {
-                background: #252525; border: 1px solid #444; border-radius: 4px;
-                padding: 6px 10px; color: #ddd;
-            }
-            QLineEdit:focus { border: 1px solid #5865F2; }
-            QLabel { color: #aaa; }
+            }}
+            QLineEdit {{
+                background: {get_color('bg_input')}; border: 1px solid {get_color('border')}; border-radius: 4px;
+                padding: 6px 10px; color: {get_color('text_primary')};
+            }}
+            QLineEdit:focus {{ border: 1px solid {get_color('accent')}; }}
+            QLabel {{ color: {get_color('text_secondary')}; }}
         """)
 
         layout = QVBoxLayout(dialog)
@@ -58,12 +59,12 @@ class WebUIMixin:
 
         # 헤더
         header = QLabel("🚀 AI Studio Pro")
-        header.setStyleSheet("color: #fff; font-size: 18px; font-weight: bold;")
+        header.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 18px; font-weight: bold;")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
 
         sub_header = QLabel("사용할 이미지 생성 백엔드를 선택하세요")
-        sub_header.setStyleSheet("color: #aaa; font-size: 13px;")
+        sub_header.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 13px;")
         sub_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(sub_header)
 
@@ -139,11 +140,11 @@ class WebUIMixin:
         h_wf.addWidget(workflow_input)
         btn_browse = QPushButton("...")
         btn_browse.setFixedWidth(36)
-        btn_browse.setStyleSheet("""
-            QPushButton {
-                background: #333; border: 1px solid #555; border-radius: 4px; color: #ddd;
-            }
-            QPushButton:hover { background: #444; }
+        btn_browse.setStyleSheet(f"""
+            QPushButton {{
+                background: {get_color('bg_button')}; border: 1px solid {get_color('border')}; border-radius: 4px; color: {get_color('text_primary')};
+            }}
+            QPushButton:hover {{ background: {get_color('bg_button_hover')}; }}
         """)
         h_wf.addWidget(btn_browse)
         cg_layout.addLayout(h_wf)
@@ -241,17 +242,17 @@ class WebUIMixin:
             confirm.setDefaultButton(QMessageBox.StandardButton.Yes)
 
             # 버튼 스타일
-            confirm.setStyleSheet("""
-                QMessageBox { background-color: #1a1a1a; color: #ddd; }
-                QLabel { color: #ddd; font-size: 13px; }
-                QPushButton {
-                    background: #333; border: 1px solid #555; border-radius: 4px;
-                    padding: 8px 20px; color: #ddd; min-width: 80px;
-                }
-                QPushButton:hover { background: #444; }
-                QPushButton:default {
-                    background: #5865F2; border: none; color: white;
-                }
+            confirm.setStyleSheet(f"""
+                QMessageBox {{ background-color: {get_color('bg_primary')}; color: {get_color('text_primary')}; }}
+                QLabel {{ color: {get_color('text_primary')}; font-size: 13px; }}
+                QPushButton {{
+                    background: {get_color('bg_button')}; border: 1px solid {get_color('border')}; border-radius: 4px;
+                    padding: 8px 20px; color: {get_color('text_primary')}; min-width: 80px;
+                }}
+                QPushButton:hover {{ background: {get_color('bg_button_hover')}; }}
+                QPushButton:default {{
+                    background: {get_color('accent')}; border: none; color: white;
+                }}
             """)
 
             if confirm.exec() == QMessageBox.StandardButton.Yes:
@@ -342,12 +343,12 @@ class WebUIMixin:
         btn_row = QHBoxLayout()
         btn_skip = QPushButton("⏭️ 건너뛰기")
         btn_skip.setToolTip("백엔드 연결 없이 UI 시작")
-        btn_skip.setStyleSheet("""
-            QPushButton {
-                background: #2a2a2a; border: 1px solid #444; border-radius: 6px;
-                padding: 10px 24px; color: #888;
-            }
-            QPushButton:hover { background: #333; color: #aaa; }
+        btn_skip.setStyleSheet(f"""
+            QPushButton {{
+                background: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')}; border-radius: 6px;
+                padding: 10px 24px; color: {get_color('text_muted')};
+            }}
+            QPushButton:hover {{ background: {get_color('bg_button')}; color: {get_color('text_secondary')}; }}
         """)
 
         # 건너뛰기 플래그
@@ -618,47 +619,47 @@ class WebUIMixin:
         dialog = QDialog(self)
         dialog.setWindowTitle("API 백엔드 관리")
         dialog.setMinimumWidth(480)
-        dialog.setStyleSheet("""
-            QDialog { background-color: #1e1e1e; color: #ddd; }
-            QGroupBox {
-                border: 1px solid #444; border-radius: 8px;
+        dialog.setStyleSheet(f"""
+            QDialog {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; }}
+            QGroupBox {{
+                border: 1px solid {get_color('border')}; border-radius: 8px;
                 margin-top: 14px; padding: 14px; padding-top: 28px;
-                font-weight: bold; color: #ccc; font-size: 13px;
-            }
-            QGroupBox::title {
+                font-weight: bold; color: {get_color('text_secondary')}; font-size: 13px;
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin; left: 14px; padding: 0 8px;
-            }
-            QGroupBox:!enabled {
-                border-color: #333; color: #666;
-            }
-            QLabel { color: #bbb; }
-            QLabel:disabled { color: #555; }
-            QLineEdit {
-                background: #252525; border: 1px solid #444; border-radius: 4px;
-                padding: 6px 10px; color: #ddd; font-size: 12px;
-            }
-            QLineEdit:focus { border: 1px solid #5865F2; }
-            QLineEdit:disabled { background: #1a1a1a; color: #555; border-color: #333; }
-            QRadioButton {
-                color: #ccc; spacing: 8px; font-size: 13px; padding: 6px 4px;
-            }
-            QRadioButton::indicator {
+            }}
+            QGroupBox:!enabled {{
+                border-color: {get_color('border')}; color: {get_color('disabled_text')};
+            }}
+            QLabel {{ color: {get_color('text_secondary')}; }}
+            QLabel:disabled {{ color: {get_color('disabled_text')}; }}
+            QLineEdit {{
+                background: {get_color('bg_input')}; border: 1px solid {get_color('border')}; border-radius: 4px;
+                padding: 6px 10px; color: {get_color('text_primary')}; font-size: 12px;
+            }}
+            QLineEdit:focus {{ border: 1px solid {get_color('accent')}; }}
+            QLineEdit:disabled {{ background: {get_color('disabled_bg')}; color: {get_color('disabled_text')}; border-color: {get_color('border')}; }}
+            QRadioButton {{
+                color: {get_color('text_secondary')}; spacing: 8px; font-size: 13px; padding: 6px 4px;
+            }}
+            QRadioButton::indicator {{
                 width: 18px; height: 18px; border-radius: 9px;
-                border: 2px solid #666; background: #252525;
-            }
-            QRadioButton::indicator:hover {
-                border-color: #5865F2;
-            }
-            QRadioButton::indicator:checked {
-                border-color: #5865F2; background: #5865F2;
-            }
-            QRadioButton:hover { color: #fff; }
-            QPushButton {
-                background: #333; border: 1px solid #555; border-radius: 5px;
-                padding: 6px 16px; color: #ddd; font-size: 12px;
-            }
-            QPushButton:hover { background: #444; border-color: #666; }
-            QPushButton:pressed { background: #2a2a2a; }
+                border: 2px solid {get_color('text_muted')}; background: {get_color('bg_input')};
+            }}
+            QRadioButton::indicator:hover {{
+                border-color: {get_color('accent')};
+            }}
+            QRadioButton::indicator:checked {{
+                border-color: {get_color('accent')}; background: {get_color('accent')};
+            }}
+            QRadioButton:hover {{ color: {get_color('text_primary')}; }}
+            QPushButton {{
+                background: {get_color('bg_button')}; border: 1px solid {get_color('border')}; border-radius: 5px;
+                padding: 6px 16px; color: {get_color('text_primary')}; font-size: 12px;
+            }}
+            QPushButton:hover {{ background: {get_color('bg_button_hover')}; border-color: {get_color('text_muted')}; }}
+            QPushButton:pressed {{ background: {get_color('bg_tertiary')}; }}
         """)
         main_layout = QVBoxLayout(dialog)
         main_layout.setContentsMargins(20, 16, 20, 16)
@@ -712,8 +713,8 @@ class WebUIMixin:
         wf_preview_label = QLabel("")
         wf_preview_label.setWordWrap(True)
         wf_preview_label.setStyleSheet(
-            "font-size: 11px; padding: 6px; background: #252525; "
-            "border: 1px solid #333; border-radius: 4px;"
+            f"font-size: 11px; padding: 6px; background: {get_color('bg_input')}; "
+            f"border: 1px solid {get_color('border')}; border-radius: 4px;"
         )
         wf_preview_label.hide()
 
@@ -727,8 +728,8 @@ class WebUIMixin:
             info = analyze_workflow(path)
             if info.get('error') and not info.get('valid'):
                 wf_preview_label.setStyleSheet(
-                    "font-size: 11px; padding: 6px; background: #3a1a1a; "
-                    "border: 1px solid #f87171; border-radius: 4px; color: #f87171;"
+                    f"font-size: 11px; padding: 6px; background: {get_color('bg_input')}; "
+                    f"border: 1px solid #f87171; border-radius: 4px; color: #f87171;"
                 )
                 wf_preview_label.setText(f"❌ {info['error']}")
             else:
@@ -744,8 +745,8 @@ class WebUIMixin:
                 if info.get('error'):
                     lines.append(f"⚠️ 경고: {info['error']}")
                 wf_preview_label.setStyleSheet(
-                    "font-size: 11px; padding: 6px; background: #1a2a1a; "
-                    "border: 1px solid #4ade80; border-radius: 4px; color: #4ade80;"
+                    f"font-size: 11px; padding: 6px; background: {get_color('bg_input')}; "
+                    f"border: 1px solid #4ade80; border-radius: 4px; color: #4ade80;"
                 )
                 wf_preview_label.setText("\n".join(lines))
             wf_preview_label.show()
@@ -815,13 +816,13 @@ class WebUIMixin:
 
         btn_apply = QPushButton("✅ 적용")
         btn_apply.setFixedHeight(35)
-        btn_apply.setStyleSheet("""
-            QPushButton {
-                background: #5865F2; border: none; border-radius: 5px;
+        btn_apply.setStyleSheet(f"""
+            QPushButton {{
+                background: {get_color('accent')}; border: none; border-radius: 5px;
                 color: white; font-weight: bold; font-size: 13px;
-            }
-            QPushButton:hover { background: #6975FF; }
-            QPushButton:pressed { background: #4752C4; }
+            }}
+            QPushButton:hover {{ background: #6975FF; }}
+            QPushButton:pressed {{ background: #4752C4; }}
         """)
 
         def apply_settings():

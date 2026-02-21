@@ -8,79 +8,81 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont
+from utils.theme_manager import get_color
 
 
-_DARK_STYLE = """
-QDialog {
-    background-color: #1E1E1E;
-    color: #DDD;
-}
-QLabel {
-    color: #CCC;
-}
-QListWidget {
-    background-color: #252525;
-    color: #DDD;
-    border: 1px solid #444;
+def _get_dark_style():
+    return f"""
+QDialog {{
+    background-color: {get_color('bg_secondary')};
+    color: {get_color('text_primary')};
+}}
+QLabel {{
+    color: {get_color('text_primary')};
+}}
+QListWidget {{
+    background-color: {get_color('bg_tertiary')};
+    color: {get_color('text_primary')};
+    border: 1px solid {get_color('border')};
     border-radius: 6px;
     padding: 4px;
     font-size: 13px;
     outline: none;
-}
-QListWidget::item {
+}}
+QListWidget::item {{
     padding: 8px 10px;
     border-radius: 4px;
-}
-QListWidget::item:selected {
-    background-color: #5865F2;
+}}
+QListWidget::item:selected {{
+    background-color: {get_color('accent')};
     color: white;
-}
-QListWidget::item:hover {
-    background-color: #333;
-}
-QLineEdit {
-    background-color: #2A2A2A;
-    color: #DDD;
-    border: 1px solid #444;
+}}
+QListWidget::item:hover {{
+    background-color: {get_color('bg_button')};
+}}
+QLineEdit {{
+    background-color: {get_color('bg_input')};
+    color: {get_color('text_primary')};
+    border: 1px solid {get_color('border')};
     border-radius: 4px;
     padding: 6px 8px;
     font-size: 13px;
-}
-QLineEdit:focus {
-    border: 1px solid #5865F2;
-}
-QTextEdit {
-    background-color: #2A2A2A;
-    color: #DDD;
-    border: 1px solid #444;
+}}
+QLineEdit:focus {{
+    border: 1px solid {get_color('accent')};
+}}
+QTextEdit {{
+    background-color: {get_color('bg_input')};
+    color: {get_color('text_primary')};
+    border: 1px solid {get_color('border')};
     border-radius: 4px;
     padding: 4px;
     font-size: 12px;
-}
-QTextEdit:focus {
-    border: 1px solid #5865F2;
-}
-QCheckBox {
-    color: #BBB;
+}}
+QTextEdit:focus {{
+    border: 1px solid {get_color('accent')};
+}}
+QCheckBox {{
+    color: {get_color('text_secondary')};
     spacing: 6px;
     font-size: 12px;
     font-weight: bold;
-}
-QCheckBox::indicator {
+}}
+QCheckBox::indicator {{
     width: 16px;
     height: 16px;
     border-radius: 3px;
-    border: 1px solid #555;
-    background-color: #2A2A2A;
-}
-QCheckBox::indicator:checked {
-    background-color: #5865F2;
-    border: 1px solid #5865F2;
-}
-QScrollArea {
+    border: 1px solid {get_color('border')};
+    background-color: {get_color('bg_input')};
+}}
+QCheckBox::indicator:checked {{
+    background-color: {get_color('accent')};
+    border: 1px solid {get_color('accent')};
+}}
+QScrollArea {{
     border: none;
     background-color: transparent;
-}
+}}
 """
 
 _FIELD_DEFS = [
@@ -102,7 +104,7 @@ class PresetPreviewDialog(QDialog):
         self.setWindowTitle("프리셋 불러오기")
         self.setMinimumSize(900, 620)
         self.resize(960, 680)
-        self.setStyleSheet(_DARK_STYLE)
+        self.setStyleSheet(_get_dark_style())
 
         self._selected_name: str | None = None
         self._result_data: dict | None = None
@@ -118,13 +120,13 @@ class PresetPreviewDialog(QDialog):
 
         # 상단 제목
         title = QLabel("프리셋 불러오기")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #EEE; padding: 2px 0;")
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {get_color('text_primary')}; padding: 2px 0;")
         root.addWidget(title)
 
         # ── 본체: 좌측 목록 | 우측 편집 ──
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(4)
-        splitter.setStyleSheet("QSplitter::handle { background-color: #333; }")
+        splitter.setStyleSheet(f"QSplitter::handle {{ background-color: {get_color('border')}; }}")
 
         # 좌측 — 프리셋 목록
         left = QWidget()
@@ -194,7 +196,7 @@ class PresetPreviewDialog(QDialog):
         # ── 구분선 ──
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("color: #333;")
+        line.setStyleSheet(f"color: {get_color('border')};")
         root.addWidget(line)
 
         # ── 하단 버튼 ──
@@ -204,10 +206,10 @@ class PresetPreviewDialog(QDialog):
         self._btn_delete = QPushButton("삭제")
         self._btn_delete.setFixedSize(100, 38)
         self._btn_delete.setStyleSheet(
-            "QPushButton { background-color: #E74C3C; color: white; border-radius: 6px; "
-            "font-weight: bold; font-size: 13px; }"
-            "QPushButton:hover { background-color: #C0392B; }"
-            "QPushButton:disabled { background-color: #555; color: #888; }"
+            f"QPushButton {{ background-color: #E74C3C; color: white; border-radius: 6px; "
+            f"font-weight: bold; font-size: 13px; }}"
+            f"QPushButton:hover {{ background-color: #C0392B; }}"
+            f"QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}"
         )
         self._btn_delete.clicked.connect(self._on_delete)
         self._btn_delete.setEnabled(False)
@@ -218,10 +220,10 @@ class PresetPreviewDialog(QDialog):
         self._btn_apply = QPushButton("적용")
         self._btn_apply.setFixedSize(120, 38)
         self._btn_apply.setStyleSheet(
-            "QPushButton { background-color: #5865F2; color: white; border-radius: 6px; "
-            "font-weight: bold; font-size: 14px; }"
-            "QPushButton:hover { background-color: #6975F3; }"
-            "QPushButton:disabled { background-color: #555; color: #888; }"
+            f"QPushButton {{ background-color: {get_color('accent')}; color: white; border-radius: 6px; "
+            f"font-weight: bold; font-size: 14px; }}"
+            f"QPushButton:hover {{ background-color: #6975F3; }}"
+            f"QPushButton:disabled {{ background-color: {get_color('border')}; color: {get_color('text_muted')}; }}"
         )
         self._btn_apply.clicked.connect(self._on_apply)
         self._btn_apply.setEnabled(False)
@@ -229,9 +231,9 @@ class PresetPreviewDialog(QDialog):
         btn_close = QPushButton("닫기")
         btn_close.setFixedSize(100, 38)
         btn_close.setStyleSheet(
-            "QPushButton { background-color: #444; color: #DDD; border-radius: 6px; "
-            "font-weight: bold; font-size: 13px; }"
-            "QPushButton:hover { background-color: #555; }"
+            f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 6px; "
+            f"font-weight: bold; font-size: 13px; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
         )
         btn_close.clicked.connect(self.reject)
 

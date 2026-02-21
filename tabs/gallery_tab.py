@@ -29,7 +29,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QThread, QTimer, QEvent, QMimeDa
 from widgets.common_widgets import FlowLayout, NoScrollComboBox
 from core.database import MetadataManager, normalize_path
 from workers.gallery_worker import GalleryScanWorker, GalleryCacheWorker, IMAGE_EXTENSIONS
-from utils.theme_manager import get_theme_manager
+from utils.theme_manager import get_theme_manager, get_color
 
 try:
     from watchdog.observers import Observer
@@ -103,7 +103,7 @@ class ImagePreviewDialog(QDialog):
         self.setWindowTitle(os.path.basename(image_path))
         self.setMinimumSize(1000, 700)
         self.resize(1400, 900)
-        self.setStyleSheet("background-color: #1E1E1E; color: #EEE;")
+        self.setStyleSheet(f"background-color: {get_color('bg_primary')}; color: {get_color('text_primary')};")
 
         self._init_ui()
 
@@ -122,7 +122,7 @@ class ImagePreviewDialog(QDialog):
 
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setStyleSheet("background-color: #111; border-radius: 6px;")
+        self.image_label.setStyleSheet(f"background-color: {get_color('bg_secondary')}; border-radius: 6px;")
         self.image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         pix = QPixmap(self.image_path)
@@ -133,7 +133,7 @@ class ImagePreviewDialog(QDialog):
 
         # 파일 경로 표시
         path_label = QLabel(self.image_path)
-        path_label.setStyleSheet("color: #888; font-size: 11px; padding: 2px;")
+        path_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px; padding: 2px;")
         path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         img_layout.addWidget(path_label)
 
@@ -147,14 +147,14 @@ class ImagePreviewDialog(QDialog):
 
         info_header = QLabel("생성 정보 (EXIF)")
         info_header.setStyleSheet(
-            "color: #AAA; font-size: 13px; font-weight: bold; padding: 4px;"
+            f"color: {get_color('text_secondary')}; font-size: 13px; font-weight: bold; padding: 4px;"
         )
         info_layout.addWidget(info_header)
 
         self.info_text = QTextEdit()
         self.info_text.setReadOnly(True)
         self.info_text.setStyleSheet(
-            "background-color: #252525; color: #DDD; border: 1px solid #444; "
+            f"background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; padding: 8px;"
         )
         if self.exif_text:
@@ -174,7 +174,7 @@ class ImagePreviewDialog(QDialog):
             "background-color: #5865F2; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
             if has_prompt else
-            "background-color: #333; color: #666; border-radius: 4px; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; border-radius: 4px; "
             "font-size: 13px;"
         )
         btn_send.clicked.connect(self._on_send_prompt)
@@ -188,7 +188,7 @@ class ImagePreviewDialog(QDialog):
             "background-color: #43B581; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
             if has_prompt else
-            "background-color: #333; color: #666; border-radius: 4px; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; border-radius: 4px; "
             "font-size: 13px;"
         )
         btn_gen.clicked.connect(self._on_generate)
@@ -202,7 +202,7 @@ class ImagePreviewDialog(QDialog):
             "background-color: #E67E22; color: white; border-radius: 4px; "
             "font-size: 13px; font-weight: bold;"
             if has_prompt else
-            "background-color: #333; color: #666; border-radius: 4px; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; border-radius: 4px; "
             "font-size: 13px;"
         )
         btn_queue.clicked.connect(self._on_send_to_queue)
@@ -222,7 +222,7 @@ class ImagePreviewDialog(QDialog):
         btn_close.setFixedHeight(35)
         btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         btn_close.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border-radius: 4px; font-size: 13px;"
         )
         btn_close.clicked.connect(self.close)
         info_layout.addWidget(btn_close)
@@ -474,14 +474,14 @@ class ThumbnailWidget(QFrame):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2C2C2C; color: #EEE; border: 1px solid #555;
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')};
                 font-size: 13px; padding: 4px;
-            }
-            QMenu::item { padding: 6px 20px; }
-            QMenu::item:selected { background-color: #5865F2; }
-            QMenu::separator { height: 1px; background: #555; margin: 4px 8px; }
+            }}
+            QMenu::item {{ padding: 6px 20px; }}
+            QMenu::item:selected {{ background-color: #5865F2; }}
+            QMenu::separator {{ height: 1px; background: {get_color('border')}; margin: 4px 8px; }}
         """)
 
         act_open_explorer = menu.addAction("📂 탐색기에서 열기")
@@ -644,7 +644,7 @@ class GalleryTab(QWidget):
         top_bar.addWidget(self.btn_folder)
 
         self.label_folder = QLabel("폴더를 선택하세요")
-        self.label_folder.setStyleSheet("color: #888; font-size: 12px;")
+        self.label_folder.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
         self.label_folder.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         top_bar.addWidget(self.label_folder)
 
@@ -682,7 +682,7 @@ class GalleryTab(QWidget):
         self.search_input.setPlaceholderText("검색 (파일명 + EXIF, 공백으로 AND 검색)...")
         self.search_input.setFixedHeight(35)
         self.search_input.setStyleSheet(
-            "background-color: #2C2C2C; color: #EEE; border: 1px solid #555; "
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 0 8px; font-size: 13px;"
         )
         self.search_input.returnPressed.connect(self._on_search)
@@ -702,7 +702,7 @@ class GalleryTab(QWidget):
         self.btn_reset.setFixedSize(70, 35)
         self.btn_reset.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_reset.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border-radius: 4px; font-size: 13px;"
         )
         self.btn_reset.clicked.connect(self._on_reset_search)
         search_bar.addWidget(self.btn_reset)
@@ -744,7 +744,7 @@ class GalleryTab(QWidget):
         self.btn_reset_filter = QPushButton("초기화")
         self.btn_reset_filter.setFixedSize(60, 30)
         self.btn_reset_filter.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; font-size: 12px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border-radius: 4px; font-size: 12px;"
         )
         self.btn_reset_filter.clicked.connect(self._on_reset_tag_filter)
         filter_layout.addWidget(self.btn_reset_filter)
@@ -772,12 +772,12 @@ class GalleryTab(QWidget):
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(20)
         self.progress_bar.setTextVisible(True)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: #2C2C2C; border: 1px solid #555;
-                border-radius: 4px; text-align: center; color: #AAA; font-size: 11px;
-            }
-            QProgressBar::chunk { background-color: #5865F2; border-radius: 3px; }
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background-color: {get_color('bg_input')}; border: 1px solid {get_color('border')};
+                border-radius: 4px; text-align: center; color: {get_color('text_secondary')}; font-size: 11px;
+            }}
+            QProgressBar::chunk {{ background-color: #5865F2; border-radius: 3px; }}
         """)
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
@@ -787,8 +787,8 @@ class GalleryTab(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll_area.setStyleSheet("""
-            QScrollArea { background-color: #1E1E1E; border: 1px solid #333; border-radius: 4px; }
+        self.scroll_area.setStyleSheet(f"""
+            QScrollArea {{ background-color: {get_color('bg_primary')}; border: 1px solid {get_color('border')}; border-radius: 4px; }}
         """)
 
         self.grid_container = QWidget()
@@ -810,7 +810,7 @@ class GalleryTab(QWidget):
         self.btn_prev.setFixedSize(80, 35)
         self.btn_prev.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_prev.setStyleSheet(
-            "background-color: #333; color: #DDD; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 4px; font-size: 13px;"
         )
         self.btn_prev.clicked.connect(self._on_prev_page)
         bottom_bar.addWidget(self.btn_prev)
@@ -866,7 +866,7 @@ class GalleryTab(QWidget):
         self.btn_batch_clear.setFixedSize(80, 35)
         self.btn_batch_clear.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_batch_clear.setStyleSheet(
-            "background-color: #555; color: #DDD; border-radius: 4px; font-size: 12px;"
+            f"background-color: {get_color('border')}; color: {get_color('text_primary')}; border-radius: 4px; font-size: 12px;"
         )
         self.btn_batch_clear.clicked.connect(self._clear_multi_select)
         self.btn_batch_clear.hide()
@@ -875,7 +875,7 @@ class GalleryTab(QWidget):
         bottom_bar.addStretch()
 
         self.label_page = QLabel("페이지 0/0 (총 0개)")
-        self.label_page.setStyleSheet("color: #AAA; font-size: 13px;")
+        self.label_page.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 13px;")
         self.label_page.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bottom_bar.addWidget(self.label_page)
 
@@ -885,7 +885,7 @@ class GalleryTab(QWidget):
         self.btn_next.setFixedSize(80, 35)
         self.btn_next.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_next.setStyleSheet(
-            "background-color: #333; color: #DDD; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border-radius: 4px; font-size: 13px;"
         )
         self.btn_next.clicked.connect(self._on_next_page)
         bottom_bar.addWidget(self.btn_next)
@@ -897,21 +897,21 @@ class GalleryTab(QWidget):
         self.grid_slider.setValue(self.DEFAULT_COLS)
         self.grid_slider.setFixedWidth(120)
         self.grid_slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.grid_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                background: #333; height: 6px; border-radius: 3px;
-            }
-            QSlider::handle:horizontal {
+        self.grid_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{
+                background: {get_color('bg_button')}; height: 6px; border-radius: 3px;
+            }}
+            QSlider::handle:horizontal {{
                 background: #5865F2; width: 14px; height: 14px;
                 margin: -4px 0; border-radius: 7px;
-            }
+            }}
         """)
         self.grid_slider.valueChanged.connect(self._on_grid_size_changed)
         bottom_bar.addWidget(self.grid_slider)
 
         self.label_grid_size = QLabel(f"{self.DEFAULT_COLS}열")
         self.label_grid_size.setFixedWidth(30)
-        self.label_grid_size.setStyleSheet("color: #AAA; font-size: 11px;")
+        self.label_grid_size.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 11px;")
         bottom_bar.addWidget(self.label_grid_size)
 
         layout.addLayout(bottom_bar)
@@ -923,7 +923,7 @@ class GalleryTab(QWidget):
             return
         self._current_folder = folder
         self.label_folder.setText(folder)
-        self.label_folder.setStyleSheet("color: #DDD; font-size: 12px;")
+        self.label_folder.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 12px;")
         self._start_scan(folder)
 
     def _on_select_folder(self):
@@ -932,7 +932,7 @@ class GalleryTab(QWidget):
             return
         self._current_folder = folder
         self.label_folder.setText(folder)
-        self.label_folder.setStyleSheet("color: #DDD; font-size: 12px;")
+        self.label_folder.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 12px;")
         self._start_scan(folder)
 
     def _start_scan(self, folder: str):
@@ -1794,15 +1794,15 @@ class SlideshowDialog(QDialog):
         self._btn_next = QPushButton("▶")
         self._btn_close = QPushButton("✕ 닫기")
         self._lbl_counter = QLabel("1 / 1")
-        self._lbl_counter.setStyleSheet("color: #CCC; font-size: 13px;")
+        self._lbl_counter.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 13px;")
 
         for btn in [self._btn_prev, self._btn_pause, self._btn_next, self._btn_close]:
             btn.setFixedHeight(35)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.setStyleSheet(
-                "QPushButton { background-color: #333; color: #EEE; "
+                f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; "
                 "border-radius: 4px; padding: 0 12px; font-size: 13px; }"
-                "QPushButton:hover { background-color: #555; }"
+                f"QPushButton:hover {{ background-color: {get_color('border')}; }}"
             )
 
         self._btn_prev.clicked.connect(self._prev)

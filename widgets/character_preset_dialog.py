@@ -7,48 +7,50 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 from widgets.common_widgets import FlowLayout
+from utils.theme_manager import get_color
 
 
-_STYLE = """
-QDialog { background-color: #1E1E1E; color: #DDD; }
-QLabel { color: #CCC; }
-QLineEdit {
-    background-color: #2A2A2A; color: #DDD;
-    border: 1px solid #444; border-radius: 6px;
+def _get_style():
+    return f"""
+QDialog {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')}; }}
+QLabel {{ color: {get_color('text_primary')}; }}
+QLineEdit {{
+    background-color: {get_color('bg_input')}; color: {get_color('text_primary')};
+    border: 1px solid {get_color('border')}; border-radius: 6px;
     padding: 8px 12px; font-size: 13px;
-}
-QLineEdit:focus { border: 1px solid #5865F2; }
-QTextEdit {
-    background-color: #2A2A2A; color: #DDD;
-    border: 1px solid #444; border-radius: 6px;
+}}
+QLineEdit:focus {{ border: 1px solid {get_color('accent')}; }}
+QTextEdit {{
+    background-color: {get_color('bg_input')}; color: {get_color('text_primary')};
+    border: 1px solid {get_color('border')}; border-radius: 6px;
     padding: 6px 10px; font-size: 12px;
-}
-QTextEdit:focus { border: 1px solid #5865F2; }
-QGroupBox {
-    color: #CCC; font-weight: bold; font-size: 12px;
-    border: 1px solid #444; border-radius: 6px;
+}}
+QTextEdit:focus {{ border: 1px solid {get_color('accent')}; }}
+QGroupBox {{
+    color: {get_color('text_primary')}; font-weight: bold; font-size: 12px;
+    border: 1px solid {get_color('border')}; border-radius: 6px;
     margin-top: 8px; padding-top: 16px;
-}
-QGroupBox::title {
+}}
+QGroupBox::title {{
     subcontrol-origin: margin;
     padding: 0 6px;
-}
-QListWidget {
-    background-color: #252525; color: #DDD;
-    border: 1px solid #333; border-radius: 6px;
+}}
+QListWidget {{
+    background-color: {get_color('bg_tertiary')}; color: {get_color('text_primary')};
+    border: 1px solid {get_color('border')}; border-radius: 6px;
     font-size: 12px; padding: 4px;
     outline: 0;
-}
-QListWidget::item {
+}}
+QListWidget::item {{
     padding: 6px 8px; border-radius: 4px;
-}
-QListWidget::item:selected {
-    background-color: #5865F2; color: white;
-}
-QListWidget::item:hover {
-    background-color: #333;
-}
-QScrollArea { border: none; }
+}}
+QListWidget::item:selected {{
+    background-color: {get_color('accent')}; color: white;
+}}
+QListWidget::item:hover {{
+    background-color: {get_color('bg_button')};
+}}
+QScrollArea {{ border: none; }}
 """
 
 _TAG_CHECKED = (
@@ -57,17 +59,19 @@ _TAG_CHECKED = (
     "font-size: 11px; font-weight: bold; }"
     "QPushButton:hover { background-color: #6975F3; }"
 )
-_TAG_UNCHECKED = (
-    "QPushButton { background-color: #333; color: #777; "
-    "border: none; border-radius: 11px; padding: 4px 12px; "
-    "font-size: 11px; text-decoration: line-through; }"
-    "QPushButton:hover { background-color: #444; }"
-)
-_TAG_EXISTS = (
-    "QPushButton { background-color: #2C2C2C; color: #555; "
-    "border: 1px solid #3A3A3A; border-radius: 11px; padding: 4px 12px; "
-    "font-size: 11px; }"
-)
+def _tag_unchecked():
+    return (
+        f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; "
+        f"border: none; border-radius: 11px; padding: 4px 12px; "
+        f"font-size: 11px; text-decoration: line-through; }}"
+        f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
+    )
+def _tag_exists():
+    return (
+        f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; "
+        f"border: 1px solid {get_color('border')}; border-radius: 11px; padding: 4px 12px; "
+        f"font-size: 11px; }}"
+    )
 _TAG_CUSTOM = (
     "QPushButton { background-color: #D35400; color: white; "
     "border: none; border-radius: 11px; padding: 4px 12px; "
@@ -96,7 +100,7 @@ class CharacterPresetDialog(QDialog):
         self.setWindowTitle("캐릭터 특징 프리셋")
         self.setMinimumSize(1100, 800)
         self.resize(1250, 900)
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_get_style())
 
         self._existing_tags = existing_tags or set()
         self._lookup = None
@@ -128,14 +132,14 @@ class CharacterPresetDialog(QDialog):
 
         # 타이틀
         title = QLabel("캐릭터 특징 프리셋")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #EEE;")
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {get_color('text_primary')};")
         root.addWidget(title)
 
         desc = QLabel(
             "캐릭터를 검색하고 특징 태그를 선택하여 프롬프트에 삽입합니다. "
             "커스텀 프롬프트도 태그로 추가하여 on/off 할 수 있습니다."
         )
-        desc.setStyleSheet("color: #888; font-size: 12px;")
+        desc.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
         root.addWidget(desc)
 
         # 검색 입력
@@ -157,7 +161,7 @@ class CharacterPresetDialog(QDialog):
 
         self._result_label = QLabel("검색 결과")
         self._result_label.setStyleSheet(
-            "color: #AAA; font-weight: bold; font-size: 12px;"
+            f"color: {get_color('text_secondary')}; font-weight: bold; font-size: 12px;"
         )
         left_layout.addWidget(self._result_label)
 
@@ -183,7 +187,7 @@ class CharacterPresetDialog(QDialog):
         right_layout.addWidget(self._char_name_label)
 
         self._char_count_label = QLabel("")
-        self._char_count_label.setStyleSheet("color: #888; font-size: 11px;")
+        self._char_count_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         right_layout.addWidget(self._char_count_label)
 
         # 전체 선택 / 해제 버튼
@@ -191,9 +195,9 @@ class CharacterPresetDialog(QDialog):
         btn_select_all = QPushButton("전체 선택")
         btn_select_all.setFixedHeight(30)
         btn_select_all.setStyleSheet(
-            "QPushButton { background-color: #3A3A3A; color: #CCC; "
-            "border-radius: 4px; font-size: 11px; padding: 0 10px; }"
-            "QPushButton:hover { background-color: #444; }"
+            f"QPushButton {{ background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; "
+            f"border-radius: 4px; font-size: 11px; padding: 0 10px; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
         )
         btn_select_all.clicked.connect(self._select_all_tags)
         sel_row.addWidget(btn_select_all)
@@ -201,9 +205,9 @@ class CharacterPresetDialog(QDialog):
         btn_deselect_all = QPushButton("전체 해제")
         btn_deselect_all.setFixedHeight(30)
         btn_deselect_all.setStyleSheet(
-            "QPushButton { background-color: #3A3A3A; color: #CCC; "
-            "border-radius: 4px; font-size: 11px; padding: 0 10px; }"
-            "QPushButton:hover { background-color: #444; }"
+            f"QPushButton {{ background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; "
+            f"border-radius: 4px; font-size: 11px; padding: 0 10px; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
         )
         btn_deselect_all.clicked.connect(self._deselect_all_tags)
         sel_row.addWidget(btn_deselect_all)
@@ -299,7 +303,7 @@ class CharacterPresetDialog(QDialog):
         preset_row.addWidget(btn_del_preset)
 
         self._preset_status = QLabel("")
-        self._preset_status.setStyleSheet("color: #888; font-size: 11px;")
+        self._preset_status.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         preset_row.addWidget(self._preset_status)
         preset_row.addStretch()
         right_layout.addLayout(preset_row)
@@ -311,15 +315,15 @@ class CharacterPresetDialog(QDialog):
         # 캐릭터 조건부 프롬프트
         self._cond_toggle = QPushButton("▶ 캐릭터 조건부 프롬프트")
         self._cond_toggle.setCheckable(True)
-        self._cond_toggle.setStyleSheet("""
-            QPushButton {
-                background-color: #2A2A2A; color: #FFA726;
-                border: 1px solid #444; border-radius: 6px;
+        self._cond_toggle.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_input')}; color: #FFA726;
+                border: 1px solid {get_color('border')}; border-radius: 6px;
                 font-weight: bold; font-size: 12px;
                 padding: 6px 12px; text-align: left;
-            }
-            QPushButton:checked { background-color: #3A3000; border-color: #D35400; }
-            QPushButton:hover { background-color: #333; }
+            }}
+            QPushButton:checked {{ background-color: #3A3000; border-color: #D35400; }}
+            QPushButton:hover {{ background-color: {get_color('bg_button')}; }}
         """)
         self._cond_toggle.toggled.connect(self._on_cond_toggle)
         root.addWidget(self._cond_toggle)
@@ -364,9 +368,9 @@ class CharacterPresetDialog(QDialog):
         btn_close = QPushButton("닫기")
         btn_close.setFixedSize(80, 38)
         btn_close.setStyleSheet(
-            "QPushButton { background-color: #444; color: #DDD; "
-            "border-radius: 6px; font-weight: bold; }"
-            "QPushButton:hover { background-color: #555; }"
+            f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; "
+            f"border-radius: 6px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
         )
         btn_close.clicked.connect(self.reject)
         btn_row.addWidget(btn_close)
@@ -533,12 +537,12 @@ class CharacterPresetDialog(QDialog):
                 btn.setEnabled(not is_existing)
 
                 if is_existing:
-                    btn.setStyleSheet(_TAG_EXISTS)
+                    btn.setStyleSheet(_tag_exists())
                 else:
                     btn.setStyleSheet(_TAG_CHECKED)
                     btn.toggled.connect(
                         lambda checked, b=btn: b.setStyleSheet(
-                            _TAG_CHECKED if checked else _TAG_UNCHECKED
+                            _TAG_CHECKED if checked else _tag_unchecked()
                         )
                     )
 

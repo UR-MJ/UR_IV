@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFontDatabase
 from widgets.sliders import NumericSlider
+from utils.theme_manager import get_color
 
 
 _PRESETS = {
@@ -134,7 +135,7 @@ class WatermarkPanel(QWidget):
         il.addWidget(self.btn_load_wm_img)
 
         self.lbl_wm_preview = QLabel("이미지 없음")
-        self.lbl_wm_preview.setStyleSheet("color: #666; font-size: 11px;")
+        self.lbl_wm_preview.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
         self.lbl_wm_preview.setFixedHeight(20)
         il.addWidget(self.lbl_wm_preview)
 
