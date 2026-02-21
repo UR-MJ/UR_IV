@@ -271,6 +271,8 @@ class MosaicEditor(QWidget):
             lambda: self.image_label.clear_adjustment_preview()
         )
         self.color_panel.filter_apply_requested.connect(self._apply_filter_preset)
+        self.color_panel.filter_preview_requested.connect(self._preview_filter_preset)
+        self.color_panel.filter_cancel_requested.connect(self._cancel_filter_preview)
         self.color_panel.auto_correct_requested.connect(self._apply_auto_correct)
 
         # 고급 색감 패널
@@ -629,13 +631,41 @@ class MosaicEditor(QWidget):
 
     # ── 필터 프리셋 ──
 
-    def _apply_filter_preset(self, filter_name: str):
-        """필터 프리셋 적용"""
+    def _blend_filter(self, img: np.ndarray, filter_name: str,
+                      strength: int) -> np.ndarray:
+        """필터 적용 + 강도 블렌딩"""
+        filtered = ColorAdjustPanel.apply_filter(img, filter_name)
+        if strength >= 100:
+            return filtered
+        alpha = strength / 100.0
+        return cv2.addWeighted(filtered, alpha, img, 1.0 - alpha, 0)
+
+    def _preview_filter_preset(self, filter_name: str, strength: int):
+        """필터 프리셋 실시간 프리뷰 (display_base_image를 건드리지 않음)"""
+        if self.image_label.display_base_image is None:
+            return
+        blended = self._blend_filter(
+            self.image_label.display_base_image, filter_name, strength
+        )
+        self.image_label.cv_image = blended
+        self.image_label.update()
+
+    def _cancel_filter_preview(self):
+        """필터 프리뷰 취소 → 원본 복원"""
+        if self.image_label.display_base_image is None:
+            return
+        self.image_label.cv_image = self.image_label.display_base_image.copy()
+        self.image_label.update()
+
+    def _apply_filter_preset(self, filter_name: str, strength: int = 100):
+        """필터 프리셋 확정 적용"""
         if self.image_label.display_base_image is None:
             return
         self.image_label.push_undo_stack()
-        filtered = ColorAdjustPanel.apply_filter(self.image_label.display_base_image, filter_name)
-        self.image_label.update_image_keep_view(filtered)
+        result = self._blend_filter(
+            self.image_label.display_base_image, filter_name, strength
+        )
+        self.image_label.update_image_keep_view(result)
         self.image_label.setFocus()
 
     # ── 고급 색감 ──

@@ -14,7 +14,9 @@ class ColorAdjustPanel(QWidget):
     adjustment_changed = pyqtSignal(int, int, int)
     apply_requested = pyqtSignal(int, int, int)
     reset_requested = pyqtSignal()
-    filter_apply_requested = pyqtSignal(str)
+    filter_apply_requested = pyqtSignal(str, int)   # filter_name, strength (0-100)
+    filter_preview_requested = pyqtSignal(str, int)  # 실시간 프리뷰
+    filter_cancel_requested = pyqtSignal()            # 프리뷰 취소
     auto_correct_requested = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -94,6 +96,7 @@ class ColorAdjustPanel(QWidget):
             ("🔇 노이즈제거", "denoise"),
         ]
 
+        self._filter_buttons = []
         for i, (label, name) in enumerate(presets):
             btn = QPushButton(label)
             btn.setFixedHeight(35)
@@ -104,11 +107,50 @@ class ColorAdjustPanel(QWidget):
                     border-radius: 4px; font-size: 12px; font-weight: bold;
                 }
                 QPushButton:hover { background-color: #3C3C3C; border: 1px solid #777; }
+                QPushButton:checked {
+                    background-color: #5865F2; color: white; border: 1px solid #5865F2;
+                }
             """)
-            btn.clicked.connect(lambda checked, n=name: self.filter_apply_requested.emit(n))
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, n=name: self._on_filter_select(n))
             preset_grid.addWidget(btn, i // 4, i % 4)
+            self._filter_buttons.append((btn, name))
 
         layout.addLayout(preset_grid)
+
+        # 필터 강도 슬라이더
+        self.slider_filter_strength = NumericSlider("필터 강도 %", 1, 100, 100)
+        self.slider_filter_strength.valueChanged.connect(self._on_filter_strength_changed)
+        layout.addWidget(self.slider_filter_strength)
+
+        # 필터 적용/해제 버튼
+        filter_btn_row = QHBoxLayout()
+        filter_btn_row.setSpacing(6)
+
+        self.btn_filter_apply = QPushButton("✅ 필터 적용")
+        self.btn_filter_apply.setFixedHeight(35)
+        self.btn_filter_apply.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_filter_apply.setStyleSheet(
+            "background-color: #5865F2; color: white; border-radius: 4px; "
+            "font-size: 13px; font-weight: bold;"
+        )
+        self.btn_filter_apply.clicked.connect(self._on_filter_apply)
+
+        self.btn_filter_cancel = QPushButton("❌ 필터 해제")
+        self.btn_filter_cancel.setFixedHeight(35)
+        self.btn_filter_cancel.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_filter_cancel.setStyleSheet(
+            "background-color: #8B0000; color: white; border-radius: 4px; "
+            "font-size: 13px; font-weight: bold;"
+        )
+        self.btn_filter_cancel.clicked.connect(self._on_filter_cancel)
+
+        filter_btn_row.addWidget(self.btn_filter_apply, 2)
+        filter_btn_row.addWidget(self.btn_filter_cancel, 1)
+        layout.addLayout(filter_btn_row)
+
+        self._active_filter = None
+
         layout.addStretch()
 
         # ── 시그널 연결 ──
@@ -146,6 +188,38 @@ class ColorAdjustPanel(QWidget):
         self.slider_contrast.setValue(0)
         self.slider_saturation.setValue(0)
 
+    def _on_filter_select(self, filter_name: str):
+        """필터 버튼 클릭 → 프리뷰"""
+        # 다른 버튼 해제
+        for btn, name in self._filter_buttons:
+            btn.setChecked(name == filter_name)
+        self._active_filter = filter_name
+        strength = self.slider_filter_strength.value()
+        self.filter_preview_requested.emit(filter_name, strength)
+
+    def _on_filter_strength_changed(self, value: int):
+        """강도 슬라이더 변경 → 프리뷰 갱신"""
+        if self._active_filter:
+            self.filter_preview_requested.emit(self._active_filter, value)
+
+    def _on_filter_apply(self):
+        """현재 프리뷰 중인 필터를 확정 적용"""
+        if self._active_filter:
+            strength = self.slider_filter_strength.value()
+            self.filter_apply_requested.emit(self._active_filter, strength)
+            self._clear_filter_selection()
+
+    def _on_filter_cancel(self):
+        """필터 프리뷰 취소 → 원본 복원"""
+        self._clear_filter_selection()
+        self.filter_cancel_requested.emit()
+
+    def _clear_filter_selection(self):
+        """필터 선택 상태 초기화"""
+        self._active_filter = None
+        for btn, _ in self._filter_buttons:
+            btn.setChecked(False)
+
     @staticmethod
     def apply_filter(img: np.ndarray, filter_name: str) -> np.ndarray:
         """필터 프리셋 적용 (정적 메서드)"""
@@ -164,44 +238,44 @@ class ColorAdjustPanel(QWidget):
 
         elif filter_name == "sharpen":
             kernel = np.array([
-                [0, -1, 0],
-                [-1, 5, -1],
-                [0, -1, 0]
-            ], dtype=np.float32)
+                [0,  -1,  0],
+                [-1,  6, -1],
+                [0,  -1,  0]
+            ], dtype=np.float32) / 2.0
             return cv2.filter2D(img, -1, kernel)
 
         elif filter_name == "warm":
             hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 0] = np.clip(hsv[:, :, 0] - 10, 0, 179)
-            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.15, 0, 255)
+            hsv[:, :, 0] = np.clip(hsv[:, :, 0] - 5, 0, 179)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.08, 0, 255)
             result = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-            # 약간의 붉은 틴트
-            result[:, :, 2] = np.clip(result[:, :, 2].astype(np.int16) + 10, 0, 255).astype(np.uint8)
+            result[:, :, 2] = np.clip(result[:, :, 2].astype(np.int16) + 5, 0, 255).astype(np.uint8)
             return result
 
         elif filter_name == "cool":
             hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 0] = np.clip(hsv[:, :, 0] + 10, 0, 179)
-            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 0.9, 0, 255)
+            hsv[:, :, 0] = np.clip(hsv[:, :, 0] + 5, 0, 179)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 0.95, 0, 255)
             result = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-            # 약간의 파란 틴트
-            result[:, :, 0] = np.clip(result[:, :, 0].astype(np.int16) + 15, 0, 255).astype(np.uint8)
+            result[:, :, 0] = np.clip(result[:, :, 0].astype(np.int16) + 8, 0, 255).astype(np.uint8)
             return result
 
         elif filter_name == "soft":
-            return cv2.GaussianBlur(img, (5, 5), 0)
+            return cv2.GaussianBlur(img, (9, 9), 0)
 
         elif filter_name == "invert":
             return cv2.bitwise_not(img)
 
         elif filter_name == "emboss":
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             kernel = np.array([
                 [-2, -1, 0],
                 [-1,  1, 1],
                 [ 0,  1, 2]
             ], dtype=np.float32)
-            embossed = cv2.filter2D(img, -1, kernel)
-            return np.clip(embossed.astype(np.int16) + 128, 0, 255).astype(np.uint8)
+            embossed = cv2.filter2D(gray, -1, kernel)
+            embossed = np.clip(embossed.astype(np.int16) + 128, 0, 255).astype(np.uint8)
+            return cv2.cvtColor(embossed, cv2.COLOR_GRAY2BGR)
 
         elif filter_name == "sketch":
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -211,7 +285,7 @@ class ColorAdjustPanel(QWidget):
             return cv2.cvtColor(sketch, cv2.COLOR_GRAY2BGR)
 
         elif filter_name == "posterize":
-            n = 6
+            n = 4
             table = np.arange(256, dtype=np.uint8)
             table = (table // (256 // n)) * (256 // n)
             return cv2.LUT(img, table)
@@ -225,7 +299,7 @@ class ColorAdjustPanel(QWidget):
             return (img.astype(np.float32) * mask[:, :, np.newaxis]).astype(np.uint8)
 
         elif filter_name == "denoise":
-            return cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
+            return cv2.fastNlMeansDenoisingColored(img, None, 5, 5, 7, 21)
 
         return img
 
