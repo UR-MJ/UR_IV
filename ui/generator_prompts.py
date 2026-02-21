@@ -321,7 +321,24 @@ class PromptHandlingMixin:
         if cond_enabled and wc_enabled:
             self._apply_conditional_prompts()
 
-        # 13. 최종 프롬프트 업데이트
+        # 13. 자동 해상도 (Parquet H/W)
+        if hasattr(self, 'auto_res_check') and self.auto_res_check.isChecked():
+            raw_w = bundle.get('image_width')
+            raw_h = bundle.get('image_height')
+            if raw_w is not None and raw_h is not None:
+                try:
+                    import math
+                    w = int(float(raw_w))
+                    h = int(float(raw_h))
+                    # 8의 배수로 반올림
+                    w = max(256, min(2048, round(w / 8) * 8))
+                    h = max(256, min(2048, round(h / 8) * 8))
+                    self.width_input.setText(str(w))
+                    self.height_input.setText(str(h))
+                except (ValueError, TypeError):
+                    pass
+
+        # 14. 최종 프롬프트 업데이트
         self.update_total_prompt_display()
 
     def _auto_insert_character_features(self, character_list: list[str]):

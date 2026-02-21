@@ -91,6 +91,11 @@ class UISetupMixin:
             }
         """)
 
+        # VRAM 상태 라벨 (상태바 오른쪽에 표시)
+        self.vram_label = QLabel("")
+        self.vram_label.setFixedHeight(24)
+        self.vram_label.setStyleSheet("color: #44FF44; font-size: 10px; padding-right: 10px;")
+
     def _create_left_panel(self):
         """왼쪽 생성 패널 생성"""
         left_panel_scroll = QScrollArea()
@@ -780,6 +785,11 @@ class UISetupMixin:
         # 랜덤 해상도
         self.random_res_check = QCheckBox("랜덤 해상도")
         layout.addWidget(self.random_res_check)
+
+        # 자동 해상도 (Parquet)
+        self.auto_res_check = QCheckBox("자동 해상도 (Parquet H/W)")
+        self.auto_res_check.setToolTip("자동화 시 parquet 데이터의 image_width/image_height로 해상도 자동 설정")
+        layout.addWidget(self.auto_res_check)
         
         self.random_res_label = QLabel()
         layout.addWidget(self.random_res_label)
