@@ -189,7 +189,11 @@ class ColorAdjustPanel(QWidget):
         self.slider_saturation.setValue(0)
 
     def _on_filter_select(self, filter_name: str):
-        """필터 버튼 클릭 → 프리뷰"""
+        """필터 버튼 클릭 → 토글 (같은 필터 다시 누르면 해제)"""
+        if self._active_filter == filter_name:
+            # 같은 필터 다시 클릭 → 해제
+            self._on_filter_cancel()
+            return
         # 다른 버튼 해제
         for btn, name in self._filter_buttons:
             btn.setChecked(name == filter_name)
