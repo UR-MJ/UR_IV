@@ -25,7 +25,16 @@ class UISetupMixin:
     """UI 구성을 담당하는 Mixin 클래스"""
     
     def _setup_ui(self):
-        """UI 초기 구성"""
+        """UI 초기 구성 — config.UI_STYLE에 따라 분기"""
+        import config
+        if getattr(config, 'UI_STYLE', 'classic') == 'modern':
+            from ui.generator_ui_v2 import setup_modern_ui
+            setup_modern_ui(self)
+            return
+        self._setup_ui_classic()
+
+    def _setup_ui_classic(self):
+        """Classic UI 구성 (기존)"""
         self.setWindowTitle("AI Studio - Pro")
         self.setGeometry(100, 100, 1600, 950)
 

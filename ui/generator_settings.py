@@ -123,6 +123,7 @@ class SettingsMixin:
             # 웹 설정 추가!
             "web_home_url": self.web_tab.home_url if hasattr(self.web_tab, 'home_url') else "",
 
+            "ui_style": ('classic' if self.settings_tab.ui_style_combo.currentIndex() == 0 else 'modern') if hasattr(self.settings_tab, 'ui_style_combo') else 'classic',
             "theme": self.settings_tab.theme_combo.currentText() if hasattr(self.settings_tab, 'theme_combo') else "다크",
             "font_family": self.settings_tab.font_combo.currentText() if hasattr(self.settings_tab, 'font_combo') else "Pretendard",
             "font_size": self.settings_tab.font_size_spin.value() if hasattr(self.settings_tab, 'font_size_spin') else 10.5,
@@ -325,6 +326,15 @@ class SettingsMixin:
             self.base_prefix_prompt = settings.get("base_prefix_prompt", "")
             self.base_suffix_prompt = settings.get("base_suffix_prompt", "")
             self.base_neg_prompt = settings.get("base_neg_prompt", "")
+
+            # UI 스타일 복원
+            ui_style = settings.get("ui_style", "classic")
+            import config as _cfg_mod
+            _cfg_mod.UI_STYLE = ui_style
+            if hasattr(self.settings_tab, 'ui_style_combo'):
+                self.settings_tab.ui_style_combo.blockSignals(True)
+                self.settings_tab.ui_style_combo.setCurrentIndex(0 if ui_style == 'classic' else 1)
+                self.settings_tab.ui_style_combo.blockSignals(False)
 
             # 테마 복원
             theme_name = settings.get("theme", "다크")

@@ -277,6 +277,232 @@ _QSS_TEMPLATE = """
     }}
 """
 
+# ── 모던 UI용 QSS 템플릿 (NAIS 스타일) ──
+_MODERN_QSS_TEMPLATE = """
+    QWidget {{
+        background-color: {bg_primary};
+        color: {text_primary};
+        font-family: {font_family};
+        font-size: {font_size};
+    }}
+
+    QMainWindow {{
+        background-color: {bg_primary};
+    }}
+
+    QSplitter::handle {{
+        background-color: transparent;
+        width: 1px;
+    }}
+
+    QGroupBox {{
+        background-color: {bg_secondary};
+        border: none;
+        border-radius: 16px;
+        margin-top: 8px;
+        padding: 20px 18px 18px 18px;
+    }}
+    QGroupBox::title {{
+        subcontrol-origin: margin;
+        subcontrol-position: top left;
+        left: 18px;
+        top: 4px;
+        color: {text_primary};
+        font-weight: bold;
+        font-size: 11pt;
+        background-color: transparent;
+    }}
+
+    QLineEdit, QTextEdit, QComboBox {{
+        background-color: {bg_input};
+        border: none;
+        border-radius: 12px;
+        padding: 10px 14px;
+        color: {text_primary};
+        selection-background-color: {accent};
+    }}
+    QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{
+        background-color: {bg_tertiary};
+        border: 1px solid {border_input_focus};
+    }}
+
+    QComboBox::drop-down {{
+        border: none;
+        width: 28px;
+    }}
+
+    QPushButton {{
+        background-color: {bg_button};
+        border: none;
+        border-radius: 20px;
+        color: {text_primary};
+        padding: 10px 20px;
+        font-weight: 600;
+    }}
+    QPushButton:hover {{
+        background-color: {bg_button_hover};
+    }}
+    QPushButton:pressed {{
+        background-color: {bg_button_pressed};
+    }}
+    QPushButton:checked {{
+        background-color: {accent};
+        color: white;
+    }}
+    QPushButton:disabled {{
+        background-color: {disabled_bg};
+        color: {disabled_text};
+    }}
+
+    QScrollArea {{ border: none; background: transparent; }}
+    QScrollBar:vertical {{
+        background: transparent;
+        width: 6px;
+        margin: 4px 0;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {scrollbar_handle};
+        min-height: 40px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {accent};
+        width: 8px;
+    }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+        height: 0px; background: none;
+    }}
+
+    QTabWidget::pane {{ border: none; background-color: {bg_primary}; }}
+    QTabBar::tab {{
+        background: transparent;
+        color: {text_muted};
+        padding: 8px 18px;
+        border-radius: 20px;
+        margin: 2px 3px;
+        font-weight: 600;
+    }}
+    QTabBar::tab:selected {{
+        background: {bg_tertiary};
+        color: {text_primary};
+    }}
+    QTabBar::tab:hover {{
+        background: {bg_secondary};
+        color: {text_primary};
+    }}
+
+    QLabel {{
+        color: {text_secondary};
+        background: transparent;
+    }}
+
+    QMenu {{
+        background-color: {bg_secondary};
+        border: 1px solid {border};
+        border-radius: 12px;
+        padding: 6px;
+        color: {text_primary};
+    }}
+    QMenu::item {{
+        padding: 8px 20px;
+        border-radius: 8px;
+    }}
+    QMenu::item:selected {{
+        background-color: {accent};
+        color: white;
+    }}
+    QMenu::separator {{
+        height: 1px;
+        background: {border};
+        margin: 4px 10px;
+    }}
+
+    QToolTip {{
+        background-color: {bg_secondary};
+        color: {text_primary};
+        border: 1px solid {border};
+        border-radius: 8px;
+        padding: 6px 10px;
+    }}
+
+    QProgressBar {{
+        background-color: {bg_input};
+        border: none;
+        border-radius: 6px;
+        text-align: center;
+        color: {text_primary};
+        height: 8px;
+    }}
+    QProgressBar::chunk {{
+        background-color: {accent};
+        border-radius: 6px;
+    }}
+
+    QDialog {{
+        background-color: {bg_primary};
+        color: {text_primary};
+    }}
+
+    QListWidget {{
+        background-color: {bg_secondary};
+        border: none;
+        border-radius: 12px;
+        color: {text_primary};
+        padding: 4px;
+    }}
+    QListWidget::item {{
+        padding: 8px 12px;
+        border-radius: 8px;
+    }}
+    QListWidget::item:selected {{
+        background-color: {accent};
+        color: white;
+    }}
+    QListWidget::item:hover {{
+        background-color: {bg_tertiary};
+    }}
+
+    QSpinBox, QDoubleSpinBox {{
+        background-color: {bg_input};
+        border: none;
+        border-radius: 12px;
+        padding: 8px 12px;
+        color: {text_primary};
+    }}
+    QSpinBox:focus, QDoubleSpinBox:focus {{
+        background-color: {bg_tertiary};
+        border: 1px solid {border_input_focus};
+    }}
+
+    QSlider::groove:horizontal {{
+        height: 4px;
+        background: {bg_input};
+        border-radius: 2px;
+    }}
+    QSlider::handle:horizontal {{
+        width: 18px; height: 18px;
+        margin: -7px 0;
+        background: {accent};
+        border-radius: 9px;
+    }}
+    QSlider::sub-page:horizontal {{
+        background: {accent};
+        border-radius: 2px;
+    }}
+
+    QFrame {{
+        color: {text_primary};
+    }}
+
+    QStatusBar {{
+        background-color: {bg_primary};
+        color: {text_muted};
+        border-top: 1px solid {border};
+    }}
+"""
+
 
 class ThemeManager:
     """테마 관리 클래스"""
@@ -322,6 +548,7 @@ class ThemeManager:
 
     def get_stylesheet(self, theme_name: str | None = None) -> str:
         """테마 이름에 대응하는 QSS 문자열 반환"""
+        import config
         name = theme_name or self._current
         colors = THEMES.get(name, DARK_THEME)
         self._current = name
@@ -330,7 +557,8 @@ class ThemeManager:
             'font_family': self._font_family,
             'font_size': self._font_size,
         }
-        return _QSS_TEMPLATE.format(**fmt_vars)
+        template = _MODERN_QSS_TEMPLATE if getattr(config, 'UI_STYLE', 'classic') == 'modern' else _QSS_TEMPLATE
+        return template.format(**fmt_vars)
 
     @staticmethod
     def available_themes() -> list[str]:

@@ -13,6 +13,7 @@ from utils.shortcut_manager import (
 )
 from utils.file_wildcard import get_file_wildcard_manager
 from utils.theme_manager import get_color
+import config
 
 
 class KeyCaptureButton(QPushButton):
@@ -1016,6 +1017,24 @@ class SettingsTab(QWidget):
         from utils.theme_manager import get_theme_manager, ThemeManager
         tm = get_theme_manager()
 
+        # UI 스타일 선택
+        style_group = QGroupBox("UI 스타일")
+        style_gl = QVBoxLayout(style_group)
+
+        style_h = QHBoxLayout()
+        style_h.addWidget(QLabel("UI 스타일:"))
+        self.ui_style_combo = NoScrollComboBox()
+        self.ui_style_combo.addItems(["Classic", "Modern (UI2)"])
+        current_style = getattr(config, 'UI_STYLE', 'classic')
+        self.ui_style_combo.setCurrentIndex(0 if current_style == 'classic' else 1)
+        self.ui_style_combo.currentIndexChanged.connect(self._on_ui_style_changed)
+        style_h.addWidget(self.ui_style_combo)
+        style_h.addStretch()
+        style_gl.addLayout(style_h)
+
+        style_gl.addWidget(QLabel("※ UI 스타일 변경 시 앱을 재시작해야 적용됩니다."))
+        l.addWidget(style_group)
+
         # 테마 선택
         group = QGroupBox("테마 선택")
         gl = QVBoxLayout(group)
@@ -1084,6 +1103,14 @@ class SettingsTab(QWidget):
         if self.parent_ui and hasattr(self.parent_ui, 'apply_stylesheet'):
             self.parent_ui.apply_stylesheet()
 
+    def _on_ui_style_changed(self, index: int):
+        """UI 스타일 변경 시 재시작 안내"""
+        QMessageBox.information(
+            self, "UI 스타일 변경",
+            "UI 스타일을 변경하려면 앱을 재시작해야 합니다.\n"
+            "설정을 저장한 후 앱을 다시 시작해주세요."
+        )
+
     def apply_api_url(self):
         """API URL 적용"""
         import config
@@ -1121,9 +1148,12 @@ class SettingsTab(QWidget):
         """모든 설정 저장"""
         self.apply_api_url()
 
-        import config
         import os
         config.OUTPUT_DIR = self.path_input.text()
+
+        # UI 스타일 저장
+        if hasattr(self, 'ui_style_combo'):
+            config.UI_STYLE = 'classic' if self.ui_style_combo.currentIndex() == 0 else 'modern'
         os.makedirs(config.OUTPUT_DIR, exist_ok=True)
 
         # 데이터 경로 적용

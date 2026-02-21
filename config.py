@@ -52,6 +52,9 @@ COMFYUI_API_URL = "http://127.0.0.1:8188"
 COMFYUI_WORKFLOW_PATH = ""
 COMFYUI_WORKFLOW_IMG2IMG_PATH = ""
 
+# UI 스타일 설정 ('classic' | 'modern')
+UI_STYLE = 'classic'
+
 from utils.app_logger import get_logger as _get_logger
 _logger = _get_logger('config')
 _logger.info(f"초기 설정된 API 주소: {WEBUI_API_URL}")
