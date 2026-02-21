@@ -9,15 +9,16 @@ from widgets.sliders import NumericSlider
 from utils.theme_manager import get_color
 
 
-_BTN_STYLE = """
-    QPushButton {
-        background-color: #2C2C2C; border: 1px solid #444;
-        border-radius: 6px; color: #CCC;
+def _btn_style():
+    return f"""
+    QPushButton {{
+        background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
+        border-radius: 6px; color: {get_color('text_secondary')};
         font-size: 13px; font-weight: bold;
         padding: 8px 12px;
-    }
-    QPushButton:hover { border: 1px solid #666; background-color: #333; }
-    QPushButton:disabled { color: #555; background-color: #222; }
+    }}
+    QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
+    QPushButton:disabled {{ color: {get_color('border')}; background-color: {get_color('bg_secondary')}; }}
 """
 
 _ACCENT_BTN = """
@@ -59,7 +60,7 @@ class MovePanel(QWidget):
         # 헤더
         header = QLabel("영역 이동")
         header.setStyleSheet(
-            "color: #999; font-size: 18px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 18px; font-weight: bold; padding: 2px 2px;"
         )
         layout.addWidget(header)
 
@@ -67,8 +68,8 @@ class MovePanel(QWidget):
         self.status_label = QLabel("마스킹을 먼저 해주세요")
         self.status_label.setWordWrap(True)
         self.status_label.setStyleSheet(
-            "color: #AAA; font-size: 12px; padding: 6px; "
-            "background-color: #1E1E1E; border-radius: 4px;"
+            f"color: {get_color('text_secondary')}; font-size: 12px; padding: 6px; "
+            f"background-color: {get_color('bg_secondary')}; border-radius: 4px;"
         )
         layout.addWidget(self.status_label)
 
@@ -80,14 +81,14 @@ class MovePanel(QWidget):
 
         # 채우기 색상
         fill_label = QLabel("구멍 채우기 색")
-        fill_label.setStyleSheet("color: #999; font-size: 12px; font-weight: bold;")
+        fill_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px; font-weight: bold;")
         layout.addWidget(fill_label)
 
         self.fill_combo = QComboBox()
         self.fill_combo.addItem("검은색", (0, 0, 0))
         self.fill_combo.addItem("흰색", (255, 255, 255))
         self.fill_combo.setStyleSheet(
-            "background-color: #2C2C2C; color: #CCC; border: 1px solid #444; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px;"
         )
         self.fill_combo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -104,7 +105,7 @@ class MovePanel(QWidget):
         self.btn_undo_move = QPushButton("↩️  이동 되돌리기")
         self.btn_undo_move.setFixedHeight(40)
         self.btn_undo_move.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_undo_move.setStyleSheet(_BTN_STYLE)
+        self.btn_undo_move.setStyleSheet(_btn_style())
         self.btn_undo_move.setEnabled(False)
         layout.addWidget(self.btn_undo_move)
 
@@ -122,14 +123,14 @@ class MovePanel(QWidget):
         self.btn_confirm = QPushButton("✅ 확정")
         self.btn_confirm.setFixedHeight(40)
         self.btn_confirm.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_confirm.setStyleSheet(_BTN_STYLE)
+        self.btn_confirm.setStyleSheet(_btn_style())
         self.btn_confirm.setEnabled(False)
         row.addWidget(self.btn_confirm)
 
         self.btn_cancel = QPushButton("❌ 취소")
         self.btn_cancel.setFixedHeight(40)
         self.btn_cancel.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_cancel.setStyleSheet(_BTN_STYLE)
+        self.btn_cancel.setStyleSheet(_btn_style())
         self.btn_cancel.setEnabled(False)
         row.addWidget(self.btn_cancel)
 
@@ -151,27 +152,27 @@ class MovePanel(QWidget):
 
         # 프롬프트
         prompt_label = QLabel("Prompt")
-        prompt_label.setStyleSheet("color: #999; font-size: 12px; font-weight: bold;")
+        prompt_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px; font-weight: bold;")
         layout.addWidget(prompt_label)
 
         self.prompt_text = QTextEdit()
         self.prompt_text.setFixedHeight(50)
         self.prompt_text.setPlaceholderText("인페인트할 내용 (비우면 메인 프롬프트 사용)")
         self.prompt_text.setStyleSheet(
-            "background-color: #1E1E1E; color: #CCC; border: 1px solid #444; "
+            f"background-color: {get_color('bg_secondary')}; color: {get_color('text_secondary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px; font-size: 12px;"
         )
         layout.addWidget(self.prompt_text)
 
         neg_label = QLabel("Negative Prompt")
-        neg_label.setStyleSheet("color: #999; font-size: 12px; font-weight: bold;")
+        neg_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px; font-weight: bold;")
         layout.addWidget(neg_label)
 
         self.neg_prompt_text = QTextEdit()
         self.neg_prompt_text.setFixedHeight(35)
         self.neg_prompt_text.setPlaceholderText("네거티브 (비우면 메인 네거티브 사용)")
         self.neg_prompt_text.setStyleSheet(
-            "background-color: #1E1E1E; color: #CCC; border: 1px solid #444; "
+            f"background-color: {get_color('bg_secondary')}; color: {get_color('text_secondary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px; font-size: 12px;"
         )
         layout.addWidget(self.neg_prompt_text)

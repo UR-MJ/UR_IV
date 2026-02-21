@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QPointF, QRectF
 from PyQt6.QtGui import QPainter, QImage, QPen, QColor, QBrush, QPixmap
+from utils.theme_manager import get_color
 
 
 class PerspectiveCanvas(QWidget):
@@ -70,7 +71,7 @@ class PerspectiveCanvas(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # 배경
-        painter.fillRect(self.rect(), QColor("#1E1E1E"))
+        painter.fillRect(self.rect(), QColor(get_color('bg_secondary')))
 
         # 이미지
         r = self._display_rect()
@@ -148,7 +149,7 @@ class PerspectiveDialog(QDialog):
         layout = QVBoxLayout(self)
 
         info = QLabel("4개 꼭짓점을 드래그하여 보정할 영역을 지정하세요")
-        info.setStyleSheet("color: #AAA; font-size: 12px;")
+        info.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(info)
 
@@ -167,7 +168,7 @@ class PerspectiveDialog(QDialog):
         btn_cancel = QPushButton("취소")
         btn_cancel.setFixedHeight(36)
         btn_cancel.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; border-radius: 4px; font-size: 13px;"
         )
         btn_cancel.clicked.connect(self.reject)
 

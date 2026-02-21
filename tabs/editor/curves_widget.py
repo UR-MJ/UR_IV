@@ -4,6 +4,7 @@ import numpy as np
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QButtonGroup
 from PyQt6.QtCore import Qt, QPointF, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QPainterPath
+from utils.theme_manager import get_color
 
 
 class CurvesWidget(QWidget):
@@ -42,15 +43,15 @@ class CurvesWidget(QWidget):
         self._ch_group = QButtonGroup(self)
 
         _btn_style = """
-            QPushButton {{
-                background: #2C2C2C; color: {color}; border: 1px solid #444;
+            QPushButton {{{{
+                background: {bg_button}; color: {{color}}; border: 1px solid {border};
                 border-radius: 4px; font-size: 11px; font-weight: bold;
                 padding: 3px 8px;
-            }}
-            QPushButton:checked {{
-                background: {bg}; color: white; border: 1px solid {color};
-            }}
-        """
+            }}}}
+            QPushButton:checked {{{{
+                background: {{bg}}; color: white; border: 1px solid {{color}};
+            }}}}
+        """.format(bg_button=get_color('bg_button'), border=get_color('border'))
 
         channels = [
             ('rgb', 'RGB', '#888', '#444'),
@@ -82,7 +83,7 @@ class CurvesWidget(QWidget):
         btn_reset.setFixedHeight(28)
         btn_reset.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         btn_reset.setStyleSheet(
-            "background: #2C2C2C; color: #AAA; border: 1px solid #444; "
+            f"background: {get_color('bg_button')}; color: {get_color('text_secondary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 11px;"
         )
         btn_reset.clicked.connect(self._reset_current)
@@ -178,12 +179,12 @@ class _CurveCanvas(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # 배경
-        painter.fillRect(self.rect(), QColor("#1A1A1A"))
+        painter.fillRect(self.rect(), QColor(get_color('bg_secondary')))
 
         gx, gy, gw, gh = self._graph_rect()
 
         # 격자
-        painter.setPen(QPen(QColor("#333"), 1))
+        painter.setPen(QPen(QColor(get_color('bg_button_hover')), 1))
         for i in range(1, 4):
             frac = i / 4.0
             x = int(gx + frac * gw)
@@ -192,7 +193,7 @@ class _CurveCanvas(QWidget):
             painter.drawLine(gx, y, gx + gw, y)
 
         # 대각선 (기본 커브)
-        painter.setPen(QPen(QColor("#444"), 1, Qt.PenStyle.DashLine))
+        painter.setPen(QPen(QColor(get_color('border')), 1, Qt.PenStyle.DashLine))
         painter.drawLine(int(gx), int(gy + gh), int(gx + gw), int(gy))
 
         # 현재 채널 커브
@@ -225,7 +226,7 @@ class _CurveCanvas(QWidget):
             painter.drawEllipse(spt, self._HANDLE_R, self._HANDLE_R)
 
         # 테두리
-        painter.setPen(QPen(QColor("#555"), 1))
+        painter.setPen(QPen(QColor(get_color('border')), 1))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(gx, gy, gw, gh)
 

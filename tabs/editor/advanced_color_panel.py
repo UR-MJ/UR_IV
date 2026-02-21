@@ -32,7 +32,7 @@ class AdvancedColorPanel(QWidget):
         # ── 히스토그램 ──
         hist_header = QLabel("히스토그램")
         hist_header.setStyleSheet(
-            "color: #999; font-size: 14px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 14px; font-weight: bold; padding: 2px 2px;"
         )
         layout.addWidget(hist_header)
 
@@ -47,7 +47,7 @@ class AdvancedColorPanel(QWidget):
         # ── 커브 ──
         curves_header = QLabel("커브 (Curves)")
         curves_header.setStyleSheet(
-            "color: #999; font-size: 14px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 14px; font-weight: bold; padding: 2px 2px;"
         )
         layout.addWidget(curves_header)
 
@@ -63,7 +63,7 @@ class AdvancedColorPanel(QWidget):
         # ── 레벨 (Levels) ──
         levels_header = QLabel("레벨 (Levels)")
         levels_header.setStyleSheet(
-            "color: #999; font-size: 14px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 14px; font-weight: bold; padding: 2px 2px;"
         )
         layout.addWidget(levels_header)
 
@@ -87,7 +87,7 @@ class AdvancedColorPanel(QWidget):
         # ── 색온도 / 틴트 ──
         temp_header = QLabel("색온도 / 틴트")
         temp_header.setStyleSheet(
-            "color: #999; font-size: 14px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 14px; font-weight: bold; padding: 2px 2px;"
         )
         layout.addWidget(temp_header)
 
@@ -117,7 +117,7 @@ class AdvancedColorPanel(QWidget):
         self.btn_reset.setFixedHeight(36)
         self.btn_reset.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_reset.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; border-radius: 4px; font-size: 13px;"
         )
         self.btn_reset.clicked.connect(self._on_reset)
 

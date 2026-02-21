@@ -55,7 +55,7 @@ class ColorAdjustPanel(QWidget):
         self.btn_reset.setFixedHeight(35)
         self.btn_reset.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_reset.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; "
+            f"background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; border-radius: 4px; "
             "font-size: 13px;"
         )
 
@@ -102,15 +102,15 @@ class ColorAdjustPanel(QWidget):
             btn = QPushButton(label)
             btn.setFixedHeight(35)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #2C2C2C; color: #DDD; border: 1px solid #555;
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')};
                     border-radius: 4px; font-size: 12px; font-weight: bold;
-                }
-                QPushButton:hover { background-color: #3C3C3C; border: 1px solid #777; }
-                QPushButton:checked {
+                }}
+                QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; border: 1px solid {get_color('text_muted')}; }}
+                QPushButton:checked {{
                     background-color: #5865F2; color: white; border: 1px solid #5865F2;
-                }
+                }}
             """)
             btn.setCheckable(True)
             btn.clicked.connect(lambda checked, n=name: self._on_filter_select(n))

@@ -5,6 +5,7 @@ import numpy as np
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter, QColor, QPen
+from utils.theme_manager import get_color
 
 
 class HistogramWidget(QWidget):
@@ -35,10 +36,10 @@ class HistogramWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # 배경
-        painter.fillRect(self.rect(), QColor("#1A1A1A"))
+        painter.fillRect(self.rect(), QColor(get_color('bg_secondary')))
 
         if self._hist_b is None:
-            painter.setPen(QColor("#555"))
+            painter.setPen(QColor(get_color('border')))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "히스토그램 없음")
             painter.end()
             return
@@ -69,7 +70,7 @@ class HistogramWidget(QWidget):
                 painter.drawLine(x, oy + h, x, oy + h - bar_h)
 
         # 테두리
-        painter.setPen(QPen(QColor("#444"), 1))
+        painter.setPen(QPen(QColor(get_color('border')), 1))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(ox, oy, w, h)
 

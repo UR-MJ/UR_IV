@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from widgets.sliders import NumericSlider
+from utils.theme_manager import get_color
 
 
 class TextOverlayDialog(QDialog):
@@ -30,7 +31,7 @@ class TextOverlayDialog(QDialog):
         self.text_input = QLineEdit()
         self.text_input.setPlaceholderText("표시할 텍스트를 입력하세요")
         self.text_input.setStyleSheet(
-            "background: #2C2C2C; color: #EEE; border: 1px solid #555; "
+            f"background: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 6px; font-size: 14px;"
         )
         layout.addWidget(self.text_input)
@@ -39,7 +40,7 @@ class TextOverlayDialog(QDialog):
         layout.addWidget(QLabel("폰트:"))
         self.font_combo = QFontComboBox()
         self.font_combo.setStyleSheet(
-            "background: #2C2C2C; color: #EEE; border: 1px solid #555; "
+            f"background: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px;"
         )
         layout.addWidget(self.font_combo)
@@ -58,7 +59,7 @@ class TextOverlayDialog(QDialog):
         btn_color = QPushButton("색상 선택")
         btn_color.setFixedHeight(32)
         btn_color.setStyleSheet(
-            "background: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px;"
         )
         btn_color.clicked.connect(self._pick_color)
@@ -89,7 +90,7 @@ class TextOverlayDialog(QDialog):
         btn_cancel = QPushButton("취소")
         btn_cancel.setFixedHeight(36)
         btn_cancel.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 4px; font-size: 13px;"
+            f"background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; border-radius: 4px; font-size: 13px;"
         )
         btn_cancel.clicked.connect(self.reject)
 
@@ -105,7 +106,7 @@ class TextOverlayDialog(QDialog):
 
     def _update_color_preview(self):
         self.color_preview.setStyleSheet(
-            f"background-color: {self._color.name()}; border: 2px solid #666; border-radius: 4px;"
+            f"background-color: {self._color.name()}; border: 2px solid {get_color('text_muted')}; border-radius: 4px;"
         )
 
     def get_config(self) -> dict:

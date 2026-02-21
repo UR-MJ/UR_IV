@@ -41,12 +41,12 @@ class WatermarkPanel(QWidget):
 
         # ── 텍스트 워터마크 ──
         text_group = QGroupBox("텍스트 워터마크")
-        text_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #444; border-radius: 6px;
+        text_group.setStyleSheet(f"""
+            QGroupBox {{
+                border: 1px solid {get_color('border')}; border-radius: 6px;
                 margin-top: 8px; padding-top: 5px;
-                font-weight: bold; color: #888;
-            }
+                font-weight: bold; color: {get_color('text_muted')};
+            }}
         """)
         tl = QVBoxLayout(text_group)
         tl.setContentsMargins(8, 15, 8, 8)
@@ -55,7 +55,7 @@ class WatermarkPanel(QWidget):
         self.txt_watermark = QLineEdit()
         self.txt_watermark.setPlaceholderText("워터마크 텍스트 입력...")
         self.txt_watermark.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 6px; font-size: 13px;"
         )
         tl.addWidget(self.txt_watermark)
@@ -64,7 +64,7 @@ class WatermarkPanel(QWidget):
         font_color_row = QHBoxLayout()
         self.combo_font = QComboBox()
         self.combo_font.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; padding: 4px;"
         )
         families = QFontDatabase.families()
@@ -75,7 +75,7 @@ class WatermarkPanel(QWidget):
         self.btn_color.setFixedHeight(35)
         self.btn_color.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_color.setStyleSheet(
-            "background-color: #FFFFFF; color: #000; border: 1px solid #555; "
+            f"background-color: #FFFFFF; color: #000; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
         self.btn_color.clicked.connect(self._pick_color)
@@ -95,7 +95,7 @@ class WatermarkPanel(QWidget):
         tl.addWidget(self.slider_text_rotation)
 
         self.chk_tile = QCheckBox("타일 반복")
-        self.chk_tile.setStyleSheet("color: #AAA; font-size: 12px;")
+        self.chk_tile.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         tl.addWidget(self.chk_tile)
 
         self.btn_apply_text = QPushButton("✅ 텍스트 워터마크 적용")
@@ -113,12 +113,12 @@ class WatermarkPanel(QWidget):
 
         # ── 이미지 워터마크 ──
         img_group = QGroupBox("이미지 워터마크")
-        img_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #444; border-radius: 6px;
+        img_group.setStyleSheet(f"""
+            QGroupBox {{
+                border: 1px solid {get_color('border')}; border-radius: 6px;
                 margin-top: 8px; padding-top: 5px;
-                font-weight: bold; color: #888;
-            }
+                font-weight: bold; color: {get_color('text_muted')};
+            }}
         """)
         il = QVBoxLayout(img_group)
         il.setContentsMargins(8, 15, 8, 8)
@@ -128,7 +128,7 @@ class WatermarkPanel(QWidget):
         self.btn_load_wm_img.setFixedHeight(35)
         self.btn_load_wm_img.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_load_wm_img.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
         self.btn_load_wm_img.clicked.connect(self._load_watermark_image)
@@ -164,7 +164,7 @@ class WatermarkPanel(QWidget):
         # ── 공통 옵션 ──
         self.chk_clamp = QCheckBox("이미지 영역 내 제한")
         self.chk_clamp.setChecked(True)
-        self.chk_clamp.setStyleSheet("color: #AAA; font-size: 12px; font-weight: bold;")
+        self.chk_clamp.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px; font-weight: bold;")
         self.chk_clamp.setToolTip("워터마크가 이미지 밖으로 나가지 않게 제한합니다")
         self.chk_clamp.toggled.connect(lambda v: self.clamp_changed.emit(v))
         layout.addWidget(self.chk_clamp)
@@ -195,7 +195,7 @@ class WatermarkPanel(QWidget):
         preset_row = QHBoxLayout()
         preset_row.setSpacing(3)
         btn_style = (
-            "background-color: #333; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 3px; padding: 3px 6px; font-size: 11px;"
         )
         for name, (px, py) in _PRESETS.items():
@@ -306,7 +306,7 @@ class WatermarkPanel(QWidget):
             self._watermark_color = color
             self.btn_color.setStyleSheet(
                 f"background-color: {color.name()}; color: {'#000' if color.lightness() > 128 else '#FFF'}; "
-                "border: 1px solid #555; border-radius: 4px; font-size: 13px; font-weight: bold;"
+                f"border: 1px solid {get_color('border')}; border-radius: 4px; font-size: 13px; font-weight: bold;"
             )
             self._emit_preview_if_active()
 

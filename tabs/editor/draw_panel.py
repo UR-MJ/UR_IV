@@ -16,19 +16,20 @@ _PALETTE_COLORS = [
     "#FF8800", "#8800FF", "#888888", "#FF4488",
 ]
 
-_TOOL_BTN_STYLE = """
-    QPushButton {
-        background-color: #2C2C2C; border: 1px solid #444;
-        border-radius: 6px; color: #CCC;
+def _get_tool_btn_style():
+    return f"""
+    QPushButton {{
+        background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
+        border-radius: 6px; color: {get_color('text_secondary')};
         font-size: 13px; font-weight: bold;
         text-align: left; padding-left: 12px;
-    }
-    QPushButton:checked {
+    }}
+    QPushButton:checked {{
         background-color: #5865F2; color: white;
         border: 1px solid #5865F2;
-    }
-    QPushButton:hover { border: 1px solid #666; background-color: #333; }
-    QPushButton:checked:hover { background-color: #6975F3; }
+    }}
+    QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
+    QPushButton:checked:hover {{ background-color: #6975F3; }}
 """
 
 
@@ -52,7 +53,7 @@ class DrawPanel(QWidget):
         # ── 도구 선택 ──
         tool_header = QLabel("그리기 도구")
         tool_header.setStyleSheet(
-            "color: #999; font-size: 18px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 18px; font-weight: bold; padding: 2px 2px;"
         )
         main_layout.addWidget(tool_header)
 
@@ -77,7 +78,7 @@ class DrawPanel(QWidget):
             btn.setCheckable(True)
             btn.setFixedHeight(36)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            btn.setStyleSheet(_TOOL_BTN_STYLE)
+            btn.setStyleSheet(_get_tool_btn_style())
             self.tool_group.addButton(btn, id_val)
             main_layout.addWidget(btn)
 
@@ -91,7 +92,7 @@ class DrawPanel(QWidget):
         # ── 팔레트 ──
         palette_header = QLabel("색상")
         palette_header.setStyleSheet(
-            "color: #999; font-size: 14px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 14px; font-weight: bold; padding: 2px 2px;"
         )
         main_layout.addWidget(palette_header)
 
@@ -103,7 +104,7 @@ class DrawPanel(QWidget):
             btn = QPushButton()
             btn.setFixedSize(32, 32)
             btn.setStyleSheet(
-                f"background-color: {hex_color}; border: 2px solid #444; border-radius: 4px;"
+                f"background-color: {hex_color}; border: 2px solid {get_color('border')}; border-radius: 4px;"
             )
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.clicked.connect(lambda checked, c=hex_color: self._on_palette_click(c))
@@ -125,7 +126,7 @@ class DrawPanel(QWidget):
         btn_custom.setFixedHeight(36)
         btn_custom.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         btn_custom.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; font-weight: bold;"
         )
         btn_custom.clicked.connect(self._on_custom_color)
@@ -140,14 +141,14 @@ class DrawPanel(QWidget):
         grad_row.setSpacing(6)
 
         grad_label = QLabel("끝 색상:")
-        grad_label.setStyleSheet("color: #999; font-size: 12px;")
+        grad_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 12px;")
         grad_row.addWidget(grad_label)
 
         self._gradient_end_color = QColor("#000000")
         self.gradient_end_preview = QLabel()
         self.gradient_end_preview.setFixedSize(32, 32)
         self.gradient_end_preview.setStyleSheet(
-            f"background-color: #000000; border: 2px solid #666; border-radius: 4px;"
+            f"background-color: #000000; border: 2px solid {get_color('text_muted')}; border-radius: 4px;"
         )
         grad_row.addWidget(self.gradient_end_preview)
 
@@ -155,7 +156,7 @@ class DrawPanel(QWidget):
         btn_grad_color.setFixedHeight(32)
         btn_grad_color.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         btn_grad_color.setStyleSheet(
-            "background: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px;"
         )
         btn_grad_color.clicked.connect(self._on_gradient_end_color)
@@ -195,15 +196,15 @@ class DrawPanel(QWidget):
         self.btn_filled.setChecked(False)
         self.btn_filled.setFixedHeight(34)
         self.btn_filled.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_filled.setStyleSheet("""
-            QPushButton {
-                background-color: #2C2C2C; color: #CCC; border: 1px solid #444;
+        self.btn_filled.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border: 1px solid {get_color('border')};
                 border-radius: 6px; font-size: 13px; font-weight: bold;
-            }
-            QPushButton:checked {
+            }}
+            QPushButton:checked {{
                 background-color: #4A90E2; color: white; border: 1px solid #4A90E2;
-            }
-            QPushButton:hover { border: 1px solid #666; }
+            }}
+            QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}
         """)
         main_layout.addWidget(self.btn_filled)
 
@@ -215,7 +216,7 @@ class DrawPanel(QWidget):
         # ── 그리기 레이어 투명도 ──
         layer_header = QLabel("레이어")
         layer_header.setStyleSheet(
-            "color: #999; font-size: 14px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 14px; font-weight: bold; padding: 2px 2px;"
         )
         main_layout.addWidget(layer_header)
 
@@ -227,9 +228,9 @@ class DrawPanel(QWidget):
         self.btn_flatten.setFixedHeight(34)
         self.btn_flatten.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_flatten.setStyleSheet(
-            "QPushButton { background-color: #2C2C2C; color: #CCC; border: 1px solid #444; "
+            f"QPushButton {{ background-color: {get_color('bg_button')}; color: {get_color('text_secondary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 6px; font-size: 13px; font-weight: bold; }"
-            "QPushButton:hover { border: 1px solid #666; }"
+            f"QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}"
         )
         self.btn_flatten.setToolTip("현재 블렌딩 결과를 원본에 병합")
         main_layout.addWidget(self.btn_flatten)
@@ -277,7 +278,7 @@ class DrawPanel(QWidget):
     def _update_color_preview(self):
         hex_c = self._current_color.name()
         self.color_preview.setStyleSheet(
-            f"background-color: {hex_c}; border: 2px solid #666; border-radius: 4px;"
+            f"background-color: {hex_c}; border: 2px solid {get_color('text_muted')}; border-radius: 4px;"
         )
 
     def _on_palette_click(self, hex_color: str):
@@ -327,7 +328,7 @@ class DrawPanel(QWidget):
         if color.isValid():
             self._gradient_end_color = color
             self.gradient_end_preview.setStyleSheet(
-                f"background-color: {color.name()}; border: 2px solid #666; border-radius: 4px;"
+                f"background-color: {color.name()}; border: 2px solid {get_color('text_muted')}; border-radius: 4px;"
             )
 
     def gradient_end_color_bgr(self) -> tuple:

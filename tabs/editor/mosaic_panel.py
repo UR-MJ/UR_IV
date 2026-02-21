@@ -60,7 +60,7 @@ class ResizeDialog(QDialog):
         layout = QVBoxLayout(self)
 
         info_label = QLabel(f"현재 크기: {current_w} × {current_h}")
-        info_label.setStyleSheet("color: #AAA; font-size: 12px;")
+        info_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         layout.addWidget(info_label)
 
         form = QFormLayout()
@@ -139,26 +139,26 @@ class MosaicPanel(QWidget):
         # ── 도구 선택 ──
         tool_header = QLabel("도구")
         tool_header.setStyleSheet(
-            "color: #999; font-size: 18px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 18px; font-weight: bold; padding: 2px 2px;"
         )
         main_layout.addWidget(tool_header)
 
         self.tool_group = QButtonGroup(self)
         self.tool_group.setExclusive(True)
 
-        _tool_btn_style = """
-            QPushButton {
-                background-color: #2C2C2C; border: 1px solid #444;
-                border-radius: 6px; color: #CCC;
+        _tool_btn_style = f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
+                border-radius: 6px; color: {get_color('text_secondary')};
                 font-size: 13px; font-weight: bold;
                 text-align: left; padding-left: 12px;
-            }
-            QPushButton:checked {
+            }}
+            QPushButton:checked {{
                 background-color: #5865F2; color: white;
                 border: 1px solid #5865F2;
-            }
-            QPushButton:hover { border: 1px solid #666; background-color: #333; }
-            QPushButton:checked:hover { background-color: #6975F3; }
+            }}
+            QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
+            QPushButton:checked:hover {{ background-color: #6975F3; }}
         """
 
         def create_tool_btn(text, id_val):
@@ -185,26 +185,26 @@ class MosaicPanel(QWidget):
         # ── 효과 선택 ──
         effect_header = QLabel("효과")
         effect_header.setStyleSheet(
-            "color: #999; font-size: 18px; font-weight: bold; padding: 2px 2px;"
+            f"color: {get_color('text_muted')}; font-size: 18px; font-weight: bold; padding: 2px 2px;"
         )
         main_layout.addWidget(effect_header)
 
         self.effect_group = QButtonGroup(self)
         self.effect_group.setExclusive(True)
 
-        _effect_btn_style = """
-            QPushButton {
-                background-color: #2C2C2C; border: 1px solid #444;
-                border-radius: 6px; color: #CCC;
+        _effect_btn_style = f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
+                border-radius: 6px; color: {get_color('text_secondary')};
                 font-size: 13px; font-weight: bold;
                 text-align: left; padding-left: 12px;
-            }
-            QPushButton:checked {
+            }}
+            QPushButton:checked {{
                 background-color: #4A90E2; color: white;
                 border: 1px solid #4A90E2;
-            }
-            QPushButton:hover { border: 1px solid #666; background-color: #333; }
-            QPushButton:checked:hover { background-color: #5A9FF0; }
+            }}
+            QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
+            QPushButton:checked:hover {{ background-color: #5A9FF0; }}
         """
 
         def create_effect_btn(text, id_val):
@@ -234,7 +234,7 @@ class MosaicPanel(QWidget):
         ac_layout.setSpacing(4)
 
         self.yolo_model_label = QLabel("모델 없음")
-        self.yolo_model_label.setStyleSheet("color: #AAA; font-size: 12px;")
+        self.yolo_model_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         self.yolo_model_label.setWordWrap(True)
         ac_layout.addWidget(self.yolo_model_label)
 
@@ -244,20 +244,20 @@ class MosaicPanel(QWidget):
         btn_add_model = QPushButton("+ 모델")
         btn_add_model.setFixedHeight(35)
         btn_add_model.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        btn_add_model.setStyleSheet("""
-            QPushButton { background-color: #333; border: 1px solid #555;
-                          border-radius: 4px; color: #DDD; font-size: 13px; font-weight: bold; }
-            QPushButton:hover { background-color: #444; }
+        btn_add_model.setStyleSheet(f"""
+            QPushButton {{ background-color: {get_color('bg_button_hover')}; border: 1px solid {get_color('border')};
+                          border-radius: 4px; color: {get_color('text_primary')}; font-size: 13px; font-weight: bold; }}
+            QPushButton:hover {{ background-color: {get_color('border')}; }}
         """)
         btn_add_model.clicked.connect(self._add_yolo_model)
 
         btn_clear_model = QPushButton("초기화")
         btn_clear_model.setFixedHeight(35)
         btn_clear_model.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        btn_clear_model.setStyleSheet("""
-            QPushButton { background-color: #333; border: 1px solid #555;
-                          border-radius: 4px; color: #DDD; font-size: 13px; font-weight: bold; }
-            QPushButton:hover { background-color: #444; }
+        btn_clear_model.setStyleSheet(f"""
+            QPushButton {{ background-color: {get_color('bg_button_hover')}; border: 1px solid {get_color('border')};
+                          border-radius: 4px; color: {get_color('text_primary')}; font-size: 13px; font-weight: bold; }}
+            QPushButton:hover {{ background-color: {get_color('border')}; }}
         """)
         btn_clear_model.clicked.connect(self._clear_yolo_models)
 
@@ -271,14 +271,14 @@ class MosaicPanel(QWidget):
         self.btn_auto_censor = QPushButton("🛡️ 자동 검열")
         self.btn_auto_censor.setFixedHeight(35)
         self.btn_auto_censor.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_auto_censor.setStyleSheet("""
-            QPushButton {
+        self.btn_auto_censor.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #8B0000; color: white;
                 border: 1px solid #B22222; border-radius: 4px;
                 font-size: 13px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #A52A2A; }
-            QPushButton:disabled { background-color: #333; color: #666; }
+            }}
+            QPushButton:hover {{ background-color: #A52A2A; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button_hover')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_auto_censor.setToolTip("YOLO 모델로 감지 후 즉시 검열 적용")
         ac_layout.addWidget(self.btn_auto_censor)
@@ -286,14 +286,14 @@ class MosaicPanel(QWidget):
         self.btn_auto_detect = QPushButton("🔍 감지만 (마스크)")
         self.btn_auto_detect.setFixedHeight(35)
         self.btn_auto_detect.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_auto_detect.setStyleSheet("""
-            QPushButton {
-                background-color: #333; color: #DDD;
-                border: 1px solid #555; border-radius: 4px;
+        self.btn_auto_detect.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('bg_button_hover')}; color: {get_color('text_primary')};
+                border: 1px solid {get_color('border')}; border-radius: 4px;
                 font-size: 13px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #444; }
-            QPushButton:disabled { background-color: #222; color: #666; }
+            }}
+            QPushButton:hover {{ background-color: {get_color('border')}; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_secondary')}; color: {get_color('text_muted')}; }}
         """)
         self.btn_auto_detect.setToolTip("감지 영역을 마스크로만 표시 (수동 적용)")
         ac_layout.addWidget(self.btn_auto_detect)
@@ -366,7 +366,7 @@ class MosaicPanel(QWidget):
 
         self.btn_cancel_sel = QPushButton("❌ 선택 취소 (Esc)")
         self.btn_cancel_sel.setStyleSheet(
-            "background-color: #333; color: #AAA; "
+            f"background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; "
             "border-radius: 6px; font-size: 13px;"
         )
         self.btn_cancel_sel.setFixedHeight(40)
@@ -383,7 +383,7 @@ class MosaicPanel(QWidget):
         self.btn_crop.setFixedHeight(35)
         self.btn_crop.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_crop.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
 
@@ -391,7 +391,7 @@ class MosaicPanel(QWidget):
         self.btn_resize.setFixedHeight(35)
         self.btn_resize.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_resize.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
 
@@ -399,7 +399,7 @@ class MosaicPanel(QWidget):
         self.btn_perspective.setFixedHeight(35)
         self.btn_perspective.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_perspective.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
 
@@ -410,7 +410,7 @@ class MosaicPanel(QWidget):
 
         # 회전/뒤집기 버튼
         _tf_style = (
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
 
@@ -453,7 +453,7 @@ class MosaicPanel(QWidget):
 
         bg_model_label = QLabel("모델:")
         bg_model_label.setFixedWidth(35)
-        bg_model_label.setStyleSheet("color: #AAA; font-size: 12px;")
+        bg_model_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         bg_model_layout.addWidget(bg_model_label)
 
         _BG_MODELS = [
@@ -468,21 +468,21 @@ class MosaicPanel(QWidget):
             self.bg_model_combo.addItem(f"{model_id}  —  {desc}", model_id)
         self.bg_model_combo.setFixedHeight(30)
         self.bg_model_combo.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; padding: 2px 6px;"
         )
         bg_model_layout.addWidget(self.bg_model_combo)
 
         bg_color_label = QLabel("배경:")
         bg_color_label.setFixedWidth(35)
-        bg_color_label.setStyleSheet("color: #AAA; font-size: 12px;")
+        bg_color_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         bg_model_layout.addWidget(bg_color_label)
 
         self.bg_color_combo = NoScrollComboBox()
         self.bg_color_combo.addItems(["흰색", "검은색"])
         self.bg_color_combo.setFixedHeight(30)
         self.bg_color_combo.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 12px; padding: 2px 6px;"
         )
         bg_model_layout.addWidget(self.bg_color_combo)
@@ -493,7 +493,7 @@ class MosaicPanel(QWidget):
         self.btn_remove_bg.setFixedHeight(36)
         self.btn_remove_bg.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.btn_remove_bg.setStyleSheet(
-            "background-color: #2C2C2C; color: #DDD; border: 1px solid #555; "
+            f"background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
             "border-radius: 4px; font-size: 13px; font-weight: bold;"
         )
         action_layout.addWidget(self.btn_remove_bg)
@@ -529,19 +529,19 @@ class MosaicPanel(QWidget):
                 self.image_label.eraser_restores_image = self.eraser_mode_restore
                 self.update_eraser_visual()
 
-        _default_style = """
-            QPushButton {
-                background-color: #2C2C2C; border: 1px solid #444;
-                border-radius: 6px; color: #CCC;
+        _default_style = f"""
+            QPushButton {{
+                background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
+                border-radius: 6px; color: {get_color('text_secondary')};
                 font-size: 13px; font-weight: bold;
                 text-align: left; padding-left: 12px;
-            }
-            QPushButton:checked {
+            }}
+            QPushButton:checked {{
                 background-color: #5865F2; color: white;
                 border: 1px solid #5865F2;
-            }
-            QPushButton:hover { border: 1px solid #666; background-color: #333; }
-            QPushButton:checked:hover { background-color: #6975F3; }
+            }}
+            QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
+            QPushButton:checked:hover {{ background-color: #6975F3; }}
         """
         if id_val != 3:
             self.btn_tool_eraser.setText("🧹  지우기")
@@ -558,68 +558,68 @@ class MosaicPanel(QWidget):
         """지우개 비주얼 업데이트"""
         if self.eraser_mode_restore:
             self.btn_tool_eraser.setText("✨  모자이크 지우기")
-            self.btn_tool_eraser.setStyleSheet("""
-                QPushButton {
-                    background-color: #2C2C2C; border: 1px solid #e67e22;
+            self.btn_tool_eraser.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_button')}; border: 1px solid #e67e22;
                     border-radius: 6px; color: #e67e22;
                     font-size: 13px; font-weight: bold;
                     text-align: left; padding-left: 12px;
-                }
-                QPushButton:checked {
+                }}
+                QPushButton:checked {{
                     background-color: #e67e22; color: white;
                     border: 1px solid #d35400;
-                }
-                QPushButton:hover { border: 1px solid #d35400; }
+                }}
+                QPushButton:hover {{ border: 1px solid #d35400; }}
             """)
         else:
             self.btn_tool_eraser.setText("🧹  지우기")
-            self.btn_tool_eraser.setStyleSheet("""
-                QPushButton {
-                    background-color: #2C2C2C; border: 1px solid #444;
-                    border-radius: 6px; color: #CCC;
+            self.btn_tool_eraser.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
+                    border-radius: 6px; color: {get_color('text_secondary')};
                     font-size: 13px; font-weight: bold;
                     text-align: left; padding-left: 12px;
-                }
-                QPushButton:checked {
+                }}
+                QPushButton:checked {{
                     background-color: #5865F2; color: white;
                     border: 1px solid #5865F2;
-                }
-                QPushButton:hover { border: 1px solid #666; background-color: #333; }
-                QPushButton:checked:hover { background-color: #6975F3; }
+                }}
+                QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
+                QPushButton:checked:hover {{ background-color: #6975F3; }}
             """)
 
     def update_lasso_visual(self):
         """올가미 비주얼 업데이트 (일반 ↔ 자석)"""
         if self.lasso_magnetic_mode:
             self.btn_tool_lasso.setText("🧲  자석 올가미")
-            self.btn_tool_lasso.setStyleSheet("""
-                QPushButton {
-                    background-color: #2C2C2C; border: 1px solid #2ecc71;
+            self.btn_tool_lasso.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_button')}; border: 1px solid #2ecc71;
                     border-radius: 6px; color: #2ecc71;
                     font-size: 13px; font-weight: bold;
                     text-align: left; padding-left: 12px;
-                }
-                QPushButton:checked {
+                }}
+                QPushButton:checked {{
                     background-color: #2ecc71; color: white;
                     border: 1px solid #27ae60;
-                }
-                QPushButton:hover { border: 1px solid #27ae60; }
+                }}
+                QPushButton:hover {{ border: 1px solid #27ae60; }}
             """)
         else:
             self.btn_tool_lasso.setText("➰  올가미 선택")
-            self.btn_tool_lasso.setStyleSheet("""
-                QPushButton {
-                    background-color: #2C2C2C; border: 1px solid #444;
-                    border-radius: 6px; color: #CCC;
+            self.btn_tool_lasso.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_button')}; border: 1px solid {get_color('border')};
+                    border-radius: 6px; color: {get_color('text_secondary')};
                     font-size: 13px; font-weight: bold;
                     text-align: left; padding-left: 12px;
-                }
-                QPushButton:checked {
+                }}
+                QPushButton:checked {{
                     background-color: #5865F2; color: white;
                     border: 1px solid #5865F2;
-                }
-                QPushButton:hover { border: 1px solid #666; background-color: #333; }
-                QPushButton:checked:hover { background-color: #6975F3; }
+                }}
+                QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; background-color: {get_color('bg_button_hover')}; }}
+                QPushButton:checked:hover {{ background-color: #6975F3; }}
             """)
 
     def on_effect_changed(self):

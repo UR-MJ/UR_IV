@@ -130,7 +130,7 @@ class CropWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # 배경
-        painter.fillRect(self.rect(), QBrush(QColor("#1A1A1A")))
+        painter.fillRect(self.rect(), QBrush(QColor(get_color('bg_secondary'))))
 
         # 이미지
         dr = self._display_rect
@@ -272,7 +272,7 @@ class CropDialog(QDialog):
         layout.setSpacing(8)
 
         info = QLabel("모서리와 변의 핸들을 드래그하여 크롭 영역을 조절하세요")
-        info.setStyleSheet("color: #AAA; font-size: 12px;")
+        info.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
         info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(info)
 
@@ -294,7 +294,7 @@ class CropDialog(QDialog):
         btn_cancel = QPushButton("❌ 취소")
         btn_cancel.setFixedHeight(38)
         btn_cancel.setStyleSheet(
-            "background-color: #333; color: #AAA; border-radius: 6px; "
+            f"background-color: {get_color('bg_button_hover')}; color: {get_color('text_secondary')}; border-radius: 6px; "
             "font-size: 14px; padding: 0 20px;"
         )
         btn_cancel.clicked.connect(self.reject)
