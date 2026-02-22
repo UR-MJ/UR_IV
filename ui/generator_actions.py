@@ -11,6 +11,7 @@ from config import OUTPUT_DIR
 from utils.theme_manager import get_color
 from core.image_utils import exif_for_display
 from utils.app_logger import get_logger
+from ui.generator_generation import _gen_btn_style, _gen_btn_default_color
 
 _logger = get_logger('actions')
 
@@ -207,14 +208,7 @@ class ActionsMixin:
             
             # 생성 버튼 → 자동화 시작 버튼으로 변경
             self.btn_generate.setText("🚀 자동화 시작")
-            self.btn_generate.setStyleSheet("""
-                QPushButton {
-                    font-size: 15px; font-weight: bold;
-                    background-color: #27ae60; color: white;
-                    border-radius: 5px; padding: 4px;
-                }
-                QPushButton:hover { background-color: #2ecc71; }
-            """)
+            self.btn_generate.setStyleSheet(_gen_btn_style('#27ae60'))
         else:
             # 자동화 중이면 먼저 중지
             if self.is_automating:
@@ -234,14 +228,7 @@ class ActionsMixin:
 
             # 생성 버튼 복구
             self.btn_generate.setText("✨ 이미지 생성")
-            self.btn_generate.setStyleSheet(f"""
-                QPushButton {{
-                    font-size: 15px; font-weight: bold;
-                    background-color: {get_color('accent')}; color: white;
-                    border-radius: 5px; padding: 4px;
-                }}
-                QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
-            """)
+            self.btn_generate.setStyleSheet(_gen_btn_style(_gen_btn_default_color()))
             
     def _on_automation_generation_finished(self, result, gen_info):
         """자동화 생성 완료"""
@@ -383,14 +370,7 @@ class ActionsMixin:
         
         # 버튼 상태 변경
         self.btn_generate.setText("⏸️ 자동화 중지")
-        self.btn_generate.setStyleSheet("""
-            QPushButton {
-                font-size: 15px; font-weight: bold;
-                background-color: #e74c3c; color: white;
-                border-radius: 5px; padding: 4px;
-            }
-            QPushButton:hover { background-color: #c0392b; }
-        """)
+        self.btn_generate.setStyleSheet(_gen_btn_style('#e74c3c'))
         
         self.show_status("🔄 자동화 시작...")
         
@@ -463,24 +443,10 @@ class ActionsMixin:
         # 버튼 상태 복구 (자동화 모드는 유지)
         if self.btn_auto_toggle.isChecked():
             self.btn_generate.setText("🚀 자동화 시작")
-            self.btn_generate.setStyleSheet("""
-                QPushButton {
-                    font-size: 15px; font-weight: bold;
-                    background-color: #27ae60; color: white;
-                    border-radius: 5px; padding: 4px;
-                }
-                QPushButton:hover { background-color: #2ecc71; }
-            """)
+            self.btn_generate.setStyleSheet(_gen_btn_style('#27ae60'))
         else:
             self.btn_generate.setText("✨ 이미지 생성")
-            self.btn_generate.setStyleSheet(f"""
-                QPushButton {{
-                    font-size: 15px; font-weight: bold;
-                    background-color: {get_color('accent')}; color: white;
-                    border-radius: 5px; padding: 4px;
-                }}
-                QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
-            """)
+            self.btn_generate.setStyleSheet(_gen_btn_style(_gen_btn_default_color()))
 
         self.btn_generate.setEnabled(True)
         
@@ -526,8 +492,9 @@ class ActionsMixin:
             else:
                 self.left_stack.setCurrentIndex(0)  # 기본 생성 설정
                 # 왼쪽 패널 스크롤 최상단으로 리셋
-                if hasattr(self, 'left_panel_scroll'):
-                    self.left_panel_scroll.verticalScrollBar().setValue(0)
+                scroll = getattr(self, '_left_scroll_area', None) or getattr(self, 'left_panel_scroll', None)
+                if scroll:
+                    scroll.verticalScrollBar().setValue(0)
 
         # 즐겨찾기 탭으로 전환 시 자동 새로고침
         if hasattr(self, 'fav_tab') and current_widget == self.fav_tab:

@@ -208,9 +208,70 @@ def setup_modern_ui(self):
 # ===========================================================================
 # 왼쪽 패널 구축 (모던 레이아웃)
 # ===========================================================================
-def _build_modern_left_panel(self) -> QScrollArea:
-    """모던 스타일 왼쪽 패널 생성"""
+def _build_modern_left_panel(self) -> QWidget:
+    """모던 스타일 왼쪽 패널 생성 — 3단 구조 (헤더/스크롤/하단바)"""
 
+    # ─── 외부 컨테이너 ───
+    outer = QWidget()
+    outer.setMaximumWidth(450)
+    outer_layout = QVBoxLayout(outer)
+    outer_layout.setContentsMargins(0, 0, 0, 0)
+    outer_layout.setSpacing(0)
+
+    # ─── generator_panel (다른 mixin에서 참조) ───
+    self.generator_panel = QWidget()
+
+    # ==================================================================
+    # PART 1: 고정 헤더 바 (44px)
+    # ==================================================================
+    header_bar = QWidget()
+    header_bar.setFixedHeight(44)
+    header_bar.setObjectName("modernLeftHeader")
+    header_bar.setStyleSheet(f"""
+        #modernLeftHeader {{
+            background-color: {get_color('bg_primary')};
+            border-bottom: 1px solid {get_color('border')};
+        }}
+    """)
+    header_layout = QHBoxLayout(header_bar)
+    header_layout.setContentsMargins(14, 0, 14, 0)
+
+    _header_title = QLabel("기본")
+    _header_title.setStyleSheet(
+        f"font-weight: bold; font-size: 15px; "
+        f"color: {get_color('text_primary')}; background: transparent;"
+    )
+    header_layout.addWidget(_header_title)
+
+    _btn_folder = QPushButton("📂")
+    _btn_folder.setFixedSize(28, 28)
+    _btn_folder.setCursor(Qt.CursorShape.PointingHandCursor)
+    _btn_folder.setToolTip("프리셋 불러오기")
+    _btn_folder.setStyleSheet(f"""
+        QPushButton {{ background: transparent; border: none; font-size: 14px; }}
+        QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; border-radius: 14px; }}
+    """)
+    _btn_folder.clicked.connect(self._load_prompt_preset)
+    header_layout.addWidget(_btn_folder)
+
+    header_layout.addStretch()
+
+    # 토큰 카운터 (금색, 헤더 우측)
+    self.token_count_label = QLabel("🪙 0")
+    self.token_count_label.setStyleSheet(
+        "color: #E8A822; font-size: 13px; font-weight: bold; "
+        "padding: 0 4px; background: transparent;"
+    )
+    self.token_count_label.setAlignment(
+        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+    )
+    header_layout.addWidget(self.token_count_label)
+
+    outer_layout.addWidget(header_bar)
+
+    # ==================================================================
+    # PART 2: 스크롤 영역 (확장)
+    # ==================================================================
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -227,15 +288,13 @@ def _build_modern_left_panel(self) -> QScrollArea:
             min-height: 40px;
         }}
     """)
+    self._left_scroll_area = scroll  # 스크롤바 접근용
 
     container = QWidget()
     container.setMaximumWidth(440)
     root = QVBoxLayout(container)
-    root.setContentsMargins(12, 10, 12, 10)
-    root.setSpacing(8)
-
-    # ─── generator_panel (다른 mixin에서 참조) ───
-    self.generator_panel = QWidget()
+    root.setContentsMargins(12, 12, 12, 12)
+    root.setSpacing(12)  # 넉넉한 간격 (레퍼런스)
 
     # ========== API 상태 버튼 ==========
     self.btn_api_manager = ApiStatusButton()
@@ -263,10 +322,40 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.main_prompt_text.setPlaceholderText("메인 프롬프트...")
     root.addWidget(self.main_prompt_text)
 
+    # ========== 세부 프롬프트 (total_prompt_display) ==========
+    root.addWidget(_section_label("세부 프롬프트"))
+    self.total_prompt_display = QTextEdit()
+    self.total_prompt_display.setReadOnly(False)
+    self.total_prompt_display.setMinimumHeight(60)
+    self.total_prompt_display.document().contentsChanged.connect(
+        self._adjust_total_prompt_height
+    )
+    self.total_prompt_display.textChanged.connect(self._update_token_count)
+    root.addWidget(self.total_prompt_display)
+
+    # ========== 네거티브 프롬프트 ==========
+    root.addWidget(_section_label("네거티브 프롬프트", color="#e74c3c"))
+    self.neg_prompt_text = TagInputWidget()
+    self.neg_prompt_text.setMinimumHeight(60)
+    self.neg_prompt_text.setPlaceholderText("부정 프롬프트...")
+    root.addWidget(self.neg_prompt_text)
+
+    # 숨김 토글 버튼 (다른 mixin 참조)
+    self.neg_toggle_button = QPushButton("▼ 부정 프롬프트 (Negative)")
+    self.neg_toggle_button.setCheckable(True)
+    self.neg_toggle_button.setChecked(True)
+    self.neg_toggle_button.hide()
+    self.neg_toggle_button.toggled.connect(self._on_neg_toggle)
+
+    # ====================================================================
+    # 접이식 "추가 옵션" — 후행/제외/즐겨찾기/LoRA (메인에서 이동)
+    # ====================================================================
+    extra_section = _CollapsibleSection("추가 옵션")
+
     # 즐겨찾기 태그 바
     self.fav_tags_bar = FavoriteTagsBar()
     self.fav_tags_bar.tag_insert_requested.connect(self._insert_fav_tag)
-    root.addWidget(self.fav_tags_bar)
+    extra_section.addWidget(self.fav_tags_bar)
 
     # LoRA + 가중치 편집 버튼 행
     lora_row = QHBoxLayout()
@@ -294,50 +383,13 @@ def _build_modern_left_panel(self) -> QScrollArea:
 
     lora_row.addWidget(self.btn_tag_weights)
     lora_row.addWidget(self.btn_lora_manager)
-    root.addLayout(lora_row)
+    extra_section.addLayout(lora_row)
 
     # LoRA 활성 목록 패널
     self.lora_active_panel = LoraActivePanel()
-    root.addWidget(self.lora_active_panel)
+    extra_section.addWidget(self.lora_active_panel)
 
-    # ========== 세부 프롬프트 (total_prompt_display, readonly) ==========
-    root.addWidget(_section_label("세부 프롬프트 (최종)"))
-    self.total_prompt_display = QTextEdit()
-    self.total_prompt_display.setReadOnly(False)
-    self.total_prompt_display.setMinimumHeight(60)
-    self.total_prompt_display.document().contentsChanged.connect(
-        self._adjust_total_prompt_height
-    )
-    self.total_prompt_display.textChanged.connect(self._update_token_count)
-    # 모던 QSS 템플릿의 QTextEdit 스타일 적용 (inline 제거)
-    root.addWidget(self.total_prompt_display)
-
-    # 토큰 카운터
-    self.token_count_label = QLabel("토큰: 0 / 75")
-    self.token_count_label.setStyleSheet(
-        f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold; "
-        f"padding: 0 4px;"
-    )
-    self.token_count_label.setAlignment(
-        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-    )
-    root.addWidget(self.token_count_label)
-
-    # ========== 네거티브 프롬프트 ==========
-    root.addWidget(_section_label("네거티브 프롬프트", color="#e74c3c"))
-    self.neg_prompt_text = TagInputWidget()
-    self.neg_prompt_text.setMinimumHeight(60)
-    self.neg_prompt_text.setPlaceholderText("부정 프롬프트...")
-    root.addWidget(self.neg_prompt_text)
-
-    # 숨김 토글 버튼 (다른 mixin 참조)
-    self.neg_toggle_button = QPushButton("▼ 부정 프롬프트 (Negative)")
-    self.neg_toggle_button.setCheckable(True)
-    self.neg_toggle_button.setChecked(True)
-    self.neg_toggle_button.hide()
-    self.neg_toggle_button.toggled.connect(self._on_neg_toggle)
-
-    # ========== 후행 프롬프트 ==========
+    # 후행 프롬프트
     self.suffix_prompt_text = TagInputWidget()
     self.suffix_prompt_text.setMinimumHeight(60)
     self.suffix_prompt_text.setPlaceholderText("후행 고정 프롬프트...")
@@ -346,10 +398,10 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.suffix_toggle_button.setChecked(True)
     self.suffix_toggle_button.hide()
     self.suffix_toggle_button.toggled.connect(self._on_suffix_toggle)
-    root.addWidget(_section_label("후행 프롬프트"))
-    root.addWidget(self.suffix_prompt_text)
+    extra_section.addWidget(_section_label("후행 프롬프트"))
+    extra_section.addWidget(self.suffix_prompt_text)
 
-    # ========== 제외 프롬프트 ==========
+    # 제외 프롬프트
     self.exclude_prompt_local_input = TagInputWidget()
     self.exclude_prompt_local_input.setMinimumHeight(60)
     self.exclude_prompt_local_input.setPlaceholderText(
@@ -360,8 +412,10 @@ def _build_modern_left_panel(self) -> QScrollArea:
     self.exclude_toggle_button.setChecked(True)
     self.exclude_toggle_button.hide()
     self.exclude_toggle_button.toggled.connect(self._on_exclude_toggle)
-    root.addWidget(_section_label("제외 프롬프트", color="#e67e22"))
-    root.addWidget(self.exclude_prompt_local_input)
+    extra_section.addWidget(_section_label("제외 프롬프트", color="#e67e22"))
+    extra_section.addWidget(self.exclude_prompt_local_input)
+
+    root.addWidget(extra_section)
 
     # ====================================================================
     # 접이식 "상세 설정" 섹션
@@ -859,76 +913,173 @@ def _build_modern_left_panel(self) -> QScrollArea:
 
     root.addWidget(util_section)
 
-    # ====================================================================
-    # 하단 고정 바: 아이콘 버튼들 + 생성 버튼
-    # ====================================================================
     root.addStretch()
 
-    # 아이콘 버튼 행
+    # ==================================================================
+    # 스크롤 → outer 배치
+    # ==================================================================
+    scroll.setWidget(container)
+    outer_layout.addWidget(scroll, 1)   # stretch=1 → 가용 공간 차지
+
+    # ==================================================================
+    # PART 3: 고정 하단 바
+    # ==================================================================
+    bottom_bar = QWidget()
+    bottom_bar.setObjectName("modernBottomBar")
+    bottom_bar.setStyleSheet(f"""
+        #modernBottomBar {{
+            background-color: {get_color('bg_primary')};
+            border-top: 1px solid {get_color('border')};
+        }}
+    """)
+    bottom_layout = QVBoxLayout(bottom_bar)
+    bottom_layout.setContentsMargins(10, 8, 10, 10)
+    bottom_layout.setSpacing(8)
+
+    # ── 5개 아이콘 버튼 행 (pill 스타일) ──
     icon_row = QHBoxLayout()
     icon_row.setSpacing(6)
-    icon_row.setContentsMargins(0, 4, 0, 0)
 
-    self.btn_random_prompt = QPushButton("🎲")
-    self.btn_random_prompt.setFixedSize(40, 40)
-    self.btn_random_prompt.setToolTip("랜덤 프롬프트")
-    self.btn_random_prompt.setEnabled(False)
-    self.btn_random_prompt.setStyleSheet(f"""
-        QPushButton {{
-            background-color: {get_color('bg_secondary')};
-            border: none; border-radius: 12px;
-            font-size: 18px;
-        }}
-        QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
-    """)
+    _icon_btn_style = (
+        f"QPushButton {{ background-color: {get_color('bg_secondary')}; "
+        f"color: {get_color('text_primary')}; border: none; border-radius: 16px; "
+        f"font-size: 12px; font-weight: bold; padding: 6px 10px; }}"
+        f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
+    )
 
-    self.btn_prompt_history = QPushButton("📋")
-    self.btn_prompt_history.setFixedSize(40, 40)
-    self.btn_prompt_history.setToolTip("최근 프롬프트 히스토리")
-    self.btn_prompt_history.setStyleSheet(f"""
-        QPushButton {{
-            background-color: {get_color('bg_secondary')};
-            border: none; border-radius: 12px;
-            font-size: 18px;
-        }}
-        QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}
-    """)
-    self.btn_prompt_history.clicked.connect(self._show_prompt_history)
+    self.btn_bottom_i2i = QPushButton("🖼 참조")
+    self.btn_bottom_i2i.setFixedHeight(32)
+    self.btn_bottom_i2i.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_bottom_i2i.setStyleSheet(_icon_btn_style)
+    self.btn_bottom_i2i.setToolTip("이미지 참조 (I2I) 탭으로 이동")
+    self.btn_bottom_i2i.clicked.connect(
+        lambda: self.center_tabs.setCurrentIndex(1) if hasattr(self, 'center_tabs') else None
+    )
 
-    icon_row.addWidget(self.btn_random_prompt)
-    icon_row.addWidget(self.btn_prompt_history)
-    icon_row.addStretch()
-    root.addLayout(icon_row)
+    self.btn_bottom_char = QPushButton("👤 캐릭터")
+    self.btn_bottom_char.setFixedHeight(32)
+    self.btn_bottom_char.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_bottom_char.setStyleSheet(_icon_btn_style)
+    self.btn_bottom_char.setToolTip("캐릭터 프리셋 열기")
+    self.btn_bottom_char.clicked.connect(
+        lambda: self._open_character_preset() if hasattr(self, '_open_character_preset') else None
+    )
 
-    # 생성 버튼 (풀 폭, 액센트 색상, 필 모양)
-    self.btn_generate = QPushButton("✨  이미지 생성")
+    self.btn_bottom_shuffle = QPushButton("🎨 조각")
+    self.btn_bottom_shuffle.setFixedHeight(32)
+    self.btn_bottom_shuffle.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_bottom_shuffle.setStyleSheet(_icon_btn_style)
+    self.btn_bottom_shuffle.setToolTip("메인 프롬프트 태그 셔플")
+    self.btn_bottom_shuffle.clicked.connect(
+        lambda: self._shuffle_main_prompt() if hasattr(self, '_shuffle_main_prompt') else None
+    )
+
+    self.btn_bottom_lora = QPushButton("◆ LoRA")
+    self.btn_bottom_lora.setFixedHeight(32)
+    self.btn_bottom_lora.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_bottom_lora.setStyleSheet(_icon_btn_style)
+    self.btn_bottom_lora.setToolTip("LoRA 브라우저 열기")
+    self.btn_bottom_lora.clicked.connect(
+        lambda: self._open_lora_manager() if hasattr(self, '_open_lora_manager') else None
+    )
+
+    self.btn_bottom_detail = QPushButton("⚙ 상세")
+    self.btn_bottom_detail.setFixedHeight(32)
+    self.btn_bottom_detail.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_bottom_detail.setStyleSheet(_icon_btn_style)
+    self.btn_bottom_detail.setToolTip("상세 설정 펼치기")
+    self.btn_bottom_detail.clicked.connect(
+        lambda: detail_section.toggle_btn.click()
+    )
+
+    icon_row.addWidget(self.btn_bottom_i2i)
+    icon_row.addWidget(self.btn_bottom_char)
+    icon_row.addWidget(self.btn_bottom_shuffle)
+    icon_row.addWidget(self.btn_bottom_lora)
+    icon_row.addWidget(self.btn_bottom_detail)
+    bottom_layout.addLayout(icon_row)
+
+    # ── 생성 버튼 행: [🖌 이미지 생성] + [-] N [+] ──
+    gen_row = QHBoxLayout()
+    gen_row.setSpacing(8)
+
+    self.btn_generate = QPushButton("🖌  이미지 생성")
     self.btn_generate.setFixedHeight(48)
     self.btn_generate.setEnabled(False)
     self.btn_generate.setCursor(Qt.CursorShape.PointingHandCursor)
     self.btn_generate.setStyleSheet(f"""
         QPushButton {{
             font-size: 15px; font-weight: bold;
-            background-color: {get_color('accent')};
-            color: white;
-            border: none;
-            border-radius: 24px;
-            padding: 4px;
+            background-color: #E8822A;
+            color: white; border: none;
+            border-radius: 24px; padding: 4px 16px;
         }}
-        QPushButton:hover {{
-            background-color: #7289DA;
-        }}
+        QPushButton:hover {{ background-color: #F09030; }}
         QPushButton:disabled {{
             background-color: {get_color('disabled_bg')};
             color: {get_color('disabled_text')};
         }}
     """)
-    root.addWidget(self.btn_generate)
+    gen_row.addWidget(self.btn_generate, 1)
 
-    # exclude_artist_checkbox, exclude_copyright_checkbox는
-    # _create_center_tabs() 내부에서 생성되므로 여기서 중복 생성하지 않음.
+    # 배치 카운트 [-] N [+]
+    self._batch_count = 1
+    _batch_btn_style = (
+        f"QPushButton {{ background-color: {get_color('bg_secondary')}; "
+        f"color: {get_color('text_primary')}; border: none; border-radius: 14px; "
+        f"font-size: 14px; font-weight: bold; }}"
+        f"QPushButton:hover {{ background-color: {get_color('bg_button_hover')}; }}"
+    )
 
-    scroll.setWidget(container)
-    return scroll
+    self.btn_batch_minus = QPushButton("−")
+    self.btn_batch_minus.setFixedSize(28, 28)
+    self.btn_batch_minus.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_batch_minus.setStyleSheet(_batch_btn_style)
+    self.btn_batch_minus.clicked.connect(lambda: self._change_batch_count(-1))
+
+    self.batch_count_label = QLabel("1")
+    self.batch_count_label.setFixedWidth(24)
+    self.batch_count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    self.batch_count_label.setStyleSheet(
+        f"color: {get_color('text_primary')}; font-size: 14px; font-weight: bold;"
+    )
+
+    self.btn_batch_plus = QPushButton("+")
+    self.btn_batch_plus.setFixedSize(28, 28)
+    self.btn_batch_plus.setCursor(Qt.CursorShape.PointingHandCursor)
+    self.btn_batch_plus.setStyleSheet(_batch_btn_style)
+    self.btn_batch_plus.clicked.connect(lambda: self._change_batch_count(1))
+
+    gen_row.addWidget(self.btn_batch_minus)
+    gen_row.addWidget(self.batch_count_label)
+    gen_row.addWidget(self.btn_batch_plus)
+    bottom_layout.addLayout(gen_row)
+
+    # ── 숨김 위젯 (ActionsMixin 호환용) ──
+    self.btn_random_prompt = QPushButton("🎲")
+    self.btn_random_prompt.setEnabled(False)
+    self.btn_random_prompt.hide()
+
+    self.btn_prompt_history = QPushButton("📋")
+    self.btn_prompt_history.clicked.connect(self._show_prompt_history)
+    self.btn_prompt_history.hide()
+
+    outer_layout.addWidget(bottom_bar)
+    return outer
+
+
+def _change_batch_count(self, delta: int):
+    """배치 카운트 증감 (1~16 범위)"""
+    self._batch_count = max(1, min(16, self._batch_count + delta))
+    self.batch_count_label.setText(str(self._batch_count))
+
+
+def _update_history_count(self):
+    """히스토리 이미지 수 갱신"""
+    if not hasattr(self, 'history_count_label'):
+        return
+    count = len(self.gallery_items) if hasattr(self, 'gallery_items') else 0
+    self.history_count_label.setText(f"{count}개" if count else "")
 
 
 # ===========================================================================
@@ -1030,6 +1181,13 @@ def _build_modern_history_panel(self) -> QWidget:
         f"font-size: 13px; background: transparent;"
     )
     header_layout.addWidget(title)
+
+    self.history_count_label = QLabel("")
+    self.history_count_label.setStyleSheet(
+        f"color: {get_color('text_muted')}; font-size: 11px; "
+        f"background: transparent; margin-left: 4px;"
+    )
+    header_layout.addWidget(self.history_count_label)
     header_layout.addStretch()
 
     self.btn_refresh_gallery = QPushButton("🔄")

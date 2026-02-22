@@ -99,7 +99,9 @@ class GalleryMixin:
         for filename in files[:50]:
             filepath = os.path.join(OUTPUT_DIR, filename)
             self.add_image_to_gallery(filepath)
-    
+        if hasattr(self, '_update_history_count'):
+            self._update_history_count()
+
     def add_image_to_gallery(self, filepath):
         """갤러리에 이미지 추가"""
         thumb = ThumbnailItem(filepath, hover_enabled=False)
@@ -113,7 +115,9 @@ class GalleryMixin:
             old_thumb = self.gallery_items.pop()
             self.gallery_layout.removeWidget(old_thumb)
             old_thumb.deleteLater()
-    
+        if hasattr(self, '_update_history_count'):
+            self._update_history_count()
+
     def on_thumbnail_clicked(self, filepath):
         """썸네일 클릭"""
         for item in self.gallery_items:
@@ -222,7 +226,9 @@ class GalleryMixin:
                     self.gallery_items.pop(i)
                     item.deleteLater()
                     break
-            
+            if hasattr(self, '_update_history_count'):
+                self._update_history_count()
+
             if self.current_image_path == filepath:
                 self.viewer_label.clear()
                 self.viewer_label.setText("이미지가 삭제되었습니다.")

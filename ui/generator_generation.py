@@ -21,6 +21,12 @@ from utils.app_logger import get_logger
 from utils.theme_manager import get_theme_manager
 
 
+def _gen_btn_default_color() -> str:
+    """생성 버튼 기본 색상 (모던=오렌지, 클래식=파란)"""
+    is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
+    return '#E8822A' if is_modern else '#4A90E2'
+
+
 def _gen_btn_style(bg_color: str) -> str:
     """생성 버튼 스타일 (UI 모드별 border-radius 적용)"""
     is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
@@ -102,11 +108,15 @@ class GenerationMixin:
             "seed": int(self.seed_input.text()), 
             "width": width, 
             "height": height,
-            "send_images": True, 
+            "send_images": True,
             "save_images": True,
-            "alwayson_scripts": {} 
+            "alwayson_scripts": {}
         }
-        
+
+        # 배치 카운트 (모던 UI)
+        if hasattr(self, '_batch_count') and self._batch_count > 1:
+            payload["n_iter"] = self._batch_count
+
         # Hires.fix
         if self.hires_options_group.isChecked():
             hr_payload = {
@@ -216,7 +226,7 @@ class GenerationMixin:
                 self.btn_generate.setStyleSheet(_gen_btn_style('#27ae60'))
         else:
             self.btn_generate.setText("✨ 이미지 생성")
-            self.btn_generate.setStyleSheet(_gen_btn_style('#4A90E2'))
+            self.btn_generate.setStyleSheet(_gen_btn_style(_gen_btn_default_color()))
         
         self.btn_generate.setEnabled(True)
 

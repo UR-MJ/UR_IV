@@ -17,6 +17,7 @@ from widgets.sliders import NumericSlider
 from widgets.favorite_tags import FavoriteTagsBar
 from widgets.character_preset_dialog import CharacterPresetDialog
 from widgets.common_widgets import NoScrollComboBox, AutomationWidget, ResolutionItemWidget
+import config
 from config import OUTPUT_DIR
 from widgets.tag_input import TagInputWidget
 from utils.theme_manager import get_color
@@ -1541,30 +1542,48 @@ class UISetupMixin:
 
     def _update_token_count(self):
         """최종 프롬프트 토큰 수 추정 (CLIP 기준 근사)"""
-        text = self.total_prompt_display.toPlainText().strip()
-        if not text:
-            self.token_count_label.setText("토큰: 0 / 75")
-            self.token_count_label.setStyleSheet(
-                f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold; padding: 0 4px;"
-            )
-            return
-        # CLIP 토큰 근사: 단어/서브워드 기준 (영어 ~0.75 토큰/단어, 태그 ~1 토큰/태그)
         import re
+        is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
+        text = self.total_prompt_display.toPlainText().strip()
+
+        if not text:
+            if is_modern:
+                self.token_count_label.setText("🪙 0")
+                self.token_count_label.setStyleSheet(
+                    "color: #E8A822; font-size: 13px; font-weight: bold; "
+                    "padding: 0 4px; background: transparent;"
+                )
+            else:
+                self.token_count_label.setText("토큰: 0 / 75")
+                self.token_count_label.setStyleSheet(
+                    f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold; padding: 0 4px;"
+                )
+            return
+
+        # CLIP 토큰 근사: 단어/서브워드 기준 (영어 ~0.75 토큰/단어, 태그 ~1 토큰/태그)
         tags = [t.strip() for t in text.split(",") if t.strip()]
         token_est = 0
         for tag in tags:
             words = re.findall(r'[a-zA-Z]+|[^ ,():\[\]]+', tag)
             token_est += max(1, len(words))
-        if token_est <= 75:
-            color = "#4CAF50"
-        elif token_est <= 150:
-            color = "#FFA726"
+
+        if is_modern:
+            self.token_count_label.setText(f"🪙 {token_est:,}")
+            self.token_count_label.setStyleSheet(
+                "color: #E8A822; font-size: 13px; font-weight: bold; "
+                "padding: 0 4px; background: transparent;"
+            )
         else:
-            color = "#E74C3C"
-        self.token_count_label.setText(f"토큰: ~{token_est} / 75")
-        self.token_count_label.setStyleSheet(
-            f"color: {color}; font-size: 11px; font-weight: bold; padding: 0 4px;"
-        )
+            if token_est <= 75:
+                color = "#4CAF50"
+            elif token_est <= 150:
+                color = "#FFA726"
+            else:
+                color = "#E74C3C"
+            self.token_count_label.setText(f"토큰: ~{token_est} / 75")
+            self.token_count_label.setStyleSheet(
+                f"color: {color}; font-size: 11px; font-weight: bold; padding: 0 4px;"
+            )
 
     def _open_tag_weight_editor(self):
         """태그 가중치 슬라이더 편집"""
