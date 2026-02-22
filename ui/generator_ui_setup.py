@@ -17,7 +17,6 @@ from widgets.sliders import NumericSlider
 from widgets.favorite_tags import FavoriteTagsBar
 from widgets.character_preset_dialog import CharacterPresetDialog
 from widgets.common_widgets import NoScrollComboBox, AutomationWidget, ResolutionItemWidget
-import config
 from config import OUTPUT_DIR
 from widgets.tag_input import TagInputWidget
 from utils.theme_manager import get_color
@@ -26,16 +25,7 @@ class UISetupMixin:
     """UI 구성을 담당하는 Mixin 클래스"""
     
     def _setup_ui(self):
-        """UI 초기 구성 — config.UI_STYLE에 따라 분기"""
-        import config
-        if getattr(config, 'UI_STYLE', 'classic') == 'modern':
-            from ui.generator_ui_v2 import setup_modern_ui
-            setup_modern_ui(self)
-            return
-        self._setup_ui_classic()
-
-    def _setup_ui_classic(self):
-        """Classic UI 구성 (기존)"""
+        """UI 초기 구성"""
         self.setWindowTitle("AI Studio - Pro")
         self.setGeometry(100, 100, 1600, 950)
 
@@ -1543,21 +1533,13 @@ class UISetupMixin:
     def _update_token_count(self):
         """최종 프롬프트 토큰 수 추정 (CLIP 기준 근사)"""
         import re
-        is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
         text = self.total_prompt_display.toPlainText().strip()
 
         if not text:
-            if is_modern:
-                self.token_count_label.setText("🪙 0")
-                self.token_count_label.setStyleSheet(
-                    "color: #E8A822; font-size: 13px; font-weight: bold; "
-                    "padding: 0 4px; background: transparent;"
-                )
-            else:
-                self.token_count_label.setText("토큰: 0 / 75")
-                self.token_count_label.setStyleSheet(
-                    f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold; padding: 0 4px;"
-                )
+            self.token_count_label.setText("토큰: 0 / 75")
+            self.token_count_label.setStyleSheet(
+                f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold; padding: 0 4px;"
+            )
             return
 
         # CLIP 토큰 근사: 단어/서브워드 기준 (영어 ~0.75 토큰/단어, 태그 ~1 토큰/태그)
@@ -1567,23 +1549,16 @@ class UISetupMixin:
             words = re.findall(r'[a-zA-Z]+|[^ ,():\[\]]+', tag)
             token_est += max(1, len(words))
 
-        if is_modern:
-            self.token_count_label.setText(f"🪙 {token_est:,}")
-            self.token_count_label.setStyleSheet(
-                "color: #E8A822; font-size: 13px; font-weight: bold; "
-                "padding: 0 4px; background: transparent;"
-            )
+        if token_est <= 75:
+            color = "#4CAF50"
+        elif token_est <= 150:
+            color = "#FFA726"
         else:
-            if token_est <= 75:
-                color = "#4CAF50"
-            elif token_est <= 150:
-                color = "#FFA726"
-            else:
-                color = "#E74C3C"
-            self.token_count_label.setText(f"토큰: ~{token_est} / 75")
-            self.token_count_label.setStyleSheet(
-                f"color: {color}; font-size: 11px; font-weight: bold; padding: 0 4px;"
-            )
+            color = "#E74C3C"
+        self.token_count_label.setText(f"토큰: ~{token_est} / 75")
+        self.token_count_label.setStyleSheet(
+            f"color: {color}; font-size: 11px; font-weight: bold; padding: 0 4px;"
+        )
 
     def _open_tag_weight_editor(self):
         """태그 가중치 슬라이더 편집"""

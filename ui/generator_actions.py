@@ -492,9 +492,8 @@ class ActionsMixin:
             else:
                 self.left_stack.setCurrentIndex(0)  # 기본 생성 설정
                 # 왼쪽 패널 스크롤 최상단으로 리셋
-                scroll = getattr(self, '_left_scroll_area', None) or getattr(self, 'left_panel_scroll', None)
-                if scroll:
-                    scroll.verticalScrollBar().setValue(0)
+                if hasattr(self, 'left_panel_scroll'):
+                    self.left_panel_scroll.verticalScrollBar().setValue(0)
 
         # 즐겨찾기 탭으로 전환 시 자동 새로고침
         if hasattr(self, 'fav_tab') and current_widget == self.fav_tab:

@@ -98,7 +98,6 @@ class SettingsTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_ui = parent
-        self._is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -106,56 +105,31 @@ class SettingsTab(QWidget):
 
         # 사이드바
         self.sidebar = QListWidget()
-        self.sidebar.setFixedWidth(180 if not self._is_modern else 200)
+        self.sidebar.setFixedWidth(200)
         self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        if self._is_modern:
-            self.sidebar.setStyleSheet(f"""
-                QListWidget {{
-                    background-color: {get_color('bg_primary')};
-                    border: none;
-                    border-right: 1px solid {get_color('border')};
-                    outline: none;
-                    padding: 8px 6px;
-                }}
-                QListWidget::item {{
-                    color: {get_color('text_secondary')};
-                    padding: 12px 16px;
-                    font-weight: 600;
-                    border-radius: 10px;
-                    margin: 2px 0;
-                }}
-                QListWidget::item:selected {{
-                    background-color: {get_color('bg_tertiary')};
-                    color: {get_color('text_primary')};
-                }}
-                QListWidget::item:hover {{
-                    background-color: {get_color('bg_secondary')};
-                }}
-            """)
-        else:
-            self.sidebar.setStyleSheet(f"""
-                QListWidget {{
-                    background-color: {get_color('bg_primary')};
-                    border: none;
-                    border-right: 1px solid {get_color('bg_input')};
-                    outline: none;
-                }}
-                QListWidget::item {{
-                    color: {get_color('text_secondary')};
-                    padding: 15px 20px;
-                    font-weight: bold;
-                    border-bottom: 1px solid {get_color('bg_secondary')};
-                }}
-                QListWidget::item:selected {{
-                    background-color: {get_color('bg_tertiary')};
-                    color: {get_color('text_primary')};
-                    border-left: 3px solid {get_color('accent')};
-                }}
-                QListWidget::item:hover {{
-                    background-color: {get_color('bg_secondary')};
-                }}
-            """)
+        self.sidebar.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {get_color('bg_primary')};
+                border: none;
+                border-right: 1px solid {get_color('border')};
+                outline: none;
+                padding: 8px 6px;
+            }}
+            QListWidget::item {{
+                color: {get_color('text_secondary')};
+                padding: 12px 16px;
+                font-weight: 600;
+                border-radius: 10px;
+                margin: 2px 0;
+            }}
+            QListWidget::item:selected {{
+                background-color: {get_color('bg_tertiary')};
+                color: {get_color('text_primary')};
+            }}
+            QListWidget::item:hover {{
+                background-color: {get_color('bg_secondary')};
+            }}
+        """)
         
         items = [
             "📝 프롬프트 로직",
@@ -1062,22 +1036,9 @@ class SettingsTab(QWidget):
         from utils.theme_manager import get_theme_manager, ThemeManager
         tm = get_theme_manager()
 
-        # UI 스타일 선택
-        style_group = QGroupBox("UI 스타일")
+        # 앱 관리
+        style_group = QGroupBox("앱 관리")
         style_gl = QVBoxLayout(style_group)
-
-        style_h = QHBoxLayout()
-        style_h.addWidget(QLabel("UI 스타일:"))
-        self.ui_style_combo = NoScrollComboBox()
-        self.ui_style_combo.addItems(["Classic", "Modern (UI2)"])
-        current_style = getattr(config, 'UI_STYLE', 'classic')
-        self.ui_style_combo.setCurrentIndex(0 if current_style == 'classic' else 1)
-        self.ui_style_combo.currentIndexChanged.connect(self._on_ui_style_changed)
-        style_h.addWidget(self.ui_style_combo)
-        style_h.addStretch()
-        style_gl.addLayout(style_h)
-
-        style_gl.addWidget(QLabel("※ UI 스타일 변경 시 앱을 재시작해야 적용됩니다."))
 
         self.btn_restart_app = QPushButton("🔄 앱 재시작")
         self.btn_restart_app.setFixedHeight(36)
@@ -1160,14 +1121,6 @@ class SettingsTab(QWidget):
         if self.parent_ui and hasattr(self.parent_ui, 'apply_stylesheet'):
             self.parent_ui.apply_stylesheet()
 
-    def _on_ui_style_changed(self, index: int):
-        """UI 스타일 변경 시 재시작 안내"""
-        QMessageBox.information(
-            self, "UI 스타일 변경",
-            "UI 스타일을 변경하려면 앱을 재시작해야 합니다.\n"
-            "아래 '앱 재시작' 버튼을 누르면 설정 저장 후 자동 재시작됩니다."
-        )
-
     def _restart_application(self):
         """설정 저장 후 앱 재시작"""
         import sys
@@ -1235,10 +1188,6 @@ class SettingsTab(QWidget):
 
         import os
         config.OUTPUT_DIR = self.path_input.text()
-
-        # UI 스타일 저장
-        if hasattr(self, 'ui_style_combo'):
-            config.UI_STYLE = 'classic' if self.ui_style_combo.currentIndex() == 0 else 'modern'
         os.makedirs(config.OUTPUT_DIR, exist_ok=True)
 
         # 데이터 경로 적용

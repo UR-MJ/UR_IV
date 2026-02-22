@@ -538,39 +538,42 @@ class GeneratorMainUI(
     def closeEvent(self, event):
         """앱 종료 시 트레이 최소화 / 종료 선택"""
         import os
-        from utils.app_logger import get_logger
+        try:
+            from utils.app_logger import get_logger
 
-        msg = QMessageBox(self)
-        msg.setWindowTitle("종료")
-        msg.setText("AI Studio Pro를 어떻게 처리할까요?")
-        btn_tray = msg.addButton("트레이로 최소화", QMessageBox.ButtonRole.AcceptRole)
-        btn_quit = msg.addButton("완전 종료", QMessageBox.ButtonRole.DestructiveRole)
-        btn_cancel = msg.addButton("취소", QMessageBox.ButtonRole.RejectRole)
-        msg.setDefaultButton(btn_cancel)
-        msg.exec()
+            msg = QMessageBox(self)
+            msg.setWindowTitle("종료")
+            msg.setText("AI Studio Pro를 어떻게 처리할까요?")
+            btn_tray = msg.addButton("트레이로 최소화", QMessageBox.ButtonRole.AcceptRole)
+            btn_quit = msg.addButton("완전 종료", QMessageBox.ButtonRole.DestructiveRole)
+            btn_cancel = msg.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+            msg.setDefaultButton(btn_cancel)
+            msg.exec()
 
-        clicked = msg.clickedButton()
-        if clicked == btn_tray:
-            event.ignore()
-            self.hide()
-            if hasattr(self, '_tray_manager'):
-                self._tray_manager.notify("AI Studio Pro", "트레이로 최소화되었습니다.")
-        elif clicked == btn_quit:
-            try:
-                self.save_settings()
-            except Exception as e:
-                get_logger('main').error(f"종료 시 설정 저장 실패: {e}")
-            # 워커 스레드 정리
-            self._cleanup_workers()
-            # DB 연결 종료
-            if hasattr(self, 'db') and self.db:
+            clicked = msg.clickedButton()
+            if clicked == btn_tray:
+                event.ignore()
+                self.hide()
+                if hasattr(self, '_tray_manager'):
+                    self._tray_manager.notify("AI Studio Pro", "트레이로 최소화되었습니다.")
+                return
+            elif clicked == btn_quit:
                 try:
-                    self.db.close()
-                except Exception:
-                    pass
-            if hasattr(self, '_tray_manager'):
-                self._tray_manager.hide()
+                    self.save_settings()
+                except Exception as e:
+                    get_logger('main').error(f"종료 시 설정 저장 실패: {e}")
+                self._cleanup_workers()
+                if hasattr(self, 'db') and self.db:
+                    try:
+                        self.db.close()
+                    except Exception:
+                        pass
+                if hasattr(self, '_tray_manager'):
+                    self._tray_manager.hide()
+                event.accept()
+                os._exit(0)
+            else:
+                event.ignore()
+        except Exception:
             event.accept()
             os._exit(0)
-        else:
-            event.ignore()

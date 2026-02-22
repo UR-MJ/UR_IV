@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
 
-import config
 from config import OUTPUT_DIR
 from workers.generation_worker import GenerationFlowWorker
 from utils.file_wildcard import resolve_file_wildcards
@@ -22,19 +21,16 @@ from utils.theme_manager import get_theme_manager
 
 
 def _gen_btn_default_color() -> str:
-    """생성 버튼 기본 색상 (모던=오렌지, 클래식=파란)"""
-    is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
-    return '#E8822A' if is_modern else '#4A90E2'
+    """생성 버튼 기본 색상"""
+    return '#4A90E2'
 
 
 def _gen_btn_style(bg_color: str) -> str:
-    """생성 버튼 스타일 (UI 모드별 border-radius 적용)"""
-    is_modern = getattr(config, 'UI_STYLE', 'classic') == 'modern'
-    radius = '24px' if is_modern else '5px'
+    """생성 버튼 스타일"""
     return (
         f"QPushButton {{ font-size: 15px; font-weight: bold; "
         f"background-color: {bg_color}; color: white; "
-        f"border: none; border-radius: {radius}; padding: 4px; }}"
+        f"border: none; border-radius: 20px; padding: 4px; }}"
     )
 
 _logger = get_logger('generation')
@@ -112,10 +108,6 @@ class GenerationMixin:
             "save_images": True,
             "alwayson_scripts": {}
         }
-
-        # 배치 카운트 (모던 UI)
-        if hasattr(self, '_batch_count') and self._batch_count > 1:
-            payload["n_iter"] = self._batch_count
 
         # Hires.fix
         if self.hires_options_group.isChecked():
