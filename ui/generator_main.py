@@ -503,7 +503,8 @@ class GeneratorMainUI(
                 self.db.close()
             except Exception:
                 pass
-        self._tray_manager.hide()
+        if hasattr(self, '_tray_manager'):
+            self._tray_manager.hide()
         os._exit(0)
 
     def tray_notify(self, title: str, message: str):
@@ -552,7 +553,8 @@ class GeneratorMainUI(
         if clicked == btn_tray:
             event.ignore()
             self.hide()
-            self._tray_manager.notify("AI Studio Pro", "트레이로 최소화되었습니다.")
+            if hasattr(self, '_tray_manager'):
+                self._tray_manager.notify("AI Studio Pro", "트레이로 최소화되었습니다.")
         elif clicked == btn_quit:
             try:
                 self.save_settings()
@@ -566,7 +568,8 @@ class GeneratorMainUI(
                     self.db.close()
                 except Exception:
                     pass
-            self._tray_manager.hide()
+            if hasattr(self, '_tray_manager'):
+                self._tray_manager.hide()
             event.accept()
             os._exit(0)
         else:

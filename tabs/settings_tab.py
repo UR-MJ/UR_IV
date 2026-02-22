@@ -1185,7 +1185,7 @@ class SettingsTab(QWidget):
 
         # 설정 저장
         try:
-            self.apply_settings()
+            self.save_all_settings()
         except Exception:
             pass
 
