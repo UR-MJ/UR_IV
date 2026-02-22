@@ -33,34 +33,38 @@ from utils.theme_manager import get_color
 class _CollapsibleSection(QWidget):
     """접이식(collapsible) 카드 위젯"""
 
-    def __init__(self, title: str, parent=None):
+    def __init__(self, title: str, expanded: bool = False, parent=None):
         super().__init__(parent)
-        self._expanded = False
+        self._title = title
+        self._expanded = expanded
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(0, 4, 0, 4)
         layout.setSpacing(0)
 
         # 헤더 버튼
-        self.toggle_btn = QPushButton(f"  ▶  {title}")
+        arrow = "▼" if expanded else "▶"
+        self.toggle_btn = QPushButton(f"  {arrow}  {title}")
         self.toggle_btn.setCheckable(True)
-        self.toggle_btn.setChecked(False)
+        self.toggle_btn.setChecked(expanded)
         self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.toggle_btn.setFixedHeight(38)
+        self.toggle_btn.setFixedHeight(36)
         self.toggle_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {get_color('bg_secondary')};
                 color: {get_color('text_secondary')};
                 border: none;
-                border-radius: 16px;
+                border-radius: 12px;
                 text-align: left;
                 font-weight: bold;
-                font-size: 11px;
-                padding-left: 14px;
+                font-size: 12px;
+                padding-left: 12px;
             }}
             QPushButton:checked {{
                 background-color: {get_color('bg_tertiary')};
                 color: {get_color('text_primary')};
+                border-left: 3px solid {get_color('accent')};
+                border-radius: 0px 12px 12px 0px;
             }}
             QPushButton:hover {{
                 background-color: {get_color('bg_button_hover')};
@@ -68,12 +72,18 @@ class _CollapsibleSection(QWidget):
         """)
         layout.addWidget(self.toggle_btn)
 
-        # 콘텐츠 컨테이너
+        # 콘텐츠 컨테이너 (카드 스타일)
         self.content = QWidget()
+        self.content.setStyleSheet(f"""
+            QWidget {{
+                background-color: {get_color('bg_secondary')};
+                border-radius: 0 0 12px 12px;
+            }}
+        """)
         self.content_layout = QVBoxLayout(self.content)
-        self.content_layout.setContentsMargins(8, 6, 8, 6)
+        self.content_layout.setContentsMargins(12, 8, 12, 10)
         self.content_layout.setSpacing(6)
-        self.content.hide()
+        self.content.setVisible(expanded)
         layout.addWidget(self.content)
 
         self.toggle_btn.toggled.connect(self._on_toggle)
@@ -86,6 +96,16 @@ class _CollapsibleSection(QWidget):
             self.toggle_btn.setText(title_text.replace("▶", "▼", 1))
         else:
             self.toggle_btn.setText(title_text.replace("▼", "▶", 1))
+
+    def expand(self):
+        """프로그래밍 방식으로 펼치기"""
+        if not self._expanded:
+            self.toggle_btn.setChecked(True)
+
+    def collapse(self):
+        """프로그래밍 방식으로 접기"""
+        if self._expanded:
+            self.toggle_btn.setChecked(False)
 
     def addWidget(self, w):
         self.content_layout.addWidget(w)
@@ -225,12 +245,12 @@ def _build_modern_left_panel(self) -> QWidget:
     # PART 1: 고정 헤더 바 (44px)
     # ==================================================================
     header_bar = QWidget()
-    header_bar.setFixedHeight(44)
+    header_bar.setFixedHeight(48)
     header_bar.setObjectName("modernLeftHeader")
     header_bar.setStyleSheet(f"""
         #modernLeftHeader {{
-            background-color: {get_color('bg_primary')};
-            border-bottom: 1px solid {get_color('border')};
+            background-color: {get_color('bg_secondary')};
+            border-bottom: 2px solid {get_color('border')};
         }}
     """)
     header_layout = QHBoxLayout(header_bar)
@@ -275,19 +295,7 @@ def _build_modern_left_panel(self) -> QWidget:
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    scroll.setStyleSheet(f"""
-        QScrollArea {{
-            background-color: {get_color('bg_primary')};
-            border: none;
-        }}
-        QScrollBar:vertical {{
-            width: 6px; background: transparent;
-        }}
-        QScrollBar::handle:vertical {{
-            background: {get_color('bg_button')}; border-radius: 3px;
-            min-height: 40px;
-        }}
-    """)
+    scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
     self._left_scroll_area = scroll  # 스크롤바 접근용
 
     container = QWidget()
@@ -301,12 +309,28 @@ def _build_modern_left_panel(self) -> QWidget:
     self.btn_api_manager.clicked.connect(self._show_api_manager_popup)
     root.addWidget(self.btn_api_manager)
 
-    # ========== 기본 프롬프트 (prefix) ==========
-    root.addWidget(_section_label("기본 프롬프트"))
+    # ====================================================================
+    # 프롬프트 카드 — 배경 카드로 묶어 클래식과 차별화
+    # ====================================================================
+    prompt_card = QWidget()
+    prompt_card.setObjectName("promptCard")
+    prompt_card.setStyleSheet(f"""
+        #promptCard {{
+            background-color: {get_color('bg_secondary')};
+            border-radius: 14px;
+            border: 1px solid {get_color('border')};
+        }}
+    """)
+    pc_layout = QVBoxLayout(prompt_card)
+    pc_layout.setContentsMargins(12, 10, 12, 10)
+    pc_layout.setSpacing(8)
+
+    # ── 기본 프롬프트 (prefix) ──
+    pc_layout.addWidget(_section_label("기본 프롬프트"))
     self.prefix_prompt_text = TagInputWidget()
     self.prefix_prompt_text.setMinimumHeight(60)
     self.prefix_prompt_text.setPlaceholderText("선행 고정 프롬프트...")
-    root.addWidget(self.prefix_prompt_text)
+    pc_layout.addWidget(self.prefix_prompt_text)
 
     # 토글 버튼 (숨김 — 다른 mixin에서 참조하므로 생성 필수)
     self.prefix_toggle_button = QPushButton("▼ 선행 고정 프롬프트")
@@ -315,15 +339,15 @@ def _build_modern_left_panel(self) -> QWidget:
     self.prefix_toggle_button.hide()
     self.prefix_toggle_button.toggled.connect(self._on_prefix_toggle)
 
-    # ========== 추가 프롬프트 (main) ==========
-    root.addWidget(_section_label("추가 프롬프트"))
+    # ── 추가 프롬프트 (main) ──
+    pc_layout.addWidget(_section_label("추가 프롬프트"))
     self.main_prompt_text = TagInputWidget()
     self.main_prompt_text.setMinimumHeight(80)
     self.main_prompt_text.setPlaceholderText("메인 프롬프트...")
-    root.addWidget(self.main_prompt_text)
+    pc_layout.addWidget(self.main_prompt_text)
 
-    # ========== 세부 프롬프트 (total_prompt_display) ==========
-    root.addWidget(_section_label("세부 프롬프트"))
+    # ── 세부 프롬프트 (total_prompt_display) ──
+    pc_layout.addWidget(_section_label("세부 프롬프트"))
     self.total_prompt_display = QTextEdit()
     self.total_prompt_display.setReadOnly(False)
     self.total_prompt_display.setMinimumHeight(60)
@@ -331,14 +355,16 @@ def _build_modern_left_panel(self) -> QWidget:
         self._adjust_total_prompt_height
     )
     self.total_prompt_display.textChanged.connect(self._update_token_count)
-    root.addWidget(self.total_prompt_display)
+    pc_layout.addWidget(self.total_prompt_display)
 
-    # ========== 네거티브 프롬프트 ==========
-    root.addWidget(_section_label("네거티브 프롬프트", color="#e74c3c"))
+    # ── 네거티브 프롬프트 (카드 안) ──
+    pc_layout.addWidget(_section_label("네거티브 프롬프트", color="#e74c3c"))
     self.neg_prompt_text = TagInputWidget()
     self.neg_prompt_text.setMinimumHeight(60)
     self.neg_prompt_text.setPlaceholderText("부정 프롬프트...")
-    root.addWidget(self.neg_prompt_text)
+    pc_layout.addWidget(self.neg_prompt_text)
+
+    root.addWidget(prompt_card)  # 프롬프트 카드를 root에 추가
 
     # 숨김 토글 버튼 (다른 mixin 참조)
     self.neg_toggle_button = QPushButton("▼ 부정 프롬프트 (Negative)")
@@ -418,9 +444,9 @@ def _build_modern_left_panel(self) -> QWidget:
     root.addWidget(extra_section)
 
     # ====================================================================
-    # 접이식 "상세 설정" 섹션
+    # 접이식 "상세 설정" 섹션 (기본 펼침)
     # ====================================================================
-    detail_section = _CollapsibleSection("상세 설정")
+    detail_section = _CollapsibleSection("상세 설정", expanded=True)
 
     # --- 인물 수 ---
     detail_section.addWidget(_section_label("인물 수"))
@@ -928,13 +954,13 @@ def _build_modern_left_panel(self) -> QWidget:
     bottom_bar.setObjectName("modernBottomBar")
     bottom_bar.setStyleSheet(f"""
         #modernBottomBar {{
-            background-color: {get_color('bg_primary')};
-            border-top: 1px solid {get_color('border')};
+            background-color: {get_color('bg_secondary')};
+            border-top: 2px solid {get_color('border')};
         }}
     """)
     bottom_layout = QVBoxLayout(bottom_bar)
-    bottom_layout.setContentsMargins(10, 8, 10, 10)
-    bottom_layout.setSpacing(8)
+    bottom_layout.setContentsMargins(10, 10, 10, 10)
+    bottom_layout.setSpacing(10)
 
     # ── 5개 아이콘 버튼 행 (pill 스타일) ──
     icon_row = QHBoxLayout()
