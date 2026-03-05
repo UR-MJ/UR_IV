@@ -733,10 +733,24 @@ class ParamDiffWidget(QWidget):
                 params['prompt'] = prompt
                 params['negative_prompt'] = negative
                 if params_line:
-                    for item in params_line.split(', '):
+                    items = []
+                    current = ""
+                    in_quotes = False
+                    for ch in params_line:
+                        if ch == '"':
+                            in_quotes = not in_quotes
+                            current += ch
+                        elif ch == ',' and not in_quotes:
+                            items.append(current.strip())
+                            current = ""
+                        else:
+                            current += ch
+                    if current.strip():
+                        items.append(current.strip())
+                    for item in items:
                         if ':' in item:
                             k, v = item.split(':', 1)
-                            params[k.strip()] = v.strip()
+                            params[k.strip()] = v.strip().strip('"')
         except Exception:
             pass
         return params
@@ -1126,11 +1140,26 @@ class PngInfoTab(QWidget):
             self.current_params['negative_prompt'] = negative
 
             if params_line:
-                items = params_line.split(', ')
+                # 따옴표 안의 쉼표를 보호하여 파싱 (Lora hashes 등)
+                items = []
+                current = ""
+                in_quotes = False
+                for ch in params_line:
+                    if ch == '"':
+                        in_quotes = not in_quotes
+                        current += ch
+                    elif ch == ',' and not in_quotes:
+                        items.append(current.strip())
+                        current = ""
+                    else:
+                        current += ch
+                if current.strip():
+                    items.append(current.strip())
+
                 for item in items:
                     if ':' in item:
                         k, v = item.split(':', 1)
-                        self.current_params[k.strip()] = v.strip()
+                        self.current_params[k.strip()] = v.strip().strip('"')
         except Exception as e:
             print(f"⚠️ PNG Info 파싱 실패: {e}")
             self.current_params['prompt'] = text.strip()
@@ -1199,6 +1228,38 @@ class PngInfoTab(QWidget):
             for param in hires_params:
                 display_lines.append(f"  • {param}")
 
+        # LoRA 파라미터 — 프롬프트에서 <lora:...> 추출 + Lora hashes
+        import re as _re
+        lora_entries = []
+        prompt_text = p.get('prompt', '')
+        for m in _re.finditer(r'<lora:([^:>]+):([^>]+)>', prompt_text):
+            lora_entries.append(f"{m.group(1)}  (weight: {m.group(2)})")
+        neg_text = p.get('negative_prompt', '')
+        for m in _re.finditer(r'<lora:([^:>]+):([^>]+)>', neg_text):
+            lora_entries.append(f"{m.group(1)}  (weight: {m.group(2)}, negative)")
+        # Lora hashes 키에서 추가 정보
+        lora_hashes = p.get('Lora hashes', '')
+        if lora_hashes:
+            for part in lora_hashes.split(', '):
+                part = part.strip()
+                if ':' in part:
+                    name, hash_val = part.split(':', 1)
+                    name = name.strip()
+                    hash_val = hash_val.strip()
+                    # 이미 프롬프트에서 찾은 것과 중복 체크
+                    if not any(name in e for e in lora_entries):
+                        lora_entries.append(f"{name}  (hash: {hash_val})")
+
+        if lora_entries:
+            display_lines.extend([
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "🔗 LoRA",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            ])
+            for entry in lora_entries:
+                display_lines.append(f"  • {entry}")
+
         # ADetailer 파라미터
         adetailer_params = []
         for key, val in p.items():
@@ -1219,7 +1280,8 @@ class PngInfoTab(QWidget):
         known_keys = {
             'prompt', 'negative_prompt', 'Model', 'Model hash', 'Seed', 'Steps',
             'CFG scale', 'Sampler', 'Schedule type', 'Size', 'Hires upscale',
-            'Hires upscaler', 'Hires steps', 'Denoising strength',
+            'Hires upscaler', 'Hires steps', 'Denoising strength', 'Lora hashes',
+            'TI hashes',
         }
         other_params = []
         for key, val in p.items():
