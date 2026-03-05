@@ -15,6 +15,7 @@ import pandas as pd
 from urllib.parse import urlparse
 from pathlib import Path
 from PIL import Image, PngImagePlugin
+Image.MAX_IMAGE_PIXELS = None
 from threading import Lock
 from typing import Optional, List, Dict, Tuple
 from core.database import MetadataManager
