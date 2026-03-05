@@ -184,15 +184,11 @@ class SettingsTab(QWidget):
 
     def _create_header(self, text):
         """헤더 라벨 생성"""
-        if self._is_modern:
-            lbl = QLabel(text)
-            lbl.setStyleSheet(
-                f"color: {get_color('text_primary')}; font-size: 20px; "
-                f"font-weight: bold; margin-bottom: 12px; background: transparent;"
-            )
-        else:
-            lbl = QLabel(f"<h2>{text}</h2>")
-            lbl.setStyleSheet(f"color: {get_color('text_primary')}; margin-bottom: 10px;")
+        lbl = QLabel(text)
+        lbl.setStyleSheet(
+            f"color: {get_color('text_primary')}; font-size: 20px; "
+            f"font-weight: bold; margin-bottom: 12px; background: transparent;"
+        )
         return lbl
 
     def _create_container(self):
@@ -204,12 +200,8 @@ class SettingsTab(QWidget):
 
         w = QWidget()
         l = QVBoxLayout(w)
-        if self._is_modern:
-            l.setContentsMargins(36, 30, 36, 30)
-            l.setSpacing(16)
-        else:
-            l.setContentsMargins(30, 30, 30, 30)
-            l.setSpacing(20)
+        l.setContentsMargins(36, 30, 36, 30)
+        l.setSpacing(16)
         l.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         scroll.setWidget(w)
