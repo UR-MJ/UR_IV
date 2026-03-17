@@ -31,8 +31,10 @@ from PyQt6.QtWidgets import (
     QTabWidget, QRadioButton, QStackedWidget, QButtonGroup, QTableWidget,
     QTableWidgetItem, QHeaderView, QGridLayout
 )
-from PyQt6.QtGui import QPixmap, QFont, QImage, QIcon, QColor, QCursor, QPainter, QPen, QPolygon, QBrush, QAction
+from PyQt6.QtGui import QPixmap, QFont, QImage, QIcon, QColor, QCursor, QPainter, QPen, QPolygon, QBrush, QAction, QImageReader
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QEvent, QSize, QUrl, QRect, QPoint, QTimer
+
+QImageReader.setAllocationLimit(0)  # Qt 이미지 할당 제한 해제
 
 # [기능 확장 라이브러리]
 from PyQt6.QtWebEngineWidgets import QWebEngineView
