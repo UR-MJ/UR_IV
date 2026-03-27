@@ -84,29 +84,29 @@ GEMINI_THEME = {
 }
 
 CLAUDE_THEME = {
-    'bg_primary': '#0D0D0D',
-    'bg_secondary': '#161616',
-    'bg_tertiary': '#1C1C1C',
-    'bg_input': '#111111',
-    'bg_button': '#1A1A1A',
-    'bg_button_hover': '#252525',
-    'bg_button_pressed': '#0D0D0D',
-    'bg_tab': '#0D0D0D',
-    'bg_tab_selected': '#0D0D0D',
-    'bg_splitter': '#1C1C1C',
-    'text_primary': '#F0F0F0',
-    'text_secondary': '#909090',
-    'text_muted': '#555555',
-    'text_tab': '#555555',
-    'text_tab_selected': '#F0F0F0',
-    'border': '#1E1E1E',
+    'bg_primary': '#0A0A0A',
+    'bg_secondary': '#131313',
+    'bg_tertiary': '#1A1A1A',
+    'bg_input': '#131313',
+    'bg_button': '#181818',
+    'bg_button_hover': '#222222',
+    'bg_button_pressed': '#0E0E0E',
+    'bg_tab': 'transparent',
+    'bg_tab_selected': '#1A1A1A',
+    'bg_splitter': '#151515',
+    'text_primary': '#E8E8E8',
+    'text_secondary': '#787878',
+    'text_muted': '#484848',
+    'text_tab': '#585858',
+    'text_tab_selected': '#E8E8E8',
+    'border': '#1A1A1A',
     'border_input_focus': '#E2B340',
     'accent': '#E2B340',
-    'scrollbar_bg': '#0D0D0D',
-    'scrollbar_handle': '#2A2A2A',
-    'disabled_bg': '#111111',
-    'disabled_text': '#3A3A3A',
-    'bg_status_bar': '#080808',
+    'scrollbar_bg': '#0A0A0A',
+    'scrollbar_handle': '#222222',
+    'disabled_bg': '#0E0E0E',
+    'disabled_text': '#333333',
+    'bg_status_bar': '#070707',
 }
 
 THEMES = {
@@ -133,52 +133,66 @@ _QSS_TEMPLATE = """
         width: 1px;
     }}
 
+    /* ── GroupBox: 미니멀 카드 ── */
     QGroupBox {{
         background-color: {bg_secondary};
-        border: 1px solid {border};
-        border-radius: 6px;
-        margin-top: 12px;
-        padding: 24px 16px 16px 16px;
+        border: none;
+        border-radius: 8px;
+        margin-top: 14px;
+        padding: 28px 16px 16px 16px;
     }}
     QGroupBox::title {{
         subcontrol-origin: margin;
         subcontrol-position: top left;
         left: 16px;
         top: 6px;
-        color: {text_primary};
-        font-weight: bold;
-        font-size: 10pt;
+        color: {text_muted};
+        font-weight: 600;
+        font-size: 9pt;
+        text-transform: uppercase;
     }}
 
-    QLineEdit, QTextEdit, QComboBox {{
+    /* ── 입력 필드: border-less 미니멀 ── */
+    QLineEdit, QTextEdit {{
         background-color: {bg_input};
-        border: 1px solid {border};
+        border: none;
         border-radius: 6px;
-        padding: 8px 12px;
+        padding: 10px 14px;
         color: {text_primary};
         selection-background-color: {accent};
         selection-color: black;
     }}
-    QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{
-        border: 1px solid {accent};
+    QLineEdit:focus, QTextEdit:focus {{
+        background-color: {bg_tertiary};
     }}
 
+    QComboBox {{
+        background-color: {bg_input};
+        border: none;
+        border-radius: 6px;
+        padding: 8px 12px;
+        color: {text_primary};
+        selection-background-color: {accent};
+    }}
+    QComboBox:focus {{
+        background-color: {bg_tertiary};
+    }}
     QComboBox::drop-down {{
         border: none;
         width: 28px;
     }}
 
+    /* ── 버튼: 플랫 스타일 ── */
     QPushButton {{
         background-color: {bg_button};
-        border: 1px solid {border};
-        border-radius: 6px;
+        border: none;
+        border-radius: 8px;
         color: {text_primary};
-        padding: 8px 16px;
+        padding: 9px 18px;
         font-weight: 600;
     }}
     QPushButton:hover {{
         background-color: {bg_button_hover};
-        border: 1px solid {accent};
     }}
     QPushButton:pressed {{
         background-color: {bg_button_pressed};
@@ -186,87 +200,103 @@ _QSS_TEMPLATE = """
     QPushButton:checked {{
         background-color: {accent};
         color: black;
-        border: 1px solid {accent};
     }}
     QPushButton:disabled {{
         background-color: {disabled_bg};
         color: {disabled_text};
-        border: 1px solid {disabled_bg};
     }}
 
+    /* ── 생성 버튼: 강조 (NAIS2 스타일) ── */
     QPushButton#primaryButton {{
         background-color: {accent};
         color: black;
         border: none;
+        border-radius: 10px;
         font-weight: 800;
+        font-size: 11pt;
+        padding: 12px;
     }}
     QPushButton#primaryButton:hover {{
-        background-color: white;
+        background-color: #F0C850;
+    }}
+    QPushButton#primaryButton:disabled {{
+        background-color: #3A3020;
+        color: #666050;
     }}
 
+    /* ── 스크롤바: 슬림 ── */
     QScrollArea {{ border: none; background: transparent; }}
     QScrollBar:vertical {{
         background: transparent;
-        width: 4px;
+        width: 3px;
         margin: 0px;
     }}
     QScrollBar::handle:vertical {{
         background: {scrollbar_handle};
         min-height: 40px;
-        border-radius: 2px;
+        border-radius: 1px;
     }}
     QScrollBar::handle:vertical:hover {{
         background: {accent};
+        width: 5px;
     }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
     QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
         height: 0px; background: none;
     }}
 
+    /* ── 탭: NAIS2 스타일 (선택 시 배경 하이라이트) ── */
     QTabWidget::pane {{ border: none; background-color: {bg_primary}; }}
     QTabBar::tab {{
         background: transparent;
-        color: {text_muted};
-        padding: 12px 20px;
-        margin-right: 8px;
+        color: {text_tab};
+        padding: 10px 16px;
+        margin: 2px 2px;
         font-weight: 600;
-        border-bottom: 2px solid transparent;
+        border-radius: 6px;
+        border: none;
     }}
     QTabBar::tab:selected {{
-        color: {text_primary};
-        border-bottom: 2px solid {accent};
+        background: {bg_tab_selected};
+        color: {text_tab_selected};
     }}
     QTabBar::tab:hover {{
         color: {text_primary};
+        background: {bg_tertiary};
     }}
 
+    /* ── 라벨: 작은 회색 (NAIS2) ── */
     QLabel {{
         color: {text_secondary};
         background: transparent;
+        font-size: 9pt;
     }}
 
+    /* ── 프로그레스바 ── */
     QProgressBar {{
-        background-color: {bg_input};
+        background-color: {bg_tertiary};
         border: none;
-        border-radius: 2px;
+        border-radius: 3px;
         text-align: center;
         color: {text_primary};
         height: 4px;
     }}
     QProgressBar::chunk {{
         background-color: {accent};
+        border-radius: 3px;
     }}
 
+    /* ── 리스트 ── */
     QListWidget {{
         background-color: {bg_secondary};
-        border: 1px solid {border};
-        border-radius: 4px;
+        border: none;
+        border-radius: 6px;
         color: {text_primary};
         padding: 4px;
     }}
     QListWidget::item {{
-        padding: 6px 10px;
-        border-radius: 3px;
+        padding: 8px 12px;
+        border-radius: 4px;
     }}
     QListWidget::item:selected {{
         background-color: {accent};
@@ -276,17 +306,19 @@ _QSS_TEMPLATE = """
         background-color: {bg_tertiary};
     }}
 
+    /* ── 스핀박스 ── */
     QSpinBox, QDoubleSpinBox {{
         background-color: {bg_input};
-        border: 1px solid {border};
-        border-radius: 4px;
-        padding: 6px 10px;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 10px;
         color: {text_primary};
     }}
     QSpinBox:focus, QDoubleSpinBox:focus {{
-        border: 1px solid {accent};
+        background-color: {bg_tertiary};
     }}
 
+    /* ── 슬라이더 ── */
     QSlider::groove:horizontal {{
         height: 3px;
         background: {bg_tertiary};
@@ -303,16 +335,17 @@ _QSS_TEMPLATE = """
         border-radius: 1px;
     }}
 
+    /* ── 메뉴 ── */
     QMenu {{
         background-color: {bg_secondary};
         border: 1px solid {border};
-        border-radius: 6px;
-        padding: 4px;
+        border-radius: 8px;
+        padding: 6px;
         color: {text_primary};
     }}
     QMenu::item {{
-        padding: 7px 20px;
-        border-radius: 3px;
+        padding: 8px 24px;
+        border-radius: 4px;
     }}
     QMenu::item:selected {{
         background-color: {accent};
@@ -321,15 +354,16 @@ _QSS_TEMPLATE = """
     QMenu::separator {{
         height: 1px;
         background: {border};
-        margin: 4px 8px;
+        margin: 4px 10px;
     }}
 
+    /* ── 툴팁 ── */
     QToolTip {{
         background-color: {bg_secondary};
         color: {text_primary};
         border: 1px solid {border};
-        border-radius: 4px;
-        padding: 5px 8px;
+        border-radius: 6px;
+        padding: 6px 10px;
     }}
 
     QDialog {{
@@ -347,30 +381,31 @@ _QSS_TEMPLATE = """
         border-top: 1px solid {border};
     }}
 
+    /* ── 체크박스 / 라디오 ── */
     QCheckBox {{
         color: {text_primary};
-        spacing: 6px;
+        spacing: 8px;
     }}
     QCheckBox::indicator {{
         width: 16px; height: 16px;
-        border: 1px solid {border};
-        border-radius: 3px;
-        background: {bg_input};
+        border: 2px solid {scrollbar_handle};
+        border-radius: 4px;
+        background: transparent;
     }}
     QCheckBox::indicator:checked {{
         background: {accent};
-        border: 1px solid {accent};
+        border: 2px solid {accent};
     }}
 
     QRadioButton {{
         color: {text_primary};
-        spacing: 6px;
+        spacing: 8px;
     }}
     QRadioButton::indicator {{
         width: 14px; height: 14px;
-        border: 1px solid {border};
+        border: 2px solid {scrollbar_handle};
         border-radius: 7px;
-        background: {bg_input};
+        background: transparent;
     }}
     QRadioButton::indicator:checked {{
         background: {accent};
