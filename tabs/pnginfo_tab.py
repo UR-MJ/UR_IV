@@ -1287,7 +1287,7 @@ class PngInfoTab(QWidget):
             for param in hires_params:
                 display_lines.append(f"  • {param}")
 
-        # LoRA 파라미터 — 프롬프트 + 파라미터 값에서 <lora:...> 추출 + Lora hashes
+        # LoRA 파라미터 — 프롬프트에서 <lora:...> 추출 + Lora hashes
         import re as _re
         lora_entries = []
         seen_lora_names = set()
@@ -1302,16 +1302,6 @@ class PngInfoTab(QWidget):
             name = m.group(1).strip()
             lora_entries.append(f"{name}  (weight: {m.group(2).strip()}, negative)")
             seen_lora_names.add(name)
-        # 파라미터 값(Z Values 등)에서도 <lora:...> 추출
-        skip_keys = {'prompt', 'negative_prompt'}
-        for key, val in p.items():
-            if key in skip_keys or not isinstance(val, str):
-                continue
-            for m in _re.finditer(r'<lora:\s*([^:>]+):([^>]+)>', val):
-                name = m.group(1).strip()
-                if name not in seen_lora_names:
-                    lora_entries.append(f"{name}  (weight: {m.group(2).strip()}, from {key})")
-                    seen_lora_names.add(name)
         # Lora hashes 키에서 추가 정보
         lora_hashes = p.get('Lora hashes', '')
         if lora_hashes:
@@ -1321,7 +1311,6 @@ class PngInfoTab(QWidget):
                     name, hash_val = part.split(':', 1)
                     name = name.strip()
                     hash_val = hash_val.strip()
-                    # 이미 찾은 것과 중복 체크
                     if name not in seen_lora_names:
                         lora_entries.append(f"{name}  (hash: {hash_val})")
                         seen_lora_names.add(name)

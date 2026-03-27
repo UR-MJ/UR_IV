@@ -371,18 +371,26 @@ class WebUIMixin:
         result = dialog.exec()
 
         if result == QDialog.DialogCode.Accepted:
-            if hasattr(self, 'save_settings'):
-                self.save_settings()
-            self.load_webui_info()
+            self._backend_startup_result = 'accepted'
         elif skip_clicked['value']:
-            self.viewer_label.setText(
-                "백엔드에 연결되지 않았습니다.\n\n"
-                "왼쪽 상단의 API 관리 버튼으로 연결하세요."
-            )
+            self._backend_startup_result = 'skipped'
         else:
             # X 버튼 — 앱 종료
             import sys
             sys.exit(0)
+
+    def _apply_backend_startup_result(self):
+        """UI 생성 후 백엔드 선택 결과 적용"""
+        result = getattr(self, '_backend_startup_result', None)
+        if result == 'accepted':
+            if hasattr(self, 'save_settings'):
+                self.save_settings()
+            self.load_webui_info()
+        elif result == 'skipped':
+            self.viewer_label.setText(
+                "백엔드에 연결되지 않았습니다.\n\n"
+                "왼쪽 상단의 API 관리 버튼으로 연결하세요."
+            )
 
     @staticmethod
     def _quick_test(url: str, endpoint: str) -> bool:

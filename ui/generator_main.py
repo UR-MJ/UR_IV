@@ -42,11 +42,16 @@ class GeneratorMainUI(
 
         self.prompt_cleaner = get_prompt_cleaner()
 
+        # 백엔드 선택 다이얼로그를 먼저 표시 (UI 생성 전 — 빠른 시작)
+        self._startup_backend_check()
+
         self._setup_ui()
         self.apply_stylesheet()
         self.connect_signals()
         self.load_settings()
-        self._startup_backend_check()
+
+        # UI 생성 완료 후 백엔드 연결 결과 적용
+        self._apply_backend_startup_result()
         
         # 초기화
         self.is_automating = False
