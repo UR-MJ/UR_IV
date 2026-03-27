@@ -158,7 +158,7 @@ class UISetupMixin:
         """테마에 따른 동적 탭 이름 반환"""
         from utils.theme_manager import get_theme_manager
         theme = get_theme_manager().current_theme_name
-        use_minimal = theme in ('Gemini', 'Claude')
+        use_minimal = theme in ('모던', 'Gemini', 'Claude')
 
         titles_minimal = {
             't2i': "T2I", 'i2i': "I2I", 'inpaint': "Inpaint",
