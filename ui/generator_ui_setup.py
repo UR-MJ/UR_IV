@@ -43,7 +43,7 @@ class UISetupMixin:
         upper_layout.setSpacing(0)
 
         # 왼쪽 패널 (생성 설정 / 에디터 도구 전환)
-        self.left_panel_scroll = self._create_left_panel()
+        self._left_panel_container = self._create_left_panel()
 
         # 중앙 탭 (mosaic_editor 등 생성)
         self.center_tabs = self._create_center_tabs()
@@ -54,7 +54,7 @@ class UISetupMixin:
         # 왼쪽 패널 스택 (생성 설정 / 에디터 도구 / I2I / Inpaint)
         self.left_stack = QStackedWidget()
         self.left_stack.setFixedWidth(450)
-        self.left_stack.addWidget(self.left_panel_scroll)    # index 0: 생성 설정
+        self.left_stack.addWidget(self._left_panel_container)  # index 0: 생성 설정
         self.left_stack.addWidget(self.editor_tools_scroll)  # index 1: 에디터 도구
         self.left_stack.addWidget(self.i2i_tab.left_scroll)  # index 2: I2I 설정
         self.left_stack.addWidget(self.inpaint_tab.left_scroll)  # index 3: Inpaint 설정
@@ -69,6 +69,10 @@ class UISetupMixin:
 
         # 상단 작업 영역 + 하단 대기열 (고정 높이)
         main_layout.addWidget(upper_area, 1)
+
+        # 도구 바 (대기열 위 전체 너비: LoRA, 셔플, 프리셋 등)
+        self._tools_bar = self._create_tools_bar()
+        main_layout.addWidget(self._tools_bar)
 
         # 하단 컨테이너 (대기열 + 상태바, _setup_queue에서 채움)
         self._bottom_container = QWidget()
@@ -645,71 +649,17 @@ class UISetupMixin:
         )
 
     def _create_bottom_toolbar(self):
-        """고정 하단 툴바 + 생성 버튼 (NAIS2 스타일)"""
+        """좌측 패널 고정 하단: 자동화 + 생성 버튼만"""
         bar = QWidget()
         bar.setStyleSheet(f"background-color: {get_color('bg_secondary')}; border-top: 1px solid {get_color('border')};")
         bl = QVBoxLayout(bar)
-        bl.setContentsMargins(10, 8, 10, 8)
-        bl.setSpacing(6)
-
-        # 툴바 버튼 행
-        toolbar = QHBoxLayout()
-        toolbar.setSpacing(4)
-
-        self.btn_save_settings = QPushButton("💾")
-        self.btn_save_settings.setToolTip("설정 저장")
-        self.btn_preset_save = QPushButton("📥")
-        self.btn_preset_save.setToolTip("프리셋 저장")
-        self.btn_preset_save.clicked.connect(self._save_prompt_preset)
-        self.btn_preset_load = QPushButton("📤")
-        self.btn_preset_load.setToolTip("프리셋 불러오기")
-        self.btn_preset_load.clicked.connect(self._load_prompt_preset)
-
-        self.btn_prompt_history = QPushButton("📋")
-        self.btn_prompt_history.setToolTip("프롬프트 히스토리")
-        self.btn_prompt_history.clicked.connect(self._show_prompt_history)
-
-        # LoRA
-        self.btn_lora_manager = QPushButton("LoRA")
-        self.btn_lora_manager.setToolTip("LoRA 관리")
-        self.btn_lora_manager.clicked.connect(self._open_lora_manager)
-        self.btn_tag_weights = QPushButton("⚖")
-        self.btn_tag_weights.setToolTip("가중치 편집")
-        self.btn_tag_weights.clicked.connect(self._open_tag_weight_editor)
-
-        # 도구
-        self.btn_shuffle = QPushButton("🔀")
-        self.btn_shuffle.setToolTip("태그 셔플")
-        self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
-        self.btn_ab_test = QPushButton("A/B")
-        self.btn_ab_test.setToolTip("A/B 비교")
-        self.btn_ab_test.clicked.connect(self._open_ab_test)
-
-        self.btn_random_prompt = QPushButton("🎲")
-        self.btn_random_prompt.setToolTip("랜덤 프롬프트")
-        self.btn_random_prompt.setEnabled(False)
-
-        self.btn_api_manager = None  # 호환성 — 필요 시 아래에서 생성
-
-        for btn in [self.btn_save_settings, self.btn_preset_save, self.btn_preset_load,
-                     self.btn_prompt_history, self.btn_lora_manager, self.btn_tag_weights,
-                     self.btn_shuffle, self.btn_ab_test, self.btn_random_prompt]:
-            btn.setFixedSize(36, 36)
-            toolbar.addWidget(btn)
-
-        toolbar.addStretch()
-        bl.addLayout(toolbar)
-
-        # LoRA 활성 패널 (접이식)
-        from widgets.lora_panel import LoraActivePanel
-        self.lora_active_panel = LoraActivePanel()
-        self.lora_active_panel.hide()
-        bl.addWidget(self.lora_active_panel)
+        bl.setContentsMargins(10, 6, 10, 6)
+        bl.setSpacing(4)
 
         # 자동화 토글
         self.btn_auto_toggle = QPushButton("AUTOMATION: OFF")
         self.btn_auto_toggle.setCheckable(True)
-        self.btn_auto_toggle.setFixedHeight(36)
+        self.btn_auto_toggle.setFixedHeight(32)
         self.btn_auto_toggle.toggled.connect(self.toggle_automation_ui)
         bl.addWidget(self.btn_auto_toggle)
 
@@ -720,9 +670,63 @@ class UISetupMixin:
         # 생성 버튼
         self.btn_generate = QPushButton("이미지 생성")
         self.btn_generate.setObjectName("primaryButton")
-        self.btn_generate.setFixedHeight(48)
+        self.btn_generate.setFixedHeight(44)
         self.btn_generate.setEnabled(False)
         bl.addWidget(self.btn_generate)
+
+        return bar
+
+    def _create_tools_bar(self):
+        """대기열 위 전체 너비 도구 바: 버튼 + LoRA (가로 나열)"""
+        bar = QWidget()
+        bar.setFixedHeight(40)
+        bar.setStyleSheet(f"background-color: {get_color('bg_secondary')}; border-bottom: 1px solid {get_color('border')};")
+        hl = QHBoxLayout(bar)
+        hl.setContentsMargins(8, 2, 8, 2)
+        hl.setSpacing(4)
+
+        self.btn_save_settings = QPushButton("💾 저장")
+        self.btn_save_settings.setToolTip("설정 저장")
+        self.btn_preset_save = QPushButton("📥 프리셋 저장")
+        self.btn_preset_save.setToolTip("프리셋 저장")
+        self.btn_preset_save.clicked.connect(self._save_prompt_preset)
+        self.btn_preset_load = QPushButton("📤 프리셋 로드")
+        self.btn_preset_load.setToolTip("프리셋 불러오기")
+        self.btn_preset_load.clicked.connect(self._load_prompt_preset)
+        self.btn_prompt_history = QPushButton("📋 히스토리")
+        self.btn_prompt_history.setToolTip("프롬프트 히스토리")
+        self.btn_prompt_history.clicked.connect(self._show_prompt_history)
+
+        self.btn_lora_manager = QPushButton("LoRA")
+        self.btn_lora_manager.setToolTip("LoRA 관리")
+        self.btn_lora_manager.clicked.connect(self._open_lora_manager)
+        self.btn_tag_weights = QPushButton("⚖ 가중치")
+        self.btn_tag_weights.setToolTip("가중치 편집")
+        self.btn_tag_weights.clicked.connect(self._open_tag_weight_editor)
+
+        self.btn_shuffle = QPushButton("🔀 셔플")
+        self.btn_shuffle.setToolTip("태그 셔플")
+        self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
+        self.btn_ab_test = QPushButton("A/B")
+        self.btn_ab_test.setToolTip("A/B 비교")
+        self.btn_ab_test.clicked.connect(self._open_ab_test)
+        self.btn_random_prompt = QPushButton("🎲 랜덤")
+        self.btn_random_prompt.setToolTip("랜덤 프롬프트")
+        self.btn_random_prompt.setEnabled(False)
+
+        self.btn_api_manager = None
+
+        for btn in [self.btn_save_settings, self.btn_preset_save, self.btn_preset_load,
+                     self.btn_prompt_history, self.btn_lora_manager, self.btn_tag_weights,
+                     self.btn_shuffle, self.btn_ab_test, self.btn_random_prompt]:
+            btn.setFixedHeight(30)
+            hl.addWidget(btn)
+
+        # LoRA 활성 패널
+        from widgets.lora_panel import LoraActivePanel
+        self.lora_active_panel = LoraActivePanel()
+        self.lora_active_panel.hide()
+        hl.addWidget(self.lora_active_panel)
 
         return bar
 
