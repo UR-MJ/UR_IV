@@ -509,31 +509,41 @@ class UISetupMixin:
         sl.addWidget(self._prompt_label("Seed"))
         sl.addLayout(seed_row)
 
-        # 해상도
-        sl.addWidget(self._prompt_label("해상도 (W × H)"))
+        # 해상도 (W × H 한 줄)
+        sl.addWidget(self._prompt_label("해상도"))
+        res_row = QHBoxLayout()
+        res_row.setSpacing(6)
         self.width_input = QLineEdit("1024")
-        self.width_input.setPlaceholderText("Width")
-        sl.addWidget(self.width_input)
+        self.width_input.setPlaceholderText("W")
+        self.width_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.height_input = QLineEdit("1024")
-        self.height_input.setPlaceholderText("Height")
-        sl.addWidget(self.height_input)
-        btn_swap = QPushButton("↔ W/H 교환")
+        self.height_input.setPlaceholderText("H")
+        self.height_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _lbl_x = QLabel("×")
+        _lbl_x.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _lbl_x.setFixedWidth(16)
+        btn_swap = QPushButton("↔")
+        btn_swap.setFixedSize(30, 30)
+        btn_swap.setToolTip("W ↔ H 교환")
         btn_swap.clicked.connect(self._swap_resolution)
-        sl.addWidget(btn_swap)
+        res_row.addWidget(self.width_input)
+        res_row.addWidget(_lbl_x)
+        res_row.addWidget(self.height_input)
+        res_row.addWidget(btn_swap)
+        sl.addLayout(res_row)
 
-        # 해상도 프리셋
+        # 해상도 퀵 프리셋 (각 한 줄)
+        sl.addWidget(self._prompt_label("퀵 프리셋"))
         from PyQt6.QtWidgets import QInputDialog
         self._DEFAULT_RES_PRESETS = [
-            ("512²", 512, 512), ("512x768", 512, 768), ("768x512", 768, 512),
-            ("1024²", 1024, 1024), ("832x1216", 832, 1216), ("1216x832", 1216, 832),
+            ("512 × 512", 512, 512), ("512 × 768", 512, 768), ("768 × 512", 768, 512),
+            ("1024 × 1024", 1024, 1024), ("832 × 1216", 832, 1216), ("1216 × 832", 1216, 832),
         ]
         self._res_presets = [list(p) for p in self._DEFAULT_RES_PRESETS]
         self._res_preset_btns = []
-        res_preset_row = QHBoxLayout()
-        res_preset_row.setSpacing(3)
         for i, (_label, _w, _h) in enumerate(self._res_presets):
             _btn = QPushButton(_label)
-            _btn.setFixedHeight(24)
+            _btn.setFixedHeight(28)
             _btn.clicked.connect(
                 lambda _, idx=i: (
                     self.width_input.setText(str(self._res_presets[idx][1])),
@@ -545,8 +555,7 @@ class UISetupMixin:
                 lambda pos, idx=i, b=_btn: self._on_res_preset_context(idx, b)
             )
             self._res_preset_btns.append(_btn)
-            res_preset_row.addWidget(_btn)
-        sl.addLayout(res_preset_row)
+            sl.addWidget(_btn)
 
         self.random_res_check = QCheckBox("랜덤 해상도")
         self.auto_res_check = QCheckBox("자동 해상도 (Parquet H/W)")
