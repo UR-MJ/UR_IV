@@ -122,6 +122,7 @@ class UISetupMixin:
         self._prompt_layout.addStretch()
 
         scroll.setWidget(scroll_content)
+        self.left_panel_scroll = scroll  # 스크롤 위치 리셋용
         container_layout.addWidget(scroll, 1)
 
         # ── 고정 하단바 (툴바 + 생성 버튼) ──
@@ -300,62 +301,16 @@ class UISetupMixin:
 
     def _create_prompt_zone(self, layout):
         """프롬프트 영역 (항상 표시) — NAIS2 메인 뷰"""
-
-        # 캐릭터 + 작품 (한 줄)
-        meta_row = QHBoxLayout()
-        meta_row.setSpacing(6)
-        self.character_input = QLineEdit()
-        self.character_input.setPlaceholderText("캐릭터")
-        self.copyright_input = QLineEdit()
-        self.copyright_input.setPlaceholderText("작품 (Copyright)")
-        meta_row.addWidget(self.character_input)
-        meta_row.addWidget(self.copyright_input)
-        layout.addLayout(meta_row)
-
-        # 선행 프롬프트
-        layout.addWidget(self._prompt_label("선행 프롬프트"))
-        self.prefix_prompt_text = TagInputWidget()
-        self.prefix_prompt_text.setPlaceholderText("year 2025, masterpiece, best quality, ...")
-        self.prefix_prompt_text.setMinimumHeight(50)
-        self.prefix_prompt_text.setMaximumHeight(80)
-        layout.addWidget(self.prefix_prompt_text)
-
-        # 메인 프롬프트
-        layout.addWidget(self._prompt_label("메인 프롬프트"))
-        self.main_prompt_text = TagInputWidget()
-        self.main_prompt_text.setPlaceholderText("메인 태그 입력...")
-        self.main_prompt_text.setMinimumHeight(80)
-        layout.addWidget(self.main_prompt_text)
-
-        # 즐겨찾기 태그 바
-        self.fav_tags_bar = FavoriteTagsBar()
-        self.fav_tags_bar.tag_insert_requested.connect(self._insert_fav_tag)
-        layout.addWidget(self.fav_tags_bar)
-
-        # 후행 프롬프트
-        layout.addWidget(self._prompt_label("후행 프롬프트"))
-        self.suffix_prompt_text = TagInputWidget()
-        self.suffix_prompt_text.setPlaceholderText("후행 고정 태그...")
-        self.suffix_prompt_text.setMinimumHeight(50)
-        self.suffix_prompt_text.setMaximumHeight(80)
-        layout.addWidget(self.suffix_prompt_text)
-
-        # 네거티브 프롬프트
-        layout.addWidget(self._prompt_label("네거티브 프롬프트", get_color('error')))
-        self.neg_prompt_text = TagInputWidget()
-        self.neg_prompt_text.setPlaceholderText("lowres, bad quality, ...")
-        self.neg_prompt_text.setMinimumHeight(50)
-        self.neg_prompt_text.setMaximumHeight(80)
-        layout.addWidget(self.neg_prompt_text)
-
-        # 접이식: 최종 프롬프트
-        self._final_prompt_toggle = QPushButton("▶ 최종 프롬프트")
-        self._final_prompt_toggle.setCheckable(True)
-        self._final_prompt_toggle.setChecked(False)
-        self._final_prompt_toggle.setStyleSheet(
+        _toggle_style = (
             f"QPushButton {{ background: transparent; color: {get_color('text_muted')}; "
             f"border: none; text-align: left; font-size: 10px; padding: 4px 0; }}"
         )
+
+        # ── 1. 전체 프롬프트 (접이식, 기본 접힘) ──
+        self._final_prompt_toggle = QPushButton("▶ 최종 프롬프트")
+        self._final_prompt_toggle.setCheckable(True)
+        self._final_prompt_toggle.setChecked(False)
+        self._final_prompt_toggle.setStyleSheet(_toggle_style)
         layout.addWidget(self._final_prompt_toggle)
 
         self.total_prompt_display = QTextEdit()
@@ -379,14 +334,77 @@ class UISetupMixin:
                             "▼ 최종 프롬프트" if on else "▶ 최종 프롬프트"))
         )
 
-        # 접이식: 제외 프롬프트
+        # ── 2. 캐릭터 + 작품 + 인물 수 ──
+        meta_row = QHBoxLayout()
+        meta_row.setSpacing(6)
+        self.character_input = QLineEdit()
+        self.character_input.setPlaceholderText("캐릭터")
+        self.copyright_input = QLineEdit()
+        self.copyright_input.setPlaceholderText("작품")
+        self.char_count_input = QLineEdit()
+        self.char_count_input.setPlaceholderText("인물 수")
+        self.char_count_input.setFixedWidth(70)
+        meta_row.addWidget(self.character_input)
+        meta_row.addWidget(self.copyright_input)
+        meta_row.addWidget(self.char_count_input)
+        layout.addLayout(meta_row)
+
+        # ── 3. 작가 + 고정 버튼 ──
+        artist_row = QHBoxLayout()
+        artist_row.setSpacing(4)
+        self.artist_input = TagInputWidget()
+        self.artist_input.setPlaceholderText("작가 태그...")
+        self.artist_input.setMinimumHeight(36)
+        self.artist_input.setMaximumHeight(50)
+        self.btn_lock_artist = QPushButton("🔒")
+        self.btn_lock_artist.setCheckable(True)
+        self.btn_lock_artist.setFixedSize(36, 36)
+        self.btn_lock_artist.setToolTip("작가 고정")
+        artist_row.addWidget(self.artist_input)
+        artist_row.addWidget(self.btn_lock_artist)
+        layout.addLayout(artist_row)
+
+        # ── 4. 선행 프롬프트 ──
+        layout.addWidget(self._prompt_label("선행 프롬프트"))
+        self.prefix_prompt_text = TagInputWidget()
+        self.prefix_prompt_text.setPlaceholderText("year 2025, masterpiece, best quality, ...")
+        self.prefix_prompt_text.setMinimumHeight(50)
+        self.prefix_prompt_text.setMaximumHeight(80)
+        layout.addWidget(self.prefix_prompt_text)
+
+        # ── 5. 메인 프롬프트 ──
+        layout.addWidget(self._prompt_label("메인 프롬프트"))
+        self.main_prompt_text = TagInputWidget()
+        self.main_prompt_text.setPlaceholderText("메인 태그 입력...")
+        self.main_prompt_text.setMinimumHeight(80)
+        layout.addWidget(self.main_prompt_text)
+
+        # 즐겨찾기 태그 바
+        self.fav_tags_bar = FavoriteTagsBar()
+        self.fav_tags_bar.tag_insert_requested.connect(self._insert_fav_tag)
+        layout.addWidget(self.fav_tags_bar)
+
+        # ── 6. 후행 프롬프트 ──
+        layout.addWidget(self._prompt_label("후행 프롬프트"))
+        self.suffix_prompt_text = TagInputWidget()
+        self.suffix_prompt_text.setPlaceholderText("후행 고정 태그...")
+        self.suffix_prompt_text.setMinimumHeight(50)
+        self.suffix_prompt_text.setMaximumHeight(80)
+        layout.addWidget(self.suffix_prompt_text)
+
+        # ── 7. 네거티브 프롬프트 ──
+        layout.addWidget(self._prompt_label("네거티브 프롬프트", get_color('error')))
+        self.neg_prompt_text = TagInputWidget()
+        self.neg_prompt_text.setPlaceholderText("lowres, bad quality, ...")
+        self.neg_prompt_text.setMinimumHeight(50)
+        self.neg_prompt_text.setMaximumHeight(80)
+        layout.addWidget(self.neg_prompt_text)
+
+        # ── 8. 제외 프롬프트 (접이식) ──
         self._exclude_toggle = QPushButton("▶ 제외 프롬프트")
         self._exclude_toggle.setCheckable(True)
         self._exclude_toggle.setChecked(False)
-        self._exclude_toggle.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {get_color('text_muted')}; "
-            f"border: none; text-align: left; font-size: 10px; padding: 4px 0; }}"
-        )
+        self._exclude_toggle.setStyleSheet(_toggle_style)
         layout.addWidget(self._exclude_toggle)
 
         self.exclude_prompt_local_input = TagInputWidget()
@@ -435,26 +453,6 @@ class UISetupMixin:
         sl = QVBoxLayout(self._settings_container)
         sl.setContentsMargins(0, 4, 0, 0)
         sl.setSpacing(8)
-
-        # 작가
-        artist_row = QHBoxLayout()
-        artist_row.addWidget(self._prompt_label("작가 (Artist)"))
-        artist_row.addStretch()
-        self.btn_lock_artist = QPushButton("🔒 고정")
-        self.btn_lock_artist.setCheckable(True)
-        self.btn_lock_artist.setFixedWidth(70)
-        artist_row.addWidget(self.btn_lock_artist)
-        sl.addLayout(artist_row)
-        self.artist_input = TagInputWidget()
-        self.artist_input.setPlaceholderText("작가 태그...")
-        self.artist_input.setMinimumHeight(40)
-        sl.addWidget(self.artist_input)
-
-        # 인물 수
-        self.char_count_input = QLineEdit()
-        self.char_count_input.setPlaceholderText("인물 수 (예: 1girl)")
-        sl.addWidget(self._prompt_label("인물 수"))
-        sl.addWidget(self.char_count_input)
 
         # 캐릭터 옵션
         char_opts = QHBoxLayout()

@@ -111,13 +111,14 @@ class GeneratorMainUI(
         self.is_programmatic_change = True
         try:
             for w in [self.char_count_input, self.character_input,
-                      self.copyright_input, self.artist_input]:
+                      self.copyright_input]:
                 orig = w.text()
                 if orig.strip():
                     cleaned = self.prompt_cleaner.clean(orig)
                     if orig != cleaned:
                         w.setText(cleaned)
-            for w in [self.prefix_prompt_text, self.main_prompt_text,
+            for w in [self.artist_input, self.prefix_prompt_text,
+                      self.main_prompt_text,
                       self.suffix_prompt_text, self.neg_prompt_text]:
                 orig = w.toPlainText()
                 if orig.strip():
