@@ -57,7 +57,61 @@ LIGHT_THEME = {
     'bg_status_bar': '#E0E0E0',
 }
 
+GEMINI_THEME = {
+    'bg_primary': '#0A0A0A',
+    'bg_secondary': '#141414',
+    'bg_tertiary': '#1F1F1F',
+    'bg_input': '#141414',
+    'bg_button': '#1F1F1F',
+    'bg_button_hover': '#2A2A2A',
+    'bg_button_pressed': '#0A0A0A',
+    'bg_tab': '#0A0A0A',
+    'bg_tab_selected': '#0A0A0A',
+    'bg_splitter': '#1F1F1F',
+    'text_primary': '#FFFFFF',
+    'text_secondary': '#A0A0A0',
+    'text_muted': '#606060',
+    'text_tab': '#606060',
+    'text_tab_selected': '#FFFFFF',
+    'border': '#1F1F1F',
+    'border_input_focus': '#FACC15',
+    'accent': '#FACC15',
+    'scrollbar_bg': '#0A0A0A',
+    'scrollbar_handle': '#2A2A2A',
+    'disabled_bg': '#0F0F0F',
+    'disabled_text': '#404040',
+    'bg_status_bar': '#050505',
+}
+
+CLAUDE_THEME = {
+    'bg_primary': '#0D0D0D',
+    'bg_secondary': '#161616',
+    'bg_tertiary': '#1C1C1C',
+    'bg_input': '#111111',
+    'bg_button': '#1A1A1A',
+    'bg_button_hover': '#252525',
+    'bg_button_pressed': '#0D0D0D',
+    'bg_tab': '#0D0D0D',
+    'bg_tab_selected': '#0D0D0D',
+    'bg_splitter': '#1C1C1C',
+    'text_primary': '#F0F0F0',
+    'text_secondary': '#909090',
+    'text_muted': '#555555',
+    'text_tab': '#555555',
+    'text_tab_selected': '#F0F0F0',
+    'border': '#1E1E1E',
+    'border_input_focus': '#E2B340',
+    'accent': '#E2B340',
+    'scrollbar_bg': '#0D0D0D',
+    'scrollbar_handle': '#2A2A2A',
+    'disabled_bg': '#111111',
+    'disabled_text': '#3A3A3A',
+    'bg_status_bar': '#080808',
+}
+
 THEMES = {
+    'Claude': CLAUDE_THEME,
+    'Gemini': GEMINI_THEME,
     '다크': DARK_THEME,
     '라이트': LIGHT_THEME,
 }
@@ -75,39 +129,38 @@ _QSS_TEMPLATE = """
     }}
 
     QSplitter::handle {{
-        background-color: transparent;
+        background-color: {bg_splitter};
         width: 1px;
     }}
 
     QGroupBox {{
         background-color: {bg_secondary};
-        border: none;
-        border-radius: 16px;
-        margin-top: 8px;
-        padding: 20px 18px 18px 18px;
+        border: 1px solid {border};
+        border-radius: 6px;
+        margin-top: 12px;
+        padding: 24px 16px 16px 16px;
     }}
     QGroupBox::title {{
         subcontrol-origin: margin;
         subcontrol-position: top left;
-        left: 18px;
-        top: 4px;
+        left: 16px;
+        top: 6px;
         color: {text_primary};
         font-weight: bold;
-        font-size: 11pt;
-        background-color: transparent;
+        font-size: 10pt;
     }}
 
     QLineEdit, QTextEdit, QComboBox {{
         background-color: {bg_input};
-        border: none;
-        border-radius: 12px;
-        padding: 10px 14px;
+        border: 1px solid {border};
+        border-radius: 6px;
+        padding: 8px 12px;
         color: {text_primary};
         selection-background-color: {accent};
+        selection-color: black;
     }}
     QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{
-        background-color: {bg_tertiary};
-        border: 1px solid {border_input_focus};
+        border: 1px solid {accent};
     }}
 
     QComboBox::drop-down {{
@@ -117,42 +170,53 @@ _QSS_TEMPLATE = """
 
     QPushButton {{
         background-color: {bg_button};
-        border: none;
-        border-radius: 20px;
+        border: 1px solid {border};
+        border-radius: 6px;
         color: {text_primary};
-        padding: 10px 20px;
+        padding: 8px 16px;
         font-weight: 600;
     }}
     QPushButton:hover {{
         background-color: {bg_button_hover};
+        border: 1px solid {accent};
     }}
     QPushButton:pressed {{
         background-color: {bg_button_pressed};
     }}
     QPushButton:checked {{
         background-color: {accent};
-        color: white;
+        color: black;
+        border: 1px solid {accent};
     }}
     QPushButton:disabled {{
         background-color: {disabled_bg};
         color: {disabled_text};
+        border: 1px solid {disabled_bg};
+    }}
+
+    QPushButton#primaryButton {{
+        background-color: {accent};
+        color: black;
+        border: none;
+        font-weight: 800;
+    }}
+    QPushButton#primaryButton:hover {{
+        background-color: white;
     }}
 
     QScrollArea {{ border: none; background: transparent; }}
     QScrollBar:vertical {{
         background: transparent;
-        width: 6px;
-        margin: 4px 0;
-        border-radius: 3px;
+        width: 4px;
+        margin: 0px;
     }}
     QScrollBar::handle:vertical {{
         background: {scrollbar_handle};
         min-height: 40px;
-        border-radius: 3px;
+        border-radius: 2px;
     }}
     QScrollBar::handle:vertical:hover {{
         background: {accent};
-        width: 8px;
     }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
     QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
@@ -163,17 +227,16 @@ _QSS_TEMPLATE = """
     QTabBar::tab {{
         background: transparent;
         color: {text_muted};
-        padding: 8px 18px;
-        border-radius: 20px;
-        margin: 2px 3px;
+        padding: 12px 20px;
+        margin-right: 8px;
         font-weight: 600;
+        border-bottom: 2px solid transparent;
     }}
     QTabBar::tab:selected {{
-        background: {bg_tertiary};
         color: {text_primary};
+        border-bottom: 2px solid {accent};
     }}
     QTabBar::tab:hover {{
-        background: {bg_secondary};
         color: {text_primary};
     }}
 
@@ -182,67 +245,32 @@ _QSS_TEMPLATE = """
         background: transparent;
     }}
 
-    QMenu {{
-        background-color: {bg_secondary};
-        border: 1px solid {border};
-        border-radius: 12px;
-        padding: 6px;
-        color: {text_primary};
-    }}
-    QMenu::item {{
-        padding: 8px 20px;
-        border-radius: 8px;
-    }}
-    QMenu::item:selected {{
-        background-color: {accent};
-        color: white;
-    }}
-    QMenu::separator {{
-        height: 1px;
-        background: {border};
-        margin: 4px 10px;
-    }}
-
-    QToolTip {{
-        background-color: {bg_secondary};
-        color: {text_primary};
-        border: 1px solid {border};
-        border-radius: 8px;
-        padding: 6px 10px;
-    }}
-
     QProgressBar {{
         background-color: {bg_input};
         border: none;
-        border-radius: 6px;
+        border-radius: 2px;
         text-align: center;
         color: {text_primary};
-        height: 8px;
+        height: 4px;
     }}
     QProgressBar::chunk {{
         background-color: {accent};
-        border-radius: 6px;
-    }}
-
-    QDialog {{
-        background-color: {bg_primary};
-        color: {text_primary};
     }}
 
     QListWidget {{
         background-color: {bg_secondary};
-        border: none;
-        border-radius: 12px;
+        border: 1px solid {border};
+        border-radius: 4px;
         color: {text_primary};
         padding: 4px;
     }}
     QListWidget::item {{
-        padding: 8px 12px;
-        border-radius: 8px;
+        padding: 6px 10px;
+        border-radius: 3px;
     }}
     QListWidget::item:selected {{
         background-color: {accent};
-        color: white;
+        color: black;
     }}
     QListWidget::item:hover {{
         background-color: {bg_tertiary};
@@ -250,30 +278,63 @@ _QSS_TEMPLATE = """
 
     QSpinBox, QDoubleSpinBox {{
         background-color: {bg_input};
-        border: none;
-        border-radius: 12px;
-        padding: 8px 12px;
+        border: 1px solid {border};
+        border-radius: 4px;
+        padding: 6px 10px;
         color: {text_primary};
     }}
     QSpinBox:focus, QDoubleSpinBox:focus {{
-        background-color: {bg_tertiary};
-        border: 1px solid {border_input_focus};
+        border: 1px solid {accent};
     }}
 
     QSlider::groove:horizontal {{
-        height: 4px;
-        background: {bg_input};
-        border-radius: 2px;
+        height: 3px;
+        background: {bg_tertiary};
+        border-radius: 1px;
     }}
     QSlider::handle:horizontal {{
-        width: 18px; height: 18px;
-        margin: -7px 0;
+        width: 14px; height: 14px;
+        margin: -6px 0;
         background: {accent};
-        border-radius: 9px;
+        border-radius: 7px;
     }}
     QSlider::sub-page:horizontal {{
         background: {accent};
-        border-radius: 2px;
+        border-radius: 1px;
+    }}
+
+    QMenu {{
+        background-color: {bg_secondary};
+        border: 1px solid {border};
+        border-radius: 6px;
+        padding: 4px;
+        color: {text_primary};
+    }}
+    QMenu::item {{
+        padding: 7px 20px;
+        border-radius: 3px;
+    }}
+    QMenu::item:selected {{
+        background-color: {accent};
+        color: black;
+    }}
+    QMenu::separator {{
+        height: 1px;
+        background: {border};
+        margin: 4px 8px;
+    }}
+
+    QToolTip {{
+        background-color: {bg_secondary};
+        color: {text_primary};
+        border: 1px solid {border};
+        border-radius: 4px;
+        padding: 5px 8px;
+    }}
+
+    QDialog {{
+        background-color: {bg_primary};
+        color: {text_primary};
     }}
 
     QFrame {{
@@ -281,9 +342,39 @@ _QSS_TEMPLATE = """
     }}
 
     QStatusBar {{
-        background-color: {bg_primary};
+        background-color: {bg_status_bar};
         color: {text_muted};
         border-top: 1px solid {border};
+    }}
+
+    QCheckBox {{
+        color: {text_primary};
+        spacing: 6px;
+    }}
+    QCheckBox::indicator {{
+        width: 16px; height: 16px;
+        border: 1px solid {border};
+        border-radius: 3px;
+        background: {bg_input};
+    }}
+    QCheckBox::indicator:checked {{
+        background: {accent};
+        border: 1px solid {accent};
+    }}
+
+    QRadioButton {{
+        color: {text_primary};
+        spacing: 6px;
+    }}
+    QRadioButton::indicator {{
+        width: 14px; height: 14px;
+        border: 1px solid {border};
+        border-radius: 7px;
+        background: {bg_input};
+    }}
+    QRadioButton::indicator:checked {{
+        background: {accent};
+        border: 2px solid {accent};
     }}
 """
 
@@ -292,7 +383,7 @@ class ThemeManager:
     """테마 관리 클래스"""
 
     def __init__(self):
-        self._current = '다크'
+        self._current = 'Claude'
         self._font_family = DEFAULT_FONT_FAMILY
         self._font_size = DEFAULT_FONT_SIZE
 
