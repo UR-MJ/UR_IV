@@ -253,16 +253,8 @@ class SearchTab(QWidget):
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area)
 
-        # 자동완성 & 태그 데이터는 탭 최초 표시 시 지연 로드
+        # 자동완성은 첫 검색 실행 시 지연 로드
         self._autocomplete_ready = False
-
-    def showEvent(self, event):
-        """탭 최초 표시 시 자동완성 데이터 지연 로드"""
-        super().showEvent(event)
-        if not self._autocomplete_ready:
-            self._autocomplete_ready = True
-            from PyQt6.QtCore import QTimer
-            QTimer.singleShot(0, self._setup_autocomplete)
 
     def _setup_autocomplete(self):
         """각 검색 필드에 카테고리별 자동완성 설정 (TagData 기반)"""
@@ -386,8 +378,15 @@ class SearchTab(QWidget):
         self.chk_q.setChecked(ratings.get("q", False))
         self.chk_e.setChecked(ratings.get("e", False))
 
+    def _ensure_autocomplete(self):
+        """자동완성 데이터가 아직 없으면 로드"""
+        if not self._autocomplete_ready:
+            self._autocomplete_ready = True
+            self._setup_autocomplete()
+
     def start_pandas_search(self):
         """검색 시작"""
+        self._ensure_autocomplete()
         ratings = []
         if self.chk_g.isChecked(): ratings.append('g')
         if self.chk_s.isChecked(): ratings.append('s')
