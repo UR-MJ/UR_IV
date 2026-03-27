@@ -411,7 +411,7 @@ class WebUIMixin:
         self.btn_random_prompt.setEnabled(False)
 
         # API 버튼: 연결 중 애니메이션
-        if hasattr(self, 'btn_api_manager'):
+        if getattr(self, 'btn_api_manager', None):
             self.btn_api_manager.set_connecting(backend_name)
 
         # 이전 워커 정리
@@ -496,7 +496,7 @@ class WebUIMixin:
         )
 
         # API 버튼: 연결됨 애니메이션 (체크마크)
-        if hasattr(self, 'btn_api_manager'):
+        if getattr(self, 'btn_api_manager', None):
             self.btn_api_manager.set_connected(backend_name)
 
         # 검색 기능 활성화
@@ -523,7 +523,7 @@ class WebUIMixin:
         self.show_status(f"❌ {backend_name} 연결 실패: {error_msg}")
 
         # API 버튼: 실패 애니메이션 (흔들림 + X)
-        if hasattr(self, 'btn_api_manager'):
+        if getattr(self, 'btn_api_manager', None):
             self.btn_api_manager.set_failed(backend_name)
 
         # 연결 실패해도 Backend UI 탭은 전환 (웹 인터페이스 직접 접근용)
