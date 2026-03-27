@@ -1131,15 +1131,35 @@ class PngInfoTab(QWidget):
             ifd = exif_data.get_ifd(IFD.Exif)
             user_comment = ifd.get(0x9286)
             if user_comment:
+                if isinstance(user_comment, str) and user_comment.strip():
+                    return user_comment.strip()
                 if isinstance(user_comment, bytes):
-                    # UserComment 인코딩 prefix 제거 (ASCII/UNICODE/JIS)
-                    for prefix in (b'ASCII\x00\x00\x00', b'UNICODE\x00', b'\x00' * 8):
-                        if user_comment.startswith(prefix):
-                            user_comment = user_comment[len(prefix):]
-                            break
-                    user_comment = user_comment.decode('utf-8', errors='replace').strip('\x00').strip()
-                if isinstance(user_comment, str) and user_comment:
-                    return user_comment
+                    # A1111/piexif: UNICODE prefix + UTF-16 인코딩
+                    if user_comment.startswith(b'UNICODE\x00'):
+                        payload = user_comment[8:]
+                        # BOM으로 endian 판별, 없으면 UTF-16-BE (piexif 기본)
+                        if payload.startswith(b'\xff\xfe'):
+                            text = payload.decode('utf-16-le', errors='replace')
+                        elif payload.startswith(b'\xfe\xff'):
+                            text = payload.decode('utf-16-be', errors='replace')
+                        else:
+                            # piexif 기본은 UTF-16-BE, 실패 시 UTF-16-LE 시도
+                            try:
+                                text = payload.decode('utf-16-be')
+                            except UnicodeDecodeError:
+                                text = payload.decode('utf-16-le', errors='replace')
+                        return text.strip('\x00').strip() or None
+                    elif user_comment.startswith(b'ASCII\x00\x00\x00'):
+                        return user_comment[8:].decode('ascii', errors='replace').strip('\x00').strip() or None
+                    else:
+                        # prefix 없음 — null 바이트 포함 시 UTF-16 시도
+                        if b'\x00' in user_comment[:8]:
+                            try:
+                                text = user_comment.decode('utf-16', errors='replace')
+                                return text.strip('\x00').strip() or None
+                            except Exception:
+                                pass
+                        return user_comment.decode('utf-8', errors='replace').strip('\x00').strip() or None
         except Exception:
             pass
         return None
