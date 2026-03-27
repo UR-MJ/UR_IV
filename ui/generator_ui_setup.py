@@ -67,19 +67,20 @@ class UISetupMixin:
         upper_layout.addWidget(self.center_tabs)
         upper_layout.addWidget(self.history_panel)
 
-        # 상단 작업 영역 + 하단 대기열 (고정 높이)
+        # 상단 작업 영역 (최소 높이 보장)
+        upper_area.setMinimumHeight(400)
         main_layout.addWidget(upper_area, 1)
 
         # 도구 바 (대기열 위 전체 너비: LoRA, 셔플, 프리셋 등)
         self._tools_bar = self._create_tools_bar()
         main_layout.addWidget(self._tools_bar)
 
-        # 하단 컨테이너 (대기열 + 상태바, _setup_queue에서 채움)
+        # 하단 컨테이너 (대기열 + 상태바)
         self._bottom_container = QWidget()
         self._bottom_layout = QVBoxLayout(self._bottom_container)
         self._bottom_layout.setContentsMargins(0, 0, 0, 0)
         self._bottom_layout.setSpacing(0)
-        self._bottom_container.setFixedHeight(230)
+        self._bottom_container.setMaximumHeight(230)
         main_layout.addWidget(self._bottom_container, 0)
 
         # 상태 메시지 라벨은 _setup_queue()에서 하단 컨테이너에 추가
