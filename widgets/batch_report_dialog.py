@@ -68,8 +68,10 @@ class BatchReportDialog(QDialog):
         btn_close.clicked.connect(self.accept)
         layout.addWidget(btn_close)
 
-    def _stat_row(self, label: str, value: str, color: str = "#FFC107") -> QWidget:
+    def _stat_row(self, label: str, value: str, color: str = None) -> QWidget:
         """통계 행 위젯"""
+        if color is None:
+            color = get_color('accent')
         row = QFrame()
         h = QHBoxLayout(row)
         h.setContentsMargins(0, 0, 0, 0)

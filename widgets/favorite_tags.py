@@ -49,7 +49,7 @@ class FavoriteTagsBar(QWidget):
 
         lbl = QLabel("퀵 태그")
         lbl.setStyleSheet(
-            "color: #FFC107; font-size: 11px; font-weight: bold; padding: 0 2px;"
+            f"color: {get_color('accent')}; font-size: 11px; font-weight: bold; padding: 0 2px;"
         )
         lbl.setToolTip("클릭하면 메인 프롬프트에 태그를 바로 삽입합니다")
         outer.addWidget(lbl)

@@ -234,7 +234,7 @@ class InpaintTab(QWidget):
 
         title = QLabel("Inpaint")
         title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        title.setStyleSheet("color: #5865F2;")
+        title.setStyleSheet(f"color: {get_color('accent')};")
         left_layout.addWidget(title)
 
         # 이미지 로드

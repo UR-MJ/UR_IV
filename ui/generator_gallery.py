@@ -308,26 +308,26 @@ class GalleryMixin:
             self.btn_add_favorite.setText("💛 즐겨찾기 제거")
             self.btn_add_favorite.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: #FFC107;
-                    border: 1px solid #FFA000;
+                    background-color: {get_color('accent')};
+                    border: 1px solid {get_color('accent')};
                     color: {get_color('bg_primary')};
                     font-weight: bold;
                     border-radius: 0px;
                 }}
-                QPushButton:hover {{ background-color: #FFD54F; }}
+                QPushButton:hover {{ background-color: {get_color('accent')}; }}
             """)
         else:
             self.btn_add_favorite.setText("⭐ 즐겨찾기 추가 (FAV)")
             self.btn_add_favorite.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {get_color('bg_button')};
-                    border: 1px solid #FFC107;
-                    color: #FFC107;
+                    border: 1px solid {get_color('accent')};
+                    color: {get_color('accent')};
                     font-weight: bold;
                     border-radius: 0px;
                 }}
                 QPushButton:hover {{
-                    background-color: #FFC107;
+                    background-color: {get_color('accent')};
                     color: {get_color('bg_primary')};
                 }}
             """)

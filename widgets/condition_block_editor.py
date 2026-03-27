@@ -107,7 +107,7 @@ class ConditionBlockRow(QFrame):
         row1.addWidget(self._chk_enabled)
 
         lbl_if = QLabel("만약")
-        lbl_if.setStyleSheet("color: #5865F2; font-weight: bold; font-size: 11px;")
+        lbl_if.setStyleSheet(f"color: {get_color('accent')}; font-weight: bold; font-size: 11px;")
         lbl_if.setFixedWidth(28)
         row1.addWidget(lbl_if)
 

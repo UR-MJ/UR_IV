@@ -144,7 +144,7 @@ class DropCardContainer(QWidget):
         # 드롭 위치 표시 인디케이터
         self._drop_indicator = QFrame(self)
         self._drop_indicator.setFixedWidth(3)
-        self._drop_indicator.setStyleSheet("background-color: #5865F2; border-radius: 1px;")
+        self._drop_indicator.setStyleSheet(f"background-color: {get_color('accent')}; border-radius: 1px;")
         self._drop_indicator.hide()
 
     def dragEnterEvent(self, event: QDragEnterEvent):
@@ -230,14 +230,14 @@ class QueuePanel(QWidget):
         header_layout = QHBoxLayout()
 
         self.title_label = QLabel("⏳ 대기열 (0)")
-        self.title_label.setStyleSheet("""
-            font-weight: bold; font-size: 14px; color: #FFC107;
+        self.title_label.setStyleSheet(f"""
+            font-weight: bold; font-size: 14px; color: {get_color('accent')};
         """)
         header_layout.addWidget(self.title_label)
 
         # 진행률
         self.progress_label = QLabel("")
-        self.progress_label.setStyleSheet("color: #5865F2; font-weight: bold; font-size: 12px;")
+        self.progress_label.setStyleSheet(f"color: {get_color('accent')}; font-weight: bold; font-size: 12px;")
         header_layout.addWidget(self.progress_label)
 
         header_layout.addStretch()

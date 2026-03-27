@@ -225,7 +225,7 @@ class SettingsTab(QWidget):
             "중복 태그 방지 (이미 있으면 추가 안 함)"
         )
         self.cond_prevent_dupe_check.setChecked(True)
-        self.cond_prevent_dupe_check.setStyleSheet("color: #FFD700;")
+        self.cond_prevent_dupe_check.setStyleSheet(f"color: {get_color('accent')};")
 
         from widgets.condition_block_editor import ConditionBlockEditor
 
@@ -244,7 +244,7 @@ class SettingsTab(QWidget):
         pos_vl.setContentsMargins(0, 0, 0, 0)
         pos_vl.setSpacing(4)
         pos_lbl = QLabel("Positive")
-        pos_lbl.setStyleSheet("color: #4CAF50; font-weight: bold; font-size: 12px;")
+        pos_lbl.setStyleSheet(f"color: {get_color('success')}; font-weight: bold; font-size: 12px;")
         pos_vl.addWidget(pos_lbl)
         self.cond_block_editor_pos = ConditionBlockEditor(fixed_target="pos")
         pos_vl.addWidget(self.cond_block_editor_pos, 1)
@@ -256,7 +256,7 @@ class SettingsTab(QWidget):
         neg_vl.setContentsMargins(0, 0, 0, 0)
         neg_vl.setSpacing(4)
         neg_lbl = QLabel("Negative")
-        neg_lbl.setStyleSheet("color: #F44336; font-weight: bold; font-size: 12px;")
+        neg_lbl.setStyleSheet(f"color: {get_color('error')}; font-weight: bold; font-size: 12px;")
         neg_vl.addWidget(neg_lbl)
         self.cond_block_editor_neg = ConditionBlockEditor(fixed_target="neg")
         neg_vl.addWidget(self.cond_block_editor_neg, 1)
@@ -399,7 +399,7 @@ class SettingsTab(QWidget):
         # 활성화 체크박스
         self.chk_wildcard_enabled = QCheckBox("와일드카드 시스템 활성화")
         self.chk_wildcard_enabled.setChecked(True)
-        self.chk_wildcard_enabled.setStyleSheet("font-weight: bold; color: #FFD700;")
+        self.chk_wildcard_enabled.setStyleSheet(f"font-weight: bold; color: {get_color('accent')};")
         main_layout.addWidget(self.chk_wildcard_enabled)
 
         # 상단: 파일 목록 + 편집기
@@ -479,7 +479,7 @@ class SettingsTab(QWidget):
         self._wc_preview_label = QLabel("")
         self._wc_preview_label.setWordWrap(True)
         self._wc_preview_label.setStyleSheet(
-            f"color: #8BC34A; background-color: {get_color('bg_primary')}; "
+            f"color: {get_color('success')}; background-color: {get_color('bg_primary')}; "
             f"border: 1px solid {get_color('border')}; border-radius: 4px; padding: 8px;"
         )
         self._wc_preview_label.setMinimumHeight(40)

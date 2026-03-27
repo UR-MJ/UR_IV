@@ -424,9 +424,9 @@ class ImageCompareWidget(QWidget):
         # ── 하단 정보 ──
         info_layout = QHBoxLayout()
         self.info_a = QLabel("A: -")
-        self.info_a.setStyleSheet("color: #6AA0D0; font-size: 11px;")
+        self.info_a.setStyleSheet(f"color: {get_color('info')}; font-size: 11px;")
         self.info_b = QLabel("B: -")
-        self.info_b.setStyleSheet("color: #D06A6A; font-size: 11px;")
+        self.info_b.setStyleSheet(f"color: {get_color('error')}; font-size: 11px;")
         info_layout.addWidget(self.info_a)
         info_layout.addStretch()
         info_layout.addWidget(self.info_b)

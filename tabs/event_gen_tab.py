@@ -154,7 +154,7 @@ class StepCard(QWidget):
             removed = self.step_data.get('removed', [])
 
             added_label = QLabel(f"+ 이전 대비 추가 ({len(added)})")
-            added_label.setStyleSheet("color: #27ae60; font-size: 10px; font-weight: bold;")
+            added_label.setStyleSheet(f"color: {get_color('success')}; font-size: 10px; font-weight: bold;")
             layout.addWidget(added_label)
 
             added_preview = ', '.join(added[:6])
@@ -167,7 +167,7 @@ class StepCard(QWidget):
             layout.addWidget(self.added_text)
 
             removed_label = QLabel(f"- 이전 대비 제거 ({len(removed)})")
-            removed_label.setStyleSheet("color: #e74c3c; font-size: 10px; font-weight: bold;")
+            removed_label.setStyleSheet(f"color: {get_color('error')}; font-size: 10px; font-weight: bold;")
             layout.addWidget(removed_label)
 
             removed_preview = ', '.join(removed[:6])
@@ -191,7 +191,7 @@ class StepCard(QWidget):
 
         self.btn_apply_edit = QPushButton("적용")
         self.btn_apply_edit.setFixedHeight(28)
-        self.btn_apply_edit.setStyleSheet("font-size: 9px; background: #27ae60; color: white; border-radius: 3px;")
+        self.btn_apply_edit.setStyleSheet(f"font-size: 9px; background: {get_color('success')}; color: white; border-radius: 3px;")
         self.btn_apply_edit.clicked.connect(self._apply_edit)
         self.btn_apply_edit.hide()
         layout.addWidget(self.btn_apply_edit)
@@ -204,7 +204,7 @@ class StepCard(QWidget):
 
         # 캐리 옵션
         carry_label = QLabel("→ 다음으로 캐리:")
-        carry_label.setStyleSheet("color: #FFC107; font-size: 10px; font-weight: bold;")
+        carry_label.setStyleSheet(f"color: {get_color('accent')}; font-size: 10px; font-weight: bold;")
         layout.addWidget(carry_label)
 
         self.chk_carry_costume = QCheckBox("의상 유지")
@@ -390,7 +390,7 @@ class EventGenTab(QWidget):
         cf_inc_row = QHBoxLayout()
         cf_inc_label = QLabel("포함:")
         cf_inc_label.setFixedWidth(35)
-        cf_inc_label.setStyleSheet("color: #8BC34A; font-weight: bold;")
+        cf_inc_label.setStyleSheet(f"color: {get_color('success')}; font-weight: bold;")
         cf_inc_row.addWidget(cf_inc_label)
         self.child_include_input = QLineEdit()
         self.child_include_input.setPlaceholderText("sex, penetration")
@@ -404,7 +404,7 @@ class EventGenTab(QWidget):
         cf_exc_row = QHBoxLayout()
         cf_exc_label = QLabel("제외:")
         cf_exc_label.setFixedWidth(35)
-        cf_exc_label.setStyleSheet("color: #F44336; font-weight: bold;")
+        cf_exc_label.setStyleSheet(f"color: {get_color('error')}; font-weight: bold;")
         cf_exc_row.addWidget(cf_exc_label)
         self.child_exclude_input = QLineEdit()
         self.child_exclude_input.setPlaceholderText("futanari, yaoi")
@@ -570,7 +570,7 @@ class EventGenTab(QWidget):
         repeat_row.addWidget(self.repeat_spin)
         repeat_row.addStretch()
         self.total_images_label = QLabel("총 0장 생성 예정")
-        self.total_images_label.setStyleSheet("color: #FFC107; font-weight: bold;")
+        self.total_images_label.setStyleSheet(f"color: {get_color('accent')}; font-weight: bold;")
         repeat_row.addWidget(self.total_images_label)
         options_layout.addLayout(repeat_row)
 

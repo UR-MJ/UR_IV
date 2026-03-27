@@ -40,10 +40,10 @@ class SearchPreviewCard(QWidget):
         
         # 헤더
         header_label = QLabel("📋 미리보기")
-        header_label.setStyleSheet("""
+        header_label.setStyleSheet(f"""
             font-weight: bold;
             font-size: 13px;
-            color: #FFC107;
+            color: {get_color('accent')};
         """)
         layout.addWidget(header_label)
         

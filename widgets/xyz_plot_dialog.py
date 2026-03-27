@@ -84,7 +84,7 @@ class XYZPlotDialog(QDialog):
         options_layout.addStretch()
         
         self.lbl_total = QLabel("총 생성 예정: 0장")
-        self.lbl_total.setStyleSheet("font-weight: bold; color: #FFC107;")
+        self.lbl_total.setStyleSheet(f"font-weight: bold; color: {get_color('accent')};")
         options_layout.addWidget(self.lbl_total)
         
         layout.addLayout(options_layout)
@@ -272,11 +272,11 @@ class XYZPlotDialog(QDialog):
         
         # 너무 많으면 경고
         if total > 100:
-            self.lbl_total.setStyleSheet("font-weight: bold; color: #e74c3c;")
+            self.lbl_total.setStyleSheet(f"font-weight: bold; color: {get_color('error')};")
         elif total > 50:
-            self.lbl_total.setStyleSheet("font-weight: bold; color: #f39c12;")
+            self.lbl_total.setStyleSheet(f"font-weight: bold; color: {get_color('accent')};")
         else:
-            self.lbl_total.setStyleSheet("font-weight: bold; color: #FFC107;")
+            self.lbl_total.setStyleSheet(f"font-weight: bold; color: {get_color('accent')};")
     
     def _apply_axis_configs(self):
         """축 설정 적용"""

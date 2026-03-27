@@ -264,7 +264,7 @@ class QueueItemCard(QFrame):
                 opacity: 0.7;
             }}
         """)
-        self.color_bar.setStyleSheet("background-color: #27ae60;")
+        self.color_bar.setStyleSheet(f"background-color: {get_color('success')};")
 
     def update_data(self, item_data: dict):
         self.item_data = item_data

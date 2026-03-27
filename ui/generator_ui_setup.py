@@ -85,7 +85,7 @@ class UISetupMixin:
         self.status_message_label.setStyleSheet(f"""
             #statusMessageLabel {{
                 background-color: {get_color('bg_status_bar')};
-                color: #8BC34A;
+                color: {get_color('success')};
                 padding-left: 10px;
                 font-size: 10pt;
                 border-top: 1px solid {get_color('border')};
@@ -95,7 +95,7 @@ class UISetupMixin:
         # VRAM 상태 라벨 (상태바 오른쪽에 표시)
         self.vram_label = QLabel("")
         self.vram_label.setFixedHeight(24)
-        self.vram_label.setStyleSheet("color: #44FF44; font-size: 10px; padding-right: 10px;")
+        self.vram_label.setStyleSheet(f"color: {get_color('success')}; font-size: 10px; padding-right: 10px;")
 
     def _create_left_panel(self):
         """왼쪽 생성 패널 생성"""
@@ -1673,7 +1673,7 @@ class UISetupMixin:
         # 헤더
         header_layout = QHBoxLayout()
         header_label = QLabel("⭐ 즐겨찾기 목록")
-        header_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFC107;")
+        header_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {get_color('accent')};")
         header_layout.addWidget(header_label)
         header_layout.addStretch()
         

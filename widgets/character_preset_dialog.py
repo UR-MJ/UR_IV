@@ -482,7 +482,7 @@ class CharacterPresetDialog(QDialog):
                 self._cond_block_editor.set_rules(rules)
 
             self._preset_status.setText("★ 저장된 프리셋 로드됨")
-            self._preset_status.setStyleSheet("color: #D35400; font-size: 11px;")
+            self._preset_status.setStyleSheet(f"color: {get_color('accent')}; font-size: 11px;")
         else:
             self._cond_block_editor.clear()
             self._preset_status.setText("")
@@ -621,7 +621,7 @@ class CharacterPresetDialog(QDialog):
             self._current_char_key, combined, cond_rules_json
         )
         self._preset_status.setText(f"★ 저장 완료")
-        self._preset_status.setStyleSheet("color: #27AE60; font-size: 11px;")
+        self._preset_status.setStyleSheet(f"color: {get_color('success')}; font-size: 11px;")
 
     def _delete_preset(self):
         """현재 캐릭터의 프리셋 삭제"""
@@ -630,11 +630,11 @@ class CharacterPresetDialog(QDialog):
         from utils.character_presets import delete_character_preset, has_preset
         if not has_preset(self._current_char_key):
             self._preset_status.setText("프리셋 없음")
-            self._preset_status.setStyleSheet("color: #E74C3C; font-size: 11px;")
+            self._preset_status.setStyleSheet(f"color: {get_color('error')}; font-size: 11px;")
             return
         delete_character_preset(self._current_char_key)
         self._preset_status.setText("프리셋 삭제됨")
-        self._preset_status.setStyleSheet("color: #E74C3C; font-size: 11px;")
+        self._preset_status.setStyleSheet(f"color: {get_color('error')}; font-size: 11px;")
 
     # ── 적용 ──
 

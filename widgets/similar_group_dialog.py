@@ -144,7 +144,7 @@ class SimilarGroupDialog(QDialog):
         thresh_row.addWidget(self._slider_thresh)
         self._thresh_label = QLabel("10")
         self._thresh_label.setFixedWidth(30)
-        self._thresh_label.setStyleSheet("color: #5865F2; font-weight: bold;")
+        self._thresh_label.setStyleSheet(f"color: {get_color('accent')}; font-weight: bold;")
         thresh_row.addWidget(self._thresh_label)
         self._slider_thresh.valueChanged.connect(
             lambda v: self._thresh_label.setText(str(v))
@@ -292,7 +292,7 @@ class SimilarGroupDialog(QDialog):
             fl.setSpacing(4)
 
             header = QLabel(f"그룹 {gi+1} ({len(group)}장)")
-            header.setStyleSheet("color: #5865F2; font-weight: bold; font-size: 13px;")
+            header.setStyleSheet(f"color: {get_color('accent')}; font-weight: bold; font-size: 13px;")
             fl.addWidget(header)
 
             row = QHBoxLayout()

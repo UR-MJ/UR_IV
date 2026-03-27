@@ -18,7 +18,7 @@ from widgets.queue_panel import QueuePanel
 from widgets.queue_manager import QueueManager
 from widgets.xyz_plot_dialog import XYZPlotDialog
 from utils.prompt_cleaner import get_prompt_cleaner
-from utils.theme_manager import get_theme_manager
+from utils.theme_manager import get_theme_manager, get_color
 from utils.tray_manager import TrayManager
 
 
@@ -405,6 +405,22 @@ class GeneratorMainUI(
         """테마 전환"""
         tm = get_theme_manager()
         self.setStyleSheet(tm.get_stylesheet(theme_name))
+        
+        # 탭 이름 업데이트 (이모지 포함 여부 등)
+        if hasattr(self, '_update_tab_titles'):
+            self._update_tab_titles()
+            
+        # 상태 메시지 라벨 등 특수 위젯 갱신
+        if hasattr(self, 'status_message_label'):
+            self.status_message_label.setStyleSheet(f"""
+                #statusMessageLabel {{
+                    background-color: {get_color('bg_status_bar')};
+                    color: {get_color('success')};
+                    padding-left: 10px;
+                    font-size: 10pt;
+                    border-top: 1px solid {get_color('border')};
+                }}
+            """)
     
     def _setup_tray(self):
         """시스템 트레이 초기화"""
@@ -427,11 +443,11 @@ class GeneratorMainUI(
                 pct = (stats['vram_used'] / stats['vram_total']) * 100
                 self.vram_label.setText(f"VRAM: {used_gb:.1f}/{total_gb:.1f}GB ({pct:.0f}%)")
                 if pct > 90:
-                    self.vram_label.setStyleSheet("color: #FF4444; font-size: 10px;")
+                    self.vram_label.setStyleSheet(f"color: {get_color('error')}; font-size: 10px;")
                 elif pct > 70:
-                    self.vram_label.setStyleSheet("color: #FFA500; font-size: 10px;")
+                    self.vram_label.setStyleSheet(f"color: {get_color('warning')}; font-size: 10px;")
                 else:
-                    self.vram_label.setStyleSheet("color: #44FF44; font-size: 10px;")
+                    self.vram_label.setStyleSheet(f"color: {get_color('success')}; font-size: 10px;")
             else:
                 self.vram_label.setText("")
         except Exception:

@@ -77,7 +77,7 @@ class FolderOrganizerDialog(QDialog):
         layout.setSpacing(8)
 
         header = QLabel("🗂️ 폴더 정리 도구")
-        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #E67E22;")
+        header.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {get_color('accent')};")
         layout.addWidget(header)
 
         self.progress_bar = QProgressBar()
@@ -147,7 +147,7 @@ class FolderOrganizerDialog(QDialog):
         btn_copy_favs = QPushButton("⭐ 즐겨찾기 이미지 복사")
         btn_copy_favs.setFixedHeight(40)
         btn_copy_favs.setStyleSheet(
-            f"background-color: #FFC107; color: {get_color('bg_secondary')}; border-radius: 4px; "
+            f"background-color: {get_color('accent')}; color: {get_color('bg_secondary')}; border-radius: 4px; "
             "font-size: 14px; font-weight: bold;"
         )
         btn_copy_favs.clicked.connect(self._copy_favorites)

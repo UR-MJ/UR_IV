@@ -124,7 +124,7 @@ class TagWeightEditorDialog(QDialog):
             lbl_val = QLabel(f"{weight:.2f}")
             lbl_val.setFixedWidth(45)
             lbl_val.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl_val.setStyleSheet("font-size: 12px; font-weight: bold; color: #5865F2;")
+            lbl_val.setStyleSheet(f"font-size: 12px; font-weight: bold; color: {get_color('accent')};")
             row.addWidget(lbl_val)
 
             slider.valueChanged.connect(

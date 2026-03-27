@@ -162,7 +162,7 @@ class StatsPanel(QDialog):
         layout.setSpacing(8)
 
         header = QLabel("📊 생성 통계 대시보드")
-        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #5865F2;")
+        header.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {get_color('accent')};")
         layout.addWidget(header)
 
         self.progress_bar = QProgressBar()

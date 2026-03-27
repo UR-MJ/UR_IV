@@ -98,7 +98,7 @@ class XYZPlotTab(QWidget):
         load_layout.addWidget(self.btn_load_current)
 
         self.lbl_base_status = QLabel("기본 설정이 로드되지 않았습니다.")
-        self.lbl_base_status.setStyleSheet("color: #e74c3c;")
+        self.lbl_base_status.setStyleSheet(f"color: {get_color('error')};")
         load_layout.addWidget(self.lbl_base_status)
         load_layout.addStretch()
 
@@ -184,7 +184,7 @@ class XYZPlotTab(QWidget):
         # 헤더
         header = QHBoxLayout()
         self.results_title = QLabel("결과 이미지 (0)")
-        self.results_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFC107;")
+        self.results_title.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {get_color('accent')};")
         header.addWidget(self.results_title)
         header.addStretch()
 
@@ -299,11 +299,11 @@ class XYZPlotTab(QWidget):
         if self.parent_ui and hasattr(self.parent_ui, '_build_current_payload'):
             self.base_payload = self.parent_ui._build_current_payload()
             self.lbl_base_status.setText("기본 설정 로드됨")
-            self.lbl_base_status.setStyleSheet("color: #27ae60;")
+            self.lbl_base_status.setStyleSheet(f"color: {get_color('success')};")
             self._update_preview()
         else:
             self.lbl_base_status.setText("설정을 불러올 수 없습니다.")
-            self.lbl_base_status.setStyleSheet("color: #e74c3c;")
+            self.lbl_base_status.setStyleSheet(f"color: {get_color('error')};")
 
     def _parse_values(self, text: str) -> list:
         """값 문자열 파싱"""

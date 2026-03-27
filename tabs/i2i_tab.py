@@ -21,7 +21,7 @@ from PIL import Image
 
 from config import OUTPUT_DIR, WEBUI_API_URL
 from workers.generation_worker import Img2ImgFlowWorker
-from utils.theme_manager import get_theme_manager
+from utils.theme_manager import get_theme_manager, get_color
 
 
 class Img2ImgTab(QWidget):
@@ -54,7 +54,7 @@ class Img2ImgTab(QWidget):
 
         title = QLabel("Image-to-Image")
         title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        title.setStyleSheet("color: #5865F2;")
+        title.setStyleSheet(f"color: {get_color('accent')};")
         left_layout.addWidget(title)
 
         # 이미지 입력 영역
