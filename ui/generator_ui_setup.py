@@ -655,23 +655,40 @@ class UISetupMixin:
         )
 
     def _create_bottom_toolbar(self):
-        """좌측 패널 고정 하단: 자동화 + 생성 버튼만"""
+        """좌측 패널 고정 하단: 자동화(접이식) + 생성 버튼"""
         bar = QWidget()
         bar.setStyleSheet(f"background-color: {get_color('bg_secondary')}; border-top: 1px solid {get_color('border')};")
         bl = QVBoxLayout(bar)
         bl.setContentsMargins(10, 6, 10, 6)
         bl.setSpacing(4)
 
-        # 자동화 토글
+        # 자동화 ON/OFF 토글 (체크 = 자동화 활성)
         self.btn_auto_toggle = QPushButton("AUTOMATION: OFF")
         self.btn_auto_toggle.setCheckable(True)
         self.btn_auto_toggle.setFixedHeight(32)
         self.btn_auto_toggle.toggled.connect(self.toggle_automation_ui)
         bl.addWidget(self.btn_auto_toggle)
 
+        # 자동화 설정 펼침/접기 (ON/OFF 무관하게 독립적으로 동작)
+        self._auto_settings_toggle = QPushButton("▶ 자동화 설정")
+        self._auto_settings_toggle.setCheckable(True)
+        self._auto_settings_toggle.setChecked(False)
+        self._auto_settings_toggle.setFixedHeight(28)
+        self._auto_settings_toggle.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {get_color('text_muted')}; "
+            f"border: none; text-align: left; font-size: 10px; padding: 2px 0; }}"
+        )
+        bl.addWidget(self._auto_settings_toggle)
+
         self.automation_widget = AutomationWidget()
         self.automation_widget.hide()
         bl.addWidget(self.automation_widget)
+
+        self._auto_settings_toggle.toggled.connect(
+            lambda on: (self.automation_widget.setVisible(on),
+                        self._auto_settings_toggle.setText(
+                            "▼ 자동화 설정" if on else "▶ 자동화 설정"))
+        )
 
         # 생성 버튼
         self.btn_generate = QPushButton("이미지 생성")

@@ -186,49 +186,29 @@ class ActionsMixin:
             self.update_total_prompt_display()
     
     def toggle_automation_ui(self, checked):
-        """자동화 모드 토글 (UI만 보여주기/숨기기)"""
+        """자동화 모드 토글 (ON/OFF만 — 패널 표시는 별도 접이식)"""
         # 생성 중이면 토글 무시
-        if hasattr(self, 'generation_worker') and self.generation_worker and self.generation_worker.isRunning():
-            self.btn_auto_toggle.setChecked(not checked)  # 원래 상태로 복구
+        if hasattr(self, 'gen_worker') and self.gen_worker and self.gen_worker.isRunning():
+            self.btn_auto_toggle.setChecked(not checked)
             QMessageBox.warning(self, "알림", "이미지 생성 중에는 자동화 모드를 변경할 수 없습니다.")
             return
-        
+
         if checked:
-            # 자동화 패널 보여주기
-            self.automation_widget.show()
-            self.btn_auto_toggle.setText("⏹️ 자동화 모드: 켜짐 (ON)")
-            self.btn_auto_toggle.setStyleSheet("""
-                QPushButton { 
-                    background-color: #27ae60; color: white; 
-                    border: 1px solid #2ecc71; border-radius: 5px; 
-                    font-weight: bold; font-size: 13px; 
-                }
-                QPushButton:hover { background-color: #2ecc71; }
-            """)
-            
-            # 생성 버튼 → 자동화 시작 버튼으로 변경
-            self.btn_generate.setText("🚀 자동화 시작")
-            self.btn_generate.setStyleSheet(_gen_btn_style('#27ae60'))
-        else:
-            # 자동화 중이면 먼저 중지
-            if self.is_automating:
-                self._stop_automation("자동화가 중지되었습니다.")
-            
-            # 자동화 패널 숨기기
-            self.automation_widget.hide()
-            self.btn_auto_toggle.setText("⏹️ 자동화 모드: 꺼짐 (OFF)")
+            self.btn_auto_toggle.setText("AUTOMATION: ON")
             self.btn_auto_toggle.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {get_color('bg_tertiary')}; color: {get_color('text_secondary')};
-                    border: 1px solid {get_color('border')}; border-radius: 5px;
-                    font-weight: bold; font-size: 13px;
+                    background-color: {get_color('success')}; color: black;
+                    border: none; border-radius: 5px; font-weight: bold;
                 }}
-                QPushButton:hover {{ border: 1px solid {get_color('text_muted')}; }}
+                QPushButton:hover {{ background-color: {get_color('success')}; }}
             """)
-
-            # 생성 버튼 복구
-            self.btn_generate.setText("✨ 이미지 생성")
-            self.btn_generate.setStyleSheet(_gen_btn_style(_gen_btn_default_color()))
+            self.btn_generate.setText("자동화 시작")
+        else:
+            if self.is_automating:
+                self._stop_automation("자동화가 중지되었습니다.")
+            self.btn_auto_toggle.setText("AUTOMATION: OFF")
+            self.btn_auto_toggle.setStyleSheet("")  # 테마 기본 스타일 복원
+            self.btn_generate.setText("이미지 생성")
             
     def _on_automation_generation_finished(self, result, gen_info):
         """자동화 생성 완료"""
