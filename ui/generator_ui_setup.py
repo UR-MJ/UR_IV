@@ -32,56 +32,62 @@ class UISetupMixin:
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        # 최상위: 좌측 패널 | 우측(중앙+히스토리+도구+대기열)
+        root_layout = QHBoxLayout(central_widget)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
-        # 상단 영역 (설정 + 탭 + 히스토리)
-        upper_area = QWidget()
-        upper_layout = QHBoxLayout(upper_area)
-        upper_layout.setContentsMargins(0, 0, 0, 0)
-        upper_layout.setSpacing(0)
-
-        # 왼쪽 패널 (생성 설정 / 에디터 도구 전환)
+        # 왼쪽 패널 (생성 설정 / 에디터 도구 전환) — 전체 높이 사용
         self._left_panel_container = self._create_left_panel()
 
-        # 중앙 탭 (mosaic_editor 등 생성)
+        # 중앙 탭
         self.center_tabs = self._create_center_tabs()
 
-        # 에디터 도구 패널 (center_tabs 생성 후 mosaic_editor 참조 가능)
+        # 에디터 도구 패널
         self.editor_tools_scroll = self._create_editor_tools_panel()
 
-        # 왼쪽 패널 스택 (생성 설정 / 에디터 도구 / I2I / Inpaint)
+        # 왼쪽 패널 스택
         self.left_stack = QStackedWidget()
-        self.left_stack.setFixedWidth(450)
+        self.left_stack.setFixedWidth(420)
         self.left_stack.addWidget(self._left_panel_container)  # index 0: 생성 설정
         self.left_stack.addWidget(self.editor_tools_scroll)  # index 1: 에디터 도구
         self.left_stack.addWidget(self.i2i_tab.left_scroll)  # index 2: I2I 설정
         self.left_stack.addWidget(self.inpaint_tab.left_scroll)  # index 3: Inpaint 설정
 
-        # 오른쪽 히스토리
+        root_layout.addWidget(self.left_stack)
+
+        # 우측 영역: 탭+히스토리(상단) + 도구바 + 대기열(하단)
+        right_area = QWidget()
+        right_layout = QVBoxLayout(right_area)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
+        # 상단: 중앙 탭 + 히스토리 (가로)
+        upper_area = QWidget()
+        upper_layout = QHBoxLayout(upper_area)
+        upper_layout.setContentsMargins(0, 0, 0, 0)
+        upper_layout.setSpacing(0)
+
         self.history_panel = self._create_history_panel()
         self.history_panel.setFixedWidth(240)
 
-        upper_layout.addWidget(self.left_stack)
         upper_layout.addWidget(self.center_tabs)
         upper_layout.addWidget(self.history_panel)
+        right_layout.addWidget(upper_area, 1)
 
-        # 상단 작업 영역 (최소 높이 보장)
-        upper_area.setMinimumHeight(400)
-        main_layout.addWidget(upper_area, 1)
-
-        # 도구 바 (대기열 위 전체 너비: LoRA, 셔플, 프리셋 등)
+        # 도구 바 (대기열 위)
         self._tools_bar = self._create_tools_bar()
-        main_layout.addWidget(self._tools_bar)
+        right_layout.addWidget(self._tools_bar)
 
-        # 하단 컨테이너 (대기열 + 상태바)
+        # 하단: 대기열 + 상태바
         self._bottom_container = QWidget()
         self._bottom_layout = QVBoxLayout(self._bottom_container)
         self._bottom_layout.setContentsMargins(0, 0, 0, 0)
         self._bottom_layout.setSpacing(0)
         self._bottom_container.setMaximumHeight(230)
-        main_layout.addWidget(self._bottom_container, 0)
+        right_layout.addWidget(self._bottom_container, 0)
+
+        root_layout.addWidget(right_area, 1)
 
         # 상태 메시지 라벨은 _setup_queue()에서 하단 컨테이너에 추가
         self.status_message_label = QLabel("")
@@ -339,19 +345,18 @@ class UISetupMixin:
                             "▼ 최종 프롬프트" if on else "▶ 최종 프롬프트"))
         )
 
-        # ── 2. 캐릭터 + 작품 + 인물 수 ──
+        # ── 2. 인물 수 → 캐릭터 → 작품명 ──
         meta_row = QHBoxLayout()
         meta_row.setSpacing(6)
+        self.char_count_input = QLineEdit()
+        self.char_count_input.setPlaceholderText("인물 수")
         self.character_input = QLineEdit()
         self.character_input.setPlaceholderText("캐릭터")
         self.copyright_input = QLineEdit()
-        self.copyright_input.setPlaceholderText("작품")
-        self.char_count_input = QLineEdit()
-        self.char_count_input.setPlaceholderText("인물 수")
-        self.char_count_input.setFixedWidth(70)
+        self.copyright_input.setPlaceholderText("작품명")
+        meta_row.addWidget(self.char_count_input)
         meta_row.addWidget(self.character_input)
         meta_row.addWidget(self.copyright_input)
-        meta_row.addWidget(self.char_count_input)
         layout.addLayout(meta_row)
 
         # ── 3. 작가 + 고정 버튼 ──
@@ -688,12 +693,20 @@ class UISetupMixin:
 
         self.btn_save_settings = QPushButton("💾 저장")
         self.btn_save_settings.setToolTip("설정 저장")
-        self.btn_preset_save = QPushButton("📥 프리셋 저장")
-        self.btn_preset_save.setToolTip("프리셋 저장")
-        self.btn_preset_save.clicked.connect(self._save_prompt_preset)
-        self.btn_preset_load = QPushButton("📤 프리셋 로드")
-        self.btn_preset_load.setToolTip("프리셋 불러오기")
-        self.btn_preset_load.clicked.connect(self._load_prompt_preset)
+
+        # 프리셋: 하나의 버튼 → 메뉴로 저장/로드 분기
+        self._btn_preset = QPushButton("📦 프리셋")
+        self._btn_preset.setToolTip("프리셋 저장/불러오기")
+        _preset_menu = QMenu(self._btn_preset)
+        _act_save = _preset_menu.addAction("📥 프리셋 저장")
+        _act_save.triggered.connect(self._save_prompt_preset)
+        _act_load = _preset_menu.addAction("📤 프리셋 불러오기")
+        _act_load.triggered.connect(self._load_prompt_preset)
+        self._btn_preset.setMenu(_preset_menu)
+        # 호환성: 기존 속성 유지
+        self.btn_preset_save = self._btn_preset
+        self.btn_preset_load = self._btn_preset
+
         self.btn_prompt_history = QPushButton("📋 히스토리")
         self.btn_prompt_history.setToolTip("프롬프트 히스토리")
         self.btn_prompt_history.clicked.connect(self._show_prompt_history)
@@ -717,7 +730,7 @@ class UISetupMixin:
 
         self.btn_api_manager = None
 
-        for btn in [self.btn_save_settings, self.btn_preset_save, self.btn_preset_load,
+        for btn in [self.btn_save_settings, self._btn_preset,
                      self.btn_prompt_history, self.btn_lora_manager, self.btn_tag_weights,
                      self.btn_shuffle, self.btn_ab_test, self.btn_random_prompt]:
             btn.setFixedHeight(30)
