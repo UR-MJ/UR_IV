@@ -161,6 +161,8 @@ _QSS_TEMPLATE = """
         color: {text_primary};
         padding: 8px 20px;
         font-weight: 600;
+        min-height: 20px;
+        min-width: 32px;
     }}
     QPushButton:hover {{
         background-color: {bg_button_hover};
@@ -220,6 +222,9 @@ _QSS_TEMPLATE = """
 
     /* ── 탭 ── */
     QTabWidget::pane {{ border: none; background-color: {bg_primary}; }}
+    QTabBar {{
+        alignment: center;
+    }}
     QTabBar::tab {{
         background: {bg_button};
         color: {text_tab};
@@ -229,6 +234,7 @@ _QSS_TEMPLATE = """
         border-radius: {radius_button};
         border: 1px solid {border};
         font-size: 9pt;
+        min-width: 50px;
     }}
     QTabBar::tab:selected {{
         background: {bg_tertiary};

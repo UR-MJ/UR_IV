@@ -204,7 +204,7 @@ class UISetupMixin:
 
         self.center_tabs = QTabWidget()
         self.center_tabs.setUsesScrollButtons(True)
-        self.center_tabs.tabBar().setExpanding(False)
+        self.center_tabs.tabBar().setExpanding(True)
         
         # 1. 뷰어 패널 (T2I)
         self.viewer_panel = self._create_viewer_panel()
