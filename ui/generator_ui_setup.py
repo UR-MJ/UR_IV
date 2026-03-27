@@ -345,19 +345,21 @@ class UISetupMixin:
                             "▼ 최종 프롬프트" if on else "▶ 최종 프롬프트"))
         )
 
-        # ── 2. 인물 수 → 캐릭터 → 작품명 ──
-        meta_row = QHBoxLayout()
-        meta_row.setSpacing(6)
+        # ── 2. 인물 수 / 캐릭터 / 작품명 (각 한 줄) ──
+        layout.addWidget(self._prompt_label("인물 수"))
         self.char_count_input = QLineEdit()
-        self.char_count_input.setPlaceholderText("인물 수")
+        self.char_count_input.setPlaceholderText("예: 1girl, 2boys")
+        layout.addWidget(self.char_count_input)
+
+        layout.addWidget(self._prompt_label("캐릭터"))
         self.character_input = QLineEdit()
-        self.character_input.setPlaceholderText("캐릭터")
+        self.character_input.setPlaceholderText("캐릭터 이름")
+        layout.addWidget(self.character_input)
+
+        layout.addWidget(self._prompt_label("작품명"))
         self.copyright_input = QLineEdit()
-        self.copyright_input.setPlaceholderText("작품명")
-        meta_row.addWidget(self.char_count_input)
-        meta_row.addWidget(self.character_input)
-        meta_row.addWidget(self.copyright_input)
-        layout.addLayout(meta_row)
+        self.copyright_input.setPlaceholderText("작품 (Copyright)")
+        layout.addWidget(self.copyright_input)
 
         # ── 3. 작가 + 고정 버튼 ──
         artist_row = QHBoxLayout()
@@ -465,31 +467,32 @@ class UISetupMixin:
         sl.setSpacing(8)
 
         # 캐릭터 옵션
-        char_opts = QHBoxLayout()
         self.chk_auto_char_features = QCheckBox("특징 자동 추가")
+        sl.addWidget(self.chk_auto_char_features)
+
+        sl.addWidget(self._prompt_label("특징 모드"))
         self.combo_char_feature_mode = NoScrollComboBox()
         self.combo_char_feature_mode.addItems(["핵심만", "핵심+의상"])
-        self.combo_char_feature_mode.setFixedWidth(90)
+        sl.addWidget(self.combo_char_feature_mode)
+
         self.btn_char_preset = QPushButton("특징 프리셋")
         self.btn_char_preset.clicked.connect(self._open_character_preset)
-        char_opts.addWidget(self.chk_auto_char_features)
-        char_opts.addWidget(self.combo_char_feature_mode)
-        char_opts.addWidget(self.btn_char_preset)
-        sl.addLayout(char_opts)
+        sl.addWidget(self.btn_char_preset)
 
         # 모델
-        self.model_combo = NoScrollComboBox()
         sl.addWidget(self._prompt_label("모델"))
+        self.model_combo = NoScrollComboBox()
         sl.addWidget(self.model_combo)
 
-        # 샘플러 / 스케줄러
+        # 샘플러
+        sl.addWidget(self._prompt_label("샘플러"))
         self.sampler_combo = NoScrollComboBox()
+        sl.addWidget(self.sampler_combo)
+
+        # 스케줄러
+        sl.addWidget(self._prompt_label("스케줄러"))
         self.scheduler_combo = NoScrollComboBox()
-        sampler_row = QHBoxLayout()
-        sampler_row.addWidget(self.sampler_combo)
-        sampler_row.addWidget(self.scheduler_combo)
-        sl.addWidget(self._prompt_label("샘플러 / 스케줄러"))
-        sl.addLayout(sampler_row)
+        sl.addWidget(self.scheduler_combo)
 
         # Steps / CFG
         self.steps_input, _ = self._create_param_slider(sl, "Steps", 1, 100, 25, 1)
@@ -507,19 +510,16 @@ class UISetupMixin:
         sl.addLayout(seed_row)
 
         # 해상도
-        res_row = QHBoxLayout()
+        sl.addWidget(self._prompt_label("해상도 (W × H)"))
         self.width_input = QLineEdit("1024")
+        self.width_input.setPlaceholderText("Width")
+        sl.addWidget(self.width_input)
         self.height_input = QLineEdit("1024")
-        self.width_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.height_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        btn_swap = QPushButton("↔")
-        btn_swap.setFixedSize(30, 30)
+        self.height_input.setPlaceholderText("Height")
+        sl.addWidget(self.height_input)
+        btn_swap = QPushButton("↔ W/H 교환")
         btn_swap.clicked.connect(self._swap_resolution)
-        res_row.addWidget(self.width_input)
-        res_row.addWidget(btn_swap)
-        res_row.addWidget(self.height_input)
-        sl.addWidget(self._prompt_label("해상도"))
-        sl.addLayout(res_row)
+        sl.addWidget(btn_swap)
 
         # 해상도 프리셋
         from PyQt6.QtWidgets import QInputDialog
