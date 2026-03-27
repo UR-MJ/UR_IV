@@ -11,8 +11,9 @@ class BrowserTab(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.default_url = "https://hijiribe.donmai.us/" 
-        
+        self.default_url = "https://hijiribe.donmai.us/"
+        self.home_url = self.default_url
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         

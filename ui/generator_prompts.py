@@ -2,9 +2,7 @@
 """
 프롬프트 처리 관련 로직
 """
-import re
 import random
-import pandas as pd
 from PyQt6.QtWidgets import QMessageBox
 from utils.app_logger import get_logger
 

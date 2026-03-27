@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QRadioButton, QButtonGroup, QFileDialog, QDialog, QLayout,
     QSpinBox, QDoubleSpinBox
 )
-from PyQt6.QtCore import Qt, QObject, QEvent, pyqtSignal, QRect, QSize, Qt
+from PyQt6.QtCore import Qt, QObject, QEvent, pyqtSignal, QRect, QSize
 from utils.theme_manager import get_color
 
 class WheelEventFilter(QObject):

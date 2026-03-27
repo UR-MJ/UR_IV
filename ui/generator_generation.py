@@ -5,7 +5,6 @@
 import os
 import time
 import random
-import base64
 import json
 from PIL import Image
 from PyQt6.QtWidgets import QMessageBox

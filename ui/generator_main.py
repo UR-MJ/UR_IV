@@ -401,15 +401,6 @@ class GeneratorMainUI(
         tm = get_theme_manager()
         self.setStyleSheet(tm.get_stylesheet(theme_name))
     
-    def _setup_connections(self):
-        """시그널 연결"""
-        # 즐겨찾기 버튼
-        self.btn_add_favorite.clicked.connect(self.add_to_favorites)
-        
-        # 갤러리 새로고침
-        if hasattr(self, 'btn_refresh_gallery'):
-            self.btn_refresh_gallery.clicked.connect(self.refresh_gallery)
-
     def _setup_tray(self):
         """시스템 트레이 초기화"""
         self._tray_manager = TrayManager(self)

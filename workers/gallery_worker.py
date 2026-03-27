@@ -1,20 +1,16 @@
 # workers/gallery_worker.py
 import os
 import hashlib
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PyQt6.QtCore import QThread, pyqtSignal
 from PIL import Image, PngImagePlugin
+
+from core.image_utils import normalize_path as _normalize_path
 
 try:
     import exifread
 except ImportError:
     exifread = None
-
-
-def _normalize_path(path: str) -> str:
-    """경로 정규화"""
-    return Path(path).resolve().as_posix()
 
 
 def _get_thumb_path(image_path: str, thumb_dir: str) -> str:

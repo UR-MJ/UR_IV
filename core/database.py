@@ -1,11 +1,8 @@
 # core/database.py
 import sqlite3
 import threading
-from pathlib import Path
 
-def normalize_path(path):
-    """경로 정규화"""
-    return Path(path).resolve().as_posix()
+from core.image_utils import normalize_path
 
 class MetadataManager:
     """이미지 메타데이터 관리 클래스"""

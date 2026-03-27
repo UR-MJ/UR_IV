@@ -5,7 +5,6 @@ import uuid
 import random
 import requests
 import websocket
-import threading
 from typing import Dict, List, Optional, Tuple
 
 from backends.base import (

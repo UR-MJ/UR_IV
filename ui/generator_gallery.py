@@ -8,8 +8,6 @@ from PyQt6.QtWidgets import QListWidgetItem, QMessageBox, QMenu
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QGuiApplication, QAction
 
-from PyQt6.QtWidgets import QApplication
-
 from config import OUTPUT_DIR, FAVORITES_FILE
 from utils.theme_manager import get_color
 from core.image_utils import exif_for_display, move_to_trash
@@ -80,25 +78,6 @@ class GalleryMixin:
 
         if idx >= 0:
             self.center_tabs.setCurrentIndex(idx)
-
-    def load_gallery(self):
-        """갤러리 로드"""
-        if not os.path.exists(OUTPUT_DIR):
-            os.makedirs(OUTPUT_DIR)
-            return
-        
-        files = [
-            f for f in os.listdir(OUTPUT_DIR) 
-            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))
-        ]
-        
-        files.sort(key=lambda x: os.path.getmtime(
-            os.path.join(OUTPUT_DIR, x)
-        ), reverse=True)
-        
-        for filename in files[:50]:
-            filepath = os.path.join(OUTPUT_DIR, filename)
-            self.add_image_to_gallery(filepath)
 
     def add_image_to_gallery(self, filepath):
         """갤러리에 이미지 추가"""
@@ -448,33 +427,6 @@ class GalleryMixin:
             self._save_favorites_to_file()
             self.refresh_favorites()
             QMessageBox.information(self, "완료", "모든 즐겨찾기가 삭제되었습니다.")
-
-    def _view_in_main(self, filepath):
-        """메인 뷰어에서 보기"""
-        self.current_image_path = filepath
-        pixmap = QPixmap(filepath)
-        if not pixmap.isNull():
-            self.viewer_label.setPixmap(
-                pixmap.scaled(
-                    self.viewer_label.size(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                )
-            )
-        self.center_tabs.setCurrentIndex(0)
-
-    def _open_file_location(self, filepath):
-        """파일 위치 열기"""
-        import subprocess
-        import platform
-        
-        folder = os.path.dirname(filepath)
-        if platform.system() == "Windows":
-            subprocess.run(['explorer', '/select,', filepath])
-        elif platform.system() == "Darwin":
-            subprocess.run(['open', '-R', filepath])
-        else:
-            subprocess.run(['xdg-open', folder])
 
     # ==================== 설정 불러오기 ====================
     

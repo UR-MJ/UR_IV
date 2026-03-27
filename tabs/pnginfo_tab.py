@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QTabWidget, QStackedWidget
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QRect, QPoint, QThread
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QImage, QFont as QGFont
+from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QImage
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 from utils.theme_manager import get_color
