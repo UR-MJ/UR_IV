@@ -7,23 +7,30 @@ from PyQt6.QtWidgets import (
     QPushButton, QTextEdit, QFrame, QScrollArea
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from utils.feature_extractor import get_feature_extractor
 from utils.theme_manager import get_color
 
 
 class SearchPreviewCard(QWidget):
     """검색 결과 미리보기 카드"""
-    
+
     # 시그널
     apply_clicked = pyqtSignal(dict)       # 즉시 적용
     add_to_queue_clicked = pyqtSignal(dict) # 대기열 추가
     next_clicked = pyqtSignal()             # 다음 결과 보기
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_bundle = None
-        self.feature_extractor = get_feature_extractor()
+        self._feature_extractor = None
         self._setup_ui()
+
+    @property
+    def feature_extractor(self):
+        """FeatureExtractor 지연 로드"""
+        if self._feature_extractor is None:
+            from utils.feature_extractor import get_feature_extractor
+            self._feature_extractor = get_feature_extractor()
+        return self._feature_extractor
     
     def _setup_ui(self):
         """UI 구성"""

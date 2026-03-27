@@ -8,19 +8,18 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPoint
 from PyQt6.QtGui import QKeyEvent, QFocusEvent
-from utils.tag_completer import get_tag_completer
 from utils.theme_manager import get_color
 
 
 class TagInputWidget(QTextEdit):
     """태그 자동완성 지원 입력창"""
-    
+
     tag_inserted = pyqtSignal(str)  # 태그 삽입 시
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        
-        self.completer = get_tag_completer()
+
+        self._completer = None  # 지연 로드
         self.popup = None
         self.debounce_timer = QTimer()
         self.debounce_timer.setSingleShot(True)
@@ -95,7 +94,10 @@ class TagInputWidget(QTextEdit):
             return
         
         # 추천 가져오기
-        suggestions = self.completer.get_suggestions(current_word, self.max_suggestions)
+        if self._completer is None:
+            from utils.tag_completer import get_tag_completer
+            self._completer = get_tag_completer()
+        suggestions = self._completer.get_suggestions(current_word, self.max_suggestions)
         
         if not suggestions:
             self.popup.hide()

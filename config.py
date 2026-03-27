@@ -1,47 +1,14 @@
-import sys
 import os
-import json
-import time
-import base64
-import requests
-import random
-import hashlib
-import re
-import shutil
-import sqlite3
-import logging
-import unittest
-import pandas as pd
 from urllib.parse import urlparse
-from pathlib import Path
-from PIL import Image, PngImagePlugin
+
+from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
-from threading import Lock
-from typing import Optional, List, Dict, Tuple
-from core.database import MetadataManager
-from concurrent.futures import ThreadPoolExecutor
-import exifread
 
-# [UI 라이브러리 임포트]
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QTextEdit, QMessageBox, QLineEdit, QSlider, QFrame,
-    QSizePolicy, QComboBox, QGroupBox, QCheckBox, QSplitter, QScrollArea,
-    QStatusBar, QLayout, QFileDialog, QListWidget, QListWidgetItem, QDialog,
-    QTabWidget, QRadioButton, QStackedWidget, QButtonGroup, QTableWidget,
-    QTableWidgetItem, QHeaderView, QGridLayout
-)
-from PyQt6.QtGui import QPixmap, QFont, QImage, QIcon, QColor, QCursor, QPainter, QPen, QPolygon, QBrush, QAction, QImageReader
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QEvent, QSize, QUrl, QRect, QPoint, QTimer
-
+from PyQt6.QtGui import QImageReader
 QImageReader.setAllocationLimit(0)  # Qt 이미지 할당 제한 해제
 
-# [기능 확장 라이브러리]
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEnginePage, QWebEngineProfile, QWebEngineScript
-
-import cv2
-import numpy as np
+# QtWebEngine은 QApplication 생성 전에 import 필요
+from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
 
 # --- [설정 상수] ---
 USER_INPUT_URL = "http://127.0.0.1:7860/?__theme=dark"
