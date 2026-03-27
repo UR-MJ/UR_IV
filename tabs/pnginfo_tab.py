@@ -1110,9 +1110,39 @@ class PngInfoTab(QWidget):
                 self.parse_generation_info(raw_info)
                 self._display_webui_formatted()
             else:
-                self.info_text.setPlainText("표준 PNG Info가 없습니다.")
+                # PNG Info가 없으면 EXIF UserComment 시도 (JPEG 등)
+                exif_text = self._read_exif_usercomment(img)
+                if exif_text:
+                    self.parse_generation_info(exif_text)
+                    self._display_webui_formatted()
+                else:
+                    self.info_text.setPlainText("표준 PNG Info가 없습니다.")
         except Exception as e:
             self.info_text.setPlainText(f"이미지 읽기 오류: {e}")
+
+    def _read_exif_usercomment(self, img) -> str | None:
+        """EXIF UserComment 태그에서 생성 정보 텍스트 추출 (JPEG 등)"""
+        try:
+            exif_data = img.getexif()
+            if not exif_data:
+                return None
+            # EXIF IFD 내 UserComment (tag 0x9286)
+            from PIL.ExifTags import IFD
+            ifd = exif_data.get_ifd(IFD.Exif)
+            user_comment = ifd.get(0x9286)
+            if user_comment:
+                if isinstance(user_comment, bytes):
+                    # UserComment 인코딩 prefix 제거 (ASCII/UNICODE/JIS)
+                    for prefix in (b'ASCII\x00\x00\x00', b'UNICODE\x00', b'\x00' * 8):
+                        if user_comment.startswith(prefix):
+                            user_comment = user_comment[len(prefix):]
+                            break
+                    user_comment = user_comment.decode('utf-8', errors='replace').strip('\x00').strip()
+                if isinstance(user_comment, str) and user_comment:
+                    return user_comment
+        except Exception:
+            pass
+        return None
 
     def parse_generation_info(self, text):
         try:
@@ -1141,11 +1171,19 @@ class PngInfoTab(QWidget):
 
             if params_line:
                 # 따옴표 안의 쉼표를 보호하여 파싱 (Lora hashes 등)
+                # \" 이스케이프 시퀀스도 올바르게 처리
                 items = []
                 current = ""
                 in_quotes = False
-                for ch in params_line:
-                    if ch == '"':
+                i = 0
+                while i < len(params_line):
+                    ch = params_line[i]
+                    if ch == '\\' and i + 1 < len(params_line) and params_line[i + 1] == '"':
+                        # \" 이스케이프 — 따옴표 상태 변경 없이 그대로 추가
+                        current += params_line[i:i + 2]
+                        i += 2
+                        continue
+                    elif ch == '"':
                         in_quotes = not in_quotes
                         current += ch
                     elif ch == ',' and not in_quotes:
@@ -1153,6 +1191,7 @@ class PngInfoTab(QWidget):
                         current = ""
                     else:
                         current += ch
+                    i += 1
                 if current.strip():
                     items.append(current.strip())
 
@@ -1228,15 +1267,31 @@ class PngInfoTab(QWidget):
             for param in hires_params:
                 display_lines.append(f"  • {param}")
 
-        # LoRA 파라미터 — 프롬프트에서 <lora:...> 추출 + Lora hashes
+        # LoRA 파라미터 — 프롬프트 + 파라미터 값에서 <lora:...> 추출 + Lora hashes
         import re as _re
         lora_entries = []
+        seen_lora_names = set()
+
         prompt_text = p.get('prompt', '')
-        for m in _re.finditer(r'<lora:([^:>]+):([^>]+)>', prompt_text):
-            lora_entries.append(f"{m.group(1)}  (weight: {m.group(2)})")
+        for m in _re.finditer(r'<lora:\s*([^:>]+):([^>]+)>', prompt_text):
+            name = m.group(1).strip()
+            lora_entries.append(f"{name}  (weight: {m.group(2).strip()})")
+            seen_lora_names.add(name)
         neg_text = p.get('negative_prompt', '')
-        for m in _re.finditer(r'<lora:([^:>]+):([^>]+)>', neg_text):
-            lora_entries.append(f"{m.group(1)}  (weight: {m.group(2)}, negative)")
+        for m in _re.finditer(r'<lora:\s*([^:>]+):([^>]+)>', neg_text):
+            name = m.group(1).strip()
+            lora_entries.append(f"{name}  (weight: {m.group(2).strip()}, negative)")
+            seen_lora_names.add(name)
+        # 파라미터 값(Z Values 등)에서도 <lora:...> 추출
+        skip_keys = {'prompt', 'negative_prompt'}
+        for key, val in p.items():
+            if key in skip_keys or not isinstance(val, str):
+                continue
+            for m in _re.finditer(r'<lora:\s*([^:>]+):([^>]+)>', val):
+                name = m.group(1).strip()
+                if name not in seen_lora_names:
+                    lora_entries.append(f"{name}  (weight: {m.group(2).strip()}, from {key})")
+                    seen_lora_names.add(name)
         # Lora hashes 키에서 추가 정보
         lora_hashes = p.get('Lora hashes', '')
         if lora_hashes:
@@ -1246,9 +1301,10 @@ class PngInfoTab(QWidget):
                     name, hash_val = part.split(':', 1)
                     name = name.strip()
                     hash_val = hash_val.strip()
-                    # 이미 프롬프트에서 찾은 것과 중복 체크
-                    if not any(name in e for e in lora_entries):
+                    # 이미 찾은 것과 중복 체크
+                    if name not in seen_lora_names:
                         lora_entries.append(f"{name}  (hash: {hash_val})")
+                        seen_lora_names.add(name)
 
         if lora_entries:
             display_lines.extend([
