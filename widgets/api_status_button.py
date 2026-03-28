@@ -29,9 +29,9 @@ class ApiStatusButton(QPushButton):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(38)
+        self.setMinimumHeight(36)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.setMouseTracking(True)
 
         self._state = self.STATE_IDLE

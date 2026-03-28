@@ -712,7 +712,7 @@ class UISetupMixin:
     def _create_tools_bar(self):
         """대기열 위 전체 너비 도구 바 (그룹별 구분)"""
         bar = QWidget()
-        bar.setFixedHeight(42)
+        bar.setFixedHeight(46)
         bar.setStyleSheet(
             f"background-color: {get_color('bg_secondary')}; "
             f"border-top: 1px solid {get_color('border')}; "
@@ -730,12 +730,14 @@ class UISetupMixin:
             s.setStyleSheet(f"color: {get_color('border')};")
             return s
 
-        _btn_h = 30
+        _btn_h = 36
 
         # ── 그룹 1: 백엔드 ──
         from widgets.api_status_button import ApiStatusButton
         self.btn_api_manager = ApiStatusButton()
         self.btn_api_manager.setFixedHeight(_btn_h)
+        self.btn_api_manager.setMinimumWidth(100)
+        self.btn_api_manager.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.btn_api_manager.clicked.connect(self._show_api_manager_popup)
         hl.addWidget(self.btn_api_manager)
 
