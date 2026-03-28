@@ -30,6 +30,7 @@ class ApiStatusButton(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(36)
+        self.setMinimumWidth(140)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.setMouseTracking(True)

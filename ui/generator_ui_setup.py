@@ -48,7 +48,7 @@ class UISetupMixin:
 
         # 왼쪽 패널 스택
         self.left_stack = QStackedWidget()
-        self.left_stack.setFixedWidth(420)
+        self.left_stack.setFixedWidth(460)
         self.left_stack.addWidget(self._left_panel_container)  # index 0: 생성 설정
         self.left_stack.addWidget(self.editor_tools_scroll)  # index 1: 에디터 도구
         self.left_stack.addWidget(self.i2i_tab.left_scroll)  # index 2: I2I 설정
@@ -122,7 +122,7 @@ class UISetupMixin:
         scroll.setStyleSheet("QScrollArea { border: none; }")
 
         scroll_content = QWidget()
-        scroll_content.setMaximumWidth(420)
+        scroll_content.setMaximumWidth(460)
         self._prompt_layout = QVBoxLayout(scroll_content)
         self._prompt_layout.setContentsMargins(10, 10, 10, 10)
         self._prompt_layout.setSpacing(8)
@@ -524,7 +524,7 @@ class UISetupMixin:
         _lbl_x.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _lbl_x.setFixedWidth(16)
         btn_swap = QPushButton("↔")
-        btn_swap.setFixedSize(30, 30)
+        btn_swap.setFixedSize(36, 36)
         btn_swap.setToolTip("W ↔ H 교환")
         btn_swap.clicked.connect(self._swap_resolution)
         res_row.addWidget(self.width_input)
