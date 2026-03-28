@@ -389,7 +389,7 @@ class WebUIMixin:
         elif result == 'skipped':
             self.viewer_label.setText(
                 "백엔드에 연결되지 않았습니다.\n\n"
-                "왼쪽 상단의 API 관리 버튼으로 연결하세요."
+                "하단 도구 바의 '백엔드' 버튼으로 연결하세요."
             )
 
     @staticmethod

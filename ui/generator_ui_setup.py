@@ -175,14 +175,14 @@ class UISetupMixin:
         titles_minimal = {
             't2i': "T2I", 'i2i': "I2I", 'inpaint': "Inpaint",
             'event': "Event Gen", 'search': "Search", 'web': "Web",
-            'editor': "Editor", 'batch': "Batch", 'upscale': "Upscale",
+            'editor': "Editor", 'batch': "Batch / Upscale",
             'gallery': "Gallery", 'xyz': "XYZ Plot", 'png': "PNG Info",
             'fav': "Favorites", 'backend': "Backend UI", 'settings': "Settings",
         }
         titles_emoji = {
             't2i': "🖼️ T2I", 'i2i': "🖼️ I2I", 'inpaint': "🎨 Inpaint",
             'event': "🎬 이벤트 생성", 'search': "🔍 Search", 'web': "🌐 Web",
-            'editor': "🎨 Editor", 'batch': "📦 배치 처리", 'upscale': "🔍 Upscale",
+            'editor': "🎨 Editor", 'batch': "📦 배치/업스케일",
             'gallery': "🖼️ Gallery", 'xyz': "📊 XYZ Plot", 'png': "ℹ️ PNG Info",
             'fav': "⭐ Favorites", 'backend': "🖥️ Backend UI", 'settings': "⚙️ Setting",
         }
@@ -193,7 +193,7 @@ class UISetupMixin:
         """테마 변경 시 모든 탭 이름 업데이트"""
         tab_keys = [
             't2i', 'i2i', 'inpaint', 'event', 'search', 'web', 'editor',
-            'batch', 'upscale', 'gallery', 'xyz', 'png', 'fav', 'backend', 'settings'
+            'batch', 'gallery', 'xyz', 'png', 'fav', 'backend', 'settings'
         ]
         for i, key in enumerate(tab_keys):
             if i < self.center_tabs.count():
@@ -246,14 +246,15 @@ class UISetupMixin:
         self.mosaic_editor = MosaicEditor()
         self.center_tabs.addTab(self.mosaic_editor, self._get_tab_title('editor'))
 
-        # 5-1. 배치 처리 탭
+        # 5-1. 배치 + 업스케일 통합 탭
         from tabs.batch_tab import BatchTab
         self.batch_tab = BatchTab(self)
-        self.center_tabs.addTab(self.batch_tab, self._get_tab_title('batch'))
-
-        # 6-1. 업스케일 탭
         self.upscale_tab = UpscaleTab(self)
-        self.center_tabs.addTab(self.upscale_tab, self._get_tab_title('upscale'))
+
+        self._batch_upscale_tabs = QTabWidget()
+        self._batch_upscale_tabs.addTab(self.batch_tab, "배치 처리")
+        self._batch_upscale_tabs.addTab(self.upscale_tab, "Upscale")
+        self.center_tabs.addTab(self._batch_upscale_tabs, self._get_tab_title('batch'))
 
         # 6-2. 갤러리 탭
         self.gallery_tab = GalleryTab(self)
@@ -709,27 +710,47 @@ class UISetupMixin:
         return bar
 
     def _create_tools_bar(self):
-        """대기열 위 전체 너비 도구 바: 버튼 + LoRA (가로 나열)"""
+        """대기열 위 전체 너비 도구 바 (그룹별 구분)"""
         bar = QWidget()
-        bar.setFixedHeight(40)
-        bar.setStyleSheet(f"background-color: {get_color('bg_secondary')}; border-bottom: 1px solid {get_color('border')};")
+        bar.setFixedHeight(42)
+        bar.setStyleSheet(
+            f"background-color: {get_color('bg_secondary')}; "
+            f"border-top: 1px solid {get_color('border')}; "
+            f"border-bottom: 1px solid {get_color('border')};"
+        )
         hl = QHBoxLayout(bar)
-        hl.setContentsMargins(8, 2, 8, 2)
-        hl.setSpacing(4)
+        hl.setContentsMargins(8, 4, 8, 4)
+        hl.setSpacing(3)
 
+        def _sep():
+            """구분선"""
+            s = QFrame()
+            s.setFrameShape(QFrame.Shape.VLine)
+            s.setFixedWidth(1)
+            s.setStyleSheet(f"color: {get_color('border')};")
+            return s
+
+        _btn_h = 30
+
+        # ── 그룹 1: 백엔드 ──
+        from widgets.api_status_button import ApiStatusButton
+        self.btn_api_manager = ApiStatusButton()
+        self.btn_api_manager.setFixedHeight(_btn_h)
+        self.btn_api_manager.clicked.connect(self._show_api_manager_popup)
+        hl.addWidget(self.btn_api_manager)
+
+        hl.addWidget(_sep())
+
+        # ── 그룹 2: 저장 / 프리셋 ──
         self.btn_save_settings = QPushButton("💾 저장")
         self.btn_save_settings.setToolTip("설정 저장")
 
-        # 프리셋: 하나의 버튼 → 메뉴로 저장/로드 분기
         self._btn_preset = QPushButton("📦 프리셋")
         self._btn_preset.setToolTip("프리셋 저장/불러오기")
         _preset_menu = QMenu(self._btn_preset)
-        _act_save = _preset_menu.addAction("📥 프리셋 저장")
-        _act_save.triggered.connect(self._save_prompt_preset)
-        _act_load = _preset_menu.addAction("📤 프리셋 불러오기")
-        _act_load.triggered.connect(self._load_prompt_preset)
+        _preset_menu.addAction("📥 프리셋 저장").triggered.connect(self._save_prompt_preset)
+        _preset_menu.addAction("📤 프리셋 불러오기").triggered.connect(self._load_prompt_preset)
         self._btn_preset.setMenu(_preset_menu)
-        # 호환성: 기존 속성 유지
         self.btn_preset_save = self._btn_preset
         self.btn_preset_load = self._btn_preset
 
@@ -737,6 +758,13 @@ class UISetupMixin:
         self.btn_prompt_history.setToolTip("프롬프트 히스토리")
         self.btn_prompt_history.clicked.connect(self._show_prompt_history)
 
+        for btn in [self.btn_save_settings, self._btn_preset, self.btn_prompt_history]:
+            btn.setFixedHeight(_btn_h)
+            hl.addWidget(btn)
+
+        hl.addWidget(_sep())
+
+        # ── 그룹 3: LoRA / 가중치 ──
         self.btn_lora_manager = QPushButton("LoRA")
         self.btn_lora_manager.setToolTip("LoRA 관리")
         self.btn_lora_manager.clicked.connect(self._open_lora_manager)
@@ -744,6 +772,13 @@ class UISetupMixin:
         self.btn_tag_weights.setToolTip("가중치 편집")
         self.btn_tag_weights.clicked.connect(self._open_tag_weight_editor)
 
+        for btn in [self.btn_lora_manager, self.btn_tag_weights]:
+            btn.setFixedHeight(_btn_h)
+            hl.addWidget(btn)
+
+        hl.addWidget(_sep())
+
+        # ── 그룹 4: 도구 ──
         self.btn_shuffle = QPushButton("🔀 셔플")
         self.btn_shuffle.setToolTip("태그 셔플")
         self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
@@ -754,13 +789,11 @@ class UISetupMixin:
         self.btn_random_prompt.setToolTip("랜덤 프롬프트")
         self.btn_random_prompt.setEnabled(False)
 
-        self.btn_api_manager = None
-
-        for btn in [self.btn_save_settings, self._btn_preset,
-                     self.btn_prompt_history, self.btn_lora_manager, self.btn_tag_weights,
-                     self.btn_shuffle, self.btn_ab_test, self.btn_random_prompt]:
-            btn.setFixedHeight(30)
+        for btn in [self.btn_shuffle, self.btn_ab_test, self.btn_random_prompt]:
+            btn.setFixedHeight(_btn_h)
             hl.addWidget(btn)
+
+        hl.addStretch()
 
         # LoRA 활성 패널
         from widgets.lora_panel import LoraActivePanel
