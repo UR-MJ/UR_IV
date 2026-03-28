@@ -523,8 +523,8 @@ class UISetupMixin:
         _lbl_x = QLabel("×")
         _lbl_x.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _lbl_x.setFixedWidth(16)
-        btn_swap = QPushButton("↔")
-        btn_swap.setFixedSize(36, 36)
+        btn_swap = QPushButton("<->")
+        btn_swap.setFixedHeight(32)
         btn_swap.setToolTip("W ↔ H 교환")
         btn_swap.clicked.connect(self._swap_resolution)
         res_row.addWidget(self.width_input)
@@ -710,99 +710,99 @@ class UISetupMixin:
         return bar
 
     def _create_tools_bar(self):
-        """대기열 위 전체 너비 도구 바 (그룹별 구분)"""
+        """대기열 위 전체 너비 도구 바 (2행: 백엔드 / 도구 버튼)"""
         bar = QWidget()
-        bar.setFixedHeight(46)
         bar.setStyleSheet(
             f"background-color: {get_color('bg_secondary')}; "
             f"border-top: 1px solid {get_color('border')}; "
             f"border-bottom: 1px solid {get_color('border')};"
         )
-        hl = QHBoxLayout(bar)
-        hl.setContentsMargins(8, 4, 8, 4)
-        hl.setSpacing(3)
+        vl = QVBoxLayout(bar)
+        vl.setContentsMargins(8, 4, 8, 4)
+        vl.setSpacing(4)
+
+        # ── 행 1: 백엔드 상태 (풀 너비) ──
+        from widgets.api_status_button import ApiStatusButton
+        self.btn_api_manager = ApiStatusButton()
+        self.btn_api_manager.setFixedHeight(36)
+        self.btn_api_manager.clicked.connect(self._show_api_manager_popup)
+        vl.addWidget(self.btn_api_manager)
+
+        # ── 행 2: 도구 버튼들 (가로 나열) ──
+        tools_row = QHBoxLayout()
+        tools_row.setSpacing(4)
 
         def _sep():
-            """구분선"""
             s = QFrame()
             s.setFrameShape(QFrame.Shape.VLine)
             s.setFixedWidth(1)
+            s.setFixedHeight(24)
             s.setStyleSheet(f"color: {get_color('border')};")
             return s
 
-        _btn_h = 36
+        _btn_h = 30
 
-        # ── 그룹 1: 백엔드 ──
-        from widgets.api_status_button import ApiStatusButton
-        self.btn_api_manager = ApiStatusButton()
-        self.btn_api_manager.setFixedHeight(_btn_h)
-        self.btn_api_manager.setMinimumWidth(100)
-        self.btn_api_manager.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.btn_api_manager.clicked.connect(self._show_api_manager_popup)
-        hl.addWidget(self.btn_api_manager)
-
-        hl.addWidget(_sep())
-
-        # ── 그룹 2: 저장 / 프리셋 ──
-        self.btn_save_settings = QPushButton("💾 저장")
+        # 저장 / 프리셋
+        self.btn_save_settings = QPushButton("  💾 저장  ")
         self.btn_save_settings.setToolTip("설정 저장")
 
-        self._btn_preset = QPushButton("📦 프리셋")
+        self._btn_preset = QPushButton("  📦 프리셋  ")
         self._btn_preset.setToolTip("프리셋 저장/불러오기")
         _preset_menu = QMenu(self._btn_preset)
-        _preset_menu.addAction("📥 프리셋 저장").triggered.connect(self._save_prompt_preset)
-        _preset_menu.addAction("📤 프리셋 불러오기").triggered.connect(self._load_prompt_preset)
+        _preset_menu.addAction("  📥  프리셋 저장").triggered.connect(self._save_prompt_preset)
+        _preset_menu.addAction("  📤  프리셋 불러오기").triggered.connect(self._load_prompt_preset)
         self._btn_preset.setMenu(_preset_menu)
         self.btn_preset_save = self._btn_preset
         self.btn_preset_load = self._btn_preset
 
-        self.btn_prompt_history = QPushButton("📋 히스토리")
+        self.btn_prompt_history = QPushButton("  📋 히스토리  ")
         self.btn_prompt_history.setToolTip("프롬프트 히스토리")
         self.btn_prompt_history.clicked.connect(self._show_prompt_history)
 
         for btn in [self.btn_save_settings, self._btn_preset, self.btn_prompt_history]:
             btn.setFixedHeight(_btn_h)
-            hl.addWidget(btn)
+            tools_row.addWidget(btn)
 
-        hl.addWidget(_sep())
+        tools_row.addWidget(_sep())
 
-        # ── 그룹 3: LoRA / 가중치 ──
-        self.btn_lora_manager = QPushButton("LoRA")
+        # LoRA / 가중치
+        self.btn_lora_manager = QPushButton("  LoRA  ")
         self.btn_lora_manager.setToolTip("LoRA 관리")
         self.btn_lora_manager.clicked.connect(self._open_lora_manager)
-        self.btn_tag_weights = QPushButton("⚖ 가중치")
+        self.btn_tag_weights = QPushButton("  ⚖ 가중치  ")
         self.btn_tag_weights.setToolTip("가중치 편집")
         self.btn_tag_weights.clicked.connect(self._open_tag_weight_editor)
 
         for btn in [self.btn_lora_manager, self.btn_tag_weights]:
             btn.setFixedHeight(_btn_h)
-            hl.addWidget(btn)
+            tools_row.addWidget(btn)
 
-        hl.addWidget(_sep())
+        tools_row.addWidget(_sep())
 
-        # ── 그룹 4: 도구 ──
-        self.btn_shuffle = QPushButton("🔀 셔플")
+        # 도구
+        self.btn_shuffle = QPushButton("  🔀 셔플  ")
         self.btn_shuffle.setToolTip("태그 셔플")
         self.btn_shuffle.clicked.connect(self._shuffle_main_prompt)
-        self.btn_ab_test = QPushButton("A/B")
+        self.btn_ab_test = QPushButton("  A/B  ")
         self.btn_ab_test.setToolTip("A/B 비교")
         self.btn_ab_test.clicked.connect(self._open_ab_test)
-        self.btn_random_prompt = QPushButton("🎲 랜덤")
+        self.btn_random_prompt = QPushButton("  🎲 랜덤  ")
         self.btn_random_prompt.setToolTip("랜덤 프롬프트")
         self.btn_random_prompt.setEnabled(False)
 
         for btn in [self.btn_shuffle, self.btn_ab_test, self.btn_random_prompt]:
             btn.setFixedHeight(_btn_h)
-            hl.addWidget(btn)
+            tools_row.addWidget(btn)
 
-        hl.addStretch()
+        tools_row.addStretch()
 
         # LoRA 활성 패널
         from widgets.lora_panel import LoraActivePanel
         self.lora_active_panel = LoraActivePanel()
         self.lora_active_panel.hide()
-        hl.addWidget(self.lora_active_panel)
+        tools_row.addWidget(self.lora_active_panel)
 
+        vl.addLayout(tools_row)
         return bar
 
     def _create_adetailer_slot_ui(self, title, default_model):
