@@ -1,18 +1,25 @@
 <template>
   <div class="app">
-    <ImageViewer
-      :image-url="currentImage"
-      :resolution="resolution"
-      :seed="seed"
-      :status="status"
-    />
+    <TabBar />
+    <div class="content">
+      <router-view v-slot="{ Component }">
+        <keep-alive>
+          <component :is="Component"
+            :image-url="currentImage"
+            :resolution="resolution"
+            :seed="seed"
+            :status="status"
+          />
+        </keep-alive>
+      </router-view>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { initBridge, onBackendEvent } from './bridge.js'
-import ImageViewer from './components/ImageViewer.vue'
+import TabBar from './components/TabBar.vue'
 
 const currentImage = ref('')
 const resolution = ref('')
@@ -41,11 +48,7 @@ onMounted(async () => {
 </script>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   background-color: #0A0A0A;
   color: #E8E8E8;
@@ -56,6 +59,11 @@ body {
   width: 100vw;
   height: 100vh;
   display: flex;
+  flex-direction: column;
+}
+.content {
+  flex: 1;
+  overflow: hidden;
 }
 
 ::-webkit-scrollbar { width: 4px; }

@@ -216,71 +216,53 @@ class UISetupMixin:
         from tabs.inpaint_tab import InpaintTab
         from tabs.backend_ui_tab import BackendUITab
 
-        self.center_tabs = QTabWidget()
-        self.center_tabs.setUsesScrollButtons(True)
-        self.center_tabs.tabBar().setExpanding(True)
-        
-        # 1. 뷰어 패널 (T2I)
+        # ── 중앙 영역: QStackedWidget (Vue SPA + 네이티브 탭) ──
+        self.center_tabs = QStackedWidget()
+
+        # index 0: Vue SPA (T2I 뷰어 + Vue 탭들)
         self.viewer_panel = self._create_viewer_panel()
-        self.center_tabs.addTab(self.viewer_panel, self._get_tab_title('t2i'))
-        
-        # 2. I2I 탭
-        self.i2i_tab = Img2ImgTab(self)
-        self.center_tabs.addTab(self.i2i_tab, self._get_tab_title('i2i'))
+        self.center_tabs.addWidget(self.viewer_panel)
 
-        # 3. Inpaint 탭
-        self.inpaint_tab = InpaintTab(self)
-        self.center_tabs.addTab(self.inpaint_tab, self._get_tab_title('inpaint'))
-        
-        # 3. 이벤트 생성 탭
-        self.event_gen_tab = EventGenTab(self)
-        self.center_tabs.addTab(self.event_gen_tab, self._get_tab_title('event'))
-        
-        # 4. 검색 탭
-        self.search_tab = SearchTab(self)
-        self.center_tabs.addTab(self.search_tab, self._get_tab_title('search'))
-        
-        # 5. 브라우저 탭
-        self.web_tab = BrowserTab(self)
-        self.center_tabs.addTab(self.web_tab, self._get_tab_title('web'))
-        
-        # 6. 편집기 탭
+        # index 1: Editor (네이티브 PyQt)
         self.mosaic_editor = MosaicEditor()
-        self.center_tabs.addTab(self.mosaic_editor, self._get_tab_title('editor'))
+        self.center_tabs.addWidget(self.mosaic_editor)
 
-        # 5-1. 배치 + 업스케일 통합 탭
+        # index 2: Web Browser (네이티브 PyQt)
+        self.web_tab = BrowserTab(self)
+        self.center_tabs.addWidget(self.web_tab)
+
+        # index 3: Backend UI (네이티브 PyQt)
+        self.backend_ui_tab = BackendUITab(self)
+        self.center_tabs.addWidget(self.backend_ui_tab)
+
+        # 기존 PyQt 탭들 — 인스턴스만 생성 (Vue placeholder 대체 예정, 호환성 유지)
+        self.i2i_tab = Img2ImgTab(self)
+        self.inpaint_tab = InpaintTab(self)
+        self.event_gen_tab = EventGenTab(self)
+        self.search_tab = SearchTab(self)
         from tabs.batch_tab import BatchTab
         self.batch_tab = BatchTab(self)
         self.upscale_tab = UpscaleTab(self)
-
         self._batch_upscale_tabs = QTabWidget()
         self._batch_upscale_tabs.addTab(self.batch_tab, "배치 처리")
         self._batch_upscale_tabs.addTab(self.upscale_tab, "Upscale")
-        self.center_tabs.addTab(self._batch_upscale_tabs, self._get_tab_title('batch'))
-
-        # 6-2. 갤러리 탭
         self.gallery_tab = GalleryTab(self)
-        self.center_tabs.addTab(self.gallery_tab, self._get_tab_title('gallery'))
-
-        # 7. XYZ plot 탭
         self.xyz_plot_tab = XYZPlotTab(self)
-        self.center_tabs.addTab(self.xyz_plot_tab, self._get_tab_title('xyz'))        
-        
-        # 8. PNG Info 탭
         self.png_info_tab = PngInfoTab()
-        self.center_tabs.addTab(self.png_info_tab, self._get_tab_title('png'))
-        
-        # 9. 즐겨찾기 탭
         self.fav_tab = self._create_favorites_tab()
-        self.center_tabs.addTab(self.fav_tab, self._get_tab_title('fav'))
-        
-        # 10. 백엔드 UI 탭
-        self.backend_ui_tab = BackendUITab(self)
-        self.center_tabs.addTab(self.backend_ui_tab, self._get_tab_title('backend'))
-
-        # 11. 설정 탭
         self.settings_tab = SettingsTab(self)
-        self.center_tabs.addTab(self.settings_tab, self._get_tab_title('settings'))
+
+        # Vue 액션 핸들러 등록 (탭 전환 등)
+        self.vue_bridge.set_action_handler(self._handle_vue_action)
+
+        # 호환성: center_tabs 메서드 패치 (기존 코드에서 .count(), .widget(), .tabText() 호출)
+        self.center_tabs._vue_tab_names = [
+            't2i', 'i2i', 'inpaint', 'event', 'search', 'web', 'editor',
+            'batch', 'gallery', 'xyz', 'png', 'fav', 'backend', 'settings'
+        ]
+        self.center_tabs.count = lambda: 14
+        self.center_tabs.tabText = lambda i: self.center_tabs._vue_tab_names[i] if i < 14 else ''
+        self.center_tabs.setTabText = lambda i, t: None
 
         
         # 설정 위젯 링크 (조건부 프롬프트 등)
@@ -295,10 +277,6 @@ class UISetupMixin:
         
         # ★★★ 탭 전환 시그널 연결 ★★★
         self.center_tabs.currentChanged.connect(self._on_center_tab_changed)
-
-        # 드래그 중 탭 헤더 호버 시 자동 탭 전환
-        self.center_tabs.tabBar().setAcceptDrops(True)
-        self.center_tabs.tabBar().setChangeCurrentOnDrag(True)
 
         return self.center_tabs
     

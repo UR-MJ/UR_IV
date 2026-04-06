@@ -395,6 +395,46 @@ class GeneratorMainUI(
         self.show_status(f"XYZ Plot: {len(payloads)}개 생성 시작!")
         self.queue_manager.start()
     
+    # ========== Vue 액션 핸들러 ==========
+
+    def _handle_vue_action(self, action: str, payload: dict):
+        """Vue에서 전달된 액션 처리"""
+        if action == 'native_tab_switch':
+            tab_id = payload.get('tab', '')
+            if tab_id == 'editor':
+                self.center_tabs.setCurrentIndex(1)
+                self.left_stack.setFixedWidth(460)
+                self.left_stack.setCurrentIndex(1)
+            elif tab_id == 'web':
+                self.center_tabs.setCurrentIndex(2)
+                self.left_stack.setFixedWidth(0)
+            elif tab_id == 'backend':
+                self.center_tabs.setCurrentIndex(3)
+                self.left_stack.setFixedWidth(0)
+        elif action == 'vue_tab_switch':
+            # Vue 내부 탭 전환 — QStackedWidget을 Vue(index 0)로
+            self.center_tabs.setCurrentIndex(0)
+            tab_name = payload.get('tab', 't2i')
+            # 에디터 관련 탭이 아니면 좌측 패널은 기본 (프롬프트)
+            if tab_name in ('i2i', 'inpaint'):
+                self.left_stack.setFixedWidth(460)
+                self.left_stack.setCurrentIndex(2 if tab_name == 'i2i' else 3)
+            else:
+                self.left_stack.setFixedWidth(460)
+                self.left_stack.setCurrentIndex(0)
+        elif action == 'generate':
+            if hasattr(self, 'on_generate_clicked'):
+                self.on_generate_clicked()
+        elif action == 'toggle_automation':
+            checked = payload.get('checked', False)
+            self.btn_auto_toggle.setChecked(checked)
+        elif action == 'swap_resolution':
+            if hasattr(self, '_swap_resolution'):
+                self._swap_resolution()
+        elif action == 'open_character_preset':
+            if hasattr(self, '_open_character_preset'):
+                self._open_character_preset()
+
     # ========== 스타일시트 ==========
     
     def apply_stylesheet(self):
