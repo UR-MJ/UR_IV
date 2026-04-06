@@ -66,61 +66,33 @@ class UISetupMixin:
         self.left_panel_scroll = _DummyWidget()
         self.generator_panel = _DummyWidget()
 
-        # 메인 영역
-        main_vbox = QVBoxLayout()
-        main_vbox.setContentsMargins(0, 0, 0, 0)
-        main_vbox.setSpacing(0)
+        # Vue SPA가 전체 화면 사용
+        root_layout.addWidget(self.viewer_panel, 1)
 
-        # 상단: 중앙 스택 + 히스토리 (가로)
-        upper_area = QWidget()
-        upper_layout = QHBoxLayout(upper_area)
-        upper_layout.setContentsMargins(0, 0, 0, 0)
-        upper_layout.setSpacing(0)
-
-        self.history_panel = self._create_history_panel()
-        self.history_panel.setFixedWidth(240)
-
-        # 네이티브 탭바 더미 (호환성)
+        # 호환성 더미 (기존 코드에서 참조)
         self._native_tab_bar = type('D', (), {'hide': lambda s: None, 'show': lambda s: None, 'setVisible': lambda s, v: None})()
         self._native_tab_btns = {}
 
-        # 중앙: Vue SPA (QWebEngineView)
-        upper_layout.addWidget(self.viewer_panel, 1)
-        upper_layout.addWidget(self.history_panel)
-        main_vbox.addWidget(upper_area, 1)
+        # 히스토리 패널 (화면에 추가하지 않음 — Vue에서 처리 예정)
+        self.history_panel = self._create_history_panel()
+        self.history_panel.setParent(None)
 
-        # 도구바 (숨김 — Vue TabBar가 대체, 위젯 인스턴스만 유지)
+        # 도구바 (화면에 추가하지 않음)
         self._tools_bar = self._create_tools_bar()
-        self._tools_bar.setParent(None)  # 레이아웃/화면에서 완전 제거
+        self._tools_bar.setParent(None)
 
-        # 하단: 대기열 + 상태바
+        # 대기열 컨테이너 (화면에 추가하지 않음 — Vue에서 처리 예정)
         self._bottom_container = QWidget()
         self._bottom_layout = QVBoxLayout(self._bottom_container)
         self._bottom_layout.setContentsMargins(0, 0, 0, 0)
         self._bottom_layout.setSpacing(0)
-        self._bottom_container.setMaximumHeight(230)
-        main_vbox.addWidget(self._bottom_container, 0)
+        self._bottom_container.setParent(None)
 
-        root_layout.addLayout(main_vbox, 1)
-
-        # 상태 메시지 라벨은 _setup_queue()에서 하단 컨테이너에 추가
+        # 상태/VRAM 라벨 (더미 — 화면에 추가하지 않음)
         self.status_message_label = QLabel("")
-        self.status_message_label.setObjectName("statusMessageLabel")
-        self.status_message_label.setFixedHeight(24)
-        self.status_message_label.setStyleSheet(f"""
-            #statusMessageLabel {{
-                background-color: {get_color('bg_status_bar')};
-                color: {get_color('success')};
-                padding-left: 10px;
-                font-size: 10pt;
-                border-top: 1px solid {get_color('border')};
-            }}
-        """)
-
-        # VRAM 상태 라벨 (상태바 오른쪽에 표시)
+        self.status_message_label.setParent(None)
         self.vram_label = QLabel("")
-        self.vram_label.setFixedHeight(24)
-        self.vram_label.setStyleSheet(f"color: {get_color('success')}; font-size: 10px; padding-right: 10px;")
+        self.vram_label.setParent(None)
 
     def _create_left_panel(self):
         """왼쪽 패널: 스크롤 프롬프트 영역 + 고정 하단바"""
@@ -1082,20 +1054,11 @@ class UISetupMixin:
         return slot_group, widgets
     
     def _create_viewer_panel(self):
-        """뷰어 패널 생성 (Vue WebEngine + 폴백 QLabel)"""
-        from PyQt6.QtWidgets import QProgressBar
+        """뷰어 패널 생성 — QWebEngineView(Vue SPA) 전체 화면"""
         from PyQt6.QtWebEngineWidgets import QWebEngineView
         from PyQt6.QtWebEngineCore import QWebEngineSettings
         from PyQt6.QtWebChannel import QWebChannel
         import os
-
-        splitter = QSplitter(Qt.Orientation.Vertical)
-
-        # 상단: Vue 뷰어 + 프로그레스 바
-        viewer_container = QWidget()
-        vc_layout = QVBoxLayout(viewer_container)
-        vc_layout.setContentsMargins(0, 0, 0, 0)
-        vc_layout.setSpacing(0)
 
         # QWebEngineView (Vue 앱) — vue_bridge는 _setup_ui에서 이미 생성됨
         from PyQt6.QtWebEngineCore import QWebEngineScript
@@ -1138,16 +1101,11 @@ class UISetupMixin:
         else:
             self.vue_viewer.setHtml('<h2 style="color:#787878;text-align:center;margin-top:40%">Vue 빌드 필요: cd frontend && npm run build</h2>')
 
-        vc_layout.addWidget(self.vue_viewer, 1)
-
-        # viewer_label 프록시 — setPixmap/setText를 Vue로 전달
+        # 호환성 더미
         class _ViewerLabelProxy:
-            def __init__(self, bridge):
-                self._bridge = bridge
-            def setPixmap(self, pixmap):
-                pass  # _process_new_image에서 filepath로 직접 전달
-            def setText(self, text):
-                self._bridge.generationError.emit(text) if '실패' in text or '❌' in text else None
+            def __init__(self, bridge): self._bridge = bridge
+            def setPixmap(self, p): pass
+            def setText(self, t): pass
             def setAlignment(self, a): pass
             def setFixedHeight(self, h): pass
             def setMinimumSize(self, *a): pass
@@ -1165,52 +1123,19 @@ class UISetupMixin:
             customContextMenuRequested = _DummySig()
         self.viewer_label = _ViewerLabelProxy(self.vue_bridge)
 
-        # 생성 진행률 바
-        self.gen_progress_bar = QProgressBar()
-        self.gen_progress_bar.setRange(0, 100)
-        self.gen_progress_bar.setValue(0)
-        self.gen_progress_bar.setFixedHeight(20)
-        self.gen_progress_bar.setTextVisible(True)
-        self.gen_progress_bar.setFormat("%v / %m steps")
-        self.gen_progress_bar.setStyleSheet(f"""
-            QProgressBar {{
-                background-color: {get_color('bg_status_bar')};
-                border: 1px solid {get_color('border')};
-                border-radius: 2px;
-                color: {get_color('text_primary')};
-                font-size: 11px;
-                font-weight: bold;
-                text-align: center;
-            }}
-            QProgressBar::chunk {{
-                background-color: {get_color('accent')};
-                border-radius: 1px;
-            }}
-        """)
-        self.gen_progress_bar.hide()
-        vc_layout.addWidget(self.gen_progress_bar)
+        # 더미 (호환성)
+        self.gen_progress_bar = type('D', (), {
+            'setRange': lambda s,a,b: None, 'setValue': lambda s,v: None,
+            'setFixedHeight': lambda s,h: None, 'setTextVisible': lambda s,v: None,
+            'setFormat': lambda s,f: None, 'setStyleSheet': lambda s,st: None,
+            'hide': lambda s: None, 'show': lambda s: None, 'setMaximum': lambda s,v: None,
+        })()
+        self.exif_display = type('D', (), {
+            'setPlainText': lambda s,t: None, 'setReadOnly': lambda s,v: None,
+            'setStyleSheet': lambda s,st: None, 'toPlainText': lambda s: '',
+        })()
 
-        # 하단: EXIF 정보
-        self.exif_display = QTextEdit()
-        self.exif_display.setReadOnly(True)
-        self.exif_display.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {get_color('bg_secondary')}; color: {get_color('text_secondary')};
-                border: 1px solid {get_color('border')};
-                border-radius: 4px;
-                padding: 10px;
-                font-family: 'Consolas', monospace;
-                font-size: 9pt;
-            }}
-        """)
-
-
-        splitter.addWidget(viewer_container)
-        splitter.addWidget(self.exif_display)
-        splitter.setSizes([800, 200])
-        splitter.setStretchFactor(0, 1)
-
-        return splitter
+        return self.vue_viewer
     
     def _create_history_panel(self):
         """히스토리 패널 생성"""
