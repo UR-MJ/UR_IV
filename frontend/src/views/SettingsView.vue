@@ -51,21 +51,14 @@
 
       <!-- 도구 -->
       <div v-show="currentTab === 'tools'" class="tab-content">
+        <p style="color: #585858; font-size: 12px;">도구 버튼은 T2I 좌측 패널에서 사용할 수 있습니다.</p>
         <div class="setting-row">
-          <span class="label">LoRA 관리</span>
-          <button class="btn" @click="action('open_lora_manager')">열기</button>
+          <span class="label">검색 결과 내보내기</span>
+          <button class="btn" @click="action('export_results')">내보내기</button>
         </div>
         <div class="setting-row">
-          <span class="label">가중치 편집</span>
-          <button class="btn" @click="action('open_tag_weight_editor')">열기</button>
-        </div>
-        <div class="setting-row">
-          <span class="label">태그 셔플</span>
-          <button class="btn" @click="action('shuffle')">실행</button>
-        </div>
-        <div class="setting-row">
-          <span class="label">A/B 비교</span>
-          <button class="btn" @click="action('ab_test')">열기</button>
+          <span class="label">검색 결과 불러오기</span>
+          <button class="btn" @click="action('import_results')">불러오기</button>
         </div>
       </div>
 

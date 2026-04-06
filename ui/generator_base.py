@@ -69,15 +69,21 @@ class GeneratorBase(QMainWindow):
     
     def _auto_adjust_text_edit_height(self, text_edit):
         """텍스트 에디트 높이 자동 조절"""
-        doc = text_edit.document()
-        layout = doc.documentLayout()
-        layout.blockBoundingRect(doc.firstBlock()) 
-        doc_height = layout.documentSize().height()
-        margins = text_edit.contentsMargins()
-        new_height = doc_height + margins.top() + margins.bottom() + 15
-        min_h = text_edit.minimumHeight()
-        final_height = max(min_h, new_height)
-        text_edit.setFixedHeight(int(final_height))
+        # Vue 프록시에서는 스킵
+        if not hasattr(text_edit, 'contentsMargins'):
+            return
+        try:
+            doc = text_edit.document()
+            layout = doc.documentLayout()
+            layout.blockBoundingRect(doc.firstBlock())
+            doc_height = layout.documentSize().height()
+            margins = text_edit.contentsMargins()
+            new_height = doc_height + margins.top() + margins.bottom() + 15
+            min_h = text_edit.minimumHeight()
+            final_height = max(min_h, new_height)
+            text_edit.setFixedHeight(int(final_height))
+        except (AttributeError, TypeError):
+            pass
     
     def showEvent(self, event):
         """창 표시 이벤트"""

@@ -33,8 +33,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
+import { onBackendEvent } from '../bridge.js'
 
 const isDragging = ref(false)
 const imageSrc = ref('')
@@ -64,6 +65,12 @@ function onDrop(e) {
 function openFile() {
   requestAction('editor_open_file')
 }
+
+onMounted(() => {
+  onBackendEvent('editorImageLoaded', (path) => {
+    imageSrc.value = 'file:///' + path
+  })
+})
 </script>
 
 <style scoped>

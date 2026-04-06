@@ -15,6 +15,8 @@ class VueBridge(QObject):
     generationStarted = pyqtSignal()
     generationError = pyqtSignal(str)
 
+    editorImageLoaded = pyqtSignal(str)  # file path
+
     # 위젯 값/속성 동기화 (Python → Vue)
     widgetValueChanged = pyqtSignal(str, str)       # (widget_id, value)
     widgetPropertyChanged = pyqtSignal(str, str, str)  # (widget_id, prop, value_json)

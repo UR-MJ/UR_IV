@@ -7,10 +7,15 @@
       </template>
       <template v-else>
         <div class="placeholder">
-          <div class="placeholder-icon">🖼️</div>
-          <div class="placeholder-text">{{ status || '이미지를 생성하세요' }}</div>
-          <div class="placeholder-sub">좌측에서 프롬프트를 입력하고 생성 버튼을 클릭하세요</div>
-          <div class="placeholder-sub">이미지를 드래그하여 메타데이터를 불러올 수 있습니다</div>
+          <div v-if="status === '생성 중...'" class="generating">
+            <div class="spinner" />
+            <div class="gen-text">이미지 생성 중...</div>
+          </div>
+          <template v-else>
+            <div class="placeholder-icon">🖼️</div>
+            <div class="placeholder-text">{{ status || '이미지를 생성하세요' }}</div>
+            <div class="placeholder-sub">좌측에서 프롬프트를 입력하고 생성 버튼을 클릭하세요</div>
+          </template>
         </div>
       </template>
     </div>
@@ -94,4 +99,12 @@ defineProps({
   font-size: 12px;
   color: #787878;
 }
+.generating { text-align: center; }
+.spinner {
+  width: 40px; height: 40px; margin: 0 auto 12px;
+  border: 3px solid #1A1A1A; border-top: 3px solid #E2B340;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.gen-text { color: #E2B340; font-size: 14px; font-weight: 600; }
 </style>

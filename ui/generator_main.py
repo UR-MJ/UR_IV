@@ -475,10 +475,7 @@ class GeneratorMainUI(
             path, _ = QFileDialog.getOpenFileName(
                 self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
             if path:
-                import json as _json
-                self.vue_bridge.imageGenerated.emit(
-                    _json.dumps({'path': path.replace('\\', '/'), 'width': 0, 'height': 0, 'seed': 0})
-                )
+                self.vue_bridge.editorImageLoaded.emit(path.replace('\\', '/'))
 
     # ========== 스타일시트 ==========
     
