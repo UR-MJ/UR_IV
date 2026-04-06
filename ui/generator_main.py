@@ -397,31 +397,41 @@ class GeneratorMainUI(
     
     # ========== Vue 액션 핸들러 ==========
 
+    def _switch_native_tab(self, tab_id: str):
+        """PyQt 네이티브 탭 전환 (탭바 버튼 클릭)"""
+        if tab_id == 'vue':
+            self.center_tabs.setCurrentIndex(0)
+            self._native_tab_bar.hide()
+            self.left_stack.setFixedWidth(460)
+            self.left_stack.setCurrentIndex(0)
+        elif tab_id == 'editor':
+            self.center_tabs.setCurrentIndex(1)
+            self._native_tab_bar.show()
+            self.left_stack.setFixedWidth(460)
+            self.left_stack.setCurrentIndex(1)
+        elif tab_id == 'web':
+            self.center_tabs.setCurrentIndex(2)
+            self._native_tab_bar.show()
+            self.left_stack.setFixedWidth(0)
+        elif tab_id == 'backend':
+            self.center_tabs.setCurrentIndex(3)
+            self._native_tab_bar.show()
+            self.left_stack.setFixedWidth(0)
+
     def _handle_vue_action(self, action: str, payload: dict):
         """Vue에서 전달된 액션 처리"""
         if action == 'native_tab_switch':
-            tab_id = payload.get('tab', '')
-            if tab_id == 'editor':
-                self.center_tabs.setCurrentIndex(1)
-                self.left_stack.setFixedWidth(460)
-                self.left_stack.setCurrentIndex(1)
-            elif tab_id == 'web':
-                self.center_tabs.setCurrentIndex(2)
-                self.left_stack.setFixedWidth(0)
-            elif tab_id == 'backend':
-                self.center_tabs.setCurrentIndex(3)
-                self.left_stack.setFixedWidth(0)
+            self._switch_native_tab(payload.get('tab', 'vue'))
         elif action == 'vue_tab_switch':
-            # Vue 내부 탭 전환 — QStackedWidget을 Vue(index 0)로
-            self.center_tabs.setCurrentIndex(0)
             tab_name = payload.get('tab', 't2i')
-            # 에디터 관련 탭이 아니면 좌측 패널은 기본 (프롬프트)
-            if tab_name in ('i2i', 'inpaint'):
-                self.left_stack.setFixedWidth(460)
-                self.left_stack.setCurrentIndex(2 if tab_name == 'i2i' else 3)
-            else:
+            self.center_tabs.setCurrentIndex(0)
+            self._native_tab_bar.hide()
+            # T2I일 때만 좌측 패널 표시
+            if tab_name == 't2i':
                 self.left_stack.setFixedWidth(460)
                 self.left_stack.setCurrentIndex(0)
+            else:
+                self.left_stack.setFixedWidth(0)
         elif action == 'generate':
             if hasattr(self, 'on_generate_clicked'):
                 self.on_generate_clicked()
@@ -436,8 +446,11 @@ class GeneratorMainUI(
                 self._open_character_preset()
         elif action == 'display_image':
             path = payload.get('path', '')
-            if path and hasattr(self, 'display_image'):
-                self.display_image(path)
+            if path:
+                # 별도 뷰어 창으로 표시
+                from widgets.image_viewer import FullScreenImageViewer
+                viewer = FullScreenImageViewer(path, self)
+                viewer.show()
         elif action == 'save_settings':
             if hasattr(self, 'save_settings'):
                 self.save_settings()

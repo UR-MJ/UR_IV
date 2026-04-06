@@ -75,7 +75,38 @@ class UISetupMixin:
         self.history_panel = self._create_history_panel()
         self.history_panel.setFixedWidth(240)
 
-        upper_layout.addWidget(self.center_tabs)
+        # PyQt 탭 전환 바 (네이티브 탭에서 Vue로 돌아오기 위한 최소 버튼)
+        self._native_tab_bar = QWidget()
+        _ntb_layout = QHBoxLayout(self._native_tab_bar)
+        _ntb_layout.setContentsMargins(4, 4, 4, 4)
+        _ntb_layout.setSpacing(4)
+
+        _tab_names = [
+            ('vue', 'T2I'), ('editor', 'Editor'), ('web', 'Web'), ('backend', 'Backend UI')
+        ]
+        self._native_tab_btns = {}
+        for tab_id, tab_label in _tab_names:
+            btn = QPushButton(tab_label)
+            btn.setFixedHeight(28)
+            btn.setStyleSheet(
+                f"QPushButton {{ background: {get_color('bg_button')}; color: {get_color('text_muted')}; "
+                f"border: none; border-radius: 4px; padding: 4px 12px; font-size: 11px; font-weight: 600; }}"
+                f"QPushButton:hover {{ background: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; }}"
+            )
+            btn.clicked.connect(lambda _, tid=tab_id: self._switch_native_tab(tid))
+            _ntb_layout.addWidget(btn)
+            self._native_tab_btns[tab_id] = btn
+        _ntb_layout.addStretch()
+        self._native_tab_bar.hide()  # Vue 모드일 때 숨김
+
+        # 중앙 영역 = 네이티브 탭바(상단) + 스택(메인)
+        center_vbox = QVBoxLayout()
+        center_vbox.setContentsMargins(0, 0, 0, 0)
+        center_vbox.setSpacing(0)
+        center_vbox.addWidget(self._native_tab_bar)
+        center_vbox.addWidget(self.center_tabs, 1)
+
+        upper_layout.addLayout(center_vbox, 1)
         upper_layout.addWidget(self.history_panel)
         right_layout.addWidget(upper_area, 1)
 

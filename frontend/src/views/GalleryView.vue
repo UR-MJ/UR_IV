@@ -61,10 +61,10 @@ onMounted(loadImages)
 .gallery-grid {
   flex: 1; display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 4px; padding: 8px; overflow-y: auto; align-content: start;
+  gap: 6px; padding: 8px; overflow-y: auto; align-content: start;
 }
 .gallery-item {
-  aspect-ratio: 1; border-radius: 4px; overflow: hidden;
+  height: 150px; border-radius: 4px; overflow: hidden;
   cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s;
 }
 .gallery-item:hover { border-color: #333; }
