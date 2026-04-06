@@ -399,27 +399,18 @@ class GeneratorMainUI(
 
     def _switch_native_tab(self, tab_id: str):
         """PyQt 네이티브 탭 전환"""
-        # 에디터 도구 패널 제거 (이전에 삽입된 경우)
-        layout = self.centralWidget().layout()
+        # 에디터 도구 패널 제거
         if self.editor_tools_scroll.parent():
-            layout.removeWidget(self.editor_tools_scroll)
+            self.centralWidget().layout().removeWidget(self.editor_tools_scroll)
             self.editor_tools_scroll.setParent(None)
 
-        if tab_id == 'vue':
-            self.center_tabs.setCurrentIndex(0)
-            self._native_tab_bar.hide()
-        elif tab_id == 'editor':
-            self.center_tabs.setCurrentIndex(1)
-            self._native_tab_bar.show()
-            # 에디터 도구 패널을 맨 왼쪽에 삽입
-            layout.insertWidget(0, self.editor_tools_scroll)
+        tab_map = {'vue': 0, 'editor': 1, 'web': 2, 'backend': 3}
+        idx = tab_map.get(tab_id, 0)
+        self.center_tabs.setCurrentIndex(idx)
+
+        if tab_id == 'editor':
+            self.centralWidget().layout().insertWidget(0, self.editor_tools_scroll)
             self.editor_tools_scroll.show()
-        elif tab_id == 'web':
-            self.center_tabs.setCurrentIndex(2)
-            self._native_tab_bar.show()
-        elif tab_id == 'backend':
-            self.center_tabs.setCurrentIndex(3)
-            self._native_tab_bar.show()
 
     def _handle_vue_action(self, action: str, payload: dict):
         """Vue에서 전달된 액션 처리"""

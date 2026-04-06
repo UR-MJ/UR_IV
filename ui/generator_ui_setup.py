@@ -54,21 +54,25 @@ class UISetupMixin:
         self.editor_tools_scroll.setFixedWidth(460)
         self.editor_tools_scroll.setParent(None)  # 레이아웃에 추가하지 않음
 
-        # left_stack 호환성 더미 (기존 코드에서 참조)
-        self.left_stack = QWidget()
-        self.left_stack.hide()
-        self.left_stack.setCurrentIndex = lambda i: None
-        self.left_stack.setFixedWidth = lambda w: None
-        self._left_panel_container = QWidget()
-        self.left_panel_scroll = QWidget()
-        self.generator_panel = QWidget()
+        # left_stack 호환성 더미 (기존 코드에서 참조 — 부모 없음, 레이아웃 밖)
+        class _DummyWidget:
+            def hide(self): pass
+            def show(self): pass
+            def setCurrentIndex(self, i): pass
+            def setFixedWidth(self, w): pass
+            def setVisible(self, v): pass
+            def isVisible(self): return False
+        self.left_stack = _DummyWidget()
+        self._left_panel_container = _DummyWidget()
+        self.left_panel_scroll = _DummyWidget()
+        self.generator_panel = _DummyWidget()
 
         # 메인 영역
         main_vbox = QVBoxLayout()
         main_vbox.setContentsMargins(0, 0, 0, 0)
         main_vbox.setSpacing(0)
 
-        # 상단: 중앙 탭 + 히스토리 (가로)
+        # 상단: 중앙 스택 + 히스토리 (가로)
         upper_area = QWidget()
         upper_layout = QHBoxLayout(upper_area)
         upper_layout.setContentsMargins(0, 0, 0, 0)
@@ -77,44 +81,19 @@ class UISetupMixin:
         self.history_panel = self._create_history_panel()
         self.history_panel.setFixedWidth(240)
 
-        # PyQt 탭 전환 바 (네이티브 탭에서 Vue로 돌아오기 위한 최소 버튼)
+        # 네이티브 탭바 — 더미 (Vue TabBar가 전부 처리)
         self._native_tab_bar = QWidget()
-        _ntb_layout = QHBoxLayout(self._native_tab_bar)
-        _ntb_layout.setContentsMargins(4, 4, 4, 4)
-        _ntb_layout.setSpacing(4)
-
-        _tab_names = [
-            ('vue', 'T2I'), ('editor', 'Editor'), ('web', 'Web'), ('backend', 'Backend UI')
-        ]
+        self._native_tab_bar.hide()
         self._native_tab_btns = {}
-        for tab_id, tab_label in _tab_names:
-            btn = QPushButton(tab_label)
-            btn.setFixedHeight(28)
-            btn.setStyleSheet(
-                f"QPushButton {{ background: {get_color('bg_button')}; color: {get_color('text_muted')}; "
-                f"border: none; border-radius: 4px; padding: 4px 12px; font-size: 11px; font-weight: 600; }}"
-                f"QPushButton:hover {{ background: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; }}"
-            )
-            btn.clicked.connect(lambda _, tid=tab_id: self._switch_native_tab(tid))
-            _ntb_layout.addWidget(btn)
-            self._native_tab_btns[tab_id] = btn
-        _ntb_layout.addStretch()
-        self._native_tab_bar.hide()  # Vue 모드일 때 숨김
 
-        # 중앙 영역 = 네이티브 탭바(상단) + 스택(메인)
-        center_vbox = QVBoxLayout()
-        center_vbox.setContentsMargins(0, 0, 0, 0)
-        center_vbox.setSpacing(0)
-        center_vbox.addWidget(self._native_tab_bar)
-        center_vbox.addWidget(self.center_tabs, 1)
-
-        upper_layout.addLayout(center_vbox, 1)
+        # 중앙에 QStackedWidget만 배치
+        upper_layout.addWidget(self.center_tabs, 1)
         upper_layout.addWidget(self.history_panel)
         main_vbox.addWidget(upper_area, 1)
 
         # 도구바 (숨김 — Vue TabBar가 대체, 위젯 인스턴스만 유지)
         self._tools_bar = self._create_tools_bar()
-        self._tools_bar.hide()
+        self._tools_bar.setParent(None)  # 레이아웃/화면에서 완전 제거
 
         # 하단: 대기열 + 상태바
         self._bottom_container = QWidget()
@@ -249,24 +228,27 @@ class UISetupMixin:
         from tabs.inpaint_tab import InpaintTab
         from tabs.backend_ui_tab import BackendUITab
 
-        # ── 중앙 영역: QStackedWidget (Vue SPA + 네이티브 탭) ──
-        self.center_tabs = QStackedWidget()
+        # ── 중앙 영역: QTabWidget (Vue 탭들 + 네이티브 탭) ──
+        self.center_tabs = QTabWidget()
+        self.center_tabs.setUsesScrollButtons(True)
+        self.center_tabs.tabBar().setExpanding(True)
+        self.center_tabs.tabBar().hide()  # Vue TabBar가 대체
 
-        # index 0: Vue SPA (T2I 뷰어 + Vue 탭들)
+        # Tab 0: Vue SPA
         self.viewer_panel = self._create_viewer_panel()
-        self.center_tabs.addWidget(self.viewer_panel)
+        self.center_tabs.addTab(self.viewer_panel, "Vue")
 
-        # index 1: Editor (네이티브 PyQt)
+        # Tab 1: Editor (네이티브 PyQt)
         self.mosaic_editor = MosaicEditor()
-        self.center_tabs.addWidget(self.mosaic_editor)
+        self.center_tabs.addTab(self.mosaic_editor, "Editor")
 
-        # index 2: Web Browser (네이티브 PyQt)
+        # Tab 2: Web Browser (네이티브 PyQt)
         self.web_tab = BrowserTab(self)
-        self.center_tabs.addWidget(self.web_tab)
+        self.center_tabs.addTab(self.web_tab, "Web")
 
-        # index 3: Backend UI (네이티브 PyQt)
+        # Tab 3: Backend UI (네이티브 PyQt)
         self.backend_ui_tab = BackendUITab(self)
-        self.center_tabs.addWidget(self.backend_ui_tab)
+        self.center_tabs.addTab(self.backend_ui_tab, "Backend UI")
 
         # 기존 PyQt 탭들 — 인스턴스만 생성 (Vue placeholder 대체 예정, 호환성 유지)
         self.i2i_tab = Img2ImgTab(self)
@@ -288,14 +270,7 @@ class UISetupMixin:
         # Vue 액션 핸들러 등록 (탭 전환 등)
         self.vue_bridge.set_action_handler(self._handle_vue_action)
 
-        # 호환성: center_tabs 메서드 패치 (기존 코드에서 .count(), .widget(), .tabText() 호출)
-        self.center_tabs._vue_tab_names = [
-            't2i', 'i2i', 'inpaint', 'event', 'search', 'web', 'editor',
-            'batch', 'gallery', 'xyz', 'png', 'fav', 'backend', 'settings'
-        ]
-        self.center_tabs.count = lambda: 14
-        self.center_tabs.tabText = lambda i: self.center_tabs._vue_tab_names[i] if i < 14 else ''
-        self.center_tabs.setTabText = lambda i, t: None
+        # Vue에서 탭 전환 시 center_tabs 인덱스 변경
 
         
         # 설정 위젯 링크 (조건부 프롬프트 등)
