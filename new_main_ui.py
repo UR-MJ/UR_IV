@@ -33,26 +33,8 @@ def main():
     app.setApplicationName("AI Studio Pro")
     app.setOrganizationName("AI Studio")
     
-    # 다크 모드 팔레트
-    palette = QPalette()
-    palette.setColor(QPalette.ColorRole.Window, QColor(30, 30, 30))
-    palette.setColor(QPalette.ColorRole.WindowText, QColor(224, 224, 224))
-    palette.setColor(QPalette.ColorRole.Base, QColor(37, 37, 37))
-    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(44, 44, 44))
-    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(224, 224, 224))
-    palette.setColor(QPalette.ColorRole.ToolTipText, QColor(224, 224, 224))
-    palette.setColor(QPalette.ColorRole.Text, QColor(224, 224, 224))
-    palette.setColor(QPalette.ColorRole.Button, QColor(44, 44, 44))
-    palette.setColor(QPalette.ColorRole.ButtonText, QColor(224, 224, 224))
-    palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 255, 255))
-    palette.setColor(QPalette.ColorRole.Link, QColor(88, 101, 242))
-    palette.setColor(QPalette.ColorRole.Highlight, QColor(88, 101, 242))
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
-    app.setPalette(palette)
-    
-    # 버튼 호버 시 포인터 커서 표시
-    cursor_filter = ButtonCursorFilter(app)
-    app.installEventFilter(cursor_filter)
+    # PyQt 스타일 최소화 — Vue가 모든 UI 스타일링 담당
+    app.setStyleSheet("QMainWindow { background: #0A0A0A; }")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 

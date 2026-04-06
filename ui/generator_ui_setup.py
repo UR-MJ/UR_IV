@@ -30,14 +30,15 @@ class UISetupMixin:
         self.setGeometry(100, 100, 1600, 950)
 
         central_widget = QWidget()
+        central_widget.setContentsMargins(0, 0, 0, 0)
         self.setCentralWidget(central_widget)
 
-        # Vue 브릿지 초기화 (프록시보다 먼저)
+        # Vue 브릿지 초기화
         from ui.vue_bridge import VueBridge
         self.vue_bridge = VueBridge(self)
 
-        # 전체 레이아웃 (Vue SPA가 좌측 패널 포함 — PyQt left_stack 제거)
-        root_layout = QHBoxLayout(central_widget)
+        # QWebEngineView가 전체 화면 차지 (마진/패딩 0)
+        root_layout = QVBoxLayout(central_widget)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 

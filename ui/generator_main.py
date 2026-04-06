@@ -46,7 +46,8 @@ class GeneratorMainUI(
         self._startup_backend_check()
 
         self._setup_ui()
-        self.apply_stylesheet()
+        # QSS 제거 — Vue가 모든 UI 스타일링 담당
+        self.setStyleSheet("QMainWindow { background: #0A0A0A; } * { margin: 0; padding: 0; }")
         self.connect_signals()
         self.load_settings()
 
@@ -174,27 +175,12 @@ class GeneratorMainUI(
             self.prompt_cleaner.set_options(**cleaning_options)
 
     def _setup_queue(self):
-        """대기열 설정"""
+        """대기열 설정 — PyQt 위젯은 화면에 추가하지 않음 (Vue 대기열 사용)"""
         self.queue_panel = QueuePanel()
+        self.queue_panel.setParent(None)  # 화면에 추가하지 않음
         self.queue_manager = QueueManager(self.queue_panel)
 
-        # 하단 컨테이너에 대기열 + 상태 메시지 배치
-        self._bottom_layout.addWidget(self.queue_panel)
-
-        # 상태바 행: 상태 메시지 + VRAM 라벨
-        status_row = QWidget()
-        status_row.setFixedHeight(24)
-        tm = get_theme_manager()
-        c = tm.get_colors()
-        status_row.setStyleSheet(f"background-color: {c['bg_secondary']}; border-top: 1px solid {c['border']};")
-        status_row_layout = QHBoxLayout(status_row)
-        status_row_layout.setContentsMargins(0, 0, 0, 0)
-        status_row_layout.setSpacing(0)
-        status_row_layout.addWidget(self.status_message_label, 1)
-        status_row_layout.addWidget(self.vram_label, 0)
-        self._bottom_layout.addWidget(status_row)
-
-        # 시그널 연결
+        # 시그널 연결 (Python 로직은 유지)
         self.queue_panel.btn_add_current.clicked.connect(self._add_current_to_queue)
         self.queue_manager.need_new_prompt.connect(self._on_need_new_prompt)
         self.queue_manager.generation_requested.connect(self._on_generation_requested)
@@ -484,14 +470,12 @@ class GeneratorMainUI(
     # ========== 스타일시트 ==========
     
     def apply_stylesheet(self):
-        """전역 스타일시트 적용"""
-        tm = get_theme_manager()
-        self.setStyleSheet(tm.get_stylesheet())
+        """전역 스타일시트 — Vue가 담당, PyQt는 최소 배경만"""
+        self.setStyleSheet("QMainWindow { background: #0A0A0A; }")
 
     def set_theme(self, theme_name: str):
-        """테마 전환"""
-        tm = get_theme_manager()
-        self.setStyleSheet(tm.get_stylesheet(theme_name))
+        """테마 전환 — Vue CSS에서 처리"""
+        pass
         
         # 탭 이름 업데이트 (이모지 포함 여부 등)
         if hasattr(self, '_update_tab_titles'):
