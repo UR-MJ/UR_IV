@@ -56,9 +56,18 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+    # 예외 핸들러 — 크래시 원인 로깅
+    import traceback
+    def _excepthook(exc_type, exc_value, exc_tb):
+        print("=" * 60)
+        print("UNHANDLED EXCEPTION:")
+        traceback.print_exception(exc_type, exc_value, exc_tb)
+        print("=" * 60)
+    sys.excepthook = _excepthook
+
     window = GeneratorMainUI()
     window.showMaximized()
-    
+
     sys.exit(app.exec())
 
 

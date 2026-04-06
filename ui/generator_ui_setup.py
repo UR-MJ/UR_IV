@@ -1110,8 +1110,16 @@ class UISetupMixin:
         from PyQt6.QtWebEngineCore import QWebEngineScript
         from PyQt6.QtCore import QUrl
 
+        from PyQt6.QtWebEngineCore import QWebEnginePage
+
+        class _DebugPage(QWebEnginePage):
+            def javaScriptConsoleMessage(self, level, message, line, source):
+                print(f"[Vue JS] {message} (line {line}, {source})")
+
         self.vue_viewer = QWebEngineView()
         self.vue_viewer.setMinimumSize(400, 400)
+        debug_page = _DebugPage(self.vue_viewer)
+        self.vue_viewer.setPage(debug_page)
 
         page = self.vue_viewer.page()
         channel = QWebChannel(page)
