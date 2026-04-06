@@ -36,9 +36,12 @@ const loading = ref(false)
 async function loadFavorites() {
   loading.value = true
   try {
-    const backend = getBackend()
-    const result = await backend.getFavorites()
-    favorites.value = JSON.parse(result)
+    const backend = await getBackend()
+    if (backend.getFavorites) {
+      backend.getFavorites((json) => {
+        try { favorites.value = JSON.parse(json) } catch {}
+      })
+    }
   } catch (e) {
     console.error('Failed to load favorites:', e)
     favorites.value = []

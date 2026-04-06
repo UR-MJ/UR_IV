@@ -126,6 +126,12 @@ class TextEditProxy(_ProxyBase):
         def documentSize(self):
             from PyQt6.QtCore import QSizeF
             return QSizeF(100, 60)
+        def blockBoundingRect(self, *a):
+            from PyQt6.QtCore import QRectF
+            return QRectF(0, 0, 100, 20)
+
+    class _DummyBlock:
+        def isValid(self): return False
 
     class _DummyDocument:
         class _Signal:
@@ -134,6 +140,9 @@ class TextEditProxy(_ProxyBase):
         def documentLayout(self):
             return TextEditProxy._DummyLayout()
         def setDocumentMargin(self, m): pass
+        def firstBlock(self):
+            return TextEditProxy._DummyBlock()
+        def blockCount(self): return 1
 
     def document(self):
         return TextEditProxy._DummyDocument()

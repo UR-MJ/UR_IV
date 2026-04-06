@@ -583,13 +583,12 @@ class WebUIMixin:
                 unsupported_tabs.append(self.upscale_tab)
 
             for tab in unsupported_tabs:
-                idx = self.center_tabs.indexOf(tab)
-                if idx >= 0:
-                    self.center_tabs.setTabEnabled(idx, not is_comfyui)
-                    if is_comfyui:
-                        self.center_tabs.setTabToolTip(idx, comfyui_tip)
-                    else:
-                        self.center_tabs.setTabToolTip(idx, "")
+                try:
+                    idx = self.center_tabs.indexOf(tab)
+                    if idx is not None and idx >= 0:
+                        self.center_tabs.setTabEnabled(idx, not is_comfyui)
+                except (TypeError, AttributeError):
+                    pass  # Vue 모드에서는 center_tabs가 더미
 
     def _auto_select_workflow_model(self, available_models: list):
         """ComfyUI 워크플로우에 설정된 체크포인트를 모델 콤보박스에서 자동 선택"""
