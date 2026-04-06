@@ -1,9 +1,8 @@
 <template>
   <div class="app">
-    <!-- 상단: 좌측 패널 | 중앙(탭바+콘텐츠) | 히스토리 -->
     <div class="upper">
-      <!-- 좌측 패널 (T2I에서만 표시) -->
-      <div class="left-panel" v-show="showLeftPanel">
+      <!-- 좌측 패널 (T2I에서만) -->
+      <div class="left-panel" v-if="showLeftPanel">
         <PromptPanel />
       </div>
 
@@ -28,7 +27,6 @@
       <HistoryPanel @select="onHistorySelect" />
     </div>
 
-    <!-- 하단: 대기열 -->
     <QueuePanel @add-current="onAddCurrentToQueue" />
   </div>
 </template>
@@ -62,7 +60,6 @@ function onAddCurrentToQueue() {
 
 onMounted(async () => {
   await initBridge()
-
   onBackendEvent('imageGenerated', (data) => {
     const parsed = JSON.parse(data)
     currentImage.value = parsed.path
@@ -70,28 +67,22 @@ onMounted(async () => {
     seed.value = String(parsed.seed)
     status.value = ''
   })
-
-  onBackendEvent('generationStarted', () => {
-    status.value = '생성 중...'
-  })
-
-  onBackendEvent('generationError', (msg) => {
-    status.value = `오류: ${msg}`
-  })
+  onBackendEvent('generationStarted', () => { status.value = '생성 중...' })
+  onBackendEvent('generationError', (msg) => { status.value = `오류: ${msg}` })
 })
 </script>
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
 body {
-  background-color: #0A0A0A;
+  background: #0A0A0A;
   color: #E8E8E8;
   font-family: 'Pretendard', 'Malgun Gothic', 'Segoe UI', sans-serif;
-  overflow: hidden;
 }
 .app {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -99,16 +90,15 @@ body {
   flex: 1;
   display: flex;
   overflow: hidden;
+  min-height: 0;
 }
 .left-panel {
-  width: 380px;
-  min-width: 300px;
+  width: 360px;
+  flex-shrink: 0;
   background: #0D0D0D;
-  border-right: 1px solid #1A1A1A;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  flex-shrink: 0;
 }
 .center {
   flex: 1;

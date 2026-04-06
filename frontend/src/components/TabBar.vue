@@ -49,7 +49,7 @@ function switchTo(tab) {
   gap: 5px;
   padding: 6px 12px;
   background: #0A0A0A;
-  border-bottom: 1px solid #1A1A1A;
+  /* border 제거 */
   justify-content: center;
   align-items: center;
 }

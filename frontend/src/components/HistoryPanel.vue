@@ -54,7 +54,7 @@ onMounted(() => {
   width: 200px;
   min-width: 160px;
   background: #0D0D0D;
-  border-left: 1px solid #1A1A1A;
+  /* border 제거 */
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -35,7 +35,7 @@ defineExpose({ items })
 <style scoped>
 .queue-panel {
   background: #0D0D0D;
-  border-top: 1px solid #1A1A1A;
+  /* border 제거 */
   max-height: 180px;
   display: flex;
   flex-direction: column;
