@@ -25,89 +25,151 @@ class UISetupMixin:
     """UI 구성을 담당하는 Mixin 클래스"""
     
     def _setup_ui(self):
-        """UI 초기 구성"""
+        """UI: QWebEngineView(Vue SPA) 하나만 전체 화면"""
         self.setWindowTitle("AI Studio - Pro")
         self.setGeometry(100, 100, 1600, 950)
 
-        central_widget = QWidget()
-        central_widget.setContentsMargins(0, 0, 0, 0)
-        self.setCentralWidget(central_widget)
-
-        # Vue 브릿지 초기화
+        # ── QWebEngineView 생성 (Vue SPA) ──
         from ui.vue_bridge import VueBridge
+        from PyQt6.QtWebEngineWidgets import QWebEngineView
+        from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineScript, QWebEnginePage
+        from PyQt6.QtWebChannel import QWebChannel
+        from PyQt6.QtCore import QUrl
+        import os
+
         self.vue_bridge = VueBridge(self)
 
-        # QWebEngineView가 전체 화면 차지 (마진/패딩 0)
-        root_layout = QVBoxLayout(central_widget)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.setSpacing(0)
+        class _DebugPage(QWebEnginePage):
+            def javaScriptConsoleMessage(self, level, message, line, source):
+                print(f"[Vue] {message}")
 
-        # 프록시 위젯 초기화 (Vue ↔ Python 데이터 동기화)
+        self.vue_viewer = QWebEngineView()
+        page = _DebugPage(self.vue_viewer)
+        self.vue_viewer.setPage(page)
+
+        channel = QWebChannel(page)
+        channel.registerObject('backend', self.vue_bridge)
+        page.setWebChannel(channel)
+
+        qwc = QWebEngineScript()
+        qwc.setName("qwebchannel")
+        qwc.setSourceUrl(QUrl("qrc:///qtwebchannel/qwebchannel.js"))
+        qwc.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        qwc.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        page.scripts().insert(qwc)
+
+        settings = page.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+
+        frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend_dist', 'index.html')
+        if os.path.exists(frontend_path):
+            self.vue_viewer.setUrl(QUrl.fromLocalFile(frontend_path))
+
+        # QWebEngineView를 중앙 위젯으로 직접 설정 (레이아웃 없음)
+        self.setCentralWidget(self.vue_viewer)
+
+        # ── 프록시 위젯 초기화 ──
         self._init_prompt_proxies()
         self._init_settings_proxies()
         self._init_button_proxies()
 
-        # 중앙 탭
-        self.center_tabs = self._create_center_tabs()
+        # ── 호환성 더미 (Python 백엔드 코드에서 참조하는 속성들) ──
+        self.vue_bridge.set_action_handler(self._handle_vue_action)
 
-        # 에디터 도구 패널 (호환성 더미)
-        self.editor_tools_scroll = QWidget()
-        self.editor_tools_scroll.setParent(None)
+        _D = type('D', (), {
+            '__getattr__': lambda s, n: lambda *a, **k: None
+        })
 
-        # left_stack 호환성 더미 (기존 코드에서 참조 — 부모 없음, 레이아웃 밖)
-        class _DummyWidget:
-            def hide(self): pass
-            def show(self): pass
-            def setCurrentIndex(self, i): pass
-            def setFixedWidth(self, w): pass
-            def setVisible(self, v): pass
-            def isVisible(self): return False
-        self.left_stack = _DummyWidget()
-        self._left_panel_container = _DummyWidget()
-        self.left_panel_scroll = _DummyWidget()
-        self.generator_panel = _DummyWidget()
-
-        # Vue SPA가 전체 화면 사용
-        root_layout.addWidget(self.viewer_panel, 1)
-
-        # 호환성 더미 (기존 코드에서 참조)
-        self._native_tab_bar = type('D', (), {'hide': lambda s: None, 'show': lambda s: None, 'setVisible': lambda s, v: None})()
+        self.viewer_panel = self.vue_viewer
+        self.center_tabs = _D()
+        self.left_stack = _D()
+        self._left_panel_container = _D()
+        self.left_panel_scroll = _D()
+        self.generator_panel = _D()
+        self.editor_tools_scroll = _D()
+        self._native_tab_bar = _D()
         self._native_tab_btns = {}
+        self.history_panel = _D()
+        self._tools_bar = _D()
+        self._bottom_container = _D()
+        self._bottom_layout = _D()
+        self.status_message_label = _D()
+        self.vram_label = _D()
+        self.gallery_items = []
+        self.gallery_layout = _D()
 
-        # 히스토리 패널 → Vue에서 처리 (더미)
-        self.history_panel = type('D', (), {
-            'setFixedWidth': lambda s, w: None,
-            'setParent': lambda s, p: None,
-        })()
+        # viewer_label 프록시
+        class _VLP:
+            def __getattr__(self, n): return lambda *a, **k: None
+            def size(self):
+                from PyQt6.QtCore import QSize
+                return QSize(800, 600)
+            class _Sig:
+                def connect(self, *a): pass
+            customContextMenuRequested = _Sig()
+        self.viewer_label = _VLP()
 
-        # 히스토리/갤러리 관련 더미 속성 (호환성)
+        self.gen_progress_bar = _D()
+        self.exif_display = _D()
+
+        # 히스토리/갤러리 프록시
         from ui.widget_proxies import ButtonProxy
         b = self.vue_bridge
         self.btn_add_favorite = ButtonProxy(b, 'btn_add_favorite')
         self.btn_refresh_gallery = ButtonProxy(b, 'btn_refresh_gallery')
-        self.gallery_layout = type('D', (), {
-            'insertWidget': lambda s, *a: None,
-            'removeWidget': lambda s, *a: None,
-            'setAlignment': lambda s, *a: None,
-        })()
-        self.gallery_items = []
 
-        # 도구바 (화면에 추가하지 않음)
-        self._tools_bar = self._create_tools_bar()
-        self._tools_bar.setParent(None)
+        # 기존 PyQt 탭 인스턴스 (Python 백엔드에서 참조)
+        from tabs.settings_tab import SettingsTab
+        from tabs.search_tab import SearchTab
+        from tabs.event_gen_tab import EventGenTab
+        from tabs.editor_tab import MosaicEditor
+        from tabs.i2i_tab import Img2ImgTab
+        from tabs.inpaint_tab import InpaintTab
+        from tabs.upscale_tab import UpscaleTab
+        from tabs.gallery_tab import GalleryTab
+        from tabs.xyz_plot_tab import XYZPlotTab
+        from tabs.pnginfo_tab import PngInfoTab
+        from tabs.batch_tab import BatchTab
+        from tabs.browser_tab import BrowserTab
+        from tabs.backend_ui_tab import BackendUITab
 
-        # 대기열 컨테이너 (화면에 추가하지 않음 — Vue에서 처리 예정)
-        self._bottom_container = QWidget()
-        self._bottom_layout = QVBoxLayout(self._bottom_container)
-        self._bottom_layout.setContentsMargins(0, 0, 0, 0)
-        self._bottom_layout.setSpacing(0)
-        self._bottom_container.setParent(None)
+        self.settings_tab = SettingsTab(self)
+        self.settings_tab.setParent(None)
+        self.search_tab = SearchTab(self)
+        self.search_tab.setParent(None)
+        self.event_gen_tab = EventGenTab(self)
+        self.event_gen_tab.setParent(None)
+        self.mosaic_editor = MosaicEditor()
+        self.mosaic_editor.setParent(None)
+        self.i2i_tab = Img2ImgTab(self)
+        self.i2i_tab.setParent(None)
+        self.inpaint_tab = InpaintTab(self)
+        self.inpaint_tab.setParent(None)
+        self.upscale_tab = UpscaleTab(self)
+        self.upscale_tab.setParent(None)
+        self.gallery_tab = GalleryTab(self)
+        self.gallery_tab.setParent(None)
+        self.xyz_plot_tab = XYZPlotTab(self)
+        self.xyz_plot_tab.setParent(None)
+        self.png_info_tab = PngInfoTab()
+        self.png_info_tab.setParent(None)
+        self.batch_tab = BatchTab(self)
+        self.batch_tab.setParent(None)
+        self.web_tab = BrowserTab(self)
+        self.web_tab.setParent(None)
+        self.backend_ui_tab = BackendUITab(self)
+        self.backend_ui_tab.setParent(None)
+        self._batch_upscale_tabs = _D()
+        self.fav_tab = _D()
 
-        # 상태/VRAM 라벨 (더미 — 화면에 추가하지 않음)
-        self.status_message_label = QLabel("")
-        self.status_message_label.setParent(None)
-        self.vram_label = QLabel("")
-        self.vram_label.setParent(None)
+        # 설정 위젯 링크
+        self.cond_prompt_check = self.settings_tab.cond_prompt_check
+        self.cond_prevent_dupe_check = self.settings_tab.cond_prevent_dupe_check
+        self.cond_block_editor_pos = self.settings_tab.cond_block_editor_pos
+        self.cond_block_editor_neg = self.settings_tab.cond_block_editor_neg
+        self.exclude_artist_checkbox = _D()
+        self.exclude_copyright_checkbox = _D()
 
     def _create_left_panel(self):
         """왼쪽 패널: 스크롤 프롬프트 영역 + 고정 하단바"""
