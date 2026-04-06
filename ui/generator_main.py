@@ -465,7 +465,20 @@ class GeneratorMainUI(
             from PyQt6.QtWidgets import QFileDialog
             paths, _ = QFileDialog.getOpenFileNames(
                 self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
-            # TODO: 파일 경로를 Vue로 전달
+        elif action == 'open_url':
+            import webbrowser
+            url = payload.get('url', '')
+            if url:
+                webbrowser.open(url)
+        elif action == 'editor_open_file':
+            from PyQt6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getOpenFileName(
+                self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
+            if path:
+                import json as _json
+                self.vue_bridge.imageGenerated.emit(
+                    _json.dumps({'path': path.replace('\\', '/'), 'width': 0, 'height': 0, 'seed': 0})
+                )
 
     # ========== 스타일시트 ==========
     

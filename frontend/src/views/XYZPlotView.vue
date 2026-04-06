@@ -77,7 +77,7 @@ function startPlot() {
 </script>
 
 <style scoped>
-.xyz-view { height: 100%; display: flex; }
+.xyz-view { width: 100%; height: 100%; display: flex; }
 .config-panel {
   width: 320px; padding: 16px; border-right: 1px solid #1A1A1A;
   display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
@@ -97,7 +97,7 @@ function startPlot() {
 }
 .btn-gen:disabled { opacity: 0.35; cursor: not-allowed; }
 .result-area { flex: 1; overflow-y: auto; padding: 8px; }
-.empty { height: 100%; display: flex; align-items: center; justify-content: center; color: #484848; font-size: 14px; }
+.empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #484848; font-size: 14px; }
 .result-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 4px; align-content: start;

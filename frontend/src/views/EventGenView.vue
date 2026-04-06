@@ -175,7 +175,7 @@ function generateNow() {
 </script>
 
 <style scoped>
-.event-view { height: 100%; display: flex; }
+.event-view { width: 100%; height: 100%; display: flex; }
 
 .sidebar {
   width: 340px; min-width: 280px; padding: 14px; border-right: 1px solid #1A1A1A;

@@ -97,7 +97,7 @@ function action(name) { requestAction(name) }
 </script>
 
 <style scoped>
-.settings-view { height: 100%; display: flex; flex-direction: column; }
+.settings-view { width: 100%; height: 100%; display: flex; flex-direction: column; }
 .sub-tab-bar {
   display: flex; gap: 0; border-bottom: 1px solid #1A1A1A;
   padding: 0 16px;

@@ -3,62 +3,58 @@
     <div class="toolbar">
       <span class="label">Backend UI</span>
       <button class="btn" @click="action('show_api_manager')">백엔드 설정</button>
-      <button class="btn" @click="reload">새로고침</button>
+      <button class="btn" @click="openInBrowser">브라우저에서 열기</button>
     </div>
-    <iframe :src="backendUrl" class="backend-frame" v-if="backendUrl" ref="frameRef" />
-    <div class="placeholder" v-else>
-      <h2>Backend UI</h2>
-      <p>백엔드(WebUI/ComfyUI)의 웹 인터페이스</p>
-      <button class="btn-connect" @click="action('show_api_manager')">백엔드 연결</button>
+    <div class="info">
+      <p>백엔드 웹 UI는 시스템 브라우저에서 확인하세요.</p>
+      <div class="url-display">{{ backendUrl }}</div>
+      <button class="open-btn" @click="openInBrowser">
+        {{ backendUrl }} 열기
+      </button>
+      <button class="open-btn secondary" @click="action('show_api_manager')">
+        백엔드 연결 설정
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
-import { getBackend } from '../bridge.js'
 
-const backendUrl = ref('')
-const frameRef = ref(null)
+const backendUrl = ref('http://127.0.0.1:7860')
 
 function action(name) { requestAction(name) }
-function reload() { if (frameRef.value) frameRef.value.src = backendUrl.value }
-
-onMounted(async () => {
-  const backend = await getBackend()
-  if (backend.getSettings) {
-    backend.getSettings((json) => {
-      try {
-        const s = JSON.parse(json)
-        if (s.api_url) backendUrl.value = s.api_url
-      } catch {}
-    })
-  }
-})
+function openInBrowser() {
+  requestAction('open_url', { url: backendUrl.value })
+}
 </script>
 
 <style scoped>
-.backend-view { height: 100%; display: flex; flex-direction: column; }
+.backend-view { width: 100%; height: 100%; display: flex; flex-direction: column; }
 .toolbar {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-  border-bottom: 1px solid #1A1A1A;
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
 }
-.label { color: #787878; font-size: 12px; font-weight: 600; }
+.label { color: #787878; font-size: 13px; font-weight: 600; }
 .btn {
-  padding: 4px 12px; background: #181818; border: none; border-radius: 4px;
-  color: #787878; font-size: 11px; cursor: pointer;
+  padding: 6px 14px; background: #181818; border: none; border-radius: 6px;
+  color: #787878; font-size: 12px; cursor: pointer;
 }
 .btn:hover { background: #222; color: #E8E8E8; }
-.backend-frame { flex: 1; border: none; }
-.placeholder {
+.info {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; color: #484848;
+  align-items: center; justify-content: center; gap: 16px;
+  color: #585858; font-size: 13px;
 }
-.placeholder h2 { font-size: 20px; margin-bottom: 8px; color: #787878; }
-.placeholder p { font-size: 13px; margin-bottom: 16px; }
-.btn-connect {
-  padding: 10px 24px; background: #E2B340; border: none; border-radius: 6px;
-  color: #000; font-weight: 700; cursor: pointer;
+.url-display {
+  font-family: 'Consolas', monospace; font-size: 15px; color: #E2B340;
+  padding: 10px 20px; background: #131313; border-radius: 6px;
 }
+.open-btn {
+  padding: 12px 32px; background: #E2B340; border: none; border-radius: 8px;
+  color: #000; font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.open-btn:hover { background: #F0C850; }
+.open-btn.secondary { background: #181818; color: #787878; }
+.open-btn.secondary:hover { background: #222; color: #E8E8E8; }
 </style>

@@ -59,7 +59,7 @@ onMounted(() => {
 <style scoped>
 .tab-view {
   width: 100%;
-  height: 100%;
+  width: 100%; height: 100%;
   background: #0A0A0A;
   color: #E8E8E8;
   overflow: hidden;
@@ -69,7 +69,7 @@ onMounted(() => {
 .favorites-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  width: 100%; height: 100%;
   padding: 16px;
   gap: 12px;
 }
@@ -127,7 +127,7 @@ onMounted(() => {
 }
 .grid-item img {
   width: 100%;
-  height: 100%;
+  width: 100%; height: 100%;
   object-fit: cover;
   display: block;
 }

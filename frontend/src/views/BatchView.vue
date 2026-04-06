@@ -123,7 +123,7 @@ function startUpscale() {
 </script>
 
 <style scoped>
-.batch-view { height: 100%; display: flex; overflow-y: auto; }
+.batch-view { width: 100%; height: 100%; display: flex; overflow-y: auto; }
 .section { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
 .section h3 { color: #E8E8E8; font-size: 14px; margin: 0; }
 .divider { width: 1px; background: #1A1A1A; }

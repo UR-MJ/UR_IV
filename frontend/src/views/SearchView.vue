@@ -173,7 +173,7 @@ function addToQueue() {
 </script>
 
 <style scoped>
-.search-view { height: 100%; display: flex; }
+.search-view { width: 100%; height: 100%; display: flex; }
 
 /* 좌측 사이드바 */
 .search-sidebar {
