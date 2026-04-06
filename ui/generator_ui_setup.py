@@ -121,10 +121,7 @@ class UISetupMixin:
 
         # 빈 컨테이너 (Vue가 실제 UI를 QWebEngineView에서 렌더링)
         container = QWidget()
-        container.setMaximumWidth(0)  # PyQt 좌측 패널 숨김
-        container.hide()
-
-        self.left_panel_scroll = QScrollArea()  # 호환성 더미
+        self.left_panel_scroll = container  # 호환성 더미
         self.generator_panel = container
         return container
 
@@ -294,6 +291,7 @@ class UISetupMixin:
         from ui.widget_proxies import LineEditProxy, TextEditProxy, CheckBoxProxy
 
         b = self.vue_bridge
+        p = self  # 모든 프록시의 QObject 부모 (GC 방지)
         self.char_count_input = LineEditProxy(b, 'char_count_input')
         self.character_input = LineEditProxy(b, 'character_input')
         self.copyright_input = LineEditProxy(b, 'copyright_input')
@@ -428,6 +426,9 @@ class UISetupMixin:
                 'model': ComboBoxProxy(b, f'{prefix}_model'),
                 'confidence': SliderProxy(b, f'{prefix}_conf'),
                 'strength': SliderProxy(b, f'{prefix}_str'),
+                'mask_blur': SliderProxy(b, f'{prefix}_mask_blur'),
+                'denoise': SliderProxy(b, f'{prefix}_denoise'),
+                'padding': SliderProxy(b, f'{prefix}_padding'),
                 'steps': SliderProxy(b, f'{prefix}_steps'),
                 'cfg': SliderProxy(b, f'{prefix}_cfg'),
                 'use_inpaint_size_check': CheckBoxProxy(b, f'{prefix}_use_inp_size'),
@@ -1095,7 +1096,6 @@ class UISetupMixin:
         from PyQt6.QtWebEngineWidgets import QWebEngineView
         from PyQt6.QtWebEngineCore import QWebEngineSettings
         from PyQt6.QtWebChannel import QWebChannel
-        from ui.vue_bridge import VueBridge
         import os
 
         splitter = QSplitter(Qt.Orientation.Vertical)

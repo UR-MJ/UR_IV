@@ -33,8 +33,10 @@ class VueBridge(QObject):
         self._action_handler = None  # 액션 디스패처 (메인 윈도우에서 설정)
 
     def _register_proxy(self, widget_id: str, proxy):
-        """위젯 프록시 등록"""
+        """위젯 프록시 등록 + 부모 설정 (GC 방지)"""
         self._proxies[widget_id] = proxy
+        if hasattr(proxy, 'setParent') and proxy.parent() is None:
+            proxy.setParent(self)
 
     def set_action_handler(self, handler):
         """액션 핸들러 설정 (메인 윈도우의 메서드를 디스패치)"""
