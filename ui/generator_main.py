@@ -459,6 +459,48 @@ class GeneratorMainUI(
         elif action == 'open_tag_weight_editor':
             if hasattr(self, '_open_tag_weight_editor'):
                 self._open_tag_weight_editor()
+        elif action == 'open_native_search':
+            # Search는 PyQt 탭 — center_tabs index 0(Vue)에서 PyQt search_tab은 별도
+            # search_tab을 다이얼로그로 표시
+            if hasattr(self, 'search_tab'):
+                self.search_tab.show()
+                self.search_tab.raise_()
+        elif action == 'open_event_gen':
+            if hasattr(self, 'event_gen_tab'):
+                self.event_gen_tab.show()
+                self.event_gen_tab.raise_()
+        elif action == 'open_batch':
+            if hasattr(self, 'batch_tab'):
+                self.batch_tab.show()
+                self.batch_tab.raise_()
+        elif action == 'open_upscale':
+            if hasattr(self, 'upscale_tab'):
+                self.upscale_tab.show()
+                self.upscale_tab.raise_()
+        elif action == 'open_xyz_plot':
+            if hasattr(self, 'xyz_plot_tab'):
+                self.xyz_plot_tab.show()
+                self.xyz_plot_tab.raise_()
+        elif action == 'open_png_info_file':
+            from PyQt6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getOpenFileName(
+                self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
+            if path:
+                self.vue_bridge.imageGenerated.emit(
+                    __import__('json').dumps({
+                        'path': path.replace('\\', '/'),
+                        'width': 0, 'height': 0, 'seed': 0
+                    })
+                )
+        elif action == 'generate_i2i':
+            if hasattr(self, 'i2i_tab'):
+                self.i2i_tab.show()
+                self.i2i_tab.raise_()
+        elif action == 'native_tab_switch':
+            tab_id = payload.get('tab', '')
+            if tab_id == 'inpaint_native' and hasattr(self, 'inpaint_tab'):
+                self.inpaint_tab.show()
+                self.inpaint_tab.raise_()
 
     # ========== 스타일시트 ==========
     

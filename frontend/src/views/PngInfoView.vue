@@ -29,6 +29,7 @@
 <script setup>
 import { ref } from 'vue'
 import { getBackend } from '../bridge.js'
+import { requestAction } from '../stores/widgetStore.js'
 
 const imagePath = ref('')
 const infoText = ref('')
@@ -65,10 +66,7 @@ function onDrop(e) {
 }
 
 function openFile() {
-  // Python에서 파일 선택 다이얼로그 열기
-  import('../stores/widgetStore.js').then(({ requestAction }) => {
-    requestAction('open_png_info_file')
-  })
+  requestAction('open_png_info_file')
 }
 
 function copyInfo() {

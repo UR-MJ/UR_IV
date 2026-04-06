@@ -163,6 +163,21 @@ class VueBridge(QObject):
 
     # ── PNG Info ──
 
+    @pyqtSlot(result=str)
+    def getFavorites(self) -> str:
+        """즐겨찾기 목록 반환"""
+        import os
+        from config import FAVORITES_FILE
+        if os.path.exists(FAVORITES_FILE):
+            with open(FAVORITES_FILE, 'r', encoding='utf-8') as f:
+                return f.read()
+        return json.dumps([])
+
+    @pyqtSlot(str, result=str)
+    def searchDanbooru(self, query_json: str) -> str:
+        """Danbooru 검색 (간단 버전 — 실제 검색은 Python worker)"""
+        return json.dumps({'status': 'use_python_search', 'message': '검색은 좌측 패널의 Search 탭에서 실행하세요'})
+
     @pyqtSlot(str, result=str)
     def getPngInfo(self, filepath: str) -> str:
         """이미지의 PNG 메타데이터 반환"""
