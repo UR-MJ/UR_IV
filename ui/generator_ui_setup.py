@@ -49,11 +49,10 @@ class UISetupMixin:
         # 중앙 탭
         self.center_tabs = self._create_center_tabs()
 
-        # 에디터 도구 패널 (Editor 탭 전환 시만 표시)
+        # 에디터 도구 패널 (Editor 탭 전환 시 동적 삽입)
         self.editor_tools_scroll = self._create_editor_tools_panel()
         self.editor_tools_scroll.setFixedWidth(460)
-        self.editor_tools_scroll.hide()
-        root_layout.addWidget(self.editor_tools_scroll)
+        self.editor_tools_scroll.setParent(None)  # 레이아웃에 추가하지 않음
 
         # left_stack 호환성 더미 (기존 코드에서 참조)
         self.left_stack = QWidget()
