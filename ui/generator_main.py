@@ -398,17 +398,17 @@ class GeneratorMainUI(
     # ========== Vue 액션 핸들러 ==========
 
     def _switch_native_tab(self, tab_id: str):
-        """PyQt 네이티브 탭 전환 (탭바 버튼 클릭)"""
+        """PyQt 네이티브 탭 전환"""
         if tab_id == 'vue':
             self.center_tabs.setCurrentIndex(0)
             self._native_tab_bar.hide()
-            self.left_stack.setFixedWidth(460)
-            self.left_stack.setCurrentIndex(0)
+            # 마지막 Vue 탭에 따라 좌측 패널 결정
+            self.left_stack.setFixedWidth(0)
         elif tab_id == 'editor':
             self.center_tabs.setCurrentIndex(1)
             self._native_tab_bar.show()
             self.left_stack.setFixedWidth(460)
-            self.left_stack.setCurrentIndex(1)
+            self.left_stack.setCurrentIndex(1)  # 에디터 도구
         elif tab_id == 'web':
             self.center_tabs.setCurrentIndex(2)
             self._native_tab_bar.show()
@@ -426,7 +426,7 @@ class GeneratorMainUI(
             tab_name = payload.get('tab', 't2i')
             self.center_tabs.setCurrentIndex(0)
             self._native_tab_bar.hide()
-            # T2I일 때만 좌측 패널 표시
+            # T2I만 좌측 패널 표시
             if tab_name == 't2i':
                 self.left_stack.setFixedWidth(460)
                 self.left_stack.setCurrentIndex(0)
