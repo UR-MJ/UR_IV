@@ -8,33 +8,58 @@ let _resolveReady = null
 const _ready = new Promise(resolve => { _resolveReady = resolve })
 
 /**
+ * QWebChannel 사용 가능할 때까지 대기
+ */
+function waitForQWebChannel(maxWait = 5000) {
+  return new Promise((resolve) => {
+    if (window.QWebChannel && window.qt?.webChannelTransport) {
+      resolve(true)
+      return
+    }
+    const start = Date.now()
+    const check = () => {
+      if (window.QWebChannel && window.qt?.webChannelTransport) {
+        resolve(true)
+      } else if (Date.now() - start > maxWait) {
+        resolve(false) // 타임아웃 → 개발 모드
+      } else {
+        setTimeout(check, 50)
+      }
+    }
+    setTimeout(check, 50)
+  })
+}
+
+/**
  * QWebChannel 초기화
  */
-export function initBridge() {
-  return new Promise((resolve) => {
-    if (window.qt && window.qt.webChannelTransport) {
+export async function initBridge() {
+  const available = await waitForQWebChannel()
+
+  if (available) {
+    return new Promise((resolve) => {
       new window.QWebChannel(window.qt.webChannelTransport, (channel) => {
         _backend = channel.objects.backend
-        // 위젯 스토어 연결
         connectStore(_backend)
         _resolveReady(_backend)
         resolve(_backend)
       })
-    } else {
-      // 개발 모드 — 목 객체
-      _backend = {
-        onWidgetChanged: (id, v) => console.log(`[mock] widget ${id} = ${v}`),
-        onAction: (a, p) => console.log(`[mock] action ${a}`, p),
-        onTabSwitch: (t) => console.log(`[mock] tab ${t}`),
-        getAllWidgetValues: (cb) => cb('{}'),
-        getSettings: (cb) => cb('{}'),
-        _mock: true,
-      }
-      connectStore(_backend)
-      _resolveReady(_backend)
-      resolve(_backend)
+    })
+  } else {
+    // 개발 모드 — 목 객체
+    console.log('[bridge] QWebChannel not available, using mock')
+    _backend = {
+      onWidgetChanged: (id, v) => console.log(`[mock] widget ${id} = ${v}`),
+      onAction: (a, p) => console.log(`[mock] action ${a}`, p),
+      onTabSwitch: (t) => console.log(`[mock] tab ${t}`),
+      getAllWidgetValues: (cb) => cb('{}'),
+      getSettings: (cb) => cb('{}'),
+      _mock: true,
     }
-  })
+    connectStore(_backend)
+    _resolveReady(_backend)
+    return _backend
+  }
 }
 
 /**

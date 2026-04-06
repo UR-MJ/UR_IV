@@ -1107,21 +1107,34 @@ class UISetupMixin:
         vc_layout.setSpacing(0)
 
         # QWebEngineView (Vue 앱) — vue_bridge는 _setup_ui에서 이미 생성됨
+        from PyQt6.QtWebEngineCore import QWebEngineScript
+        from PyQt6.QtCore import QUrl
+
         self.vue_viewer = QWebEngineView()
         self.vue_viewer.setMinimumSize(400, 400)
-        channel = QWebChannel(self.vue_viewer.page())
+
+        page = self.vue_viewer.page()
+        channel = QWebChannel(page)
         channel.registerObject('backend', self.vue_bridge)
-        self.vue_viewer.page().setWebChannel(channel)
+        page.setWebChannel(channel)
+
+        # qwebchannel.js를 스크립트 주입으로 로드 (qrc 프로토콜 대신)
+        qwc_script = QWebEngineScript()
+        qwc_script.setName("qwebchannel")
+        qwc_script.setSourceUrl(QUrl("qrc:///qtwebchannel/qwebchannel.js"))
+        qwc_script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        qwc_script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        page.scripts().insert(qwc_script)
 
         # 로컬 파일 접근 허용
-        settings = self.vue_viewer.page().settings()
+        settings = page.settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
 
         # Vue 빌드 결과 로드
+        from PyQt6.QtCore import QUrl
         frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend_dist', 'index.html')
         if os.path.exists(frontend_path):
-            from PyQt6.QtCore import QUrl
             self.vue_viewer.setUrl(QUrl.fromLocalFile(frontend_path))
         else:
             self.vue_viewer.setHtml('<h2 style="color:#787878;text-align:center;margin-top:40%">Vue 빌드 필요: cd frontend && npm run build</h2>')
