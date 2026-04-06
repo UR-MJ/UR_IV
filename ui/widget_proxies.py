@@ -172,6 +172,14 @@ class ComboBoxProxy(QObject):
     def itemText(self, idx: int) -> str:
         return self._items[idx] if 0 <= idx < len(self._items) else ""
 
+    def text(self) -> str:
+        """호환성: settings에서 .text() 호출 시"""
+        return self.currentText()
+
+    def setText(self, value: str):
+        """호환성: settings에서 .setText() 호출 시"""
+        self.setCurrentText(value)
+
     def setEnabled(self, enabled: bool):
         self._enabled = enabled
     def isEnabled(self) -> bool:

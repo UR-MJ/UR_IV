@@ -32,12 +32,16 @@ class UISetupMixin:
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
+        # Vue 브릿지 초기화 (프록시보다 먼저)
+        from ui.vue_bridge import VueBridge
+        self.vue_bridge = VueBridge(self)
+
         # 최상위: 좌측 패널 | 우측(중앙+히스토리+도구+대기열)
         root_layout = QHBoxLayout(central_widget)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # 왼쪽 패널 (생성 설정 / 에디터 도구 전환) — 전체 높이 사용
+        # 왼쪽 패널 프록시 초기화 (Vue가 실제 UI 렌더링)
         self._left_panel_container = self._create_left_panel()
 
         # 중앙 탭
@@ -46,10 +50,10 @@ class UISetupMixin:
         # 에디터 도구 패널
         self.editor_tools_scroll = self._create_editor_tools_panel()
 
-        # 왼쪽 패널 스택
+        # 왼쪽 패널 스택 (에디터/I2I/Inpaint 전용 — T2I는 Vue에서 렌더링)
         self.left_stack = QStackedWidget()
-        self.left_stack.setFixedWidth(460)
-        self.left_stack.addWidget(self._left_panel_container)  # index 0: 생성 설정
+        self.left_stack.setFixedWidth(0)  # T2I 모드일 때 숨김 (Vue가 좌측 패널 제공)
+        self.left_stack.addWidget(self._left_panel_container)  # index 0: 빈 위젯
         self.left_stack.addWidget(self.editor_tools_scroll)  # index 1: 에디터 도구
         self.left_stack.addWidget(self.i2i_tab.left_scroll)  # index 2: I2I 설정
         self.left_stack.addWidget(self.inpaint_tab.left_scroll)  # index 3: Inpaint 설정
@@ -75,9 +79,9 @@ class UISetupMixin:
         upper_layout.addWidget(self.history_panel)
         right_layout.addWidget(upper_area, 1)
 
-        # 도구 바 (대기열 위)
-        self._tools_bar = self._create_tools_bar()
-        right_layout.addWidget(self._tools_bar)
+        # 도구 바 — Vue SPA에서 렌더링 (PyQt 도구바 제거)
+        # self._tools_bar = self._create_tools_bar()
+        # right_layout.addWidget(self._tools_bar)
 
         # 하단: 대기열 + 상태바
         self._bottom_container = QWidget()
@@ -109,38 +113,19 @@ class UISetupMixin:
         self.vram_label.setStyleSheet(f"color: {get_color('success')}; font-size: 10px; padding-right: 10px;")
 
     def _create_left_panel(self):
-        """왼쪽 패널: 스크롤 프롬프트 영역 + 고정 하단바 (NAIS2 스타일)"""
+        """왼쪽 패널: Vue SPA가 렌더링 — PyQt는 프록시만 초기화"""
+        # 프록시 위젯 초기화 (Vue ↔ Python 데이터 동기화)
+        self._init_prompt_proxies()
+        self._init_settings_proxies()
+        self._init_button_proxies()
+
+        # 빈 컨테이너 (Vue가 실제 UI를 QWebEngineView에서 렌더링)
         container = QWidget()
-        container_layout = QVBoxLayout(container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(0)
+        container.setMaximumWidth(0)  # PyQt 좌측 패널 숨김
+        container.hide()
 
-        # ── 스크롤 영역 (프롬프트 중심) ──
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
-
-        scroll_content = QWidget()
-        scroll_content.setMaximumWidth(460)
-        self._prompt_layout = QVBoxLayout(scroll_content)
-        self._prompt_layout.setContentsMargins(10, 10, 10, 10)
-        self._prompt_layout.setSpacing(8)
-
-        # 모든 위젯 생성 (프롬프트 영역 + 숨겨진 설정 컨테이너)
-        self._create_prompt_zone(self._prompt_layout)
-        self._create_settings_container(self._prompt_layout)
-        self._prompt_layout.addStretch()
-
-        scroll.setWidget(scroll_content)
-        self.left_panel_scroll = scroll  # 스크롤 위치 리셋용
-        container_layout.addWidget(scroll, 1)
-
-        # ── 고정 하단바 (툴바 + 생성 버튼) ──
-        bottom_bar = self._create_bottom_toolbar()
-        container_layout.addWidget(bottom_bar)
-
-        self.generator_panel = container  # 호환성
+        self.left_panel_scroll = QScrollArea()  # 호환성 더미
+        self.generator_panel = container
         return container
 
     def _create_editor_tools_panel(self):
@@ -301,8 +286,217 @@ class UISetupMixin:
         return self.center_tabs
     
     # ──────────────────────────────────────
-    #  NAIS2 스타일 좌측 패널 구성
+    #  프록시 위젯 초기화 (Vue SPA 연동)
     # ──────────────────────────────────────
+
+    def _init_prompt_proxies(self):
+        """프롬프트 영역 프록시 위젯 초기화"""
+        from ui.widget_proxies import LineEditProxy, TextEditProxy, CheckBoxProxy
+
+        b = self.vue_bridge
+        self.char_count_input = LineEditProxy(b, 'char_count_input')
+        self.character_input = LineEditProxy(b, 'character_input')
+        self.copyright_input = LineEditProxy(b, 'copyright_input')
+        self.artist_input = TextEditProxy(b, 'artist_input')
+        self.prefix_prompt_text = TextEditProxy(b, 'prefix_prompt_text')
+        self.main_prompt_text = TextEditProxy(b, 'main_prompt_text')
+        self.suffix_prompt_text = TextEditProxy(b, 'suffix_prompt_text')
+        self.neg_prompt_text = TextEditProxy(b, 'neg_prompt_text')
+        self.exclude_prompt_local_input = TextEditProxy(b, 'exclude_prompt_local_input')
+        self.total_prompt_display = TextEditProxy(b, 'total_prompt_display')
+        self.token_count_label = type('LabelProxy', (), {
+            'setText': lambda self, t: None,
+            'setAlignment': lambda self, a: None,
+            'setStyleSheet': lambda self, s: None,
+            'hide': lambda self: None,
+            'show': lambda self: None,
+            'setVisible': lambda self, v: None,
+            'setFixedHeight': lambda self, h: None,
+        })()
+
+        # 즐겨찾기 태그 바 (Vue에서 렌더링 — 더미)
+        self.fav_tags_bar = type('DummyFavBar', (), {
+            'tag_insert_requested': type('Sig', (), {'connect': lambda *a: None})(),
+            'hide': lambda self: None,
+            'show': lambda self: None,
+        })()
+
+        # 호환성: 토글 버튼 더미
+        class _AlwaysOn:
+            def isChecked(self): return True
+            def setChecked(self, v): pass
+            toggled = type('', (), {'connect': lambda *a: None})()
+        _d = _AlwaysOn()
+        self.prefix_toggle_button = _d
+        self.suffix_toggle_button = _d
+        self.neg_toggle_button = _d
+        self.exclude_toggle_button = _d
+
+    def _init_settings_proxies(self):
+        """설정 영역 프록시 위젯 초기화"""
+        from ui.widget_proxies import (
+            LineEditProxy, TextEditProxy, ComboBoxProxy, CheckBoxProxy,
+            SliderProxy, GroupBoxProxy, ButtonProxy
+        )
+
+        b = self.vue_bridge
+        self.chk_auto_char_features = CheckBoxProxy(b, 'chk_auto_char_features')
+        self.combo_char_feature_mode = ComboBoxProxy(b, 'combo_char_feature_mode')
+        self.combo_char_feature_mode.addItems(["핵심만", "핵심+의상"])
+        self.btn_char_preset = ButtonProxy(b, 'btn_char_preset')
+
+        self.model_combo = ComboBoxProxy(b, 'model_combo')
+        self.sampler_combo = ComboBoxProxy(b, 'sampler_combo')
+        self.scheduler_combo = ComboBoxProxy(b, 'scheduler_combo')
+
+        self.steps_input = SliderProxy(b, 'steps_input')
+        self.steps_input.setText('25')
+        self.cfg_input = SliderProxy(b, 'cfg_input', multiplier=2)
+        self.cfg_input.setText('7')
+
+        self.seed_input = LineEditProxy(b, 'seed_input')
+        self.seed_input.setText('-1')
+        self.width_input = LineEditProxy(b, 'width_input')
+        self.width_input.setText('1024')
+        self.height_input = LineEditProxy(b, 'height_input')
+        self.height_input.setText('1024')
+
+        # 해상도 관련
+        self.random_res_check = CheckBoxProxy(b, 'random_res_check')
+        self.auto_res_check = CheckBoxProxy(b, 'auto_res_check')
+        self.random_res_label = type('LblProxy', (), {
+            'setText': lambda s, t: None, 'hide': lambda s: None, 'show': lambda s: None,
+        })()
+        self.resolution_editor_container = type('WProxy', (), {
+            'hide': lambda s: None, 'show': lambda s: None,
+        })()
+        self.resolution_list_widget = type('LWProxy', (), {
+            'clear': lambda s: None, 'addItem': lambda s, i: None,
+            'count': lambda s: 0, 'item': lambda s, i: None,
+            'setFixedHeight': lambda s, h: None,
+        })()
+        self.res_width_input = LineEditProxy(b, 'res_width_input')
+        self.res_height_input = LineEditProxy(b, 'res_height_input')
+        self.btn_add_res = ButtonProxy(b, 'btn_add_res')
+        self._res_presets = [
+            ["512 × 512", 512, 512], ["512 × 768", 512, 768], ["768 × 512", 768, 512],
+            ["1024 × 1024", 1024, 1024], ["832 × 1216", 832, 1216], ["1216 × 832", 1216, 832],
+        ]
+        self._DEFAULT_RES_PRESETS = self._res_presets[:]
+        self._res_preset_btns = []
+
+        # Hires.fix
+        self.hires_options_group = GroupBoxProxy(b, 'hires_options_group')
+        self.upscaler_combo = ComboBoxProxy(b, 'upscaler_combo')
+        self.hires_steps_input = SliderProxy(b, 'hires_steps_input')
+        self.hires_denoising_input = SliderProxy(b, 'hires_denoising_input', multiplier=100)
+        self.hires_denoising_input.setText('0.40')
+        self.hires_scale_input = SliderProxy(b, 'hires_scale_input', multiplier=20)
+        self.hires_scale_input.setText('2.00')
+        self.hires_cfg_input = SliderProxy(b, 'hires_cfg_input', multiplier=2)
+        self.hires_checkpoint_combo = ComboBoxProxy(b, 'hires_checkpoint_combo')
+        self.hires_sampler_combo = ComboBoxProxy(b, 'hires_sampler_combo')
+        self.hires_scheduler_combo = ComboBoxProxy(b, 'hires_scheduler_combo')
+        self.hires_prompt_text = TextEditProxy(b, 'hires_prompt_text')
+        self.hires_neg_prompt_text = TextEditProxy(b, 'hires_neg_prompt_text')
+
+        # NegPiP / ADetailer
+        self.negpip_group = GroupBoxProxy(b, 'negpip_group')
+        self.adetailer_group = GroupBoxProxy(b, 'adetailer_group')
+        self.ad_toggle_button = ButtonProxy(b, 'ad_toggle_button')
+        self.ad_settings_container = type('WProxy', (), {
+            'hide': lambda s: None, 'show': lambda s: None, 'setVisible': lambda s, v: None,
+        })()
+        # ADetailer 슬롯 (더미)
+        self.ad_slot1_group = type('GBProxy', (), {
+            'setChecked': lambda s, v: None, 'isChecked': lambda s: False,
+            'setCheckable': lambda s, v: None,
+        })()
+        self.ad_slot2_group = type('GBProxy', (), {
+            'setChecked': lambda s, v: None, 'isChecked': lambda s: False,
+            'setCheckable': lambda s, v: None,
+        })()
+        # ADetailer 슬롯 위젯 더미 (전체 키)
+        def _ad_slot(prefix):
+            _W = type('WProxy', (), {
+                'setVisible': lambda s, v: None, 'hide': lambda s: None,
+                'show': lambda s: None, 'isVisible': lambda s: False,
+            })
+            return {
+                'prompt': TextEditProxy(b, f'{prefix}_prompt'),
+                'neg_prompt': TextEditProxy(b, f'{prefix}_neg'),
+                'model': ComboBoxProxy(b, f'{prefix}_model'),
+                'confidence': SliderProxy(b, f'{prefix}_conf'),
+                'strength': SliderProxy(b, f'{prefix}_str'),
+                'steps': SliderProxy(b, f'{prefix}_steps'),
+                'cfg': SliderProxy(b, f'{prefix}_cfg'),
+                'use_inpaint_size_check': CheckBoxProxy(b, f'{prefix}_use_inp_size'),
+                'use_steps_check': CheckBoxProxy(b, f'{prefix}_use_steps'),
+                'use_cfg_check': CheckBoxProxy(b, f'{prefix}_use_cfg'),
+                'use_checkpoint_check': CheckBoxProxy(b, f'{prefix}_use_ckpt'),
+                'use_vae_check': CheckBoxProxy(b, f'{prefix}_use_vae'),
+                'use_sampler_check': CheckBoxProxy(b, f'{prefix}_use_sampler'),
+                'inpaint_size_container': _W(),
+                'inpaint_width': LineEditProxy(b, f'{prefix}_inp_w'),
+                'inpaint_height': LineEditProxy(b, f'{prefix}_inp_h'),
+                'checkpoint_combo': ComboBoxProxy(b, f'{prefix}_ckpt'),
+                'vae_combo': ComboBoxProxy(b, f'{prefix}_vae'),
+                'sampler_combo': ComboBoxProxy(b, f'{prefix}_sampler'),
+                'scheduler_combo': ComboBoxProxy(b, f'{prefix}_scheduler'),
+                'sampler_container': _W(),
+            }
+        self.s1_widgets = _ad_slot('_ad_s1')
+        self.s2_widgets = _ad_slot('_ad_s2')
+
+        # 제거 옵션
+        self.chk_remove_artist = CheckBoxProxy(b, 'chk_remove_artist')
+        self.chk_remove_copyright = CheckBoxProxy(b, 'chk_remove_copyright')
+        self.chk_remove_character = CheckBoxProxy(b, 'chk_remove_character')
+        self.chk_remove_meta = CheckBoxProxy(b, 'chk_remove_meta')
+        self.chk_remove_censorship = CheckBoxProxy(b, 'chk_remove_censorship')
+        self.chk_remove_text = CheckBoxProxy(b, 'chk_remove_text')
+
+        # lock
+        self.btn_lock_artist = CheckBoxProxy(b, 'btn_lock_artist')
+
+    def _init_button_proxies(self):
+        """하단 도구바 버튼 프록시 초기화"""
+        from ui.widget_proxies import ButtonProxy, CheckBoxProxy
+
+        b = self.vue_bridge
+
+        self.btn_generate = ButtonProxy(b, 'btn_generate')
+        self.btn_generate._text = "이미지 생성"
+        self.btn_random_prompt = ButtonProxy(b, 'btn_random_prompt')
+        self.btn_auto_toggle = ButtonProxy(b, 'btn_auto_toggle')
+        self.btn_auto_toggle.setCheckable(True)
+
+        self.btn_save_settings = ButtonProxy(b, 'btn_save_settings')
+        self.btn_preset_save = ButtonProxy(b, 'btn_preset_save')
+        self.btn_preset_load = ButtonProxy(b, 'btn_preset_load')
+        self.btn_prompt_history = ButtonProxy(b, 'btn_prompt_history')
+        self.btn_lora_manager = ButtonProxy(b, 'btn_lora_manager')
+        self.btn_tag_weights = ButtonProxy(b, 'btn_tag_weights')
+        self.btn_shuffle = ButtonProxy(b, 'btn_shuffle')
+        self.btn_ab_test = ButtonProxy(b, 'btn_ab_test')
+        self.btn_api_manager = None
+
+        # 자동화 위젯 (더미)
+        self.automation_widget = type('AutoProxy', (), {
+            'hide': lambda s: None, 'show': lambda s: None,
+            'get_settings': lambda s: {},
+            'setVisible': lambda s, v: None,
+        })()
+
+        # LoRA 패널 (더미)
+        from ui.widget_proxies import ButtonProxy as BP
+        self.lora_active_panel = type('LoraProxy', (), {
+            'hide': lambda s: None, 'show': lambda s: None,
+            'get_active_loras': lambda s: [],
+            'clear_all': lambda s: None,
+            'get_entries': lambda s: [],
+            'set_entries': lambda s, e: None,
+        })()
 
     def _prompt_label(self, text: str, color: str = None) -> QLabel:
         """NAIS2식 작은 프롬프트 라벨"""
@@ -912,10 +1106,7 @@ class UISetupMixin:
         vc_layout.setContentsMargins(0, 0, 0, 0)
         vc_layout.setSpacing(0)
 
-        # Vue 브릿지
-        self.vue_bridge = VueBridge(self)
-
-        # QWebEngineView (Vue 앱)
+        # QWebEngineView (Vue 앱) — vue_bridge는 _setup_ui에서 이미 생성됨
         self.vue_viewer = QWebEngineView()
         self.vue_viewer.setMinimumSize(400, 400)
         channel = QWebChannel(self.vue_viewer.page())

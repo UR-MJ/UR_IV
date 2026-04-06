@@ -1,0 +1,337 @@
+<template>
+  <div class="prompt-panel">
+    <!-- 최종 프롬프트 (접이식) -->
+    <button class="toggle-btn" @click="showFinal = !showFinal">
+      {{ showFinal ? '▼' : '▶' }} 최종 프롬프트
+    </button>
+    <div v-show="showFinal" class="collapsible">
+      <textarea
+        class="input-area final-prompt"
+        :value="get('total_prompt_display')"
+        @input="set('total_prompt_display', $event.target.value)"
+        placeholder="Final output prompt..."
+        rows="3"
+      />
+      <div class="token-count">TOKENS: {{ tokenCount }}</div>
+    </div>
+
+    <!-- 인물 수 -->
+    <label class="field-label">인물 수</label>
+    <input
+      class="input-field"
+      :value="get('char_count_input')"
+      @input="set('char_count_input', $event.target.value)"
+      placeholder="예: 1girl, 2boys"
+    />
+
+    <!-- 캐릭터 -->
+    <label class="field-label">캐릭터</label>
+    <input
+      class="input-field"
+      :value="get('character_input')"
+      @input="set('character_input', $event.target.value)"
+      placeholder="캐릭터 이름"
+    />
+
+    <!-- 작품명 -->
+    <label class="field-label">작품명</label>
+    <input
+      class="input-field"
+      :value="get('copyright_input')"
+      @input="set('copyright_input', $event.target.value)"
+      placeholder="작품 (Copyright)"
+    />
+
+    <!-- 작가 + 고정 -->
+    <div class="artist-row">
+      <label class="field-label">작가</label>
+      <button
+        class="lock-btn"
+        :class="{ active: get('btn_lock_artist') === 'true' }"
+        @click="toggle('btn_lock_artist')"
+      >🔒</button>
+    </div>
+    <textarea
+      class="input-area"
+      :value="get('artist_input')"
+      @input="set('artist_input', $event.target.value)"
+      placeholder="작가 태그..."
+      rows="2"
+    />
+
+    <!-- 선행 프롬프트 -->
+    <label class="field-label">선행 프롬프트</label>
+    <textarea
+      class="input-area"
+      :value="get('prefix_prompt_text')"
+      @input="set('prefix_prompt_text', $event.target.value)"
+      placeholder="year 2025, masterpiece, best quality, ..."
+      rows="2"
+    />
+
+    <!-- 메인 프롬프트 -->
+    <label class="field-label">메인 프롬프트</label>
+    <textarea
+      class="input-area main-prompt"
+      :value="get('main_prompt_text')"
+      @input="set('main_prompt_text', $event.target.value)"
+      placeholder="메인 태그 입력..."
+      rows="4"
+    />
+
+    <!-- 후행 프롬프트 -->
+    <label class="field-label">후행 프롬프트</label>
+    <textarea
+      class="input-area"
+      :value="get('suffix_prompt_text')"
+      @input="set('suffix_prompt_text', $event.target.value)"
+      placeholder="후행 고정 태그..."
+      rows="2"
+    />
+
+    <!-- 네거티브 프롬프트 -->
+    <label class="field-label negative">네거티브 프롬프트</label>
+    <textarea
+      class="input-area"
+      :value="get('neg_prompt_text')"
+      @input="set('neg_prompt_text', $event.target.value)"
+      placeholder="lowres, bad quality, ..."
+      rows="2"
+    />
+
+    <!-- 제외 프롬프트 (접이식) -->
+    <button class="toggle-btn" @click="showExclude = !showExclude">
+      {{ showExclude ? '▼' : '▶' }} 제외 프롬프트
+    </button>
+    <div v-show="showExclude" class="collapsible">
+      <textarea
+        class="input-area"
+        :value="get('exclude_prompt_local_input')"
+        @input="set('exclude_prompt_local_input', $event.target.value)"
+        placeholder="예: arms up, __hair, ~blue hair"
+        rows="2"
+      />
+    </div>
+
+    <!-- 생성 설정 (접이식) -->
+    <button class="toggle-btn settings-toggle" @click="showSettings = !showSettings">
+      {{ showSettings ? '▼' : '▶' }} 생성 설정
+    </button>
+    <SettingsPanel v-show="showSettings" />
+
+    <!-- 하단 고정 영역 -->
+    <div class="bottom-fixed">
+      <!-- 자동화 -->
+      <button
+        class="auto-toggle"
+        :class="{ active: autoOn }"
+        @click="autoOn = !autoOn; action('toggle_automation', { checked: autoOn })"
+      >
+        AUTOMATION: {{ autoOn ? 'ON' : 'OFF' }}
+      </button>
+
+      <!-- 생성 버튼 -->
+      <button
+        class="generate-btn"
+        @click="action('generate')"
+      >
+        {{ autoOn ? '자동화 시작' : '이미지 생성' }}
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import { state, getValue, setValue, requestAction } from '../stores/widgetStore.js'
+import SettingsPanel from './SettingsPanel.vue'
+
+const showFinal = ref(false)
+const showExclude = ref(false)
+const showSettings = ref(false)
+const autoOn = ref(false)
+
+const tokenCount = computed(() => {
+  const text = getValue('total_prompt_display')
+  if (!text) return '0 / 75'
+  const count = text.split(',').filter(t => t.trim()).length
+  return `${count} / 75`
+})
+
+function get(id) {
+  return state.values[id] ?? ''
+}
+
+function set(id, value) {
+  setValue(id, value)
+}
+
+function toggle(id) {
+  const cur = get(id) === 'true'
+  set(id, cur ? 'false' : 'true')
+}
+
+function action(name, payload = {}) {
+  requestAction(name, payload)
+}
+</script>
+
+<style scoped>
+.prompt-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.field-label {
+  font-size: 11px;
+  color: #585858;
+  font-weight: 600;
+  margin-top: 6px;
+  padding: 0;
+}
+.field-label.negative {
+  color: #E05252;
+}
+
+.input-field {
+  width: 100%;
+  background: #131313;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #E8E8E8;
+  font-size: 13px;
+  outline: none;
+  transition: background 0.2s;
+}
+.input-field:focus {
+  background: #1A1A1A;
+}
+
+.input-area {
+  width: 100%;
+  background: #131313;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #E8E8E8;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  min-height: 40px;
+  transition: background 0.2s;
+}
+.input-area:focus {
+  background: #1A1A1A;
+}
+.input-area.main-prompt {
+  min-height: 80px;
+}
+.input-area.final-prompt {
+  min-height: 60px;
+  color: #787878;
+  font-size: 12px;
+}
+
+.artist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.lock-btn {
+  background: #181818;
+  border: none;
+  border-radius: 6px;
+  color: #585858;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.lock-btn.active {
+  background: #E2B340;
+  color: #0A0A0A;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: #484848;
+  font-size: 11px;
+  text-align: left;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.toggle-btn:hover {
+  color: #787878;
+}
+.toggle-btn.settings-toggle {
+  background: #161616;
+  border: 1px solid #1A1A1A;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.collapsible {
+  padding: 4px 0;
+}
+
+.token-count {
+  text-align: right;
+  font-size: 10px;
+  color: #484848;
+  padding: 2px 0;
+}
+
+.bottom-fixed {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auto-toggle {
+  width: 100%;
+  padding: 8px;
+  background: #181818;
+  border: none;
+  border-radius: 6px;
+  color: #787878;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.auto-toggle.active {
+  background: #4CAF50;
+  color: #000;
+}
+
+.generate-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(90deg, #E2B340, #D4882A);
+  border: none;
+  border-radius: 10px;
+  color: #000;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.generate-btn:hover {
+  background: linear-gradient(90deg, #F0C850, #E09030);
+}
+</style>
