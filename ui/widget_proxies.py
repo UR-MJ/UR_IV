@@ -122,11 +122,18 @@ class TextEditProxy(_ProxyBase):
     def installEventFilter(self, f): pass
 
     # QTextEdit document() 호환
+    class _DummyLayout:
+        def documentSize(self):
+            from PyQt6.QtCore import QSizeF
+            return QSizeF(100, 60)
+
     class _DummyDocument:
-        def contentsChanged(self): pass
         class _Signal:
             def connect(self, *a): pass
         contentsChanged = _Signal()
+        def documentLayout(self):
+            return TextEditProxy._DummyLayout()
+        def setDocumentMargin(self, m): pass
 
     def document(self):
         return TextEditProxy._DummyDocument()
