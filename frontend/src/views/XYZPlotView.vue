@@ -1,72 +1,108 @@
 <template>
-  <div class="tab-view">
-    <div class="delegate-panel">
-      <div class="icon-circle">&#x1F4CA;</div>
-      <h2>XYZ Plot</h2>
-      <p class="desc">파라미터 조합을 그리드로 비교 생성합니다</p>
-      <p class="sub-desc">X, Y, Z 축에 서로 다른 파라미터(모델, 샘플러, CFG 등)를 지정하여<br/>조합별 결과를 한눈에 비교할 수 있습니다.</p>
-      <button class="btn-action" @click="openXYZPlot">
-        XYZ Plot 열기
+  <div class="xyz-view">
+    <div class="config-panel">
+      <h3>XYZ Plot</h3>
+      <div v-for="(axis, ai) in axes" :key="ai" class="axis-config">
+        <label class="axis-label">{{ axis.name }} 축</label>
+        <select v-model="axis.type" class="s-select">
+          <option value="">None</option>
+          <option v-for="opt in axisOptions" :key="opt" :value="opt">{{ opt }}</option>
+        </select>
+        <input v-if="axis.type" class="s-input" v-model="axis.values"
+          :placeholder="axis.type === 'Prompt S/R' ? 'search, replace1, replace2' : '값1, 값2, 값3 또는 20-40:5'"
+        />
+      </div>
+      <div class="combo-info">
+        조합 수: <span class="accent">{{ comboCount }}</span>
+      </div>
+      <button class="btn-gen" @click="startPlot" :disabled="comboCount === 0">
+        XYZ Plot 시작
       </button>
+    </div>
+    <div class="result-area">
+      <div v-if="resultImages.length === 0" class="empty">
+        축을 설정하고 시작하면 결과가 여기에 표시됩니다
+      </div>
+      <div v-else class="result-grid">
+        <div v-for="(img, i) in resultImages" :key="i" class="result-item">
+          <img :src="'file:///' + img.path" />
+          <div class="result-label">{{ img.label }}</div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref, reactive, computed } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 
-function openXYZPlot() {
-  requestAction('open_xyz_plot')
+const axisOptions = ['Prompt S/R', 'Negative S/R', 'Steps', 'CFG Scale', 'Sampler', 'Scheduler', 'Seed', 'Width', 'Height', 'Denoising']
+
+const axes = reactive([
+  { name: 'X', type: '', values: '' },
+  { name: 'Y', type: '', values: '' },
+  { name: 'Z', type: '', values: '' },
+])
+const resultImages = ref([])
+
+const comboCount = computed(() => {
+  let count = 1
+  for (const a of axes) {
+    if (a.type && a.values.trim()) {
+      const vals = parseValues(a.values)
+      if (vals.length > 0) count *= vals.length
+    }
+  }
+  return axes.some(a => a.type && a.values.trim()) ? count : 0
+})
+
+function parseValues(str) {
+  const s = str.trim()
+  const m = s.match(/^(\d+)-(\d+):(\d+)$/)
+  if (m) {
+    const vals = []
+    for (let v = parseInt(m[1]); v <= parseInt(m[2]); v += parseInt(m[3])) vals.push(String(v))
+    return vals
+  }
+  return s.split(',').map(v => v.trim()).filter(Boolean)
+}
+
+function startPlot() {
+  const axisData = axes.filter(a => a.type && a.values.trim()).map(a => ({
+    type: a.type, values: parseValues(a.values),
+  }))
+  requestAction('start_xyz_plot', { axes: axisData })
 }
 </script>
 
 <style scoped>
-.tab-view {
-  width: 100%;
-  height: 100%;
-  background: #0A0A0A;
-  color: #E8E8E8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.xyz-view { height: 100%; display: flex; }
+.config-panel {
+  width: 320px; padding: 16px; border-right: 1px solid #1A1A1A;
+  display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
 }
-.delegate-panel {
-  text-align: center;
-  max-width: 420px;
-  padding: 32px;
+.config-panel h3 { color: #E8E8E8; font-size: 14px; margin: 0; }
+.axis-config { display: flex; flex-direction: column; gap: 4px; }
+.axis-label { color: #E2B340; font-size: 12px; font-weight: 700; }
+.s-select, .s-input {
+  background: #131313; border: none; border-radius: 4px; padding: 6px 8px;
+  color: #E8E8E8; font-size: 12px; outline: none;
 }
-.icon-circle {
-  font-size: 36px;
-  margin-bottom: 16px;
+.combo-info { color: #787878; font-size: 12px; text-align: center; }
+.accent { color: #E2B340; font-weight: 700; }
+.btn-gen {
+  padding: 12px; background: #E2B340; border: none; border-radius: 6px;
+  color: #000; font-weight: 700; cursor: pointer;
 }
-.delegate-panel h2 {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 10px 0;
-  color: #E8E8E8;
+.btn-gen:disabled { opacity: 0.35; cursor: not-allowed; }
+.result-area { flex: 1; overflow-y: auto; padding: 8px; }
+.empty { height: 100%; display: flex; align-items: center; justify-content: center; color: #484848; font-size: 14px; }
+.result-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 4px; align-content: start;
 }
-.desc {
-  font-size: 14px;
-  color: #E8E8E8;
-  margin: 0 0 8px 0;
-}
-.sub-desc {
-  font-size: 12px;
-  color: #585858;
-  margin: 0 0 24px 0;
-  line-height: 1.5;
-}
-.btn-action {
-  background: transparent;
-  border: 1px solid #E2B340;
-  color: #E2B340;
-  padding: 10px 24px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.15s;
-}
-.btn-action:hover {
-  background: rgba(226, 179, 64, 0.1);
-}
+.result-item { border-radius: 4px; overflow: hidden; border: 1px solid #1A1A1A; }
+.result-item img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+.result-label { font-size: 10px; color: #585858; padding: 4px 6px; text-align: center; }
 </style>

@@ -175,8 +175,58 @@ class VueBridge(QObject):
 
     @pyqtSlot(str, result=str)
     def searchDanbooru(self, query_json: str) -> str:
-        """Danbooru 검색 (간단 버전 — 실제 검색은 Python worker)"""
-        return json.dumps({'status': 'use_python_search', 'message': '검색은 좌측 패널의 Search 탭에서 실행하세요'})
+        """Danbooru parquet 검색"""
+        try:
+            q = json.loads(query_json)
+            ratings = q.get('ratings', ['g'])
+            queries = q.get('queries', {})
+            excludes = q.get('excludes', {})
+
+            from workers.search_worker import PandasSearchWorker
+            from config import PARQUET_DIR
+            worker = PandasSearchWorker(PARQUET_DIR, ratings, queries, excludes)
+            worker.run()  # 동기 실행 (작은 데이터셋)
+            results = worker._results if hasattr(worker, '_results') else []
+            # 최대 50개만 반환
+            out = []
+            for _, row in (results[:50] if hasattr(results, '__getitem__') else []):
+                out.append({
+                    'copyright': str(row.get('tag_string_copyright', '')),
+                    'character': str(row.get('tag_string_character', '')),
+                    'artist': str(row.get('tag_string_artist', '')),
+                    'general': str(row.get('tag_string_general', '')),
+                    'rating': str(row.get('rating', '')),
+                })
+            return json.dumps(out)
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    @pyqtSlot(str, result=str)
+    def loadImageBase64(self, filepath: str) -> str:
+        """이미지를 base64로 반환"""
+        import base64, os
+        if not os.path.exists(filepath):
+            return ''
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        ext = os.path.splitext(filepath)[1].lower()
+        mime = {'png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp'}.get(ext, 'image/png')
+        return f"data:{mime};base64,{base64.b64encode(data).decode()}"
+
+    @pyqtSlot(result=str)
+    def getUpscalers(self) -> str:
+        """API에서 업스케일러 목록 반환"""
+        try:
+            from backends import get_backend
+            backend = get_backend()
+            if backend:
+                import requests
+                r = requests.get(f"{backend.api_url}/sdapi/v1/upscalers", timeout=5)
+                if r.status_code == 200:
+                    return json.dumps([u['name'] for u in r.json()])
+        except Exception:
+            pass
+        return json.dumps([])
 
     @pyqtSlot(str, result=str)
     def getPngInfo(self, filepath: str) -> str:

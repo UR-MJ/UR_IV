@@ -459,48 +459,37 @@ class GeneratorMainUI(
         elif action == 'open_tag_weight_editor':
             if hasattr(self, '_open_tag_weight_editor'):
                 self._open_tag_weight_editor()
-        elif action == 'open_native_search':
-            # Search는 PyQt 탭 — center_tabs index 0(Vue)에서 PyQt search_tab은 별도
-            # search_tab을 다이얼로그로 표시
-            if hasattr(self, 'search_tab'):
-                self.search_tab.show()
-                self.search_tab.raise_()
-        elif action == 'open_event_gen':
-            if hasattr(self, 'event_gen_tab'):
-                self.event_gen_tab.show()
-                self.event_gen_tab.raise_()
-        elif action == 'open_batch':
-            if hasattr(self, 'batch_tab'):
-                self.batch_tab.show()
-                self.batch_tab.raise_()
-        elif action == 'open_upscale':
-            if hasattr(self, 'upscale_tab'):
-                self.upscale_tab.show()
-                self.upscale_tab.raise_()
-        elif action == 'open_xyz_plot':
-            if hasattr(self, 'xyz_plot_tab'):
-                self.xyz_plot_tab.show()
-                self.xyz_plot_tab.raise_()
+        elif action == 'apply_search_result':
+            # 검색 결과 프롬프트 적용
+            if hasattr(self, 'apply_prompt_from_data'):
+                self.apply_prompt_from_data(payload)
         elif action == 'open_png_info_file':
             from PyQt6.QtWidgets import QFileDialog
             path, _ = QFileDialog.getOpenFileName(
                 self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
             if path:
+                import json as _json
                 self.vue_bridge.imageGenerated.emit(
-                    __import__('json').dumps({
-                        'path': path.replace('\\', '/'),
-                        'width': 0, 'height': 0, 'seed': 0
-                    })
+                    _json.dumps({'path': path.replace('\\', '/'), 'width': 0, 'height': 0, 'seed': 0})
                 )
         elif action == 'generate_i2i':
-            if hasattr(self, 'i2i_tab'):
-                self.i2i_tab.show()
-                self.i2i_tab.raise_()
-        elif action == 'native_tab_switch':
-            tab_id = payload.get('tab', '')
-            if tab_id == 'inpaint_native' and hasattr(self, 'inpaint_tab'):
-                self.inpaint_tab.show()
-                self.inpaint_tab.raise_()
+            # Vue I2I → Python 백엔드로 전달
+            self.show_status("I2I 생성 요청 수신")
+        elif action == 'generate_inpaint':
+            self.show_status("Inpaint 생성 요청 수신")
+        elif action == 'search_events':
+            self.show_status("이벤트 검색 요청 수신")
+        elif action == 'start_xyz_plot':
+            self.show_status("XYZ Plot 시작 요청 수신")
+        elif action == 'start_batch':
+            self.show_status("배치 처리 시작 요청 수신")
+        elif action == 'start_upscale':
+            self.show_status("업스케일 시작 요청 수신")
+        elif action == 'open_batch_files' or action == 'open_upscale_files':
+            from PyQt6.QtWidgets import QFileDialog
+            paths, _ = QFileDialog.getOpenFileNames(
+                self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
+            # TODO: 파일 경로를 Vue로 전달
 
     # ========== 스타일시트 ==========
     
