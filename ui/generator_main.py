@@ -434,6 +434,31 @@ class GeneratorMainUI(
         elif action == 'open_character_preset':
             if hasattr(self, '_open_character_preset'):
                 self._open_character_preset()
+        elif action == 'display_image':
+            path = payload.get('path', '')
+            if path and hasattr(self, 'display_image'):
+                self.display_image(path)
+        elif action == 'save_settings':
+            if hasattr(self, 'save_settings'):
+                self.save_settings()
+        elif action == 'save_preset':
+            if hasattr(self, '_save_prompt_preset'):
+                self._save_prompt_preset()
+        elif action == 'load_preset':
+            if hasattr(self, '_load_prompt_preset'):
+                self._load_prompt_preset()
+        elif action == 'show_prompt_history':
+            if hasattr(self, '_show_prompt_history'):
+                self._show_prompt_history()
+        elif action == 'show_api_manager':
+            if hasattr(self, '_show_api_manager_popup'):
+                self._show_api_manager_popup()
+        elif action == 'open_lora_manager':
+            if hasattr(self, '_open_lora_manager'):
+                self._open_lora_manager()
+        elif action == 'open_tag_weight_editor':
+            if hasattr(self, '_open_tag_weight_editor'):
+                self._open_tag_weight_editor()
 
     # ========== 스타일시트 ==========
     

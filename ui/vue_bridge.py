@@ -140,3 +140,42 @@ class VueBridge(QObject):
     @pyqtSlot(result=str)
     def getSettings(self) -> str:
         return json.dumps({'status': 'ok'})
+
+    # ── 갤러리 ──
+
+    @pyqtSlot(str, result=str)
+    def getGalleryImages(self, folder: str) -> str:
+        """폴더의 이미지 목록 반환"""
+        import os
+        from config import OUTPUT_DIR
+        target = folder if folder else OUTPUT_DIR
+        if not os.path.isdir(target):
+            return json.dumps([])
+        exts = ('.png', '.jpg', '.jpeg', '.webp')
+        files = []
+        for f in sorted(os.listdir(target), key=lambda x: os.path.getmtime(os.path.join(target, x)), reverse=True):
+            if f.lower().endswith(exts):
+                fp = os.path.join(target, f).replace('\\', '/')
+                files.append(fp)
+            if len(files) >= 200:
+                break
+        return json.dumps(files)
+
+    # ── PNG Info ──
+
+    @pyqtSlot(str, result=str)
+    def getPngInfo(self, filepath: str) -> str:
+        """이미지의 PNG 메타데이터 반환"""
+        try:
+            from PIL import Image
+            img = Image.open(filepath)
+            info = {}
+            if 'parameters' in img.info:
+                info['parameters'] = img.info['parameters']
+            elif 'prompt' in img.info:
+                info['prompt'] = img.info['prompt']
+                if 'workflow' in img.info:
+                    info['workflow'] = img.info['workflow']
+            return json.dumps(info)
+        except Exception as e:
+            return json.dumps({'error': str(e)})
