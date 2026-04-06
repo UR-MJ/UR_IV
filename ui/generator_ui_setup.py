@@ -896,24 +896,53 @@ class UISetupMixin:
         return slot_group, widgets
     
     def _create_viewer_panel(self):
-        """뷰어 패널 생성"""
+        """뷰어 패널 생성 (Vue WebEngine + 폴백 QLabel)"""
         from PyQt6.QtWidgets import QProgressBar
+        from PyQt6.QtWebEngineWidgets import QWebEngineView
+        from PyQt6.QtWebEngineCore import QWebEngineSettings
+        from PyQt6.QtWebChannel import QWebChannel
+        from ui.vue_bridge import VueBridge
+        import os
 
         splitter = QSplitter(Qt.Orientation.Vertical)
 
-        # 상단: 이미지 뷰어 + 프로그레스 바 컨테이너
+        # 상단: Vue 뷰어 + 프로그레스 바
         viewer_container = QWidget()
         vc_layout = QVBoxLayout(viewer_container)
         vc_layout.setContentsMargins(0, 0, 0, 0)
         vc_layout.setSpacing(0)
 
-        self.viewer_label = QLabel("WebUI 정보를 불러오는 중...")
+        # Vue 브릿지
+        self.vue_bridge = VueBridge(self)
+
+        # QWebEngineView (Vue 앱)
+        self.vue_viewer = QWebEngineView()
+        self.vue_viewer.setMinimumSize(400, 400)
+        channel = QWebChannel(self.vue_viewer.page())
+        channel.registerObject('backend', self.vue_bridge)
+        self.vue_viewer.page().setWebChannel(channel)
+
+        # 로컬 파일 접근 허용
+        settings = self.vue_viewer.page().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+
+        # Vue 빌드 결과 로드
+        frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend_dist', 'index.html')
+        if os.path.exists(frontend_path):
+            from PyQt6.QtCore import QUrl
+            self.vue_viewer.setUrl(QUrl.fromLocalFile(frontend_path))
+        else:
+            self.vue_viewer.setHtml('<h2 style="color:#787878;text-align:center;margin-top:40%">Vue 빌드 필요: cd frontend && npm run build</h2>')
+
+        vc_layout.addWidget(self.vue_viewer, 1)
+
+        # 호환성: viewer_label (기존 코드에서 setText로 상태 표시하는 용도)
+        self.viewer_label = QLabel("")
         self.viewer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.viewer_label.setMinimumSize(400, 400)
-        self.viewer_label.setStyleSheet(
-            f"background-color: {get_color('bg_secondary')}; border-radius: 4px; color: {get_color('text_muted')};"
-        )
-        vc_layout.addWidget(self.viewer_label, 1)
+        self.viewer_label.setFixedHeight(0)  # 숨김 (Vue가 대체)
+        self.viewer_label.hide()
+        vc_layout.addWidget(self.viewer_label)
 
         # 생성 진행률 바
         self.gen_progress_bar = QProgressBar()
