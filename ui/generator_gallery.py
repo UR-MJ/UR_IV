@@ -118,20 +118,20 @@ class GalleryMixin:
         """이미지 표시"""
         if not os.path.exists(filepath):
             return
-        
+
         self.current_image_path = filepath
-        
+
         if hasattr(self, 'btn_add_favorite'):
             self.btn_add_favorite.setEnabled(True)
-        
+
+        # Vue 뷰어에 이미지 전달
+        if hasattr(self, 'vue_bridge'):
+            pixmap = QPixmap(filepath)
+            self.vue_bridge.send_image(filepath, pixmap.width(), pixmap.height(), 0)
+
+        # 기존 viewer_label (프록시 — no-op)
         pixmap = QPixmap(filepath)
-        self.viewer_label.setPixmap(
-            pixmap.scaled(
-                self.viewer_label.size(), 
-                Qt.AspectRatioMode.KeepAspectRatio, 
-                Qt.TransformationMode.SmoothTransformation
-            )
-        )
+        self.viewer_label.setPixmap(pixmap)
         
         # EXIF 표시
         gen_info = self.generation_data.get(filepath, {})

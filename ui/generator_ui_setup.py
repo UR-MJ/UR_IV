@@ -1155,12 +1155,30 @@ class UISetupMixin:
 
         vc_layout.addWidget(self.vue_viewer, 1)
 
-        # 호환성: viewer_label (기존 코드에서 setText로 상태 표시하는 용도)
-        self.viewer_label = QLabel("")
-        self.viewer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.viewer_label.setFixedHeight(0)  # 숨김 (Vue가 대체)
-        self.viewer_label.hide()
-        vc_layout.addWidget(self.viewer_label)
+        # viewer_label 프록시 — setPixmap/setText를 Vue로 전달
+        class _ViewerLabelProxy:
+            def __init__(self, bridge):
+                self._bridge = bridge
+            def setPixmap(self, pixmap):
+                pass  # _process_new_image에서 filepath로 직접 전달
+            def setText(self, text):
+                self._bridge.generationError.emit(text) if '실패' in text or '❌' in text else None
+            def setAlignment(self, a): pass
+            def setFixedHeight(self, h): pass
+            def setMinimumSize(self, *a): pass
+            def setStyleSheet(self, s): pass
+            def hide(self): pass
+            def show(self): pass
+            def size(self):
+                from PyQt6.QtCore import QSize
+                return QSize(800, 600)
+            def setEnabled(self, e): pass
+            def setContextMenuPolicy(self, p): pass
+            def setAcceptDrops(self, v): pass
+            class _DummySig:
+                def connect(self, *a): pass
+            customContextMenuRequested = _DummySig()
+        self.viewer_label = _ViewerLabelProxy(self.vue_bridge)
 
         # 생성 진행률 바
         self.gen_progress_bar = QProgressBar()

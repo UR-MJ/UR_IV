@@ -50,6 +50,8 @@ class GenerationMixin:
         self.show_status("🎨 이미지 생성 중...")
         
         # 뷰어에 로딩 표시
+        if hasattr(self, 'vue_bridge'):
+            self.vue_bridge.send_start()
         self.viewer_label.setText("🎨 이미지 생성 중...\n\n잠시만 기다려주세요.")
         c = get_theme_manager().get_colors()
         self.viewer_label.setStyleSheet(f"""
@@ -292,6 +294,14 @@ class GenerationMixin:
             f.write(image_data)
         
         self.current_image_path = filepath
+
+        # Vue 뷰어에 이미지 전달
+        if hasattr(self, 'vue_bridge'):
+            w = pixmap.width()
+            h = pixmap.height()
+            seed = gen_info.get('seed', 0) if isinstance(gen_info, dict) else 0
+            self.vue_bridge.send_image(filepath, w, h, seed)
+
         # _xyz_info 주입
         if hasattr(self, '_pending_xyz_info') and self._pending_xyz_info:
             if isinstance(gen_info, dict):
