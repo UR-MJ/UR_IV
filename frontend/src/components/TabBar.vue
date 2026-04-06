@@ -1,6 +1,5 @@
 <template>
   <div class="tab-bar">
-    <!-- Vue 탭들 -->
     <button
       v-for="tab in tabs"
       :key="tab.name"
@@ -9,19 +8,6 @@
       @click="switchTo(tab)"
     >
       {{ tab.title }}
-    </button>
-
-    <div class="sep" />
-
-    <!-- 네이티브 탭들 (Editor/Web/Backend) -->
-    <button
-      v-for="ntab in nativeTabs"
-      :key="ntab.id"
-      class="tab-btn native"
-      :class="{ active: currentTab === ntab.id }"
-      @click="switchToNative(ntab.id)"
-    >
-      {{ ntab.title }}
     </button>
   </div>
 </template>
@@ -42,12 +28,6 @@ const tabs = routes.map(r => ({
   path: r.path,
 }))
 
-const nativeTabs = [
-  { id: 'editor', title: 'Editor' },
-  { id: 'web', title: 'Web' },
-  { id: 'backend', title: 'Backend UI' },
-]
-
 watch(route, (r) => {
   currentTab.value = r.name
 })
@@ -57,16 +37,8 @@ const emit = defineEmits(['tab-changed'])
 function switchTo(tab) {
   currentTab.value = tab.name
   router.push(tab.path)
-  // Vue 탭 → QTabWidget index 0 (Vue SPA)
   requestAction('vue_tab_switch', { tab: tab.name })
   emit('tab-changed', tab.name)
-}
-
-function switchToNative(id) {
-  currentTab.value = id
-  // 네이티브 탭 → QTabWidget index 변경
-  requestAction('native_tab_switch', { tab: id })
-  emit('tab-changed', id)
 }
 </script>
 
@@ -80,12 +52,6 @@ function switchToNative(id) {
   border-bottom: 1px solid #1A1A1A;
   justify-content: center;
   align-items: center;
-}
-.sep {
-  width: 1px;
-  height: 20px;
-  background: #2A2A2A;
-  margin: 0 4px;
 }
 .tab-btn {
   padding: 6px 14px;
@@ -107,8 +73,5 @@ function switchToNative(id) {
   background: #1A1A1A;
   color: #E8E8E8;
   border-color: #E2B340;
-}
-.tab-btn.native {
-  border-style: dashed;
 }
 </style>

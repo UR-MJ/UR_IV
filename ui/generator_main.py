@@ -398,22 +398,8 @@ class GeneratorMainUI(
     # ========== Vue 액션 핸들러 ==========
 
     def _switch_native_tab(self, tab_id: str):
-        """PyQt 네이티브 탭 전환"""
-        # 에디터 도구 패널 제거
-        if self.editor_tools_scroll.parent():
-            self.centralWidget().layout().removeWidget(self.editor_tools_scroll)
-            self.editor_tools_scroll.setParent(None)
-
-        tab_map = {'vue': 0, 'editor': 1, 'web': 2, 'backend': 3}
-        idx = tab_map.get(tab_id, 0)
-        self.center_tabs.setCurrentIndex(idx)
-
-        # Vue 모드면 탭바 숨김, 네이티브면 표시
-        self._native_tab_bar.setVisible(tab_id != 'vue')
-
-        if tab_id == 'editor':
-            self.centralWidget().layout().insertWidget(0, self.editor_tools_scroll)
-            self.editor_tools_scroll.show()
+        """네이티브 탭 전환 — Vue에서 전부 처리하므로 no-op"""
+        pass
 
     def _handle_vue_action(self, action: str, payload: dict):
         """Vue에서 전달된 액션 처리"""

@@ -11,6 +11,9 @@ import XYZPlotView from './views/XYZPlotView.vue'
 import PngInfoView from './views/PngInfoView.vue'
 import FavoritesView from './views/FavoritesView.vue'
 import SettingsView from './views/SettingsView.vue'
+import EditorView from './views/EditorView.vue'
+import WebView from './views/WebView.vue'
+import BackendView from './views/BackendView.vue'
 
 const routes = [
   { path: '/', name: 't2i', component: ImageViewer, meta: { title: 'T2I' } },
@@ -24,10 +27,13 @@ const routes = [
   { path: '/png', name: 'png', component: PngInfoView, meta: { title: 'PNG Info' } },
   { path: '/fav', name: 'fav', component: FavoritesView, meta: { title: 'Favorites' } },
   { path: '/settings', name: 'settings', component: SettingsView, meta: { title: 'Settings' } },
+  { path: '/editor', name: 'editor', component: EditorView, meta: { title: 'Editor' } },
+  { path: '/web', name: 'web', component: WebView, meta: { title: 'Web' } },
+  { path: '/backend', name: 'backend', component: BackendView, meta: { title: 'Backend UI' } },
 ]
 
 const router = createRouter({
-  history: createMemoryHistory(),  // QWebEngineView에서는 메모리 히스토리 사용
+  history: createMemoryHistory(),
   routes,
 })
 

@@ -49,10 +49,9 @@ class UISetupMixin:
         # 중앙 탭
         self.center_tabs = self._create_center_tabs()
 
-        # 에디터 도구 패널 (Editor 탭 전환 시 동적 삽입)
-        self.editor_tools_scroll = self._create_editor_tools_panel()
-        self.editor_tools_scroll.setFixedWidth(460)
-        self.editor_tools_scroll.setParent(None)  # 레이아웃에 추가하지 않음
+        # 에디터 도구 패널 (호환성 더미)
+        self.editor_tools_scroll = QWidget()
+        self.editor_tools_scroll.setParent(None)
 
         # left_stack 호환성 더미 (기존 코드에서 참조 — 부모 없음, 레이아웃 밖)
         class _DummyWidget:
@@ -81,37 +80,12 @@ class UISetupMixin:
         self.history_panel = self._create_history_panel()
         self.history_panel.setFixedWidth(240)
 
-        # 네이티브 탭 전환 바 (네이티브 탭에서만 표시)
-        self._native_tab_bar = QWidget()
-        self._native_tab_bar.setFixedHeight(36)
-        self._native_tab_bar.setStyleSheet(
-            f"background-color: {get_color('bg_primary')}; border-bottom: 1px solid {get_color('border')};"
-        )
-        _ntb_layout = QHBoxLayout(self._native_tab_bar)
-        _ntb_layout.setContentsMargins(8, 4, 8, 4)
-        _ntb_layout.setSpacing(6)
+        # 네이티브 탭바 더미 (호환성)
+        self._native_tab_bar = type('D', (), {'hide': lambda s: None, 'show': lambda s: None, 'setVisible': lambda s, v: None})()
         self._native_tab_btns = {}
-        for tid, tlabel in [('vue', 'AI Studio'), ('editor', 'Editor'), ('web', 'Web'), ('backend', 'Backend UI')]:
-            btn = QPushButton(tlabel)
-            btn.setFixedHeight(28)
-            btn.setStyleSheet(
-                f"QPushButton {{ background: {get_color('bg_button')}; color: {get_color('text_muted')}; "
-                f"border: none; border-radius: 4px; padding: 4px 14px; font-size: 11px; font-weight: 600; }}"
-                f"QPushButton:hover {{ background: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; }}"
-            )
-            btn.clicked.connect(lambda _, t=tid: self._switch_native_tab(t))
-            _ntb_layout.addWidget(btn)
-            self._native_tab_btns[tid] = btn
-        _ntb_layout.addStretch()
-        self._native_tab_bar.hide()
 
-        # 중앙: 네이티브 탭바 + QTabWidget
-        center_col = QVBoxLayout()
-        center_col.setContentsMargins(0, 0, 0, 0)
-        center_col.setSpacing(0)
-        center_col.addWidget(self._native_tab_bar)
-        center_col.addWidget(self.center_tabs, 1)
-        upper_layout.addLayout(center_col, 1)
+        # 중앙: Vue SPA (QWebEngineView)
+        upper_layout.addWidget(self.viewer_panel, 1)
         upper_layout.addWidget(self.history_panel)
         main_vbox.addWidget(upper_area, 1)
 
@@ -252,23 +226,28 @@ class UISetupMixin:
         from tabs.inpaint_tab import InpaintTab
         from tabs.backend_ui_tab import BackendUITab
 
-        # ── 중앙 영역: QTabWidget (탭바 숨김 — Vue가 전부 처리) ──
-        self.center_tabs = QTabWidget()
-        self.center_tabs.tabBar().hide()
-
-        # Vue SPA (모든 Vue 탭)
+        # ── 중앙 영역: Vue SPA만 (QTabWidget/네이티브 탭 제거) ──
         self.viewer_panel = self._create_viewer_panel()
-        self.center_tabs.addTab(self.viewer_panel, "AI Studio")
 
-        # 네이티브 PyQt 탭
+        # center_tabs 호환성 더미
+        self.center_tabs = self.viewer_panel
+        self.center_tabs.setCurrentIndex = lambda i: None
+        self.center_tabs.currentChanged = type('S', (), {'connect': lambda *a: None})()
+        self.center_tabs.indexOf = lambda w: 0
+        self.center_tabs.setTabEnabled = lambda i, v: None
+        self.center_tabs.setTabToolTip = lambda i, t: None
+        self.center_tabs.widget = lambda i: self.viewer_panel
+        self.center_tabs.count = lambda: 1
+        self.center_tabs.tabText = lambda i: 'AI Studio'
+        self.center_tabs.setTabText = lambda i, t: None
+
+        # 네이티브 탭 인스턴스 (호환성 — 부모 없음, 화면에 추가하지 않음)
         self.mosaic_editor = MosaicEditor()
-        self.center_tabs.addTab(self.mosaic_editor, "Editor")
-
+        self.mosaic_editor.setParent(None)
         self.web_tab = BrowserTab(self)
-        self.center_tabs.addTab(self.web_tab, "Web")
-
+        self.web_tab.setParent(None)
         self.backend_ui_tab = BackendUITab(self)
-        self.center_tabs.addTab(self.backend_ui_tab, "Backend UI")
+        self.backend_ui_tab.setParent(None)
 
         # 기존 PyQt 탭들 — 인스턴스만 생성 (Vue placeholder 대체 예정, 호환성 유지)
         self.i2i_tab = Img2ImgTab(self)
