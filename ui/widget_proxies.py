@@ -1,0 +1,365 @@
+# ui/widget_proxies.py
+"""
+WidgetProxy — PyQt 위젯 인터페이스를 모방하지만 실제 데이터는 Vue와 동기화.
+generator_settings.py, generator_actions.py 등 기존 코드가 수정 없이 동작.
+"""
+from PyQt6.QtCore import QObject, pyqtSignal
+
+
+class LineEditProxy(QObject):
+    """QLineEdit 호환 프록시"""
+    textChanged = pyqtSignal(str)
+    editingFinished = pyqtSignal()
+
+    def __init__(self, bridge, widget_id: str, parent=None):
+        super().__init__(parent)
+        self._bridge = bridge
+        self._id = widget_id
+        self._value = ""
+        self._enabled = True
+        self._placeholder = ""
+        bridge._register_proxy(widget_id, self)
+
+    def text(self) -> str:
+        return self._value
+
+    def setText(self, value: str):
+        if self._value != value:
+            self._value = value
+            self._bridge.pushWidgetValue(self._id, value)
+            self.textChanged.emit(value)
+
+    def clear(self):
+        self.setText("")
+
+    def setPlaceholderText(self, text: str):
+        self._placeholder = text
+        self._bridge.pushWidgetProperty(self._id, "placeholder", text)
+
+    def setEnabled(self, enabled: bool):
+        self._enabled = enabled
+        self._bridge.pushWidgetProperty(self._id, "enabled", enabled)
+
+    def isEnabled(self) -> bool:
+        return self._enabled
+
+    def setFixedWidth(self, w): pass
+    def setFixedHeight(self, h): pass
+    def setAlignment(self, a): pass
+    def setStyleSheet(self, s): pass
+    def setToolTip(self, t): pass
+    def installEventFilter(self, f): pass
+
+    def _on_vue_changed(self, value: str):
+        """Vue에서 값 변경 시 호출 (브릿지 경유)"""
+        if self._value != value:
+            self._value = value
+            self.textChanged.emit(value)
+
+
+class TextEditProxy(QObject):
+    """QTextEdit / TagInputWidget 호환 프록시"""
+    textChanged = pyqtSignal()
+
+    def __init__(self, bridge, widget_id: str, parent=None):
+        super().__init__(parent)
+        self._bridge = bridge
+        self._id = widget_id
+        self._value = ""
+        self._enabled = True
+        bridge._register_proxy(widget_id, self)
+
+    def toPlainText(self) -> str:
+        return self._value
+
+    def setPlainText(self, value: str):
+        if self._value != value:
+            self._value = value
+            self._bridge.pushWidgetValue(self._id, value)
+            self.textChanged.emit()
+
+    def clear(self):
+        self.setPlainText("")
+
+    def setPlaceholderText(self, text: str):
+        self._bridge.pushWidgetProperty(self._id, "placeholder", text)
+
+    def setMinimumHeight(self, h): pass
+    def setMaximumHeight(self, h): pass
+    def setEnabled(self, enabled: bool):
+        self._enabled = enabled
+        self._bridge.pushWidgetProperty(self._id, "enabled", enabled)
+
+    def isEnabled(self) -> bool:
+        return self._enabled
+
+    def setReadOnly(self, ro): pass
+    def setStyleSheet(self, s): pass
+    def setToolTip(self, t): pass
+    def installEventFilter(self, f): pass
+
+    # QTextEdit document() 호환
+    class _DummyDocument:
+        def contentsChanged(self): pass
+        class _Signal:
+            def connect(self, *a): pass
+        contentsChanged = _Signal()
+
+    def document(self):
+        return TextEditProxy._DummyDocument()
+
+    def _on_vue_changed(self, value: str):
+        if self._value != value:
+            self._value = value
+            self.textChanged.emit()
+
+
+class ComboBoxProxy(QObject):
+    """QComboBox 호환 프록시"""
+    currentTextChanged = pyqtSignal(str)
+    currentIndexChanged = pyqtSignal(int)
+
+    def __init__(self, bridge, widget_id: str, parent=None):
+        super().__init__(parent)
+        self._bridge = bridge
+        self._id = widget_id
+        self._items = []
+        self._index = -1
+        self._enabled = True
+        bridge._register_proxy(widget_id, self)
+
+    def addItems(self, items: list):
+        self._items = list(items)
+        self._bridge.pushWidgetProperty(self._id, "items", self._items)
+        if self._items and self._index < 0:
+            self._index = 0
+
+    def addItem(self, item: str):
+        self._items.append(item)
+        self._bridge.pushWidgetProperty(self._id, "items", self._items)
+
+    def clear(self):
+        self._items = []
+        self._index = -1
+        self._bridge.pushWidgetProperty(self._id, "items", [])
+
+    def currentText(self) -> str:
+        if 0 <= self._index < len(self._items):
+            return self._items[self._index]
+        return ""
+
+    def currentIndex(self) -> int:
+        return self._index
+
+    def setCurrentText(self, text: str):
+        if text in self._items:
+            idx = self._items.index(text)
+            self.setCurrentIndex(idx)
+
+    def setCurrentIndex(self, idx: int):
+        if self._index != idx and 0 <= idx < len(self._items):
+            self._index = idx
+            self._bridge.pushWidgetValue(self._id, str(idx))
+            self.currentTextChanged.emit(self.currentText())
+            self.currentIndexChanged.emit(idx)
+
+    def findText(self, text: str) -> int:
+        return self._items.index(text) if text in self._items else -1
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemText(self, idx: int) -> str:
+        return self._items[idx] if 0 <= idx < len(self._items) else ""
+
+    def setEnabled(self, enabled: bool):
+        self._enabled = enabled
+    def isEnabled(self) -> bool:
+        return self._enabled
+    def setStyleSheet(self, s): pass
+    def setFixedWidth(self, w): pass
+    def setFixedSize(self, *a): pass
+    def setToolTip(self, t): pass
+    def installEventFilter(self, f): pass
+
+    def _on_vue_changed(self, value: str):
+        try:
+            idx = int(value)
+        except ValueError:
+            idx = self._items.index(value) if value in self._items else -1
+        if idx != self._index and 0 <= idx < len(self._items):
+            self._index = idx
+            self.currentTextChanged.emit(self.currentText())
+            self.currentIndexChanged.emit(idx)
+
+
+class CheckBoxProxy(QObject):
+    """QCheckBox 호환 프록시"""
+    toggled = pyqtSignal(bool)
+    stateChanged = pyqtSignal(int)
+
+    def __init__(self, bridge, widget_id: str, parent=None):
+        super().__init__(parent)
+        self._bridge = bridge
+        self._id = widget_id
+        self._checked = False
+        bridge._register_proxy(widget_id, self)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool):
+        if self._checked != checked:
+            self._checked = checked
+            self._bridge.pushWidgetValue(self._id, "true" if checked else "false")
+            self.toggled.emit(checked)
+            self.stateChanged.emit(2 if checked else 0)
+
+    def setStyleSheet(self, s): pass
+    def setToolTip(self, t): pass
+    def setEnabled(self, e): pass
+
+    def _on_vue_changed(self, value: str):
+        checked = value.lower() in ("true", "1")
+        if self._checked != checked:
+            self._checked = checked
+            self.toggled.emit(checked)
+            self.stateChanged.emit(2 if checked else 0)
+
+
+class ButtonProxy(QObject):
+    """QPushButton 호환 프록시"""
+    clicked = pyqtSignal()
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, bridge, widget_id: str, parent=None):
+        super().__init__(parent)
+        self._bridge = bridge
+        self._id = widget_id
+        self._text = ""
+        self._enabled = True
+        self._checked = False
+        self._checkable = False
+        bridge._register_proxy(widget_id, self)
+
+    def text(self) -> str:
+        return self._text
+
+    def setText(self, text: str):
+        self._text = text
+        self._bridge.pushWidgetProperty(self._id, "text", text)
+
+    def setEnabled(self, enabled: bool):
+        self._enabled = enabled
+        self._bridge.pushWidgetProperty(self._id, "enabled", enabled)
+
+    def isEnabled(self) -> bool:
+        return self._enabled
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool):
+        if self._checked != checked:
+            self._checked = checked
+            self._bridge.pushWidgetProperty(self._id, "checked", checked)
+            if self._checkable:
+                self.toggled.emit(checked)
+
+    def setCheckable(self, v: bool):
+        self._checkable = v
+
+    def setObjectName(self, n): pass
+    def setFixedHeight(self, h): pass
+    def setFixedSize(self, *a): pass
+    def setFixedWidth(self, w): pass
+    def setStyleSheet(self, s): pass
+    def setToolTip(self, t): pass
+    def setCursor(self, c): pass
+    def setMenu(self, m): pass
+    def setSizePolicy(self, *a): pass
+    def setMinimumWidth(self, w): pass
+    def setFont(self, f): pass
+    def setMinimumHeight(self, h): pass
+
+    def _on_vue_changed(self, value: str):
+        if value == "click":
+            self.clicked.emit()
+        elif value in ("true", "false"):
+            checked = value == "true"
+            if self._checked != checked:
+                self._checked = checked
+                self.toggled.emit(checked)
+
+
+class GroupBoxProxy(QObject):
+    """QGroupBox 호환 프록시 (체크 가능)"""
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, bridge, widget_id: str, parent=None):
+        super().__init__(parent)
+        self._bridge = bridge
+        self._id = widget_id
+        self._checked = False
+        bridge._register_proxy(widget_id, self)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool):
+        if self._checked != checked:
+            self._checked = checked
+            self._bridge.pushWidgetValue(self._id, "true" if checked else "false")
+            self.toggled.emit(checked)
+
+    def setCheckable(self, v): pass
+    def setStyleSheet(self, s): pass
+
+    def _on_vue_changed(self, value: str):
+        checked = value.lower() in ("true", "1")
+        if self._checked != checked:
+            self._checked = checked
+            self.toggled.emit(checked)
+
+
+class SliderProxy(QObject):
+    """Steps/CFG 등 슬라이더+입력 쌍 프록시 (NumericSlider 패턴 호환)"""
+    textChanged = pyqtSignal(str)
+    editingFinished = pyqtSignal()
+
+    def __init__(self, bridge, widget_id: str, multiplier: int = 1, parent=None):
+        super().__init__(parent)
+        self._bridge = bridge
+        self._id = widget_id
+        self._value = "0"
+        self._multiplier = multiplier
+        self._slider = self  # 자기 자신 (호환용)
+        bridge._register_proxy(widget_id, self)
+
+    def text(self) -> str:
+        return self._value
+
+    def setText(self, value: str):
+        if self._value != value:
+            self._value = value
+            self._bridge.pushWidgetValue(self._id, value)
+            self.textChanged.emit(value)
+
+    def value(self) -> int:
+        try:
+            return int(float(self._value) * self._multiplier)
+        except ValueError:
+            return 0
+
+    def setValue(self, v: int):
+        self._value = str(v / self._multiplier) if self._multiplier != 1 else str(v)
+        self._bridge.pushWidgetValue(self._id, self._value)
+
+    def setFixedWidth(self, w): pass
+    def setAlignment(self, a): pass
+    def installEventFilter(self, f): pass
+
+    def _on_vue_changed(self, value: str):
+        if self._value != value:
+            self._value = value
+            self.textChanged.emit(value)
