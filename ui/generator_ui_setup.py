@@ -80,8 +80,9 @@ class UISetupMixin:
         right_layout.addWidget(upper_area, 1)
 
         # 도구 바
+        # 도구바 — Vue TabBar가 대체하므로 숨김 (위젯 인스턴스는 유지)
         self._tools_bar = self._create_tools_bar()
-        right_layout.addWidget(self._tools_bar)
+        self._tools_bar.hide()
 
         # 하단: 대기열 + 상태바
         self._bottom_container = QWidget()
