@@ -50,9 +50,9 @@ class UISetupMixin:
         # 에디터 도구 패널
         self.editor_tools_scroll = self._create_editor_tools_panel()
 
-        # 왼쪽 패널 스택 (에디터/I2I/Inpaint 전용 — T2I는 Vue에서 렌더링)
+        # 왼쪽 패널 스택
         self.left_stack = QStackedWidget()
-        self.left_stack.setFixedWidth(0)  # T2I 모드일 때 숨김 (Vue가 좌측 패널 제공)
+        self.left_stack.setFixedWidth(460)
         self.left_stack.addWidget(self._left_panel_container)  # index 0: 빈 위젯
         self.left_stack.addWidget(self.editor_tools_scroll)  # index 1: 에디터 도구
         self.left_stack.addWidget(self.i2i_tab.left_scroll)  # index 2: I2I 설정
@@ -79,9 +79,9 @@ class UISetupMixin:
         upper_layout.addWidget(self.history_panel)
         right_layout.addWidget(upper_area, 1)
 
-        # 도구 바 — Vue SPA에서 렌더링 (PyQt 도구바 제거)
-        # self._tools_bar = self._create_tools_bar()
-        # right_layout.addWidget(self._tools_bar)
+        # 도구 바
+        self._tools_bar = self._create_tools_bar()
+        right_layout.addWidget(self._tools_bar)
 
         # 하단: 대기열 + 상태바
         self._bottom_container = QWidget()
@@ -113,15 +113,35 @@ class UISetupMixin:
         self.vram_label.setStyleSheet(f"color: {get_color('success')}; font-size: 10px; padding-right: 10px;")
 
     def _create_left_panel(self):
-        """왼쪽 패널: Vue SPA가 렌더링 — PyQt는 프록시만 초기화"""
-        # 프록시 위젯 초기화 (Vue ↔ Python 데이터 동기화)
-        self._init_prompt_proxies()
-        self._init_settings_proxies()
-        self._init_button_proxies()
-
-        # 빈 컨테이너 (Vue가 실제 UI를 QWebEngineView에서 렌더링)
+        """왼쪽 패널: 스크롤 프롬프트 영역 + 고정 하단바"""
         container = QWidget()
-        self.left_panel_scroll = container  # 호환성 더미
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+
+        # 스크롤 영역
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+
+        scroll_content = QWidget()
+        scroll_content.setMaximumWidth(460)
+        self._prompt_layout = QVBoxLayout(scroll_content)
+        self._prompt_layout.setContentsMargins(10, 10, 10, 10)
+        self._prompt_layout.setSpacing(8)
+
+        self._create_prompt_zone(self._prompt_layout)
+        self._create_settings_container(self._prompt_layout)
+        self._prompt_layout.addStretch()
+
+        scroll.setWidget(scroll_content)
+        self.left_panel_scroll = scroll
+        container_layout.addWidget(scroll, 1)
+
+        bottom_bar = self._create_bottom_toolbar()
+        container_layout.addWidget(bottom_bar)
+
         self.generator_panel = container
         return container
 

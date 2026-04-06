@@ -42,7 +42,7 @@ MODERN_THEME = {
     'radius_button': '8px',
     'radius_primary_btn': '10px',
     'tab_padding': '10px 18px',
-    'tab_margin': '0px 4px 0px 0px',
+    'tab_margin': '3px 6px',
     'primary_btn_bg_hover': '#F0C850',
     'primary_btn_bg_disabled': '#3A3020',
     'primary_btn_text_disabled': '#666050',

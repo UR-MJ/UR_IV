@@ -1,26 +1,17 @@
 <template>
   <div class="app">
-    <!-- 좌측 패널 -->
-    <div class="left-panel">
-      <PromptPanel />
-    </div>
-
-    <!-- 중앙 뷰어 -->
-    <div class="center">
-      <ImageViewer
-        :image-url="currentImage"
-        :resolution="resolution"
-        :seed="seed"
-        :status="status"
-      />
-    </div>
+    <ImageViewer
+      :image-url="currentImage"
+      :resolution="resolution"
+      :seed="seed"
+      :status="status"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { initBridge, onBackendEvent } from './bridge.js'
-import PromptPanel from './components/PromptPanel.vue'
 import ImageViewer from './components/ImageViewer.vue'
 
 const currentImage = ref('')
@@ -66,35 +57,9 @@ body {
   height: 100vh;
   display: flex;
 }
-.left-panel {
-  width: 380px;
-  min-width: 320px;
-  max-width: 460px;
-  height: 100vh;
-  background: #0D0D0D;
-  border-right: 1px solid #1A1A1A;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.center {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
 
-/* 스크롤바 */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #222;
-  border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #E2B340;
-}
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #E2B340; }
 </style>
