@@ -73,9 +73,23 @@ class UISetupMixin:
         self._native_tab_bar = type('D', (), {'hide': lambda s: None, 'show': lambda s: None, 'setVisible': lambda s, v: None})()
         self._native_tab_btns = {}
 
-        # 히스토리 패널 (화면에 추가하지 않음 — Vue에서 처리 예정)
-        self.history_panel = self._create_history_panel()
-        self.history_panel.setParent(None)
+        # 히스토리 패널 → Vue에서 처리 (더미)
+        self.history_panel = type('D', (), {
+            'setFixedWidth': lambda s, w: None,
+            'setParent': lambda s, p: None,
+        })()
+
+        # 히스토리/갤러리 관련 더미 속성 (호환성)
+        from ui.widget_proxies import ButtonProxy
+        b = self.vue_bridge
+        self.btn_add_favorite = ButtonProxy(b, 'btn_add_favorite')
+        self.btn_refresh_gallery = ButtonProxy(b, 'btn_refresh_gallery')
+        self.gallery_layout = type('D', (), {
+            'insertWidget': lambda s, *a: None,
+            'removeWidget': lambda s, *a: None,
+            'setAlignment': lambda s, *a: None,
+        })()
+        self.gallery_items = []
 
         # 도구바 (화면에 추가하지 않음)
         self._tools_bar = self._create_tools_bar()
