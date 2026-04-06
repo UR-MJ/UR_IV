@@ -48,16 +48,19 @@ watch(route, (r) => {
   currentTab.value = r.name
 })
 
+const emit = defineEmits(['tab-changed'])
+
 function switchTo(tab) {
   currentTab.value = tab.name
   router.push(tab.path)
-  // Python에 알림 (left_stack 전환용)
   requestAction('vue_tab_switch', { tab: tab.name })
+  emit('tab-changed', tab.name)
 }
 
 function switchToNative(id) {
   currentTab.value = id
   requestAction('native_tab_switch', { tab: id })
+  emit('tab-changed', id)
 }
 </script>
 

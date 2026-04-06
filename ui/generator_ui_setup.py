@@ -36,35 +36,38 @@ class UISetupMixin:
         from ui.vue_bridge import VueBridge
         self.vue_bridge = VueBridge(self)
 
-        # 최상위: 좌측 패널 | 우측(중앙+히스토리+도구+대기열)
+        # 전체 레이아웃 (Vue SPA가 좌측 패널 포함 — PyQt left_stack 제거)
         root_layout = QHBoxLayout(central_widget)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # 왼쪽 패널 프록시 초기화 (Vue가 실제 UI 렌더링)
-        self._left_panel_container = self._create_left_panel()
+        # 프록시 위젯 초기화 (Vue ↔ Python 데이터 동기화)
+        self._init_prompt_proxies()
+        self._init_settings_proxies()
+        self._init_button_proxies()
 
         # 중앙 탭
         self.center_tabs = self._create_center_tabs()
 
-        # 에디터 도구 패널
+        # 에디터 도구 패널 (Editor 탭 전환 시만 표시)
         self.editor_tools_scroll = self._create_editor_tools_panel()
+        self.editor_tools_scroll.setFixedWidth(460)
+        self.editor_tools_scroll.hide()
+        root_layout.addWidget(self.editor_tools_scroll)
 
-        # 왼쪽 패널 스택
-        self.left_stack = QStackedWidget()
-        self.left_stack.setFixedWidth(460)
-        self.left_stack.addWidget(self._left_panel_container)  # index 0: 빈 위젯
-        self.left_stack.addWidget(self.editor_tools_scroll)  # index 1: 에디터 도구
-        self.left_stack.addWidget(self.i2i_tab.left_scroll)  # index 2: I2I 설정
-        self.left_stack.addWidget(self.inpaint_tab.left_scroll)  # index 3: Inpaint 설정
+        # left_stack 호환성 더미 (기존 코드에서 참조)
+        self.left_stack = QWidget()
+        self.left_stack.hide()
+        self.left_stack.setCurrentIndex = lambda i: None
+        self.left_stack.setFixedWidth = lambda w: None
+        self._left_panel_container = QWidget()
+        self.left_panel_scroll = QWidget()
+        self.generator_panel = QWidget()
 
-        root_layout.addWidget(self.left_stack)
-
-        # 우측 영역: 탭+히스토리(상단) + 도구바 + 대기열(하단)
-        right_area = QWidget()
-        right_layout = QVBoxLayout(right_area)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(0)
+        # 메인 영역
+        main_vbox = QVBoxLayout()
+        main_vbox.setContentsMargins(0, 0, 0, 0)
+        main_vbox.setSpacing(0)
 
         # 상단: 중앙 탭 + 히스토리 (가로)
         upper_area = QWidget()
@@ -108,10 +111,9 @@ class UISetupMixin:
 
         upper_layout.addLayout(center_vbox, 1)
         upper_layout.addWidget(self.history_panel)
-        right_layout.addWidget(upper_area, 1)
+        main_vbox.addWidget(upper_area, 1)
 
-        # 도구 바
-        # 도구바 — Vue TabBar가 대체하므로 숨김 (위젯 인스턴스는 유지)
+        # 도구바 (숨김 — Vue TabBar가 대체, 위젯 인스턴스만 유지)
         self._tools_bar = self._create_tools_bar()
         self._tools_bar.hide()
 
@@ -121,9 +123,9 @@ class UISetupMixin:
         self._bottom_layout.setContentsMargins(0, 0, 0, 0)
         self._bottom_layout.setSpacing(0)
         self._bottom_container.setMaximumHeight(230)
-        right_layout.addWidget(self._bottom_container, 0)
+        main_vbox.addWidget(self._bottom_container, 0)
 
-        root_layout.addWidget(right_area, 1)
+        root_layout.addLayout(main_vbox, 1)
 
         # 상태 메시지 라벨은 _setup_queue()에서 하단 컨테이너에 추가
         self.status_message_label = QLabel("")
