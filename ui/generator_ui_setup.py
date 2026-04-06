@@ -228,25 +228,46 @@ class UISetupMixin:
         from tabs.inpaint_tab import InpaintTab
         from tabs.backend_ui_tab import BackendUITab
 
-        # ── 중앙 영역: QTabWidget (Vue 탭들 + 네이티브 탭) ──
+        # ── 중앙 영역: QTabWidget (PyQt 탭바 상시 표시) ──
         self.center_tabs = QTabWidget()
         self.center_tabs.setUsesScrollButtons(True)
         self.center_tabs.tabBar().setExpanding(True)
-        self.center_tabs.tabBar().hide()  # Vue TabBar가 대체
+        self.center_tabs.setStyleSheet(f"""
+            QTabBar::tab {{
+                background: {get_color('bg_button')};
+                color: {get_color('text_muted')};
+                padding: 8px 16px;
+                margin: 2px 4px;
+                font-weight: 600;
+                border-radius: 6px;
+                border: 1px solid {get_color('border')};
+                font-size: 10pt;
+            }}
+            QTabBar::tab:selected {{
+                background: {get_color('bg_tertiary')};
+                color: {get_color('text_primary')};
+                border: 1px solid {get_color('accent')};
+            }}
+            QTabBar::tab:hover {{
+                background: {get_color('bg_button_hover')};
+                color: {get_color('text_primary')};
+            }}
+            QTabWidget::pane {{
+                border: none;
+            }}
+        """)
 
-        # Tab 0: Vue SPA
+        # Vue SPA (모든 Vue 탭)
         self.viewer_panel = self._create_viewer_panel()
-        self.center_tabs.addTab(self.viewer_panel, "Vue")
+        self.center_tabs.addTab(self.viewer_panel, "AI Studio")
 
-        # Tab 1: Editor (네이티브 PyQt)
+        # 네이티브 PyQt 탭
         self.mosaic_editor = MosaicEditor()
         self.center_tabs.addTab(self.mosaic_editor, "Editor")
 
-        # Tab 2: Web Browser (네이티브 PyQt)
         self.web_tab = BrowserTab(self)
         self.center_tabs.addTab(self.web_tab, "Web")
 
-        # Tab 3: Backend UI (네이티브 PyQt)
         self.backend_ui_tab = BackendUITab(self)
         self.center_tabs.addTab(self.backend_ui_tab, "Backend UI")
 

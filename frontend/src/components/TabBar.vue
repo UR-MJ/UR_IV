@@ -9,16 +9,7 @@
     >
       {{ tab.title }}
     </button>
-    <!-- 네이티브 PyQt 탭 (클릭 시 Python에 요청) -->
-    <button
-      v-for="ntab in nativeTabs"
-      :key="ntab.id"
-      class="tab-btn native"
-      :class="{ active: currentTab === ntab.id }"
-      @click="switchToNative(ntab.id)"
-    >
-      {{ ntab.title }}
-    </button>
+    <!-- 네이티브 탭은 PyQt QTabBar에서 처리 -->
   </div>
 </template>
 
