@@ -6,7 +6,30 @@ generator_settings.py, generator_actions.py 등 기존 코드가 수정 없이 �
 from PyQt6.QtCore import QObject, pyqtSignal
 
 
-class LineEditProxy(QObject):
+class _ProxyBase(QObject):
+    """모든 프록시의 공통 no-op 메서드"""
+    def setVisible(self, v): pass
+    def hide(self): pass
+    def show(self): pass
+    def installEventFilter(self, f): pass
+    def setStyleSheet(self, s): pass
+    def setToolTip(self, t): pass
+    def setFixedWidth(self, w): pass
+    def setFixedHeight(self, h): pass
+    def setFixedSize(self, *a): pass
+    def setMinimumHeight(self, h): pass
+    def setMaximumHeight(self, h): pass
+    def setMinimumWidth(self, w): pass
+    def setSizePolicy(self, *a): pass
+    def setFont(self, f): pass
+    def setCursor(self, c): pass
+    def setMenu(self, m): pass
+    def setObjectName(self, n): pass
+    def setEnabled(self, e): pass
+    def isEnabled(self): return True
+
+
+class LineEditProxy(_ProxyBase):
     """QLineEdit 호환 프록시"""
     textChanged = pyqtSignal(str)
     editingFinished = pyqtSignal()
@@ -57,7 +80,7 @@ class LineEditProxy(QObject):
             self.textChanged.emit(value)
 
 
-class TextEditProxy(QObject):
+class TextEditProxy(_ProxyBase):
     """QTextEdit / TagInputWidget 호환 프록시"""
     textChanged = pyqtSignal()
 
@@ -114,7 +137,7 @@ class TextEditProxy(QObject):
             self.textChanged.emit()
 
 
-class ComboBoxProxy(QObject):
+class ComboBoxProxy(_ProxyBase):
     """QComboBox 호환 프록시"""
     currentTextChanged = pyqtSignal(str)
     currentIndexChanged = pyqtSignal(int)
@@ -201,7 +224,7 @@ class ComboBoxProxy(QObject):
             self.currentIndexChanged.emit(idx)
 
 
-class CheckBoxProxy(QObject):
+class CheckBoxProxy(_ProxyBase):
     """QCheckBox 호환 프록시"""
     toggled = pyqtSignal(bool)
     stateChanged = pyqtSignal(int)
@@ -235,7 +258,7 @@ class CheckBoxProxy(QObject):
             self.stateChanged.emit(2 if checked else 0)
 
 
-class ButtonProxy(QObject):
+class ButtonProxy(_ProxyBase):
     """QPushButton 호환 프록시"""
     clicked = pyqtSignal()
     toggled = pyqtSignal(bool)
@@ -300,7 +323,7 @@ class ButtonProxy(QObject):
                 self.toggled.emit(checked)
 
 
-class GroupBoxProxy(QObject):
+class GroupBoxProxy(_ProxyBase):
     """QGroupBox 호환 프록시 (체크 가능)"""
     toggled = pyqtSignal(bool)
 
@@ -330,7 +353,7 @@ class GroupBoxProxy(QObject):
             self.toggled.emit(checked)
 
 
-class SliderProxy(QObject):
+class SliderProxy(_ProxyBase):
     """Steps/CFG 등 슬라이더+입력 쌍 프록시 (NumericSlider 패턴 호환)"""
     textChanged = pyqtSignal(str)
     editingFinished = pyqtSignal()
@@ -366,6 +389,9 @@ class SliderProxy(QObject):
     def setFixedWidth(self, w): pass
     def setAlignment(self, a): pass
     def installEventFilter(self, f): pass
+    def setVisible(self, v): pass
+    def hide(self): pass
+    def show(self): pass
 
     def _on_vue_changed(self, value: str):
         if self._value != value:
