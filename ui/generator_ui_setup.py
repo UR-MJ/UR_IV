@@ -81,13 +81,37 @@ class UISetupMixin:
         self.history_panel = self._create_history_panel()
         self.history_panel.setFixedWidth(240)
 
-        # 네이티브 탭바 — 더미 (Vue TabBar가 전부 처리)
+        # 네이티브 탭 전환 바 (네이티브 탭에서만 표시)
         self._native_tab_bar = QWidget()
-        self._native_tab_bar.hide()
+        self._native_tab_bar.setFixedHeight(36)
+        self._native_tab_bar.setStyleSheet(
+            f"background-color: {get_color('bg_primary')}; border-bottom: 1px solid {get_color('border')};"
+        )
+        _ntb_layout = QHBoxLayout(self._native_tab_bar)
+        _ntb_layout.setContentsMargins(8, 4, 8, 4)
+        _ntb_layout.setSpacing(6)
         self._native_tab_btns = {}
+        for tid, tlabel in [('vue', 'AI Studio'), ('editor', 'Editor'), ('web', 'Web'), ('backend', 'Backend UI')]:
+            btn = QPushButton(tlabel)
+            btn.setFixedHeight(28)
+            btn.setStyleSheet(
+                f"QPushButton {{ background: {get_color('bg_button')}; color: {get_color('text_muted')}; "
+                f"border: none; border-radius: 4px; padding: 4px 14px; font-size: 11px; font-weight: 600; }}"
+                f"QPushButton:hover {{ background: {get_color('bg_button_hover')}; color: {get_color('text_primary')}; }}"
+            )
+            btn.clicked.connect(lambda _, t=tid: self._switch_native_tab(t))
+            _ntb_layout.addWidget(btn)
+            self._native_tab_btns[tid] = btn
+        _ntb_layout.addStretch()
+        self._native_tab_bar.hide()
 
-        # 중앙에 QStackedWidget만 배치
-        upper_layout.addWidget(self.center_tabs, 1)
+        # 중앙: 네이티브 탭바 + QTabWidget
+        center_col = QVBoxLayout()
+        center_col.setContentsMargins(0, 0, 0, 0)
+        center_col.setSpacing(0)
+        center_col.addWidget(self._native_tab_bar)
+        center_col.addWidget(self.center_tabs, 1)
+        upper_layout.addLayout(center_col, 1)
         upper_layout.addWidget(self.history_panel)
         main_vbox.addWidget(upper_area, 1)
 
@@ -228,34 +252,9 @@ class UISetupMixin:
         from tabs.inpaint_tab import InpaintTab
         from tabs.backend_ui_tab import BackendUITab
 
-        # ── 중앙 영역: QTabWidget (PyQt 탭바 상시 표시) ──
+        # ── 중앙 영역: QTabWidget (탭바 숨김 — Vue가 전부 처리) ──
         self.center_tabs = QTabWidget()
-        self.center_tabs.setUsesScrollButtons(True)
-        self.center_tabs.tabBar().setExpanding(True)
-        self.center_tabs.setStyleSheet(f"""
-            QTabBar::tab {{
-                background: {get_color('bg_button')};
-                color: {get_color('text_muted')};
-                padding: 8px 16px;
-                margin: 2px 4px;
-                font-weight: 600;
-                border-radius: 6px;
-                border: 1px solid {get_color('border')};
-                font-size: 10pt;
-            }}
-            QTabBar::tab:selected {{
-                background: {get_color('bg_tertiary')};
-                color: {get_color('text_primary')};
-                border: 1px solid {get_color('accent')};
-            }}
-            QTabBar::tab:hover {{
-                background: {get_color('bg_button_hover')};
-                color: {get_color('text_primary')};
-            }}
-            QTabWidget::pane {{
-                border: none;
-            }}
-        """)
+        self.center_tabs.tabBar().hide()
 
         # Vue SPA (모든 Vue 탭)
         self.viewer_panel = self._create_viewer_panel()

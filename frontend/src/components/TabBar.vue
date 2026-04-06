@@ -1,5 +1,6 @@
 <template>
   <div class="tab-bar">
+    <!-- Vue 탭들 -->
     <button
       v-for="tab in tabs"
       :key="tab.name"
@@ -9,7 +10,19 @@
     >
       {{ tab.title }}
     </button>
-    <!-- 네이티브 탭은 PyQt QTabBar에서 처리 -->
+
+    <div class="sep" />
+
+    <!-- 네이티브 탭들 (Editor/Web/Backend) -->
+    <button
+      v-for="ntab in nativeTabs"
+      :key="ntab.id"
+      class="tab-btn native"
+      :class="{ active: currentTab === ntab.id }"
+      @click="switchToNative(ntab.id)"
+    >
+      {{ ntab.title }}
+    </button>
   </div>
 </template>
 
@@ -44,12 +57,14 @@ const emit = defineEmits(['tab-changed'])
 function switchTo(tab) {
   currentTab.value = tab.name
   router.push(tab.path)
+  // Vue 탭 → QTabWidget index 0 (Vue SPA)
   requestAction('vue_tab_switch', { tab: tab.name })
   emit('tab-changed', tab.name)
 }
 
 function switchToNative(id) {
   currentTab.value = id
+  // 네이티브 탭 → QTabWidget index 변경
   requestAction('native_tab_switch', { tab: id })
   emit('tab-changed', id)
 }
@@ -59,20 +74,26 @@ function switchToNative(id) {
 .tab-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 5px;
+  padding: 6px 12px;
   background: #0A0A0A;
   border-bottom: 1px solid #1A1A1A;
   justify-content: center;
+  align-items: center;
 }
-
+.sep {
+  width: 1px;
+  height: 20px;
+  background: #2A2A2A;
+  margin: 0 4px;
+}
 .tab-btn {
-  padding: 8px 16px;
+  padding: 6px 14px;
   background: #181818;
   border: 1px solid #1A1A1A;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #585858;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;

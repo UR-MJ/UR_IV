@@ -408,6 +408,9 @@ class GeneratorMainUI(
         idx = tab_map.get(tab_id, 0)
         self.center_tabs.setCurrentIndex(idx)
 
+        # Vue 모드면 탭바 숨김, 네이티브면 표시
+        self._native_tab_bar.setVisible(tab_id != 'vue')
+
         if tab_id == 'editor':
             self.centralWidget().layout().insertWidget(0, self.editor_tools_scroll)
             self.editor_tools_scroll.show()
