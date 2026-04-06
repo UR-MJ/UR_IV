@@ -93,7 +93,7 @@ class ApiStatusButton(QPushButton):
         """연결 성공 (체크마크 그리기)"""
         self._state = self.STATE_CONNECTED
         self._backend_name = backend_name
-        self._label_text = f"{backend_name} 연결됨"
+        self._label_text = f"{backend_name} 연결됨 ✓"
         self._frame = 0
         self._check_progress = 0.0
         self._pulse_phase = 0.0

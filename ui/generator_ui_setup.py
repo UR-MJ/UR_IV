@@ -533,33 +533,23 @@ class UISetupMixin:
             f"border: none; text-align: left; font-size: 10px; padding: 4px 0; }}"
         )
 
-        # ── 1. 전체 프롬프트 (접이식, 기본 접힘) ──
-        self._final_prompt_toggle = QPushButton("▶ 최종 프롬프트")
-        self._final_prompt_toggle.setCheckable(True)
-        self._final_prompt_toggle.setChecked(False)
-        self._final_prompt_toggle.setStyleSheet(_toggle_style)
-        layout.addWidget(self._final_prompt_toggle)
-
+        # ── 1. 전체 프롬프트 (기본 펼침) ──
+        layout.addWidget(self._prompt_label("최종 프롬프트"))
         self.total_prompt_display = QTextEdit()
         self.total_prompt_display.setPlaceholderText("Final output prompt...")
         self.total_prompt_display.setMinimumHeight(60)
         self.total_prompt_display.document().contentsChanged.connect(self._adjust_total_prompt_height)
         self.total_prompt_display.textChanged.connect(self._update_token_count)
-        self.total_prompt_display.hide()
         layout.addWidget(self.total_prompt_display)
 
         self.token_count_label = QLabel("TOKENS: 0 / 75")
         self.token_count_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.token_count_label.setStyleSheet(f"font-size: 9px; color: {get_color('text_muted')};")
-        self.token_count_label.hide()
         layout.addWidget(self.token_count_label)
 
-        self._final_prompt_toggle.toggled.connect(
-            lambda on: (self.total_prompt_display.setVisible(on),
-                        self.token_count_label.setVisible(on),
-                        self._final_prompt_toggle.setText(
-                            "▼ 최종 프롬프트" if on else "▶ 최종 프롬프트"))
-        )
+        # 접이식 토글 더미 (호환성)
+        self._final_prompt_toggle = QPushButton()
+        self._final_prompt_toggle.hide()
 
         # ── 2. 인물 수 / 캐릭터 / 작품명 (각 한 줄) ──
         layout.addWidget(self._prompt_label("인물 수"))
@@ -583,7 +573,6 @@ class UISetupMixin:
         self.artist_input = TagInputWidget()
         self.artist_input.setPlaceholderText("작가 태그...")
         self.artist_input.setMinimumHeight(36)
-        self.artist_input.setMaximumHeight(50)
         self.btn_lock_artist = QPushButton("🔒")
         self.btn_lock_artist.setCheckable(True)
         self.btn_lock_artist.setFixedSize(36, 36)
@@ -597,7 +586,6 @@ class UISetupMixin:
         self.prefix_prompt_text = TagInputWidget()
         self.prefix_prompt_text.setPlaceholderText("year 2025, masterpiece, best quality, ...")
         self.prefix_prompt_text.setMinimumHeight(50)
-        self.prefix_prompt_text.setMaximumHeight(80)
         layout.addWidget(self.prefix_prompt_text)
 
         # ── 5. 메인 프롬프트 ──
@@ -617,7 +605,6 @@ class UISetupMixin:
         self.suffix_prompt_text = TagInputWidget()
         self.suffix_prompt_text.setPlaceholderText("후행 고정 태그...")
         self.suffix_prompt_text.setMinimumHeight(50)
-        self.suffix_prompt_text.setMaximumHeight(80)
         layout.addWidget(self.suffix_prompt_text)
 
         # ── 7. 네거티브 프롬프트 ──
@@ -625,7 +612,6 @@ class UISetupMixin:
         self.neg_prompt_text = TagInputWidget()
         self.neg_prompt_text.setPlaceholderText("lowres, bad quality, ...")
         self.neg_prompt_text.setMinimumHeight(50)
-        self.neg_prompt_text.setMaximumHeight(80)
         layout.addWidget(self.neg_prompt_text)
 
         # ── 8. 제외 프롬프트 (접이식) ──
@@ -1010,14 +996,14 @@ class UISetupMixin:
             tools_row.addWidget(btn)
 
         tools_row.addStretch()
+        vl.addLayout(tools_row)
 
-        # LoRA 활성 패널
+        # ── 행 3: LoRA 활성 패널 (스택 공간) ──
         from widgets.lora_panel import LoraActivePanel
         self.lora_active_panel = LoraActivePanel()
         self.lora_active_panel.hide()
-        tools_row.addWidget(self.lora_active_panel)
+        vl.addWidget(self.lora_active_panel)
 
-        vl.addLayout(tools_row)
         return bar
 
     def _create_adetailer_slot_ui(self, title, default_model):
