@@ -156,13 +156,20 @@ function doRedo() {
 }
 
 async function doOp(operation, params = {}) {
+  if (!imagePath.value) { console.log('[Editor] No image loaded'); return }
+  console.log('[Editor] doOp:', operation, params)
   const backend = await getBackend()
-  if (!backend.editorProcess) return
+  if (!backend.editorProcess) { console.log('[Editor] editorProcess not available'); return }
   backend.editorProcess(imagePath.value, operation, JSON.stringify(params), (json) => {
     try {
       const result = JSON.parse(json)
-      if (result.path) pushState(result.path)
-    } catch {}
+      console.log('[Editor] result:', result)
+      if (result.path) {
+        pushState(result.path)
+      } else if (result.error) {
+        console.error('[Editor] error:', result.error)
+      }
+    } catch (e) { console.error('[Editor] parse error:', e) }
   })
 }
 

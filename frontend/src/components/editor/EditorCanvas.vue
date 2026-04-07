@@ -1,52 +1,53 @@
 <template>
-  <div class="canvas-container" ref="containerRef">
-    <!-- 원본 이미지 -->
-    <canvas ref="mainCanvas" class="main-canvas"
-      @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp"
-      @mouseleave="onMouseUp" @wheel.prevent="onWheel"
-    />
-    <!-- 선택/마스크 오버레이 -->
-    <canvas ref="overlayCanvas" class="overlay-canvas"
-      @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp"
-      @mouseleave="onMouseUp"
-    />
+  <div class="canvas-container" ref="containerRef"
+    @wheel.prevent="onWheel"
+    @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp"
+    @mouseleave="onMouseUp"
+  >
+    <canvas ref="canvasEl" :style="canvasStyle" />
     <div class="canvas-info">
       {{ imgWidth }} × {{ imgHeight }}
       <template v-if="hasSelection"> | 선택: {{ selRect.w }}×{{ selRect.h }}</template>
-      <template v-if="zoom !== 1"> | {{ Math.round(zoom * 100) }}%</template>
+      | {{ Math.round(zoom * 100) }}% | {{ Math.round(rotation) }}°
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 
 const props = defineProps({
   imageSrc: { type: String, default: '' },
-  tool: { type: String, default: 'box' },     // box, lasso, brush, eraser
+  tool: { type: String, default: 'box' },
   brushSize: { type: Number, default: 20 },
-  brushColor: { type: String, default: '#FF0000' },
 })
 
-const emit = defineEmits(['selection-changed', 'mask-changed', 'color-picked'])
+const emit = defineEmits(['selection-changed', 'mask-changed'])
 
 const containerRef = ref(null)
-const mainCanvas = ref(null)
-const overlayCanvas = ref(null)
+const canvasEl = ref(null)
 const imgWidth = ref(0)
 const imgHeight = ref(0)
 const zoom = ref(1)
+const rotation = ref(0)
+const panX = ref(0)
+const panY = ref(0)
 const hasSelection = ref(false)
 const selRect = ref({ x: 0, y: 0, w: 0, h: 0 })
 
 let ctx = null
-let overlayCtx = null
 let sourceImg = null
 let drawing = false
+let panning = false
 let startX = 0, startY = 0
-let maskData = null  // Uint8Array mask
+let panStartX = 0, panStartY = 0
 
-// 이미지 로드
+const canvasStyle = computed(() => ({
+  transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value}) rotate(${rotation.value}deg)`,
+  transformOrigin: 'center center',
+  cursor: panning ? 'grabbing' : (props.tool === 'brush' || props.tool === 'eraser' ? 'crosshair' : 'default'),
+}))
+
 watch(() => props.imageSrc, (src) => {
   if (!src) return
   const img = new Image()
@@ -54,169 +55,141 @@ watch(() => props.imageSrc, (src) => {
     sourceImg = img
     imgWidth.value = img.naturalWidth
     imgHeight.value = img.naturalHeight
-    resizeCanvases()
-    drawImage()
-    clearOverlay()
-    maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
+    zoom.value = 1
+    rotation.value = 0
+    panX.value = 0
+    panY.value = 0
+    drawAll()
   }
   img.src = src
 })
 
-function resizeCanvases() {
-  if (!mainCanvas.value || !sourceImg) return
-  const c = mainCanvas.value
-  const o = overlayCanvas.value
+function drawAll() {
+  if (!canvasEl.value || !sourceImg) return
+  const c = canvasEl.value
   c.width = sourceImg.naturalWidth
   c.height = sourceImg.naturalHeight
-  o.width = c.width
-  o.height = c.height
   ctx = c.getContext('2d')
-  overlayCtx = o.getContext('2d')
-}
-
-function drawImage() {
-  if (!ctx || !sourceImg) return
-  ctx.clearRect(0, 0, mainCanvas.value.width, mainCanvas.value.height)
+  ctx.clearRect(0, 0, c.width, c.height)
   ctx.drawImage(sourceImg, 0, 0)
+
+  // 선택 영역 그리기
+  if (hasSelection.value) {
+    const s = selRect.value
+    ctx.strokeStyle = '#E2B340'
+    ctx.lineWidth = 2 / zoom.value
+    ctx.setLineDash([6 / zoom.value, 4 / zoom.value])
+    ctx.strokeRect(s.x, s.y, s.w, s.h)
+    ctx.setLineDash([])
+    ctx.fillStyle = 'rgba(226, 179, 64, 0.15)'
+    ctx.fillRect(s.x, s.y, s.w, s.h)
+  }
 }
 
-function clearOverlay() {
-  if (!overlayCtx) return
-  overlayCtx.clearRect(0, 0, overlayCanvas.value.width, overlayCanvas.value.height)
-  hasSelection.value = false
-}
-
-function getCanvasPos(e) {
-  const rect = overlayCanvas.value.getBoundingClientRect()
-  const sx = overlayCanvas.value.width / rect.width
-  const sy = overlayCanvas.value.height / rect.height
-  return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy }
+function getImagePos(e) {
+  if (!canvasEl.value) return { x: 0, y: 0 }
+  const rect = canvasEl.value.getBoundingClientRect()
+  return {
+    x: (e.clientX - rect.left) / (rect.width / canvasEl.value.width),
+    y: (e.clientY - rect.top) / (rect.height / canvasEl.value.height),
+  }
 }
 
 function onMouseDown(e) {
-  const pos = getCanvasPos(e)
+  // Alt+클릭 → 팬
+  if (e.altKey) {
+    panning = true
+    panStartX = e.clientX - panX.value
+    panStartY = e.clientY - panY.value
+    return
+  }
+  const pos = getImagePos(e)
   drawing = true
   startX = pos.x
   startY = pos.y
 
   if (props.tool === 'brush' || props.tool === 'eraser') {
-    drawBrushStroke(pos)
+    drawBrush(pos)
   }
 }
 
 function onMouseMove(e) {
+  if (panning) {
+    panX.value = e.clientX - panStartX
+    panY.value = e.clientY - panStartY
+    return
+  }
   if (!drawing) return
-  const pos = getCanvasPos(e)
+  const pos = getImagePos(e)
 
   if (props.tool === 'box') {
-    // 사각형 선택 프리뷰
-    clearOverlay()
-    const w = pos.x - startX
-    const h = pos.y - startY
-    overlayCtx.strokeStyle = '#E2B340'
-    overlayCtx.lineWidth = 2
-    overlayCtx.setLineDash([5, 5])
-    overlayCtx.strokeRect(startX, startY, w, h)
-    overlayCtx.setLineDash([])
-    // 반투명 채움
-    overlayCtx.fillStyle = 'rgba(226, 179, 64, 0.1)'
-    overlayCtx.fillRect(startX, startY, w, h)
+    drawAll()
+    // 임시 선택 영역
+    ctx.strokeStyle = '#E2B340'
+    ctx.lineWidth = 2 / zoom.value
+    ctx.setLineDash([6 / zoom.value, 4 / zoom.value])
+    ctx.strokeRect(startX, startY, pos.x - startX, pos.y - startY)
+    ctx.setLineDash([])
+    ctx.fillStyle = 'rgba(226, 179, 64, 0.15)'
+    ctx.fillRect(startX, startY, pos.x - startX, pos.y - startY)
   } else if (props.tool === 'brush' || props.tool === 'eraser') {
-    drawBrushStroke(pos)
+    drawBrush(pos)
   }
 }
 
 function onMouseUp(e) {
+  if (panning) { panning = false; return }
   if (!drawing) return
   drawing = false
-  const pos = getCanvasPos(e)
+  const pos = getImagePos(e)
 
   if (props.tool === 'box') {
     const x1 = Math.min(startX, pos.x)
     const y1 = Math.min(startY, pos.y)
-    const x2 = Math.max(startX, pos.x)
-    const y2 = Math.max(startY, pos.y)
-    selRect.value = { x: Math.round(x1), y: Math.round(y1), w: Math.round(x2 - x1), h: Math.round(y2 - y1) }
-    hasSelection.value = selRect.value.w > 5 && selRect.value.h > 5
-    if (hasSelection.value) {
+    const w = Math.abs(pos.x - startX)
+    const h = Math.abs(pos.y - startY)
+    if (w > 3 && h > 3) {
+      selRect.value = { x: Math.round(x1), y: Math.round(y1), w: Math.round(w), h: Math.round(h) }
+      hasSelection.value = true
       emit('selection-changed', selRect.value)
-      // 마스크에 선택 영역 기록
-      fillMaskRect(x1, y1, x2, y2)
     }
+    drawAll()
   }
 }
 
-function drawBrushStroke(pos) {
-  if (!overlayCtx) return
-  const r = props.brushSize
+function drawBrush(pos) {
+  if (!ctx) return
+  const r = props.brushSize / zoom.value
   if (props.tool === 'eraser') {
-    overlayCtx.globalCompositeOperation = 'destination-out'
-    overlayCtx.beginPath()
-    overlayCtx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
-    overlayCtx.fill()
-    overlayCtx.globalCompositeOperation = 'source-over'
-    // 마스크에서 제거
-    fillMaskCircle(pos.x, pos.y, r, 0)
-  } else {
-    overlayCtx.fillStyle = 'rgba(255, 0, 0, 0.4)'
-    overlayCtx.beginPath()
-    overlayCtx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
-    overlayCtx.fill()
-    // 마스크에 추가
-    fillMaskCircle(pos.x, pos.y, r, 255)
+    ctx.globalCompositeOperation = 'destination-out'
   }
-  emit('mask-changed', getMaskBase64())
-}
-
-function fillMaskRect(x1, y1, x2, y2) {
-  if (!maskData) return
-  for (let y = Math.max(0, Math.floor(y1)); y < Math.min(imgHeight.value, Math.ceil(y2)); y++) {
-    for (let x = Math.max(0, Math.floor(x1)); x < Math.min(imgWidth.value, Math.ceil(x2)); x++) {
-      maskData[y * imgWidth.value + x] = 255
-    }
-  }
-}
-
-function fillMaskCircle(cx, cy, r, val) {
-  if (!maskData) return
-  for (let y = Math.max(0, Math.floor(cy - r)); y < Math.min(imgHeight.value, Math.ceil(cy + r)); y++) {
-    for (let x = Math.max(0, Math.floor(cx - r)); x < Math.min(imgWidth.value, Math.ceil(cx + r)); x++) {
-      if ((x - cx) ** 2 + (y - cy) ** 2 <= r ** 2) {
-        maskData[y * imgWidth.value + x] = val
-      }
-    }
-  }
-}
-
-function getMaskBase64() {
-  if (!maskData || !imgWidth.value) return ''
-  const c = document.createElement('canvas')
-  c.width = imgWidth.value
-  c.height = imgHeight.value
-  const cx = c.getContext('2d')
-  const imgData = cx.createImageData(imgWidth.value, imgHeight.value)
-  for (let i = 0; i < maskData.length; i++) {
-    imgData.data[i * 4] = imgData.data[i * 4 + 1] = imgData.data[i * 4 + 2] = maskData[i]
-    imgData.data[i * 4 + 3] = 255
-  }
-  cx.putImageData(imgData, 0, 0)
-  return c.toDataURL('image/png')
+  ctx.fillStyle = 'rgba(255, 0, 0, 0.4)'
+  ctx.beginPath()
+  ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.globalCompositeOperation = 'source-over'
 }
 
 function onWheel(e) {
-  const delta = e.deltaY > 0 ? 0.9 : 1.1
-  zoom.value = Math.max(0.1, Math.min(5, zoom.value * delta))
-  if (containerRef.value) {
-    mainCanvas.value.style.transform = `scale(${zoom.value})`
-    overlayCanvas.value.style.transform = `scale(${zoom.value})`
+  if (e.shiftKey) {
+    // Shift+휠 → 부드러운 회전
+    rotation.value += e.deltaY > 0 ? 5 : -5
+  } else {
+    // Ctrl+휠 또는 기본 휠 → 줌
+    const delta = e.deltaY > 0 ? 0.9 : 1.1
+    zoom.value = Math.max(0.1, Math.min(10, zoom.value * delta))
   }
 }
 
-// 외부 API
-function clearSelection() { clearOverlay(); hasSelection.value = false; maskData?.fill(0) }
+function clearSelection() {
+  hasSelection.value = false
+  selRect.value = { x: 0, y: 0, w: 0, h: 0 }
+  drawAll()
+}
+
 function getSelection() { return hasSelection.value ? selRect.value : null }
 
-defineExpose({ clearSelection, getSelection, getMaskBase64, clearOverlay })
+defineExpose({ clearSelection, getSelection, drawAll })
 
 onMounted(() => {
   if (props.imageSrc) {
@@ -225,8 +198,7 @@ onMounted(() => {
       sourceImg = img
       imgWidth.value = img.naturalWidth
       imgHeight.value = img.naturalHeight
-      resizeCanvases()
-      drawImage()
+      drawAll()
     }
     img.src = props.imageSrc
   }
@@ -239,23 +211,14 @@ onMounted(() => {
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; background: #111;
 }
-.main-canvas, .overlay-canvas {
-  max-width: 100%; max-height: 100%; object-fit: contain;
-  transform-origin: center center;
-}
-.overlay-canvas {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: auto; cursor: crosshair;
-}
-.main-canvas {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
+canvas {
+  max-width: 90%; max-height: 90%;
+  transition: transform 0.05s ease-out;
 }
 .canvas-info {
   position: absolute; bottom: 8px; right: 12px;
   color: #585858; font-size: 11px;
   background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px;
+  pointer-events: none;
 }
 </style>

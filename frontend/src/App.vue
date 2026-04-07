@@ -149,7 +149,13 @@ async function loadHistory() {
 
 // 클릭 시 우클릭 메뉴 닫기
 function onGlobalClick() { hideCtxMenu() }
-onMounted(() => document.addEventListener('click', onGlobalClick))
+onMounted(() => {
+  document.addEventListener('click', onGlobalClick)
+  // Ctrl+휠 페이지 줌 차단 (캔버스 줌과 분리)
+  document.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) e.preventDefault()
+  }, { passive: false })
+})
 onUnmounted(() => document.removeEventListener('click', onGlobalClick))
 
 onMounted(async () => {
