@@ -37,6 +37,11 @@ class BrowserTab(QWidget):
         btn_go.setFixedWidth(60)
         btn_go.clicked.connect(self.navigate_to_url)
         
+        btn_vue_home = QPushButton("← AI Studio")
+        btn_vue_home.setFixedWidth(100)
+        btn_vue_home.clicked.connect(self._go_vue_home)
+
+        nav_bar.addWidget(btn_vue_home)
         nav_bar.addWidget(btn_back)
         nav_bar.addWidget(btn_home)
         nav_bar.addWidget(self.url_input)
@@ -101,6 +106,15 @@ class BrowserTab(QWidget):
     def go_back(self):
         """뒤로 가기"""
         self.web_view.back()
+
+    def _go_vue_home(self):
+        """Vue SPA(AI Studio)로 복귀"""
+        parent = self.parent()
+        while parent:
+            if hasattr(parent, '_main_stack'):
+                parent._main_stack.setCurrentIndex(0)
+                return
+            parent = parent.parent()
 
     def navigate_to_url(self):
         """URL로 이동"""

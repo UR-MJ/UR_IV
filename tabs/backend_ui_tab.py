@@ -37,6 +37,11 @@ class BackendUITab(QWidget):
         top_bar.setContentsMargins(8, 6, 8, 6)
         top_bar.setSpacing(6)
 
+        btn_vue_home = QPushButton("← AI Studio")
+        btn_vue_home.setFixedWidth(100)
+        btn_vue_home.clicked.connect(self._go_vue_home)
+        top_bar.addWidget(btn_vue_home)
+
         self._status_label = QLabel("백엔드 UI")
         self._status_label.setStyleSheet(
             f"color: {get_color('text_secondary')}; font-weight: bold; font-size: 13px;"
@@ -125,6 +130,15 @@ class BackendUITab(QWidget):
                 pass
 
     # ── 공개 API ──
+
+    def _go_vue_home(self):
+        """Vue SPA로 복귀"""
+        parent = self.parent()
+        while parent:
+            if hasattr(parent, '_main_stack'):
+                parent._main_stack.setCurrentIndex(0)
+                return
+            parent = parent.parent()
 
     def load_backend_ui(self):
         """현재 백엔드에 맞는 UI를 로드"""

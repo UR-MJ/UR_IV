@@ -6,15 +6,21 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from utils.theme_manager import get_color
 
 
-def _create_default_icon() -> QIcon:
-    """기본 앱 아이콘 생성 (간단한 'A' 아이콘)"""
+def _get_app_icon() -> QIcon:
+    """앱 전용 아이콘 로드 (없으면 기본 생성)"""
+    import os
+    icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icons', 'app_icon.svg')
+    if os.path.exists(icon_path):
+        return QIcon(icon_path)
+    
+    # 폴백: 아이콘 파일이 없을 경우 기존처럼 'A' 아이콘 생성
     pix = QPixmap(64, 64)
-    pix.fill(QColor(88, 101, 242))  # Discord-like blue
+    pix.fill(QColor(250, 204, 21))  # Gemini Yellow
     painter = QPainter(pix)
-    painter.setPen(QColor(255, 255, 255))
+    painter.setPen(QColor(0, 0, 0))
     font = QFont("Arial", 36, QFont.Weight.Bold)
     painter.setFont(font)
-    painter.drawText(pix.rect(), 0x0084, "A")  # AlignCenter
+    painter.drawText(pix.rect(), 0x0084, "A")
     painter.end()
     return QIcon(pix)
 
@@ -27,7 +33,7 @@ class TrayManager(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self._icon = _create_default_icon()
+        self._icon = _get_app_icon()
         self._tray = QSystemTrayIcon(self._icon, self)
         self._tray.setToolTip("AI Studio Pro")
 

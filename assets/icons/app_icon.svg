@@ -1,0 +1,12 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background: Rounded Square (Matching UI Radius) -->
+  <rect width="512" height="512" rx="100" fill="#0A0A0A"/>
+  
+  <!-- Central Symbol: Geometric AI Spark -->
+  <path d="M256 80L290.5 221.5L432 256L290.5 290.5L256 432L221.5 290.5L80 256L221.5 221.5L256 80Z" fill="#FACC15"/>
+  
+  <!-- Subtle Inner Detail: Tech Lines -->
+  <circle cx="256" cy="256" r="40" fill="#0A0A0A"/>
+  <rect x="246" y="216" width="20" height="80" rx="10" fill="#FACC15"/>
+  <rect x="216" y="246" width="80" height="20" rx="10" fill="#FACC15"/>
+</svg>

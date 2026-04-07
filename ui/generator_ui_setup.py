@@ -67,25 +67,26 @@ class UISetupMixin:
         if os.path.exists(frontend_path):
             self.vue_viewer.setUrl(QUrl.fromLocalFile(frontend_path))
 
-        # QStackedWidget: 0=Vue SPA, 1=Editor, 2=Web, 3=Backend
+        # QStackedWidget: 0=Vue SPA, 1=Web, 2=Backend
         from PyQt6.QtWidgets import QStackedWidget
         self._main_stack = QStackedWidget()
         self._main_stack.setContentsMargins(0, 0, 0, 0)
         self._main_stack.addWidget(self.vue_viewer)  # index 0
 
-        from tabs.editor_tab import MosaicEditor
-        self.mosaic_editor = MosaicEditor()
-        self._main_stack.addWidget(self.mosaic_editor)  # index 1
-
-        # Web Browser (별도 QWebEngineView)
+        # Web Browser (별도 QWebEngineView — iframe 보안 우회)
         from tabs.browser_tab import BrowserTab
         self.web_tab = BrowserTab(self)
-        self._main_stack.addWidget(self.web_tab)  # index 2
+        self._main_stack.addWidget(self.web_tab)  # index 1
 
         # Backend UI (별도 QWebEngineView)
         from tabs.backend_ui_tab import BackendUITab
         self.backend_ui_tab = BackendUITab(self)
-        self._main_stack.addWidget(self.backend_ui_tab)  # index 3
+        self._main_stack.addWidget(self.backend_ui_tab)  # index 2
+
+        # Editor는 Vue에서 처리 (PyQt MosaicEditor 제거)
+        from tabs.editor_tab import MosaicEditor
+        self.mosaic_editor = MosaicEditor()
+        self.mosaic_editor.setParent(None)  # 화면에 추가하지 않음
 
         self.setCentralWidget(self._main_stack)
 

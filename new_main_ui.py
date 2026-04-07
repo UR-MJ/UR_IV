@@ -25,6 +25,12 @@ class ButtonCursorFilter(QObject):
 
 def main():
     """메인 실행 함수"""
+    # 윈도우 작업 표시줄 아이콘 해결 (AppUserModelID 설정)
+    if sys.platform == 'win32':
+        import ctypes
+        myappid = 'mycompany.myproduct.subproduct.version' # 임의의 고유 ID
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
@@ -32,6 +38,12 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("AI Studio Pro")
     app.setOrganizationName("AI Studio")
+
+    # 앱 전역 아이콘 설정 (작업 표시줄 및 트레이 기본값)
+    from PyQt6.QtGui import QIcon
+    icon_path = os.path.join(os.path.dirname(__file__), 'assets', 'icons', 'app_icon.svg')
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
     
     # PyQt 스타일 완전 제거 — Vue가 모든 UI 스타일링 담당
     app.setStyleSheet("")

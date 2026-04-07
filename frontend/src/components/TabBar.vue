@@ -33,7 +33,6 @@ const tabs = routes.map(r => ({
 }))
 
 const nativeTabs = [
-  { id: 'editor', title: 'Editor' },
   { id: 'web', title: 'Web' },
   { id: 'backend', title: 'Backend UI' },
 ]

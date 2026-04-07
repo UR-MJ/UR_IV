@@ -395,7 +395,7 @@ class GeneratorMainUI(
 
     def _switch_native_tab(self, tab_id: str):
         """네이티브 탭 전환 (QStackedWidget)"""
-        tab_map = {'vue': 0, 'editor': 1, 'web': 2, 'backend': 3}
+        tab_map = {'vue': 0, 'web': 1, 'backend': 2}
         idx = tab_map.get(tab_id, 0)
         if hasattr(self, '_main_stack'):
             self._main_stack.setCurrentIndex(idx)
