@@ -67,8 +67,17 @@ class UISetupMixin:
         if os.path.exists(frontend_path):
             self.vue_viewer.setUrl(QUrl.fromLocalFile(frontend_path))
 
-        # QWebEngineView를 중앙 위젯으로 직접 설정 (레이아웃 없음)
-        self.setCentralWidget(self.vue_viewer)
+        # QStackedWidget: 0=Vue SPA, 1=Editor(PyQt)
+        from PyQt6.QtWidgets import QStackedWidget
+        self._main_stack = QStackedWidget()
+        self._main_stack.setContentsMargins(0, 0, 0, 0)
+        self._main_stack.addWidget(self.vue_viewer)  # index 0
+
+        from tabs.editor_tab import MosaicEditor
+        self.mosaic_editor = MosaicEditor()
+        self._main_stack.addWidget(self.mosaic_editor)  # index 1
+
+        self.setCentralWidget(self._main_stack)
 
         # ── 프록시 위젯 초기화 ──
         self._init_prompt_proxies()

@@ -40,6 +40,13 @@ class GeneratorMainUI(
         self.setWindowTitle("AI Studio Pro")
         self.setAcceptDrops(True)
 
+        # 앱 아이콘 설정
+        from PyQt6.QtGui import QIcon
+        import os
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icons', 'app_icon.svg')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         self.prompt_cleaner = get_prompt_cleaner()
 
         # 백엔드 선택 다이얼로그를 먼저 표시 (UI 생성 전 — 빠른 시작)

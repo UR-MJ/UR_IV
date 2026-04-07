@@ -201,9 +201,9 @@ class VueBridge(QObject):
                 y2 = params.get('y2', img.shape[0])
                 img = img[int(y1):int(y2), int(x1):int(x2)]
 
-            # 결과 저장
+            # 결과 저장 (에디터 전용 폴더 — 히스토리에 안 나타남)
             import os, time, random as rnd
-            out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'generated_images')
+            out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'image_cache', 'editor_temp')
             os.makedirs(out_dir, exist_ok=True)
             out_path = os.path.join(out_dir, f"edited_{int(time.time())}_{rnd.randint(100,999)}.png")
             cv2.imwrite(out_path, img)

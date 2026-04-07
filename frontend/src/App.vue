@@ -112,8 +112,13 @@ function ctxCopyPath() {
 function ctxDelete() { action('delete_image', { path: ctxMenu.value.path }); hideCtxMenu() }
 
 function selectHistoryImage(path) {
+  // Vue 뷰어에서 직접 표시 (Python 윈도우 안 뜸)
   currentImage.value = path
-  action('display_image', { path })
+  const img = new Image()
+  img.onload = () => {
+    resolution.value = `${img.naturalWidth} × ${img.naturalHeight}`
+  }
+  img.src = 'file:///' + path
 }
 
 function onTabChanged(tabName) {
