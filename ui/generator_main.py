@@ -456,10 +456,8 @@ class GeneratorMainUI(
             path, _ = QFileDialog.getOpenFileName(
                 self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
             if path:
-                import json as _json
-                self.vue_bridge.imageGenerated.emit(
-                    _json.dumps({'path': path.replace('\\', '/'), 'width': 0, 'height': 0, 'seed': 0})
-                )
+                # PNGInfo/Inpaint용 — 히스토리에 추가하지 않음
+                self.vue_bridge.inpaintImageLoaded.emit(path.replace('\\', '/'))
         elif action == 'generate_i2i':
             # Vue I2I → Python 백엔드로 전달
             self.show_status("I2I 생성 요청 수신")
@@ -541,6 +539,106 @@ class GeneratorMainUI(
                 self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
             if path:
                 self.vue_bridge.editorImageLoaded.emit(path.replace('\\', '/'))
+
+        # ── Gallery 액션 ──
+        elif action == 'gallery_open_folder':
+            from PyQt6.QtWidgets import QFileDialog
+            folder = QFileDialog.getExistingDirectory(self, "폴더 선택")
+            if folder:
+                self.vue_bridge.galleryFolderLoaded.emit(folder.replace('\\', '/'))
+        elif action == 'gallery_load_exif':
+            path = payload.get('path', '')
+            if path:
+                try:
+                    from PIL import Image as PILImage
+                    img = PILImage.open(path)
+                    info = img.info.get('parameters', '')
+                    self.vue_bridge.exifLoaded.emit(json.dumps({
+                        'path': path.replace('\\', '/'), 'exif': info
+                    }))
+                except Exception:
+                    pass
+        elif action == 'gallery_send_exif_to_t2i':
+            # EXIF에서 프롬프트 추출 → T2I에 적용
+            exif_text = payload.get('exif', '')
+            if exif_text and hasattr(self, 'handle_prompt_only_transfer'):
+                # 파싱
+                parts = exif_text.split('\nNegative prompt: ')
+                prompt = parts[0].strip()
+                negative = parts[1].split('\nSteps: ')[0].strip() if len(parts) > 1 else ''
+                self.handle_prompt_only_transfer(prompt, negative)
+                self.show_status("EXIF → T2I 프롬프트 전송됨")
+        elif action == 'gallery_send_to_queue':
+            path = payload.get('path', '')
+            if path and hasattr(self, '_add_current_to_queue'):
+                self._add_current_to_queue()
+        elif action == 'gallery_send_to_upscale':
+            path = payload.get('path', '')
+            if path and hasattr(self, 'upscale_tab'):
+                self.upscale_tab._add_file(path)
+                self.show_status("Upscale로 전송됨")
+
+        # ── PNGInfo 액션 ──
+        elif action == 'pnginfo_send_prompt':
+            prompt = payload.get('prompt', '')
+            negative = payload.get('negative', '')
+            if hasattr(self, 'handle_prompt_only_transfer'):
+                self.handle_prompt_only_transfer(prompt, negative)
+                self.show_status("프롬프트 → T2I 전송됨")
+        elif action == 'pnginfo_generate':
+            # EXIF 설정으로 즉시 생성
+            if hasattr(self, 'handle_immediate_generation'):
+                self.handle_immediate_generation(payload)
+        elif action == 'pnginfo_send_to_i2i':
+            path = payload.get('path', '')
+            if path and hasattr(self, '_handle_send_to_i2i'):
+                self._handle_send_to_i2i({'path': path})
+        elif action == 'pnginfo_send_to_inpaint':
+            path = payload.get('path', '')
+            if path and hasattr(self, '_handle_send_to_inpaint'):
+                self._handle_send_to_inpaint({'path': path})
+
+        # ── Search 액션 ──
+        elif action == 'search_apply_and_generate':
+            if hasattr(self, 'apply_prompt_from_data'):
+                self.apply_prompt_from_data(payload)
+                if hasattr(self, 'on_generate_clicked'):
+                    from PyQt6.QtCore import QTimer
+                    QTimer.singleShot(100, self.on_generate_clicked)
+        elif action == 'add_search_to_queue':
+            if hasattr(self, 'apply_prompt_from_data'):
+                self.apply_prompt_from_data(payload)
+                if hasattr(self, '_add_current_to_queue'):
+                    from PyQt6.QtCore import QTimer
+                    QTimer.singleShot(100, self._add_current_to_queue)
+        elif action == 'random_prompt':
+            if hasattr(self, 'apply_random_prompt'):
+                self.apply_random_prompt()
+
+        # ── Inpaint 액션 ──
+        elif action == 'inpaint_load_image':
+            from PyQt6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getOpenFileName(
+                self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
+            if path:
+                self.vue_bridge.inpaintImageLoaded.emit(path.replace('\\', '/'))
+
+        # ── 공통 ──
+        elif action == 'shuffle':
+            if hasattr(self, '_shuffle_main_prompt'):
+                self._shuffle_main_prompt()
+        elif action == 'ab_test':
+            if hasattr(self, '_open_ab_test'):
+                self._open_ab_test()
+        elif action == 'copy_to_clipboard':
+            path = payload.get('path', '')
+            if path:
+                from PyQt6.QtWidgets import QApplication
+                from PyQt6.QtGui import QPixmap
+                pixmap = QPixmap(path)
+                if not pixmap.isNull():
+                    QApplication.clipboard().setPixmap(pixmap)
+                    self.show_status("클립보드에 복사됨")
 
     # ========== 스타일시트 ==========
     

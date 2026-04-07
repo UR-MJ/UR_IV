@@ -15,7 +15,11 @@ class VueBridge(QObject):
     generationStarted = pyqtSignal()
     generationError = pyqtSignal(str)
 
-    editorImageLoaded = pyqtSignal(str)  # file path
+    editorImageLoaded = pyqtSignal(str)   # file path
+    galleryFolderLoaded = pyqtSignal(str)  # folder path
+    exifLoaded = pyqtSignal(str)           # JSON {path, exif}
+    inpaintImageLoaded = pyqtSignal(str)   # file path
+    searchStatus = pyqtSignal(str)         # status message
 
     # 위젯 값/속성 동기화 (Python → Vue)
     widgetValueChanged = pyqtSignal(str, str)       # (widget_id, value)
@@ -328,6 +332,40 @@ class VueBridge(QObject):
         except Exception:
             pass
         return json.dumps([])
+
+    @pyqtSlot(str, result=str)
+    def getImageExif(self, filepath: str) -> str:
+        """이미지의 EXIF/생성정보를 상세 JSON으로 반환"""
+        try:
+            from PIL import Image
+            import os
+            img = Image.open(filepath)
+            info = {}
+            raw = ''
+            if 'parameters' in img.info:
+                raw = img.info['parameters']
+            elif 'prompt' in img.info:
+                raw = img.info.get('prompt', '')
+
+            info['raw'] = raw
+            info['path'] = filepath.replace('\\', '/')
+            info['filename'] = os.path.basename(filepath)
+            info['size'] = f"{img.width} × {img.height}"
+            info['format'] = img.format or 'Unknown'
+            info['filesize'] = f"{os.path.getsize(filepath) / 1024:.1f} KB"
+
+            # WebUI 파라미터 파싱
+            if raw and 'Steps:' in raw:
+                parts = raw.split('\nNegative prompt: ')
+                info['prompt'] = parts[0].strip()
+                if len(parts) > 1:
+                    sub = parts[1].split('\nSteps: ')
+                    info['negative'] = sub[0].strip()
+                    if len(sub) > 1:
+                        info['params_line'] = 'Steps: ' + sub[1].strip()
+            return json.dumps(info)
+        except Exception as e:
+            return json.dumps({'error': str(e), 'path': filepath})
 
     @pyqtSlot(str, result=str)
     def getPngInfo(self, filepath: str) -> str:

@@ -21,8 +21,8 @@
           @mouseup="stopDraw"
           @mouseleave="stopDraw"
         />
-        <div v-if="!hasImage" class="canvas-hint" @click="openFile">
-          이미지를 드래그하거나 클릭하여 선택
+        <div v-if="!hasImage" class="canvas-hint" @click="openFile" @dblclick="openFile">
+          이미지를 드래그하거나 더블클릭하여 선택
         </div>
       </div>
     </div>
@@ -56,6 +56,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
+import { onBackendEvent } from '../bridge.js'
 
 const canvasRef = ref(null)
 const tool = ref('brush')
@@ -77,11 +78,14 @@ onMounted(() => {
     ctx = c.getContext('2d')
     ctx.fillStyle = '#1A1A1A'
     ctx.fillRect(0, 0, c.width, c.height)
-    // 마스크 레이어 (별도 캔버스)
     maskCanvas = document.createElement('canvas')
     maskCanvas.width = c.width; maskCanvas.height = c.height
     maskCtx = maskCanvas.getContext('2d')
   }
+  // 외부에서 이미지 전달 수신 (Gallery/PNGInfo에서)
+  onBackendEvent('inpaintImageLoaded', (path) => {
+    loadImage('file:///' + path)
+  })
 })
 
 function loadImage(src) {
