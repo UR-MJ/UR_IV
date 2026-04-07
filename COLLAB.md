@@ -68,13 +68,26 @@ App.vue
 └── QueuePanel (하단 고정)
 ```
 
-### 남은 작업 / 알려진 이슈
-- Editor 서브패널 버튼들 대부분 VueBridge 연결 미완 (UI만 존재)
-- settings load 시 경미한 TypeError (center_tabs 더미 — crash 아님)
-- 검색 결과 내보내기/불러오기 — Python 연결 필요
-- 태그 자동완성 — Vue에서 미구현
-- Inpaint 캔버스 → 백엔드 생성 연결 미완
-- 대기열 Python 동기화 미완
+### 연결 완료 상태 (2026-04-07)
+- Gallery: EXIF/전송/폴더/정렬/우클릭 ✅
+- PNGInfo: 로드/전송/즉시생성 ✅
+- Search: 비동기 Worker 검색 ✅
+- Favorites: 그리드/EXIF/추가/제거/우클릭 ✅
+- Editor: 19개 OpenCV 효과 + 6개 서브패널 ✅
+- I2I/Inpaint: 생성 연결 ✅
+- EventGen: 검색/대기열/즉시생성 ✅
+- XYZ Plot: 조합 생성 ✅
+- Batch/Upscale: Worker 연결 ✅
+- 자동화: toggle_automation_ui 연결 ✅
+- 태그 자동완성: getTagSuggestions ✅
+- 즐겨찾기 태그바: localStorage 기반 ✅
+- 생성 진행률: 프로그레스 바 ✅
+- 글로벌 단축키: Ctrl+G/S, F5 ✅
+
+### 남은 이슈
+- settings load TypeError (경미 — crash 아님)
+- Editor 캔버스 좌표 보정 (줌/회전 시)
+- 일부 Python 핸들러가 Vue에서 호출되지 않음 (medium priority)
 
 ## Gemini를 위한 지시사항
 - Vue 파일(`frontend/src/`)을 수정할 때는 `cd frontend && npm run build` 실행 필수.
