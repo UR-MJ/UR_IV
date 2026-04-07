@@ -23,7 +23,10 @@ const props = defineProps({
   tool: { type: String, default: 'box' },
   brushSize: { type: Number, default: 20 },
   eraserMode: { type: String, default: 'brush' },
+  eraserRestore: { type: Boolean, default: false },
   stampSpacing: { type: Number, default: 30 },
+  magneticLasso: { type: Boolean, default: false },
+  snapRadius: { type: Number, default: 12 },
 })
 
 const emit = defineEmits(['selection-changed', 'mask-changed'])
@@ -50,10 +53,11 @@ let lastBrushX = -1, lastBrushY = -1
 let lassoPoints = []
 let maskData = null
 let lastAltClick = 0  // Alt 더블클릭 감지
-let stampAccum = 0     // STAMP 도구 누적 거리
-
-// 저장된 zoom/rotation 상태 (효과 적용 후 복원용)
+let stampAccum = 0
 let savedZoom = 1, savedRotation = 0, savedPanX = 0, savedPanY = 0
+let pristineImg = null  // 원본 이미지 (모자이크 지우개용)
+let edgeMapData = null  // Canny edge map (자석 올가미용) — Uint8Array
+let edgeMapW = 0, edgeMapH = 0
 
 const canvasStyle = computed(() => {
   let cursor = 'crosshair'
@@ -94,6 +98,11 @@ function loadNewImage(src, preserveTransform = false) {
     if (!preserveTransform) {
       maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
       hasMask.value = false
+      // 원본 이미지 저장 (모자이크 지우개용)
+      const pc = document.createElement('canvas')
+      pc.width = img.naturalWidth; pc.height = img.naturalHeight
+      pc.getContext('2d').drawImage(img, 0, 0)
+      pristineImg = pc
     }
     drawAll()
   }
@@ -191,7 +200,8 @@ function onMouseDown(e) {
   stampAccum = 0
 
   if (props.tool === 'lasso') {
-    lassoPoints = [{ x: pos.x, y: pos.y }]
+    const sp = props.magneticLasso ? snapToEdge(pos.x, pos.y) : pos
+    lassoPoints = [{ x: sp.x, y: sp.y }]
   } else if (props.tool === 'brush') {
     paintMaskCircle(pos.x, pos.y, props.brushSize)
     renderMaskOverlay()
@@ -199,7 +209,10 @@ function onMouseDown(e) {
     paintMaskCircle(pos.x, pos.y, props.brushSize)
     renderMaskOverlay()
   } else if (props.tool === 'eraser') {
-    if (props.eraserMode === 'brush') {
+    if (props.eraserRestore) {
+      // 모자이크 지우개: 원본에서 해당 영역 복원
+      restoreCircle(pos.x, pos.y, props.brushSize)
+    } else if (props.eraserMode === 'brush') {
       eraseMaskCircle(pos.x, pos.y, props.brushSize)
       renderMaskOverlay()
     } else {
@@ -227,7 +240,8 @@ function onMouseMove(e) {
       maskCtx.setLineDash([])
     }
   } else if (props.tool === 'lasso') {
-    lassoPoints.push({ x: pos.x, y: pos.y })
+    const sp = props.magneticLasso ? snapToEdge(pos.x, pos.y) : pos
+    lassoPoints.push({ x: sp.x, y: sp.y })
     renderMaskOverlay()
     if (maskCtx && lassoPoints.length > 1) {
       maskCtx.strokeStyle = '#E2B340'
@@ -258,7 +272,10 @@ function onMouseMove(e) {
     }
     lastBrushX = pos.x; lastBrushY = pos.y
   } else if (props.tool === 'eraser') {
-    if (props.eraserMode === 'brush') {
+    if (props.eraserRestore) {
+      restoreLine(lastBrushX, lastBrushY, pos.x, pos.y, props.brushSize)
+      lastBrushX = pos.x; lastBrushY = pos.y
+    } else if (props.eraserMode === 'brush') {
       eraseMaskLine(lastBrushX, lastBrushY, pos.x, pos.y, props.brushSize)
       lastBrushX = pos.x; lastBrushY = pos.y
       renderMaskOverlay()
@@ -387,6 +404,79 @@ function pip(x, y, poly) {
   return inside
 }
 
+// ── 모자이크 지우개 (원본 복원) ──
+function restoreCircle(cx, cy, r) {
+  if (!ctx || !pristineImg || !sourceImg) return
+  const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
+  const radius = Math.max(1, r)
+  const x1 = Math.max(0, Math.floor(cx - radius))
+  const y1 = Math.max(0, Math.floor(cy - radius))
+  const x2 = Math.min(w, Math.ceil(cx + radius))
+  const y2 = Math.min(h, Math.ceil(cy + radius))
+  const sw = x2 - x1, sh = y2 - y1
+  if (sw <= 0 || sh <= 0) return
+  // pristine에서 해당 영역 가져오기
+  const pCtx = pristineImg.getContext('2d')
+  const srcData = pCtx.getImageData(x1, y1, sw, sh)
+  const dstData = ctx.getImageData(x1, y1, sw, sh)
+  // 원형 영역만 복원
+  for (let dy = 0; dy < sh; dy++) {
+    for (let dx = 0; dx < sw; dx++) {
+      const px = x1 + dx, py = y1 + dy
+      if ((px - cx) ** 2 + (py - cy) ** 2 <= radius ** 2) {
+        const i = (dy * sw + dx) * 4
+        dstData.data[i] = srcData.data[i]
+        dstData.data[i+1] = srcData.data[i+1]
+        dstData.data[i+2] = srcData.data[i+2]
+        dstData.data[i+3] = srcData.data[i+3]
+      }
+    }
+  }
+  ctx.putImageData(dstData, x1, y1)
+}
+function restoreLine(x0, y0, x1, y1, r) {
+  const dist = Math.hypot(x1 - x0, y1 - y0)
+  const steps = Math.max(1, Math.ceil(dist / Math.max(1, r * 0.3)))
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    restoreCircle(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r)
+  }
+}
+
+// ── 자석 올가미: edge map 로드 + snap ──
+function loadEdgeMap(b64) {
+  if (!b64) return
+  const img = new Image()
+  img.onload = () => {
+    const tc = document.createElement('canvas')
+    tc.width = img.naturalWidth; tc.height = img.naturalHeight
+    const tctx = tc.getContext('2d')
+    tctx.drawImage(img, 0, 0)
+    const id = tctx.getImageData(0, 0, tc.width, tc.height)
+    edgeMapW = tc.width; edgeMapH = tc.height
+    edgeMapData = new Uint8Array(edgeMapW * edgeMapH)
+    for (let i = 0; i < edgeMapData.length; i++) edgeMapData[i] = id.data[i * 4]
+  }
+  img.src = b64
+}
+
+function snapToEdge(x, y) {
+  if (!edgeMapData || !props.magneticLasso) return { x, y }
+  const r = props.snapRadius
+  let bestDist = Infinity, bx = x, by = y
+  const x0 = Math.max(0, Math.floor(x - r)), y0 = Math.max(0, Math.floor(y - r))
+  const x1 = Math.min(edgeMapW, Math.ceil(x + r)), y1 = Math.min(edgeMapH, Math.ceil(y + r))
+  for (let py = y0; py < y1; py++) {
+    for (let px = x0; px < x1; px++) {
+      if (edgeMapData[py * edgeMapW + px] > 127) {
+        const d = (px - x) ** 2 + (py - y) ** 2
+        if (d < bestDist) { bestDist = d; bx = px; by = py }
+      }
+    }
+  }
+  return { x: bx, y: by }
+}
+
 function emitMaskBounds() {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
@@ -449,7 +539,7 @@ function loadMaskFromBase64(b64) {
 // zoom/rotation 초기화
 function resetView() { zoom.value = 1; rotation.value = 0; panX.value = 0; panY.value = 0 }
 
-defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, drawAll, resetView })
+defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, loadEdgeMap, drawAll, resetView })
 
 onMounted(() => {
   if (props.imageSrc) loadNewImage(props.imageSrc, false)

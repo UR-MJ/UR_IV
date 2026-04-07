@@ -52,6 +52,7 @@
             <span class="large-filename">{{ largeView.filename }}</span>
             <div class="large-actions">
               <button class="lv-btn" @click="editFilename">✏️ 이름 변경</button>
+              <button class="lv-btn save" @click="saveExif">💾 EXIF 저장</button>
               <button class="lv-btn" @click="action('send_to_i2i', { path: largeView.path })">I2I</button>
               <button class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
               <button class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
@@ -144,16 +145,44 @@ const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
 const exifData = ref(null)
 const largeView = ref(null)
 
-function editFilename() {
+async function editFilename() {
   if (!largeView.value) return
-  const newName = prompt('파일 이름 변경:', largeView.value.filename)
+  const newName = window.prompt('파일 이름 변경:', largeView.value.filename)
   if (newName && newName !== largeView.value.filename) {
-    requestAction('gallery_rename_file', { path: largeView.value.path, new_name: newName })
+    const backend = await getBackend()
+    if (backend.renameFile) {
+      backend.renameFile(largeView.value.path, newName, (json) => {
+        try {
+          const r = JSON.parse(json)
+          if (r.ok) { largeView.value.filename = newName; loadImages() }
+          else alert(r.error || '이름 변경 실패')
+        } catch {}
+      })
+    }
   }
 }
 function onExifEdit(e, field) {
-  // EXIF 수정은 표시용만 (실제 파일 수정은 Python 백엔드 필요)
   if (largeView.value) largeView.value[field] = e.target.textContent
+}
+async function saveExif() {
+  if (!largeView.value) return
+  const backend = await getBackend()
+  if (!backend.saveImageExif) return
+  // prompt + negative + raw 에서 A1111 형식으로 재구성
+  const parts = []
+  if (largeView.value.prompt) parts.push(largeView.value.prompt)
+  if (largeView.value.negative) parts.push('Negative prompt: ' + largeView.value.negative)
+  // raw에서 Steps: 이후 파라미터 라인 추출
+  const rawMatch = (largeView.value.raw || '').match(/Steps:.*$/m)
+  if (rawMatch) parts.push(rawMatch[0])
+  const newParams = parts.join('\n')
+  backend.saveImageExif(largeView.value.path, newParams, (json) => {
+    try {
+      const r = JSON.parse(json)
+      if (r.ok) alert('EXIF 저장 완료')
+      else alert(r.error || '저장 실패')
+    } catch {}
+  })
 }
 
 async function loadImages() {
@@ -282,6 +311,7 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .lv-btn { padding: 5px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
 .lv-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .lv-btn.accent { background: var(--accent); color: #000; border: none; }
+.lv-btn.save { background: #4ade80; color: #000; border: none; }
 .lv-close { background: none; border: none; color: #f87171; font-size: 18px; cursor: pointer; padding: 0 8px; }
 .large-view-body { flex: 1; display: flex; overflow: hidden; }
 .large-img-area { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; padding: 16px; }

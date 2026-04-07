@@ -51,6 +51,19 @@
       </div>
     </div>
 
+    <!-- Section: 올가미 모드 (올가미 선택 시만) -->
+    <div class="control-group" v-if="selectedTool === 1">
+      <label>Lasso Mode</label>
+      <div class="chip-grid-2">
+        <button class="chip-btn" :class="{ active: !magneticLasso }" @click="magneticLasso = false; emit('magnetic-changed', false)">
+          ➰ FREE
+        </button>
+        <button class="chip-btn magnet" :class="{ active: magneticLasso }" @click="magneticLasso = true; emit('magnetic-changed', true)">
+          🧲 MAGNETIC
+        </button>
+      </div>
+    </div>
+
     <!-- Section: STAMP 간격 (STAMP 선택 시만) -->
     <div class="control-group" v-if="selectedTool === 4">
       <label>Stamp Spacing</label>
@@ -62,8 +75,17 @@
 
     <!-- Section: Eraser Mode (지우개 선택 시만 표시) -->
     <div class="control-group" v-if="selectedTool === 3">
-      <label>Eraser Mode</label>
-      <div class="chip-grid-3">
+      <label>Eraser Type</label>
+      <div class="chip-grid-2">
+        <button class="chip-btn" :class="{ active: !eraserRestore }" @click="eraserRestore = false; emit('eraser-restore-changed', false)">
+          <span class="icon">🧹</span> MASK ERASER
+        </button>
+        <button class="chip-btn restore" :class="{ active: eraserRestore }" @click="eraserRestore = true; emit('eraser-restore-changed', true)">
+          <span class="icon">✨</span> MOSAIC ERASER
+        </button>
+      </div>
+      <label class="mt-8" v-if="!eraserRestore">Shape Mode</label>
+      <div class="chip-grid-3" v-if="!eraserRestore">
         <button class="chip-btn" :class="{ active: eraserMode === 'brush' }" @click="setEraserMode('brush')">BRUSH</button>
         <button class="chip-btn" :class="{ active: eraserMode === 'box' }" @click="setEraserMode('box')">RECT</button>
         <button class="chip-btn" :class="{ active: eraserMode === 'lasso' }" @click="setEraserMode('lasso')">LASSO</button>
@@ -111,7 +133,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 
-const emit = defineEmits(['tool-changed','effect-changed','effect-apply','cancel-selection','crop','resize','perspective','rotate','flip','remove-bg','add-model','clear-models','auto-censor','auto-detect','params-changed','eraser-mode-changed'])
+const emit = defineEmits(['tool-changed','effect-changed','effect-apply','cancel-selection','crop','resize','perspective','rotate','flip','remove-bg','add-model','clear-models','auto-censor','auto-detect','params-changed','eraser-mode-changed','eraser-restore-changed','magnetic-changed'])
 const props = defineProps({ modelLabel: { type: String, default: 'No Model Loaded' }, detectStatus: { type: String, default: '' } })
 
 const tools = [
@@ -133,6 +155,8 @@ const toolSize = ref(20)
 const strength = ref(15)
 const detectConf = ref(25)
 const eraserMode = ref('brush')
+const eraserRestore = ref(false)
+const magneticLasso = ref(false)
 const stampSpacing = ref(30)
 
 function selectTool(id) { selectedTool.value = id; emit('tool-changed', { tool: id, size: toolSize.value }) }
@@ -165,6 +189,9 @@ watch([toolSize, strength, stampSpacing], () => { emit('params-changed', { toolS
 }
 .chip-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .chip-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.chip-btn.restore.active { background: rgba(251, 146, 60, 0.1); border-color: #fb923c; color: #fb923c; }
+.chip-btn.magnet.active { background: rgba(96, 165, 250, 0.1); border-color: #60a5fa; color: #60a5fa; }
+.chip-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 
 .glass-box {
   background: rgba(255,255,255,0.02); border: 1px solid var(--border);

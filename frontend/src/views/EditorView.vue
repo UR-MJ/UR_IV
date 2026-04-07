@@ -46,6 +46,8 @@
               @remove-bg="params => doOp('remove_bg', params)"
               @params-changed="onParamsChanged"
               @eraser-mode-changed="m => eraserMode = m"
+              @eraser-restore-changed="v => eraserRestore = v"
+              @magnetic-changed="onMagneticChanged"
             />
             <ColorPanel v-show="activeTab === 1"
               @adjustment-changed="previewAdj" @apply="applyAdj"
@@ -76,6 +78,8 @@
           :tool="currentTool"
           :brush-size="brushSize"
           :eraser-mode="eraserMode"
+          :eraser-restore="eraserRestore"
+          :magnetic-lasso="magneticLasso"
           :stamp-spacing="stampSpacing"
           @selection-changed="onSelectionChanged"
         />
@@ -119,6 +123,8 @@ const activeTab = ref(0)
 const currentTool = ref('box')
 const brushSize = ref(20)
 const eraserMode = ref('brush')
+const eraserRestore = ref(false)
+const magneticLasso = ref(false)
 const stampSpacing = ref(30)
 const canvasRef = ref(null)
 const drawPanelRef = ref(null)
@@ -215,6 +221,20 @@ function onToolChanged(data) {
   const toolMap = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser', 4: 'stamp' }
   currentTool.value = toolMap[id] ?? 'box'
   if (typeof data === 'object' && data.size) brushSize.value = data.size
+}
+
+async function onMagneticChanged(enabled) {
+  magneticLasso.value = enabled
+  if (enabled && imagePath.value) {
+    // Canny edge map을 Python에서 생성하여 로드
+    const backend = await getBackend()
+    if (backend.getEdgeMap) {
+      const cleanPath = imagePath.value.replace('file:///', '')
+      backend.getEdgeMap(cleanPath, 50, 150, (b64) => {
+        if (b64) canvasRef.value?.loadEdgeMap(b64)
+      })
+    }
+  }
 }
 
 function onParamsChanged(params) {

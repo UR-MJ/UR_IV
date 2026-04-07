@@ -508,6 +508,67 @@ class VueBridge(QObject):
             pass
         return json.dumps([])
 
+    @pyqtSlot(str, str, result=str)
+    def saveImageExif(self, filepath: str, new_params: str) -> str:
+        """이미지의 PNG 메타데이터(parameters)를 수정하여 저장"""
+        try:
+            import os
+            from PIL import Image as PILImage
+            from PIL.PngImagePlugin import PngInfo
+            if not filepath or not os.path.exists(filepath):
+                return json.dumps({'error': '파일을 찾을 수 없습니다'})
+            if not filepath.lower().endswith('.png'):
+                return json.dumps({'error': 'PNG 파일만 메타데이터 수정 가능'})
+            img = PILImage.open(filepath)
+            meta = PngInfo()
+            meta.add_text("parameters", new_params)
+            # 기존 메타데이터 중 parameters 외 보존
+            for k, v in img.info.items():
+                if k != "parameters" and isinstance(v, str):
+                    meta.add_text(k, v)
+            img.save(filepath, pnginfo=meta)
+            return json.dumps({'ok': True})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    @pyqtSlot(str, str, result=str)
+    def renameFile(self, filepath: str, new_name: str) -> str:
+        """파일 이름 변경"""
+        try:
+            import os
+            if not os.path.exists(filepath):
+                return json.dumps({'error': '파일을 찾을 수 없습니다'})
+            dir_path = os.path.dirname(filepath)
+            ext = os.path.splitext(filepath)[1]
+            if not new_name.endswith(ext):
+                new_name += ext
+            new_path = os.path.join(dir_path, new_name)
+            os.rename(filepath, new_path)
+            return json.dumps({'ok': True, 'new_path': new_path.replace('\\', '/')})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    @pyqtSlot(str, int, int, result=str)
+    def getEdgeMap(self, image_path: str, canny_low: int, canny_high: int) -> str:
+        """Canny edge detection → base64 PNG (자석 올가미용)"""
+        try:
+            import cv2, numpy as np, base64, os
+            from io import BytesIO
+            from PIL import Image as PILImage
+            clean = image_path.replace('file:///', '').replace('/', os.sep)
+            img = cv2.imread(clean)
+            if img is None:
+                return ''
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            edges = cv2.Canny(blurred, canny_low, canny_high)
+            pil = PILImage.fromarray(edges)
+            buf = BytesIO()
+            pil.save(buf, format='PNG')
+            return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+        except Exception:
+            return ''
+
     @pyqtSlot(result=str)
     def getYoloModelLabel(self) -> str:
         """YOLO 모델 라벨 반환"""
