@@ -1,74 +1,99 @@
 <template>
-  <div class="i2i-view">
-    <div class="image-area">
+  <div class="i2i-workspace">
+    <!-- Left Sidebar: Settings -->
+    <aside class="sidebar">
+      <div class="sidebar-scroll">
+        <!-- Input Card -->
+        <div class="glass-card">
+          <label>Source Image</label>
+          <div class="source-thumb" @click="triggerFileInput">
+            <img v-if="imageSrc" :src="imageSrc" />
+            <div v-else class="upload-hint">EMPTY</div>
+            <div class="edit-overlay">CHANGE IMAGE</div>
+          </div>
+        </div>
+
+        <!-- Prompt Card -->
+        <div class="glass-card">
+          <label>Override Prompt</label>
+          <textarea v-model="prompt" rows="3" placeholder="Leave empty to use T2I prompt..."></textarea>
+          <label class="mt-12 danger">Negative</label>
+          <textarea v-model="negPrompt" rows="2" placeholder="Override negative..."></textarea>
+        </div>
+
+        <!-- Generation Params Card -->
+        <div class="glass-card">
+          <label>Denoising Strength</label>
+          <div class="premium-slider">
+            <input type="range" min="0" max="1" step="0.01" v-model.number="denoising" />
+            <div class="slider-display">
+              <span class="val">{{ denoising.toFixed(2) }}</span>
+              <span class="label">Intensity</span>
+            </div>
+          </div>
+
+          <label class="mt-12">Resize Mode</label>
+          <select v-model="resizeMode">
+            <option value="0">JUST RESIZE</option>
+            <option value="1">CROP AND RESIZE</option>
+            <option value="2">RESIZE AND FILL</option>
+            <option value="3">LATENT RESIZE</option>
+          </select>
+
+          <div class="grid-2 mt-12">
+            <div class="input-unit">
+              <label>Width</label>
+              <input v-model="width" type="number" />
+            </div>
+            <div class="input-unit">
+              <label>Height</label>
+              <input v-model="height" type="number" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Card -->
+        <details class="glass-card">
+          <summary class="card-header">ADVANCED SETTINGS</summary>
+          <div class="input-group mt-12">
+            <label>Steps</label>
+            <input type="range" min="1" max="100" v-model.number="steps" class="modern-slider" />
+            <div class="val-tag">{{ steps }}</div>
+          </div>
+          <div class="input-group mt-12">
+            <label>CFG Scale</label>
+            <input type="range" min="1" max="20" step="0.5" v-model.number="cfg" class="modern-slider" />
+            <div class="val-tag">{{ cfg }}</div>
+          </div>
+        </details>
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="btn-generate primary" @click="generate" :disabled="!imageSrc">
+          {{ !imageSrc ? 'UPLOAD IMAGE FIRST' : 'START I2I GENERATION' }}
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content: Canvas -->
+    <section class="canvas-area">
       <div class="drop-zone" :class="{ 'drag-over': isDragging }"
         @dragover.prevent="isDragging = true" @dragleave="isDragging = false"
         @drop.prevent="handleDrop" @click="triggerFileInput"
       >
-        <div v-if="!imageSrc" class="drop-hint">
-          <div class="icon">🖼️</div>
-          <div>이미지를 드래그하거나 클릭</div>
-        </div>
-        <img v-else :src="imageSrc" class="preview-img" />
+        <transition name="scale">
+          <div v-if="!imageSrc" class="drop-empty">
+            <div class="icon">⤓</div>
+            <h2>DRAG & DROP SOURCE</h2>
+            <p>Or click to browse your local storage</p>
+          </div>
+          <div v-else class="preview-container">
+            <img :src="imageSrc" class="main-preview" />
+          </div>
+        </transition>
       </div>
       <input ref="fileInput" type="file" accept="image/*" hidden @change="handleFileSelect" />
-    </div>
-    <div class="settings">
-      <h3>I2I 설정</h3>
-
-      <label class="s-label">프롬프트 (비우면 T2I 프롬프트 사용)</label>
-      <textarea class="s-textarea" v-model="prompt" placeholder="프롬프트..." rows="3" />
-
-      <label class="s-label">네거티브</label>
-      <textarea class="s-textarea" v-model="negPrompt" placeholder="네거티브..." rows="2" />
-
-      <label class="s-label">Denoising Strength</label>
-      <div class="slider-row">
-        <input type="range" min="0" max="1" step="0.01" v-model.number="denoising" />
-        <span class="val">{{ denoising.toFixed(2) }}</span>
-      </div>
-
-      <label class="s-label">Resize Mode</label>
-      <select v-model="resizeMode" class="s-select">
-        <option value="0">Just resize</option>
-        <option value="1">Crop and resize</option>
-        <option value="2">Resize and fill</option>
-        <option value="3">Just resize (latent)</option>
-      </select>
-
-      <div class="row">
-        <div class="col">
-          <label class="s-label">Width</label>
-          <input class="s-input" v-model="width" />
-        </div>
-        <div class="col">
-          <label class="s-label">Height</label>
-          <input class="s-input" v-model="height" />
-        </div>
-      </div>
-
-      <label class="s-label">Steps</label>
-      <div class="slider-row">
-        <input type="range" min="1" max="100" v-model.number="steps" />
-        <span class="val">{{ steps }}</span>
-      </div>
-
-      <label class="s-label">CFG Scale</label>
-      <div class="slider-row">
-        <input type="range" min="1" max="20" step="0.5" v-model.number="cfg" />
-        <span class="val">{{ cfg }}</span>
-      </div>
-
-      <label class="s-label">Seed</label>
-      <div class="row">
-        <input class="s-input" v-model="seed" />
-        <button class="btn-sm" @click="seed = '-1'">🎲</button>
-      </div>
-
-      <button class="btn-generate" @click="generate" :disabled="!imageSrc">
-        I2I 생성
-      </button>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -95,16 +120,34 @@ function handleFileSelect(e) { const f = e.target.files?.[0]; if (f) loadFile(f)
 function handleDrop(e) {
   isDragging.value = false
   const f = e.dataTransfer?.files?.[0]
-  if (f) {
-    imagePath.value = f.path || ''
-    loadFile(f)
-  }
+  if (f) { imagePath.value = f.path || ''; loadFile(f) }
 }
 function loadFile(file) {
   const reader = new FileReader()
   reader.onload = (ev) => { imageSrc.value = ev.target.result }
   reader.readAsDataURL(file)
+  if (file.path) imagePath.value = file.path.replace(/\\/g, '/')
 }
+
+// 경로로 직접 이미지 로드 (History/Gallery에서 전송 시)
+async function loadFromPath(path) {
+  imagePath.value = path
+  const backend = await getBackend()
+  if (backend.loadImageBase64) {
+    backend.loadImageBase64(path, (b64) => {
+      if (b64) imageSrc.value = b64
+    })
+  } else {
+    imageSrc.value = 'file:///' + path
+  }
+}
+
+import { onMounted } from 'vue'
+import { onBackendEvent } from '../bridge.js'
+onMounted(() => {
+  // History/Gallery에서 send_to_i2i 시 이미지 로드
+  onBackendEvent('i2iImageLoaded', (path) => loadFromPath(path))
+})
 
 function generate() {
   requestAction('generate_i2i', {
@@ -124,43 +167,74 @@ function generate() {
 </script>
 
 <style scoped>
-.i2i-view { height: 100%; display: flex; }
-.image-area { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.drop-zone {
-  width: 100%; height: 100%; border: 2px dashed #1A1A1A; border-radius: 6px;
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
-  transition: border-color 0.15s; overflow: hidden;
-}
-.drop-zone.drag-over { border-color: #E2B340; }
-.drop-zone:hover { border-color: #333; }
-.drop-hint { text-align: center; color: #484848; }
-.drop-hint .icon { font-size: 48px; margin-bottom: 8px; opacity: 0.3; }
-.drop-hint div { font-size: 13px; }
-.preview-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.i2i-workspace { height: 100%; display: flex; background: var(--bg-primary); }
 
-.settings {
-  width: 280px; padding: 16px; border-left: 1px solid #1A1A1A;
-  display: flex; flex-direction: column; gap: 6px; overflow-y: auto;
+/* Sidebar */
+.sidebar {
+  width: 340px; display: flex; flex-direction: column;
+  background: var(--bg-secondary); border-right: 1px solid var(--border);
 }
-.settings h3 { color: #E8E8E8; font-size: 14px; margin: 0 0 8px; }
-.s-label { color: #585858; font-size: 11px; font-weight: 600; margin-top: 4px; }
-.s-textarea {
-  background: #131313; border: none; border-radius: 4px; padding: 6px 8px;
-  color: #E8E8E8; font-size: 12px; resize: vertical; outline: none; font-family: inherit;
+.sidebar-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.sidebar-footer { padding: 16px; background: var(--bg-card); border-top: 1px solid var(--border); }
+
+.glass-card {
+  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: var(--radius-card); padding: 14px;
 }
-.s-select, .s-input {
-  background: #131313; border: none; border-radius: 4px; padding: 6px 8px;
-  color: #E8E8E8; font-size: 12px; outline: none; width: 100%;
+
+.source-thumb {
+  width: 100%; aspect-ratio: 16/9; background: var(--bg-input); border-radius: var(--radius-base);
+  margin-top: 8px; overflow: hidden; position: relative; cursor: pointer; border: 1px solid var(--border);
 }
-.slider-row { display: flex; align-items: center; gap: 6px; }
-.slider-row input { flex: 1; accent-color: #E2B340; }
-.val { color: #787878; font-size: 12px; min-width: 35px; text-align: right; }
-.row { display: flex; gap: 6px; align-items: end; }
-.col { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.btn-sm { padding: 4px 8px; background: #181818; border: none; border-radius: 4px; color: #E8E8E8; cursor: pointer; }
+.source-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.upload-hint { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 10px; font-weight: 800; letter-spacing: 2px; }
+.edit-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.6); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800;
+  opacity: 0; transition: var(--transition);
+}
+.source-thumb:hover .edit-overlay { opacity: 1; }
+
+/* Premium Slider */
+.premium-slider { margin-top: 8px; }
+.slider-display { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
+.slider-display .val { font-size: 20px; font-weight: 900; color: var(--accent); font-family: 'Consolas', monospace; }
+.slider-display .label { font-size: 9px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; }
+
+.modern-slider { appearance: none; width: 100%; height: 4px; background: var(--bg-input); border-radius: 2px; outline: none; accent-color: var(--accent); }
+.val-tag { font-size: 11px; font-weight: 800; color: var(--text-secondary); text-align: right; margin-top: 4px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mt-12 { margin-top: 12px; }
+.danger { color: #f87171; }
+
 .btn-generate {
-  padding: 12px; background: #E2B340; border: none; border-radius: 6px;
-  color: #000; font-weight: 700; cursor: pointer; margin-top: auto;
+  width: 100%; height: 46px; background: var(--accent); border: none;
+  border-radius: var(--radius-pill); color: #000; font-weight: 900;
+  font-size: 12px; letter-spacing: 1px; cursor: pointer; transition: var(--transition);
 }
-.btn-generate:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-generate:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }
+
+/* Canvas Area */
+.canvas-area { flex: 1; padding: 24px; display: flex; align-items: center; justify-content: center; }
+.drop-zone {
+  width: 100%; height: 100%; max-width: 1200px;
+  background: var(--bg-card); border: 2px dashed var(--border); border-radius: 20px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: var(--transition); position: relative;
+}
+.drop-zone.drag-over { border-color: var(--accent); background: var(--accent-dim); }
+.drop-zone:hover { border-color: var(--text-muted); }
+
+.drop-empty { text-align: center; }
+.drop-empty .icon { font-size: 64px; color: var(--text-muted); margin-bottom: 16px; }
+.drop-empty h2 { font-size: 18px; letter-spacing: 4px; color: var(--text-secondary); margin-bottom: 8px; }
+.drop-empty p { font-size: 13px; color: var(--text-muted); }
+
+.preview-container { width: 100%; height: 100%; padding: 20px; display: flex; align-items: center; justify-content: center; }
+.main-preview { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+
+/* Animation */
+.scale-enter-active, .scale-leave-active { transition: all 0.3s ease; }
+.scale-enter-from, .scale-leave-to { opacity: 0; transform: scale(0.95); }
 </style>

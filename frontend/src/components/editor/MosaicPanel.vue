@@ -1,151 +1,100 @@
 <template>
   <div class="mosaic-panel">
-    <!-- Tool Selection -->
-    <div class="section-header">도구</div>
-
-    <div class="tool-group">
-      <button
-        v-for="tool in tools"
-        :key="tool.id"
-        class="tool-btn"
-        :class="{ active: selectedTool === tool.id }"
-        @click="selectTool(tool.id)"
-      >
-        {{ tool.label }}
-      </button>
+    <!-- Section 1: Selection Tools -->
+    <div class="control-group">
+      <label>Selection Tool</label>
+      <div class="chip-grid">
+        <button v-for="t in tools" :key="t.id"
+          class="chip-btn" :class="{ active: selectedTool === t.id }"
+          @click="selectTool(t.id)"
+        >
+          <span class="icon">{{ t.icon }}</span>
+          <span class="label">{{ t.label }}</span>
+        </button>
+      </div>
     </div>
 
-    <div class="divider" />
-
-    <!-- Effect Selection -->
-    <div class="section-header">효과</div>
-
-    <div class="tool-group">
-      <button
-        v-for="effect in effects"
-        :key="effect.id"
-        class="tool-btn"
-        :class="{ active: selectedEffect === effect.id }"
-        @click="selectEffect(effect.id)"
-      >
-        {{ effect.label }}
-      </button>
+    <!-- Section 2: Visual Effects -->
+    <div class="control-group">
+      <label>Apply Effect</label>
+      <div class="chip-grid-3">
+        <button v-for="e in effects" :key="e.id"
+          class="chip-btn" :class="{ active: selectedEffect === e.id }"
+          @click="selectEffect(e.id)"
+        >
+          <span class="label">{{ e.label }}</span>
+        </button>
+      </div>
     </div>
 
-    <div class="divider" />
-
-    <!-- Auto Censor (YOLO) -->
-    <div class="auto-censor-section">
-      <div class="model-label">{{ modelLabel }}</div>
-
-      <div class="btn-row">
-        <button class="secondary-btn" @click="$emit('add-model')">+ 모델</button>
-        <button class="secondary-btn" @click="$emit('clear-models')">초기화</button>
+    <!-- Section 3: Smart AI Censorship -->
+    <div class="control-group glass-box">
+      <div class="header-with-action">
+        <label>AI CENSORSHIP</label>
+        <span class="status-dot" :class="{ active: detectStatus }"></span>
       </div>
-
-      <div class="slider-group">
-        <label class="slider-label">신뢰도</label>
-        <input
-          type="range"
-          :min="1"
-          :max="100"
-          v-model.number="detectConf"
-          class="slider"
-        />
-        <span class="slider-value">{{ detectConf }}</span>
+      <div class="model-info">{{ modelLabel }}</div>
+      <div class="btn-row mt-8">
+        <button class="ghost-btn" @click="$emit('add-model')">+ ADD .PT</button>
+        <button class="ghost-btn" @click="$emit('clear-models')">RESET</button>
       </div>
-
-      <button class="censor-btn" @click="$emit('auto-censor', { confidence: detectConf })">
-        자동 검열
-      </button>
-      <button class="detect-btn" @click="$emit('auto-detect', { confidence: detectConf })">
-        감지만 (마스크)
-      </button>
-      <div class="detect-status">{{ detectStatus }}</div>
+      <div class="slider-box mt-12">
+        <div class="slider-header">
+          <span>Confidence</span>
+          <span>{{ detectConf }}%</span>
+        </div>
+        <input type="range" min="1" max="100" v-model.number="detectConf" class="modern-slider" />
+      </div>
+      <div class="btn-row mt-12">
+        <button class="action-btn primary" @click="$emit('auto-censor', { confidence: detectConf })">AUTO CENSOR</button>
+        <button class="action-btn" @click="$emit('auto-detect', { confidence: detectConf })">MASK ONLY</button>
+      </div>
     </div>
 
-    <div class="divider" />
-
-    <!-- Action Area -->
-    <div class="action-section">
-      <!-- Tool Size / Bar Size -->
-      <template v-if="selectedEffect === 1 && selectedTool === 0">
-        <div class="slider-group">
-          <label class="slider-label">너비(W)</label>
-          <input type="range" :min="1" :max="500" v-model.number="barWidth" class="slider" />
-          <span class="slider-value">{{ barWidth }}</span>
-        </div>
-        <div class="slider-group">
-          <label class="slider-label">높이(H)</label>
-          <input type="range" :min="1" :max="500" v-model.number="barHeight" class="slider" />
-          <span class="slider-value">{{ barHeight }}</span>
-        </div>
-      </template>
-      <template v-else>
-        <div class="slider-group">
-          <label class="slider-label">도구 크기</label>
-          <input type="range" :min="1" :max="300" v-model.number="toolSize" class="slider" />
-          <span class="slider-value">{{ toolSize }}</span>
-        </div>
-      </template>
-
-      <div class="slider-group">
-        <label class="slider-label">{{ selectedEffect === 1 && selectedTool === 0 ? '찍힘 간격' : '효과 강도' }}</label>
-        <input type="range" :min="1" :max="100" v-model.number="strength" class="slider" />
-        <span class="slider-value">{{ strength }}</span>
+    <!-- Section: Eraser Mode (지우개 선택 시만 표시) -->
+    <div class="control-group" v-if="selectedTool === 3">
+      <label>Eraser Mode</label>
+      <div class="chip-grid-3">
+        <button class="chip-btn" :class="{ active: eraserMode === 'brush' }" @click="setEraserMode('brush')">BRUSH</button>
+        <button class="chip-btn" :class="{ active: eraserMode === 'box' }" @click="setEraserMode('box')">RECT</button>
+        <button class="chip-btn" :class="{ active: eraserMode === 'lasso' }" @click="setEraserMode('lasso')">LASSO</button>
       </div>
+    </div>
 
-      <div class="slider-group">
-        <label class="slider-label">페더링</label>
-        <input type="range" :min="0" :max="50" v-model.number="feather" class="slider" />
-        <span class="slider-value">{{ feather }}</span>
+    <!-- Section 4: Adjustments -->
+    <div class="control-group">
+      <label>Adjustments</label>
+      <div class="slider-box">
+        <div class="slider-header"><span>Size</span><span>{{ toolSize }}px</span></div>
+        <input type="range" min="1" max="300" v-model.number="toolSize" class="modern-slider" />
       </div>
-
-      <!-- Apply / Cancel Selection -->
-      <div class="btn-row">
-        <button class="accent-btn flex-2" @click="onApply">적용 (Enter)</button>
-        <button class="cancel-btn flex-1" @click="$emit('cancel-selection')">선택 취소 (Esc)</button>
+      <div class="slider-box mt-8">
+        <div class="slider-header"><span>Strength</span><span>{{ strength }}</span></div>
+        <input type="range" min="1" max="100" v-model.number="strength" class="modern-slider" />
       </div>
+    </div>
 
-      <!-- Crop / Resize / Perspective -->
-      <div class="btn-row-3">
-        <button class="action-btn" @click="$emit('crop')">크롭</button>
-        <button class="action-btn" @click="$emit('resize')">리사이즈</button>
-        <button class="action-btn" @click="$emit('perspective')">원근보정</button>
+    <!-- Section 5: Major Actions (Sticky Bottom feel) -->
+    <div class="footer-actions mt-auto">
+      <button class="main-apply-btn" @click="onApply">
+        <span class="icon">✨</span> APPLY CHANGES (ENTER)
+      </button>
+      <button class="secondary-btn mt-8" @click="$emit('cancel-selection')">CANCEL SELECTION (ESC)</button>
+    </div>
+
+    <!-- Section 6: Transformations -->
+    <div class="control-group mt-12">
+      <label>Transform</label>
+      <div class="btn-grid-4">
+        <button class="mini-btn" @click="$emit('rotate', 'ccw')" title="Rotate CCW">↺</button>
+        <button class="mini-btn" @click="$emit('rotate', 'cw')" title="Rotate CW">↻</button>
+        <button class="mini-btn" @click="$emit('flip', 'horizontal')" title="Flip Horizontal">↔</button>
+        <button class="mini-btn" @click="$emit('flip', 'vertical')" title="Flip Vertical">↕</button>
       </div>
-
-      <!-- Rotate -->
-      <div class="btn-row">
-        <button class="action-btn" @click="$emit('rotate', 'cw')">↻ 90°</button>
-        <button class="action-btn" @click="$emit('rotate', 'ccw')">↺ 90°</button>
+      <div class="btn-row mt-8">
+        <button class="action-btn" @click="$emit('crop')">CROP</button>
+        <button class="action-btn" @click="$emit('resize')">RESIZE</button>
       </div>
-
-      <!-- Flip -->
-      <div class="btn-row">
-        <button class="action-btn" @click="$emit('flip', 'horizontal')">↔ 좌우반전</button>
-        <button class="action-btn" @click="$emit('flip', 'vertical')">↕ 상하반전</button>
-      </div>
-
-      <div class="divider" />
-
-      <!-- Background Removal -->
-      <div class="bg-remove-row">
-        <label class="small-label">모델:</label>
-        <select v-model="bgModel" class="select-input">
-          <option v-for="m in bgModels" :key="m.id" :value="m.id">
-            {{ m.id }} — {{ m.desc }}
-          </option>
-        </select>
-      </div>
-      <div class="bg-remove-row">
-        <label class="small-label">배경:</label>
-        <select v-model="bgColor" class="select-input">
-          <option value="white">흰색</option>
-          <option value="black">검은색</option>
-        </select>
-      </div>
-
-      <button class="action-btn full-width" @click="onRemoveBg">배경 제거</button>
     </div>
   </div>
 </template>
@@ -153,328 +102,107 @@
 <script setup>
 import { ref, watch } from 'vue'
 
-const emit = defineEmits([
-  'tool-changed',
-  'effect-changed',
-  'effect-apply',
-  'cancel-selection',
-  'crop',
-  'resize',
-  'perspective',
-  'rotate',
-  'flip',
-  'remove-bg',
-  'add-model',
-  'clear-models',
-  'auto-censor',
-  'auto-detect',
-  'params-changed',
-])
-
-const props = defineProps({
-  modelLabel: { type: String, default: '모델 없음' },
-  detectStatus: { type: String, default: '' },
-})
+const emit = defineEmits(['tool-changed','effect-changed','effect-apply','cancel-selection','crop','resize','perspective','rotate','flip','remove-bg','add-model','clear-models','auto-censor','auto-detect','params-changed','eraser-mode-changed'])
+const props = defineProps({ modelLabel: { type: String, default: 'No Model Loaded' }, detectStatus: { type: String, default: '' } })
 
 const tools = [
-  { id: 0, label: '사각형 선택' },
-  { id: 1, label: '올가미 선택' },
-  { id: 2, label: '브러쉬' },
-  { id: 3, label: '지우기' },
+  { id: 0, label: 'RECT', icon: '⬚' },
+  { id: 1, label: 'LASSO', icon: '➰' },
+  { id: 2, label: 'BRUSH', icon: '🖌' },
+  { id: 3, label: 'ERASER', icon: '⌫' },
 ]
-
 const effects = [
-  { id: 0, label: '모자이크' },
-  { id: 1, label: '검은띠 (Bar)' },
-  { id: 2, label: '블러 (Blur)' },
-]
-
-const bgModels = [
-  { id: 'u2net', desc: '범용 (기본)' },
-  { id: 'isnet-anime', desc: '애니/일러스트' },
-  { id: 'isnet-general-use', desc: '범용 개선판' },
-  { id: 'silueta', desc: '경량 빠름' },
+  { id: 0, label: 'MOSAIC' },
+  { id: 1, label: 'BLACK BAR' },
+  { id: 2, label: 'BLUR' },
 ]
 
 const selectedTool = ref(0)
 const selectedEffect = ref(0)
 const toolSize = ref(20)
-const barWidth = ref(50)
-const barHeight = ref(20)
 const strength = ref(15)
-const feather = ref(0)
 const detectConf = ref(25)
-const bgModel = ref('u2net')
-const bgColor = ref('white')
+const eraserMode = ref('brush')
 
-function selectTool(id) {
-  selectedTool.value = id
-  emit('tool-changed', { tool: id, size: toolSize.value })
-}
+function selectTool(id) { selectedTool.value = id; emit('tool-changed', { tool: id, size: toolSize.value }) }
+function selectEffect(id) { selectedEffect.value = id; emit('effect-changed', { effect: id }) }
+function setEraserMode(mode) { eraserMode.value = mode; emit('eraser-mode-changed', mode) }
+function onApply() { emit('effect-apply', { tool: selectedTool.value, effect: selectedEffect.value, toolSize: toolSize.value, strength: strength.value }) }
 
-function selectEffect(id) {
-  selectedEffect.value = id
-  emit('effect-changed', { effect: id })
-}
-
-function onApply() {
-  const params = {
-    tool: selectedTool.value,
-    effect: selectedEffect.value,
-    toolSize: toolSize.value,
-    barWidth: barWidth.value,
-    barHeight: barHeight.value,
-    strength: strength.value,
-    feather: feather.value,
-  }
-  emit('effect-apply', params)
-}
-
-function onRemoveBg() {
-  emit('remove-bg', { model: bgModel.value, bgColor: bgColor.value })
-}
-
-watch([toolSize, strength, feather, barWidth, barHeight], () => {
-  emit('params-changed', {
-    toolSize: toolSize.value,
-    strength: strength.value,
-    feather: feather.value,
-    barWidth: barWidth.value,
-    barHeight: barHeight.value,
-  })
-})
+watch([toolSize, strength], () => { emit('params-changed', { toolSize: toolSize.value, strength: strength.value }) })
 </script>
 
 <style scoped>
 .mosaic-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  color: #E8E8E8;
-  font-size: 13px;
+  display: flex; flex-direction: column; height: 100%;
+  padding: 16px; background: var(--bg-secondary); gap: 20px;
 }
 
-.section-header {
-  color: #585858;
-  font-size: 18px;
-  font-weight: bold;
-  padding: 2px;
+.control-group { display: flex; flex-direction: column; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-auto { margin-top: auto; }
+
+.chip-grid, .chip-grid-3 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.chip-grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+.chip-btn {
+  height: 38px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: var(--radius-base); color: var(--text-secondary);
+  font-size: 10px; font-weight: 800; cursor: pointer; transition: var(--transition);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.chip-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.chip-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+.glass-box {
+  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: var(--radius-card); padding: 12px;
 }
 
-.tool-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+.header-with-action { display: flex; justify-content: space-between; align-items: center; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #333; }
+.status-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 
-.tool-btn {
-  background-color: #1A1A1A;
-  border: 1px solid #2A2A2A;
-  border-radius: 6px;
-  color: #B0B0B0;
-  font-size: 13px;
-  font-weight: bold;
-  text-align: left;
-  padding: 8px 12px;
-  cursor: pointer;
-  height: 36px;
-  display: flex;
-  align-items: center;
-}
-.tool-btn:hover {
-  border-color: #585858;
-  background-color: #222;
-}
-.tool-btn.active {
-  background-color: #E2B340;
-  color: #fff;
-  border-color: #E2B340;
-}
-.tool-btn.active:hover {
-  background-color: #E2B340;
-}
+.model-info { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.divider {
-  height: 1px;
-  background-color: #2A2A2A;
-  margin: 4px 0;
+.ghost-btn {
+  flex: 1; height: 28px; background: transparent; border: 1px dashed var(--border);
+  border-radius: 4px; color: var(--text-secondary); font-size: 9px; font-weight: 700; cursor: pointer;
 }
+.ghost-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 
-.auto-censor-section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.model-label {
-  color: #B0B0B0;
-  font-size: 12px;
-  word-wrap: break-word;
-}
-
-.btn-row {
-  display: flex;
-  gap: 4px;
-}
-
-.btn-row-3 {
-  display: flex;
-  gap: 4px;
-}
-
-.secondary-btn {
-  flex: 1;
-  height: 35px;
-  background-color: #222;
-  border: 1px solid #2A2A2A;
-  border-radius: 4px;
-  color: #E8E8E8;
-  font-size: 13px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.secondary-btn:hover {
-  background-color: #2A2A2A;
-}
-
-.censor-btn {
-  height: 35px;
-  background-color: #8B0000;
-  color: #fff;
-  border: 1px solid #B22222;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.censor-btn:hover {
-  background-color: #A52A2A;
-}
-
-.detect-btn {
-  height: 35px;
-  background-color: #222;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.detect-btn:hover {
-  background-color: #2A2A2A;
-}
-
-.detect-status {
-  color: #585858;
-  font-size: 10px;
-  min-height: 18px;
-}
-
-.slider-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.slider-label {
-  color: #B0B0B0;
-  font-size: 12px;
-  min-width: 60px;
-  white-space: nowrap;
-}
-
-.slider {
-  flex: 1;
-  accent-color: #E2B340;
-  height: 4px;
-  background: #2A2A2A;
-  border-radius: 2px;
-}
-
-.slider-value {
-  color: #E8E8E8;
-  font-size: 12px;
-  min-width: 30px;
-  text-align: right;
-}
-
-.action-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.accent-btn {
-  height: 40px;
-  background-color: #E2B340;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.accent-btn:hover {
-  background-color: #c9a038;
-}
-
-.cancel-btn {
-  height: 40px;
-  background-color: #222;
-  color: #B0B0B0;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.cancel-btn:hover {
-  background-color: #2A2A2A;
-}
+.btn-row { display: flex; gap: 6px; }
 
 .action-btn {
-  flex: 1;
-  height: 35px;
-  background-color: #1A1A1A;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: bold;
-  cursor: pointer;
+  flex: 1; height: 34px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-primary); font-size: 10px; font-weight: 800; cursor: pointer;
 }
-.action-btn:hover {
-  background-color: #222;
-}
+.action-btn.primary { background: var(--accent); color: #000; border: none; }
 
-.action-btn.full-width {
-  width: 100%;
+.slider-box { display: flex; flex-direction: column; gap: 4px; }
+.slider-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; color: var(--text-secondary); }
+
+.modern-slider {
+  appearance: none; width: 100%; height: 4px; background: var(--bg-input);
+  border-radius: 2px; outline: none; accent-color: var(--accent);
 }
 
-.flex-1 { flex: 1; }
-.flex-2 { flex: 2; }
+.main-apply-btn {
+  width: 100%; height: 46px; background: var(--accent); border: none;
+  border-radius: var(--radius-pill); color: #000; font-weight: 900;
+  font-size: 12px; letter-spacing: 1px; cursor: pointer; transition: var(--transition);
+}
+.main-apply-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(250, 204, 21, 0.3); }
 
-.bg-remove-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.secondary-btn {
+  width: 100%; height: 36px; background: transparent; border: 1px solid var(--border);
+  border-radius: var(--radius-pill); color: var(--text-muted); font-size: 10px; font-weight: 700; cursor: pointer;
 }
 
-.small-label {
-  color: #B0B0B0;
-  font-size: 12px;
-  min-width: 35px;
-}
-
-.select-input {
-  flex: 1;
-  height: 30px;
-  background-color: #1A1A1A;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
-  border-radius: 4px;
-  font-size: 12px;
-  padding: 2px 6px;
+.btn-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.mini-btn {
+  height: 30px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text-secondary); cursor: pointer;
 }
 </style>

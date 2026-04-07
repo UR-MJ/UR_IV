@@ -1,510 +1,265 @@
 <template>
   <div class="prompt-panel">
-    <!-- 최종 프롬프트 (접이식) -->
-    <button class="toggle-btn" @click="showFinal = !showFinal">
-      {{ showFinal ? '▼' : '▶' }} 최종 프롬프트
-    </button>
-    <div v-show="showFinal" class="collapsible">
-      <textarea
-        class="input-area final-prompt"
-        :value="get('total_prompt_display')"
-        @input="set('total_prompt_display', $event.target.value)"
-        placeholder="Final output prompt..."
-        rows="3"
-      />
-      <div class="token-count">TOKENS: {{ tokenCount }}</div>
-    </div>
-
-    <!-- 인물 수 -->
-    <label class="field-label">인물 수</label>
-    <input
-      class="input-field"
-      :value="get('char_count_input')"
-      @input="set('char_count_input', $event.target.value)"
-      placeholder="예: 1girl, 2boys"
-    />
-
-    <!-- 캐릭터 -->
-    <label class="field-label">캐릭터</label>
-    <input
-      class="input-field"
-      :value="get('character_input')"
-      @input="set('character_input', $event.target.value)"
-      placeholder="캐릭터 이름"
-    />
-
-    <!-- 작품명 -->
-    <label class="field-label">작품명</label>
-    <input
-      class="input-field"
-      :value="get('copyright_input')"
-      @input="set('copyright_input', $event.target.value)"
-      placeholder="작품 (Copyright)"
-    />
-
-    <!-- 작가 + 고정 -->
-    <div class="artist-row">
-      <label class="field-label">작가</label>
-      <button
-        class="lock-btn"
-        :class="{ active: get('btn_lock_artist') === 'true' }"
-        @click="toggle('btn_lock_artist')"
-      >🔒</button>
-    </div>
-    <textarea
-      class="input-area"
-      :value="get('artist_input')"
-      @input="set('artist_input', $event.target.value)"
-      placeholder="작가 태그..."
-      rows="2"
-    />
-
-    <!-- 선행 프롬프트 -->
-    <label class="field-label">선행 프롬프트</label>
-    <textarea
-      class="input-area"
-      :value="get('prefix_prompt_text')"
-      @input="set('prefix_prompt_text', $event.target.value)"
-      placeholder="year 2025, masterpiece, best quality, ..."
-      rows="2"
-    />
-
-    <!-- 메인 프롬프트 (자동완성) -->
-    <label class="field-label">메인 프롬프트</label>
-    <div class="autocomplete-wrap">
-      <textarea
-        class="input-area main-prompt"
-        :value="get('main_prompt_text')"
-        @input="onMainInput($event)"
-        @keydown="onAutoKey($event)"
-        placeholder="메인 태그 입력..."
-        rows="4"
-        ref="mainPromptRef"
-      />
-      <div v-if="autoSuggestions.length" class="auto-popup">
-        <div v-for="(s, i) in autoSuggestions" :key="s"
-          class="auto-item" :class="{ active: autoIdx === i }"
-          @mousedown.prevent="applyAutoComplete(s)"
-        >{{ s }}</div>
+    <!-- 1. FINAL OUTPUT PROMPT (최상단, 가장 중요) -->
+    <div class="glass-card highlight">
+      <div class="card-header">
+        FINAL OUTPUT PROMPT
+        <span class="token-info">{{ tokenCount }} tokens</span>
+      </div>
+      <textarea ref="totalPromptRef" v-model="widgets.total_prompt"
+        class="total-prompt auto-grow" placeholder="인물수, 캐릭터, 작품, 작가, 선행, 메인, 후행 순서로 종합됩니다"
+        @input="autoGrow($event.target)"></textarea>
+      <div class="neg-section">
+        <label class="danger-label">NEGATIVE</label>
+        <textarea ref="negRef" v-model="widgets.negative_prompt"
+          class="neg-prompt auto-grow" placeholder="Negative prompt..."
+          @input="autoGrow($event.target)"></textarea>
       </div>
     </div>
 
-    <!-- 후행 프롬프트 -->
-    <label class="field-label">후행 프롬프트</label>
-    <textarea
-      class="input-area"
-      :value="get('suffix_prompt_text')"
-      @input="set('suffix_prompt_text', $event.target.value)"
-      placeholder="후행 고정 태그..."
-      rows="2"
-    />
-
-    <!-- 네거티브 프롬프트 -->
-    <label class="field-label negative">네거티브 프롬프트</label>
-    <textarea
-      class="input-area"
-      :value="get('neg_prompt_text')"
-      @input="set('neg_prompt_text', $event.target.value)"
-      placeholder="lowres, bad quality, ..."
-      rows="2"
-    />
-
-    <!-- 즐겨찾기 태그바 -->
-    <div class="fav-tags" v-if="favTags.length">
-      <button v-for="tag in favTags" :key="tag" class="fav-tag"
-        @click="insertFavTag(tag)" @contextmenu.prevent="removeFavTag(tag)"
-      >{{ tag }}</button>
-      <button class="fav-tag add-tag" @click="addFavTag">+</button>
+    <!-- 2. CHARACTER & MODEL -->
+    <div class="glass-card">
+      <div class="card-header">CHARACTER & MODEL</div>
+      <div class="input-group">
+        <label>Char Count</label>
+        <input type="text" v-model="widgets.char_count" placeholder="e.g. 1girl, 2girls..." />
+      </div>
+      <div class="input-group">
+        <label>Character</label>
+        <div class="row">
+          <input type="text" v-model="widgets.character" placeholder="e.g. hatsune miku" />
+          <button class="small-btn" @click="requestAction('open_character_preset')">PRESET</button>
+        </div>
+      </div>
+      <div class="input-group">
+        <label>Copyright</label>
+        <input type="text" v-model="widgets.copyright" placeholder="Copyright / Series..." />
+      </div>
+      <div class="input-group">
+        <div class="row label-row">
+          <label>Artist</label>
+          <button class="lock-btn" :class="{ locked: artistLocked }" @click="toggleArtistLock" title="잠금: 랜덤 프롬프트로 변경되지 않음">
+            {{ artistLocked ? '🔒' : '🔓' }}
+          </button>
+        </div>
+        <textarea ref="artistRef" v-model="widgets.artist" class="auto-grow" placeholder="Artist tags..."
+          @input="autoGrow($event.target)"></textarea>
+      </div>
+      <div class="input-group">
+        <label>Checkpoint</label>
+        <select v-model="widgets.model">
+          <option v-for="m in modelItems" :key="m" :value="m">{{ m }}</option>
+        </select>
+      </div>
     </div>
-    <div v-else class="fav-tags-empty">
-      <button class="fav-tag add-tag" @click="addFavTag">+ 즐겨찾기 태그 추가</button>
-    </div>
 
-    <!-- 제외 프롬프트 (접이식) -->
-    <button class="toggle-btn" @click="showExclude = !showExclude">
-      {{ showExclude ? '▼' : '▶' }} 제외 프롬프트
+    <!-- 3. PROMPT BLOCKS -->
+    <details class="glass-card" open>
+      <summary class="card-header">PROMPT BLOCKS</summary>
+      <div class="input-group">
+        <label>Prefix</label>
+        <textarea ref="prefixRef" v-model="widgets.prefix_prompt" class="auto-grow" placeholder="선행 프롬프트..."
+          @input="autoGrow($event.target)"></textarea>
+      </div>
+      <div class="input-group">
+        <label>Main Tags</label>
+        <textarea ref="mainRef" v-model="widgets.main_prompt" class="auto-grow" placeholder="메인 태그..."
+          @input="autoGrow($event.target)" rows="3"></textarea>
+      </div>
+      <div class="input-group">
+        <label>Suffix</label>
+        <textarea ref="suffixRef" v-model="widgets.suffix_prompt" class="auto-grow" placeholder="후행 프롬프트..."
+          @input="autoGrow($event.target)"></textarea>
+      </div>
+      <div class="input-group">
+        <label>Exclude (Local)</label>
+        <textarea ref="excludeRef" v-model="widgets.exclude_local" class="auto-grow" placeholder="제외 태그..."
+          @input="autoGrow($event.target)"></textarea>
+      </div>
+    </details>
+
+    <!-- 4. PARAMETERS -->
+    <details class="glass-card">
+      <summary class="card-header">PARAMETERS</summary>
+      <div class="input-group">
+        <label>Resolution</label>
+        <div class="res-row">
+          <input type="number" v-model="widgets.width" />
+          <span>×</span>
+          <input type="number" v-model="widgets.height" />
+          <button class="icon-btn" @click="requestAction('swap_resolution')">↔</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="input-group">
+          <label>Sampler</label>
+          <select v-model="widgets.sampler">
+            <option v-for="s in samplerItems" :key="s" :value="s">{{ s }}</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Scheduler</label>
+          <select v-model="widgets.scheduler">
+            <option v-for="s in schedulerItems" :key="s" :value="s">{{ s }}</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="input-group">
+          <label>Steps</label>
+          <input type="number" v-model="widgets.steps" min="1" max="150" />
+        </div>
+        <div class="input-group">
+          <label>CFG Scale</label>
+          <input type="number" v-model="widgets.cfg" step="0.5" />
+        </div>
+      </div>
+      <div class="input-group">
+        <label>Seed</label>
+        <div class="row">
+          <input type="text" v-model="widgets.seed" />
+          <button class="icon-btn" @click="widgets.seed = '-1'">🎲</button>
+        </div>
+      </div>
+    </details>
+
+    <!-- 5. 확장 패널 열기 버튼 -->
+    <button class="expand-btn" @click="$emit('toggle-extend')">
+      ⚙ ADVANCED (ADetailer / Hires / LoRA)
     </button>
-    <div v-show="showExclude" class="collapsible">
-      <textarea
-        class="input-area"
-        :value="get('exclude_prompt_local_input')"
-        @input="set('exclude_prompt_local_input', $event.target.value)"
-        placeholder="예: arms up, __hair, ~blue hair"
-        rows="2"
-      />
-    </div>
-
-    <!-- 태그 제거 옵션 (접이식) -->
-    <button class="toggle-btn" @click="showRemove = !showRemove">
-      {{ showRemove ? '▼' : '▶' }} 태그 제거 옵션
-    </button>
-    <div v-show="showRemove" class="collapsible remove-opts">
-      <label class="chk-row" v-for="opt in removeOptions" :key="opt.id">
-        <input type="checkbox"
-          :checked="get(opt.id) === 'true'"
-          @change="set(opt.id, $event.target.checked ? 'true' : 'false')"
-        />
-        <span>{{ opt.label }}</span>
-      </label>
-    </div>
-
-    <!-- LoRA (접이식) -->
-    <button class="toggle-btn" @click="showLora = !showLora">
-      {{ showLora ? '▼' : '▶' }} LoRA
-    </button>
-    <div v-show="showLora" class="collapsible">
-      <button class="small-btn" @click="action('open_lora_manager')">LoRA 관리</button>
-      <button class="small-btn" @click="action('open_tag_weight_editor')">⚖ 가중치 편집</button>
-    </div>
-
-    <!-- 생성 설정 (접이식) -->
-    <button class="toggle-btn settings-toggle" @click="showSettings = !showSettings">
-      {{ showSettings ? '▼' : '▶' }} 생성 설정
-    </button>
-    <SettingsPanel v-show="showSettings" />
-
-    <!-- 하단 고정 영역 -->
-    <div class="bottom-fixed">
-      <!-- 자동화 -->
-      <button
-        class="auto-toggle"
-        :class="{ active: autoOn }"
-        @click="autoOn = !autoOn; action('toggle_automation', { checked: autoOn })"
-      >
-        AUTOMATION: {{ autoOn ? 'ON' : 'OFF' }}
-      </button>
-
-      <!-- 생성 버튼 -->
-      <button
-        class="generate-btn"
-        @click="action('generate')"
-      >
-        {{ autoOn ? '자동화 시작' : '이미지 생성' }}
-      </button>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { state, getValue, setValue, requestAction } from '../stores/widgetStore.js'
-import SettingsPanel from './SettingsPanel.vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
 
-const showFinal = ref(false)
-const showExclude = ref(false)
-const showRemove = ref(false)
-const showLora = ref(false)
-const showSettings = ref(false)
-const autoOn = ref(false)
+const emit = defineEmits(['toggle-extend'])
 
-const removeOptions = [
-  { id: 'chk_remove_artist', label: '작가명 제거' },
-  { id: 'chk_remove_copyright', label: '작품명 제거' },
-  { id: 'chk_remove_character', label: '캐릭터 제거' },
-  { id: 'chk_remove_meta', label: '메타 제거' },
-  { id: 'chk_remove_censorship', label: '검열 제거' },
-  { id: 'chk_remove_text', label: '텍스트 제거' },
-]
+const store = useWidgetStore()
+const widgets = store.widgets
 
+const artistLocked = ref(false)
+const totalPromptRef = ref(null)
+const negRef = ref(null)
+const artistRef = ref(null)
+const prefixRef = ref(null)
+const mainRef = ref(null)
+const suffixRef = ref(null)
+const excludeRef = ref(null)
+
+const modelItems = computed(() => store.getProperty('model_combo', 'items') || [])
+const samplerItems = computed(() => store.getProperty('sampler_combo', 'items') || [])
+const schedulerItems = computed(() => store.getProperty('scheduler_combo', 'items') || [])
 const tokenCount = computed(() => {
-  const text = getValue('total_prompt_display')
-  if (!text) return '0 / 75'
-  const count = text.split(',').filter(t => t.trim()).length
-  return `${count} / 75`
+  const t = widgets.total_prompt
+  if (!t) return 0
+  return t.split(',').filter(s => s.trim()).length
 })
 
-function get(id) {
-  return state.values[id] ?? ''
+function toggleArtistLock() {
+  artistLocked.value = !artistLocked.value
+  requestAction('set_artist_locked', { locked: artistLocked.value })
 }
 
-function set(id, value) {
-  setValue(id, value)
+function autoGrow(el) {
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = el.scrollHeight + 'px'
 }
 
-function toggle(id) {
-  const cur = get(id) === 'true'
-  set(id, cur ? 'false' : 'true')
+// 초기 로드 시 모든 textarea 자동 크기 조절
+function growAll() {
+  nextTick(() => {
+    ;[totalPromptRef, negRef, artistRef, prefixRef, mainRef, suffixRef, excludeRef].forEach(r => {
+      if (r.value) autoGrow(r.value)
+    })
+  })
 }
 
-// 태그 자동완성
-const autoSuggestions = ref([])
-const autoIdx = ref(-1)
-const mainPromptRef = ref(null)
-let autoTimer = null
+onMounted(() => {
+  // 초기 값 로드 후 autoGrow
+  setTimeout(growAll, 500)
+  setTimeout(growAll, 1500) // 배치 업데이트 후 재조정
+})
 
-async function onMainInput(e) {
-  set('main_prompt_text', e.target.value)
-  // 마지막 태그 추출
-  const text = e.target.value
-  const lastComma = text.lastIndexOf(',')
-  const currentWord = text.substring(lastComma + 1).trim()
-  if (currentWord.length < 2) { autoSuggestions.value = []; return }
-
-  clearTimeout(autoTimer)
-  autoTimer = setTimeout(async () => {
-    const { getBackend } = await import('../bridge.js')
-    const backend = await getBackend()
-    if (backend.getTagSuggestions) {
-      backend.getTagSuggestions(currentWord, (json) => {
-        try { autoSuggestions.value = JSON.parse(json).slice(0, 8) } catch {}
-      })
-    }
-  }, 150)
-}
-
-function onAutoKey(e) {
-  if (!autoSuggestions.value.length) return
-  if (e.key === 'ArrowDown') { e.preventDefault(); autoIdx.value = Math.min(autoIdx.value + 1, autoSuggestions.value.length - 1) }
-  if (e.key === 'ArrowUp') { e.preventDefault(); autoIdx.value = Math.max(autoIdx.value - 1, 0) }
-  if (e.key === 'Enter' && autoIdx.value >= 0) {
-    e.preventDefault()
-    applyAutoComplete(autoSuggestions.value[autoIdx.value])
-  }
-  if (e.key === 'Escape') { autoSuggestions.value = []; autoIdx.value = -1 }
-}
-
-function applyAutoComplete(tag) {
-  const text = get('main_prompt_text')
-  const lastComma = text.lastIndexOf(',')
-  const before = lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : ''
-  set('main_prompt_text', before + tag + ', ')
-  autoSuggestions.value = []
-  autoIdx.value = -1
-}
-
-// 즐겨찾기 태그
-const favTags = ref([])
-
-async function loadFavTags() {
-  try {
-    const resp = localStorage.getItem('favorite_tags')
-    if (resp) favTags.value = JSON.parse(resp)
-  } catch {}
-}
-function saveFavTags() {
-  localStorage.setItem('favorite_tags', JSON.stringify(favTags.value))
-}
-function insertFavTag(tag) {
-  const cur = get('main_prompt_text')
-  const newVal = cur ? cur + ', ' + tag : tag
-  set('main_prompt_text', newVal)
-}
-function removeFavTag(tag) {
-  favTags.value = favTags.value.filter(t => t !== tag)
-  saveFavTags()
-}
-function addFavTag() {
-  const tag = prompt('추가할 태그:')
-  if (tag && tag.trim()) {
-    favTags.value.push(tag.trim())
-    saveFavTags()
-  }
-}
-
-// 초기 로드
-onMounted(loadFavTags)
-
-function action(name, payload = {}) {
-  requestAction(name, payload)
-}
+// 위젯 값 변경 시 자동 크기
+watch(() => widgets.total_prompt, () => nextTick(() => { if (totalPromptRef.value) autoGrow(totalPromptRef.value) }))
+watch(() => widgets.negative_prompt, () => nextTick(() => { if (negRef.value) autoGrow(negRef.value) }))
+watch(() => widgets.artist, () => nextTick(() => { if (artistRef.value) autoGrow(artistRef.value) }))
+watch(() => widgets.main_prompt, () => nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) }))
 </script>
 
 <style scoped>
-.prompt-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+.prompt-panel { display: flex; flex-direction: column; gap: 12px; }
+
+.glass-card {
+  background: rgba(20, 20, 20, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 14px;
+  transition: var(--transition);
+}
+.glass-card.highlight { border-color: var(--accent-dim); background: rgba(250, 204, 21, 0.02); }
+.glass-card:hover { border-color: #333; }
+
+.card-header {
+  font-size: 10px; font-weight: 800; color: var(--text-muted);
+  letter-spacing: 1.5px; margin-bottom: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
 }
 
-.field-label {
-  font-size: 11px;
-  color: #585858;
-  font-weight: 600;
-  margin-top: 6px;
-  padding: 0;
-}
-.field-label.negative {
-  color: #E05252;
+summary { list-style: none; outline: none; }
+summary::-webkit-details-marker { display: none; }
+
+.input-group { margin-bottom: 10px; }
+.mt-4 { margin-top: 4px; }
+.row { display: flex; gap: 6px; }
+.label-row { align-items: center; margin-bottom: 4px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.small-btn {
+  padding: 0 12px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: var(--radius-base); color: var(--text-secondary);
+  font-size: 10px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
 
-.input-field {
-  width: 100%;
-  background: #131313;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 12px;
-  color: #E8E8E8;
-  font-size: 13px;
-  outline: none;
-  transition: background 0.2s;
-}
-.input-field:focus {
-  background: #1A1A1A;
-}
-
-.input-area {
-  width: 100%;
-  background: #131313;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 12px;
-  color: #E8E8E8;
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
-  outline: none;
-  min-height: 40px;
-  transition: background 0.2s;
-}
-.input-area:focus {
-  background: #1A1A1A;
-}
-.input-area.main-prompt {
-  min-height: 80px;
-}
-.input-area.final-prompt {
-  min-height: 60px;
-  color: #787878;
-  font-size: 12px;
-}
-
-.artist-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 6px;
+.icon-btn {
+  width: 36px; height: 36px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: var(--radius-base); color: var(--text-primary); cursor: pointer; flex-shrink: 0;
 }
 
 .lock-btn {
-  background: #181818;
-  border: none;
-  border-radius: 6px;
-  color: #585858;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  background: none; border: none; cursor: pointer; font-size: 14px; padding: 0 4px;
+  opacity: 0.5; transition: var(--transition);
 }
-.lock-btn.active {
-  background: #E2B340;
-  color: #0A0A0A;
+.lock-btn.locked { opacity: 1; }
+
+.total-prompt {
+  min-height: 60px; font-family: 'Consolas', monospace; font-size: 12px;
+  line-height: 1.5; color: var(--accent); border-color: var(--accent-dim);
 }
 
-.toggle-btn {
-  background: transparent;
-  border: none;
-  color: #484848;
-  font-size: 11px;
-  text-align: left;
-  padding: 6px 0;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-.toggle-btn:hover {
-  color: #787878;
-}
-.toggle-btn.settings-toggle {
-  background: #161616;
-  border: 1px solid #1A1A1A;
-  border-radius: 6px;
-  padding: 8px 12px;
-  margin-top: 8px;
-  font-weight: 600;
-}
+.neg-section { margin-top: 8px; }
+.danger-label { color: #f87171; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.neg-prompt { min-height: 30px; color: #f87171; border-color: rgba(248,113,113,0.2); }
 
-.collapsible {
-  padding: 4px 0;
-}
+.auto-grow { resize: none; overflow: hidden; min-height: 32px; }
 
-.token-count {
-  text-align: right;
-  font-size: 10px;
-  color: #484848;
-  padding: 2px 0;
-}
+.token-info { font-size: 9px; color: var(--text-muted); }
 
-.bottom-fixed {
-  margin-top: auto;
-  padding-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+.res-row { display: flex; align-items: center; gap: 8px; }
+.res-row input { text-align: center; }
 
-.auto-toggle {
-  width: 100%;
-  padding: 8px;
-  background: #181818;
-  border: none;
-  border-radius: 6px;
-  color: #787878;
-  font-weight: 600;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
+.expand-btn {
+  width: 100%; padding: 10px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: var(--radius-card); color: var(--text-secondary);
+  font-size: 11px; font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
+  transition: var(--transition);
 }
-.auto-toggle.active {
-  background: #4CAF50;
-  color: #000;
-}
+.expand-btn:hover { border-color: var(--accent-dim); color: var(--accent); }
 
-.generate-btn {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(90deg, #E2B340, #D4882A);
-  border: none;
-  border-radius: 10px;
-  color: #000;
-  font-weight: 800;
-  font-size: 15px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.generate-btn:hover {
-  background: linear-gradient(90deg, #F0C850, #E09030);
-}
-.remove-opts {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
-}
-.chk-row {
-  display: flex; align-items: center; gap: 6px;
-  color: #B0B0B0; font-size: 11px; padding: 3px 0; cursor: pointer;
-}
-.chk-row input { accent-color: #E2B340; }
-.small-btn {
-  padding: 5px 10px; background: #181818; border: none; border-radius: 4px;
-  color: #787878; font-size: 11px; cursor: pointer; margin: 2px;
-}
-.small-btn:hover { background: #222; color: #E8E8E8; }
-
-/* 즐겨찾기 태그바 */
-.fav-tags, .fav-tags-empty {
-  display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0;
-}
-.fav-tag {
-  padding: 3px 8px; background: #1A1A1A; border: none; border-radius: 4px;
-  color: #E2B340; font-size: 10px; cursor: pointer; white-space: nowrap;
-}
-.fav-tag:hover { background: #222; }
-.fav-tag.add-tag { color: #585858; }
-
-/* 자동완성 */
-.autocomplete-wrap { position: relative; }
-.auto-popup {
-  position: absolute; left: 0; right: 0; bottom: 100%;
-  background: #1A1A1A; border-radius: 6px; padding: 4px;
-  z-index: 100; max-height: 200px; overflow-y: auto;
-  box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
-}
-.auto-item {
-  padding: 5px 10px; font-size: 12px; color: #B0B0B0;
-  cursor: pointer; border-radius: 3px;
-}
-.auto-item:hover, .auto-item.active {
-  background: #222; color: #E2B340;
-}
+label.danger { color: #f87171; }
+input[type="number"] { -moz-appearance: textfield; }
+input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
 </style>

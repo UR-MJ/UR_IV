@@ -43,9 +43,24 @@ class UISetupMixin:
             def javaScriptConsoleMessage(self, level, message, line, source):
                 print(f"[Vue] {message}")
 
+        from PyQt6.QtWebEngineCore import QWebEngineProfile
+        
+        # 캐시 및 데이터 경로 설정 (프로세스 간 충돌 방지 및 액세스 거부 방지)
+        # 고정된 경로가 아닌 앱 전용 독립 경로 사용
+        base_cache_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend_ui_cache"))
+        os.makedirs(base_cache_path, exist_ok=True)
+        
+        # 독립적인 프로필 생성 (defaultProfile 대신 사용)
+        self.web_profile = QWebEngineProfile("AIStudioProfile", self)
+        self.web_profile.setPersistentStoragePath(os.path.join(base_cache_path, "Storage"))
+        self.web_profile.setCachePath(os.path.join(base_cache_path, "Cache"))
+        self.web_profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
+        
         self.vue_viewer = QWebEngineView()
         self.vue_viewer.setStyleSheet("border: none; background: transparent; margin: 0px; padding: 0px;")
-        page = _DebugPage(self.vue_viewer)
+        
+        # 중요: 새로 만든 프로필로 페이지 생성
+        page = _DebugPage(self.web_profile, self.vue_viewer)
         self.vue_viewer.setPage(page)
 
         channel = QWebChannel(page)
@@ -568,9 +583,12 @@ class UISetupMixin:
         self.lora_active_panel = type('LoraProxy', (), {
             'hide': lambda s: None, 'show': lambda s: None,
             'get_active_loras': lambda s: [],
+            'get_active_lora_text': lambda s: '',
             'clear_all': lambda s: None,
             'get_entries': lambda s: [],
             'set_entries': lambda s, e: None,
+            'add_lora': lambda s, n, w: None,
+            'parse_and_add_loras': lambda s, t: None,
         })()
 
     def _prompt_label(self, text: str, color: str = None) -> QLabel:
@@ -1670,16 +1688,26 @@ class UISetupMixin:
         dlg.exec()
 
     def _on_lora_inserted(self, lora_text: str):
-        """LoRA를 활성 패널에 추가"""
+        """LoRA를 활성 패널에 추가 + Vue로 전달"""
         import re
-        m = re.match(r'<lora:(.+?):([\d.]+)>', lora_text)
+        m = re.match(r'<lora:(.+?):([-\d.]+)>', lora_text)
         if m:
             name, weight = m.group(1), float(m.group(2))
             self.lora_active_panel.add_lora(name, weight)
+            # Vue LoRA Stack으로 전달
+            if hasattr(self, 'vue_bridge'):
+                import json as _json
+                self.vue_bridge.loraInserted.emit(_json.dumps({'name': name, 'weight': weight}))
 
     def _on_lora_batch_inserted(self, text: str):
         """다이얼로그에서 일괄 붙여넣기된 LoRA 텍스트를 패널에 추가"""
+        import re
         self.lora_active_panel.parse_and_add_loras(text)
+        # Vue로도 전달
+        if hasattr(self, 'vue_bridge'):
+            import json as _json
+            for m in re.finditer(r'<lora:(.+?):([-\d.]+)>', text):
+                self.vue_bridge.loraInserted.emit(_json.dumps({'name': m.group(1), 'weight': float(m.group(2))}))
 
     def _update_token_count(self):
         """최종 프롬프트 토큰 수 추정 (CLIP 기준 근사)"""

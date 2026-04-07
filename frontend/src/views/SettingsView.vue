@@ -1,74 +1,116 @@
 <template>
-  <div class="settings-view">
-    <div class="sub-tab-bar">
+  <div class="settings-workspace">
+    <!-- Left: Sub-navigation -->
+    <aside class="settings-nav">
+      <div class="nav-header">PREFERENCES</div>
       <button v-for="tab in subTabs" :key="tab.id"
-        class="sub-tab" :class="{ active: currentTab === tab.id }"
+        class="nav-item" :class="{ active: currentTab === tab.id }"
         @click="currentTab = tab.id"
-      >{{ tab.label }}</button>
-    </div>
-    <div class="settings-scroll">
-      <!-- 일반 -->
-      <div v-show="currentTab === 'general'" class="tab-content">
-        <h4 class="section">일반</h4>
-        <div class="row"><span>버전</span><span class="val">AI Studio Pro</span></div>
-        <div class="row"><span>백엔드 관리</span><button class="btn" @click="act('show_api_manager')">연결 설정</button></div>
-      </div>
+      >
+        <span class="icon">{{ tab.icon }}</span>
+        <span class="label">{{ tab.label }}</span>
+      </button>
+    </aside>
 
-      <!-- API -->
-      <div v-show="currentTab === 'api'" class="tab-content">
-        <h4 class="section">API 설정</h4>
-        <div class="row"><span>WebUI URL</span><input class="inp" v-model="webuiUrl" placeholder="http://127.0.0.1:7860" /></div>
-        <div class="row"><span>ComfyUI URL</span><input class="inp" v-model="comfyUrl" placeholder="http://127.0.0.1:8188" /></div>
-        <div class="row"><span>연결 테스트</span><button class="btn" @click="act('show_api_manager')">테스트</button></div>
-      </div>
-
-      <!-- 프롬프트 -->
-      <div v-show="currentTab === 'prompt'" class="tab-content">
-        <h4 class="section">프롬프트 관리</h4>
-        <div class="row"><span>설정 저장</span><button class="btn" @click="act('save_settings')">저장</button></div>
-        <div class="row"><span>프리셋 저장</span><button class="btn" @click="act('save_preset')">저장</button></div>
-        <div class="row"><span>프리셋 불러오기</span><button class="btn" @click="act('load_preset')">불러오기</button></div>
-        <div class="row"><span>프롬프트 히스토리</span><button class="btn" @click="act('show_prompt_history')">열기</button></div>
-        <h4 class="section">정리 옵션</h4>
-        <label class="chk"><input type="checkbox" v-model="cleanDuplicates" /> 중복 태그 자동 제거</label>
-        <label class="chk"><input type="checkbox" v-model="cleanSpaces" /> 공백/쉼표 자동 정리</label>
-        <label class="chk"><input type="checkbox" v-model="cleanUnderscore" /> 언더스코어 → 공백 변환</label>
-      </div>
-
-      <!-- 탭 순서 -->
-      <div v-show="currentTab === 'tabs'" class="tab-content">
-        <h4 class="section">탭 순서</h4>
-        <p class="hint">드래그하여 순서를 변경하세요</p>
-        <div class="tab-order-list">
-          <div v-for="(tab, i) in tabOrder" :key="tab"
-            class="tab-order-item"
-            draggable="true"
-            @dragstart="dragStart(i)" @dragover.prevent @drop="dragDrop(i)"
-          >
-            <span class="drag-handle">⠿</span>
-            <span>{{ tab }}</span>
+    <!-- Right: Content Area -->
+    <main class="settings-body">
+      <div class="settings-content">
+        <!-- 1. General & Backend -->
+        <div v-show="currentTab === 'general'" class="section-fade">
+          <div class="glass-card">
+            <label>SYSTEM STATUS</label>
+            <div class="info-row">
+              <span class="desc">CORE VERSION</span>
+              <span class="val-badge">v2.0.0 PRO</span>
+            </div>
+            <div class="info-row mt-12">
+              <span class="desc">API ORCHESTRATOR</span>
+              <button class="btn-pill" @click="act('show_api_manager')">MANAGE BACKENDS</button>
+            </div>
           </div>
         </div>
-        <button class="btn" @click="applyTabOrder">적용</button>
-        <button class="btn" @click="resetTabOrder">초기화</button>
-      </div>
 
-      <!-- 저장 -->
-      <div v-show="currentTab === 'save'" class="tab-content">
-        <h4 class="section">저장 설정</h4>
-        <div class="row"><span>출력 폴더</span><span class="val">generated_images/</span></div>
-        <div class="row"><span>파일명 형식</span><span class="val">generated_timestamp_random.png</span></div>
-      </div>
+        <!-- 2. Network & API -->
+        <div v-show="currentTab === 'api'" class="section-fade">
+          <div class="glass-card">
+            <label>API CONFIGURATION</label>
+            <div class="input-stack">
+              <div class="input-unit">
+                <span class="unit-label">STABLE DIFFUSION WEBUI</span>
+                <input v-model="webuiUrl" placeholder="http://127.0.0.1:7860" />
+              </div>
+              <div class="input-unit mt-12">
+                <span class="unit-label">COMFYUI (NODE-BASED)</span>
+                <input v-model="comfyUrl" placeholder="http://127.0.0.1:8188" />
+              </div>
+            </div>
+            <button class="btn-pill primary mt-16" @click="act('show_api_manager')">TEST CONNECTIVITY</button>
+          </div>
+        </div>
 
-      <!-- 단축키 -->
-      <div v-show="currentTab === 'shortcuts'" class="tab-content">
-        <h4 class="section">단축키</h4>
-        <div class="row"><span>Undo</span><span class="val">Ctrl+Z</span></div>
-        <div class="row"><span>Redo</span><span class="val">Ctrl+Y</span></div>
-        <div class="row"><span>저장</span><span class="val">Ctrl+S</span></div>
-        <div class="row"><span>선택 해제</span><span class="val">Esc</span></div>
+        <!-- 3. Prompt Logic -->
+        <div v-show="currentTab === 'prompt'" class="section-fade">
+          <div class="glass-card">
+            <label>PROMPT AUTOMATION</label>
+            <div class="toggle-grid">
+              <label class="toggle-row">
+                <span>Auto-clean Duplicates</span>
+                <input type="checkbox" v-model="cleanDuplicates" />
+              </label>
+              <label class="toggle-row">
+                <span>Sanitize Whitespaces</span>
+                <input type="checkbox" v-model="cleanSpaces" />
+              </label>
+              <label class="toggle-row">
+                <span>Convert Underscores</span>
+                <input type="checkbox" v-model="cleanUnderscore" />
+              </label>
+            </div>
+          </div>
+          <div class="glass-card mt-16">
+            <label>DATA PERSISTENCE</label>
+            <div class="btn-row-2">
+              <button class="btn-pill" @click="act('save_settings')">SAVE GLOBAL</button>
+              <button class="btn-pill" @click="act('show_prompt_history')">OPEN HISTORY</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Tab Layout (Drag & Drop) -->
+        <div v-show="currentTab === 'tabs'" class="section-fade">
+          <div class="glass-card">
+            <label>CUSTOM WORKSPACE ORDER</label>
+            <div class="drag-list">
+              <div v-for="(tab, i) in tabOrder" :key="tab"
+                class="drag-item"
+                draggable="true"
+                @dragstart="dragStart(i)" @dragover.prevent @drop="dragDrop(i)"
+              >
+                <span class="handle">⠿</span>
+                <span class="name">{{ tab }}</span>
+              </div>
+            </div>
+            <div class="btn-row-2 mt-16">
+              <button class="btn-pill primary" @click="applyTabOrder">APPLY LAYOUT</button>
+              <button class="btn-pill" @click="resetTabOrder">RESET DEFAULT</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Shortcuts -->
+        <div v-show="currentTab === 'shortcuts'" class="section-fade">
+          <div class="glass-card">
+            <label>HOTKEYS</label>
+            <div class="shortcut-grid">
+              <div class="s-row"><span>Undo Action</span><kbd>Ctrl + Z</kbd></div>
+              <div class="s-row"><span>Redo Action</span><kbd>Ctrl + Y</kbd></div>
+              <div class="s-row"><span>Force Save</span><kbd>Ctrl + S</kbd></div>
+              <div class="s-row"><span>Close Modal</span><kbd>Esc</kbd></div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
@@ -77,12 +119,11 @@ import { ref } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 
 const subTabs = [
-  { id: 'general', label: '일반' },
-  { id: 'api', label: 'API' },
-  { id: 'prompt', label: '프롬프트' },
-  { id: 'tabs', label: '탭 순서' },
-  { id: 'save', label: '저장' },
-  { id: 'shortcuts', label: '단축키' },
+  { id: 'general', label: 'GENERAL', icon: '⚙️' },
+  { id: 'api', label: 'NETWORK', icon: '🌐' },
+  { id: 'prompt', label: 'LOGIC', icon: '📝' },
+  { id: 'tabs', label: 'WORKSPACE', icon: '🗂️' },
+  { id: 'shortcuts', label: 'HOTKEYS', icon: '⌨️' },
 ]
 const currentTab = ref('general')
 const webuiUrl = ref('http://127.0.0.1:7860')
@@ -91,7 +132,6 @@ const cleanDuplicates = ref(true)
 const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
 
-// 탭 순서
 const defaultOrder = ['T2I','I2I','Inpaint','Event Gen','Search','Batch / Upscale','Gallery','XYZ Plot','PNG Info','Favorites','Settings']
 const tabOrder = ref([...defaultOrder])
 let dragIdx = -1
@@ -103,58 +143,74 @@ function dragDrop(i) {
   tabOrder.value.splice(i, 0, item)
   dragIdx = -1
 }
-function applyTabOrder() { requestAction('set_tab_order', { order: tabOrder.value }) }
-function resetTabOrder() { tabOrder.value = [...defaultOrder] }
-
-function act(name) { requestAction(name) }
+const applyTabOrder = () => requestAction('set_tab_order', { order: tabOrder.value })
+const resetTabOrder = () => tabOrder.value = [...defaultOrder]
+const act = (name) => requestAction(name)
 </script>
 
 <style scoped>
-.settings-view { width: 100%; height: 100%; display: flex; flex-direction: column; }
-.sub-tab-bar {
-  display: flex; gap: 0; padding: 0 16px; flex-shrink: 0;
+.settings-workspace { height: 100%; display: flex; background: var(--bg-primary); }
+
+/* Navigation */
+.settings-nav {
+  width: 240px; background: var(--bg-secondary); border-right: 1px solid var(--border);
+  padding: 24px 12px; display: flex; flex-direction: column; gap: 4px;
 }
-.sub-tab {
-  padding: 10px 18px; background: none; border: none;
-  color: #585858; font-size: 12px; font-weight: 600; cursor: pointer;
-  border-bottom: 2px solid transparent; transition: all 0.15s;
+.nav-header { font-size: 10px; font-weight: 900; color: var(--text-muted); letter-spacing: 2px; padding: 0 12px 12px; }
+.nav-item {
+  height: 44px; padding: 0 16px; border: none; background: transparent;
+  border-radius: var(--radius-base); display: flex; align-items: center; gap: 12px;
+  cursor: pointer; transition: var(--transition);
 }
-.sub-tab:hover { color: #E8E8E8; }
-.sub-tab.active { color: #E2B340; border-bottom-color: #E2B340; }
-.settings-scroll { flex: 1; overflow-y: auto; }
-.tab-content { max-width: 600px; margin: 0 auto; padding: 20px; }
-.section {
-  color: #E2B340; font-size: 12px; font-weight: 700; margin: 20px 0 8px;
-  text-transform: uppercase; letter-spacing: 0.5px;
-  padding-bottom: 4px; border-bottom: 1px solid #1A1A1A;
+.nav-item .icon { font-size: 16px; opacity: 0.5; transition: var(--transition); }
+.nav-item .label { font-size: 11px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; }
+.nav-item:hover { background: var(--bg-input); }
+.nav-item.active { background: var(--accent-dim); }
+.nav-item.active .icon { opacity: 1; }
+.nav-item.active .label { color: var(--accent); }
+
+/* Content Area */
+.settings-body { flex: 1; overflow-y: auto; padding: 40px; }
+.settings-content { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+.section-fade { animation: fadeIn 0.3s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.glass-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 24px; }
+
+.info-row { display: flex; justify-content: space-between; align-items: center; }
+.desc { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.val-badge { background: var(--border); padding: 4px 12px; border-radius: var(--radius-pill); font-size: 10px; font-weight: 900; color: var(--accent); }
+
+.input-stack { display: flex; flex-direction: column; gap: 16px; }
+.input-unit { position: relative; }
+.unit-label { position: absolute; left: 12px; top: -8px; background: var(--bg-primary); padding: 0 6px; font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; }
+
+.toggle-grid { display: flex; flex-direction: column; gap: 8px; }
+.toggle-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; background: var(--bg-input); border-radius: var(--radius-base);
+  cursor: pointer; transition: var(--transition);
 }
-.section:first-child { margin-top: 0; }
-.row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 0; border-bottom: 1px solid #111;
+.toggle-row:hover { background: var(--bg-button); }
+.toggle-row span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.toggle-row input { width: 40px; height: 20px; accent-color: var(--accent); }
+
+.btn-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mt-16 { margin-top: 16px; }
+
+.drag-list { display: flex; flex-direction: column; gap: 6px; }
+.drag-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
+  cursor: grab; transition: var(--transition);
 }
-.row span { color: #B0B0B0; font-size: 13px; }
-.val { color: #585858; font-size: 13px; }
-.btn {
-  padding: 6px 14px; background: #181818; border: none; border-radius: 6px;
-  color: #787878; font-size: 12px; cursor: pointer;
-}
-.btn:hover { background: #222; color: #E8E8E8; }
-.inp {
-  background: #131313; border: none; border-radius: 4px; padding: 6px 10px;
-  color: #E8E8E8; font-size: 12px; outline: none; width: 250px;
-}
-.chk {
-  display: flex; align-items: center; gap: 8px;
-  color: #B0B0B0; font-size: 12px; padding: 6px 0; cursor: pointer;
-}
-.chk input { accent-color: #E2B340; }
-.hint { color: #484848; font-size: 11px; margin-bottom: 8px; }
-.tab-order-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-.tab-order-item {
-  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-  background: #131313; border-radius: 4px; cursor: grab; font-size: 12px; color: #B0B0B0;
-}
-.tab-order-item:active { cursor: grabbing; background: #1A1A1A; }
-.drag-handle { color: #484848; }
+.drag-item:active { cursor: grabbing; background: var(--bg-button); scale: 0.98; }
+.drag-item .handle { color: var(--text-muted); }
+.drag-item .name { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--text-primary); }
+
+.shortcut-grid { display: flex; flex-direction: column; gap: 12px; }
+.s-row { display: flex; justify-content: space-between; align-items: center; }
+.s-row span { font-size: 13px; color: var(--text-secondary); }
+kbd { background: var(--bg-button); color: var(--accent); padding: 4px 10px; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 11px; border: 1px solid var(--border); }
 </style>

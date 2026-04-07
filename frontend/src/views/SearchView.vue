@@ -1,91 +1,126 @@
 <template>
-  <div class="search-view">
-    <!-- 좌측: 검색 설정 -->
-    <div class="search-sidebar">
-      <h3>Danbooru Search</h3>
-
-      <!-- 레이팅 -->
-      <div class="section">
-        <label class="sec-label">Rating</label>
-        <div class="rating-row">
-          <label v-for="r in ratings" :key="r.key" class="chk">
-            <input type="checkbox" v-model="r.checked" /> {{ r.label }}
-          </label>
+  <div class="search-workspace">
+    <!-- Left Sidebar: Filters -->
+    <aside class="sidebar">
+      <div class="sidebar-scroll">
+        <div class="sidebar-header">
+          <span class="icon">🔍</span>
+          <h3>TAG EXPLORER</h3>
         </div>
-      </div>
 
-      <!-- 검색 (포함) -->
-      <div class="section">
-        <label class="sec-label">검색 (포함)</label>
-        <div class="tip">💡 쉼표(,)=AND, [A|B]=OR</div>
-        <div class="field-grid">
-          <div class="field" v-for="f in fields" :key="f.key">
-            <label class="flabel">{{ f.label }}</label>
-            <input class="finput" v-model="f.include" :placeholder="f.placeholder" @keydown.enter="search" />
+        <div class="glass-card">
+          <label>Rating Filter</label>
+          <div class="chip-grid-2">
+            <button v-for="r in ratings" :key="r.key"
+              class="mini-chip" :class="{ active: r.checked }"
+              @click="r.checked = !r.checked"
+            >{{ r.label }}</button>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <label>Include Tags</label>
+          <div class="field-stack">
+            <div class="input-unit" v-for="f in fields" :key="f.key">
+              <span class="unit-label">{{ f.label }}</span>
+              <input v-model="f.include" :placeholder="f.placeholder" @keydown.enter="search" />
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-card danger">
+          <label class="danger">Exclude Tags</label>
+          <div class="field-stack">
+            <div class="input-unit" v-for="f in fields" :key="'ex-'+f.key">
+              <input v-model="f.exclude" :placeholder="'No ' + f.label + '...'" @keydown.enter="search" />
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-card info-box">
+          <label>Search Syntax</label>
+          <div class="syntax-info">
+            <div>쉼표(,) = AND 조건</div>
+            <div>[A|B] = OR (A 또는 B)</div>
+            <div>제외: 해당 태그 포함 결과 제거</div>
           </div>
         </div>
       </div>
 
-      <!-- 제외 -->
-      <div class="section exclude-section">
-        <label class="sec-label exclude">제외할 태그</label>
-        <div class="field-grid">
-          <div class="field" v-for="f in fields" :key="'ex-'+f.key">
-            <label class="flabel">{{ f.label }}</label>
-            <input class="finput" v-model="f.exclude" :placeholder="'제외할 '+f.label" @keydown.enter="search" />
-          </div>
+      <div class="sidebar-footer">
+        <button class="btn-search" @click="search" :disabled="searching">
+          <span v-if="!searching">RUN ENGINE</span>
+          <span v-else>SEARCHING...</span>
+        </button>
+        <div class="search-progress" v-if="searching">
+          <div class="search-progress-bar"><div class="search-progress-fill" :style="{ width: searchProgress + '%' }"></div></div>
+        </div>
+        <div class="status-msg">{{ statusText }}</div>
+        <!-- .parquet 저장/불러오기 -->
+        <div class="io-row" v-if="results.length > 0">
+          <button class="io-btn" @click="exportResults">📥 EXPORT</button>
+          <button class="io-btn" @click="importResults">📤 IMPORT</button>
         </div>
       </div>
+    </aside>
 
-      <button class="btn-search" @click="search" :disabled="searching">
-        {{ searching ? '검색 중...' : '🚀 고속 검색 시작' }}
-      </button>
-      <div class="status">{{ statusText }}</div>
-
-      <!-- 집중 검색 -->
-      <div class="section" v-if="results.length > 0">
-        <label class="sec-label">집중 검색 (결과 내 필터)</label>
-        <div class="focus-row">
-          <input class="finput" v-model="focusInclude" placeholder="포함할 태그" @keydown.enter="applyFocus" />
-          <input class="finput" v-model="focusExclude" placeholder="제외할 태그" @keydown.enter="applyFocus" />
-          <button class="btn-sm" @click="applyFocus">필터링</button>
-        </div>
+    <!-- Center: Results List + Preview -->
+    <section class="result-area">
+      <div v-if="results.length === 0 && !searching" class="empty-state">
+        <div class="empty-icon">🗂</div>
+        <h2>READY TO DISCOVER</h2>
+        <p>좌측에서 검색 조건을 입력하고 RUN ENGINE을 클릭하세요</p>
       </div>
-    </div>
 
-    <!-- 우측: 결과 미리보기 -->
-    <div class="result-panel">
-      <div v-if="results.length === 0" class="empty">
-        검색 조건을 입력하고 검색을 시작하세요
-      </div>
-      <template v-else>
-        <!-- 인덱스 + 네비게이션 -->
-        <div class="nav-bar">
-          <button class="nav-btn" @click="prevResult" :disabled="previewIdx <= 0">◀ 이전</button>
-          <span class="nav-idx">[ {{ previewIdx + 1 }} / {{ filteredResults.length }} ]</span>
-          <button class="nav-btn" @click="randomResult">🎲 랜덤</button>
-          <button class="nav-btn" @click="nextResult" :disabled="previewIdx >= filteredResults.length - 1">다음 ▶</button>
+      <template v-else-if="results.length > 0">
+        <!-- 상단 컨트롤 -->
+        <div class="result-toolbar">
+          <div class="nav-controls">
+            <button class="nav-btn" @click="prevResult" :disabled="previewIdx <= 0">◀ PREV</button>
+            <span class="idx-display"><b>{{ previewIdx + 1 }}</b> / {{ filteredResults.length }}</span>
+            <button class="nav-btn" @click="nextResult" :disabled="previewIdx >= filteredResults.length - 1">NEXT ▶</button>
+            <button class="nav-btn accent" @click="randomResult">🎲 RANDOM</button>
+          </div>
+          <div class="focus-controls">
+            <input v-model="focusInclude" placeholder="Focus include..." @keydown.enter="applyFocus" class="focus-input" />
+            <input v-model="focusExclude" placeholder="Focus exclude..." @keydown.enter="applyFocus" class="focus-input" />
+            <button class="nav-btn" @click="applyFocus">FILTER</button>
+          </div>
         </div>
 
-        <!-- 미리보기 카드 -->
-        <div class="preview-card" v-if="currentResult">
-          <div class="tag-section">
-            <div class="tag-row"><span class="tag-cat copyright">작품</span> {{ currentResult.copyright || '-' }}</div>
-            <div class="tag-row"><span class="tag-cat character">캐릭터</span> {{ currentResult.character || '-' }}</div>
-            <div class="tag-row"><span class="tag-cat artist">작가</span> {{ currentResult.artist || '-' }}</div>
-            <div class="tag-row"><span class="tag-cat rating">레이팅</span> {{ currentResult.rating || '-' }}</div>
+        <div class="result-body">
+          <!-- 좌측: 결과 목록 (스크롤) -->
+          <div class="result-list">
+            <div v-for="(r, i) in filteredResults" :key="i" class="list-item"
+              :class="{ active: previewIdx === i }" @click="previewIdx = i"
+            >
+              <span class="list-idx">{{ i + 1 }}</span>
+              <span class="list-char">{{ r.character || 'GENERIC' }}</span>
+              <span class="list-copy">{{ r.copyright || '' }}</span>
+            </div>
           </div>
-          <div class="general-tags">
-            <label class="flabel">일반 태그</label>
-            <div class="general-text">{{ currentResult.general || '' }}</div>
-          </div>
-          <div class="card-actions">
-            <button class="btn-action apply" @click="applyResult">즉시 적용</button>
-            <button class="btn-action queue" @click="addToQueue">대기열 추가</button>
+
+          <!-- 우측: 상세 프리뷰 -->
+          <div class="preview-card" v-if="currentResult">
+            <div class="meta-grid">
+              <div class="meta-cell"><label>Project</label><div class="meta-val">{{ currentResult.copyright || 'ORIGINAL' }}</div></div>
+              <div class="meta-cell"><label>Artist</label><div class="meta-val highlight">{{ currentResult.artist || 'UNKNOWN' }}</div></div>
+              <div class="meta-cell"><label>Character</label><div class="meta-val character">{{ currentResult.character || 'GENERIC' }}</div></div>
+            </div>
+            <div class="tag-cloud-section">
+              <label>General Tags</label>
+              <div class="tag-cloud">
+                <span v-for="tag in currentTags" :key="tag" class="tag-chip">{{ tag }}</span>
+              </div>
+            </div>
+            <div class="action-bar">
+              <button class="main-action apply" @click="applyResult">USE AS PROMPT</button>
+              <button class="main-action queue" @click="addToQueue">ADD TO QUEUE</button>
+            </div>
           </div>
         </div>
       </template>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -95,169 +130,157 @@ import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
 const ratings = reactive([
-  { key: 'g', label: 'General', checked: true },
-  { key: 's', label: 'Sensitive', checked: false },
-  { key: 'q', label: 'Questionable', checked: false },
-  { key: 'e', label: 'Explicit', checked: false },
+  { key: 'g', label: 'GEN', checked: true },
+  { key: 's', label: 'SENS', checked: false },
+  { key: 'q', label: 'QUES', checked: false },
+  { key: 'e', label: 'EXPL', checked: false },
 ])
 const fields = reactive([
-  { key: 'copyright', label: '작품', placeholder: 'pokemon, [genshin|honkai]', include: '', exclude: '' },
-  { key: 'character', label: '캐릭터', placeholder: 'hatsune_miku', include: '', exclude: '' },
-  { key: 'artist', label: '작가', placeholder: '작가명', include: '', exclude: '' },
-  { key: 'general', label: '일반태그', placeholder: '1boy, [blue_hair|red_hair]', include: '', exclude: '' },
+  { key: 'copyright', label: 'PROJECT', placeholder: 'e.g. genshin', include: '', exclude: '' },
+  { key: 'character', label: 'CHAR', placeholder: 'e.g. raiden_shogun', include: '', exclude: '' },
+  { key: 'artist', label: 'ARTIST', placeholder: 'Artist name...', include: '', exclude: '' },
+  { key: 'general', label: 'TAGS', placeholder: '1boy, blue_hair...', include: '', exclude: '' },
 ])
 const results = ref([])
 const filteredResults = ref([])
 const previewIdx = ref(0)
 const searching = ref(false)
-const statusText = ref('준비 완료')
+const statusText = ref('READY')
+const searchProgress = ref(0)
 const focusInclude = ref('')
 const focusExclude = ref('')
+let progressTimer = null
 
 const currentResult = computed(() => filteredResults.value[previewIdx.value] || null)
+const currentTags = computed(() => {
+  const g = currentResult.value?.general || ''
+  return g.split(/[\s,]+/).filter(Boolean).map(t => t.replace(/_/g, ' '))
+})
 
 async function search() {
-  searching.value = true
-  statusText.value = '검색 중...'
+  searching.value = true; statusText.value = 'EXPLORING...'
+  searchProgress.value = 0
+  progressTimer = setInterval(() => { if (searchProgress.value < 90) searchProgress.value += Math.random() * 15 }, 500)
   const backend = await getBackend()
   const query = {
     ratings: ratings.filter(r => r.checked).map(r => r.key),
     queries: Object.fromEntries(fields.map(f => [f.key, f.include])),
     excludes: Object.fromEntries(fields.map(f => [f.key, f.exclude])),
   }
-  if (backend.searchDanbooru) {
-    backend.searchDanbooru(JSON.stringify(query))
-    // 결과는 시그널로 수신
-  }
+  if (backend.searchDanbooru) backend.searchDanbooru(JSON.stringify(query))
 }
 
-// Search 시그널 수신
 onMounted(() => {
   onBackendEvent('searchResultsReady', (json) => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
-        results.value = data
-        filteredResults.value = data
-        previewIdx.value = 0
-        statusText.value = `${data.length}개 결과`
-      } else {
-        statusText.value = data.error || '검색 실패'
-      }
-    } catch { statusText.value = '파싱 오류' }
-    searching.value = false
+        results.value = data; filteredResults.value = data; previewIdx.value = 0
+        statusText.value = `${data.length} MATCHES FOUND`
+      } else { statusText.value = 'SEARCH FAILED' }
+    } catch { statusText.value = 'PARSE ERROR' }
+    searching.value = false; searchProgress.value = 100
+    if (progressTimer) { clearInterval(progressTimer); progressTimer = null }
   })
-  onBackendEvent('searchStatus', (msg) => {
-    statusText.value = msg
-  })
+  onBackendEvent('searchStatus', (msg) => { statusText.value = msg.toUpperCase() })
 })
 
 function applyFocus() {
-  const inc = focusInclude.value.toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
-  const exc = focusExclude.value.toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
+  const inc = focusInclude.value.toLowerCase().trim()
+  const exc = focusExclude.value.toLowerCase().trim()
   filteredResults.value = results.value.filter(r => {
     const all = `${r.copyright} ${r.character} ${r.artist} ${r.general}`.toLowerCase()
-    if (inc.length && !inc.every(t => all.includes(t))) return false
-    if (exc.length && exc.some(t => all.includes(t))) return false
+    if (inc && !inc.split(',').every(t => all.includes(t.trim()))) return false
+    if (exc && exc.split(',').some(t => all.includes(t.trim()))) return false
     return true
   })
   previewIdx.value = 0
-  statusText.value = `필터: ${filteredResults.value.length} / ${results.value.length}개`
+  statusText.value = `FILTERED: ${filteredResults.value.length} / ${results.value.length}`
 }
 
 function prevResult() { if (previewIdx.value > 0) previewIdx.value-- }
 function nextResult() { if (previewIdx.value < filteredResults.value.length - 1) previewIdx.value++ }
-function randomResult() {
-  if (filteredResults.value.length > 1) {
-    previewIdx.value = Math.floor(Math.random() * filteredResults.value.length)
-  }
-}
-
-function applyResult() {
-  if (currentResult.value) requestAction('apply_search_result', currentResult.value)
-}
-function addToQueue() {
-  if (currentResult.value) requestAction('add_search_to_queue', currentResult.value)
-}
+function randomResult() { if (filteredResults.value.length > 1) previewIdx.value = Math.floor(Math.random() * filteredResults.value.length) }
+function applyResult() { if (currentResult.value) requestAction('apply_search_result', currentResult.value) }
+function addToQueue() { if (currentResult.value) requestAction('add_search_to_queue', currentResult.value) }
+function exportResults() { requestAction('export_search_results', { count: results.value.length }) }
+function importResults() { requestAction('import_search_results') }
 </script>
 
 <style scoped>
-.search-view { width: 100%; height: 100%; display: flex; }
+.search-workspace { height: 100%; display: flex; background: var(--bg-primary); }
 
-/* 좌측 사이드바 */
-.search-sidebar {
-  width: 360px; min-width: 300px; padding: 16px; border-right: 1px solid #1A1A1A;
-  overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
-}
-.search-sidebar h3 { color: #E8E8E8; font-size: 15px; margin: 0 0 8px; }
-.section { margin-bottom: 4px; }
-.sec-label { color: #585858; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-.sec-label.exclude { color: #E05252; }
-.exclude-section { border: 1px solid #2a1515; border-radius: 6px; padding: 8px; }
-.tip { color: #484848; font-size: 10px; margin: 2px 0 6px; }
-.rating-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-.chk { color: #B0B0B0; font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
-.chk input { accent-color: #E2B340; }
-.field-grid { display: flex; flex-direction: column; gap: 4px; }
-.field { display: flex; flex-direction: column; gap: 2px; }
-.flabel { color: #484848; font-size: 10px; font-weight: 600; }
-.finput {
-  background: #131313; border: none; border-radius: 4px; padding: 7px 10px;
-  color: #E8E8E8; font-size: 12px; outline: none; width: 100%;
-}
-.finput:focus { background: #1A1A1A; }
-.btn-search {
-  padding: 12px; background: #4CAF50; border: none; border-radius: 6px;
-  color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 8px;
-}
-.btn-search:disabled { opacity: 0.4; cursor: not-allowed; }
-.status { color: #E2B340; font-size: 11px; text-align: center; font-weight: 600; }
-.focus-row { display: flex; gap: 4px; margin-top: 4px; }
-.focus-row .finput { flex: 1; }
-.btn-sm {
-  padding: 6px 12px; background: #181818; border: none; border-radius: 4px;
-  color: #787878; font-size: 11px; cursor: pointer; white-space: nowrap;
-}
-.btn-sm:hover { background: #222; color: #E8E8E8; }
+.sidebar { width: 300px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); }
+.sidebar-scroll { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.sidebar-header { display: flex; align-items: center; gap: 10px; padding-bottom: 4px; }
+.sidebar-header .icon { font-size: 18px; }
+.sidebar-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-secondary); }
 
-/* 우측 결과 */
-.result-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #484848; font-size: 14px; }
-.nav-bar {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 10px; border-bottom: 1px solid #1A1A1A;
-}
-.nav-btn {
-  padding: 6px 14px; background: #181818; border: none; border-radius: 4px;
-  color: #787878; font-size: 12px; cursor: pointer;
-}
-.nav-btn:hover { background: #222; color: #E8E8E8; }
-.nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.nav-idx { color: #585858; font-size: 12px; min-width: 80px; text-align: center; }
+.glass-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 12px; }
+.glass-card.danger { border-color: rgba(248, 113, 113, 0.1); }
+.info-box .syntax-info { font-size: 10px; color: var(--text-muted); line-height: 1.8; }
+.chip-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.mini-chip { height: 26px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); font-size: 9px; font-weight: 800; cursor: pointer; }
+.mini-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.field-stack { display: flex; flex-direction: column; gap: 6px; }
+.input-unit { position: relative; }
+.unit-label { position: absolute; left: 8px; top: -5px; background: var(--bg-secondary); padding: 0 3px; font-size: 8px; font-weight: 900; color: var(--text-muted); }
 
-.preview-card { flex: 1; padding: 16px; overflow-y: auto; }
-.tag-section { margin-bottom: 12px; }
-.tag-row { font-size: 13px; color: #B0B0B0; padding: 4px 0; border-bottom: 1px solid #111; }
-.tag-cat {
-  display: inline-block; min-width: 50px; font-size: 11px; font-weight: 700; margin-right: 8px;
-}
-.tag-cat.copyright { color: #9b59b6; }
-.tag-cat.character { color: #2ecc71; }
-.tag-cat.artist { color: #e74c3c; }
-.tag-cat.rating { color: #E2B340; }
-.general-tags { margin-bottom: 16px; }
-.general-text {
-  font-size: 12px; color: #787878; line-height: 1.6; max-height: 200px;
-  overflow-y: auto; padding: 8px; background: #111; border-radius: 4px;
-  word-break: break-all;
-}
-.card-actions { display: flex; gap: 8px; }
-.btn-action {
-  flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: 700;
-  font-size: 13px; cursor: pointer;
-}
-.btn-action.apply { background: #E2B340; color: #000; }
-.btn-action.apply:hover { background: #F0C850; }
-.btn-action.queue { background: #181818; color: #787878; }
-.btn-action.queue:hover { background: #222; color: #E8E8E8; }
+.sidebar-footer { padding: 12px; background: var(--bg-card); border-top: 1px solid var(--border); }
+.btn-search { width: 100%; height: 40px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 900; font-size: 11px; letter-spacing: 1px; cursor: pointer; }
+.status-msg { font-size: 9px; font-weight: 800; color: var(--text-muted); text-align: center; margin-top: 6px; }
+.search-progress { margin-top: 6px; }
+.search-progress-bar { width: 100%; height: 3px; background: var(--bg-input); border-radius: 2px; overflow: hidden; }
+.search-progress-fill { height: 100%; background: var(--accent); transition: width 0.4s; }
+.io-row { display: flex; gap: 4px; margin-top: 6px; }
+.io-btn { flex: 1; padding: 5px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 9px; font-weight: 700; cursor: pointer; }
+
+/* Result Area */
+.result-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.2; text-align: center; }
+.empty-icon { font-size: 64px; margin-bottom: 16px; }
+
+.result-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
+.nav-controls { display: flex; align-items: center; gap: 8px; }
+.nav-btn { padding: 5px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 10px; font-weight: 700; cursor: pointer; }
+.nav-btn:hover:not(:disabled) { border-color: var(--text-muted); color: var(--text-primary); }
+.nav-btn.accent { border-color: var(--accent-dim); color: var(--accent); }
+.nav-btn:disabled { opacity: 0.3; }
+.idx-display { font-size: 12px; color: var(--text-secondary); font-family: monospace; }
+.idx-display b { color: var(--accent); font-size: 16px; }
+.focus-controls { display: flex; gap: 4px; align-items: center; }
+.focus-input { width: 140px; padding: 5px 8px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 10px; }
+
+.result-body { flex: 1; display: flex; overflow: hidden; }
+
+/* Result List (좌측 목록) */
+.result-list { width: 280px; overflow-y: auto; border-right: 1px solid var(--border); flex-shrink: 0; }
+.list-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); transition: 0.1s; }
+.list-item:hover { background: rgba(255,255,255,0.02); }
+.list-item.active { background: var(--accent-dim); border-left: 3px solid var(--accent); }
+.list-idx { font-size: 10px; color: var(--text-muted); min-width: 28px; font-family: monospace; }
+.list-char { font-size: 11px; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-copy { font-size: 9px; color: var(--text-muted); }
+
+/* Preview Card (우측 상세) */
+.preview-card { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.meta-cell { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.meta-cell label { font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; }
+.meta-val { font-size: 14px; font-weight: 800; margin-top: 6px; color: var(--text-primary); }
+.meta-val.highlight { color: var(--accent); }
+.meta-val.character { color: #4ade80; }
+
+.tag-cloud-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.tag-cloud-section label { font-size: 10px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 10px; display: block; }
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag-chip { padding: 4px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: #787878; font-size: 10px; }
+
+.action-bar { display: flex; gap: 10px; margin-top: auto; }
+.main-action { flex: 1; height: 46px; border-radius: var(--radius-pill); border: none; font-weight: 900; font-size: 12px; letter-spacing: 1px; cursor: pointer; transition: var(--transition); }
+.main-action.apply { background: var(--accent); color: #000; }
+.main-action.queue { background: var(--bg-button); color: var(--text-secondary); border: 1px solid var(--border); }
+.main-action:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+
+label.danger { color: #f87171; }
 </style>

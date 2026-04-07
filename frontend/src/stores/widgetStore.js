@@ -1,115 +1,92 @@
 /**
- * 위젯 상태 저장소 — Python 프록시와 동기화
- *
- * Python(WidgetProxy) ↔ VueBridge ↔ widgetStore ↔ Vue 컴포넌트
+ * 위젯 상태 저장소 — Python 프록시와 실시간 2방향 동기화
  */
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 
-// 모든 위젯의 값과 속성을 저장
 const state = reactive({
   values: {},      // { widget_id: value_string }
-  properties: {},  // { widget_id: { placeholder, enabled, items, ... } }
+  properties: {},  // { widget_id: { items, enabled, ... } }
 })
 
 let _backend = null
 
 /**
- * 브릿지 연결 (App.vue에서 초기화 시 호출)
+ * 브릿지 연결
  */
 export function connectStore(backend) {
   _backend = backend
 
-  // Python → Vue: 개별 위젯 값 변경
-  if (backend.widgetValueChanged) {
-    backend.widgetValueChanged.connect((widgetId, value) => {
-      state.values[widgetId] = value
-    })
-  }
+  // 1. Python -> Vue: 개별 값 수신
+  backend.widgetValueChanged.connect((id, val) => {
+    if (state.values[id] !== val) {
+      state.values[id] = val
+    }
+  })
 
-  // Python → Vue: 위젯 속성 변경 (placeholder, items, enabled 등)
-  if (backend.widgetPropertyChanged) {
-    backend.widgetPropertyChanged.connect((widgetId, prop, valueJson) => {
-      if (!state.properties[widgetId]) {
-        state.properties[widgetId] = {}
-      }
-      try {
-        state.properties[widgetId][prop] = JSON.parse(valueJson)
-      } catch {
-        state.properties[widgetId][prop] = valueJson
-      }
-    })
-  }
+  // 2. Python -> Vue: 속성 수신
+  backend.widgetPropertyChanged.connect((id, prop, valJson) => {
+    if (!state.properties[id]) state.properties[id] = {}
+    try {
+      state.properties[id][prop] = JSON.parse(valJson)
+    } catch {
+      state.properties[id][prop] = valJson
+    }
+  })
 
-  // Python → Vue: 배치 업데이트 (settings load 시)
-  if (backend.batchUpdate) {
-    backend.batchUpdate.connect((jsonStr) => {
-      try {
-        const batch = JSON.parse(jsonStr)
-        Object.entries(batch).forEach(([id, val]) => {
-          state.values[id] = val
-        })
-      } catch (e) {
-        console.error('[widgetStore] batch parse error:', e)
-      }
-    })
-  }
+  // 3. Python -> Vue: 배치 업데이트
+  backend.batchUpdate.connect((json) => {
+    try {
+      const data = JSON.parse(json)
+      Object.assign(state.values, data)
+    } catch (e) { console.error('[Store] Batch Error:', e) }
+  })
 
-  // 초기 전체 값 로드
-  if (backend.getAllWidgetValues) {
-    backend.getAllWidgetValues((jsonStr) => {
-      try {
-        const all = JSON.parse(jsonStr)
-        Object.entries(all).forEach(([id, val]) => {
-          state.values[id] = val
-        })
-      } catch (e) {
-        console.error('[widgetStore] init load error:', e)
-      }
-    })
-  }
+  // 4. 초기값 로드
+  backend.getAllWidgetValues((json) => {
+    try {
+      const data = JSON.parse(json)
+      Object.assign(state.values, data)
+    } catch (e) { console.error('[Store] Init Error:', e) }
+  })
 }
 
 /**
- * 위젯 값 가져오기 (반응형)
+ * [중요] Vue -> Python: 자동 동기화 엔진
+ * state.values의 어떤 값이든 바뀌면 즉시 Python 백엔드에 보고합니다.
  */
-export function getValue(widgetId) {
-  return state.values[widgetId] ?? ''
-}
-
-/**
- * 위젯 속성 가져오기 (반응형)
- */
-export function getProperty(widgetId, prop, defaultVal = '') {
-  return state.properties[widgetId]?.[prop] ?? defaultVal
-}
-
-/**
- * Vue에서 값 변경 → Python에 전달
- */
-export function setValue(widgetId, value) {
-  state.values[widgetId] = value
-  if (_backend && _backend.onWidgetChanged) {
-    _backend.onWidgetChanged(widgetId, String(value))
+watch(() => state.values, (newVals) => {
+  if (!_backend) return
+  for (const [id, val] of Object.entries(newVals)) {
+    // 값이 존재하고 백엔드에 보고할 준비가 된 경우만 전송
+    _backend.onWidgetChanged(id, String(val))
   }
-}
+}, { deep: true })
 
-/**
- * 액션 요청 (버튼 클릭 등)
- */
+export function getValue(id) { return state.values[id] ?? '' }
+export function getProperty(id, prop, def = '') { return state.properties[id]?.[prop] ?? def }
+
+// 명시적 값 설정 (watch가 감지함)
+export function setValue(id, val) { state.values[id] = val }
+
+// 액션 요청
 export function requestAction(action, payload = {}) {
-  if (_backend && _backend.onAction) {
+  if (_backend) {
+    console.log(`[Vue -> Python] Action: ${action}`, payload)
     _backend.onAction(action, JSON.stringify(payload))
   }
 }
 
 /**
- * 탭 전환 요청
+ * Composable 래퍼 — PromptPanel 등에서 useWidgetStore()로 사용
  */
-export function switchTab(tabId) {
-  if (_backend && _backend.onTabSwitch) {
-    _backend.onTabSwitch(tabId)
+export function useWidgetStore() {
+  return {
+    widgets: state.values,
+    getProperty: (id, prop, def = '') => state.properties[id]?.[prop] ?? def,
+    getValue,
+    setValue,
+    requestAction,
   }
 }
 
-// 반응형 state export (Vue 컴포넌트에서 직접 참조 가능)
 export { state }

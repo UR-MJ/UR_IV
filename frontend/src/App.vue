@@ -1,74 +1,208 @@
 <template>
-  <div class="app">
-    <TabBar @tab-changed="onTabChanged" />
-    <div class="main">
-      <!-- 좌측 패널 (T2I만) -->
-      <div class="left-panel" v-if="showLeftPanel">
-        <PromptPanel />
-        <div class="tools-section">
-          <button class="tool-btn" @click="action('save_settings')">💾 저장</button>
-          <button class="tool-btn" @click="action('save_preset')">📥 프리셋</button>
-          <button class="tool-btn" @click="action('load_preset')">📤 로드</button>
-          <button class="tool-btn" @click="action('show_prompt_history')">📋</button>
-          <button class="tool-btn" @click="action('open_lora_manager')">LoRA</button>
-          <button class="tool-btn" @click="action('open_tag_weight_editor')">⚖</button>
-          <button class="tool-btn" @click="action('shuffle')">🔀</button>
-          <button class="tool-btn" @click="action('ab_test')">A/B</button>
-          <button class="tool-btn" @click="action('random_prompt')">🎲</button>
+  <div class="app-container">
+    <header class="app-header">
+      <TabBar @tab-changed="onTabChanged" />
+    </header>
+
+    <main class="main-workspace">
+      <!-- Left Panel -->
+      <aside class="side-panel left" v-if="showLeftPanel">
+        <div class="panel-scroll">
+          <PromptPanel @toggle-extend="showExtendPanel = !showExtendPanel" />
+          <div class="tool-card">
+            <label>Studio Tools</label>
+            <div class="tool-grid">
+              <button class="tool-btn" @click="action('save_settings')">SAVE</button>
+              <button class="tool-btn" @click="action('save_preset')">PRESET</button>
+              <button class="tool-btn" @click="action('open_tag_weight_editor')">WEIGHT</button>
+              <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
+            </div>
+          </div>
         </div>
-      </div>
+        <div class="gen-footer">
+          <!-- 자동화 토글 + 랜덤 프롬프트 -->
+          <div class="gen-actions">
+            <button class="action-btn" :class="{ active: autoMode }" @click="autoMode = !autoMode; action('toggle_automation', { checked: autoMode })">
+              {{ autoMode ? '🔄 AUTO ON' : '⏸ AUTO OFF' }}
+            </button>
+            <button class="action-btn highlight" @click="action('random_prompt')">🎲 RANDOM</button>
+          </div>
+          <button class="btn-generate" @click="action('generate')" :disabled="isGenerating">
+            {{ isGenerating ? 'GENERATING...' : autoMode ? 'START AUTOMATION' : 'GENERATE IMAGE' }}
+          </button>
+        </div>
+      </aside>
 
-      <!-- 중앙 콘텐츠 -->
-      <div class="content">
-        <router-view v-slot="{ Component }">
-          <keep-alive>
-            <component :is="Component"
-              :image-url="currentImage"
-              :resolution="resolution"
-              :seed="seed"
-              :status="status"
-            />
-          </keep-alive>
-        </router-view>
-      </div>
+      <!-- Extended Panel (ADetailer / Hires / LoRA) — 뷰어 위에 오버레이 -->
+      <transition name="slide">
+        <aside class="extend-overlay" v-if="showExtendPanel && showLeftPanel">
+          <div class="extend-header">
+            <h3>ADVANCED SETTINGS</h3>
+            <button class="close-btn" @click="showExtendPanel = false">✕</button>
+          </div>
+          <div class="extend-scroll">
+            <!-- Hires.fix -->
+            <details class="ext-card">
+              <summary class="ext-title">HIRES.FIX</summary>
+              <div class="ext-field">
+                <label>Upscaler</label>
+                <select v-model="extWidgets.hires_upscaler"><option>Latent</option><option>R-ESRGAN 4x+</option><option>SwinIR_4x</option></select>
+              </div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Steps</label><input type="number" v-model="extWidgets.hires_steps" /></div>
+                <div class="ext-field"><label>Denoise</label><input type="number" v-model="extWidgets.hires_denoise" step="0.05" /></div>
+              </div>
+              <div class="ext-field"><label>Scale</label><input type="number" v-model="extWidgets.hires_scale" step="0.1" /></div>
+            </details>
 
-      <!-- 우측 히스토리 (T2I만) -->
-      <div class="right-panel" v-if="showLeftPanel">
+            <!-- ADetailer -->
+            <details class="ext-card">
+              <summary class="ext-title">ADETAILER</summary>
+              <div class="ext-field">
+                <label>Slot 1 Model</label>
+                <select v-model="extWidgets.ad_model_1"><option>face_yolov8n.pt</option><option>hand_yolov8n.pt</option><option>person_yolov8n-seg.pt</option></select>
+              </div>
+              <div class="ext-field">
+                <label>Slot 1 Prompt</label>
+                <input type="text" v-model="extWidgets.ad_prompt_1" placeholder="ADetailer prompt..." />
+              </div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Confidence</label><input type="number" v-model="extWidgets.ad_conf_1" min="0" max="1" step="0.05" /></div>
+                <div class="ext-field"><label>Denoise</label><input type="number" v-model="extWidgets.ad_denoise_1" min="0" max="1" step="0.05" /></div>
+              </div>
+              <details class="ext-sub">
+                <summary>Slot 2</summary>
+                <div class="ext-field">
+                  <label>Model</label>
+                  <select v-model="extWidgets.ad_model_2"><option>face_yolov8n.pt</option><option>hand_yolov8n.pt</option></select>
+                </div>
+                <div class="ext-field">
+                  <label>Prompt</label>
+                  <input type="text" v-model="extWidgets.ad_prompt_2" placeholder="Slot 2 prompt..." />
+                </div>
+              </details>
+            </details>
+
+            <!-- NegPiP -->
+            <div class="ext-card">
+              <label class="ext-check-row">
+                <input type="checkbox" v-model="extWidgets.negpip_enabled" />
+                <span class="ext-title" style="margin:0">NegPiP 확장</span>
+              </label>
+              <div class="ext-hint">(keyword:-1.0) 네거티브 가중치 문법</div>
+            </div>
+
+            <!-- 조건부 프롬프트 -->
+            <details class="ext-card">
+              <summary class="ext-title">CONDITIONAL PROMPTS</summary>
+              <label class="ext-check-row">
+                <input type="checkbox" v-model="extWidgets.cond_enabled" />
+                <span>조건부 프롬프트 활성화</span>
+              </label>
+              <label class="ext-check-row">
+                <input type="checkbox" v-model="extWidgets.cond_prevent_dupe" />
+                <span>중복 태그 방지</span>
+              </label>
+              <div class="ext-field" v-if="extWidgets.cond_enabled">
+                <label style="color: #4ade80;">Positive Rules</label>
+                <textarea v-model="extWidgets.cond_pos_rules" class="cond-textarea"
+                  placeholder="IF tag EXISTS → ADD target TO main&#10;한 줄에 하나씩"></textarea>
+              </div>
+              <div class="ext-field" v-if="extWidgets.cond_enabled">
+                <label style="color: #f87171;">Negative Rules</label>
+                <textarea v-model="extWidgets.cond_neg_rules" class="cond-textarea"
+                  placeholder="IF tag EXISTS → ADD target TO negative&#10;한 줄에 하나씩"></textarea>
+              </div>
+            </details>
+
+            <!-- LoRA Stack -->
+            <div class="ext-card">
+              <div class="ext-title">LoRA STACK</div>
+              <div class="lora-empty" v-if="loraStack.length === 0">
+                LoRA Manager에서 추가하세요
+              </div>
+              <div v-for="(lora, i) in loraStack" :key="i" class="lora-block">
+                <label class="lora-check"><input type="checkbox" v-model="lora.enabled" /></label>
+                <div class="lora-name">{{ lora.name }}</div>
+                <input type="range" min="-100" max="200" v-model.number="lora.weight" class="lora-slider" />
+                <span class="lora-weight">{{ (lora.weight / 100).toFixed(2) }}</span>
+                <button class="lora-remove" @click="loraStack.splice(i, 1)">✕</button>
+              </div>
+              <button class="ext-add-btn" @click="action('open_lora_manager')">+ ADD LoRA</button>
+            </div>
+          </div>
+        </aside>
+      </transition>
+
+      <!-- Center: Viewport + EXIF Bar -->
+      <section class="viewport-area">
+        <div class="viewport-main">
+          <router-view v-slot="{ Component }">
+            <keep-alive>
+              <component :is="Component"
+                :image-url="currentImage"
+                :resolution="resolution"
+                :seed="seed"
+                :status="status"
+              />
+            </keep-alive>
+          </router-view>
+        </div>
+        <!-- EXIF Info Bar (Positive / Negative / Parameters 3탭) -->
+        <div class="exif-bar" v-if="showLeftPanel && currentImage">
+          <div class="exif-tabs">
+            <button v-for="tab in exifTabs" :key="tab.id" class="exif-tab"
+              :class="{ active: activeExifTab === tab.id }" @click="activeExifTab = tab.id">
+              {{ tab.label }}
+            </button>
+          </div>
+          <div class="exif-content">{{ exifContent }}</div>
+        </div>
+      </section>
+
+      <!-- Right: History -->
+      <aside class="side-panel right" v-if="showLeftPanel">
         <div class="hist-header">
-          <span>히스토리</span>
-          <span class="hist-count">{{ historyImages.length }}장</span>
+          <h3>HISTORY</h3>
+          <span class="count-badge">{{ historyImages.length }}</span>
         </div>
-        <button class="nav-btn" @click="historyScroll(-1)" :disabled="historyPage <= 0">▲</button>
-        <div class="hist-grid">
-          <div v-for="img in visibleHistory" :key="img" class="hist-item"
+        <button class="hist-nav-btn" @click="histPage = Math.max(0, histPage - 1)" :disabled="histPage <= 0">▲</button>
+        <div class="hist-scroll">
+          <div v-for="img in visibleHistory" :key="img" class="hist-card"
             @click="selectHistoryImage(img)"
             @contextmenu.prevent="showHistoryMenu($event, img)"
             :class="{ selected: currentImage === img }"
+            draggable="true" @dragstart="onDragStart($event, img)"
           >
             <img :src="'file:///' + img" loading="lazy" />
           </div>
         </div>
-        <button class="nav-btn" @click="historyScroll(1)"
-          :disabled="(historyPage + 1) * 5 >= historyImages.length">▼</button>
-        <!-- 우클릭 메뉴 -->
-        <div v-if="ctxMenu.show" class="ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
-          <div class="ctx-item" @click="ctxAddFavorite">⭐ 즐겨찾기 추가</div>
-          <div class="ctx-item" @click="ctxSendI2I">🖼️ I2I로 보내기</div>
-          <div class="ctx-item" @click="ctxSendInpaint">🎨 Inpaint로 보내기</div>
-          <div class="ctx-item" @click="ctxSendEditor">✏️ Editor로 보내기</div>
-          <div class="ctx-item" @click="ctxCopyPath">📋 경로 복사</div>
-          <div class="ctx-item delete" @click="ctxDelete">🗑️ 삭제</div>
-        </div>
-      </div>
+        <button class="hist-nav-btn" @click="histPage++" :disabled="(histPage + 1) * histPerPage >= historyImages.length">▼</button>
+
+        <transition name="pop">
+          <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="ctxMenuStyle">
+            <div class="ctx-item" @click="ctxAddFavorite">⭐ ADD TO FAVORITES</div>
+            <div class="ctx-item" @click="ctxSendI2I">🖼️ SEND TO I2I</div>
+            <div class="ctx-item" @click="ctxSendInpaint">🎨 SEND TO INPAINT</div>
+            <div class="ctx-item" @click="ctxSendEditor">✏️ SEND TO EDITOR</div>
+            <div class="ctx-separator"></div>
+            <div class="ctx-item" @click="ctxCopyPath">📋 COPY PATH</div>
+            <div class="ctx-item delete" @click="ctxDelete">🗑️ DELETE</div>
+          </div>
+        </transition>
+      </aside>
+    </main>
+
+    <div class="global-progress" v-if="isGenerating">
+      <div class="progress-fill" :style="{ width: progressVal + '%' }"></div>
     </div>
 
-    <!-- 하단 대기열 -->
     <QueuePanel />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { initBridge, onBackendEvent, getBackend } from './bridge.js'
 import { requestAction } from './stores/widgetStore.js'
 import PromptPanel from './components/PromptPanel.vue'
@@ -78,64 +212,105 @@ import QueuePanel from './components/QueuePanel.vue'
 const currentImage = ref('')
 const resolution = ref('')
 const seed = ref('')
-const status = ref('이미지를 생성하세요')
+const status = ref('')
+const isGenerating = ref(false)
+const progressVal = ref(0)
 const showLeftPanel = ref(true)
+const showExtendPanel = ref(false)
 const historyImages = ref([])
-const historyPage = ref(0)
+const histPage = ref(0)
+const histPerPage = 5
 
-// 5개씩 보기
-const visibleHistory = computed(() => {
-  const start = historyPage.value * 5
-  return historyImages.value.slice(start, start + 5)
+// EXIF
+const activeExifTab = ref('positive')
+const exifTabs = [
+  { id: 'positive', label: 'Positive' },
+  { id: 'negative', label: 'Negative' },
+  { id: 'params', label: 'Parameters' },
+]
+const currentExif = ref({ prompt: '', negative: '', raw: '' })
+const exifContent = computed(() => {
+  if (activeExifTab.value === 'positive') return currentExif.value.prompt || 'No EXIF data'
+  if (activeExifTab.value === 'negative') return currentExif.value.negative || ''
+  return currentExif.value.raw || ''
 })
 
-function historyScroll(dir) {
-  const maxPage = Math.max(0, Math.ceil(historyImages.value.length / 5) - 1)
-  historyPage.value = Math.max(0, Math.min(maxPage, historyPage.value + dir))
+const autoMode = ref(false)
+
+// Extended panel state
+const extWidgets = reactive({
+  hires_upscaler: 'Latent', hires_steps: 10, hires_denoise: 0.5, hires_scale: 2.0,
+  ad_model_1: 'face_yolov8n.pt', ad_prompt_1: '', ad_conf_1: 0.3, ad_denoise_1: 0.4,
+  ad_model_2: '', ad_prompt_2: '',
+  negpip_enabled: false,
+  cond_enabled: false, cond_prevent_dupe: true,
+  cond_pos_rules: '', cond_neg_rules: '',
+})
+const loraStack = reactive([])
+
+// LoRA 추가 함수 (Python에서 호출)
+function addLoraToStack(name, weight) {
+  const existing = loraStack.find(l => l.name === name)
+  if (existing) { existing.weight = Math.round(weight * 100); existing.enabled = true }
+  else loraStack.push({ name, weight: Math.round(weight * 100), enabled: true })
 }
 
-// 우클릭 메뉴
-const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
+// History pagination
+const visibleHistory = computed(() => {
+  const start = histPage.value * histPerPage
+  return historyImages.value.slice(start, start + histPerPage)
+})
 
-function showHistoryMenu(e, path) {
-  // 화면 밖 넘어감 방지
-  const menuW = 180, menuH = 200
-  let x = e.clientX
-  let y = e.clientY
+// Context menu (화면 밖 방지)
+const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
+const ctxMenuStyle = computed(() => {
+  const menuW = 210, menuH = 250
+  let x = ctxMenu.value.x, y = ctxMenu.value.y
   if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 10
   if (y + menuH > window.innerHeight) y = window.innerHeight - menuH - 10
   if (x < 0) x = 10
   if (y < 0) y = 10
-  ctxMenu.value = { show: true, x, y, path }
-}
-function hideCtxMenu() { ctxMenu.value.show = false }
-function ctxAddFavorite() { action('add_favorite', { path: ctxMenu.value.path }); hideCtxMenu() }
-function ctxSendI2I() { action('send_to_i2i', { path: ctxMenu.value.path }); hideCtxMenu() }
-function ctxSendInpaint() { action('send_to_inpaint', { path: ctxMenu.value.path }); hideCtxMenu() }
-function ctxSendEditor() { action('send_to_editor', { path: ctxMenu.value.path }); hideCtxMenu() }
-function ctxCopyPath() {
-  navigator.clipboard?.writeText(ctxMenu.value.path)
-  hideCtxMenu()
-}
-function ctxDelete() { action('delete_image', { path: ctxMenu.value.path }); hideCtxMenu() }
+  return { top: y + 'px', left: x + 'px' }
+})
 
-function selectHistoryImage(path) {
-  // Vue 뷰어에서 직접 표시 (Python 윈도우 안 뜸)
+function action(name, payload = {}) { requestAction(name, payload) }
+
+function showHistoryMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
+function hideCtxMenu() { ctxMenu.value.show = false }
+const ctxAddFavorite = () => { action('add_favorite', { path: ctxMenu.value.path }); hideCtxMenu() }
+const ctxSendI2I = () => { action('send_to_i2i', { path: ctxMenu.value.path }); hideCtxMenu() }
+const ctxSendInpaint = () => { action('send_to_inpaint', { path: ctxMenu.value.path }); hideCtxMenu() }
+const ctxSendEditor = () => { action('send_to_editor', { path: ctxMenu.value.path }); hideCtxMenu() }
+const ctxCopyPath = () => { navigator.clipboard?.writeText(ctxMenu.value.path); hideCtxMenu() }
+const ctxDelete = () => { action('delete_image', { path: ctxMenu.value.path }); hideCtxMenu() }
+
+async function selectHistoryImage(path) {
   currentImage.value = path
   const img = new Image()
-  img.onload = () => {
-    resolution.value = `${img.naturalWidth} × ${img.naturalHeight}`
-  }
+  img.onload = () => { resolution.value = `${img.naturalWidth} × ${img.naturalHeight}` }
   img.src = 'file:///' + path
+  // EXIF 로드
+  const backend = await getBackend()
+  if (backend.getImageExif) {
+    backend.getImageExif(path, (json) => {
+      try {
+        const d = JSON.parse(json)
+        currentExif.value = { prompt: d.prompt || '', negative: d.negative || '', raw: d.raw || '' }
+      } catch {}
+    })
+  }
+}
+
+// 드래그 앤 드롭 지원
+function onDragStart(e, path) {
+  e.dataTransfer.setData('text/plain', path)
+  e.dataTransfer.effectAllowed = 'copy'
 }
 
 function onTabChanged(tabName) {
-  showLeftPanel.value = tabName === 't2i'
+  showLeftPanel.value = ['t2i', 'i2i', 'inpaint'].includes(tabName)
+  showExtendPanel.value = false
   hideCtxMenu()
-}
-
-function action(name, payload = {}) {
-  requestAction(name, payload)
 }
 
 async function loadHistory() {
@@ -147,118 +322,157 @@ async function loadHistory() {
   }
 }
 
-// 클릭 시 우클릭 메뉴 닫기
-function onGlobalClick() { hideCtxMenu() }
-onMounted(() => {
-  document.addEventListener('click', onGlobalClick)
-  // Ctrl+휠 페이지 줌 차단 (캔버스 줌과 분리)
-  document.addEventListener('wheel', (e) => {
-    if (e.ctrlKey) e.preventDefault()
-  }, { passive: false })
-  // 글로벌 단축키
+import { useRouter } from 'vue-router'
+const router = useRouter()
+
+onMounted(async () => {
+  await initBridge()
+  loadHistory()
+  document.addEventListener('click', hideCtxMenu)
+  document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault() }, { passive: false })
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'g') { e.preventDefault(); action('generate') }
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); action('save_settings') }
     if (e.key === 'F5') { e.preventDefault(); loadHistory() }
   })
-})
-onUnmounted(() => document.removeEventListener('click', onGlobalClick))
 
-onMounted(async () => {
-  await initBridge()
-  loadHistory()
+  onBackendEvent('tabChanged', (tabId) => {
+    const targetPath = tabId === 't2i' ? '/' : `/${tabId}`
+    router.push(targetPath)
+    onTabChanged(tabId)
+  })
 
   onBackendEvent('imageGenerated', (data) => {
     const parsed = JSON.parse(data)
     currentImage.value = parsed.path
     resolution.value = `${parsed.width} × ${parsed.height}`
     seed.value = String(parsed.seed)
+    isGenerating.value = false
     status.value = ''
     if (parsed.path) {
       historyImages.value.unshift(parsed.path)
       if (historyImages.value.length > 100) historyImages.value.pop()
-      historyPage.value = 0
+      histPage.value = 0
     }
   })
-  onBackendEvent('generationStarted', () => { status.value = '생성 중...' })
+  onBackendEvent('generationStarted', () => { isGenerating.value = true; progressVal.value = 0 })
   onBackendEvent('generationProgress', (step, total) => {
-    const pct = Math.round(step / total * 100)
-    status.value = `생성 중... ${step}/${total} (${pct}%)`
+    progressVal.value = Math.round(step / total * 100)
+    status.value = `Generating... ${step}/${total}`
   })
-  onBackendEvent('generationError', (msg) => { status.value = `오류: ${msg}` })
-  onBackendEvent('queueUpdated', (json) => {
-    // 대기열 상태 업데이트 (QueuePanel에서 사용)
-    console.log('[Queue]', json)
+  onBackendEvent('generationError', (msg) => { isGenerating.value = false; status.value = `Error: ${msg}` })
+
+  // LoRA 추가 이벤트 (Python lora_manager → Vue)
+  onBackendEvent('loraInserted', (json) => {
+    try {
+      const d = JSON.parse(json)
+      addLoraToStack(d.name, d.weight || 0.8)
+      showExtendPanel.value = true
+    } catch {}
   })
 })
 </script>
 
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: 100%; height: 100%; overflow: hidden; background: #0A0A0A; }
-body { color: #E8E8E8; font-family: 'Pretendard', 'Malgun Gothic', 'Segoe UI', sans-serif; }
-.app { width: 100%; height: 100%; display: flex; flex-direction: column; }
-.main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
-.left-panel {
-  width: 340px; flex-shrink: 0; background: #0D0D0D;
-  display: flex; flex-direction: column; overflow: hidden;
-}
-.tools-section {
-  display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 6px;
-  background: #0A0A0A; flex-shrink: 0;
-}
-.tool-btn {
-  padding: 4px 8px; background: #181818; border: none; border-radius: 4px;
-  color: #585858; font-size: 10px; cursor: pointer; white-space: nowrap;
-}
-.tool-btn:hover { background: #222; color: #E8E8E8; }
-.content { flex: 1; overflow: hidden; min-width: 0; }
+<style scoped>
+.app-container { width: 100%; height: 100vh; display: flex; flex-direction: column; background: var(--bg-primary); }
+.app-header { height: 60px; display: flex; align-items: center; justify-content: center; background: var(--bg-primary); border-bottom: 1px solid var(--border); z-index: 100; }
+.main-workspace { flex: 1; display: flex; overflow: hidden; position: relative; }
 
-/* 히스토리 패널 */
-.right-panel {
-  width: 200px; flex-shrink: 0; background: #0D0D0D;
-  display: flex; flex-direction: column; overflow: hidden;
-  position: relative;
-}
-.hist-header {
-  display: flex; justify-content: space-between; padding: 6px 8px; flex-shrink: 0;
-}
-.hist-header span { color: #585858; font-size: 11px; font-weight: 600; }
-.hist-count { color: #484848; }
-.nav-btn {
-  width: 100%; padding: 4px; background: #131313; border: none;
-  color: #484848; font-size: 12px; cursor: pointer; flex-shrink: 0;
-}
-.nav-btn:hover { background: #1A1A1A; color: #E8E8E8; }
-.nav-btn:disabled { opacity: 0.3; cursor: default; }
-.hist-grid {
-  flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 4px;
-  overflow: hidden;
-}
-.hist-item {
-  border-radius: 4px; overflow: hidden; cursor: pointer;
-  border: 2px solid transparent; transition: border-color 0.15s; flex-shrink: 0;
-}
-.hist-item:hover { border-color: #333; }
-.hist-item.selected { border-color: #E2B340; }
-.hist-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.side-panel { width: 360px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); z-index: 10; }
+.side-panel.right { width: 220px; border-right: none; border-left: 1px solid var(--border); }
+.panel-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 
-/* 우클릭 메뉴 */
-.ctx-menu {
-  position: fixed; background: #1A1A1A; border-radius: 6px;
-  padding: 4px; z-index: 9999; min-width: 180px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+/* Extended Panel Overlay */
+.extend-overlay {
+  position: absolute; left: 360px; top: 0; bottom: 0; width: 320px;
+  background: var(--bg-secondary); border-right: 1px solid var(--border);
+  z-index: 50; display: flex; flex-direction: column;
+  box-shadow: 8px 0 32px rgba(0,0,0,0.5);
 }
-.ctx-item {
-  padding: 6px 12px; font-size: 12px; color: #B0B0B0; cursor: pointer;
-  border-radius: 4px; white-space: nowrap;
-}
-.ctx-item:hover { background: #222; color: #E8E8E8; }
-.ctx-item.delete { color: #E05252; }
-.ctx-item.delete:hover { background: #2a1515; }
+.extend-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.extend-header h3 { font-size: 11px; letter-spacing: 2px; color: var(--text-muted); }
+.close-btn { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; }
+.close-btn:hover { color: #f87171; }
+.extend-scroll { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #E2B340; }
+.ext-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 12px; }
+.ext-title { font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 10px; cursor: pointer; }
+.ext-field { margin-bottom: 8px; }
+.ext-field label { font-size: 9px; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 3px; }
+.ext-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ext-sub { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.ext-sub summary { font-size: 10px; color: var(--text-secondary); cursor: pointer; }
+
+/* LoRA block */
+.lora-block { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-button); border-radius: 6px; margin-bottom: 4px; }
+.lora-name { flex: 1; font-size: 11px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lora-slider { width: 60px; accent-color: var(--accent); }
+.lora-weight { font-size: 10px; color: var(--accent); min-width: 30px; text-align: right; font-family: monospace; }
+.lora-remove { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
+.ext-add-btn { width: 100%; padding: 8px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; margin-top: 4px; }
+.ext-check-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px; }
+.ext-check-row input[type="checkbox"] { accent-color: var(--accent); }
+.ext-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.cond-textarea { min-height: 60px; font-size: 11px; line-height: 1.6; font-family: 'Consolas', monospace; }
+.lora-check { flex-shrink: 0; }
+.lora-check input { accent-color: var(--accent); }
+.lora-empty { font-size: 11px; color: var(--text-muted); text-align: center; padding: 12px; }
+
+.slide-enter-active, .slide-leave-active { transition: transform 0.25s ease, opacity 0.25s ease; }
+.slide-enter-from, .slide-leave-to { transform: translateX(-20px); opacity: 0; }
+
+/* Tool Card */
+.tool-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }
+.tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tool-btn { padding: 8px 4px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.tool-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.tool-btn.highlight { color: var(--accent); border-color: var(--accent-dim); }
+
+.gen-footer { padding: 12px 16px; background: var(--bg-card); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.gen-actions { display: flex; gap: 6px; }
+.action-btn { flex: 1; padding: 7px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.action-btn.active { border-color: #4ade80; color: #4ade80; background: rgba(74,222,128,0.05); }
+.action-btn.highlight { border-color: var(--accent-dim); color: var(--accent); }
+.action-btn:hover { border-color: var(--text-muted); }
+.btn-generate { width: 100%; height: 50px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 800; font-size: 14px; letter-spacing: 1px; cursor: pointer; transition: var(--transition); }
+.btn-generate:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }
+.btn-generate:disabled { opacity: 0.5; cursor: wait; }
+
+/* Viewport */
+.viewport-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #050505; }
+.viewport-main { flex: 1; position: relative; overflow: hidden; }
+
+/* EXIF Bar */
+.exif-bar { flex-shrink: 0; background: #0D0D0D; border-top: 1px solid var(--border); }
+.exif-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+.exif-tab { flex: 1; padding: 6px; background: transparent; border: none; color: var(--text-muted); font-size: 10px; font-weight: 700; cursor: pointer; text-align: center; border-bottom: 2px solid transparent; }
+.exif-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.exif-content { padding: 6px 12px; font-size: 11px; color: var(--text-secondary); max-height: 80px; overflow-y: auto; line-height: 1.5; font-family: 'Consolas', monospace; white-space: pre-wrap; word-break: break-all; }
+
+/* History */
+.hist-header { padding: 16px; display: flex; justify-content: space-between; align-items: center; }
+.hist-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); }
+.count-badge { background: var(--border); padding: 2px 8px; border-radius: 10px; font-size: 10px; color: var(--text-secondary); }
+.hist-nav-btn { width: 100%; padding: 4px; background: #131313; border: none; color: #484848; font-size: 12px; cursor: pointer; flex-shrink: 0; }
+.hist-nav-btn:hover { background: #1A1A1A; color: #E8E8E8; }
+.hist-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.hist-scroll { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.hist-card { position: relative; border-radius: var(--radius-card); overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: border-color 0.15s; }
+.hist-card:hover { border-color: #333; }
+.hist-card.selected { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-dim); }
+.hist-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+
+/* Context Menu */
+.modern-ctx-menu { position: fixed; background: #181818; border: 1px solid #222; border-radius: 10px; padding: 6px; z-index: 1000; min-width: 200px; box-shadow: 0 12px 32px rgba(0,0,0,0.8); }
+.ctx-item { padding: 10px 14px; font-size: 11px; font-weight: 600; color: #909090; cursor: pointer; border-radius: 6px; transition: var(--transition); }
+.ctx-item:hover { background: #252525; color: #FFF; }
+.ctx-item.delete { color: #f87171; }
+.ctx-item.delete:hover { background: rgba(248, 113, 113, 0.1); }
+.ctx-separator { height: 1px; background: #222; margin: 4px 0; }
+
+.pop-enter-active { animation: pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+@keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+.global-progress { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: transparent; z-index: 1000; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }
 </style>

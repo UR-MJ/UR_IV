@@ -100,9 +100,12 @@ import { getBackend } from '../bridge.js'
 .axis-config { display: flex; flex-direction: column; gap: 4px; }
 .axis-label { color: #E2B340; font-size: 12px; font-weight: 700; }
 .s-select, .s-input {
-  background: #131313; border: none; border-radius: 4px; padding: 6px 8px;
-  color: #E8E8E8; font-size: 12px; outline: none;
+  background: #131313; border: 1px solid #222; border-radius: 4px; padding: 6px 8px;
+  color: #E8E8E8; font-size: 12px; outline: none; caret-color: #E2B340;
 }
+.s-input:focus { border-color: #E2B340; }
+.s-input::selection { background: rgba(226, 179, 64, 0.3); }
+.s-select:focus { border-color: #E2B340; }
 .combo-info { color: #787878; font-size: 12px; text-align: center; }
 .accent { color: #E2B340; font-weight: 700; }
 .btn-gen {

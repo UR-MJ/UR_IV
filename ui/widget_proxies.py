@@ -413,3 +413,32 @@ class SliderProxy(_ProxyBase):
         if self._value != value:
             self._value = value
             self.textChanged.emit(value)
+
+
+class LoraProxy(_ProxyBase):
+    """LoraActivePanel 호환 프록시"""
+    def __init__(self, bridge, widget_id: str, parent=None):
+        super().__init__(parent)
+        self._bridge = bridge
+        self._id = widget_id
+        self._loras = [] # list of {name, weight, enabled}
+        bridge._register_proxy(widget_id, self)
+
+    def get_active_lora_text(self) -> str:
+        """활성화된 LoRA들을 <lora:name:weight> 형식의 텍스트로 반환"""
+        # Vue에서 관리되는 LoRA 목록을 바탕으로 텍스트 구성
+        # (실제 데이터는 Vue에서 전달받아야 하므로 일단 빈 문자열 또는 캐시된 값 반환)
+        active_list = [f"<lora:{l['name']}:{l['weight']}>" for l in self._loras if l.get('enabled', True)]
+        return ", ".join(active_list)
+
+    def set_loras(self, loras: list):
+        self._loras = loras
+        self._bridge.pushWidgetProperty(self._id, "loras", loras)
+
+    def _on_vue_changed(self, value: str):
+        """Vue에서 LoRA 목록 변경 시 (JSON 형태)"""
+        try:
+            import json
+            self._loras = json.loads(value)
+        except Exception:
+            pass

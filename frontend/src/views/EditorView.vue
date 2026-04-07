@@ -1,15 +1,21 @@
 <template>
   <div class="editor-view" @dragover.prevent="isDragging = true" @dragleave="isDragging = false" @drop.prevent="onDrop">
     <template v-if="imagePath">
-      <!-- 상단 도구바 -->
+      <!-- 상단 도구바 (개선: 넓고 깔끔) -->
       <div class="top-bar">
-        <button class="t-btn" @click="openFile">📂 열기</button>
-        <button class="t-btn save" @click="saveImage">💾 저장</button>
-        <button class="t-btn" @click="doUndo" :disabled="undoStack.length <= 1">↩ Undo</button>
-        <button class="t-btn" @click="doRedo" :disabled="redoStack.length === 0">↪ Redo</button>
-        <div class="spacer" />
-        <span class="info">{{ imgWidth }}×{{ imgHeight }}</span>
-        <button class="t-btn" @click="resetEditor">✕ 닫기</button>
+        <div class="bar-group">
+          <button class="bar-btn accent" @click="openFile">📂 파일 열기</button>
+          <button class="bar-btn save" @click="saveImage">💾 저장</button>
+        </div>
+        <div class="bar-group center">
+          <button class="bar-btn" @click="doUndo" :disabled="undoStack.length <= 1">↩ Undo</button>
+          <button class="bar-btn" @click="doRedo" :disabled="redoStack.length === 0">↪ Redo</button>
+          <span class="bar-sep">|</span>
+          <span class="bar-info">{{ imgWidth }}×{{ imgHeight }}</span>
+        </div>
+        <div class="bar-group">
+          <button class="bar-btn danger" @click="resetEditor">✕ 닫기</button>
+        </div>
       </div>
 
       <div class="editor-body">
@@ -23,16 +29,23 @@
           </div>
           <div class="tab-content">
             <MosaicPanel v-show="activeTab === 0"
+              :model-label="modelLabel"
+              :detect-status="detectStatus"
               @tool-changed="onToolChanged"
-              @apply-effect="applyEffect"
+              @effect-apply="applyEffect"
+              @add-model="openModelDialog"
+              @clear-models="clearModels"
+              @auto-censor="runAutoCensor"
+              @auto-detect="runAutoDetect"
               @cancel-selection="canvasRef?.clearSelection()"
-              @crop="doCrop" @resize="doResize"
-              @rotate="dir => doOp(dir === 'cw' ? 'rotate_cw' : 'rotate_ccw')"
-              @flip="dir => doOp(dir === 'h' ? 'flip_h' : 'flip_v')"
+              @crop="doCrop"
+              @resize="doResize"
               @perspective="doOp('perspective')"
-              @remove-bg="doOp('remove_bg')"
-              @auto-detect="p => doOp('auto_detect', p)"
-              @auto-censor="p => doOp('auto_censor', p)"
+              @rotate="op => doOp('rotate_' + op)"
+              @flip="op => doOp('flip_' + (op === 'horizontal' ? 'h' : 'v'))"
+              @remove-bg="params => doOp('remove_bg', params)"
+              @params-changed="onParamsChanged"
+              @eraser-mode-changed="m => eraserMode = m"
             />
             <ColorPanel v-show="activeTab === 1"
               @adjustment-changed="previewAdj" @apply="applyAdj"
@@ -44,6 +57,7 @@
             />
             <WatermarkPanel v-show="activeTab === 3"
               @apply-text="applyTextWm" @apply-image="applyImageWm"
+              @load-watermark-image="loadWatermarkImage"
             />
             <DrawPanel v-show="activeTab === 4" ref="drawPanelRef"
               @tool-changed="currentTool = $event"
@@ -60,13 +74,13 @@
         <EditorCanvas ref="canvasRef"
           :image-src="imageDisplay"
           :tool="currentTool"
-          :brush-size="20"
+          :brush-size="brushSize"
+          :eraser-mode="eraserMode"
           @selection-changed="onSelectionChanged"
         />
       </div>
     </template>
 
-    <!-- 이미지 없을 때 -->
     <template v-else>
       <div class="drop-area" :class="{ dragging: isDragging }">
         <div class="drop-icon">🎨</div>
@@ -77,7 +91,6 @@
           <span>모자이크/블러</span><span>색감 조절</span><span>고급 색감</span>
           <span>워터마크</span><span>그리기</span><span>이동/변환</span>
           <span>크롭/리사이즈</span><span>회전/반전</span><span>배경 제거</span>
-          <span>Undo/Redo</span><span>단축키</span>
         </div>
       </div>
     </template>
@@ -103,9 +116,13 @@ const imgWidth = ref(0)
 const imgHeight = ref(0)
 const activeTab = ref(0)
 const currentTool = ref('box')
+const brushSize = ref(20)
+const eraserMode = ref('brush') // 'brush' | 'box' | 'lasso'
 const canvasRef = ref(null)
 const drawPanelRef = ref(null)
 const selection = ref(null)
+const modelLabel = ref('No Model Loaded')
+const detectStatus = ref('')
 
 const undoStack = ref([])
 const redoStack = ref([])
@@ -120,6 +137,7 @@ const tabs = [
 ]
 
 function loadImage(path) {
+  if (!path) return
   undoStack.value = [path]
   redoStack.value = []
   imagePath.value = path
@@ -137,6 +155,8 @@ function pushState(path) {
   const img = new Image()
   img.onload = () => { imgWidth.value = img.naturalWidth; imgHeight.value = img.naturalHeight }
   img.src = 'file:///' + path
+  // 효과 적용 후 마스크 클리어
+  canvasRef.value?.clearSelection()
 }
 
 function doUndo() {
@@ -146,7 +166,6 @@ function doUndo() {
   imagePath.value = path
   imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
 }
-
 function doRedo() {
   if (redoStack.value.length === 0) return
   const path = redoStack.value.pop()
@@ -156,47 +175,99 @@ function doRedo() {
 }
 
 async function doOp(operation, params = {}) {
-  if (!imagePath.value) { console.log('[Editor] No image loaded'); return }
-  console.log('[Editor] doOp:', operation, params)
+  if (!imagePath.value) return
   const backend = await getBackend()
-  if (!backend.editorProcess) { console.log('[Editor] editorProcess not available'); return }
-  backend.editorProcess(imagePath.value, operation, JSON.stringify(params), (json) => {
+  const cleanPath = imagePath.value.replace('file:///', '')
+  backend.editorProcess(cleanPath, operation, JSON.stringify(params), (json) => {
     try {
       const result = JSON.parse(json)
-      console.log('[Editor] result:', result)
-      if (result.path) {
-        pushState(result.path)
-      } else if (result.error) {
-        console.error('[Editor] error:', result.error)
-      }
+      if (result.path) pushState(result.path)
+      else if (result.error) console.error('[Editor] error:', result.error)
     } catch (e) { console.error('[Editor] parse error:', e) }
   })
 }
 
-function onToolChanged(toolId) {
+// 마스크 기반 효과 적용 (base64 마스크 전송)
+async function doOpWithMask(operation, params = {}) {
+  if (!imagePath.value) return
+  const maskB64 = canvasRef.value?.getMaskBase64()
+  if (!maskB64) {
+    // 마스크 없으면 선택 영역(rect)으로 fallback
+    doOp(operation, params)
+    return
+  }
+  const backend = await getBackend()
+  const cleanPath = imagePath.value.replace('file:///', '')
+  const fullParams = { ...params, mask_base64: maskB64 }
+  backend.editorProcess(cleanPath, operation, JSON.stringify(fullParams), (json) => {
+    try {
+      const result = JSON.parse(json)
+      if (result.path) pushState(result.path)
+      else if (result.error) console.error('[Editor] error:', result.error)
+    } catch (e) { console.error('[Editor] parse error:', e) }
+  })
+}
+
+function onToolChanged(data) {
+  const id = typeof data === 'object' ? data.tool : data
   const toolMap = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser' }
-  currentTool.value = toolMap[toolId] || 'box'
+  currentTool.value = toolMap[id] ?? 'box'
+  if (typeof data === 'object' && data.size) brushSize.value = data.size
+}
+
+function onParamsChanged(params) {
+  if (params.toolSize) brushSize.value = params.toolSize
 }
 
 function applyEffect(effectData) {
   const sel = canvasRef.value?.getSelection()
   const effectMap = { 0: 'mosaic', 1: 'censor_bar', 2: 'blur' }
-  const op = effectMap[effectData.effect] || 'mosaic'
-  doOp(op, { ...effectData, selection: sel })
+  const op = effectMap[effectData.effect] ?? 'mosaic'
+  if (sel) {
+    // 마스크 기반 처리
+    doOpWithMask(op, { ...effectData, selection: sel })
+  }
 }
+
+function openModelDialog() { requestAction('editor_add_yolo_model') }
+function clearModels() { requestAction('editor_clear_yolo_models') }
+
+async function runAutoCensor(params) {
+  if (!imagePath.value) return
+  detectStatus.value = '감지 중...'
+  const backend = await getBackend()
+  const cleanPath = imagePath.value.replace('file:///', '')
+  backend.editorProcess(cleanPath, 'auto_censor', JSON.stringify({
+    confidence: (params?.confidence || 25) / 100
+  }), (json) => {
+    try {
+      const result = JSON.parse(json)
+      if (result.path) { pushState(result.path); detectStatus.value = '완료' }
+      else { detectStatus.value = result.error || '실패' }
+    } catch { detectStatus.value = '오류' }
+  })
+}
+
+async function runAutoDetect(params) {
+  if (!imagePath.value) return
+  detectStatus.value = '감지 중...'
+  requestAction('editor_apply_auto_detect', { path: imagePath.value, confidence: (params?.confidence || 25) / 100 })
+}
+
 function doCrop() {
   const sel = canvasRef.value?.getSelection()
-  if (sel) doOp('crop', { x1: sel.x, y1: sel.y, x2: sel.x + sel.w, y2: sel.y + sel.h })
+  if (sel) doOp('crop', { selection: sel })
 }
 function doResize(params) { doOp('resize', params) }
-function previewAdj(adj) { /* live preview via canvas filter */ }
 function applyAdj(adj) { doOp('color_adjust', adj) }
-function resetAdj() { /* reset preview */ }
-function applyFilter(filter) { doOp(filter.name, filter) }
-function previewAdvAdj(adj) { /* live preview */ }
+function previewAdj() {}
+function resetAdj() {}
+function applyFilter(filter) { doOp(filter.name || filter.type, filter) }
+function previewAdvAdj() {}
 function applyAdvAdj(adj) { doOp('adv_color', adj) }
 function applyTextWm(params) { doOp('text_watermark', params) }
 function applyImageWm(params) { doOp('image_watermark', params) }
+function loadWatermarkImage() { requestAction('editor_load_watermark_image') }
 function onSelectionChanged(sel) { selection.value = sel }
 
 function onDrop(e) {
@@ -208,16 +279,21 @@ function onDrop(e) {
 function openFile() { requestAction('editor_open_file') }
 function saveImage() { requestAction('editor_save', { path: imagePath.value }) }
 function resetEditor() {
-  imagePath.value = ''
-  imageDisplay.value = ''
-  undoStack.value = []
-  redoStack.value = []
+  imagePath.value = ''; imageDisplay.value = ''; undoStack.value = []; redoStack.value = []
+}
+
+// YOLO 모델 라벨 업데이트
+async function refreshYoloLabel() {
+  const backend = await getBackend()
+  // Python측에서 YOLO 모델 경로를 로드
+  try {
+    const { _load_yolo_model_paths } = await import('../bridge.js')
+  } catch {}
 }
 
 onMounted(() => {
   onBackendEvent('editorImageLoaded', (path) => loadImage(path))
 
-  // 단축키
   document.addEventListener('keydown', (e) => {
     if (!imagePath.value) return
     if (e.ctrlKey && e.key === 'z') { e.preventDefault(); doUndo() }
@@ -232,18 +308,25 @@ onMounted(() => {
 .editor-view { width: 100%; height: 100%; display: flex; flex-direction: column; }
 
 .top-bar {
-  display: flex; align-items: center; gap: 4px; padding: 4px 8px;
-  background: #0D0D0D; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; background: #0D0D0D; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
 }
-.t-btn {
-  padding: 5px 10px; background: #181818; border: none; border-radius: 4px;
-  color: #787878; font-size: 11px; cursor: pointer; white-space: nowrap;
+.bar-group { display: flex; align-items: center; gap: 6px; }
+.bar-group.center { flex: 1; justify-content: center; }
+.bar-btn {
+  padding: 8px 16px; background: #181818; border: 1px solid var(--border); border-radius: 6px;
+  color: #909090; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: var(--transition);
 }
-.t-btn:hover { background: #222; color: #E8E8E8; }
-.t-btn:disabled { opacity: 0.3; }
-.t-btn.save { background: #E2B340; color: #000; }
-.spacer { flex: 1; }
-.info { color: #484848; font-size: 11px; }
+.bar-btn:hover { background: #222; color: #E8E8E8; border-color: #333; }
+.bar-btn:disabled { opacity: 0.3; }
+.bar-btn.accent { border-color: var(--accent-dim); color: var(--accent); }
+.bar-btn.save { background: var(--accent); color: #000; border: none; font-weight: 800; }
+.bar-btn.save:hover { background: var(--accent-hover); }
+.bar-btn.danger { color: #f87171; border-color: rgba(248,113,113,0.2); }
+.bar-sep { color: #333; margin: 0 4px; }
+.bar-info { color: #585858; font-size: 11px; font-family: 'Consolas', monospace; }
 
 .editor-body { flex: 1; display: flex; overflow: hidden; }
 
@@ -251,10 +334,7 @@ onMounted(() => {
   width: 280px; flex-shrink: 0; background: #0D0D0D;
   display: flex; flex-direction: column; overflow: hidden;
 }
-.tab-buttons {
-  display: flex; flex-wrap: wrap; gap: 2px; padding: 4px;
-  background: #0A0A0A; flex-shrink: 0;
-}
+.tab-buttons { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; background: #0A0A0A; flex-shrink: 0; }
 .tab-btn {
   padding: 5px 8px; background: #131313; border: none; border-radius: 4px;
   color: #585858; font-size: 10px; cursor: pointer; white-space: nowrap;
@@ -275,11 +355,6 @@ onMounted(() => {
   padding: 10px 24px; background: #E2B340; border: none; border-radius: 8px;
   color: #000; font-weight: 700; font-size: 14px; cursor: pointer;
 }
-.feature-list {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; justify-content: center;
-}
-.feature-list span {
-  padding: 5px 12px; background: #131313; border-radius: 6px;
-  color: #585858; font-size: 11px;
-}
+.feature-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; justify-content: center; }
+.feature-list span { padding: 5px 12px; background: #131313; border-radius: 6px; color: #585858; font-size: 11px; }
 </style>

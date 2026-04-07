@@ -480,127 +480,58 @@ class ActionsMixin:
                 self.gallery_tab.load_folder(self.gallery_tab._current_folder)
                 
     def handle_prompt_only_transfer(self, prompt, negative):
-        """PNG Info에서 프롬프트 전송 시 토글 적용 (apply_prompt_from_data 재사용)"""
-        # 프롬프트를 태그 리스트로 분리
-        tags = [t.strip() for t in prompt.split(',') if t.strip()]
-        
-        # ★★★ 작가/선행/후행에 있는 태그들 수집 ★★★
-        existing_tags = set()
-        
-        # 작가 입력창
-        artist_text = self.artist_input.toPlainText().strip()
-        if artist_text:
-            for t in artist_text.split(','):
-                existing_tags.add(t.strip().lower())
-        
-        # 선행 고정 프롬프트
-        prefix_text = self.prefix_prompt_text.toPlainText().strip()
-        if prefix_text:
-            for t in prefix_text.split(','):
-                existing_tags.add(t.strip().lower())
-        
-        # 후행 고정 프롬프트
-        suffix_text = self.suffix_prompt_text.toPlainText().strip()
-        if suffix_text:
-            for t in suffix_text.split(','):
-                existing_tags.add(t.strip().lower())
-        
-        # ★★★ 중복 태그 제거 ★★★
-        filtered_tags = []
-        for tag in tags:
-            tag_lower = tag.lower().strip()
-            # 이스케이프 버전도 체크
-            tag_unescaped = tag_lower.replace(r'\(', '(').replace(r'\)', ')')
-            tag_escaped = tag_lower.replace('(', r'\(').replace(')', r'\)')
-            
-            if tag_lower in existing_tags:
-                continue
-            if tag_unescaped in existing_tags:
-                continue
-            if tag_escaped in existing_tags:
-                continue
-            
-            filtered_tags.append(tag)
-        
-        _logger.debug(f"원본 태그: {len(tags)}개")
-        _logger.debug(f"기존 태그 (작가/선행/후행): {len(existing_tags)}개")
-        _logger.debug(f"중복 제거 후: {len(filtered_tags)}개")
-        
-        # 태그 분류하여 bundle 형식으로 변환
-        classified = self.tag_classifier.classify_tags_for_event(filtered_tags)
-        
-        # bundle 생성 (apply_prompt_from_data가 받는 형식)
+        """PNG Info/Gallery에서 프롬프트만 전송"""
+        classified = self.tag_classifier.classify_tags_for_event([t.strip() for t in prompt.split(',') if t.strip()])
         bundle = {
-            'general': ', '.join(
-                classified["count"] +
-                classified["costume"] +
-                classified["appearance"] + 
-                classified["expression"] + 
-                classified["action"] + 
-                classified["background"] + 
-                classified["composition"] + 
-                classified["effect"] + 
-                classified["objects"] + 
-                classified["general"]
-            ),
+            'general': ', '.join(classified["costume"] + classified["appearance"] + classified["expression"] + classified["action"] + classified["background"] + classified["composition"] + classified["effect"] + classified["objects"] + classified["general"]),
             'character': ', '.join(classified["character"]),
             'copyright': ', '.join(classified["copyright"]),
-            'artist': ''  # 작가는 기존 값 유지
+            'artist': ''
         }
-        
-        # ★★★ apply_prompt_from_data 재사용 (토글 적용됨!) ★★★
         self.apply_prompt_from_data(bundle)
-        
-        # 네거티브 프롬프트는 별도 적용
         self.neg_prompt_text.setPlainText(negative)
-        
-        # T2I 탭으로 전환
-        self.center_tabs.setCurrentIndex(0)
-        
-        self.show_status(f"✅ 프롬프트 전송 완료 (중복 {len(tags) - len(filtered_tags)}개 제거)")
+        # Vue에서 T2I 탭으로 전환 유도
+        if hasattr(self, 'vue_bridge'):
+            self.vue_bridge.tabChanged.emit('t2i')
+        self.show_status("✅ 프롬프트 전송 완료")
 
     def _handle_send_to_i2i(self, payload):
-        """PNG Info에서 I2I 탭으로 전송"""
+        """I2I 탭으로 전송 (Vue 호환)"""
         if hasattr(self, 'i2i_tab'):
             self.i2i_tab.load_from_payload(payload)
-            # I2I 탭으로 전환 (인덱스 1)
-            self.center_tabs.setCurrentIndex(1)
-            self.show_status("✅ I2I 탭으로 이미지 전송 완료")
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.tabChanged.emit('i2i')
+            self.show_status("✅ I2I 탭으로 전송 완료")
 
     def _handle_send_to_inpaint(self, payload):
-        """PNG Info에서 Inpaint 탭으로 전송"""
+        """Inpaint 탭으로 전송 (Vue 호환)"""
         if hasattr(self, 'inpaint_tab'):
             self.inpaint_tab.load_from_payload(payload)
-            # Inpaint 탭으로 전환 (인덱스 2)
-            self.center_tabs.setCurrentIndex(2)
-            self.show_status("✅ Inpaint 탭으로 이미지 전송 완료")
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.tabChanged.emit('inpaint')
+            self.show_status("✅ Inpaint 탭으로 전송 완료")
 
-    # ── Gallery → 탭 간 이동 ──
     def _gallery_send_to_editor(self, path: str):
-        """Gallery에서 에디터 탭으로 이미지 전송"""
-        if hasattr(self, 'mosaic_editor'):
-            self.mosaic_editor.load_image(path)
-            idx = self.center_tabs.indexOf(self.mosaic_editor)
-            if idx >= 0:
-                self.center_tabs.setCurrentIndex(idx)
+        """에디터 탭으로 이미지 전송 (Vue 호환)"""
+        if hasattr(self, 'vue_bridge'):
+            self.vue_bridge.editorImageLoaded.emit(path.replace('\\', '/'))
+            self.vue_bridge.tabChanged.emit('editor')
             self.show_status(f"✅ 에디터로 전송: {os.path.basename(path)}")
 
     def _gallery_send_to_i2i(self, path: str):
-        """Gallery에서 I2I 탭으로 이미지 전송"""
+        """I2I 탭으로 이미지 전송 (Vue 호환)"""
         if hasattr(self, 'i2i_tab') and hasattr(self.i2i_tab, '_load_image'):
             self.i2i_tab._load_image(path)
-            idx = self.center_tabs.indexOf(self.i2i_tab)
-            if idx >= 0:
-                self.center_tabs.setCurrentIndex(idx)
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.tabChanged.emit('i2i')
             self.show_status(f"✅ I2I로 전송: {os.path.basename(path)}")
 
     def _gallery_send_to_inpaint(self, path: str):
-        """Gallery에서 Inpaint 탭으로 이미지 전송"""
+        """Inpaint 탭으로 이미지 전송 (Vue 호환)"""
         if hasattr(self, 'inpaint_tab') and hasattr(self.inpaint_tab, '_load_image'):
             self.inpaint_tab._load_image(path)
-            idx = self.center_tabs.indexOf(self.inpaint_tab)
-            if idx >= 0:
-                self.center_tabs.setCurrentIndex(idx)
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.tabChanged.emit('inpaint')
             self.show_status(f"✅ Inpaint로 전송: {os.path.basename(path)}")
 
     def _gallery_send_to_upscale(self, path: str):
