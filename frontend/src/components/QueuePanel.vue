@@ -35,10 +35,11 @@ defineExpose({ items })
 <style scoped>
 .queue-panel {
   background: #0D0D0D;
-  /* border 제거 */
+  min-height: 36px;
   max-height: 180px;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 .queue-header {
   display: flex;

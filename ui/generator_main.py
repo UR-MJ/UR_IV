@@ -46,8 +46,13 @@ class GeneratorMainUI(
         self._startup_backend_check()
 
         self._setup_ui()
-        # QSS 제거 — Vue가 모든 UI 스타일링 담당
-        self.setStyleSheet("QMainWindow { background: #0A0A0A; } * { margin: 0; padding: 0; }")
+        # QSS 제거 및 강력한 리셋 — Vue가 모든 UI 스타일링 담당
+        self.setStyleSheet("""
+            QMainWindow { background: #0A0A0A; border: none; }
+            QMainWindow::separator { width: 0px; height: 0px; margin: 0px; padding: 0px; }
+            QWidget { border: none; margin: 0px; padding: 0px; }
+        """)
+        self.setContentsMargins(0, 0, 0, 0)
         self.connect_signals()
         self.load_settings()
 
@@ -461,6 +466,47 @@ class GeneratorMainUI(
             self.show_status("배치 처리 시작 요청 수신")
         elif action == 'start_upscale':
             self.show_status("업스케일 시작 요청 수신")
+        elif action == 'add_favorite':
+            path = payload.get('path', '')
+            if path:
+                import json as _json
+                fav_file = os.path.join(os.path.dirname(__file__), '..', 'favorites.json')
+                favs = []
+                if os.path.exists(fav_file):
+                    with open(fav_file, 'r', encoding='utf-8') as f:
+                        favs = _json.load(f)
+                if path not in favs:
+                    favs.append(path)
+                    with open(fav_file, 'w', encoding='utf-8') as f:
+                        _json.dump(favs, f, indent=2)
+                    self.show_status(f"즐겨찾기에 추가: {os.path.basename(path)}")
+        elif action == 'delete_image':
+            path = payload.get('path', '')
+            if path and os.path.exists(path):
+                from core.image_utils import move_to_trash
+                move_to_trash(path)
+                self.show_status(f"삭제됨: {os.path.basename(path)}")
+        elif action == 'send_to_i2i':
+            path = payload.get('path', '')
+            if path and hasattr(self, 'i2i_tab'):
+                self.i2i_tab._load_image(path)
+                self.show_status("I2I로 전송됨")
+        elif action == 'send_to_inpaint':
+            path = payload.get('path', '')
+            if path and hasattr(self, 'inpaint_tab'):
+                self.inpaint_tab._load_image(path)
+                self.show_status("Inpaint로 전송됨")
+        elif action == 'send_to_editor':
+            path = payload.get('path', '')
+            if path:
+                self.vue_bridge.editorImageLoaded.emit(path.replace('\\', '/'))
+                self.show_status("Editor로 전송됨")
+        elif action == 'export_results':
+            if hasattr(self, 'search_tab'):
+                self.search_tab.export_results()
+        elif action == 'import_results':
+            if hasattr(self, 'search_tab'):
+                self.search_tab.import_results()
         elif action == 'open_batch_files' or action == 'open_upscale_files':
             from PyQt6.QtWidgets import QFileDialog
             paths, _ = QFileDialog.getOpenFileNames(

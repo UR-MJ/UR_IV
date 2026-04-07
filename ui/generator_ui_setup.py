@@ -44,6 +44,7 @@ class UISetupMixin:
                 print(f"[Vue] {message}")
 
         self.vue_viewer = QWebEngineView()
+        self.vue_viewer.setStyleSheet("border: none; background: transparent; margin: 0px; padding: 0px;")
         page = _DebugPage(self.vue_viewer)
         self.vue_viewer.setPage(page)
 
