@@ -509,6 +509,44 @@ class GeneratorMainUI(
                 except Exception as e:
                     self.vue_bridge.eventSearchResults.emit(json.dumps({'error': str(e)}))
             threading.Thread(target=_search, daemon=True).start()
+        elif action == 'event_add_to_queue':
+            # 이벤트 시나리오를 대기열에 추가
+            if hasattr(self, 'event_gen_tab') and hasattr(self.event_gen_tab, '_build_scenarios'):
+                try:
+                    scenarios = self.event_gen_tab._build_scenarios()
+                    if scenarios and hasattr(self, 'queue_panel'):
+                        for s in scenarios:
+                            self.queue_panel.add_single_item(s)
+                        self.show_status(f"대기열에 {len(scenarios)}개 시나리오 추가")
+                except Exception as e:
+                    self.show_status(f"이벤트 시나리오 생성 실패: {e}")
+        elif action == 'event_generate_now':
+            # 이벤트 시나리오 즉시 생성
+            if hasattr(self, 'event_gen_tab') and hasattr(self.event_gen_tab, '_build_scenarios'):
+                try:
+                    scenarios = self.event_gen_tab._build_scenarios()
+                    if scenarios:
+                        # 첫 번째 시나리오 적용 후 생성
+                        self.apply_prompt_from_data(scenarios[0])
+                        from PyQt6.QtCore import QTimer
+                        QTimer.singleShot(100, self.on_generate_clicked)
+                        self.show_status("이벤트 시나리오 즉시 생성 시작")
+                except Exception as e:
+                    self.show_status(f"이벤트 생성 실패: {e}")
+        elif action == 'select_event':
+            idx = payload.get('index', -1)
+            if hasattr(self, 'event_gen_tab') and idx >= 0:
+                self.show_status(f"이벤트 #{idx + 1} 선택됨")
+        elif action == 'set_tab_order':
+            order = payload.get('order', [])
+            if order:
+                # 설정 파일에 저장
+                import json as _json
+                import os as _os
+                config_path = _os.path.join(_os.path.dirname(__file__), '..', 'tab_order.json')
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    _json.dump(order, f, indent=2)
+                self.show_status("탭 순서 저장됨")
         elif action == 'start_xyz_plot':
             # XYZ Plot — 축 데이터로 조합 생성 → 대기열 추가
             axes = payload.get('axes', [])
@@ -617,6 +655,13 @@ class GeneratorMainUI(
             from PyQt6.QtWidgets import QFileDialog
             paths, _ = QFileDialog.getOpenFileNames(
                 self, "이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
+            if paths:
+                # Vue에 파일 경로 전달
+                import json as _json
+                self.vue_bridge.searchStatus.emit(_json.dumps({
+                    'action': action,
+                    'files': [p.replace('\\', '/') for p in paths]
+                }))
         elif action == 'open_url':
             import webbrowser
             url = payload.get('url', '')

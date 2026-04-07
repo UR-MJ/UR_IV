@@ -186,6 +186,10 @@ onMounted(async () => {
     status.value = `생성 중... ${step}/${total} (${pct}%)`
   })
   onBackendEvent('generationError', (msg) => { status.value = `오류: ${msg}` })
+  onBackendEvent('queueUpdated', (json) => {
+    // 대기열 상태 업데이트 (QueuePanel에서 사용)
+    console.log('[Queue]', json)
+  })
 })
 </script>
 
