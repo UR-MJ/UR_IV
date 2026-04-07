@@ -516,6 +516,16 @@ class GeneratorMainUI(
             url = payload.get('url', '')
             if url:
                 webbrowser.open(url)
+        elif action == 'editor_save':
+            path = payload.get('path', '')
+            if path:
+                from PyQt6.QtWidgets import QFileDialog
+                save_path, _ = QFileDialog.getSaveFileName(
+                    self, "이미지 저장", path, "PNG (*.png);;JPEG (*.jpg);;All (*)")
+                if save_path:
+                    import shutil
+                    shutil.copy2(path, save_path)
+                    self.show_status(f"저장됨: {save_path}")
         elif action == 'editor_open_file':
             from PyQt6.QtWidgets import QFileDialog
             path, _ = QFileDialog.getOpenFileName(

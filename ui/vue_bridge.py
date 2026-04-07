@@ -143,6 +143,74 @@ class VueBridge(QObject):
     def getSettings(self) -> str:
         return json.dumps({'status': 'ok'})
 
+    # ── Editor ──
+
+    @pyqtSlot(str, str, str, result=str)
+    def editorProcess(self, image_path: str, operation: str, params_json: str) -> str:
+        """에디터 이미지 처리 (Python OpenCV)"""
+        try:
+            import cv2
+            import numpy as np
+            params = json.loads(params_json) if params_json else {}
+            img = cv2.imread(image_path)
+            if img is None:
+                return json.dumps({'error': '이미지를 읽을 수 없습니다'})
+
+            if operation == 'mosaic':
+                strength = params.get('strength', 20)
+                h, w = img.shape[:2]
+                small = cv2.resize(img, (max(1, w // strength), max(1, h // strength)))
+                img = cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST)
+            elif operation == 'blur':
+                strength = params.get('strength', 15)
+                k = max(1, strength) | 1
+                img = cv2.GaussianBlur(img, (k, k), 0)
+            elif operation == 'rotate_cw':
+                img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+            elif operation == 'rotate_ccw':
+                img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            elif operation == 'flip_h':
+                img = cv2.flip(img, 1)
+            elif operation == 'flip_v':
+                img = cv2.flip(img, 0)
+            elif operation == 'grayscale':
+                img = cv2.cvtColor(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+            elif operation == 'sepia':
+                kernel = np.array([[0.272, 0.534, 0.131],
+                                   [0.349, 0.686, 0.168],
+                                   [0.393, 0.769, 0.189]])
+                img = cv2.transform(img, kernel)
+                img = np.clip(img, 0, 255).astype(np.uint8)
+            elif operation == 'sharpen':
+                kernel = np.array([[-1,-1,-1],[-1,9,-1],[-1,-1,-1]])
+                img = cv2.filter2D(img, -1, kernel)
+            elif operation == 'brightness':
+                value = params.get('value', 0)
+                img = cv2.convertScaleAbs(img, alpha=1, beta=value)
+            elif operation == 'contrast':
+                value = params.get('value', 1.0)
+                img = cv2.convertScaleAbs(img, alpha=value, beta=0)
+            elif operation == 'resize':
+                w = params.get('width', img.shape[1])
+                h = params.get('height', img.shape[0])
+                img = cv2.resize(img, (int(w), int(h)))
+            elif operation == 'crop':
+                x1 = params.get('x1', 0)
+                y1 = params.get('y1', 0)
+                x2 = params.get('x2', img.shape[1])
+                y2 = params.get('y2', img.shape[0])
+                img = img[int(y1):int(y2), int(x1):int(x2)]
+
+            # 결과 저장
+            import os, time, random as rnd
+            out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'generated_images')
+            os.makedirs(out_dir, exist_ok=True)
+            out_path = os.path.join(out_dir, f"edited_{int(time.time())}_{rnd.randint(100,999)}.png")
+            cv2.imwrite(out_path, img)
+            return json.dumps({'path': out_path.replace('\\', '/'), 'width': img.shape[1], 'height': img.shape[0]})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
     # ── 갤러리 ──
 
     @pyqtSlot(str, result=str)
