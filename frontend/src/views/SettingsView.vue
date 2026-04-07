@@ -35,15 +35,6 @@
         <label class="chk"><input type="checkbox" v-model="cleanUnderscore" /> 언더스코어 → 공백 변환</label>
       </div>
 
-      <!-- 도구 -->
-      <div v-show="currentTab === 'tools'" class="tab-content">
-        <h4 class="section">도구</h4>
-        <div class="row"><span>LoRA 관리</span><button class="btn" @click="act('open_lora_manager')">열기</button></div>
-        <div class="row"><span>가중치 편집</span><button class="btn" @click="act('open_tag_weight_editor')">열기</button></div>
-        <div class="row"><span>검색 결과 내보내기</span><button class="btn" @click="act('export_results')">내보내기</button></div>
-        <div class="row"><span>검색 결과 불러오기</span><button class="btn" @click="act('import_results')">불러오기</button></div>
-      </div>
-
       <!-- 탭 순서 -->
       <div v-show="currentTab === 'tabs'" class="tab-content">
         <h4 class="section">탭 순서</h4>
@@ -89,7 +80,6 @@ const subTabs = [
   { id: 'general', label: '일반' },
   { id: 'api', label: 'API' },
   { id: 'prompt', label: '프롬프트' },
-  { id: 'tools', label: '도구' },
   { id: 'tabs', label: '탭 순서' },
   { id: 'save', label: '저장' },
   { id: 'shortcuts', label: '단축키' },
