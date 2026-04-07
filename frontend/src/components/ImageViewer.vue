@@ -7,9 +7,12 @@
       </template>
       <template v-else>
         <div class="placeholder">
-          <div v-if="status === '생성 중...'" class="generating">
+          <div v-if="status && status.includes('생성 중')" class="generating">
             <div class="spinner" />
-            <div class="gen-text">이미지 생성 중...</div>
+            <div class="gen-text">{{ status }}</div>
+            <div class="progress-bar" v-if="status.includes('/')">
+              <div class="progress-fill" :style="{ width: progressPct + '%' }" />
+            </div>
           </div>
           <template v-else>
             <div class="placeholder-icon">🖼️</div>
@@ -29,11 +32,19 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   imageUrl: { type: String, default: '' },
   resolution: { type: String, default: '' },
   seed: { type: String, default: '' },
   status: { type: String, default: '' },
+})
+
+const progressPct = computed(() => {
+  const m = props.status?.match(/(\d+)\/(\d+)/)
+  if (m) return Math.round(parseInt(m[1]) / parseInt(m[2]) * 100)
+  return 0
 })
 </script>
 
@@ -107,4 +118,12 @@ defineProps({
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 .gen-text { color: #E2B340; font-size: 14px; font-weight: 600; }
+.progress-bar {
+  width: 200px; height: 4px; background: #1A1A1A; border-radius: 2px;
+  margin: 12px auto 0; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; background: #E2B340; border-radius: 2px;
+  transition: width 0.3s ease;
+}
 </style>

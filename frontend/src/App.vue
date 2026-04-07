@@ -181,6 +181,10 @@ onMounted(async () => {
     }
   })
   onBackendEvent('generationStarted', () => { status.value = '생성 중...' })
+  onBackendEvent('generationProgress', (step, total) => {
+    const pct = Math.round(step / total * 100)
+    status.value = `생성 중... ${step}/${total} (${pct}%)`
+  })
   onBackendEvent('generationError', (msg) => { status.value = `오류: ${msg}` })
 })
 </script>

@@ -145,15 +145,31 @@ function searchEvents() {
     exclude_tags: excludeTags.value,
     limit: limitResults.value,
   })
-  // TODO: Python에서 결과를 bridge 시그널로 전달
-  setTimeout(() => { searching.value = false; statusText.value = 'Python에서 이벤트를 검색합니다' }, 500)
+  // 결과는 시그널로 수신
 }
 
 function selectEvent(i) {
   selectedIdx.value = i
   requestAction('select_event', { index: i })
-  // TODO: Python에서 steps 데이터를 bridge로 전달
 }
+
+// 시그널 수신
+import { onMounted } from 'vue'
+import { onBackendEvent } from '../bridge.js'
+onMounted(() => {
+  onBackendEvent('eventSearchResults', (json) => {
+    try {
+      const data = JSON.parse(json)
+      if (Array.isArray(data)) {
+        events.value = data
+        statusText.value = `${data.length}개 이벤트 발견`
+      } else if (data.error) {
+        statusText.value = `오류: ${data.error}`
+      }
+    } catch {}
+    searching.value = false
+  })
+})
 
 function addToQueue() {
   requestAction('event_add_to_queue', {

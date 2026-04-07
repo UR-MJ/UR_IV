@@ -207,6 +207,10 @@ class GenerationMixin:
         )
         self.show_status(f"🎨 생성 중... {step}/{total} steps ({pct}%)")
 
+        # Vue에 진행률 전달
+        if hasattr(self, 'vue_bridge'):
+            self.vue_bridge.generationProgress.emit(step, total)
+
     def on_generation_finished(self, result, gen_info):
         """생성 완료 처리"""
         # 버튼 복구 (자동화 모드에 따라 다르게)

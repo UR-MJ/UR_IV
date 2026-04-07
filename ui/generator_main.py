@@ -477,14 +477,38 @@ class GeneratorMainUI(
             else:
                 self.show_status("Inpaint 생성 요청 수신 (탭 미초기화)")
         elif action == 'search_events':
-            # 이벤트 검색 — EventGenTab의 검색 기능 호출
-            if hasattr(self, 'event_gen_tab'):
-                ratings = payload.get('ratings', ['g'])
-                prompt = payload.get('prompt', '')
-                self.show_status(f"이벤트 검색 중... (레이팅: {', '.join(ratings)})")
-                # EventGenTab의 데이터 로드 + 검색 트리거
-                if hasattr(self.event_gen_tab, '_start_data_load'):
-                    self.event_gen_tab._start_data_load()
+            ratings = payload.get('ratings', ['g'])
+            prompt_text = payload.get('prompt', '')
+            self.show_status(f"이벤트 검색 중... (레이팅: {', '.join(ratings)})")
+            # EventDataLoader 사용
+            import threading
+            def _search():
+                try:
+                    from core.event_data_loader import EventDataLoader
+                    from config import PARQUET_DIR
+                    import os as _os
+                    event_dir = _os.path.join(PARQUET_DIR, 'danbooru_sorted')
+                    if not _os.path.isdir(event_dir):
+                        self.vue_bridge.eventSearchResults.emit(json.dumps({'error': '이벤트 데이터 없음'}))
+                        return
+                    loader = EventDataLoader(event_dir)
+                    loader.load_parquets_by_rating(ratings)
+                    if prompt_text:
+                        results = loader.search_by_prompt(prompt_text, limit=100)
+                    else:
+                        results = []
+                    out = []
+                    for r in results[:50]:
+                        out.append({
+                            'summary': str(r.get('summary', '')),
+                            'copyright': str(r.get('copyright', '')),
+                            'step_count': r.get('step_count', 0),
+                        })
+                    self.vue_bridge.eventSearchResults.emit(json.dumps(out))
+                    self.show_status(f"이벤트 검색 완료: {len(out)}개")
+                except Exception as e:
+                    self.vue_bridge.eventSearchResults.emit(json.dumps({'error': str(e)}))
+            threading.Thread(target=_search, daemon=True).start()
         elif action == 'start_xyz_plot':
             # XYZ Plot — 축 데이터로 조합 생성 → 대기열 추가
             axes = payload.get('axes', [])
@@ -510,10 +534,29 @@ class GeneratorMainUI(
             threading.Thread(target=_batch, daemon=True).start()
         elif action == 'start_upscale':
             files = payload.get('files', [])
-            upscaler_name = payload.get('upscaler', '')
+            upscaler_name = payload.get('upscaler', 'R-ESRGAN 4x+')
             scale = payload.get('scale', 2)
             self.show_status(f"업스케일 시작: {len(files)}개 파일, {upscaler_name} {scale}x")
-            # TODO: WebUI API 업스케일 호출
+            if files:
+                import os as _os
+                from workers.upscale_worker import BatchUpscaleWorker
+                out_folder = _os.path.join(_os.path.dirname(__file__), '..', 'generated_images', 'upscaled')
+                _os.makedirs(out_folder, exist_ok=True)
+                settings = {
+                    'mode': 'upscale_only',
+                    'upscaler_name': upscaler_name,
+                    'scale_mode': 'factor',
+                    'scale_factor': float(scale),
+                    'output_folder': out_folder,
+                }
+                self._upscale_worker = BatchUpscaleWorker(files, settings)
+                self._upscale_worker.single_finished.connect(
+                    lambda i, ok, msg: self.show_status(f"업스케일 {'완료' if ok else '실패'}: {msg}")
+                )
+                self._upscale_worker.all_finished.connect(
+                    lambda: self.show_status(f"업스케일 전체 완료: {len(files)}개")
+                )
+                self._upscale_worker.start()
         elif action == 'add_favorite':
             import os as _os
             path = payload.get('path', '')

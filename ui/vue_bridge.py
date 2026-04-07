@@ -349,7 +349,10 @@ class VueBridge(QObject):
                 return f.read()
         return json.dumps([])
 
-    searchResultsReady = pyqtSignal(str)  # JSON results
+    searchResultsReady = pyqtSignal(str)   # JSON results
+    queueUpdated = pyqtSignal(str)         # JSON queue state
+    eventSearchResults = pyqtSignal(str)   # JSON event results
+    generationProgress = pyqtSignal(int, int)  # current, total steps
 
     @pyqtSlot(str)
     def searchDanbooru(self, query_json: str):
