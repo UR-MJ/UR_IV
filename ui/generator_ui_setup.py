@@ -67,7 +67,7 @@ class UISetupMixin:
         if os.path.exists(frontend_path):
             self.vue_viewer.setUrl(QUrl.fromLocalFile(frontend_path))
 
-        # QStackedWidget: 0=Vue SPA, 1=Editor(PyQt)
+        # QStackedWidget: 0=Vue SPA, 1=Editor, 2=Web, 3=Backend
         from PyQt6.QtWidgets import QStackedWidget
         self._main_stack = QStackedWidget()
         self._main_stack.setContentsMargins(0, 0, 0, 0)
@@ -76,6 +76,16 @@ class UISetupMixin:
         from tabs.editor_tab import MosaicEditor
         self.mosaic_editor = MosaicEditor()
         self._main_stack.addWidget(self.mosaic_editor)  # index 1
+
+        # Web Browser (별도 QWebEngineView)
+        from tabs.browser_tab import BrowserTab
+        self.web_tab = BrowserTab(self)
+        self._main_stack.addWidget(self.web_tab)  # index 2
+
+        # Backend UI (별도 QWebEngineView)
+        from tabs.backend_ui_tab import BackendUITab
+        self.backend_ui_tab = BackendUITab(self)
+        self._main_stack.addWidget(self.backend_ui_tab)  # index 3
 
         self.setCentralWidget(self._main_stack)
 
@@ -266,9 +276,14 @@ class UISetupMixin:
             't2i', 'i2i', 'inpaint', 'event', 'search', 'web', 'editor',
             'batch', 'gallery', 'xyz', 'png', 'fav', 'backend', 'settings'
         ]
-        for i, key in enumerate(tab_keys):
-            if i < self.center_tabs.count():
-                self.center_tabs.setTabText(i, self._get_tab_title(key))
+        try:
+            count = self.center_tabs.count()
+            if count is None: return
+            for i, key in enumerate(tab_keys):
+                if i < count:
+                    self.center_tabs.setTabText(i, self._get_tab_title(key))
+        except (TypeError, AttributeError):
+            pass  # Vue 모드에서는 center_tabs가 더미
 
     def _create_center_tabs(self):
         """중앙 탭 위젯 생성"""
@@ -300,15 +315,9 @@ class UISetupMixin:
         self.center_tabs.tabText = lambda i: 'AI Studio'
         self.center_tabs.setTabText = lambda i, t: None
 
-        # 네이티브 탭 인스턴스 (호환성 — 부모 없음, 화면에 추가하지 않음)
-        self.mosaic_editor = MosaicEditor()
-        self.mosaic_editor.setParent(None)
-        self.web_tab = BrowserTab(self)
-        self.web_tab.setParent(None)
-        self.backend_ui_tab = BackendUITab(self)
-        self.backend_ui_tab.setParent(None)
+        # mosaic_editor, web_tab, backend_ui_tab은 _main_stack에서 이미 생성됨
 
-        # 기존 PyQt 탭들 — 인스턴스만 생성 (Vue placeholder 대체 예정, 호환성 유지)
+        # 기존 PyQt 탭들 — 인스턴스만 생성 (호환성 유지)
         self.i2i_tab = Img2ImgTab(self)
         self.inpaint_tab = InpaintTab(self)
         self.event_gen_tab = EventGenTab(self)

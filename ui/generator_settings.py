@@ -445,6 +445,8 @@ class SettingsMixin:
             self.show_status("✅ 설정을 불러왔습니다.", 3000)
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             from utils.app_logger import get_logger
             get_logger('settings').error(f"설정 불러오기 실패: {e}")
     

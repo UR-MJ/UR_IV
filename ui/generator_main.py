@@ -394,17 +394,19 @@ class GeneratorMainUI(
     # ========== Vue 액션 핸들러 ==========
 
     def _switch_native_tab(self, tab_id: str):
-        """네이티브 탭 전환 — Vue에서 전부 처리하므로 no-op"""
-        pass
+        """네이티브 탭 전환 (QStackedWidget)"""
+        tab_map = {'vue': 0, 'editor': 1, 'web': 2, 'backend': 3}
+        idx = tab_map.get(tab_id, 0)
+        if hasattr(self, '_main_stack'):
+            self._main_stack.setCurrentIndex(idx)
 
     def _handle_vue_action(self, action: str, payload: dict):
         """Vue에서 전달된 액션 처리"""
         if action == 'native_tab_switch':
             self._switch_native_tab(payload.get('tab', 'vue'))
         elif action == 'vue_tab_switch':
-            self.center_tabs.setCurrentIndex(0)
-            self._native_tab_bar.hide()
-            self.editor_tools_scroll.hide()
+            if hasattr(self, '_main_stack'):
+                self._main_stack.setCurrentIndex(0)  # Vue SPA로 복귀
         elif action == 'generate':
             if hasattr(self, 'on_generate_clicked'):
                 self.on_generate_clicked()

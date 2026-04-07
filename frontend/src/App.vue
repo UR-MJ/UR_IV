@@ -98,7 +98,15 @@ function historyScroll(dir) {
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
 
 function showHistoryMenu(e, path) {
-  ctxMenu.value = { show: true, x: e.layerX, y: e.layerY, path }
+  // 화면 밖 넘어감 방지
+  const menuW = 180, menuH = 200
+  let x = e.clientX
+  let y = e.clientY
+  if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 10
+  if (y + menuH > window.innerHeight) y = window.innerHeight - menuH - 10
+  if (x < 0) x = 10
+  if (y < 0) y = 10
+  ctxMenu.value = { show: true, x, y, path }
 }
 function hideCtxMenu() { ctxMenu.value.show = false }
 function ctxAddFavorite() { action('add_favorite', { path: ctxMenu.value.path }); hideCtxMenu() }
@@ -217,9 +225,9 @@ body { color: #E8E8E8; font-family: 'Pretendard', 'Malgun Gothic', 'Segoe UI', s
 
 /* 우클릭 메뉴 */
 .ctx-menu {
-  position: absolute; background: #1A1A1A; border-radius: 6px;
-  padding: 4px; z-index: 100; min-width: 160px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  position: fixed; background: #1A1A1A; border-radius: 6px;
+  padding: 4px; z-index: 9999; min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.7);
 }
 .ctx-item {
   padding: 6px 12px; font-size: 12px; color: #B0B0B0; cursor: pointer;

@@ -27,9 +27,6 @@ const routes = [
   { path: '/png', name: 'png', component: PngInfoView, meta: { title: 'PNG Info' } },
   { path: '/fav', name: 'fav', component: FavoritesView, meta: { title: 'Favorites' } },
   { path: '/settings', name: 'settings', component: SettingsView, meta: { title: 'Settings' } },
-  { path: '/editor', name: 'editor', component: EditorView, meta: { title: 'Editor' } },
-  { path: '/web', name: 'web', component: WebView, meta: { title: 'Web' } },
-  { path: '/backend', name: 'backend', component: BackendView, meta: { title: 'Backend UI' } },
 ]
 
 const router = createRouter({
