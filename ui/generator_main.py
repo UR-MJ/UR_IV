@@ -459,18 +459,49 @@ class GeneratorMainUI(
                 # PNGInfo/Inpaint용 — 히스토리에 추가하지 않음
                 self.vue_bridge.inpaintImageLoaded.emit(path.replace('\\', '/'))
         elif action == 'generate_i2i':
-            # Vue I2I → Python 백엔드로 전달
-            self.show_status("I2I 생성 요청 수신")
+            # I2I 생성 — payload에 image(base64), denoising 등
+            if hasattr(self, 'i2i_tab') and hasattr(self.i2i_tab, '_on_generate'):
+                # payload에서 설정 적용
+                denoising = payload.get('denoising', 0.75)
+                if hasattr(self.i2i_tab, 'denoise_input'):
+                    self.i2i_tab.denoise_input.setText(str(denoising))
+                self.i2i_tab._on_generate()
+                self.show_status("I2I 생성 시작")
+            else:
+                self.show_status("I2I 생성 요청 수신 (탭 미초기화)")
         elif action == 'generate_inpaint':
-            self.show_status("Inpaint 생성 요청 수신")
+            if hasattr(self, 'inpaint_tab') and hasattr(self.inpaint_tab, '_on_generate'):
+                self.inpaint_tab._on_generate()
+                self.show_status("Inpaint 생성 시작")
+            else:
+                self.show_status("Inpaint 생성 요청 수신 (탭 미초기화)")
         elif action == 'search_events':
-            self.show_status("이벤트 검색 요청 수신")
+            # 이벤트 검색 — EventGenTab의 검색 기능 호출
+            if hasattr(self, 'event_gen_tab'):
+                ratings = payload.get('ratings', ['g'])
+                prompt = payload.get('prompt', '')
+                self.show_status(f"이벤트 검색 중... (레이팅: {', '.join(ratings)})")
+                # EventGenTab의 데이터 로드 + 검색 트리거
+                if hasattr(self.event_gen_tab, '_start_data_load'):
+                    self.event_gen_tab._start_data_load()
         elif action == 'start_xyz_plot':
-            self.show_status("XYZ Plot 시작 요청 수신")
+            # XYZ Plot — 축 데이터로 조합 생성 → 대기열 추가
+            axes = payload.get('axes', [])
+            if axes and hasattr(self, 'xyz_plot_tab'):
+                self.show_status(f"XYZ Plot: {len(axes)}축 조합 생성 중...")
+                # TODO: xyz_plot_tab._generate_combinations(axes) 연결
         elif action == 'start_batch':
-            self.show_status("배치 처리 시작 요청 수신")
+            files = payload.get('files', [])
+            self.show_status(f"배치 처리: {len(files)}개 파일")
+            if hasattr(self, 'batch_tab') and files:
+                for f in files:
+                    if hasattr(self.batch_tab, '_add_file'):
+                        self.batch_tab._add_file(f)
         elif action == 'start_upscale':
-            self.show_status("업스케일 시작 요청 수신")
+            files = payload.get('files', [])
+            upscaler = payload.get('upscaler', '')
+            scale = payload.get('scale', 2)
+            self.show_status(f"업스케일: {len(files)}개 파일, {upscaler} {scale}x")
         elif action == 'add_favorite':
             import os as _os
             path = payload.get('path', '')
@@ -486,6 +517,19 @@ class GeneratorMainUI(
                     with open(fav_file, 'w', encoding='utf-8') as f:
                         _json.dump(favs, f, indent=2)
                     self.show_status(f"즐겨찾기에 추가: {_os.path.basename(path)}")
+        elif action == 'remove_favorite':
+            import os as _os
+            path = payload.get('path', '')
+            if path:
+                import json as _json
+                fav_file = _os.path.join(_os.path.dirname(__file__), '..', 'favorites.json')
+                if _os.path.exists(fav_file):
+                    with open(fav_file, 'r', encoding='utf-8') as f:
+                        favs = _json.load(f)
+                    favs = [f for f in favs if f != path]
+                    with open(fav_file, 'w', encoding='utf-8') as f:
+                        _json.dump(favs, f, indent=2)
+                    self.show_status(f"즐겨찾기에서 제거: {_os.path.basename(path)}")
         elif action == 'delete_image':
             import os as _os
             path = payload.get('path', '')

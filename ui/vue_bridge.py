@@ -229,6 +229,78 @@ class VueBridge(QObject):
                     hsv[:,:,1] *= (100 + s_val) / 100.0
                     hsv[:,:,1] = np.clip(hsv[:,:,1], 0, 255)
                     img = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+            elif operation == 'auto_correct':
+                # 자동 색상 보정 (히스토그램 평활화)
+                lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+                l, a, b_ch = cv2.split(lab)
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                l = clahe.apply(l)
+                img = cv2.cvtColor(cv2.merge([l, a, b_ch]), cv2.COLOR_LAB2BGR)
+            elif operation == 'invert':
+                img = cv2.bitwise_not(img)
+            elif operation == 'emboss':
+                kernel = np.array([[-2,-1,0],[-1,1,1],[0,1,2]])
+                img = cv2.filter2D(img, -1, kernel)
+            elif operation == 'sketch':
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                inv = cv2.bitwise_not(gray)
+                blur = cv2.GaussianBlur(inv, (21, 21), 0)
+                img = cv2.cvtColor(cv2.divide(gray, cv2.bitwise_not(blur), scale=256), cv2.COLOR_GRAY2BGR)
+            elif operation == 'vignette':
+                h, w = img.shape[:2]
+                X = cv2.getGaussianKernel(w, w * 0.5)
+                Y = cv2.getGaussianKernel(h, h * 0.5)
+                M = Y * X.T
+                M = M / M.max()
+                for i in range(3):
+                    img[:,:,i] = (img[:,:,i] * M).astype(np.uint8)
+            elif operation == 'denoise':
+                img = cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
+            elif operation == 'posterize':
+                n = params.get('levels', 4)
+                div = 256 // n
+                img = (img // div * div + div // 2).astype(np.uint8)
+            elif operation == 'warm':
+                increase = np.array([0, 0, 30], dtype=np.uint8)
+                img = cv2.add(img, increase)
+            elif operation == 'cool':
+                increase = np.array([30, 0, 0], dtype=np.uint8)
+                img = cv2.add(img, increase)
+            elif operation == 'adv_color':
+                temp = params.get('temperature', 0)
+                tint = params.get('tint', 0)
+                if temp != 0:
+                    img = cv2.add(img, np.array([temp if temp < 0 else 0, 0, temp if temp > 0 else 0], dtype=np.int16).clip(-255, 255).astype(np.uint8))
+                if tint != 0:
+                    img[:,:,1] = np.clip(img[:,:,1].astype(np.int16) + tint, 0, 255).astype(np.uint8)
+            elif operation == 'text_watermark':
+                text = params.get('text', 'Watermark')
+                font_scale = params.get('fontSize', 24) / 24.0
+                opacity = params.get('opacity', 50) / 100.0
+                pos = params.get('position', 'center')
+                h, w = img.shape[:2]
+                overlay = img.copy()
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                size = cv2.getTextSize(text, font, font_scale, 2)[0]
+                if pos == 'center':
+                    ox, oy = (w - size[0]) // 2, (h + size[1]) // 2
+                elif pos == 'top-left':
+                    ox, oy = 10, size[1] + 10
+                elif pos == 'bottom-right':
+                    ox, oy = w - size[0] - 10, h - 10
+                else:
+                    ox, oy = 10, h - 10
+                cv2.putText(overlay, text, (ox, oy), font, font_scale, (255, 255, 255), 2)
+                img = cv2.addWeighted(overlay, opacity, img, 1 - opacity, 0)
+            elif operation == 'remove_bg':
+                try:
+                    from rembg import remove
+                    from PIL import Image as PILImage
+                    pil_img = PILImage.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                    result = remove(pil_img)
+                    img = cv2.cvtColor(np.array(result), cv2.COLOR_RGBA2BGRA)
+                except ImportError:
+                    return json.dumps({'error': 'rembg 미설치: pip install rembg'})
             elif operation == 'crop':
                 x1 = params.get('x1', 0)
                 y1 = params.get('y1', 0)
