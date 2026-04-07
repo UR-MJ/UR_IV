@@ -262,8 +262,7 @@ class VueBridge(QObject):
             if f.lower().endswith(exts):
                 fp = os.path.join(target, f).replace('\\', '/')
                 files.append(fp)
-            if len(files) >= 200:
-                break
+            # 제한 없음
         return json.dumps(files)
 
     # ── PNG Info ──
@@ -304,7 +303,7 @@ class VueBridge(QObject):
         try:
             out = []
             if hasattr(results, 'iterrows'):
-                for _, row in results.head(200).iterrows():
+                for _, row in results.iterrows():
                     out.append({
                         'copyright': str(row.get('tag_string_copyright', '')),
                         'character': str(row.get('tag_string_character', '')),
