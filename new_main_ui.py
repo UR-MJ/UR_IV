@@ -33,8 +33,8 @@ def main():
     app.setApplicationName("AI Studio Pro")
     app.setOrganizationName("AI Studio")
     
-    # PyQt 스타일 최소화 — Vue가 모든 UI 스타일링 담당
-    app.setStyleSheet("QMainWindow { background: #0A0A0A; }")
+    # PyQt 스타일 완전 제거 — Vue가 모든 UI 스타일링 담당
+    app.setStyleSheet("")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
