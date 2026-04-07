@@ -40,7 +40,46 @@
   더 이상 호출되지 않는 데드 코드. `_setup_ui`만 사용.
 - Editor 결과물은 `image_cache/editor_temp/`에 저장 (generated_images/가 아님).
 
+## [2026-04-07] Claude Code — v2.0.0 릴리즈
+
+### 최종 구조
+```
+QMainWindow
+└── QStackedWidget (_main_stack)
+    ├── index 0: QWebEngineView (Vue SPA — 모든 Vue 탭)
+    ├── index 1: BrowserTab (Web — 별도 QWebEngineView)
+    └── index 2: BackendUITab (Backend — 별도 QWebEngineView)
+```
+- Editor는 **Vue에서 처리** (PyQt MosaicEditor는 setParent(None))
+- Web/Backend만 별도 QWebEngineView (iframe 보안 정책 우회)
+- Web/Backend에 "← AI Studio" 홈 버튼 추가
+
+### Vue SPA 내부 구조
+```
+App.vue
+├── TabBar (14개 Vue 탭 + 2개 네이티브)
+├── main (flex)
+│   ├── left-panel (T2I만, v-if)
+│   │   ├── PromptPanel
+│   │   └── tools-section (저장/프리셋/LoRA/셔플 등)
+│   ├── content (router-view)
+│   └── right-panel (히스토리, T2I만)
+│       └── 5개씩 페이지 + ▲▼ + 우클릭 메뉴
+└── QueuePanel (하단 고정)
+```
+
+### 남은 작업 / 알려진 이슈
+- Editor 서브패널 버튼들 대부분 VueBridge 연결 미완 (UI만 존재)
+- settings load 시 경미한 TypeError (center_tabs 더미 — crash 아님)
+- 검색 결과 내보내기/불러오기 — Python 연결 필요
+- 태그 자동완성 — Vue에서 미구현
+- Inpaint 캔버스 → 백엔드 생성 연결 미완
+- 대기열 Python 동기화 미완
+
 ## Gemini를 위한 지시사항
-- Vue 파일(`frontend/src/`)을 수정할 때는 `npm run build`를 실행해야 반영됨.
-- PyQt QSS/테마 변경은 더 이상 화면에 영향 없음. Vue CSS를 직접 수정해야 함.
-- 새로운 Python↔Vue 통신이 필요하면 `ui/vue_bridge.py`에 `@pyqtSlot` 추가.
+- Vue 파일(`frontend/src/`)을 수정할 때는 `cd frontend && npm run build` 실행 필수.
+- PyQt QSS/테마 변경은 화면에 영향 없음. Vue CSS를 직접 수정해야 함.
+- 새로운 Python↔Vue 통신: `ui/vue_bridge.py`에 `@pyqtSlot` 추가 + `frontend/src/bridge.js`에서 호출.
+- Web/Backend 탭은 QStackedWidget index 전환으로 처리 (`_main_stack.setCurrentIndex`).
+- Editor는 Vue 전용 — `frontend/src/views/EditorView.vue` + `components/editor/*.vue` 수정.
+- 앱 아이콘: `assets/icons/app_icon.svg` (Gemini가 생성)
