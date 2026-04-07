@@ -278,9 +278,11 @@ class VueBridge(QObject):
                 return f.read()
         return json.dumps([])
 
-    @pyqtSlot(str, result=str)
-    def searchDanbooru(self, query_json: str) -> str:
-        """Danbooru parquet 검색"""
+    searchResultsReady = pyqtSignal(str)  # JSON results
+
+    @pyqtSlot(str)
+    def searchDanbooru(self, query_json: str):
+        """Danbooru parquet 검색 (비동기 — 결과는 searchResultsReady 시그널)"""
         try:
             q = json.loads(query_json)
             ratings = q.get('ratings', ['g'])
@@ -289,22 +291,31 @@ class VueBridge(QObject):
 
             from workers.search_worker import PandasSearchWorker
             from config import PARQUET_DIR
-            worker = PandasSearchWorker(PARQUET_DIR, ratings, queries, excludes)
-            worker.run()  # 동기 실행 (작은 데이터셋)
-            results = worker._results if hasattr(worker, '_results') else []
-            # 최대 50개만 반환
-            out = []
-            for _, row in (results[:50] if hasattr(results, '__getitem__') else []):
-                out.append({
-                    'copyright': str(row.get('tag_string_copyright', '')),
-                    'character': str(row.get('tag_string_character', '')),
-                    'artist': str(row.get('tag_string_artist', '')),
-                    'general': str(row.get('tag_string_general', '')),
-                    'rating': str(row.get('rating', '')),
-                })
-            return json.dumps(out)
+
+            self._search_worker = PandasSearchWorker(PARQUET_DIR, ratings, queries, excludes)
+            self._search_worker.results_ready.connect(self._on_search_results)
+            self._search_worker.start()
+            self.searchStatus.emit('검색 중...')
         except Exception as e:
-            return json.dumps({'error': str(e)})
+            self.searchResultsReady.emit(json.dumps({'error': str(e)}))
+
+    def _on_search_results(self, results, total_count):
+        """검색 결과 수신 → Vue로 전달"""
+        try:
+            out = []
+            if hasattr(results, 'iterrows'):
+                for _, row in results.head(200).iterrows():
+                    out.append({
+                        'copyright': str(row.get('tag_string_copyright', '')),
+                        'character': str(row.get('tag_string_character', '')),
+                        'artist': str(row.get('tag_string_artist', '')),
+                        'general': str(row.get('tag_string_general', '')),
+                        'rating': str(row.get('rating', '')),
+                    })
+            self.searchResultsReady.emit(json.dumps(out))
+            self.searchStatus.emit(f'{len(out)}개 결과 (전체 {total_count}개)')
+        except Exception as e:
+            self.searchResultsReady.emit(json.dumps({'error': str(e)}))
 
     @pyqtSlot(str, result=str)
     def loadImageBase64(self, filepath: str) -> str:

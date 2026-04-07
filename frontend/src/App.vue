@@ -155,6 +155,12 @@ onMounted(() => {
   document.addEventListener('wheel', (e) => {
     if (e.ctrlKey) e.preventDefault()
   }, { passive: false })
+  // 글로벌 단축키
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'g') { e.preventDefault(); action('generate') }
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); action('save_settings') }
+    if (e.key === 'F5') { e.preventDefault(); loadHistory() }
+  })
 })
 onUnmounted(() => document.removeEventListener('click', onGlobalClick))
 

@@ -90,8 +90,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
-import { getBackend } from '../bridge.js'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
 const ratings = reactive([
@@ -126,22 +126,31 @@ async function search() {
     excludes: Object.fromEntries(fields.map(f => [f.key, f.exclude])),
   }
   if (backend.searchDanbooru) {
-    backend.searchDanbooru(JSON.stringify(query), (json) => {
-      try {
-        const data = JSON.parse(json)
-        if (Array.isArray(data)) {
-          results.value = data
-          filteredResults.value = data
-          previewIdx.value = 0
-          statusText.value = `${data.length}개 결과`
-        } else {
-          statusText.value = data.error || '검색 실패'
-        }
-      } catch { statusText.value = '파싱 오류' }
-      searching.value = false
-    })
+    backend.searchDanbooru(JSON.stringify(query))
+    // 결과는 시그널로 수신
   }
 }
+
+// Search 시그널 수신
+onMounted(() => {
+  onBackendEvent('searchResultsReady', (json) => {
+    try {
+      const data = JSON.parse(json)
+      if (Array.isArray(data)) {
+        results.value = data
+        filteredResults.value = data
+        previewIdx.value = 0
+        statusText.value = `${data.length}개 결과`
+      } else {
+        statusText.value = data.error || '검색 실패'
+      }
+    } catch { statusText.value = '파싱 오류' }
+    searching.value = false
+  })
+  onBackendEvent('searchStatus', (msg) => {
+    statusText.value = msg
+  })
+})
 
 function applyFocus() {
   const inc = focusInclude.value.toLowerCase().split(',').map(s => s.trim()).filter(Boolean)

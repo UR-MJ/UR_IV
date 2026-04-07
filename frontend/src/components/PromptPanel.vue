@@ -113,6 +113,29 @@
       />
     </div>
 
+    <!-- 태그 제거 옵션 (접이식) -->
+    <button class="toggle-btn" @click="showRemove = !showRemove">
+      {{ showRemove ? '▼' : '▶' }} 태그 제거 옵션
+    </button>
+    <div v-show="showRemove" class="collapsible remove-opts">
+      <label class="chk-row" v-for="opt in removeOptions" :key="opt.id">
+        <input type="checkbox"
+          :checked="get(opt.id) === 'true'"
+          @change="set(opt.id, $event.target.checked ? 'true' : 'false')"
+        />
+        <span>{{ opt.label }}</span>
+      </label>
+    </div>
+
+    <!-- LoRA (접이식) -->
+    <button class="toggle-btn" @click="showLora = !showLora">
+      {{ showLora ? '▼' : '▶' }} LoRA
+    </button>
+    <div v-show="showLora" class="collapsible">
+      <button class="small-btn" @click="action('open_lora_manager')">LoRA 관리</button>
+      <button class="small-btn" @click="action('open_tag_weight_editor')">⚖ 가중치 편집</button>
+    </div>
+
     <!-- 생성 설정 (접이식) -->
     <button class="toggle-btn settings-toggle" @click="showSettings = !showSettings">
       {{ showSettings ? '▼' : '▶' }} 생성 설정
@@ -148,8 +171,19 @@ import SettingsPanel from './SettingsPanel.vue'
 
 const showFinal = ref(false)
 const showExclude = ref(false)
+const showRemove = ref(false)
+const showLora = ref(false)
 const showSettings = ref(false)
 const autoOn = ref(false)
+
+const removeOptions = [
+  { id: 'chk_remove_artist', label: '작가명 제거' },
+  { id: 'chk_remove_copyright', label: '작품명 제거' },
+  { id: 'chk_remove_character', label: '캐릭터 제거' },
+  { id: 'chk_remove_meta', label: '메타 제거' },
+  { id: 'chk_remove_censorship', label: '검열 제거' },
+  { id: 'chk_remove_text', label: '텍스트 제거' },
+]
 
 const tokenCount = computed(() => {
   const text = getValue('total_prompt_display')
@@ -334,4 +368,17 @@ function action(name, payload = {}) {
 .generate-btn:hover {
   background: linear-gradient(90deg, #F0C850, #E09030);
 }
+.remove-opts {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+}
+.chk-row {
+  display: flex; align-items: center; gap: 6px;
+  color: #B0B0B0; font-size: 11px; padding: 3px 0; cursor: pointer;
+}
+.chk-row input { accent-color: #E2B340; }
+.small-btn {
+  padding: 5px 10px; background: #181818; border: none; border-radius: 4px;
+  color: #787878; font-size: 11px; cursor: pointer; margin: 2px;
+}
+.small-btn:hover { background: #222; color: #E8E8E8; }
 </style>
