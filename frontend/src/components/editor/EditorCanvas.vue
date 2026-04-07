@@ -2,10 +2,10 @@
   <div class="canvas-container" ref="containerRef"
     @wheel.prevent="onWheel"
     @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp"
-    @mouseleave="onMouseUp"
+    @mouseleave="onMouseUp" @contextmenu.prevent
+    @dblclick="onDblClick"
   >
     <canvas ref="canvasEl" :style="canvasStyle" />
-    <!-- 마스크 오버레이 캔버스 (선택 영역 시각화) -->
     <canvas ref="maskCanvasEl" :style="canvasStyle" class="mask-overlay" />
     <div class="canvas-info">
       {{ imgWidth }} × {{ imgHeight }}
@@ -22,7 +22,8 @@ const props = defineProps({
   imageSrc: { type: String, default: '' },
   tool: { type: String, default: 'box' },
   brushSize: { type: Number, default: 20 },
-  eraserMode: { type: String, default: 'brush' }, // 'brush' | 'box' | 'lasso'
+  eraserMode: { type: String, default: 'brush' },
+  stampSpacing: { type: Number, default: 30 },
 })
 
 const emit = defineEmits(['selection-changed', 'mask-changed'])
@@ -46,25 +47,25 @@ let panning = false
 let startX = 0, startY = 0
 let panStartX = 0, panStartY = 0
 let lastBrushX = -1, lastBrushY = -1
-
-// lasso 전용 상태
 let lassoPoints = []
+let maskData = null
+let lastAltClick = 0  // Alt 더블클릭 감지
+let stampAccum = 0     // STAMP 도구 누적 거리
 
-// 마스크 데이터 (누적 — 다중 영역 지원)
-let maskData = null  // Uint8Array, 0 or 255 per pixel
+// 저장된 zoom/rotation 상태 (효과 적용 후 복원용)
+let savedZoom = 1, savedRotation = 0, savedPanX = 0, savedPanY = 0
 
 const canvasStyle = computed(() => {
   let cursor = 'crosshair'
   if (panning) cursor = 'grabbing'
-  else if (props.tool === 'brush' || props.tool === 'eraser') {
-    // 브러시/지우개: 원형 커서 (SVG 기반)
-    const size = Math.max(4, Math.round(props.brushSize * zoom.value * 2))
-    const half = size / 2
-    const color = props.tool === 'eraser' ? '%23f87171' : '%23E2B340'
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><circle cx='${half}' cy='${half}' r='${half - 1}' fill='none' stroke='${color}' stroke-width='1.5'/><line x1='${half}' y1='${half-3}' x2='${half}' y2='${half+3}' stroke='${color}' stroke-width='1'/><line x1='${half-3}' y1='${half}' x2='${half+3}' y2='${half}' stroke='${color}' stroke-width='1'/></svg>`
+  else if (props.tool === 'brush' || props.tool === 'eraser' || props.tool === 'stamp') {
+    // 원형 커서 — 128px 제한 없이 SVG로 생성 (브라우저 커서 제한 회피)
+    const displaySize = Math.max(6, Math.min(128, Math.round(props.brushSize * zoom.value * 2)))
+    const half = displaySize / 2
+    const color = props.tool === 'eraser' ? '%23f87171' : props.tool === 'stamp' ? '%2360a5fa' : '%23E2B340'
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${displaySize}' height='${displaySize}'><circle cx='${half}' cy='${half}' r='${half-1}' fill='none' stroke='${color}' stroke-width='1.5'/><line x1='${half}' y1='${half-3}' x2='${half}' y2='${half+3}' stroke='${color}' stroke-width='0.8'/><line x1='${half-3}' y1='${half}' x2='${half+3}' y2='${half}' stroke='${color}' stroke-width='0.8'/></svg>`
     cursor = `url("data:image/svg+xml,${svg}") ${half} ${half}, crosshair`
   }
-
   return {
     transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value}) rotate(${rotation.value}deg)`,
     transformOrigin: 'center center',
@@ -72,23 +73,37 @@ const canvasStyle = computed(() => {
   }
 })
 
-watch(() => props.imageSrc, (src) => {
+// ── 이미지 로드 (zoom/rotation 보존 옵션) ──
+function loadNewImage(src, preserveTransform = false) {
   if (!src) return
+  if (!preserveTransform) {
+    savedZoom = 1; savedRotation = 0; savedPanX = 0; savedPanY = 0
+  } else {
+    savedZoom = zoom.value; savedRotation = rotation.value
+    savedPanX = panX.value; savedPanY = panY.value
+  }
   const img = new Image()
   img.onload = () => {
     sourceImg = img
     imgWidth.value = img.naturalWidth
     imgHeight.value = img.naturalHeight
-    zoom.value = 1
-    rotation.value = 0
-    panX.value = 0
-    panY.value = 0
-    // 마스크 초기화
-    maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
-    hasMask.value = false
+    zoom.value = savedZoom
+    rotation.value = savedRotation
+    panX.value = savedPanX
+    panY.value = savedPanY
+    if (!preserveTransform) {
+      maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
+      hasMask.value = false
+    }
     drawAll()
   }
   img.src = src
+}
+
+watch(() => props.imageSrc, (src) => {
+  // 효과 적용 후 이미지 교체 시 transform 유지
+  const preserve = sourceImg !== null
+  loadNewImage(src, preserve)
 })
 
 function initMask() {
@@ -106,12 +121,9 @@ function drawAll() {
   ctx = c.getContext('2d')
   ctx.clearRect(0, 0, c.width, c.height)
   ctx.drawImage(sourceImg, 0, 0)
-
-  // 마스크 오버레이 캔버스
   const mc = maskCanvasEl.value
   if (mc) {
-    mc.width = c.width
-    mc.height = c.height
+    mc.width = c.width; mc.height = c.height
     maskCtx = mc.getContext('2d')
     renderMaskOverlay()
   }
@@ -119,32 +131,48 @@ function drawAll() {
 
 function renderMaskOverlay() {
   if (!maskCtx || !maskData || !sourceImg) return
-  const w = sourceImg.naturalWidth
-  const h = sourceImg.naturalHeight
+  const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   maskCtx.clearRect(0, 0, w, h)
-
-  // 마스크가 있는 영역을 반투명 노랑으로 표시
   const imgData = maskCtx.createImageData(w, h)
   let anyMask = false
   for (let i = 0; i < maskData.length; i++) {
     if (maskData[i] > 0) {
       anyMask = true
-      imgData.data[i * 4] = 226     // R
-      imgData.data[i * 4 + 1] = 179 // G
-      imgData.data[i * 4 + 2] = 64  // B
-      imgData.data[i * 4 + 3] = 80  // A (반투명)
+      imgData.data[i * 4] = 226; imgData.data[i * 4 + 1] = 179
+      imgData.data[i * 4 + 2] = 64; imgData.data[i * 4 + 3] = 80
     }
   }
   maskCtx.putImageData(imgData, 0, 0)
   hasMask.value = anyMask
 }
 
+// ── 좌표 변환: 화면 → 이미지 (zoom/rotation/pan 역변환) ──
 function getImagePos(e) {
-  if (!canvasEl.value) return { x: 0, y: 0 }
-  const rect = canvasEl.value.getBoundingClientRect()
-  return {
-    x: (e.clientX - rect.left) / (rect.width / canvasEl.value.width),
-    y: (e.clientY - rect.top) / (rect.height / canvasEl.value.height),
+  if (!canvasEl.value || !containerRef.value) return { x: 0, y: 0 }
+  const container = containerRef.value.getBoundingClientRect()
+  // 컨테이너 중심 기준 화면 좌표
+  const cx = container.left + container.width / 2
+  const cy = container.top + container.height / 2
+  // 마우스 위치에서 팬 보정 후 컨테이너 중심 기준 상대 좌표
+  let dx = e.clientX - cx - panX.value
+  let dy = e.clientY - cy - panY.value
+  // 줌 역변환
+  dx /= zoom.value
+  dy /= zoom.value
+  // 회전 역변환
+  const rad = -rotation.value * Math.PI / 180
+  const rx = dx * Math.cos(rad) - dy * Math.sin(rad)
+  const ry = dx * Math.sin(rad) + dy * Math.cos(rad)
+  // 캔버스 중심 → 이미지 좌표
+  const imgX = rx + canvasEl.value.width / 2
+  const imgY = ry + canvasEl.value.height / 2
+  return { x: imgX, y: imgY }
+}
+
+// ── Alt 더블클릭: 위치 복귀 ──
+function onDblClick(e) {
+  if (e.altKey) {
+    zoom.value = 1; rotation.value = 0; panX.value = 0; panY.value = 0
   }
 }
 
@@ -158,14 +186,16 @@ function onMouseDown(e) {
   initMask()
   const pos = getImagePos(e)
   drawing = true
-  startX = pos.x
-  startY = pos.y
-  lastBrushX = pos.x
-  lastBrushY = pos.y
+  startX = pos.x; startY = pos.y
+  lastBrushX = pos.x; lastBrushY = pos.y
+  stampAccum = 0
 
   if (props.tool === 'lasso') {
     lassoPoints = [{ x: pos.x, y: pos.y }]
   } else if (props.tool === 'brush') {
+    paintMaskCircle(pos.x, pos.y, props.brushSize)
+    renderMaskOverlay()
+  } else if (props.tool === 'stamp') {
     paintMaskCircle(pos.x, pos.y, props.brushSize)
     renderMaskOverlay()
   } else if (props.tool === 'eraser') {
@@ -173,7 +203,6 @@ function onMouseDown(e) {
       eraseMaskCircle(pos.x, pos.y, props.brushSize)
       renderMaskOverlay()
     } else {
-      // box/lasso 모드 시작
       lassoPoints = props.eraserMode === 'lasso' ? [{ x: pos.x, y: pos.y }] : []
     }
   }
@@ -189,10 +218,8 @@ function onMouseMove(e) {
   const pos = getImagePos(e)
 
   if (props.tool === 'box') {
-    // 임시 사각형 표시
-    drawAll()
+    renderMaskOverlay()
     if (maskCtx) {
-      renderMaskOverlay()
       maskCtx.strokeStyle = '#E2B340'
       maskCtx.lineWidth = 2 / zoom.value
       maskCtx.setLineDash([6 / zoom.value, 4 / zoom.value])
@@ -202,7 +229,6 @@ function onMouseMove(e) {
   } else if (props.tool === 'lasso') {
     lassoPoints.push({ x: pos.x, y: pos.y })
     renderMaskOverlay()
-    // 올가미 경로 + 닫힌 영역 미리보기
     if (maskCtx && lassoPoints.length > 1) {
       maskCtx.strokeStyle = '#E2B340'
       maskCtx.lineWidth = 2 / zoom.value
@@ -217,22 +243,29 @@ function onMouseMove(e) {
       maskCtx.fill()
     }
   } else if (props.tool === 'brush') {
-    // 연속 선 그리기 (점이 아닌 선으로 연결)
     paintMaskLine(lastBrushX, lastBrushY, pos.x, pos.y, props.brushSize)
-    lastBrushX = pos.x
-    lastBrushY = pos.y
+    lastBrushX = pos.x; lastBrushY = pos.y
     renderMaskOverlay()
+  } else if (props.tool === 'stamp') {
+    // STAMP: 일정 간격마다 원형 마스킹
+    const dx = pos.x - lastBrushX, dy = pos.y - lastBrushY
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    stampAccum += dist
+    if (stampAccum >= props.stampSpacing) {
+      paintMaskCircle(pos.x, pos.y, props.brushSize)
+      stampAccum = 0
+      renderMaskOverlay()
+    }
+    lastBrushX = pos.x; lastBrushY = pos.y
   } else if (props.tool === 'eraser') {
     if (props.eraserMode === 'brush') {
       eraseMaskLine(lastBrushX, lastBrushY, pos.x, pos.y, props.brushSize)
-      lastBrushX = pos.x
-      lastBrushY = pos.y
+      lastBrushX = pos.x; lastBrushY = pos.y
       renderMaskOverlay()
     } else if (props.eraserMode === 'box') {
       renderMaskOverlay()
       if (maskCtx) {
-        maskCtx.strokeStyle = '#f87171'
-        maskCtx.lineWidth = 2 / zoom.value
+        maskCtx.strokeStyle = '#f87171'; maskCtx.lineWidth = 2 / zoom.value
         maskCtx.setLineDash([6 / zoom.value, 4 / zoom.value])
         maskCtx.strokeRect(startX, startY, pos.x - startX, pos.y - startY)
         maskCtx.setLineDash([])
@@ -241,12 +274,11 @@ function onMouseMove(e) {
       lassoPoints.push({ x: pos.x, y: pos.y })
       renderMaskOverlay()
       if (maskCtx && lassoPoints.length > 1) {
-        maskCtx.strokeStyle = '#f87171'
-        maskCtx.lineWidth = 2 / zoom.value
+        maskCtx.strokeStyle = '#f87171'; maskCtx.lineWidth = 2 / zoom.value
         maskCtx.beginPath()
         maskCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y)
         for (let i = 1; i < lassoPoints.length; i++) maskCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y)
-        maskCtx.stroke()
+        maskCtx.closePath(); maskCtx.stroke()
       }
     }
   }
@@ -259,164 +291,98 @@ function onMouseUp(e) {
   const pos = getImagePos(e)
 
   if (props.tool === 'box') {
-    const x1 = Math.round(Math.min(startX, pos.x))
-    const y1 = Math.round(Math.min(startY, pos.y))
-    const x2 = Math.round(Math.max(startX, pos.x))
-    const y2 = Math.round(Math.max(startY, pos.y))
-    if (x2 - x1 > 3 && y2 - y1 > 3) {
-      fillMaskRect(x1, y1, x2, y2)
-    }
+    const x1 = Math.round(Math.min(startX, pos.x)), y1 = Math.round(Math.min(startY, pos.y))
+    const x2 = Math.round(Math.max(startX, pos.x)), y2 = Math.round(Math.max(startY, pos.y))
+    if (x2 - x1 > 3 && y2 - y1 > 3) fillMaskRect(x1, y1, x2, y2)
   } else if (props.tool === 'lasso') {
-    if (lassoPoints.length > 2) {
-      fillMaskPolygon(lassoPoints)
-    }
+    if (lassoPoints.length > 2) fillMaskPolygon(lassoPoints)
     lassoPoints = []
   } else if (props.tool === 'eraser') {
     if (props.eraserMode === 'box') {
-      const x1 = Math.round(Math.min(startX, pos.x))
-      const y1 = Math.round(Math.min(startY, pos.y))
-      const x2 = Math.round(Math.max(startX, pos.x))
-      const y2 = Math.round(Math.max(startY, pos.y))
-      if (x2 - x1 > 3 && y2 - y1 > 3) {
-        eraseMaskRect(x1, y1, x2, y2)
-      }
+      const x1 = Math.round(Math.min(startX, pos.x)), y1 = Math.round(Math.min(startY, pos.y))
+      const x2 = Math.round(Math.max(startX, pos.x)), y2 = Math.round(Math.max(startY, pos.y))
+      if (x2 - x1 > 3 && y2 - y1 > 3) eraseMaskRect(x1, y1, x2, y2)
     } else if (props.eraserMode === 'lasso') {
-      if (lassoPoints.length > 2) {
-        eraseMaskPolygon(lassoPoints)
-      }
+      if (lassoPoints.length > 2) eraseMaskPolygon(lassoPoints)
       lassoPoints = []
     }
   }
-  // brush/eraser-brush는 이미 onMouseMove에서 처리됨
-
   renderMaskOverlay()
   emitMaskBounds()
 }
 
-// ─── 마스크 조작 함수들 ───
-
-function paintMaskCircle(cx, cy, radius) {
+// ── 마스크 조작 ──
+function paintMaskCircle(cx, cy, r) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
-  const r = Math.max(1, radius)
-  const x1 = Math.max(0, Math.floor(cx - r))
-  const y1 = Math.max(0, Math.floor(cy - r))
-  const x2 = Math.min(w, Math.ceil(cx + r))
-  const y2 = Math.min(h, Math.ceil(cy + r))
-  for (let y = y1; y < y2; y++) {
-    for (let x = x1; x < x2; x++) {
-      if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) {
-        maskData[y * w + x] = 255
-      }
+  const radius = Math.max(1, r)
+  for (let y = Math.max(0, Math.floor(cy - radius)); y < Math.min(h, Math.ceil(cy + radius)); y++) {
+    for (let x = Math.max(0, Math.floor(cx - radius)); x < Math.min(w, Math.ceil(cx + radius)); x++) {
+      if ((x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2) maskData[y * w + x] = 255
     }
   }
 }
-
-function paintMaskLine(x0, y0, x1, y1, radius) {
-  const dx = x1 - x0, dy = y1 - y0
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  const steps = Math.max(1, Math.ceil(dist / Math.max(1, radius * 0.3)))
+function paintMaskLine(x0, y0, x1, y1, r) {
+  const dist = Math.hypot(x1 - x0, y1 - y0)
+  const steps = Math.max(1, Math.ceil(dist / Math.max(1, r * 0.3)))
   for (let i = 0; i <= steps; i++) {
     const t = i / steps
-    paintMaskCircle(x0 + dx * t, y0 + dy * t, radius)
+    paintMaskCircle(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r)
   }
 }
-
-function eraseMaskCircle(cx, cy, radius) {
+function eraseMaskCircle(cx, cy, r) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
-  const r = Math.max(1, radius)
-  const x1 = Math.max(0, Math.floor(cx - r))
-  const y1 = Math.max(0, Math.floor(cy - r))
-  const x2 = Math.min(w, Math.ceil(cx + r))
-  const y2 = Math.min(h, Math.ceil(cy + r))
-  for (let y = y1; y < y2; y++) {
-    for (let x = x1; x < x2; x++) {
-      if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) {
-        maskData[y * w + x] = 0
-      }
+  const radius = Math.max(1, r)
+  for (let y = Math.max(0, Math.floor(cy - radius)); y < Math.min(h, Math.ceil(cy + radius)); y++) {
+    for (let x = Math.max(0, Math.floor(cx - radius)); x < Math.min(w, Math.ceil(cx + radius)); x++) {
+      if ((x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2) maskData[y * w + x] = 0
     }
   }
 }
-
-function eraseMaskLine(x0, y0, x1, y1, radius) {
-  const dx = x1 - x0, dy = y1 - y0
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  const steps = Math.max(1, Math.ceil(dist / Math.max(1, radius * 0.3)))
+function eraseMaskLine(x0, y0, x1, y1, r) {
+  const dist = Math.hypot(x1 - x0, y1 - y0)
+  const steps = Math.max(1, Math.ceil(dist / Math.max(1, r * 0.3)))
   for (let i = 0; i <= steps; i++) {
     const t = i / steps
-    eraseMaskCircle(x0 + dx * t, y0 + dy * t, radius)
+    eraseMaskCircle(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r)
   }
 }
-
 function fillMaskRect(x1, y1, x2, y2) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
-  const rx1 = Math.max(0, x1), ry1 = Math.max(0, y1)
-  const rx2 = Math.min(w, x2), ry2 = Math.min(h, y2)
-  for (let y = ry1; y < ry2; y++) {
-    for (let x = rx1; x < rx2; x++) {
-      maskData[y * w + x] = 255
-    }
-  }
+  for (let y = Math.max(0, y1); y < Math.min(h, y2); y++)
+    for (let x = Math.max(0, x1); x < Math.min(w, x2); x++) maskData[y * w + x] = 255
 }
-
 function eraseMaskRect(x1, y1, x2, y2) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
-  const rx1 = Math.max(0, x1), ry1 = Math.max(0, y1)
-  const rx2 = Math.min(w, x2), ry2 = Math.min(h, y2)
-  for (let y = ry1; y < ry2; y++) {
-    for (let x = rx1; x < rx2; x++) {
-      maskData[y * w + x] = 0
-    }
-  }
+  for (let y = Math.max(0, y1); y < Math.min(h, y2); y++)
+    for (let x = Math.max(0, x1); x < Math.min(w, x2); x++) maskData[y * w + x] = 0
 }
-
-function fillMaskPolygon(points) {
-  if (!maskData || !sourceImg || points.length < 3) return
-  const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
-  // 바운딩 박스
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const p of points) {
-    if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y
-    if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y
-  }
-  const bx1 = Math.max(0, Math.floor(minX)), by1 = Math.max(0, Math.floor(minY))
-  const bx2 = Math.min(w, Math.ceil(maxX)), by2 = Math.min(h, Math.ceil(maxY))
-  // 스캔라인 (point-in-polygon)
-  for (let y = by1; y < by2; y++) {
-    for (let x = bx1; x < bx2; x++) {
-      if (pointInPoly(x, y, points)) maskData[y * w + x] = 255
-    }
-  }
-}
-
-function eraseMaskPolygon(points) {
-  if (!maskData || !sourceImg || points.length < 3) return
+function fillMaskPolygon(pts) {
+  if (!maskData || !sourceImg || pts.length < 3) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const p of points) {
-    if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y
-    if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y
-  }
-  const bx1 = Math.max(0, Math.floor(minX)), by1 = Math.max(0, Math.floor(minY))
-  const bx2 = Math.min(w, Math.ceil(maxX)), by2 = Math.min(h, Math.ceil(maxY))
-  for (let y = by1; y < by2; y++) {
-    for (let x = bx1; x < bx2; x++) {
-      if (pointInPoly(x, y, points)) maskData[y * w + x] = 0
-    }
-  }
+  for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y) }
+  for (let y = Math.max(0, Math.floor(minY)); y < Math.min(h, Math.ceil(maxY)); y++)
+    for (let x = Math.max(0, Math.floor(minX)); x < Math.min(w, Math.ceil(maxX)); x++)
+      if (pip(x, y, pts)) maskData[y * w + x] = 255
 }
-
-function pointInPoly(x, y, poly) {
+function eraseMaskPolygon(pts) {
+  if (!maskData || !sourceImg || pts.length < 3) return
+  const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y) }
+  for (let y = Math.max(0, Math.floor(minY)); y < Math.min(h, Math.ceil(maxY)); y++)
+    for (let x = Math.max(0, Math.floor(minX)); x < Math.min(w, Math.ceil(maxX)); x++)
+      if (pip(x, y, pts)) maskData[y * w + x] = 0
+}
+function pip(x, y, poly) {
   let inside = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const xi = poly[i].x, yi = poly[i].y
-    const xj = poly[j].x, yj = poly[j].y
-    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
-      inside = !inside
-    }
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside
   }
   return inside
 }
@@ -424,89 +390,69 @@ function pointInPoly(x, y, poly) {
 function emitMaskBounds() {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
-  let minX = w, minY = h, maxX = 0, maxY = 0
-  let any = false
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (maskData[y * w + x] > 0) {
-        any = true
-        if (x < minX) minX = x; if (y < minY) minY = y
-        if (x > maxX) maxX = x; if (y > maxY) maxY = y
-      }
-    }
+  let minX = w, minY = h, maxX = 0, maxY = 0, any = false
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (maskData[y * w + x] > 0) { any = true; minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y) }
   }
-  if (any) {
-    emit('selection-changed', { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 })
-  }
+  if (any) emit('selection-changed', { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 })
   hasMask.value = any
 }
 
 function onWheel(e) {
-  if (e.shiftKey) {
-    rotation.value += e.deltaY > 0 ? 5 : -5
-  } else {
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    zoom.value = Math.max(0.1, Math.min(10, zoom.value * delta))
-  }
+  if (e.shiftKey) { rotation.value += e.deltaY > 0 ? 5 : -5 }
+  else { zoom.value = Math.max(0.1, Math.min(10, zoom.value * (e.deltaY > 0 ? 0.9 : 1.1))) }
 }
 
 function clearSelection() {
   if (maskData) maskData.fill(0)
-  hasMask.value = false
-  lassoPoints = []
+  hasMask.value = false; lassoPoints = []
   renderMaskOverlay()
 }
 
 function getSelection() {
   if (!maskData || !sourceImg) return null
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
-  let minX = w, minY = h, maxX = 0, maxY = 0
-  let any = false
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (maskData[y * w + x] > 0) {
-        any = true
-        if (x < minX) minX = x; if (y < minY) minY = y
-        if (x > maxX) maxX = x; if (y > maxY) maxY = y
-      }
-    }
+  let minX = w, minY = h, maxX = 0, maxY = 0, any = false
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (maskData[y * w + x] > 0) { any = true; minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y) }
   }
   return any ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 } : null
 }
 
-// 마스크를 base64 PNG로 내보내기 (Python 백엔드 전송용)
 function getMaskBase64() {
   if (!maskData || !sourceImg) return null
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
-  const tmpCanvas = document.createElement('canvas')
-  tmpCanvas.width = w; tmpCanvas.height = h
-  const tmpCtx = tmpCanvas.getContext('2d')
-  const imgData = tmpCtx.createImageData(w, h)
-  for (let i = 0; i < maskData.length; i++) {
-    const v = maskData[i]
-    imgData.data[i * 4] = v
-    imgData.data[i * 4 + 1] = v
-    imgData.data[i * 4 + 2] = v
-    imgData.data[i * 4 + 3] = 255
-  }
-  tmpCtx.putImageData(imgData, 0, 0)
-  return tmpCanvas.toDataURL('image/png')
+  const tc = document.createElement('canvas'); tc.width = w; tc.height = h
+  const tctx = tc.getContext('2d')
+  const id = tctx.createImageData(w, h)
+  for (let i = 0; i < maskData.length; i++) { id.data[i*4] = id.data[i*4+1] = id.data[i*4+2] = maskData[i]; id.data[i*4+3] = 255 }
+  tctx.putImageData(id, 0, 0)
+  return tc.toDataURL('image/png')
 }
 
-defineExpose({ clearSelection, getSelection, getMaskBase64, drawAll })
+// 외부에서 마스크 로드 (YOLO auto-detect 결과)
+function loadMaskFromBase64(b64) {
+  if (!sourceImg) return
+  const img = new Image()
+  img.onload = () => {
+    const tc = document.createElement('canvas'); tc.width = sourceImg.naturalWidth; tc.height = sourceImg.naturalHeight
+    const tctx = tc.getContext('2d'); tctx.drawImage(img, 0, 0, tc.width, tc.height)
+    const id = tctx.getImageData(0, 0, tc.width, tc.height)
+    initMask()
+    for (let i = 0; i < maskData.length; i++) { if (id.data[i * 4] > 127) maskData[i] = 255 }
+    renderMaskOverlay()
+    emitMaskBounds()
+  }
+  img.src = b64
+}
+
+// zoom/rotation 초기화
+function resetView() { zoom.value = 1; rotation.value = 0; panX.value = 0; panY.value = 0 }
+
+defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, drawAll, resetView })
 
 onMounted(() => {
-  if (props.imageSrc) {
-    const img = new Image()
-    img.onload = () => {
-      sourceImg = img
-      imgWidth.value = img.naturalWidth
-      imgHeight.value = img.naturalHeight
-      maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
-      drawAll()
-    }
-    img.src = props.imageSrc
-  }
+  if (props.imageSrc) loadNewImage(props.imageSrc, false)
 })
 </script>
 
@@ -516,13 +462,8 @@ onMounted(() => {
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; background: #111;
 }
-canvas {
-  max-width: 90%; max-height: 90%;
-  position: absolute;
-}
-.mask-overlay {
-  pointer-events: none;
-}
+canvas { max-width: 90%; max-height: 90%; position: absolute; }
+.mask-overlay { pointer-events: none; }
 .canvas-info {
   position: absolute; bottom: 8px; right: 12px;
   color: #585858; font-size: 11px;

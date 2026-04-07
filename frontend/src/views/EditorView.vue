@@ -76,6 +76,7 @@
           :tool="currentTool"
           :brush-size="brushSize"
           :eraser-mode="eraserMode"
+          :stamp-spacing="stampSpacing"
           @selection-changed="onSelectionChanged"
         />
       </div>
@@ -117,7 +118,8 @@ const imgHeight = ref(0)
 const activeTab = ref(0)
 const currentTool = ref('box')
 const brushSize = ref(20)
-const eraserMode = ref('brush') // 'brush' | 'box' | 'lasso'
+const eraserMode = ref('brush')
+const stampSpacing = ref(30)
 const canvasRef = ref(null)
 const drawPanelRef = ref(null)
 const selection = ref(null)
@@ -147,16 +149,16 @@ function loadImage(path) {
   img.src = 'file:///' + path
 }
 
-function pushState(path) {
+function pushState(path, clearMask = true) {
   undoStack.value.push(path)
   redoStack.value = []
   imagePath.value = path
+  // 타임스탬프 없이 경로만 변경 → watch에서 zoom/rotation 유지됨
   imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
   const img = new Image()
   img.onload = () => { imgWidth.value = img.naturalWidth; imgHeight.value = img.naturalHeight }
   img.src = 'file:///' + path
-  // 효과 적용 후 마스크 클리어
-  canvasRef.value?.clearSelection()
+  if (clearMask) canvasRef.value?.clearSelection()
 }
 
 function doUndo() {
@@ -210,13 +212,14 @@ async function doOpWithMask(operation, params = {}) {
 
 function onToolChanged(data) {
   const id = typeof data === 'object' ? data.tool : data
-  const toolMap = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser' }
+  const toolMap = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser', 4: 'stamp' }
   currentTool.value = toolMap[id] ?? 'box'
   if (typeof data === 'object' && data.size) brushSize.value = data.size
 }
 
 function onParamsChanged(params) {
   if (params.toolSize) brushSize.value = params.toolSize
+  if (params.stampSpacing) stampSpacing.value = params.stampSpacing
 }
 
 function applyEffect(effectData) {
@@ -251,7 +254,22 @@ async function runAutoCensor(params) {
 async function runAutoDetect(params) {
   if (!imagePath.value) return
   detectStatus.value = '감지 중...'
-  requestAction('editor_apply_auto_detect', { path: imagePath.value, confidence: (params?.confidence || 25) / 100 })
+  const backend = await getBackend()
+  const cleanPath = imagePath.value.replace('file:///', '')
+  backend.editorProcess(cleanPath, 'auto_detect', JSON.stringify({
+    confidence: (params?.confidence || 25) / 100
+  }), (json) => {
+    try {
+      const result = JSON.parse(json)
+      if (result.mask_base64) {
+        // 마스크를 캔버스에 로드
+        canvasRef.value?.loadMaskFromBase64(result.mask_base64)
+        detectStatus.value = `${result.detect_count || 0}개 감지됨`
+      } else if (result.error) {
+        detectStatus.value = result.error
+      }
+    } catch { detectStatus.value = '오류' }
+  })
 }
 
 function doCrop() {
@@ -282,17 +300,17 @@ function resetEditor() {
   imagePath.value = ''; imageDisplay.value = ''; undoStack.value = []; redoStack.value = []
 }
 
-// YOLO 모델 라벨 업데이트
+// 앱 시작 시 YOLO 라벨 로드
 async function refreshYoloLabel() {
   const backend = await getBackend()
-  // Python측에서 YOLO 모델 경로를 로드
-  try {
-    const { _load_yolo_model_paths } = await import('../bridge.js')
-  } catch {}
+  if (backend.getYoloModelLabel) {
+    backend.getYoloModelLabel((label) => { if (label) modelLabel.value = label })
+  }
 }
 
 onMounted(() => {
   onBackendEvent('editorImageLoaded', (path) => loadImage(path))
+  onBackendEvent('yoloModelUpdated', (label) => { modelLabel.value = label })
 
   document.addEventListener('keydown', (e) => {
     if (!imagePath.value) return

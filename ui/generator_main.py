@@ -196,7 +196,10 @@ class GeneratorMainUI(
                     _save_yolo_model_paths(panel._yolo_model_paths)
                     panel._update_model_label()
                     # Vue에 모델 라벨 업데이트 전달
-                    label = panel.yolo_model_label.text() if hasattr(panel, 'yolo_model_label') else f"{len(panel._yolo_model_paths)} models"
+                    import os as _os2
+                    names = [_os2.path.basename(p) for p in panel._yolo_model_paths]
+                    label = ", ".join(names) if names else "No Model"
+                    self.vue_bridge.yoloModelUpdated.emit(label)
                     self.show_status(f"YOLO Model loaded: {label}")
 
             # 5. 하이엔드 우클릭 메뉴

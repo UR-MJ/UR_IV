@@ -23,8 +23,8 @@ class VueBridge(QObject):
     inpaintImageLoaded = pyqtSignal(str)   # file path
     searchStatus = pyqtSignal(str)         # status message
 
-    # LoRA 추가 이벤트
-    loraInserted = pyqtSignal(str)  # JSON {name, weight}
+    loraInserted = pyqtSignal(str)   # JSON {name, weight}
+    yoloModelUpdated = pyqtSignal(str)  # model label text
 
     # 위젯 값/속성 동기화 (Python → Vue)
     widgetValueChanged = pyqtSignal(str, str)       # (widget_id, value)
@@ -258,8 +258,8 @@ class VueBridge(QObject):
                         roi = cv2.GaussianBlur(roi, (k, k), 0)
                     img[y1:y2, x1:x2] = roi
 
-            elif operation == 'auto_censor':
-                # YOLO 기반 자동 검열
+            elif operation in ('auto_censor', 'auto_detect'):
+                # YOLO 기반 자동 검열 / 마스크만 감지
                 try:
                     from tabs.editor.mosaic_panel import _load_yolo_model_paths
                     model_paths = _load_yolo_model_paths()
@@ -267,24 +267,52 @@ class VueBridge(QObject):
                         return json.dumps({'error': 'YOLO 모델을 먼저 추가하세요 (+ADD .PT)'})
                     conf = float(params.get('confidence', 0.25))
                     from ultralytics import YOLO
-                    combined_mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                    h_img, w_img = img.shape[:2]
+                    combined_mask = np.zeros((h_img, w_img), dtype=np.uint8)
+                    detect_count = 0
                     for mp in model_paths:
                         if not os.path.exists(mp): continue
                         model = YOLO(mp)
                         results = model(img, conf=conf)
                         for r in results:
+                            # 세그먼트 마스크 우선 (성기 형태에 맞춤)
                             if r.masks is not None:
-                                for m in r.masks.data:
-                                    m_np = m.cpu().numpy()
-                                    m_resized = cv2.resize(m_np, (img.shape[1], img.shape[0]))
-                                    combined_mask[m_resized > 0.5] = 255
-                            elif r.boxes is not None:
+                                for m_tensor in r.masks.data:
+                                    m_np = m_tensor.cpu().numpy().astype(np.float32)
+                                    m_resized = cv2.resize(m_np, (w_img, h_img), interpolation=cv2.INTER_LINEAR)
+                                    combined_mask[m_resized > 0.3] = 255
+                                    detect_count += 1
+                            # 마스크 없으면 박스 fallback
+                            if r.masks is None and r.boxes is not None:
                                 for box in r.boxes.xyxy:
                                     bx1, by1, bx2, by2 = map(int, box.tolist())
+                                    bx1, by1 = max(0, bx1), max(0, by1)
+                                    bx2, by2 = min(w_img, bx2), min(h_img, by2)
                                     combined_mask[by1:by2, bx1:bx2] = 255
-                    if combined_mask.any():
-                        img = _apply_effect_with_mask(img, combined_mask, 'mosaic', 20)
+                                    detect_count += 1
+                    print(f"[YOLO] Detected {detect_count} regions, mask coverage: {combined_mask.sum() / 255}")
+
+                    if operation == 'auto_detect':
+                        # MASK ONLY: 마스크를 base64로 반환 (적용 안함)
+                        import base64
+                        from io import BytesIO
+                        from PIL import Image as PILImage
+                        mask_pil = PILImage.fromarray(combined_mask)
+                        buf = BytesIO()
+                        mask_pil.save(buf, format='PNG')
+                        mask_b64 = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+                        return json.dumps({'mask_base64': mask_b64, 'detect_count': detect_count, 'path': clean_path})
+                    else:
+                        # AUTO CENSOR: 감지 + 모자이크 적용
+                        if combined_mask.any():
+                            # 마스크 약간 확장 (dilate)으로 경계 커버
+                            kernel = np.ones((5, 5), np.uint8)
+                            combined_mask = cv2.dilate(combined_mask, kernel, iterations=2)
+                            img = _apply_effect_with_mask(img, combined_mask, 'mosaic', 15)
+                        else:
+                            return json.dumps({'error': f'감지된 영역이 없습니다 (conf={conf})'})
                 except Exception as e:
+                    import traceback; traceback.print_exc()
                     return json.dumps({'error': f'Auto censor 실패: {e}'})
 
             elif operation == 'text_watermark':
@@ -479,6 +507,19 @@ class VueBridge(QObject):
         except Exception:
             pass
         return json.dumps([])
+
+    @pyqtSlot(result=str)
+    def getYoloModelLabel(self) -> str:
+        """YOLO 모델 라벨 반환"""
+        try:
+            import os
+            from tabs.editor.mosaic_panel import _load_yolo_model_paths
+            paths = _load_yolo_model_paths()
+            if paths:
+                return ", ".join([os.path.basename(p) for p in paths])
+        except Exception:
+            pass
+        return "No Model Loaded"
 
     @pyqtSlot(str, result=str)
     def getTagSuggestions(self, prefix: str) -> str:

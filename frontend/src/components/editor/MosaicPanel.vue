@@ -51,6 +51,15 @@
       </div>
     </div>
 
+    <!-- Section: STAMP 간격 (STAMP 선택 시만) -->
+    <div class="control-group" v-if="selectedTool === 4">
+      <label>Stamp Spacing</label>
+      <div class="slider-box">
+        <div class="slider-header"><span>간격 (px)</span><span>{{ stampSpacing }}</span></div>
+        <input type="range" min="5" max="200" v-model.number="stampSpacing" class="modern-slider" />
+      </div>
+    </div>
+
     <!-- Section: Eraser Mode (지우개 선택 시만 표시) -->
     <div class="control-group" v-if="selectedTool === 3">
       <label>Eraser Mode</label>
@@ -110,6 +119,7 @@ const tools = [
   { id: 1, label: 'LASSO', icon: '➰' },
   { id: 2, label: 'BRUSH', icon: '🖌' },
   { id: 3, label: 'ERASER', icon: '⌫' },
+  { id: 4, label: 'STAMP', icon: '⬡' },
 ]
 const effects = [
   { id: 0, label: 'MOSAIC' },
@@ -123,13 +133,14 @@ const toolSize = ref(20)
 const strength = ref(15)
 const detectConf = ref(25)
 const eraserMode = ref('brush')
+const stampSpacing = ref(30)
 
 function selectTool(id) { selectedTool.value = id; emit('tool-changed', { tool: id, size: toolSize.value }) }
 function selectEffect(id) { selectedEffect.value = id; emit('effect-changed', { effect: id }) }
 function setEraserMode(mode) { eraserMode.value = mode; emit('eraser-mode-changed', mode) }
 function onApply() { emit('effect-apply', { tool: selectedTool.value, effect: selectedEffect.value, toolSize: toolSize.value, strength: strength.value }) }
 
-watch([toolSize, strength], () => { emit('params-changed', { toolSize: toolSize.value, strength: strength.value }) })
+watch([toolSize, strength, stampSpacing], () => { emit('params-changed', { toolSize: toolSize.value, strength: strength.value, stampSpacing: stampSpacing.value }) })
 </script>
 
 <style scoped>

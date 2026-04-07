@@ -330,6 +330,8 @@ onMounted(async () => {
   loadHistory()
   document.addEventListener('click', hideCtxMenu)
   document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault() }, { passive: false })
+  // 브라우저 기본 우클릭 메뉴 전역 차단
+  document.addEventListener('contextmenu', (e) => { e.preventDefault() })
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'g') { e.preventDefault(); action('generate') }
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); action('save_settings') }
