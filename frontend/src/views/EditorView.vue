@@ -23,13 +23,16 @@
           </div>
           <div class="tab-content">
             <MosaicPanel v-show="activeTab === 0"
-              @tool-changed="currentTool = $event"
+              @tool-changed="onToolChanged"
               @apply-effect="applyEffect"
+              @cancel-selection="canvasRef?.clearSelection()"
               @crop="doCrop" @resize="doResize"
-              @rotate="doOp($event)" @flip="doOp($event)"
+              @rotate="dir => doOp(dir === 'cw' ? 'rotate_cw' : 'rotate_ccw')"
+              @flip="dir => doOp(dir === 'h' ? 'flip_h' : 'flip_v')"
               @perspective="doOp('perspective')"
               @remove-bg="doOp('remove_bg')"
-              @auto-detect="doOp('auto_detect', $event)"
+              @auto-detect="p => doOp('auto_detect', p)"
+              @auto-censor="p => doOp('auto_censor', p)"
             />
             <ColorPanel v-show="activeTab === 1"
               @adjustment-changed="previewAdj" @apply="applyAdj"
@@ -163,9 +166,16 @@ async function doOp(operation, params = {}) {
   })
 }
 
+function onToolChanged(toolId) {
+  const toolMap = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser' }
+  currentTool.value = toolMap[toolId] || 'box'
+}
+
 function applyEffect(effectData) {
   const sel = canvasRef.value?.getSelection()
-  doOp(effectData.effect, { ...effectData, selection: sel })
+  const effectMap = { 0: 'mosaic', 1: 'censor_bar', 2: 'blur' }
+  const op = effectMap[effectData.effect] || 'mosaic'
+  doOp(op, { ...effectData, selection: sel })
 }
 function doCrop() {
   const sel = canvasRef.value?.getSelection()

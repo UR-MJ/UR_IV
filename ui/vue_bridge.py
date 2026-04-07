@@ -156,15 +156,32 @@ class VueBridge(QObject):
             if img is None:
                 return json.dumps({'error': '이미지를 읽을 수 없습니다'})
 
+            # 선택 영역 추출
+            sel = params.get('selection')
+            if sel:
+                x1, y1 = int(sel.get('x', 0)), int(sel.get('y', 0))
+                x2 = x1 + int(sel.get('w', img.shape[1]))
+                y2 = y1 + int(sel.get('h', img.shape[0]))
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(img.shape[1], x2), min(img.shape[0], y2)
+            else:
+                x1, y1, x2, y2 = 0, 0, img.shape[1], img.shape[0]
+
+            roi = img[y1:y2, x1:x2]
+
             if operation == 'mosaic':
                 strength = params.get('strength', 20)
-                h, w = img.shape[:2]
-                small = cv2.resize(img, (max(1, w // strength), max(1, h // strength)))
-                img = cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST)
+                h_r, w_r = roi.shape[:2]
+                small = cv2.resize(roi, (max(1, w_r // strength), max(1, h_r // strength)))
+                roi = cv2.resize(small, (w_r, h_r), interpolation=cv2.INTER_NEAREST)
+                img[y1:y2, x1:x2] = roi
+            elif operation == 'censor_bar':
+                img[y1:y2, x1:x2] = 0  # 검은색
             elif operation == 'blur':
                 strength = params.get('strength', 15)
                 k = max(1, strength) | 1
-                img = cv2.GaussianBlur(img, (k, k), 0)
+                roi = cv2.GaussianBlur(roi, (k, k), 0)
+                img[y1:y2, x1:x2] = roi
             elif operation == 'rotate_cw':
                 img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
             elif operation == 'rotate_ccw':
@@ -194,6 +211,20 @@ class VueBridge(QObject):
                 w = params.get('width', img.shape[1])
                 h = params.get('height', img.shape[0])
                 img = cv2.resize(img, (int(w), int(h)))
+            elif operation == 'color_adjust':
+                b_val = params.get('brightness', 0)
+                c_val = params.get('contrast', 0)
+                s_val = params.get('saturation', 0)
+                if b_val != 0:
+                    img = cv2.convertScaleAbs(img, alpha=1, beta=b_val)
+                if c_val != 0:
+                    factor = (100 + c_val) / 100.0
+                    img = cv2.convertScaleAbs(img, alpha=factor, beta=0)
+                if s_val != 0:
+                    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
+                    hsv[:,:,1] *= (100 + s_val) / 100.0
+                    hsv[:,:,1] = np.clip(hsv[:,:,1], 0, 255)
+                    img = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
             elif operation == 'crop':
                 x1 = params.get('x1', 0)
                 y1 = params.get('y1', 0)
