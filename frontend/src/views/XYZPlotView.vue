@@ -68,12 +68,26 @@ function parseValues(str) {
   return s.split(',').map(v => v.trim()).filter(Boolean)
 }
 
-function startPlot() {
+async function startPlot() {
   const axisData = axes.filter(a => a.type && a.values.trim()).map(a => ({
     type: a.type, values: parseValues(a.values),
   }))
-  requestAction('start_xyz_plot', { axes: axisData })
+  // 조합 생성
+  const backend = await getBackend()
+  if (backend.generateXYZCombinations) {
+    backend.generateXYZCombinations(JSON.stringify(axisData), (json) => {
+      try {
+        const data = JSON.parse(json)
+        if (data.combinations) {
+          // 대기열에 추가
+          requestAction('start_xyz_plot', { axes: axisData, combinations: data.combinations })
+        }
+      } catch {}
+    })
+  }
 }
+
+import { getBackend } from '../bridge.js'
 </script>
 
 <style scoped>

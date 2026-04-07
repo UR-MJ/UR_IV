@@ -69,15 +69,25 @@
       rows="2"
     />
 
-    <!-- 메인 프롬프트 -->
+    <!-- 메인 프롬프트 (자동완성) -->
     <label class="field-label">메인 프롬프트</label>
-    <textarea
-      class="input-area main-prompt"
-      :value="get('main_prompt_text')"
-      @input="set('main_prompt_text', $event.target.value)"
-      placeholder="메인 태그 입력..."
-      rows="4"
-    />
+    <div class="autocomplete-wrap">
+      <textarea
+        class="input-area main-prompt"
+        :value="get('main_prompt_text')"
+        @input="onMainInput($event)"
+        @keydown="onAutoKey($event)"
+        placeholder="메인 태그 입력..."
+        rows="4"
+        ref="mainPromptRef"
+      />
+      <div v-if="autoSuggestions.length" class="auto-popup">
+        <div v-for="(s, i) in autoSuggestions" :key="s"
+          class="auto-item" :class="{ active: autoIdx === i }"
+          @mousedown.prevent="applyAutoComplete(s)"
+        >{{ s }}</div>
+      </div>
+    </div>
 
     <!-- 후행 프롬프트 -->
     <label class="field-label">후행 프롬프트</label>
@@ -98,6 +108,17 @@
       placeholder="lowres, bad quality, ..."
       rows="2"
     />
+
+    <!-- 즐겨찾기 태그바 -->
+    <div class="fav-tags" v-if="favTags.length">
+      <button v-for="tag in favTags" :key="tag" class="fav-tag"
+        @click="insertFavTag(tag)" @contextmenu.prevent="removeFavTag(tag)"
+      >{{ tag }}</button>
+      <button class="fav-tag add-tag" @click="addFavTag">+</button>
+    </div>
+    <div v-else class="fav-tags-empty">
+      <button class="fav-tag add-tag" @click="addFavTag">+ 즐겨찾기 태그 추가</button>
+    </div>
 
     <!-- 제외 프롬프트 (접이식) -->
     <button class="toggle-btn" @click="showExclude = !showExclude">
@@ -165,7 +186,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { state, getValue, setValue, requestAction } from '../stores/widgetStore.js'
 import SettingsPanel from './SettingsPanel.vue'
 
@@ -204,6 +225,84 @@ function toggle(id) {
   const cur = get(id) === 'true'
   set(id, cur ? 'false' : 'true')
 }
+
+// 태그 자동완성
+const autoSuggestions = ref([])
+const autoIdx = ref(-1)
+const mainPromptRef = ref(null)
+let autoTimer = null
+
+async function onMainInput(e) {
+  set('main_prompt_text', e.target.value)
+  // 마지막 태그 추출
+  const text = e.target.value
+  const lastComma = text.lastIndexOf(',')
+  const currentWord = text.substring(lastComma + 1).trim()
+  if (currentWord.length < 2) { autoSuggestions.value = []; return }
+
+  clearTimeout(autoTimer)
+  autoTimer = setTimeout(async () => {
+    const { getBackend } = await import('../bridge.js')
+    const backend = await getBackend()
+    if (backend.getTagSuggestions) {
+      backend.getTagSuggestions(currentWord, (json) => {
+        try { autoSuggestions.value = JSON.parse(json).slice(0, 8) } catch {}
+      })
+    }
+  }, 150)
+}
+
+function onAutoKey(e) {
+  if (!autoSuggestions.value.length) return
+  if (e.key === 'ArrowDown') { e.preventDefault(); autoIdx.value = Math.min(autoIdx.value + 1, autoSuggestions.value.length - 1) }
+  if (e.key === 'ArrowUp') { e.preventDefault(); autoIdx.value = Math.max(autoIdx.value - 1, 0) }
+  if (e.key === 'Enter' && autoIdx.value >= 0) {
+    e.preventDefault()
+    applyAutoComplete(autoSuggestions.value[autoIdx.value])
+  }
+  if (e.key === 'Escape') { autoSuggestions.value = []; autoIdx.value = -1 }
+}
+
+function applyAutoComplete(tag) {
+  const text = get('main_prompt_text')
+  const lastComma = text.lastIndexOf(',')
+  const before = lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : ''
+  set('main_prompt_text', before + tag + ', ')
+  autoSuggestions.value = []
+  autoIdx.value = -1
+}
+
+// 즐겨찾기 태그
+const favTags = ref([])
+
+async function loadFavTags() {
+  try {
+    const resp = localStorage.getItem('favorite_tags')
+    if (resp) favTags.value = JSON.parse(resp)
+  } catch {}
+}
+function saveFavTags() {
+  localStorage.setItem('favorite_tags', JSON.stringify(favTags.value))
+}
+function insertFavTag(tag) {
+  const cur = get('main_prompt_text')
+  const newVal = cur ? cur + ', ' + tag : tag
+  set('main_prompt_text', newVal)
+}
+function removeFavTag(tag) {
+  favTags.value = favTags.value.filter(t => t !== tag)
+  saveFavTags()
+}
+function addFavTag() {
+  const tag = prompt('추가할 태그:')
+  if (tag && tag.trim()) {
+    favTags.value.push(tag.trim())
+    saveFavTags()
+  }
+}
+
+// 초기 로드
+onMounted(loadFavTags)
 
 function action(name, payload = {}) {
   requestAction(name, payload)
@@ -381,4 +480,31 @@ function action(name, payload = {}) {
   color: #787878; font-size: 11px; cursor: pointer; margin: 2px;
 }
 .small-btn:hover { background: #222; color: #E8E8E8; }
+
+/* 즐겨찾기 태그바 */
+.fav-tags, .fav-tags-empty {
+  display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0;
+}
+.fav-tag {
+  padding: 3px 8px; background: #1A1A1A; border: none; border-radius: 4px;
+  color: #E2B340; font-size: 10px; cursor: pointer; white-space: nowrap;
+}
+.fav-tag:hover { background: #222; }
+.fav-tag.add-tag { color: #585858; }
+
+/* 자동완성 */
+.autocomplete-wrap { position: relative; }
+.auto-popup {
+  position: absolute; left: 0; right: 0; bottom: 100%;
+  background: #1A1A1A; border-radius: 6px; padding: 4px;
+  z-index: 100; max-height: 200px; overflow-y: auto;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
+}
+.auto-item {
+  padding: 5px 10px; font-size: 12px; color: #B0B0B0;
+  cursor: pointer; border-radius: 3px;
+}
+.auto-item:hover, .auto-item.active {
+  background: #222; color: #E2B340;
+}
 </style>

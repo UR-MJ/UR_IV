@@ -415,6 +415,75 @@ class VueBridge(QObject):
             pass
         return json.dumps([])
 
+    # ── 태그 자동완성 ──
+
+    @pyqtSlot(str, result=str)
+    def getTagSuggestions(self, prefix: str) -> str:
+        """태그 자동완성 후보 반환"""
+        try:
+            from utils.tag_completer import get_tag_completer
+            completer = get_tag_completer()
+            suggestions = completer.get_suggestions(prefix, max_results=10)
+            return json.dumps(suggestions)
+        except Exception:
+            return json.dumps([])
+
+    # ── XYZ Plot ──
+
+    @pyqtSlot(str, result=str)
+    def generateXYZCombinations(self, axes_json: str) -> str:
+        """XYZ 축 데이터로 조합 생성"""
+        try:
+            import itertools
+            axes = json.loads(axes_json)
+            if not axes:
+                return json.dumps([])
+            value_lists = [a.get('values', []) for a in axes]
+            types = [a.get('type', '') for a in axes]
+            combos = list(itertools.product(*value_lists))
+            result = []
+            for combo in combos:
+                item = {}
+                for i, val in enumerate(combo):
+                    item[types[i]] = val
+                result.append(item)
+            return json.dumps({'combinations': result, 'count': len(result)})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    # ── Batch/Upscale ──
+
+    @pyqtSlot(str, str, str, result=str)
+    def processBatchFile(self, filepath: str, operation: str, params_json: str) -> str:
+        """단일 파일 배치 처리"""
+        try:
+            import cv2
+            import numpy as np
+            import os
+            params = json.loads(params_json) if params_json else {}
+            img = cv2.imread(filepath)
+            if img is None:
+                return json.dumps({'error': f'파일 읽기 실패: {filepath}'})
+
+            if operation == 'resize':
+                w = int(params.get('width', img.shape[1]))
+                h = int(params.get('height', img.shape[0]))
+                img = cv2.resize(img, (w, h))
+            elif operation == 'format':
+                pass  # 포맷은 저장 시 확장자로 결정
+            elif operation == 'grayscale':
+                img = cv2.cvtColor(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+
+            out_dir = os.path.join(os.path.dirname(filepath), 'batch_output')
+            os.makedirs(out_dir, exist_ok=True)
+            fmt = params.get('format', 'PNG').lower()
+            ext = {'png': '.png', 'jpeg': '.jpg', 'webp': '.webp'}.get(fmt, '.png')
+            out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(filepath))[0] + ext)
+            cv2.imwrite(out_path, img)
+            return json.dumps({'path': out_path.replace('\\', '/')})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
     @pyqtSlot(str, result=str)
     def getImageExif(self, filepath: str) -> str:
         """이미지의 EXIF/생성정보를 상세 JSON으로 반환"""

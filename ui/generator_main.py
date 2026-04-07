@@ -412,7 +412,8 @@ class GeneratorMainUI(
                 self.on_generate_clicked()
         elif action == 'toggle_automation':
             checked = payload.get('checked', False)
-            self.btn_auto_toggle.setChecked(checked)
+            if hasattr(self, 'toggle_automation_ui'):
+                self.toggle_automation_ui(checked)
         elif action == 'swap_resolution':
             if hasattr(self, '_swap_resolution'):
                 self._swap_resolution()
@@ -492,16 +493,27 @@ class GeneratorMainUI(
                 # TODO: xyz_plot_tab._generate_combinations(axes) 연결
         elif action == 'start_batch':
             files = payload.get('files', [])
-            self.show_status(f"배치 처리: {len(files)}개 파일")
-            if hasattr(self, 'batch_tab') and files:
+            operation = payload.get('operation', 'resize')
+            settings = payload.get('settings', {})
+            self.show_status(f"배치 처리 시작: {len(files)}개 파일, {operation}")
+            # VueBridge에서 직접 처리
+            import threading
+            def _batch():
                 for f in files:
-                    if hasattr(self.batch_tab, '_add_file'):
-                        self.batch_tab._add_file(f)
+                    try:
+                        result = json.loads(self.vue_bridge.processBatchFile(f, operation, json.dumps(settings)))
+                        if result.get('path'):
+                            self.show_status(f"처리 완료: {result['path']}")
+                    except Exception as e:
+                        print(f"[Batch] Error: {e}")
+                self.show_status(f"배치 처리 완료: {len(files)}개 파일")
+            threading.Thread(target=_batch, daemon=True).start()
         elif action == 'start_upscale':
             files = payload.get('files', [])
-            upscaler = payload.get('upscaler', '')
+            upscaler_name = payload.get('upscaler', '')
             scale = payload.get('scale', 2)
-            self.show_status(f"업스케일: {len(files)}개 파일, {upscaler} {scale}x")
+            self.show_status(f"업스케일 시작: {len(files)}개 파일, {upscaler_name} {scale}x")
+            # TODO: WebUI API 업스케일 호출
         elif action == 'add_favorite':
             import os as _os
             path = payload.get('path', '')
