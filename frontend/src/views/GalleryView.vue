@@ -10,7 +10,7 @@
       <div class="spacer"></div>
       
       <div class="control-group">
-        <button class="icon-btn" @click="loadImages" title="Refresh">🔄</button>
+        <button class="icon-btn" @click="loadImages(true)" title="Refresh (캐시 무시)">🔄</button>
         <div class="sep"></div>
         <div class="sort-chips">
           <button v-for="s in sortOptions" :key="s.val"
@@ -37,7 +37,11 @@
         </div>
       </div>
       
-      <div v-if="images.length === 0" class="empty-placeholder">
+      <div v-if="isLoading" class="empty-placeholder">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+      <div v-else-if="images.length === 0" class="empty-placeholder">
         <div class="icon">🖼️</div>
         <h2>GALLERY IS EMPTY</h2>
         <p>No images found in the current directory</p>
@@ -144,6 +148,11 @@ const sortOptions = [{label: 'DATE', val: 'date'}, {label: 'NAME', val: 'name'}]
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
 const exifData = ref(null)
 const largeView = ref(null)
+const isLoading = ref(false)
+
+// ── 캐시 시스템 ──
+const _cache = new Map()  // folder → { images, timestamp }
+const CACHE_TTL = 5 * 60 * 1000  // 5분
 
 async function editFilename() {
   if (!largeView.value) return
@@ -185,12 +194,32 @@ async function saveExif() {
   })
 }
 
-async function loadImages() {
+async function loadImages(forceRefresh = false) {
+  const cacheKey = currentFolder.value || '__default__'
+
+  // 캐시 히트 (5분 이내 + 강제 새로고침 아닌 경우)
+  if (!forceRefresh && _cache.has(cacheKey)) {
+    const cached = _cache.get(cacheKey)
+    if (Date.now() - cached.timestamp < CACHE_TTL) {
+      images.value = cached.images
+      return
+    }
+  }
+
+  isLoading.value = true
   const backend = await getBackend()
   if (backend.getGalleryImages) {
     backend.getGalleryImages(currentFolder.value, (json) => {
-      try { images.value = JSON.parse(json) } catch {}
+      try {
+        const list = JSON.parse(json)
+        images.value = list
+        // 캐시 저장
+        _cache.set(cacheKey, { images: list, timestamp: Date.now() })
+      } catch {}
+      isLoading.value = false
     })
+  } else {
+    isLoading.value = false
   }
 }
 
@@ -226,7 +255,7 @@ const hideMenu = () => ctxMenu.value.show = false
 onMounted(() => {
   document.addEventListener('click', hideMenu)
   loadImages()
-  onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; loadImages() })
+  onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; loadImages(true) })
 })
 onUnmounted(() => document.removeEventListener('click', hideMenu))
 </script>
@@ -323,6 +352,8 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .exif-preview { position: relative; cursor: pointer; }
 .exif-preview:hover .click-hint { opacity: 1; }
 .mt-8 { margin-top: 8px; }
+.spinner { width: 32px; height: 32px; border: 3px solid #222; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
