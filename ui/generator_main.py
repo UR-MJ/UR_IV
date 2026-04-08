@@ -537,6 +537,17 @@ class GeneratorMainUI(
                 if order:
                     self.show_status(f"Tab order updated: {len(order)} tabs")
 
+            # ═══════ 대기열 제어 ═══════
+            elif action == 'start_queue':
+                if hasattr(self, 'queue_manager'):
+                    self.queue_manager.start()
+                    self.show_status("Queue started.")
+
+            elif action == 'stop_queue':
+                if hasattr(self, 'queue_manager'):
+                    self.queue_manager.stop()
+                    self.show_status("Queue stopped.")
+
             # ═══════ 미처리 액션 로그 ═══════
             else:
                 print(f"[Bridge] Unhandled action: {action}")
@@ -544,6 +555,9 @@ class GeneratorMainUI(
         except Exception as e:
             print(f"[Error] Action '{action}' failed: {e}")
             traceback.print_exc()
+            # Vue Toast로 에러 알림
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.showNotification.emit('error', f'{action}: {str(e)[:100]}')
 
     # ========== PNG Info → 즉시 생성 ==========
 
@@ -642,6 +656,41 @@ class GeneratorMainUI(
         self.queue_manager = QueueManager(self.queue_panel)
         self.queue_manager.generation_requested.connect(self._on_generation_requested)
         self.queue_manager.queue_completed.connect(self._on_queue_completed)
+        # 대기열 상태를 Vue로 실시간 동기화
+        if hasattr(self.queue_panel, 'item_added'):
+            self.queue_panel.item_added.connect(self._sync_queue_to_vue)
+        # add_single_item 래핑으로 Vue 동기화
+        _orig_add = self.queue_panel.add_single_item
+        def _wrapped_add(item):
+            _orig_add(item)
+            self._sync_queue_item_added(item)
+        self.queue_panel.add_single_item = _wrapped_add
+
+    def _sync_queue_item_added(self, item: dict):
+        """대기열에 아이템 추가 시 Vue로 전달"""
+        if hasattr(self, 'vue_bridge'):
+            safe = {k: str(v)[:200] for k, v in item.items() if isinstance(v, (str, int, float, bool))}
+            self.vue_bridge.queueItemAdded.emit(json.dumps(safe))
+
+    def _sync_queue_to_vue(self):
+        """전체 대기열 상태를 Vue로 전달"""
+        if hasattr(self, 'vue_bridge') and hasattr(self, 'queue_panel'):
+            try:
+                items = []
+                for i in range(self.queue_panel.list_widget.count()):
+                    item_w = self.queue_panel.list_widget.item(i)
+                    if item_w:
+                        data = item_w.data(0x0100)  # Qt.UserRole
+                        if data:
+                            items.append({k: str(v)[:200] for k, v in data.items() if isinstance(v, (str, int, float, bool))})
+                state = {
+                    'items': items,
+                    'running': hasattr(self, 'queue_manager') and self.queue_manager._running if hasattr(self.queue_manager, '_running') else False,
+                    'completed': getattr(self, '_queue_completed_count', 0),
+                }
+                self.vue_bridge.queueUpdated.emit(json.dumps(state))
+            except Exception:
+                pass
 
     def _on_generation_requested(self, item: dict):
         self._apply_payload_to_ui(item)
@@ -649,6 +698,10 @@ class GeneratorMainUI(
 
     def _on_queue_completed(self, total_count: int):
         self.is_automation_running = False
+        self._queue_completed_count = total_count
+        if hasattr(self, 'vue_bridge'):
+            self.vue_bridge.queueCompleted.emit(json.dumps({'total': total_count}))
+            self.vue_bridge.showNotification.emit('success', f'{total_count}장 생성 완료')
         QMessageBox.information(self, "Task Complete", f"Successfully generated {total_count} images.")
 
     def _setup_tray(self):

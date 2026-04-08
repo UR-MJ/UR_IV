@@ -198,6 +198,14 @@
     </div>
 
     <QueuePanel />
+
+    <!-- Global Toast Notifications -->
+    <transition-group name="toast" tag="div" class="toast-container">
+      <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type" @click="removeToast(t.id)">
+        <span class="toast-icon">{{ t.type === 'error' ? '⚠' : t.type === 'success' ? '✓' : 'ℹ' }}</span>
+        {{ t.msg }}
+      </div>
+    </transition-group>
   </div>
 </template>
 
@@ -236,6 +244,16 @@ const exifContent = computed(() => {
 })
 
 const autoMode = ref(false)
+
+// Toast 알림 시스템
+const toasts = ref([])
+let toastId = 0
+function addToast(type, msg) {
+  const id = toastId++
+  toasts.value.push({ id, type, msg })
+  setTimeout(() => removeToast(id), 5000)
+}
+function removeToast(id) { toasts.value = toasts.value.filter(t => t.id !== id) }
 
 // Extended panel state
 const extWidgets = reactive({
@@ -364,6 +382,12 @@ onMounted(async () => {
   })
   onBackendEvent('generationError', (msg) => { isGenerating.value = false; status.value = `Error: ${msg}` })
 
+  // Global Toast 알림 (Python → Vue)
+  onBackendEvent('showNotification', (type, msg) => { addToast(type, msg) })
+
+  // 에러도 Toast로 표시
+  onBackendEvent('generationError', (msg) => { addToast('error', msg) })
+
   // LoRA 추가 이벤트 (Python lora_manager → Vue)
   onBackendEvent('loraInserted', (json) => {
     try {
@@ -477,4 +501,20 @@ onMounted(async () => {
 
 .global-progress { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: transparent; z-index: 1000; }
 .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }
+
+/* Toast Notifications */
+.toast-container { position: fixed; top: 70px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.toast {
+  padding: 10px 20px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  color: #FFF; pointer-events: auto; cursor: pointer; min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+}
+.toast.success { background: rgba(74, 222, 128, 0.9); color: #000; }
+.toast.error { background: rgba(248, 113, 113, 0.9); color: #FFF; }
+.toast.info { background: rgba(96, 165, 250, 0.9); color: #FFF; }
+.toast-icon { margin-right: 8px; }
+.toast-enter-active { animation: slideIn 0.3s ease; }
+.toast-leave-active { animation: slideOut 0.3s ease; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideOut { from { opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 </style>

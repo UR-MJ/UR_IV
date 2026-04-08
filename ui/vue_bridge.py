@@ -21,8 +21,11 @@ class VueBridge(QObject):
     inpaintImageLoaded = pyqtSignal(str)   # file path (PngInfo + InpaintView 공용)
     searchStatus = pyqtSignal(str)         # status message
 
-    loraInserted = pyqtSignal(str)   # JSON {name, weight}
-    yoloModelUpdated = pyqtSignal(str)  # model label text
+    loraInserted = pyqtSignal(str)       # JSON {name, weight}
+    yoloModelUpdated = pyqtSignal(str)   # model label text
+    queueItemAdded = pyqtSignal(str)     # JSON {prompt, ...}
+    queueCompleted = pyqtSignal(str)     # JSON {total}
+    showNotification = pyqtSignal(str, str)  # (type: success|error|info, message)
 
     # 위젯 값/속성 동기화 (Python → Vue)
     widgetValueChanged = pyqtSignal(str, str)       # (widget_id, value)
@@ -90,6 +93,7 @@ class VueBridge(QObject):
 
     def send_error(self, msg: str):
         self.generationError.emit(msg)
+        self.showNotification.emit('error', msg)
 
     # ── Vue → Python 슬롯 ──
 

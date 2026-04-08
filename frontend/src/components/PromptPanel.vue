@@ -61,10 +61,17 @@
         <textarea ref="prefixRef" v-model="widgets.prefix_prompt" class="auto-grow" placeholder="선행 프롬프트..."
           @input="autoGrow($event.target)"></textarea>
       </div>
-      <div class="input-group">
+      <div class="input-group autocomplete-wrap">
         <label>Main Tags</label>
         <textarea ref="mainRef" v-model="widgets.main_prompt" class="auto-grow" placeholder="메인 태그..."
-          @input="autoGrow($event.target)" rows="3"></textarea>
+          @input="onMainInput($event)" @keydown="onAutoKey($event)" rows="3"></textarea>
+        <!-- 태그 자동완성 팝업 -->
+        <div class="ac-popup" v-if="acItems.length > 0">
+          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
+            :class="{ selected: acIdx === i }" @mousedown.prevent="acceptSuggestion(tag)">
+            {{ tag }}
+          </div>
+        </div>
       </div>
       <div class="input-group">
         <label>Suffix</label>
@@ -133,6 +140,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
+import { getBackend } from '../bridge.js'
 
 const emit = defineEmits(['toggle-extend'])
 
@@ -160,6 +168,53 @@ const tokenCount = computed(() => {
 function toggleArtistLock() {
   artistLocked.value = !artistLocked.value
   requestAction('set_artist_locked', { locked: artistLocked.value })
+}
+
+// ── 태그 자동완성 ──
+const acItems = ref([])
+const acIdx = ref(0)
+let acTimer = null
+
+function onMainInput(e) {
+  autoGrow(e.target)
+  // 마지막 쉼표 이후 텍스트 추출
+  const text = e.target.value
+  const lastComma = text.lastIndexOf(',')
+  const prefix = (lastComma >= 0 ? text.substring(lastComma + 1) : text).trim()
+  if (prefix.length < 2) { acItems.value = []; return }
+  // 디바운스 300ms
+  clearTimeout(acTimer)
+  acTimer = setTimeout(async () => {
+    const backend = await getBackend()
+    if (backend.getTagSuggestions) {
+      backend.getTagSuggestions(prefix, (json) => {
+        try {
+          const tags = JSON.parse(json)
+          acItems.value = Array.isArray(tags) ? tags.slice(0, 10) : []
+          acIdx.value = 0
+        } catch { acItems.value = [] }
+      })
+    }
+  }, 300)
+}
+
+function onAutoKey(e) {
+  if (acItems.value.length === 0) return
+  if (e.key === 'ArrowDown') { e.preventDefault(); acIdx.value = Math.min(acIdx.value + 1, acItems.value.length - 1) }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); acIdx.value = Math.max(acIdx.value - 1, 0) }
+  else if (e.key === 'Tab' || e.key === 'Enter') {
+    if (acItems.value.length > 0) { e.preventDefault(); acceptSuggestion(acItems.value[acIdx.value]) }
+  }
+  else if (e.key === 'Escape') { acItems.value = [] }
+}
+
+function acceptSuggestion(tag) {
+  const text = widgets.main_prompt || ''
+  const lastComma = text.lastIndexOf(',')
+  const before = lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : ''
+  widgets.main_prompt = before + tag + ', '
+  acItems.value = []
+  nextTick(() => { if (mainRef.value) { mainRef.value.focus(); autoGrow(mainRef.value) } })
 }
 
 function autoGrow(el) {
@@ -260,6 +315,19 @@ summary::-webkit-details-marker { display: none; }
 .expand-btn:hover { border-color: var(--accent-dim); color: var(--accent); }
 
 label.danger { color: #f87171; }
+
+/* 자동완성 팝업 */
+.autocomplete-wrap { position: relative; }
+.ac-popup {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 100;
+  background: #1A1A1A; border: 1px solid var(--border); border-radius: 6px;
+  max-height: 200px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+}
+.ac-item {
+  padding: 6px 12px; font-size: 11px; color: var(--text-secondary); cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.ac-item:hover, .ac-item.selected { background: var(--accent-dim); color: var(--accent); }
 input[type="number"] { -moz-appearance: textfield; }
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
 </style>
