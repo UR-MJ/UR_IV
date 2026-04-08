@@ -82,11 +82,56 @@
 
     <!-- Center: Results -->
     <section class="results-area">
-      <!-- 빈 상태 -->
-      <div v-if="results.length === 0 && !searching" class="empty">
-        <div class="empty-icon">🗂</div>
-        <h2>READY TO DISCOVER</h2>
-        <p>좌측에서 검색 조건을 입력하고 RUN ENGINE을 클릭하세요</p>
+      <!-- 검색 전: 중앙 큰 검색 UI -->
+      <div v-if="results.length === 0 && !searching" class="welcome-search">
+        <div class="ws-header">
+          <div class="ws-icon">🔍</div>
+          <h1>TAG EXPLORER</h1>
+          <p>Danbooru 데이터베이스에서 프롬프트를 검색합니다</p>
+        </div>
+        <div class="ws-quick-form">
+          <div class="ws-row">
+            <div class="ws-field">
+              <label>Character</label>
+              <input v-model="fields[1].include" placeholder="e.g. hatsune_miku, raiden_shogun" @keydown.enter="search" />
+            </div>
+            <div class="ws-field">
+              <label>Copyright</label>
+              <input v-model="fields[0].include" placeholder="e.g. genshin_impact" @keydown.enter="search" />
+            </div>
+          </div>
+          <div class="ws-row">
+            <div class="ws-field">
+              <label>General Tags</label>
+              <input v-model="fields[3].include" placeholder="e.g. 1girl, blue_hair, sword, outdoors" @keydown.enter="search" />
+            </div>
+            <div class="ws-field narrow">
+              <label>Artist</label>
+              <input v-model="fields[2].include" placeholder="Artist..." @keydown.enter="search" />
+            </div>
+          </div>
+          <div class="ws-row center">
+            <div class="ws-ratings">
+              <button v-for="r in ratings" :key="r.key" class="ws-chip"
+                :class="{ active: r.checked }" @click="r.checked = !r.checked">{{ r.label }}</button>
+            </div>
+            <button class="ws-go" @click="search" :disabled="searching">
+              {{ searching ? 'SEARCHING...' : '🚀 RUN ENGINE' }}
+            </button>
+          </div>
+        </div>
+        <div class="ws-hints">
+          <span>쉼표(,) = AND</span>
+          <span>[A|B] = OR</span>
+          <span>좌측 패널에서 제외 조건 설정 가능</span>
+        </div>
+      </div>
+
+      <!-- 검색 중 -->
+      <div v-else-if="results.length === 0 && searching" class="empty">
+        <div class="search-spinner"></div>
+        <h2>SEARCHING...</h2>
+        <p>{{ statusText }}</p>
       </div>
 
       <template v-else-if="filteredResults.length > 0">
@@ -319,9 +364,41 @@ function importResults() { requestAction('import_search_results') }
 
 /* ═══ Results Area ═══ */
 .results-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.15; text-align: center; }
-.empty-icon { font-size: 72px; margin-bottom: 20px; }
-.empty h2 { letter-spacing: 6px; }
+/* Welcome Search (중앙 큰 검색) */
+.welcome-search { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; gap: 30px; }
+.ws-header { text-align: center; }
+.ws-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.6; }
+.ws-header h1 { font-size: 24px; letter-spacing: 8px; color: var(--text-secondary); font-weight: 900; }
+.ws-header p { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
+.ws-quick-form { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 12px; }
+.ws-row { display: flex; gap: 10px; }
+.ws-row.center { justify-content: center; align-items: center; gap: 16px; }
+.ws-field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.ws-field.narrow { max-width: 200px; }
+.ws-field label { font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.5px; }
+.ws-field input { padding: 12px 16px; font-size: 14px; }
+.ws-ratings { display: flex; gap: 4px; }
+.ws-chip {
+  padding: 6px 16px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: var(--radius-pill); color: var(--text-muted); font-size: 11px; font-weight: 800; cursor: pointer;
+}
+.ws-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.ws-go {
+  padding: 12px 36px; background: var(--accent); border: none; border-radius: var(--radius-pill);
+  color: #000; font-weight: 900; font-size: 14px; cursor: pointer; letter-spacing: 1px;
+  transition: var(--transition);
+}
+.ws-go:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }
+.ws-hints { display: flex; gap: 16px; }
+.ws-hints span { font-size: 10px; color: var(--text-muted); background: var(--bg-card); padding: 4px 12px; border-radius: 4px; }
+
+.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; }
+.search-spinner {
+  width: 40px; height: 40px; border: 3px solid #222; border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty h2 { color: var(--text-muted); letter-spacing: 4px; }
 
 /* Toolbar */
 .toolbar {

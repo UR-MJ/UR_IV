@@ -98,8 +98,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
+import { getBackend, onBackendEvent } from '../bridge.js'
 
 const isDragging = ref(false)
 const imageSrc = ref('')
@@ -142,8 +143,6 @@ async function loadFromPath(path) {
   }
 }
 
-import { onMounted } from 'vue'
-import { onBackendEvent } from '../bridge.js'
 onMounted(() => {
   // History/Gallery에서 send_to_i2i 시 이미지 로드
   onBackendEvent('i2iImageLoaded', (path) => loadFromPath(path))
