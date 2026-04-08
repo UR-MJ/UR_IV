@@ -345,7 +345,7 @@ const router = useRouter()
 
 onMounted(async () => {
   await initBridge()
-  loadHistory()
+  // History는 앱 시작 시 비어있음 — 생성된 이미지만 추가됨
   document.addEventListener('click', hideCtxMenu)
   document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault() }, { passive: false })
   // 브라우저 기본 우클릭 메뉴 전역 차단
