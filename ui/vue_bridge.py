@@ -17,10 +17,8 @@ class VueBridge(QObject):
 
     editorImageLoaded = pyqtSignal(str)   # file path
     i2iImageLoaded = pyqtSignal(str)     # file path
-    inpaintImageLoaded2 = pyqtSignal(str) # for InpaintView (별도)
     galleryFolderLoaded = pyqtSignal(str)  # folder path
-    exifLoaded = pyqtSignal(str)           # JSON {path, exif}
-    inpaintImageLoaded = pyqtSignal(str)   # file path
+    inpaintImageLoaded = pyqtSignal(str)   # file path (PngInfo + InpaintView 공용)
     searchStatus = pyqtSignal(str)         # status message
 
     loraInserted = pyqtSignal(str)   # JSON {name, weight}

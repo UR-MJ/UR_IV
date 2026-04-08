@@ -345,9 +345,271 @@ class GeneratorMainUI(
                 checked = payload.get('checked', False)
                 self.toggle_automation_ui(checked)
 
+            # ═══════ 이벤트 생성 (EventGen) ═══════
+            elif action == 'search_events':
+                if hasattr(self, 'event_gen_tab'):
+                    query = payload.get('prompt', payload.get('query', ''))
+                    exclude = payload.get('exclude_tags', payload.get('exclude', ''))
+                    # 검색 실행
+                    if hasattr(self.event_gen_tab, 'prompt_input'):
+                        self.event_gen_tab.prompt_input.setPlainText(query)
+                    if hasattr(self.event_gen_tab, 'exclude_input'):
+                        self.event_gen_tab.exclude_input.setPlainText(exclude)
+                    # 검색 시작
+                    if hasattr(self.event_gen_tab, '_search'):
+                        # 결과 시그널 연결 (1회용)
+                        def _on_results(results, count):
+                            try:
+                                out = []
+                                if hasattr(results, 'iterrows'):
+                                    for _, row in results.iterrows():
+                                        out.append({
+                                            'parent_tags': str(row.get('tag_string_general', '')),
+                                            'character': str(row.get('tag_string_character', '')),
+                                            'copyright': str(row.get('tag_string_copyright', '')),
+                                            'children_count': int(row.get('children_count', 0)) if 'children_count' in row.index else 0,
+                                        })
+                                elif isinstance(results, list):
+                                    out = results
+                                self.vue_bridge.eventSearchResults.emit(json.dumps(out))
+                            except Exception as e:
+                                self.vue_bridge.eventSearchResults.emit(json.dumps({'error': str(e)}))
+                        if hasattr(self.event_gen_tab, '_search_worker_done'):
+                            pass  # 기존 연결 사용
+                        self.event_gen_tab._search()
+                    self.show_status("Event search started.")
+
+            elif action == 'select_event':
+                idx = payload.get('index', 0)
+                if hasattr(self, 'event_gen_tab') and hasattr(self.event_gen_tab, 'result_list'):
+                    if 0 <= idx < self.event_gen_tab.result_list.count():
+                        self.event_gen_tab.result_list.setCurrentRow(idx)
+                        self.event_gen_tab._on_result_clicked(idx)
+
+            elif action == 'event_add_to_queue':
+                if hasattr(self, 'event_gen_tab'):
+                    scenarios = payload.get('scenarios', [])
+                    if scenarios:
+                        self.receive_event_scenarios(scenarios)
+                    elif hasattr(self.event_gen_tab, '_build_scenarios'):
+                        scenarios = self.event_gen_tab._build_scenarios()
+                        self.receive_event_scenarios(scenarios)
+
+            elif action == 'event_generate_now':
+                if hasattr(self, 'event_gen_tab'):
+                    if hasattr(self.event_gen_tab, '_build_scenarios'):
+                        scenarios = self.event_gen_tab._build_scenarios()
+                        self.receive_event_scenarios(scenarios)
+                        if hasattr(self, 'queue_manager'):
+                            self.queue_manager.start()
+
+            # ═══════ PNG Info 전송/생성 ═══════
+            elif action == 'pnginfo_send_prompt':
+                prompt = payload.get('prompt', '')
+                negative = payload.get('negative', '')
+                self.handle_prompt_only_transfer(prompt, negative)
+
+            elif action == 'pnginfo_generate':
+                # EXIF 데이터에서 payload 구성하여 즉시 생성
+                raw = payload.get('raw', payload.get('parameters', ''))
+                if raw:
+                    self._handle_immediate_generation_from_raw(raw)
+
+            # ═══════ XYZ Plot 실행 ═══════
+            elif action == 'start_xyz_plot':
+                axes = payload.get('axes', [])
+                combinations = payload.get('combinations', [])
+                if combinations and hasattr(self, 'queue_panel'):
+                    for combo in combinations:
+                        p = self._build_xyz_payload(combo)
+                        self.queue_panel.add_single_item(p)
+                    self.show_status(f"XYZ Plot: {len(combinations)} jobs queued.")
+                    if hasattr(self, 'queue_manager'):
+                        self.queue_manager.start()
+
+            # ═══════ 배치 파일 열기 ═══════
+            elif action == 'open_batch_files':
+                paths, _ = QFileDialog.getOpenFileNames(
+                    self, "배치 처리할 이미지 선택", "",
+                    "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)"
+                )
+                if paths:
+                    # Vue로 파일 목록 전달
+                    file_list = [p.replace('\\', '/') for p in paths]
+                    self.show_status(f"Batch: {len(file_list)} files selected.")
+
+            elif action == 'open_upscale_files':
+                paths, _ = QFileDialog.getOpenFileNames(
+                    self, "업스케일할 이미지 선택", "",
+                    "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)"
+                )
+                if paths:
+                    file_list = [p.replace('\\', '/') for p in paths]
+                    self.show_status(f"Upscale: {len(file_list)} files selected.")
+
+            # ═══════ 클립보드 복사 ═══════
+            elif action == 'copy_to_clipboard':
+                path = payload.get('path', '')
+                if path:
+                    clean = os.path.normpath(path.replace('file:///', ''))
+                    from PyQt6.QtGui import QPixmap
+                    pix = QPixmap(clean)
+                    if not pix.isNull():
+                        QApplication.clipboard().setPixmap(pix)
+                        self.show_status("Copied to clipboard.")
+
+            # ═══════ 캐릭터 프리셋 ═══════
+            elif action == 'open_character_preset':
+                try:
+                    from widgets.character_preset_dialog import CharacterPresetDialog
+                    dlg = CharacterPresetDialog(parent=self)
+                    if dlg.exec():
+                        preset = dlg.get_selected_preset()
+                        if preset:
+                            self.character_input.setText(preset.get('character', ''))
+                            if preset.get('copyright'):
+                                self.copyright_input.setText(preset['copyright'])
+                            self.show_status("Character preset applied.")
+                except Exception as e:
+                    print(f"[Error] Character preset: {e}")
+
+            # ═══════ 태그 가중치 편집기 ═══════
+            elif action == 'open_tag_weight_editor':
+                try:
+                    from widgets.tag_weight_editor import TagWeightEditor
+                    text = self.main_prompt_text.toPlainText()
+                    dlg = TagWeightEditor(text, parent=self)
+                    if dlg.exec():
+                        self.main_prompt_text.setPlainText(dlg.get_result())
+                        self.show_status("Tag weights updated.")
+                except Exception as e:
+                    print(f"[Error] Tag weight editor: {e}")
+
+            # ═══════ YOLO 모델 초기화 ═══════
+            elif action == 'editor_clear_yolo_models':
+                if hasattr(self, 'mosaic_editor') and self.mosaic_editor.mosaic_panel:
+                    panel = self.mosaic_editor.mosaic_panel
+                    panel._yolo_model_paths.clear()
+                    from tabs.editor.mosaic_panel import _save_yolo_model_paths
+                    _save_yolo_model_paths([])
+                    panel._update_model_label()
+                    self.vue_bridge.yoloModelUpdated.emit("No Model Loaded")
+                    self.show_status("YOLO models cleared.")
+
+            # ═══════ Gallery EXIF → T2I ═══════
+            elif action == 'gallery_send_exif_to_t2i':
+                exif_raw = payload.get('exif', '')
+                if exif_raw:
+                    parts = exif_raw.split('\nNegative prompt: ')
+                    prompt = parts[0].strip()
+                    negative = ''
+                    if len(parts) > 1:
+                        sub = parts[1].split('\nSteps: ')
+                        negative = sub[0].strip()
+                    self.handle_prompt_only_transfer(prompt, negative)
+
+            # ═══════ Gallery 폴더 열기 다이얼로그 ═══════
+            elif action == 'gallery_open_folder':
+                from config import OUTPUT_DIR
+                folder = QFileDialog.getExistingDirectory(self, "Gallery 폴더 선택", OUTPUT_DIR)
+                if folder:
+                    self.vue_bridge.galleryFolderLoaded.emit(folder.replace('\\', '/'))
+
+            # ═══════ 즐겨찾기 제거 ═══════
+            elif action == 'remove_favorite':
+                path = payload.get('path', '')
+                if path:
+                    clean = os.path.normpath(path.replace('file:///', ''))
+                    self._load_favorites_from_file()
+                    if clean in self.favorites_list:
+                        self.favorites_list.remove(clean)
+                        self._save_favorites_to_file()
+                    self.show_status("Removed from favorites.")
+
+            # ═══════ API 관리자 ═══════
+            elif action == 'show_api_manager':
+                if hasattr(self, 'settings_tab') and hasattr(self.settings_tab, '_open_api_manager'):
+                    self.settings_tab._open_api_manager()
+
+            # ═══════ 탭 순서 설정 ═══════
+            elif action == 'set_tab_order':
+                order = payload.get('order', [])
+                if order:
+                    self.show_status(f"Tab order updated: {len(order)} tabs")
+
+            # ═══════ 미처리 액션 로그 ═══════
+            else:
+                print(f"[Bridge] Unhandled action: {action}")
+
         except Exception as e:
             print(f"[Error] Action '{action}' failed: {e}")
             traceback.print_exc()
+
+    # ========== PNG Info → 즉시 생성 ==========
+
+    def _handle_immediate_generation_from_raw(self, raw: str):
+        """PNG Info raw 텍스트에서 payload 구성하여 즉시 생성"""
+        try:
+            parts = raw.split('\nNegative prompt: ')
+            prompt = parts[0].strip()
+            negative = ''
+            params = {}
+            if len(parts) > 1:
+                sub = parts[1].split('\nSteps: ')
+                negative = sub[0].strip()
+                if len(sub) > 1:
+                    for kv in ('Steps: ' + sub[1]).split(', '):
+                        if ':' in kv:
+                            k, v = kv.split(':', 1)
+                            params[k.strip().lower().replace(' ', '_')] = v.strip()
+            # 프롬프트 설정
+            self.main_prompt_text.setPlainText(prompt)
+            self.neg_prompt_text.setPlainText(negative)
+            if 'steps' in params: self.steps_input.setText(params['steps'])
+            if 'cfg_scale' in params: self.cfg_input.setText(params['cfg_scale'])
+            if 'seed' in params: self.seed_input.setText(params['seed'])
+            if 'size' in params:
+                wh = params['size'].split('x')
+                if len(wh) == 2:
+                    self.width_input.setText(wh[0].strip())
+                    self.height_input.setText(wh[1].strip())
+            self.update_total_prompt_display()
+            self.start_generation()
+        except Exception as e:
+            print(f"[Error] Immediate generation from raw: {e}")
+
+    def _build_xyz_payload(self, combo: dict) -> dict:
+        """XYZ 조합에서 생성 payload 구성"""
+        payload = {
+            'prompt': self.total_prompt_display.toPlainText(),
+            'negative_prompt': self.neg_prompt_text.toPlainText(),
+            'sampler_name': self.sampler_combo.currentText(),
+            'scheduler': self.scheduler_combo.currentText(),
+            'steps': int(self.steps_input.text() or 20),
+            'cfg_scale': float(self.cfg_input.text() or 7),
+            'seed': int(self.seed_input.text() or -1),
+            'width': int(self.width_input.text() or 1024),
+            'height': int(self.height_input.text() or 1024),
+        }
+        # XYZ 축 값 오버라이드
+        for key, val in combo.items():
+            if key == 'Steps': payload['steps'] = int(val)
+            elif key == 'CFG Scale': payload['cfg_scale'] = float(val)
+            elif key == 'Seed': payload['seed'] = int(val)
+            elif key == 'Width': payload['width'] = int(val)
+            elif key == 'Height': payload['height'] = int(val)
+            elif key == 'Sampler': payload['sampler_name'] = val
+            elif key == 'Scheduler': payload['scheduler'] = val
+            elif key == 'Denoising': payload['denoising_strength'] = float(val)
+            elif key == 'Prompt S/R':
+                if ',' in val:
+                    search, replace = val.split(',', 1)
+                    payload['prompt'] = payload['prompt'].replace(search.strip(), replace.strip())
+            elif key == 'Negative S/R':
+                if ',' in val:
+                    search, replace = val.split(',', 1)
+                    payload['negative_prompt'] = payload['negative_prompt'].replace(search.strip(), replace.strip())
+        return payload
 
     # ========== 유틸리티 메서드 ==========
 
