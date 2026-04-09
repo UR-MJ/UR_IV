@@ -653,17 +653,18 @@ onMounted(async () => {
 
 /* VRAM Bar */
 .vram-bar {
-  position: fixed; bottom: 0; left: 0; right: 0; height: 18px;
-  background: #0A0A0A; border-top: 1px solid var(--border); z-index: 500;
+  position: fixed; bottom: 0; left: 0; right: 0; height: 22px;
+  background: #080808; border-top: 1px solid var(--border); z-index: 500;
   display: flex; align-items: center;
 }
 .vram-fill { height: 100%; transition: width 1s ease; }
-.vram-fill.ok { background: rgba(74,222,128,0.3); }
-.vram-fill.warn { background: rgba(251,191,36,0.4); }
-.vram-fill.critical { background: rgba(248,113,113,0.5); }
+.vram-fill.ok { background: rgba(74,222,128,0.4); }
+.vram-fill.warn { background: rgba(251,191,36,0.5); }
+.vram-fill.critical { background: rgba(248,113,113,0.6); }
 .vram-text {
   position: absolute; left: 50%; transform: translateX(-50%);
-  font-size: 9px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px;
+  font-size: 11px; font-weight: 800; color: #B0B0B0; letter-spacing: 0.5px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
 
 .global-progress { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: transparent; z-index: 1000; }

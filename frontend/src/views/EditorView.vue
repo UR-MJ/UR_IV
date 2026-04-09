@@ -81,6 +81,9 @@
           :eraser-restore="eraserRestore"
           :magnetic-lasso="magneticLasso"
           :stamp-spacing="stampSpacing"
+          :stamp-shape="stampShape"
+          :bar-width="barWidth"
+          :bar-height="barHeight"
           @selection-changed="onSelectionChanged"
         />
       </div>
@@ -126,6 +129,9 @@ const eraserMode = ref('brush')
 const eraserRestore = ref(false)
 const magneticLasso = ref(false)
 const stampSpacing = ref(30)
+const stampShape = ref('circle')
+const barWidth = ref(40)
+const barHeight = ref(15)
 const canvasRef = ref(null)
 const drawPanelRef = ref(null)
 const selection = ref(null)
@@ -244,6 +250,9 @@ async function onMagneticChanged(enabled) {
 function onParamsChanged(params) {
   if (params.toolSize) brushSize.value = params.toolSize
   if (params.stampSpacing) stampSpacing.value = params.stampSpacing
+  if (params.stampShape) stampShape.value = params.stampShape
+  if (params.barW) barWidth.value = params.barW
+  if (params.barH) barHeight.value = params.barH
 }
 
 function applyEffect(effectData) {

@@ -99,7 +99,18 @@
         <div class="slider-header"><span>Size</span><span>{{ toolSize }}px</span></div>
         <input type="range" min="1" max="300" v-model.number="toolSize" class="modern-slider" />
       </div>
-      <div class="slider-box mt-8">
+      <!-- STAMP+BLACK BAR: 바 크기 + 간격 / 그 외: Strength -->
+      <template v-if="selectedTool === 4 && selectedEffect === 1">
+        <div class="slider-box mt-8">
+          <div class="slider-header"><span>Bar Width</span><span>{{ barW }}px</span></div>
+          <input type="range" min="5" max="200" v-model.number="barW" class="modern-slider" />
+        </div>
+        <div class="slider-box mt-8">
+          <div class="slider-header"><span>Bar Height</span><span>{{ barH }}px</span></div>
+          <input type="range" min="3" max="100" v-model.number="barH" class="modern-slider" />
+        </div>
+      </template>
+      <div class="slider-box mt-8" v-else>
         <div class="slider-header"><span>Strength</span><span>{{ strength }}</span></div>
         <input type="range" min="1" max="100" v-model.number="strength" class="modern-slider" />
       </div>
@@ -121,7 +132,7 @@
         <button class="chip-btn" :class="{ active: bgQuality === 'balanced' }" @click="bgQuality = 'balanced'">⚖️ BALANCED</button>
         <button class="chip-btn" :class="{ active: bgQuality === 'quality' }" @click="bgQuality = 'quality'">💎 QUALITY</button>
       </div>
-      <button class="action-btn primary mt-8" @click="$emit('remove-bg', { quality: bgQuality })">REMOVE BACKGROUND</button>
+      <button class="main-apply-btn mt-8" @click="$emit('remove-bg', { quality: bgQuality })">🎨 REMOVE BACKGROUND</button>
     </div>
 
     <!-- Section 7: Transformations -->
@@ -170,13 +181,21 @@ const eraserRestore = ref(false)
 const magneticLasso = ref(false)
 const stampSpacing = ref(30)
 const bgQuality = ref('balanced')
+const barW = ref(40)
+const barH = ref(15)
 
 function selectTool(id) { selectedTool.value = id; emit('tool-changed', { tool: id, size: toolSize.value }) }
 function selectEffect(id) { selectedEffect.value = id; emit('effect-changed', { effect: id }) }
 function setEraserMode(mode) { eraserMode.value = mode; emit('eraser-mode-changed', mode) }
 function onApply() { emit('effect-apply', { tool: selectedTool.value, effect: selectedEffect.value, toolSize: toolSize.value, strength: strength.value }) }
 
-watch([toolSize, strength, stampSpacing], () => { emit('params-changed', { toolSize: toolSize.value, strength: strength.value, stampSpacing: stampSpacing.value }) })
+watch([toolSize, strength, stampSpacing, barW, barH, selectedEffect, selectedTool], () => {
+  emit('params-changed', {
+    toolSize: toolSize.value, strength: strength.value, stampSpacing: stampSpacing.value,
+    barW: barW.value, barH: barH.value,
+    stampShape: (selectedTool.value === 4 && selectedEffect.value === 1) ? 'bar' : 'circle',
+  })
+})
 </script>
 
 <style scoped>

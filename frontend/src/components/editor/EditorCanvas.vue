@@ -1,7 +1,7 @@
 <template>
   <div class="canvas-container" ref="containerRef"
     @wheel.prevent="onWheel"
-    @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp"
+    @mousedown="onMouseDown" @mousemove="onMouseMoveWrap" @mouseup="onMouseUp"
     @mouseleave="onMouseUp" @contextmenu.prevent
     @dblclick="onDblClick"
   >
@@ -25,6 +25,9 @@ const props = defineProps({
   eraserMode: { type: String, default: 'brush' },
   eraserRestore: { type: Boolean, default: false },
   stampSpacing: { type: Number, default: 30 },
+  stampShape: { type: String, default: 'circle' }, // 'circle' or 'bar'
+  barWidth: { type: Number, default: 40 },
+  barHeight: { type: Number, default: 15 },
   magneticLasso: { type: Boolean, default: false },
   snapRadius: { type: Number, default: 12 },
 })
@@ -63,12 +66,18 @@ const canvasStyle = computed(() => {
   let cursor = 'crosshair'
   if (panning) cursor = 'grabbing'
   else if (props.tool === 'brush' || props.tool === 'eraser' || props.tool === 'stamp') {
-    // 원형 커서 — 128px 제한 없이 SVG로 생성 (브라우저 커서 제한 회피)
-    const displaySize = Math.max(6, Math.min(128, Math.round(props.brushSize * zoom.value * 2)))
-    const half = displaySize / 2
-    const color = props.tool === 'eraser' ? '%23f87171' : props.tool === 'stamp' ? '%2360a5fa' : '%23E2B340'
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${displaySize}' height='${displaySize}'><circle cx='${half}' cy='${half}' r='${half-1}' fill='none' stroke='${color}' stroke-width='1.5'/><line x1='${half}' y1='${half-3}' x2='${half}' y2='${half+3}' stroke='${color}' stroke-width='0.8'/><line x1='${half-3}' y1='${half}' x2='${half+3}' y2='${half}' stroke='${color}' stroke-width='0.8'/></svg>`
-    cursor = `url("data:image/svg+xml,${svg}") ${half} ${half}, crosshair`
+    const rawSize = Math.round(props.brushSize * zoom.value * 2)
+    if (rawSize <= 120) {
+      // 작은 크기: SVG 커서
+      const displaySize = Math.max(6, rawSize)
+      const half = displaySize / 2
+      const color = props.tool === 'eraser' ? '%23f87171' : props.tool === 'stamp' ? '%2360a5fa' : '%23E2B340'
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${displaySize}' height='${displaySize}'><circle cx='${half}' cy='${half}' r='${half-1}' fill='none' stroke='${color}' stroke-width='1.5'/><line x1='${half}' y1='${half-3}' x2='${half}' y2='${half+3}' stroke='${color}' stroke-width='0.8'/><line x1='${half-3}' y1='${half}' x2='${half+3}' y2='${half}' stroke='${color}' stroke-width='0.8'/></svg>`
+      cursor = `url("data:image/svg+xml,${svg}") ${half} ${half}, crosshair`
+    } else {
+      // 큰 크기: 커서 숨기고 캔버스에 직접 그림 (onMouseMove에서 처리)
+      cursor = 'none'
+    }
   }
   return {
     transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value}) rotate(${rotation.value}deg)`,
@@ -155,26 +164,17 @@ function renderMaskOverlay() {
   hasMask.value = anyMask
 }
 
-// ── 좌표 변환: 화면 → 이미지 (zoom/rotation/pan 역변환) ──
+// ── 좌표 변환: 화면 → 이미지 (getBoundingClientRect 기반 — CSS 변환 포함) ──
 function getImagePos(e) {
-  if (!canvasEl.value || !containerRef.value) return { x: 0, y: 0 }
-  const container = containerRef.value.getBoundingClientRect()
-  // 컨테이너 중심 기준 화면 좌표
-  const cx = container.left + container.width / 2
-  const cy = container.top + container.height / 2
-  // 마우스 위치에서 팬 보정 후 컨테이너 중심 기준 상대 좌표
-  let dx = e.clientX - cx - panX.value
-  let dy = e.clientY - cy - panY.value
-  // 줌 역변환
-  dx /= zoom.value
-  dy /= zoom.value
-  // 회전 역변환
-  const rad = -rotation.value * Math.PI / 180
-  const rx = dx * Math.cos(rad) - dy * Math.sin(rad)
-  const ry = dx * Math.sin(rad) + dy * Math.cos(rad)
-  // 캔버스 중심 → 이미지 좌표
-  const imgX = rx + canvasEl.value.width / 2
-  const imgY = ry + canvasEl.value.height / 2
+  if (!canvasEl.value) return { x: 0, y: 0 }
+  // getBoundingClientRect는 CSS transform(zoom/rotate/pan)이 적용된 후의 실제 화면 좌표를 반환
+  const rect = canvasEl.value.getBoundingClientRect()
+  // 화면 좌표 → 캔버스 내부 비율 좌표 (0~1)
+  const ratioX = (e.clientX - rect.left) / rect.width
+  const ratioY = (e.clientY - rect.top) / rect.height
+  // 이미지 좌표로 변환
+  const imgX = ratioX * canvasEl.value.width
+  const imgY = ratioY * canvasEl.value.height
   return { x: imgX, y: imgY }
 }
 
@@ -206,7 +206,7 @@ function onMouseDown(e) {
     paintMaskCircle(pos.x, pos.y, props.brushSize)
     renderMaskOverlay()
   } else if (props.tool === 'stamp') {
-    paintMaskCircle(pos.x, pos.y, props.brushSize)
+    paintStamp(pos.x, pos.y)
     renderMaskOverlay()
   } else if (props.tool === 'eraser') {
     if (props.eraserRestore) {
@@ -218,6 +218,29 @@ function onMouseDown(e) {
     } else {
       lassoPoints = props.eraserMode === 'lasso' ? [{ x: pos.x, y: pos.y }] : []
     }
+  }
+}
+
+function onMouseMoveWrap(e) {
+  onMouseMove(e)
+  // 큰 커서를 마스크 오버레이에 직접 그리기
+  const rawSize = Math.round(props.brushSize * zoom.value * 2)
+  if (rawSize > 120 && maskCtx && (props.tool === 'brush' || props.tool === 'eraser' || props.tool === 'stamp')) {
+    renderMaskOverlay()
+    const pos = getImagePos(e)
+    const r = props.brushSize
+    const color = props.tool === 'eraser' ? 'rgba(248,113,113,0.5)' : props.tool === 'stamp' ? 'rgba(96,165,250,0.5)' : 'rgba(226,179,64,0.5)'
+    if (props.tool === 'stamp' && props.stampShape === 'bar') {
+      maskCtx.strokeStyle = color; maskCtx.lineWidth = 2
+      maskCtx.strokeRect(pos.x - props.barWidth/2, pos.y - props.barHeight/2, props.barWidth, props.barHeight)
+    } else {
+      maskCtx.strokeStyle = color; maskCtx.lineWidth = 2
+      maskCtx.beginPath(); maskCtx.arc(pos.x, pos.y, r, 0, Math.PI * 2); maskCtx.stroke()
+    }
+    // 십자선
+    maskCtx.strokeStyle = color; maskCtx.lineWidth = 1
+    maskCtx.beginPath(); maskCtx.moveTo(pos.x - 5, pos.y); maskCtx.lineTo(pos.x + 5, pos.y); maskCtx.stroke()
+    maskCtx.beginPath(); maskCtx.moveTo(pos.x, pos.y - 5); maskCtx.lineTo(pos.x, pos.y + 5); maskCtx.stroke()
   }
 }
 
@@ -266,7 +289,7 @@ function onMouseMove(e) {
     const dist = Math.sqrt(dx * dx + dy * dy)
     stampAccum += dist
     if (stampAccum >= props.stampSpacing) {
-      paintMaskCircle(pos.x, pos.y, props.brushSize)
+      paintStamp(pos.x, pos.y)
       stampAccum = 0
       renderMaskOverlay()
     }
@@ -329,6 +352,21 @@ function onMouseUp(e) {
 }
 
 // ── 마스크 조작 ──
+function paintMaskBar(cx, cy, bw, bh) {
+  if (!maskData || !sourceImg) return
+  const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
+  const x1 = Math.max(0, Math.round(cx - bw / 2))
+  const y1 = Math.max(0, Math.round(cy - bh / 2))
+  const x2 = Math.min(w, Math.round(cx + bw / 2))
+  const y2 = Math.min(h, Math.round(cy + bh / 2))
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) maskData[y * w + x] = 255
+}
+
+function paintStamp(cx, cy) {
+  if (props.stampShape === 'bar') paintMaskBar(cx, cy, props.barWidth, props.barHeight)
+  else paintMaskCircle(cx, cy, props.brushSize)
+}
+
 function paintMaskCircle(cx, cy, r) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
