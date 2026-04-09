@@ -9,6 +9,15 @@
       <textarea ref="totalPromptRef" v-model="widgets.total_prompt_display"
         class="total-prompt auto-grow" placeholder="인물수, 캐릭터, 작품, 작가, 선행, 메인, 후행 순서로 종합됩니다"
         @input="autoGrow($event.target)"></textarea>
+      <div class="prompt-actions">
+        <button class="optimize-btn" @click="optimizePrompt">🧹 OPTIMIZE</button>
+        <span class="opt-result" v-if="optResult">{{ optResult }}</span>
+      </div>
+      <div class="conflicts" v-if="promptConflicts.length > 0">
+        <div v-for="c in promptConflicts" :key="c.group" class="conflict-item">
+          ⚠ {{ c.group }}: {{ c.tags.join(', ') }}
+        </div>
+      </div>
       <div class="neg-section">
         <label class="danger-label">NEGATIVE</label>
         <textarea ref="negRef" v-model="widgets.neg_prompt_text"
@@ -32,11 +41,16 @@
             @blur="loadCharTags" />
           <button class="small-btn" @click="requestAction('open_character_preset')">PRESET</button>
         </div>
-        <!-- 캐릭터 연관 태그 추천 -->
-        <div class="char-tags" v-if="charSuggestTags.length > 0">
-          <span class="char-tags-label">연관 태그</span>
-          <button v-for="ct in charSuggestTags" :key="ct.tag" class="char-tag-chip"
-            @click="insertCharTag(ct.tag)" :title="ct.count + '회'">{{ ct.tag.replace(/_/g, ' ') }}</button>
+        <!-- 캐릭터 인사이트 카드 -->
+        <div class="char-insight" v-if="charInsight.tags.length > 0">
+          <div class="insight-header">
+            <span class="insight-label">📖 Official Tags</span>
+            <button class="insight-apply" @click="applyOfficialTags">APPLY ALL</button>
+          </div>
+          <div class="insight-tags">
+            <button v-for="tag in charInsight.tags" :key="tag" class="char-tag-chip"
+              @click="insertCharTag(tag)">{{ tag.replace(/_/g, ' ') }}</button>
+          </div>
         </div>
         <div class="ac-popup" v-if="fieldAcTarget === 'character_input' && acItems.length > 0">
           <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
@@ -133,18 +147,38 @@ const prefixRef = ref(null)
 const mainRef = ref(null)
 const suffixRef = ref(null)
 
-// 캐릭터 연관 태그 추천
-const charSuggestTags = ref([])
+// 딥 프롬프트 클리너
+const optResult = ref('')
+const promptConflicts = ref([])
+async function optimizePrompt() {
+  const backend = await getBackend()
+  if (!backend.deepCleanPrompt) return
+  const prompt = widgets.total_prompt_display || ''
+  backend.deepCleanPrompt(JSON.stringify({ prompt }), (json) => {
+    try {
+      const d = JSON.parse(json)
+      if (d.error) { optResult.value = d.error; return }
+      if (d.optimized) widgets.main_prompt_text = d.optimized
+      promptConflicts.value = d.conflicts || []
+      optResult.value = `${d.removed}개 중복 제거, ${d.tag_count}개 태그`
+      setTimeout(() => { optResult.value = '' }, 5000)
+      nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
+    } catch {}
+  })
+}
+
+// 캐릭터 인사이트 카드
+const charInsight = ref({ tags: [], raw: '' })
 async function loadCharTags() {
   const char = widgets.character_input
-  if (!char || char.length < 2) { charSuggestTags.value = []; return }
+  if (!char || char.length < 2) { charInsight.value = { tags: [], raw: '' }; return }
   const backend = await getBackend()
-  if (backend.getCharacterTags) {
-    backend.getCharacterTags(char, (json) => {
+  if (backend.getCharacterInsight) {
+    backend.getCharacterInsight(char, (json) => {
       try {
         const data = JSON.parse(json)
-        charSuggestTags.value = Array.isArray(data) ? data : []
-      } catch { charSuggestTags.value = [] }
+        charInsight.value = { tags: data.tags || [], raw: data.raw || '' }
+      } catch { charInsight.value = { tags: [], raw: '' } }
     })
   }
 }
@@ -152,6 +186,12 @@ function insertCharTag(tag) {
   const cur = widgets.main_prompt_text || ''
   if (!cur.toLowerCase().includes(tag.toLowerCase())) {
     widgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
+  }
+}
+function applyOfficialTags() {
+  if (charInsight.value.raw) {
+    widgets.main_prompt_text = charInsight.value.raw
+    nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
   }
 }
 
@@ -323,8 +363,18 @@ label.danger { color: #f87171; }
 input[type="number"] { -moz-appearance: textfield; }
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
 
-.char-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; align-items: center; }
-.char-tags-label { font-size: 8px; font-weight: 800; color: var(--text-muted); margin-right: 4px; }
+.prompt-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.optimize-btn { padding: 3px 10px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 9px; font-weight: 700; cursor: pointer; }
+.optimize-btn:hover { border-color: var(--accent); color: var(--accent); }
+.opt-result { font-size: 9px; color: #4ade80; }
+.conflicts { margin-top: 4px; }
+.conflict-item { font-size: 9px; color: #fbbf24; padding: 2px 0; }
+
+.char-insight { margin-top: 6px; background: rgba(45,212,191,0.03); border: 1px solid rgba(45,212,191,0.1); border-radius: 6px; padding: 8px; }
+.insight-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.insight-label { font-size: 9px; font-weight: 800; color: #2dd4bf; }
+.insight-apply { padding: 2px 8px; background: #2dd4bf; border: none; border-radius: 3px; color: #000; font-size: 9px; font-weight: 800; cursor: pointer; }
+.insight-tags { display: flex; flex-wrap: wrap; gap: 3px; max-height: 80px; overflow-y: auto; }
 .char-tag-chip { padding: 2px 8px; background: rgba(45,212,191,0.08); border: 1px solid rgba(45,212,191,0.2); border-radius: 4px; color: #2dd4bf; font-size: 9px; cursor: pointer; }
 .char-tag-chip:hover { background: rgba(45,212,191,0.15); border-color: #2dd4bf; }
 

@@ -697,7 +697,97 @@ class VueBridge(QObject):
     vramUpdated = pyqtSignal(str)  # JSON {used, total, pct}
     seedExploreResult = pyqtSignal(str)  # JSON {index, path, seed}
 
-    @pyqtSlot(result=str)
+    @pyqtSlot(str, result=str)
+    def deepCleanPrompt(self, prompt_json: str) -> str:
+        """딥 프롬프트 클리너: 충돌 감지 + 중복 제거 + 최적 순서 재배치"""
+        try:
+            data = json.loads(prompt_json) if isinstance(prompt_json, str) else prompt_json
+            tags = [t.strip() for t in data.get('prompt', '').split(',') if t.strip()]
+
+            # 1. 중복 제거
+            seen = set()
+            unique = []
+            for t in tags:
+                tl = t.lower().replace(' ', '_')
+                if tl not in seen:
+                    seen.add(tl)
+                    unique.append(t)
+
+            # 2. 충돌 감지
+            conflicts = []
+            conflict_pairs = [
+                (['black_hair', 'blonde_hair', 'brown_hair', 'red_hair', 'blue_hair', 'green_hair', 'white_hair', 'pink_hair', 'purple_hair', 'silver_hair', 'orange_hair', 'grey_hair'], '머리색'),
+                (['blue_eyes', 'red_eyes', 'green_eyes', 'brown_eyes', 'yellow_eyes', 'purple_eyes', 'pink_eyes', 'grey_eyes', 'black_eyes', 'orange_eyes'], '눈색'),
+                (['short_hair', 'long_hair', 'very_long_hair', 'medium_hair'], '머리 길이'),
+                (['standing', 'sitting', 'lying', 'kneeling', 'squatting'], '포즈'),
+                (['day', 'night', 'sunset', 'sunrise'], '시간'),
+                (['indoors', 'outdoors'], '장소'),
+            ]
+            tag_lower = {t.lower().replace(' ', '_') for t in unique}
+            for group, label in conflict_pairs:
+                found = [t for t in group if t in tag_lower]
+                if len(found) > 1:
+                    conflicts.append({'group': label, 'tags': found})
+
+            # 3. 최적 순서 재배치 (작가→캐릭터→품질→배경→포즈→의상→기타)
+            quality_tags = {'masterpiece', 'best_quality', 'high_quality', 'absurdres', 'highres'}
+            count_pattern = ['1girl', '2girls', '3girls', '1boy', '2boys', 'solo', 'multiple_girls', 'multiple_boys']
+
+            ordered = {'count': [], 'quality': [], 'body': [], 'clothing': [], 'pose': [], 'bg': [], 'other': []}
+            for t in unique:
+                tl = t.lower().replace(' ', '_')
+                if tl in quality_tags: ordered['quality'].append(t)
+                elif any(tl == c for c in count_pattern): ordered['count'].append(t)
+                else: ordered['other'].append(t)
+
+            optimized = ordered['count'] + ordered['quality'] + ordered['body'] + ordered['clothing'] + ordered['pose'] + ordered['bg'] + ordered['other']
+
+            removed_count = len(tags) - len(unique)
+            return json.dumps({
+                'optimized': ', '.join(optimized),
+                'removed': removed_count,
+                'conflicts': conflicts,
+                'tag_count': len(optimized),
+            })
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    @pyqtSlot(str, result=str)
+    def getCharacterInsight(self, character: str) -> str:
+        """캐릭터 공식 설정(description) 반환 (JSONL 기반)"""
+        try:
+            import os
+            jsonl_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'danbooru_character_description_full.jsonl')
+            if not os.path.exists(jsonl_path):
+                return json.dumps({'error': 'JSONL not found'})
+            # 캐시
+            if not hasattr(self, '_char_desc_cache'):
+                self._char_desc_cache = {}
+                with open(jsonl_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        try:
+                            d = json.loads(line)
+                            name = d.get('character', '').lower().strip()
+                            desc = d.get('description', '')
+                            if name and desc:
+                                self._char_desc_cache[name] = desc
+                        except: continue
+                print(f"[CharInsight] Loaded {len(self._char_desc_cache)} characters")
+            # 검색
+            char_lower = character.lower().strip().replace(' ', '_')
+            desc = self._char_desc_cache.get(char_lower, '')
+            if not desc:
+                for k, v in self._char_desc_cache.items():
+                    if char_lower in k:
+                        desc = v; break
+            if desc:
+                tags = [t.strip() for t in desc.split(',') if t.strip()]
+                return json.dumps({'character': character, 'tags': tags, 'raw': desc})
+            return json.dumps({'tags': [], 'raw': ''})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    @pyqtSlot(str, result=str)
     def getCharacterTags(self, character: str) -> str:
         """캐릭터 연관 태그 TOP N 반환 (JSONL 기반)"""
         try:
