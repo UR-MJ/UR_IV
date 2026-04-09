@@ -457,6 +457,26 @@ class VueBridge(QObject):
 
     # ── 갤러리 ──
 
+    @pyqtSlot(result=str)
+    def getLastGalleryFolder(self) -> str:
+        """마지막 Gallery 폴더 경로 반환"""
+        import os
+        cfg = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'gallery_last_folder.txt')
+        try:
+            if os.path.exists(cfg):
+                with open(cfg, 'r') as f:
+                    return f.read().strip()
+        except: pass
+        from config import OUTPUT_DIR
+        return OUTPUT_DIR
+
+    def _save_gallery_folder(self, folder: str):
+        import os
+        cfg = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'gallery_last_folder.txt')
+        os.makedirs(os.path.dirname(cfg), exist_ok=True)
+        with open(cfg, 'w') as f:
+            f.write(folder)
+
     @pyqtSlot(str, result=str)
     def getGalleryImages(self, folder: str) -> str:
         """폴더의 이미지 목록 반환"""
@@ -790,16 +810,25 @@ class VueBridge(QObject):
 
     @pyqtSlot(result=str)
     def getYoloModelLabel(self) -> str:
-        """YOLO 모델 라벨 반환"""
+        """YOLO 모델 라벨 반환 (editor_models/ 자동 감지 포함)"""
         try:
             import os
             from tabs.editor.mosaic_panel import _load_yolo_model_paths
+            # _load_yolo_model_paths()가 editor_models/ 내 파일도 자동 감지
             paths = _load_yolo_model_paths()
             if paths:
-                return ", ".join([os.path.basename(p) for p in paths])
+                names = [os.path.basename(p) for p in paths]
+                return ", ".join(names)
         except Exception:
             pass
         return "No Model Loaded"
+
+    @pyqtSlot(result=str)
+    def refreshYoloModels(self) -> str:
+        """editor_models/ 재스캔 후 라벨 반환"""
+        label = self.getYoloModelLabel()
+        self.yoloModelUpdated.emit(label)
+        return label
 
     @pyqtSlot(str, result=str)
     def getTagSuggestions(self, prefix: str) -> str:

@@ -64,10 +64,15 @@
       </div>
     </div>
 
-    <!-- Section: STAMP 간격 (STAMP 선택 시만) -->
+    <!-- Section: STAMP 설정 (STAMP 선택 시만) -->
     <div class="control-group" v-if="selectedTool === 4">
-      <label>Stamp Spacing</label>
-      <div class="slider-box">
+      <label>Stamp Shape</label>
+      <div class="chip-grid-3">
+        <button class="chip-btn" :class="{ active: stampShapeLocal === 'circle' }" @click="stampShapeLocal = 'circle'">⬤ CIRCLE</button>
+        <button class="chip-btn" :class="{ active: stampShapeLocal === 'bar' }" @click="stampShapeLocal = 'bar'">▬ BAR</button>
+        <button class="chip-btn" :class="{ active: stampShapeLocal === 'rect' }" @click="stampShapeLocal = 'rect'">⬜ RECT</button>
+      </div>
+      <div class="slider-box mt-8">
         <div class="slider-header"><span>간격 (px)</span><span>{{ stampSpacing }}</span></div>
         <input type="range" min="5" max="200" v-model.number="stampSpacing" class="modern-slider" />
       </div>
@@ -180,6 +185,7 @@ const eraserMode = ref('brush')
 const eraserRestore = ref(false)
 const magneticLasso = ref(false)
 const stampSpacing = ref(30)
+const stampShapeLocal = ref('circle')
 const bgQuality = ref('balanced')
 const barW = ref(40)
 const barH = ref(15)
@@ -189,11 +195,11 @@ function selectEffect(id) { selectedEffect.value = id; emit('effect-changed', { 
 function setEraserMode(mode) { eraserMode.value = mode; emit('eraser-mode-changed', mode) }
 function onApply() { emit('effect-apply', { tool: selectedTool.value, effect: selectedEffect.value, toolSize: toolSize.value, strength: strength.value }) }
 
-watch([toolSize, strength, stampSpacing, barW, barH, selectedEffect, selectedTool], () => {
+watch([toolSize, strength, stampSpacing, stampShapeLocal, barW, barH, selectedEffect, selectedTool], () => {
   emit('params-changed', {
     toolSize: toolSize.value, strength: strength.value, stampSpacing: stampSpacing.value,
     barW: barW.value, barH: barH.value,
-    stampShape: (selectedTool.value === 4 && selectedEffect.value === 1) ? 'bar' : 'circle',
+    stampShape: selectedTool.value === 4 ? stampShapeLocal.value : 'circle',
   })
 })
 </script>

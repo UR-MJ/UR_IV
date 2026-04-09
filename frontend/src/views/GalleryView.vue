@@ -275,8 +275,13 @@ const sendExifToT2I = () => { if (exifData.value) requestAction('gallery_send_ex
 const action = (name, payload = {}) => requestAction(name, payload)
 const hideMenu = () => ctxMenu.value.show = false
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('click', hideMenu)
+  // 마지막 폴더 경로 로드
+  const bk = await getBackend()
+  if (bk.getLastGalleryFolder) {
+    bk.getLastGalleryFolder((f) => { if (f) { currentFolder.value = f } })
+  }
   loadImages()
   onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
 

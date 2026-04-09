@@ -115,7 +115,7 @@
         <!-- 6. 기본값 설정 (탭별) -->
         <div v-show="currentTab === 'defaults'" class="section-fade">
           <div class="glass-card">
-            <label>T2I 기본값</label>
+            <label>T2I 기본값 <span class="sync-badge" v-if="t2iSynced">SYNCED</span></label>
             <div class="defaults-grid">
               <div class="def-field"><span>Steps</span><input type="number" v-model.number="defaults.steps" /></div>
               <div class="def-field"><span>CFG Scale</span><input type="number" v-model.number="defaults.cfg" step="0.5" /></div>
@@ -123,7 +123,10 @@
               <div class="def-field"><span>Height</span><input type="number" v-model.number="defaults.height" /></div>
               <div class="def-field"><span>Seed</span><input type="text" v-model="defaults.seed" /></div>
               <div class="def-field"><span>Denoising (I2I)</span><input type="number" v-model.number="defaults.denoising" step="0.05" /></div>
+              <div class="def-field"><span>Sampler</span><input type="text" v-model="defaults.sampler" /></div>
+              <div class="def-field"><span>Scheduler</span><input type="text" v-model="defaults.scheduler" /></div>
             </div>
+            <button class="btn-pill mt-12" @click="syncFromT2I">SYNC FROM T2I</button>
           </div>
 
           <div class="glass-card mt-16">
@@ -236,6 +239,22 @@ function saveDefaults() {
 }
 function resetDefaults() { Object.assign(defaults, FACTORY_DEFAULTS) }
 
+const t2iSynced = ref(false)
+async function syncFromT2I() {
+  const { useWidgetStore } = await import('../stores/widgetStore.js')
+  const store = useWidgetStore()
+  const w = store.widgets
+  defaults.steps = parseInt(w.steps_input) || defaults.steps
+  defaults.cfg = parseFloat(w.cfg_input) || defaults.cfg
+  defaults.width = parseInt(w.width_input) || defaults.width
+  defaults.height = parseInt(w.height_input) || defaults.height
+  defaults.seed = w.seed_input || defaults.seed
+  defaults.sampler = w.sampler_combo || defaults.sampler
+  defaults.scheduler = w.scheduler_combo || defaults.scheduler
+  t2iSynced.value = true
+  setTimeout(() => { t2iSynced.value = false }, 3000)
+}
+
 // Ollama
 const ollamaUrl = ref('http://localhost:11434')
 const ollamaModel = ref('llama3')
@@ -327,5 +346,6 @@ kbd { background: var(--bg-button); color: var(--accent); padding: 4px 10px; bor
 .defaults-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .def-field { display: flex; flex-direction: column; gap: 3px; }
 .def-field span { font-size: 10px; font-weight: 700; color: var(--text-muted); }
+.sync-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 4px; font-size: 8px; font-weight: 900; margin-left: 8px; }
 .def-field input, .def-field select { padding: 8px 10px; font-size: 12px; }
 </style>

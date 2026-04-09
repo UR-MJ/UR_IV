@@ -250,6 +250,21 @@ class GeneratorMainUI(
             elif action == 'open_lora_manager': self._open_lora_manager()
             elif action == 'save_settings':
                 self.save_settings()
+                # defaults도 동시 업데이트
+                try:
+                    defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'tab_defaults.json')
+                    if os.path.exists(defaults_path):
+                        with open(defaults_path, 'r', encoding='utf-8') as f:
+                            cur = json.load(f)
+                        cur['steps'] = int(self.steps_input.text() or 20)
+                        cur['cfg'] = float(self.cfg_input.text() or 7)
+                        cur['width'] = int(self.width_input.text() or 1024)
+                        cur['height'] = int(self.height_input.text() or 1024)
+                        cur['seed'] = self.seed_input.text() or '-1'
+                        with open(defaults_path, 'w', encoding='utf-8') as f:
+                            json.dump(cur, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
                 if hasattr(self, 'vue_bridge'):
                     self.vue_bridge.showNotification.emit('success', '설정이 저장되었습니다')
             elif action == 'swap_resolution': self._swap_resolution()
@@ -630,8 +645,10 @@ class GeneratorMainUI(
             # ═══════ Gallery 폴더 열기 다이얼로그 ═══════
             elif action == 'gallery_open_folder':
                 from config import OUTPUT_DIR
-                folder = QFileDialog.getExistingDirectory(self, "Gallery 폴더 선택", OUTPUT_DIR)
+                last = self.vue_bridge.getLastGalleryFolder() or OUTPUT_DIR
+                folder = QFileDialog.getExistingDirectory(self, "Gallery 폴더 선택", last)
                 if folder:
+                    self.vue_bridge._save_gallery_folder(folder)
                     self.vue_bridge.galleryFolderLoaded.emit(folder.replace('\\', '/'))
 
             # ═══════ 즐겨찾기 제거 ═══════

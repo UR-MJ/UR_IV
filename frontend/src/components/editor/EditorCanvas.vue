@@ -57,6 +57,9 @@ let lassoPoints = []
 let maskData = null
 let lastAltClick = 0  // Alt 더블클릭 감지
 let stampAccum = 0
+let maskUndoStack = []
+let maskRedoStack = []
+const MAX_MASK_UNDO = 10
 let savedZoom = 1, savedRotation = 0, savedPanX = 0, savedPanY = 0
 let pristineImg = null  // 원본 이미지 (모자이크 지우개용)
 let edgeMapData = null  // Canny edge map (자석 올가미용) — Uint8Array
@@ -185,6 +188,26 @@ function onDblClick(e) {
   }
 }
 
+function saveMaskState() {
+  if (maskData) {
+    maskUndoStack.push(new Uint8Array(maskData))
+    while (maskUndoStack.length > MAX_MASK_UNDO) maskUndoStack.shift()
+    maskRedoStack = []
+  }
+}
+function undoMask() {
+  if (maskUndoStack.length === 0 || !maskData) return
+  maskRedoStack.push(new Uint8Array(maskData))
+  maskData.set(maskUndoStack.pop())
+  renderMaskOverlay(); emitMaskBounds()
+}
+function redoMask() {
+  if (maskRedoStack.length === 0 || !maskData) return
+  maskUndoStack.push(new Uint8Array(maskData))
+  maskData.set(maskRedoStack.pop())
+  renderMaskOverlay(); emitMaskBounds()
+}
+
 function onMouseDown(e) {
   if (e.altKey || e.button === 1) {
     panning = true
@@ -193,6 +216,7 @@ function onMouseDown(e) {
     return
   }
   initMask()
+  saveMaskState()  // 마스킹 전 상태 저장
   const pos = getImagePos(e)
   drawing = true
   startX = pos.x; startY = pos.y
@@ -364,6 +388,7 @@ function paintMaskBar(cx, cy, bw, bh) {
 
 function paintStamp(cx, cy) {
   if (props.stampShape === 'bar') paintMaskBar(cx, cy, props.barWidth, props.barHeight)
+  else if (props.stampShape === 'rect') paintMaskBar(cx, cy, props.brushSize * 2, props.brushSize * 2)
   else paintMaskCircle(cx, cy, props.brushSize)
 }
 
@@ -577,7 +602,7 @@ function loadMaskFromBase64(b64) {
 // zoom/rotation 초기화
 function resetView() { zoom.value = 1; rotation.value = 0; panX.value = 0; panY.value = 0 }
 
-defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, loadEdgeMap, drawAll, resetView })
+defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, loadEdgeMap, drawAll, resetView, undoMask, redoMask })
 
 onMounted(() => {
   if (props.imageSrc) loadNewImage(props.imageSrc, false)

@@ -265,7 +265,15 @@ function applyEffect(effectData) {
   }
 }
 
-function openModelDialog() { requestAction('editor_add_yolo_model') }
+async function openModelDialog() {
+  // 먼저 자동 감지 새로고침
+  const backend = await getBackend()
+  if (backend.refreshYoloModels) {
+    backend.refreshYoloModels((label) => { if (label) modelLabel.value = label })
+  }
+  // 새 모델 추가도 가능
+  requestAction('editor_add_yolo_model')
+}
 function clearModels() { requestAction('editor_clear_yolo_models') }
 
 async function runAutoCensor(params) {
@@ -344,11 +352,14 @@ async function refreshYoloLabel() {
 onMounted(() => {
   onBackendEvent('editorImageLoaded', (path) => loadImage(path))
   onBackendEvent('yoloModelUpdated', (label) => { modelLabel.value = label })
+  // 앱 시작 시 YOLO 모델 자동 감지
+  refreshYoloLabel()
 
   document.addEventListener('keydown', (e) => {
     if (!imagePath.value) return
-    if (e.ctrlKey && e.key === 'z') { e.preventDefault(); doUndo() }
-    if (e.ctrlKey && e.key === 'y') { e.preventDefault(); doRedo() }
+    if (e.ctrlKey && e.shiftKey && e.key === 'z') { e.preventDefault(); canvasRef.value?.redoMask() }
+    else if (e.ctrlKey && e.key === 'z') { e.preventDefault(); canvasRef.value?.undoMask() || doUndo() }
+    if (e.ctrlKey && e.key === 'y') { e.preventDefault(); canvasRef.value?.redoMask() || doRedo() }
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveImage() }
     if (e.key === 'Escape') canvasRef.value?.clearSelection()
   })

@@ -113,7 +113,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
-import { getBackend } from '../bridge.js'
+import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from './CustomSelect.vue'
 
 const emit = defineEmits(['toggle-extend'])
@@ -268,10 +268,9 @@ function growAll() {
   })
 }
 
-onMounted(async () => {
+onMounted(() => {
   setTimeout(growAll, 500); setTimeout(growAll, 1500)
   // Ollama 결과 수신
-  const { onBackendEvent } = await import('../bridge.js')
   onBackendEvent('ollamaResult', (json) => {
     ollamaLoading.value = false
     try {
