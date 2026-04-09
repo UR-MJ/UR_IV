@@ -60,6 +60,13 @@
       <div class="hints">
         <span>쉼표(,) = AND</span><span>[A|B] = OR</span><span>Exclude로 제외 조건 설정</span>
       </div>
+
+      <!-- 이전 검색 결과 있으면 바로 보기/랜덤 뽑기 -->
+      <div class="prev-results" v-if="lastResults.length > 0">
+        <span class="prev-label">이전 검색 결과 {{ lastResults.length }}건</span>
+        <button class="prev-btn" @click="restoreLastResults">📋 목록 보기</button>
+        <button class="prev-btn gold" @click="restoreAndRandom">🎲 랜덤 뽑기</button>
+      </div>
     </div>
 
     <!-- 검색 중 -->
@@ -167,6 +174,7 @@ const fields = reactive([
 
 const results = ref([])
 const filteredResults = ref([])
+const lastResults = ref([])  // 검색 폼으로 돌아가도 보존
 const previewIdx = ref(0)
 const searching = ref(false)
 const statusText = ref('READY')
@@ -200,6 +208,23 @@ async function search() {
 function newSearch() {
   results.value = []; filteredResults.value = []; previewIdx.value = 0
   deepInclude.value = ''; deepExclude.value = ''; isFiltered.value = false
+  // lastResults는 보존 — 검색 폼에서 다시 볼 수 있음
+}
+
+function restoreLastResults() {
+  results.value = lastResults.value
+  filteredResults.value = lastResults.value
+  previewIdx.value = 0
+  viewMode.value = 'list'
+  statusText.value = `${lastResults.value.length} MATCHES (복원)`
+}
+
+function restoreAndRandom() {
+  results.value = lastResults.value
+  filteredResults.value = lastResults.value
+  previewIdx.value = Math.floor(Math.random() * lastResults.value.length)
+  viewMode.value = 'single'
+  statusText.value = `${lastResults.value.length} MATCHES (랜덤)`
 }
 
 onMounted(() => {
@@ -208,6 +233,7 @@ onMounted(() => {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
         results.value = data; filteredResults.value = data; previewIdx.value = 0
+        lastResults.value = data  // 보존
         statusText.value = `${data.length} MATCHES`
       } else statusText.value = 'FAILED'
     } catch { statusText.value = 'PARSE ERROR' }
@@ -274,6 +300,18 @@ function importResults() { requestAction('import_search_results') }
 .go-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250,204,21,0.3); }
 .io-row { display: flex; gap: 4px; }
 .io-btn { padding: 6px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
+.prev-results {
+  display: flex; align-items: center; gap: 10px; padding: 12px 20px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-card);
+}
+.prev-label { font-size: 11px; color: var(--text-muted); font-weight: 700; flex: 1; }
+.prev-btn {
+  padding: 7px 16px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.prev-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.prev-btn.gold { border-color: var(--accent-dim); color: var(--accent); }
+
 .hints { display: flex; gap: 14px; }
 .hints span { font-size: 10px; color: var(--text-muted); background: var(--bg-card); padding: 4px 12px; border-radius: 4px; }
 

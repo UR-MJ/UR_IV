@@ -332,13 +332,44 @@ class GeneratorMainUI(
 
             # 15. Search parquet 저장/불러오기
             elif action == 'export_search_results':
-                if hasattr(self, 'search_tab') and hasattr(self.search_tab, 'export_results'):
-                    self.search_tab.export_results()
-                else:
-                    self.show_status("Export: search_tab not available")
+                # 현재 filtered_results를 parquet로 저장
+                path, _ = QFileDialog.getSaveFileName(self, "검색 결과 저장", "", "Parquet Files (*.parquet)")
+                if path:
+                    try:
+                        import pandas as pd
+                        if hasattr(self, 'search_tab') and hasattr(self.search_tab, 'preview_results') and self.search_tab.preview_results:
+                            df = pd.DataFrame(self.search_tab.preview_results)
+                        elif hasattr(self, '_last_search_results'):
+                            df = pd.DataFrame(self._last_search_results)
+                        else:
+                            self.show_status("Export: no results")
+                            return
+                        df.to_parquet(path)
+                        self.show_status(f"Exported {len(df)} results")
+                    except Exception as e:
+                        self.show_status(f"Export failed: {e}")
+
             elif action == 'import_search_results':
-                if hasattr(self, 'search_tab') and hasattr(self.search_tab, 'import_results'):
-                    self.search_tab.import_results()
+                path, _ = QFileDialog.getOpenFileName(self, "검색 결과 불러오기", "", "Parquet Files (*.parquet)")
+                if path:
+                    try:
+                        import pandas as pd
+                        df = pd.read_parquet(path)
+                        out = []
+                        for _, row in df.iterrows():
+                            out.append({
+                                'copyright': str(row.get('tag_string_copyright', row.get('copyright', ''))),
+                                'character': str(row.get('tag_string_character', row.get('character', ''))),
+                                'artist': str(row.get('tag_string_artist', row.get('artist', ''))),
+                                'general': str(row.get('tag_string_general', row.get('general', ''))),
+                                'rating': str(row.get('rating', '')),
+                            })
+                        self._last_search_results = out
+                        # Vue로 결과 전달
+                        self.vue_bridge.searchResultsReady.emit(json.dumps(out))
+                        self.show_status(f"Imported {len(out)} results")
+                    except Exception as e:
+                        self.show_status(f"Import failed: {e}")
 
             # 16. 자동화 토글
             elif action == 'toggle_automation':
