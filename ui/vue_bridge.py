@@ -26,6 +26,7 @@ class VueBridge(QObject):
     condRulesLoaded = pyqtSignal(str)    # JSON {positive, negative}
     batchFilesSelected = pyqtSignal(str) # JSON [paths]
     ollamaResult = pyqtSignal(str)       # JSON {tags, mode} or {error}
+    globalWeightsLoaded = pyqtSignal(str) # JSON [{tag, weight}]
     compareImageLoaded = pyqtSignal(str) # JSON {slot, path}
     queueItemAdded = pyqtSignal(str)     # JSON {prompt, ...}
     queueCompleted = pyqtSignal(str)     # JSON {total}
@@ -696,6 +697,45 @@ class VueBridge(QObject):
 
     vramUpdated = pyqtSignal(str)  # JSON {used, total, pct}
     seedExploreResult = pyqtSignal(str)  # JSON {index, path, seed}
+
+    @pyqtSlot(str, str, result=str)
+    def saveWildcard(self, filename: str, content: str) -> str:
+        """와일드카드 파일 저장/수정"""
+        import os
+        wc_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wildcards')
+        os.makedirs(wc_dir, exist_ok=True)
+        if not filename.endswith('.txt'): filename += '.txt'
+        try:
+            with open(os.path.join(wc_dir, filename), 'w', encoding='utf-8') as f:
+                f.write(content)
+            return json.dumps({'ok': True})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    @pyqtSlot(str, result=str)
+    def deleteWildcard(self, filename: str) -> str:
+        """와일드카드 파일 삭제"""
+        import os
+        wc_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wildcards')
+        fp = os.path.join(wc_dir, filename if filename.endswith('.txt') else filename + '.txt')
+        try:
+            if os.path.exists(fp): os.remove(fp)
+            return json.dumps({'ok': True})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    @pyqtSlot(str, str, result=str)
+    def renameWildcard(self, old_name: str, new_name: str) -> str:
+        """와일드카드 파일 이름 변경"""
+        import os
+        wc_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wildcards')
+        old_fp = os.path.join(wc_dir, old_name if old_name.endswith('.txt') else old_name + '.txt')
+        new_fp = os.path.join(wc_dir, new_name if new_name.endswith('.txt') else new_name + '.txt')
+        try:
+            if os.path.exists(old_fp): os.rename(old_fp, new_fp)
+            return json.dumps({'ok': True})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
 
     @pyqtSlot(str, result=str)
     def deepCleanPrompt(self, prompt_json: str) -> str:

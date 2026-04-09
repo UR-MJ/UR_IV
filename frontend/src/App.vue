@@ -13,9 +13,14 @@
             <label>Studio Tools</label>
             <div class="tool-grid">
               <button class="tool-btn" @click="action('save_settings')">SAVE</button>
-              <button class="tool-btn" @click="action('save_preset')">PRESET</button>
-              <button class="tool-btn" @click="action('open_tag_weight_editor')">WEIGHT</button>
+              <button class="tool-btn" @click="showPresetMenu = !showPresetMenu">PRESET</button>
+              <button class="tool-btn" @click="showWeightManager = true">WEIGHT</button>
               <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
+            </div>
+            <!-- 프리셋 서브메뉴 -->
+            <div class="preset-sub" v-if="showPresetMenu">
+              <button class="tool-btn" @click="action('save_preset'); showPresetMenu = false">💾 SAVE</button>
+              <button class="tool-btn" @click="action('load_preset'); showPresetMenu = false">📂 LOAD</button>
               <button class="tool-btn" @click="showWcManager = true" v-if="wildcards.length">WILDCARD</button>
             </div>
           </div>
@@ -266,6 +271,31 @@
       <span class="vram-text">VRAM {{ vramInfo.used }}GB / {{ vramInfo.total }}GB ({{ vramInfo.pct }}%)</span>
     </div>
 
+    <!-- Weight Manager Modal -->
+    <transition name="fade">
+      <div v-if="showWeightManager" class="wm-overlay" @click.self="showWeightManager = false">
+        <div class="wm-modal">
+          <div class="wm-header">
+            <h3>GLOBAL TAG WEIGHTS</h3>
+            <span class="wm-desc">등록된 태그는 어디서든 자동으로 지정 가중치가 적용됩니다</span>
+            <button class="close-btn" @click="showWeightManager = false">✕</button>
+          </div>
+          <div class="wm-body">
+            <div v-for="(w, i) in globalWeights" :key="i" class="wm-row">
+              <input v-model="w.tag" placeholder="태그명..." class="wm-tag-input" />
+              <input type="range" min="50" max="200" v-model.number="w.weight" class="wm-slider" />
+              <span class="wm-val">{{ (w.weight / 100).toFixed(2) }}</span>
+              <button class="wm-rm" @click="globalWeights.splice(i, 1)">✕</button>
+            </div>
+            <button class="wm-add" @click="globalWeights.push({ tag: '', weight: 100 })">+ ADD TAG WEIGHT</button>
+          </div>
+          <div class="wm-footer">
+            <button class="wm-save" @click="saveGlobalWeights">💾 SAVE</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- Wildcard Manager Modal -->
     <transition name="fade">
       <div v-if="showWcManager" class="wc-overlay" @click.self="showWcManager = false">
@@ -273,28 +303,50 @@
           <div class="wc-modal-header">
             <h3>WILDCARD MANAGER</h3>
             <span class="wc-path">wildcards/</span>
+            <button class="wc-new-btn" @click="createNewWildcard">+ NEW</button>
             <button class="close-btn" @click="showWcManager = false">✕</button>
           </div>
           <div class="wc-modal-body">
+            <!-- 파일 목록 -->
             <div class="wc-sidebar">
               <div v-for="wc in wildcards" :key="wc.name" class="wc-file-item"
-                :class="{ active: selectedWc === wc.name }" @click="selectedWc = wc.name">
-                {{ wc.name }}
+                :class="{ active: selectedWc === wc.name }" @click="selectWildcard(wc.name)">
+                <span class="wc-fname" @dblclick.stop="renameWildcard(wc.name)">{{ wc.name }}</span>
                 <span class="wc-file-count">{{ wc.tags.length }}</span>
+                <button class="wc-del" @click.stop="deleteWildcard(wc.name)">✕</button>
               </div>
             </div>
+            <!-- 편집 영역 -->
             <div class="wc-content">
               <template v-if="selectedWcData">
                 <div class="wc-content-header">
                   <h4>{{ selectedWc }}</h4>
-                  <span>사용: <code>{'~/' + selectedWc + '/~'}</code></span>
+                  <span class="wc-syntax">사용문법: <code>{{'__' + selectedWc + '__'}}</code></span>
+                  <button class="wc-copy-btn" @click="copyWcSyntax">📋 COPY</button>
                 </div>
-                <div class="wc-tag-grid">
-                  <button v-for="tag in selectedWcData.tags" :key="tag" class="wc-tag-btn"
-                    @click="insertWildcardTag(tag)">{{ tag }}</button>
+                <!-- 블록 뷰: 한 줄 = 하나의 블록 -->
+                <div class="wc-blocks">
+                  <div v-for="(line, li) in wcEditLines" :key="li" class="wc-block-row">
+                    <span class="wc-block-idx">{{ li + 1 }}</span>
+                    <input v-model="wcEditLines[li]" class="wc-block-input" @keydown.enter="addWcLine(li)" />
+                    <button class="wc-block-use" @click="useWcLine(li)" title="프롬프트에 삽입">USE</button>
+                    <button class="wc-block-rm" @click="wcEditLines.splice(li, 1)">✕</button>
+                  </div>
+                  <button class="wc-add-line" @click="wcEditLines.push('')">+ 줄 추가</button>
+                </div>
+                <!-- 삽입 옵션 -->
+                <div class="wc-insert-bar">
+                  <span class="wc-insert-label">삽입 위치:</span>
+                  <select v-model="wcInsertTarget" class="wc-insert-sel">
+                    <option value="main">Main Tags</option>
+                    <option value="prefix">Prefix</option>
+                    <option value="suffix">Suffix</option>
+                    <option value="clipboard">클립보드</option>
+                  </select>
+                  <button class="wc-save-btn" @click="saveCurrentWildcard">💾 SAVE</button>
                 </div>
               </template>
-              <div v-else class="wc-empty">좌측에서 와일드카드 파일을 선택하세요</div>
+              <div v-else class="wc-empty">좌측에서 와일드카드를 선택하거나 NEW를 클릭하세요</div>
             </div>
           </div>
         </div>
@@ -407,9 +459,110 @@ const ctxMenuStyle = computed(() => {
 })
 
 const wildcards = ref([])
+const showPresetMenu = ref(false)
+const showWeightManager = ref(false)
+const globalWeights = reactive([])  // [{tag, weight}]
+
+function saveGlobalWeights() {
+  const valid = globalWeights.filter(w => w.tag.trim())
+  action('save_global_weights', { weights: valid })
+  showWeightManager.value = false
+}
+
+// 프롬프트에 글로벌 가중치 적용
+function applyGlobalWeights(text) {
+  if (!globalWeights.length) return text
+  let result = text
+  for (const w of globalWeights) {
+    if (!w.tag.trim()) continue
+    const tag = w.tag.trim()
+    const weight = (w.weight / 100).toFixed(2)
+    if (weight === '1.00') continue
+    // 이미 가중치가 있으면 교체, 없으면 추가
+    const regex = new RegExp(`\\(${tag.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}:[\\d.]+\\)`, 'gi')
+    if (regex.test(result)) {
+      result = result.replace(regex, `(${tag}:${weight})`)
+    } else {
+      const plain = new RegExp(`(?<![:(])\\b${tag.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b(?![:\\)])`, 'gi')
+      result = result.replace(plain, `(${tag}:${weight})`)
+    }
+  }
+  return result
+}
 const showWcManager = ref(false)
 const selectedWc = ref('')
 const selectedWcData = computed(() => wildcards.value.find(w => w.name === selectedWc.value) || null)
+const wcEditLines = ref([])
+const wcInsertTarget = ref('main')
+
+function selectWildcard(name) {
+  selectedWc.value = name
+  const wc = wildcards.value.find(w => w.name === name)
+  wcEditLines.value = wc ? [...wc.tags] : []
+}
+
+async function saveCurrentWildcard() {
+  if (!selectedWc.value) return
+  const bk = await getBackend()
+  const content = wcEditLines.value.join('\n')
+  bk.saveWildcard(selectedWc.value + '.txt', content, (json) => {
+    try { const r = JSON.parse(json); if (r.ok) addToast('success', '와일드카드 저장됨') } catch {}
+  })
+  // 로컬 업데이트
+  const wc = wildcards.value.find(w => w.name === selectedWc.value)
+  if (wc) wc.tags = wcEditLines.value.filter(l => l.trim())
+}
+
+async function createNewWildcard() {
+  const name = prompt('새 와일드카드 이름:')
+  if (!name) return
+  const bk = await getBackend()
+  bk.saveWildcard(name + '.txt', '', () => {
+    wildcards.value.push({ name, file: name + '.txt', tags: [] })
+    selectedWc.value = name; wcEditLines.value = []
+  })
+}
+
+async function deleteWildcard(name) {
+  if (!confirm(`"${name}" 와일드카드를 삭제할까요?`)) return
+  const bk = await getBackend()
+  bk.deleteWildcard(name, () => {
+    wildcards.value = wildcards.value.filter(w => w.name !== name)
+    if (selectedWc.value === name) { selectedWc.value = ''; wcEditLines.value = [] }
+  })
+}
+
+async function renameWildcard(oldName) {
+  const newName = prompt('새 이름:', oldName)
+  if (!newName || newName === oldName) return
+  const bk = await getBackend()
+  bk.renameWildcard(oldName, newName, () => {
+    const wc = wildcards.value.find(w => w.name === oldName)
+    if (wc) { wc.name = newName; wc.file = newName + '.txt' }
+    if (selectedWc.value === oldName) selectedWc.value = newName
+  })
+}
+
+function useWcLine(idx) {
+  const tag = wcEditLines.value[idx]
+  if (!tag) return
+  if (wcInsertTarget.value === 'clipboard') {
+    navigator.clipboard?.writeText(tag)
+    addToast('info', '클립보드에 복사됨')
+  } else {
+    const targetMap = { main: 'main_prompt_text', prefix: 'prefix_prompt_text', suffix: 'suffix_prompt_text' }
+    const key = targetMap[wcInsertTarget.value] || 'main_prompt_text'
+    const cur = storeWidgets[key] || ''
+    storeWidgets[key] = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
+  }
+}
+
+function addWcLine(afterIdx) { wcEditLines.value.splice(afterIdx + 1, 0, '') }
+
+function copyWcSyntax() {
+  navigator.clipboard?.writeText(`__${selectedWc.value}__`)
+  addToast('info', '문법 복사됨')
+}
 
 function action(name, payload = {}) { requestAction(name, payload) }
 
@@ -419,7 +572,13 @@ function insertWildcardTag(tag) {
 }
 
 function doGenerate() {
-  // LoRA Stack → Python lora 텍스트로 전달
+  // 글로벌 가중치 적용
+  if (globalWeights.length > 0) {
+    const cur = storeWidgets.main_prompt_text || ''
+    const weighted = applyGlobalWeights(cur)
+    if (weighted !== cur) storeWidgets.main_prompt_text = weighted
+  }
+  // LoRA Stack
   const activeLoras = loraStack.filter(l => l.enabled)
   if (activeLoras.length > 0) {
     const loraText = activeLoras.map(l => `<lora:${l.name}:${(l.weight/100).toFixed(2)}>`).join(', ')
@@ -518,6 +677,11 @@ onMounted(async () => {
   })
   onBackendEvent('generationError', (msg) => { isGenerating.value = false; status.value = `Error: ${msg}` })
 
+  // 글로벌 가중치 로드
+  onBackendEvent('globalWeightsLoaded', (json) => {
+    try { const d = JSON.parse(json); globalWeights.splice(0); d.forEach(w => globalWeights.push(w)) } catch {}
+  })
+
   // 와일드카드 로드
   const _bk = await getBackend()
   if (_bk.getWildcardTree) _bk.getWildcardTree((json) => { try { wildcards.value = JSON.parse(json) } catch {} })
@@ -613,6 +777,23 @@ onMounted(async () => {
 .tool-btn { padding: 8px 4px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; transition: var(--transition); }
 .tool-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .tool-btn.highlight { color: var(--accent); border-color: var(--accent-dim); }
+.preset-sub { display: flex; gap: 4px; margin-top: 4px; }
+
+/* Weight Manager */
+.wm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.wm-modal { width: 500px; max-height: 500px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.wm-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wm-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); }
+.wm-desc { font-size: 9px; color: var(--text-muted); flex: 1; }
+.wm-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.wm-row { display: flex; align-items: center; gap: 6px; }
+.wm-tag-input { flex: 1; padding: 5px 8px; font-size: 11px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); }
+.wm-slider { width: 100px; accent-color: var(--accent); }
+.wm-val { font-size: 11px; color: var(--accent); min-width: 35px; text-align: right; font-family: monospace; }
+.wm-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; }
+.wm-add { width: 100%; padding: 6px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); font-size: 10px; cursor: pointer; }
+.wm-footer { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+.wm-save { padding: 7px 20px; background: var(--accent); border: none; border-radius: 6px; color: #000; font-size: 11px; font-weight: 800; cursor: pointer; }
 
 /* Wildcard Manager Modal */
 .wc-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
@@ -631,9 +812,24 @@ onMounted(async () => {
 .wc-content-header h4 { font-size: 14px; color: var(--text-primary); }
 .wc-content-header span { font-size: 10px; color: var(--text-muted); }
 .wc-content-header code { background: var(--bg-input); padding: 2px 6px; border-radius: 3px; font-size: 10px; color: var(--accent); }
-.wc-tag-grid { display: flex; flex-wrap: wrap; gap: 4px; }
-.wc-tag-btn { padding: 5px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; cursor: pointer; }
-.wc-tag-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.wc-new-btn { padding: 4px 12px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-size: 10px; font-weight: 800; cursor: pointer; }
+.wc-fname { flex: 1; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.wc-del { background: none; border: none; color: #f87171; cursor: pointer; font-size: 11px; opacity: 0; transition: 0.15s; }
+.wc-file-item:hover .wc-del { opacity: 1; }
+.wc-syntax { font-size: 10px; color: var(--text-muted); }
+.wc-syntax code { background: var(--bg-input); padding: 1px 6px; border-radius: 3px; color: var(--accent); }
+.wc-copy-btn { padding: 2px 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); font-size: 9px; cursor: pointer; }
+.wc-blocks { display: flex; flex-direction: column; gap: 3px; max-height: 300px; overflow-y: auto; }
+.wc-block-row { display: flex; align-items: center; gap: 4px; }
+.wc-block-idx { font-size: 9px; color: var(--text-muted); min-width: 20px; text-align: right; font-family: monospace; }
+.wc-block-input { flex: 1; padding: 4px 8px; font-size: 11px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
+.wc-block-use { padding: 2px 6px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 3px; color: var(--accent); font-size: 9px; font-weight: 700; cursor: pointer; }
+.wc-block-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
+.wc-add-line { width: 100%; padding: 4px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 3px; color: var(--text-muted); font-size: 9px; cursor: pointer; margin-top: 4px; }
+.wc-insert-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.wc-insert-label { font-size: 9px; color: var(--text-muted); font-weight: 700; }
+.wc-insert-sel { padding: 3px 6px; font-size: 9px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); }
+.wc-save-btn { padding: 5px 14px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-size: 10px; font-weight: 800; cursor: pointer; margin-left: auto; }
 .wc-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 13px; }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

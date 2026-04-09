@@ -720,6 +720,18 @@ class GeneratorMainUI(
                     self.vue_bridge.compareImageLoaded.emit(json.dumps({'slot': slot, 'path': clean}))
                     self.vue_bridge.tabChanged.emit('png')
 
+            # ═══════ 글로벌 가중치 저장 ═══════
+            elif action == 'save_global_weights':
+                try:
+                    weights = payload.get('weights', [])
+                    wpath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'global_weights.json')
+                    os.makedirs(os.path.dirname(wpath), exist_ok=True)
+                    with open(wpath, 'w', encoding='utf-8') as f:
+                        json.dump(weights, f, ensure_ascii=False, indent=2)
+                    self.vue_bridge.showNotification.emit('success', '가중치가 저장되었습니다')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'가중치 저장 실패: {e}')
+
             # ═══════ LoRA 텍스트 설정 ═══════
             elif action == 'set_lora_text':
                 lora_text = payload.get('lora_text', '')
@@ -791,6 +803,16 @@ class GeneratorMainUI(
                 print(f"[Config] Tab defaults loaded")
         except Exception as e:
             print(f"[Config] Failed to load defaults: {e}")
+        try:
+            wpath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'global_weights.json')
+            if os.path.exists(wpath):
+                with open(wpath, 'r', encoding='utf-8') as f:
+                    weights = json.load(f)
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.globalWeightsLoaded.emit(json.dumps(weights))
+                print(f"[Config] Global weights loaded: {len(weights)} tags")
+        except Exception as e:
+            print(f"[Config] Failed to load weights: {e}")
 
     def _apply_vue_conditional_rules(self, pos_rules: list, neg_rules: list):
         """Vue에서 전달된 조건부 프롬프트 규칙 적용"""
