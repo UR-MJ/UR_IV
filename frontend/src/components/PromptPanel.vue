@@ -79,37 +79,6 @@
       </div>
     </details>
 
-    <!-- 4. 자동화 설정 (접이식) -->
-    <details class="glass-card">
-      <summary class="card-header">AUTOMATION</summary>
-      <div class="grid-2">
-        <div class="input-group">
-          <label>종료 조건</label>
-          <select v-model="autoSettings.mode">
-            <option value="count">횟수 제한</option>
-            <option value="timer">시간 제한 (분)</option>
-          </select>
-        </div>
-        <div class="input-group">
-          <label>{{ autoSettings.mode === 'count' ? '생성 횟수' : '시간 (분)' }}</label>
-          <input type="number" v-model.number="autoSettings.limit" min="1" />
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="input-group">
-          <label>프롬프트당 반복</label>
-          <input type="number" v-model.number="autoSettings.repeat" min="1" max="100" />
-        </div>
-        <div class="input-group">
-          <label>대기 시간 (초)</label>
-          <input type="number" v-model.number="autoSettings.delay" min="0" step="0.5" />
-        </div>
-      </div>
-      <label class="check-row">
-        <input type="checkbox" v-model="autoSettings.allowDupes" />
-        <span>중복 프롬프트 허용</span>
-      </label>
-    </details>
   </div>
 </template>
 
@@ -130,11 +99,6 @@ const artistRef = ref(null)
 const prefixRef = ref(null)
 const mainRef = ref(null)
 const suffixRef = ref(null)
-
-// 자동화 설정
-const autoSettings = reactive({
-  mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false,
-})
 
 const modelItems = computed(() => store.getProperty('model_combo', 'items') || [])
 const samplerItems = computed(() => store.getProperty('sampler_combo', 'items') || [])

@@ -386,9 +386,15 @@ class GeneratorMainUI(
                     exclude = payload.get('exclude_tags', payload.get('exclude', ''))
                     # 검색 실행
                     if hasattr(self.event_gen_tab, 'prompt_input'):
-                        self.event_gen_tab.prompt_input.setPlainText(query)
+                        if hasattr(self.event_gen_tab.prompt_input, 'setPlainText'):
+                            self.event_gen_tab.prompt_input.setPlainText(query)
+                        else:
+                            self.event_gen_tab.prompt_input.setText(query)
                     if hasattr(self.event_gen_tab, 'exclude_input'):
-                        self.event_gen_tab.exclude_input.setPlainText(exclude)
+                        if hasattr(self.event_gen_tab.exclude_input, 'setPlainText'):
+                            self.event_gen_tab.exclude_input.setPlainText(exclude)
+                        else:
+                            self.event_gen_tab.exclude_input.setText(exclude)
                     # 검색 시작
                     if hasattr(self.event_gen_tab, '_search'):
                         # 결과 시그널 연결 (1회용)

@@ -25,7 +25,7 @@
     <!-- Masonry-style Grid -->
     <section class="gallery-content">
       <div class="masonry-grid">
-        <div v-for="img in images" :key="img" class="gallery-card"
+        <div v-for="img in pagedImages" :key="img" class="gallery-card"
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
         >
@@ -35,6 +35,11 @@
             <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)">📋</button>
           </div>
         </div>
+      </div>
+      <div class="gallery-pager" v-if="images.length > galPageSize">
+        <button class="pager-btn" @click="galPage--" :disabled="galPage <= 0">◀ Prev</button>
+        <span class="pager-info">{{ galPage + 1 }} / {{ totalGalPages }}</span>
+        <button class="pager-btn" @click="galPage++" :disabled="galPage >= totalGalPages - 1">Next ▶</button>
       </div>
       
       <div v-if="isLoading" class="empty-placeholder">
@@ -141,8 +146,14 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
+import { computed } from 'vue'
+
 const images = ref([])
 const currentFolder = ref('')
+const galPage = ref(0)
+const galPageSize = 60
+const totalGalPages = computed(() => Math.max(1, Math.ceil(images.value.length / galPageSize)))
+const pagedImages = computed(() => images.value.slice(galPage.value * galPageSize, (galPage.value + 1) * galPageSize))
 const sortBy = ref('date')
 const sortOptions = [{label: 'DATE', val: 'date'}, {label: 'NAME', val: 'name'}]
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
@@ -352,6 +363,11 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .exif-preview { position: relative; cursor: pointer; }
 .exif-preview:hover .click-hint { opacity: 1; }
 .mt-8 { margin-top: 8px; }
+.gallery-pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px; }
+.pager-btn { padding: 6px 14px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; cursor: pointer; }
+.pager-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pager-btn:disabled { opacity: 0.3; }
+.pager-info { font-size: 11px; color: var(--text-muted); font-family: monospace; }
 .spinner { width: 32px; height: 32px; border: 3px solid #222; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

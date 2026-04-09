@@ -79,28 +79,36 @@
 
     <!-- 검색 후: 결과 -->
     <template v-else>
-      <!-- 상단 바: 네비 + 심층검색 + IO -->
+      <!-- 상단 바 -->
       <div class="result-bar">
         <div class="bar-left">
-          <button class="bar-btn" @click="viewMode = 'single'" :class="{ active: viewMode === 'single' }">📄</button>
-          <button class="bar-btn" @click="viewMode = 'list'" :class="{ active: viewMode === 'list' }">📋</button>
+          <button class="bar-btn" @click="viewMode = 'single'" :class="{ active: viewMode === 'single' }">📄 Single</button>
+          <button class="bar-btn" @click="viewMode = 'list'" :class="{ active: viewMode === 'list' }">📋 List</button>
           <span class="bar-sep">|</span>
           <button class="bar-btn" @click="prevResult" :disabled="previewIdx <= 0">◀</button>
           <span class="bar-idx"><b>{{ previewIdx + 1 }}</b>/{{ filteredResults.length }}</span>
           <button class="bar-btn" @click="nextResult" :disabled="previewIdx >= filteredResults.length - 1">▶</button>
-          <button class="bar-btn gold" @click="randomResult">🎲</button>
-        </div>
-        <div class="bar-center">
-          <input v-model="deepInclude" placeholder="심층 포함..." @keydown.enter="applyDeepSearch" class="deep-input" />
-          <input v-model="deepExclude" placeholder="심층 제외..." @keydown.enter="applyDeepSearch" class="deep-input danger-border" />
-          <button class="bar-btn" @click="applyDeepSearch">FILTER</button>
-          <button class="bar-btn" @click="resetDeepSearch" v-if="isFiltered">RESET</button>
+          <button class="bar-btn gold" @click="randomResult">🎲 Random</button>
         </div>
         <div class="bar-right">
-          <button class="bar-btn" @click="exportResults">📥</button>
+          <button class="bar-btn parquet" @click="exportResults">📥 EXPORT .parquet</button>
           <button class="bar-btn" @click="newSearch">🔍 새 검색</button>
-          <span class="bar-count">{{ filteredResults.length }} results</span>
         </div>
+      </div>
+      <!-- 심층검색 바 + 분기 -->
+      <div class="deep-bar">
+        <span class="deep-label">DEEP SEARCH</span>
+        <input v-model="deepInclude" placeholder="포함 태그 (쉼표 구분)" @keydown.enter="applyDeepSearch" class="deep-input" />
+        <input v-model="deepExclude" placeholder="제외 태그 (쉼표 구분)" @keydown.enter="applyDeepSearch" class="deep-input neg" />
+        <button class="bar-btn" @click="applyDeepSearch">FILTER</button>
+        <template v-if="filterHistory.length > 0">
+          <span class="bar-sep">|</span>
+          <span class="branch-label">분기:</span>
+          <button v-for="(fh, fi) in filterHistory" :key="fi" class="branch-btn"
+            @click="restoreBranch(fi)">{{ fh.label }} ({{ fh.count }})</button>
+        </template>
+        <button class="bar-btn" @click="resetDeepSearch" v-if="isFiltered">✕ RESET</button>
+        <span class="bar-count">{{ filteredResults.length }} / {{ results.length }}</span>
       </div>
 
       <!-- Single View -->
@@ -110,6 +118,8 @@
             <div class="meta-pill"><span class="ml">PROJECT</span>{{ currentResult.copyright || 'ORIGINAL' }}</div>
             <div class="meta-pill artist"><span class="ml">ARTIST</span>{{ currentResult.artist || 'UNKNOWN' }}</div>
             <div class="meta-pill character"><span class="ml">CHAR</span>{{ currentResult.character || 'GENERIC' }}</div>
+            <div class="meta-pill mini"><span class="ml">RATING</span>{{ currentResult.rating || '?' }}</div>
+            <div class="meta-pill mini"><span class="ml">TAGS</span>{{ currentTags.length }}</div>
           </div>
           <div class="tag-section">
             <label>General Tags ({{ currentTags.length }})</label>
@@ -183,6 +193,7 @@ const viewMode = ref('single')
 const deepInclude = ref('')
 const deepExclude = ref('')
 const isFiltered = ref(false)
+const filterHistory = ref([])  // 분기 히스토리: [{label, count, data}]
 const listPage = ref(0)
 const listPageSize = 50
 let progressTimer = null
@@ -246,18 +257,32 @@ onMounted(() => {
 function applyDeepSearch() {
   const inc = deepInclude.value.toLowerCase().trim()
   const exc = deepExclude.value.toLowerCase().trim()
-  filteredResults.value = results.value.filter(r => {
+  if (!inc && !exc) return
+  // 현재 상태를 분기로 저장
+  const label = [inc ? `+${inc.substring(0,15)}` : '', exc ? `-${exc.substring(0,15)}` : ''].filter(Boolean).join(' ')
+  filterHistory.value.push({ label, count: filteredResults.value.length, data: [...filteredResults.value] })
+  // 현재 filteredResults 기준 누적 필터
+  filteredResults.value = filteredResults.value.filter(r => {
     const all = `${r.copyright} ${r.character} ${r.artist} ${r.general}`.toLowerCase()
     if (inc) { for (const t of inc.split(',')) { if (t.trim() && !all.includes(t.trim())) return false } }
     if (exc) { for (const t of exc.split(',')) { if (t.trim() && all.includes(t.trim())) return false } }
     return true
   })
   previewIdx.value = 0; listPage.value = 0; isFiltered.value = true
+  deepInclude.value = ''; deepExclude.value = ''
   statusText.value = `DEEP: ${filteredResults.value.length} / ${results.value.length}`
+}
+function restoreBranch(idx) {
+  filteredResults.value = [...filterHistory.value[idx].data]
+  filterHistory.value = filterHistory.value.slice(0, idx)
+  previewIdx.value = 0; listPage.value = 0
+  isFiltered.value = filterHistory.value.length > 0
+  statusText.value = `BRANCH: ${filteredResults.value.length}`
 }
 function resetDeepSearch() {
   deepInclude.value = ''; deepExclude.value = ''
-  filteredResults.value = results.value; previewIdx.value = 0; listPage.value = 0; isFiltered.value = false
+  filteredResults.value = results.value; previewIdx.value = 0; listPage.value = 0
+  isFiltered.value = false; filterHistory.value = []
   statusText.value = `${results.value.length} MATCHES`
 }
 
@@ -335,9 +360,20 @@ function importResults() { requestAction('import_search_results') }
 .bar-sep { color: #333; }
 .bar-idx { font-family: monospace; font-size: 11px; color: var(--text-secondary); }
 .bar-idx b { color: var(--accent); font-size: 14px; }
-.bar-count { font-size: 9px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
-.deep-input { width: 140px; padding: 4px 8px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 10px; }
-.deep-input.danger-border { border-color: rgba(248,113,113,0.2); }
+.bar-count { font-size: 9px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; margin-left: auto; }
+.bar-btn.parquet { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); color: #60a5fa; }
+
+/* Deep bar */
+.deep-bar {
+  display: flex; align-items: center; gap: 6px; padding: 5px 12px;
+  background: rgba(250,204,21,0.02); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap;
+}
+.deep-label { font-size: 9px; font-weight: 900; color: var(--accent); letter-spacing: 1px; }
+.deep-input { width: 160px; padding: 4px 8px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 10px; }
+.deep-input.neg { border-color: rgba(248,113,113,0.2); }
+.branch-label { font-size: 9px; color: var(--text-muted); font-weight: 700; }
+.branch-btn { padding: 3px 8px; background: var(--bg-button); border: 1px solid var(--accent-dim); border-radius: 4px; color: var(--accent); font-size: 9px; font-weight: 700; cursor: pointer; }
+.branch-btn:hover { background: var(--accent-dim); }
 
 /* ═══ Single View ═══ */
 .single-view { flex: 1; overflow-y: auto; padding: 24px; display: flex; justify-content: center; }
@@ -346,6 +382,7 @@ function importResults() { requestAction('import_search_results') }
 .meta-pill { padding: 12px 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: 800; color: var(--text-primary); display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
 .meta-pill.artist { color: var(--accent); }
 .meta-pill.character { color: #4ade80; }
+.meta-pill.mini { min-width: 60px; flex: 0; }
 .ml { font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; }
 
 .tag-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }

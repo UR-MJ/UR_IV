@@ -20,12 +20,29 @@
           </div>
         </div>
         <div class="gen-footer">
-          <!-- 자동화 토글 + 랜덤 프롬프트 -->
           <div class="gen-actions">
             <button class="action-btn" :class="{ active: autoMode }" @click="autoMode = !autoMode; action('toggle_automation', { checked: autoMode })">
               {{ autoMode ? '🔄 AUTO ON' : '⏸ AUTO OFF' }}
             </button>
             <button class="action-btn highlight" @click="action('random_prompt')">🎲 RANDOM</button>
+          </div>
+          <!-- 자동화 설정 (AUTO ON일 때만) -->
+          <div class="auto-settings" v-if="autoMode">
+            <div class="auto-row">
+              <label>{{ autoSettings.mode === 'count' ? '횟수' : '시간(분)' }}</label>
+              <input type="number" v-model.number="autoSettings.limit" min="1" class="auto-input" />
+              <select v-model="autoSettings.mode" class="auto-select">
+                <option value="count">횟수</option>
+                <option value="timer">시간</option>
+              </select>
+            </div>
+            <div class="auto-row">
+              <label>반복</label>
+              <input type="number" v-model.number="autoSettings.repeat" min="1" max="100" class="auto-input" />
+              <label>대기(초)</label>
+              <input type="number" v-model.number="autoSettings.delay" min="0" step="0.5" class="auto-input" />
+            </div>
+            <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
           </div>
           <button class="btn-generate" @click="action('generate')" :disabled="isGenerating">
             {{ isGenerating ? 'GENERATING...' : autoMode ? 'START AUTOMATION' : 'GENERATE IMAGE' }}
@@ -282,6 +299,7 @@ const exifContent = computed(() => {
 })
 
 const autoMode = ref(false)
+const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false })
 
 // Toast 알림 시스템
 const toasts = ref([])
@@ -514,6 +532,13 @@ onMounted(async () => {
 .action-btn.active { border-color: #4ade80; color: #4ade80; background: rgba(74,222,128,0.05); }
 .action-btn.highlight { border-color: var(--accent-dim); color: var(--accent); }
 .action-btn:hover { border-color: var(--text-muted); }
+.auto-settings { display: flex; flex-direction: column; gap: 4px; padding: 8px; background: rgba(74,222,128,0.03); border: 1px solid rgba(74,222,128,0.1); border-radius: 8px; }
+.auto-row { display: flex; align-items: center; gap: 4px; }
+.auto-row label { font-size: 9px; color: var(--text-muted); font-weight: 700; min-width: 32px; }
+.auto-input { width: 50px; padding: 4px 6px; font-size: 11px; text-align: center; }
+.auto-select { width: 60px; padding: 4px; font-size: 10px; }
+.auto-check { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer; }
+.auto-check input { accent-color: #4ade80; }
 .btn-generate { width: 100%; height: 50px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 800; font-size: 14px; letter-spacing: 1px; cursor: pointer; transition: var(--transition); }
 .btn-generate:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }
 .btn-generate:disabled { opacity: 0.5; cursor: wait; }

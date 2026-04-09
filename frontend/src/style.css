@@ -99,7 +99,7 @@ input:focus, textarea:focus, select:focus {
   background: var(--bg-card);
 }
 
-/* select option 드롭다운 하이라이트 수정 */
+/* select 스타일 */
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -110,21 +110,9 @@ select {
   cursor: pointer;
 }
 
-option {
-  background: #181818;
-  color: #E8E8E8;
-  padding: 8px 12px;
-}
-option:hover, option:focus, option:checked {
-  background: #FACC15 !important;
-  color: #000 !important;
-}
-
-/* Chromium 드롭다운 내부 선택 하이라이트 — 단일 항목만 */
-select:focus option:checked {
-  background: linear-gradient(0deg, #FACC15 0%, #FACC15 100%) !important;
-  color: #000 !important;
-}
+/* Chromium select 내부 option — 배경색 강제 */
+option { background: #181818 !important; color: #E8E8E8; }
+option:checked { background: #FACC15 !important; color: #000 !important; }
 
 label {
   font-size: 11px;
