@@ -248,26 +248,63 @@ class GeneratorMainUI(
 
             # 7. 검색 결과 → 프롬프트 적용
             elif action == 'apply_search_result':
-                self.apply_prompt_from_data(payload)
-                if hasattr(self, 'vue_bridge'):
-                    self.vue_bridge.tabChanged.emit('t2i')
-                self.show_status("Prompt applied from search result.")
-
-            elif action == 'add_search_to_queue':
-                # 검색 결과를 대기열에 추가
-                classified = self.tag_classifier.classify_tags_for_event(
-                    [t.strip() for t in payload.get('general', '').split(',') if t.strip()]
-                )
-                queue_payload = {
-                    'prompt': payload.get('general', ''),
-                    'negative_prompt': self.neg_prompt_text.toPlainText(),
+                # Vue 검색 결과 필드명 → Python bundle 필드명 통일
+                bundle = {
                     'character': payload.get('character', ''),
                     'copyright': payload.get('copyright', ''),
                     'artist': payload.get('artist', ''),
+                    'general': payload.get('general', ''),
+                }
+                # nan 문자열 처리
+                for k in bundle:
+                    if str(bundle[k]).lower() == 'nan':
+                        bundle[k] = ''
+
+                self.is_programmatic_change = True
+                try:
+                    self.apply_prompt_from_data(bundle)
+                finally:
+                    self.is_programmatic_change = False
+
+                # Vue 위젯 강제 동기화 (proxy → Vue store)
+                self.update_total_prompt_display()
+
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.tabChanged.emit('t2i')
+                    self.vue_bridge.showNotification.emit('success', '프롬프트가 적용되었습니다')
+
+            elif action == 'add_search_to_queue':
+                # 먼저 프롬프트 적용하여 UI 채우기
+                bundle = {
+                    'character': payload.get('character', ''),
+                    'copyright': payload.get('copyright', ''),
+                    'artist': payload.get('artist', ''),
+                    'general': payload.get('general', ''),
+                }
+                for k in bundle:
+                    if str(bundle[k]).lower() == 'nan': bundle[k] = ''
+                self.is_programmatic_change = True
+                try:
+                    self.apply_prompt_from_data(bundle)
+                finally:
+                    self.is_programmatic_change = False
+                self.update_total_prompt_display()
+
+                # 현재 UI 상태에서 payload 구성
+                queue_payload = {
+                    'prompt': self.total_prompt_display.toPlainText(),
+                    'negative_prompt': self.neg_prompt_text.toPlainText(),
+                    'sampler_name': self.sampler_combo.currentText(),
+                    'steps': int(self.steps_input.text() or 20),
+                    'cfg_scale': float(self.cfg_input.text() or 7),
+                    'seed': int(self.seed_input.text() or -1),
+                    'width': int(self.width_input.text() or 1024),
+                    'height': int(self.height_input.text() or 1024),
                 }
                 if hasattr(self, 'queue_panel'):
                     self.queue_panel.add_single_item(queue_payload)
-                    self.show_status("Added to queue.")
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.showNotification.emit('success', '대기열에 추가되었습니다')
 
             # 8. 즐겨찾기
             elif action == 'add_favorite':
@@ -400,6 +437,11 @@ class GeneratorMainUI(
                                 'rating': str(row.get('rating', '')),
                             })
                         self._last_search_results = out
+                        # Python filtered_results + shuffled_prompt_deck 업데이트
+                        import random as _rnd
+                        self.filtered_results = out
+                        self.shuffled_prompt_deck = out.copy()
+                        _rnd.shuffle(self.shuffled_prompt_deck)
                         # Vue로 결과 전달
                         self.vue_bridge.searchResultsReady.emit(json.dumps(out))
                         self.show_status(f"Imported {len(out)} results")

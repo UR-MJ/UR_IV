@@ -466,8 +466,9 @@ class VueBridge(QObject):
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
 
     def _on_search_results(self, results, total_count):
-        """검색 결과 수신 → Vue로 전달"""
+        """검색 결과 수신 → Vue 전달 + Python filtered_results 업데이트"""
         try:
+            import random as _rnd
             out = []
             if hasattr(results, 'iterrows'):
                 for _, row in results.iterrows():
@@ -478,8 +479,17 @@ class VueBridge(QObject):
                         'general': str(row.get('tag_string_general', '')),
                         'rating': str(row.get('rating', '')),
                     })
+            # Vue로 전달
             self.searchResultsReady.emit(json.dumps(out))
             self.searchStatus.emit(f'{len(out)}개 결과 (전체 {total_count}개)')
+
+            # Python 메인 윈도우의 filtered_results도 업데이트 (랜덤 프롬프트용)
+            main_win = self.parent()
+            if main_win and hasattr(main_win, 'filtered_results'):
+                main_win.filtered_results = out
+                main_win.shuffled_prompt_deck = out.copy()
+                _rnd.shuffle(main_win.shuffled_prompt_deck)
+                print(f"[Search] filtered_results updated: {len(out)} items")
         except Exception as e:
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
 
