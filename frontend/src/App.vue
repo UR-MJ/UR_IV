@@ -94,41 +94,48 @@
             <!-- Hires.fix -->
             <details class="ext-card">
               <summary class="ext-title">HIRES.FIX</summary>
+              <label class="ext-check-row"><input type="checkbox" v-model="hires_enabled" /><span>Hires.fix 활성화</span></label>
               <div class="ext-field">
                 <label>Upscaler</label>
-                <select v-model="extWidgets.hires_upscaler"><option>Latent</option><option>R-ESRGAN 4x+</option><option>SwinIR_4x</option></select>
+                <CustomSelect v-model="storeWidgets.upscaler_combo" :options="upscalerItems" placeholder="Upscaler..." />
               </div>
               <div class="ext-row">
-                <div class="ext-field"><label>Steps</label><input type="number" v-model="extWidgets.hires_steps" /></div>
-                <div class="ext-field"><label>Denoise</label><input type="number" v-model="extWidgets.hires_denoise" step="0.05" /></div>
+                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets.hires_steps_input" /></div>
+                <div class="ext-field"><label>Denoise</label><input type="number" v-model="storeWidgets.hires_denoising_input" step="0.05" /></div>
               </div>
-              <div class="ext-field"><label>Scale</label><input type="number" v-model="extWidgets.hires_scale" step="0.1" /></div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Scale</label><input type="number" v-model="storeWidgets.hires_scale_input" step="0.1" /></div>
+                <div class="ext-field"><label>CFG (0=off)</label><input type="number" v-model="storeWidgets.hires_cfg_input" step="0.5" /></div>
+              </div>
             </details>
 
             <!-- ADetailer -->
             <details class="ext-card">
               <summary class="ext-title">ADETAILER</summary>
-              <div class="ext-field">
-                <label>Slot 1 Model</label>
-                <select v-model="extWidgets.ad_model_1"><option>face_yolov8n.pt</option><option>hand_yolov8n.pt</option><option>person_yolov8n-seg.pt</option></select>
-              </div>
-              <div class="ext-field">
-                <label>Slot 1 Prompt</label>
-                <input type="text" v-model="extWidgets.ad_prompt_1" placeholder="ADetailer prompt..." />
-              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="ad_enabled" /><span>ADetailer 활성화</span></label>
+              <!-- Slot 1 -->
+              <div class="ext-sub-title">Slot 1</div>
+              <label class="ext-check-row"><input type="checkbox" v-model="ad_s1_enabled" /><span>Slot 1 활성화</span></label>
+              <div class="ext-field"><label>Model</label>
+                <input type="text" v-model="storeWidgets._ad_s1_model" placeholder="face_yolov8n.pt" /></div>
+              <div class="ext-field"><label>Prompt</label>
+                <input type="text" v-model="storeWidgets._ad_s1_prompt" placeholder="ADetailer prompt..." /></div>
               <div class="ext-row">
-                <div class="ext-field"><label>Confidence</label><input type="number" v-model="extWidgets.ad_conf_1" min="0" max="1" step="0.05" /></div>
-                <div class="ext-field"><label>Denoise</label><input type="number" v-model="extWidgets.ad_denoise_1" min="0" max="1" step="0.05" /></div>
+                <div class="ext-field"><label>Confidence</label><input type="number" v-model="storeWidgets._ad_s1_confidence" step="0.05" /></div>
+                <div class="ext-field"><label>Denoise</label><input type="number" v-model="storeWidgets._ad_s1_denoise" step="0.05" /></div>
+                <div class="ext-field"><label>Mask Blur</label><input type="number" v-model="storeWidgets._ad_s1_mask_blur" /></div>
               </div>
+              <!-- Slot 2 -->
               <details class="ext-sub">
                 <summary>Slot 2</summary>
-                <div class="ext-field">
-                  <label>Model</label>
-                  <select v-model="extWidgets.ad_model_2"><option>face_yolov8n.pt</option><option>hand_yolov8n.pt</option></select>
-                </div>
-                <div class="ext-field">
-                  <label>Prompt</label>
-                  <input type="text" v-model="extWidgets.ad_prompt_2" placeholder="Slot 2 prompt..." />
+                <label class="ext-check-row"><input type="checkbox" v-model="ad_s2_enabled" /><span>Slot 2 활성화</span></label>
+                <div class="ext-field"><label>Model</label>
+                  <input type="text" v-model="storeWidgets._ad_s2_model" placeholder="hand_yolov8n.pt" /></div>
+                <div class="ext-field"><label>Prompt</label>
+                  <input type="text" v-model="storeWidgets._ad_s2_prompt" placeholder="Slot 2 prompt..." /></div>
+                <div class="ext-row">
+                  <div class="ext-field"><label>Confidence</label><input type="number" v-model="storeWidgets._ad_s2_confidence" step="0.05" /></div>
+                  <div class="ext-field"><label>Denoise</label><input type="number" v-model="storeWidgets._ad_s2_denoise" step="0.05" /></div>
                 </div>
               </details>
             </details>
@@ -268,6 +275,13 @@ const wStore = useWidgetStore()
 const storeWidgets = wStore.widgets
 const samplerItems = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
 const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
+const upscalerItems = computed(() => wStore.getProperty('upscaler_combo', 'items') || [])
+
+// Hires/ADetailer 체크박스 (proxy 연동)
+const hires_enabled = computed({ get: () => storeWidgets.hires_options_group === 'true', set: v => { storeWidgets.hires_options_group = v ? 'true' : 'false' } })
+const ad_enabled = computed({ get: () => storeWidgets.adetailer_group === 'true', set: v => { storeWidgets.adetailer_group = v ? 'true' : 'false' } })
+const ad_s1_enabled = computed({ get: () => storeWidgets.ad_slot1_group === 'true', set: v => { storeWidgets.ad_slot1_group = v ? 'true' : 'false' } })
+const ad_s2_enabled = computed({ get: () => storeWidgets.ad_slot2_group === 'true', set: v => { storeWidgets.ad_slot2_group = v ? 'true' : 'false' } })
 import PromptPanel from './components/PromptPanel.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import TabBar from './components/TabBar.vue'
@@ -312,11 +326,8 @@ function addToast(type, msg) {
 }
 function removeToast(id) { toasts.value = toasts.value.filter(t => t.id !== id) }
 
-// Extended panel state
+// Extended panel state (NegPiP/조건부만 로컬)
 const extWidgets = reactive({
-  hires_upscaler: 'Latent', hires_steps: 10, hires_denoise: 0.5, hires_scale: 2.0,
-  ad_model_1: 'face_yolov8n.pt', ad_prompt_1: '', ad_conf_1: 0.3, ad_denoise_1: 0.4,
-  ad_model_2: '', ad_prompt_2: '',
   negpip_enabled: false,
   cond_enabled: false, cond_prevent_dupe: true,
   cond_pos_rules: '', cond_neg_rules: '',
@@ -497,6 +508,7 @@ onMounted(async () => {
 .ext-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ext-sub { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .ext-sub summary { font-size: 10px; color: var(--text-secondary); cursor: pointer; }
+.ext-sub-title { font-size: 10px; font-weight: 800; color: var(--accent); letter-spacing: 1px; margin: 8px 0 4px; }
 
 /* LoRA block */
 .lora-block { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-button); border-radius: 6px; margin-bottom: 4px; }
