@@ -169,6 +169,56 @@
           <button class="bar-btn" @click="listPage++" :disabled="listPage >= totalListPages - 1">▶</button>
         </div>
       </div>
+      <!-- 조건부 프롬프트 (결과 하단에 항상 표시) -->
+      <div class="cond-section">
+        <details class="cond-card">
+          <summary class="cond-title positive">CONDITIONAL POSITIVE</summary>
+          <p class="cond-desc">태그가 존재하면 자동으로 다른 태그를 추가/제거합니다</p>
+          <div v-for="(rule, ri) in condPositive" :key="'p'+ri" class="cond-rule">
+            <label class="cond-check"><input type="checkbox" v-model="rule.enabled" /></label>
+            <span class="cond-kw">IF</span>
+            <input v-model="rule.condition" placeholder="조건 태그" class="cond-input" />
+            <select v-model="rule.exists" class="cond-sel">
+              <option :value="true">있으면</option>
+              <option :value="false">없으면</option>
+            </select>
+            <input v-model="rule.target" placeholder="대상 태그" class="cond-input" />
+            <select v-model="rule.action" class="cond-sel">
+              <option value="add">추가</option>
+              <option value="remove">제거</option>
+              <option value="replace">대체</option>
+            </select>
+            <select v-model="rule.location" class="cond-sel sm">
+              <option value="main">main</option>
+              <option value="prefix">prefix</option>
+              <option value="suffix">suffix</option>
+            </select>
+            <button class="cond-rm" @click="condPositive.splice(ri, 1)">✕</button>
+          </div>
+          <button class="cond-add" @click="condPositive.push({enabled:true,condition:'',exists:true,target:'',action:'add',location:'main'})">+ 규칙 추가</button>
+        </details>
+
+        <details class="cond-card neg">
+          <summary class="cond-title negative">CONDITIONAL NEGATIVE</summary>
+          <p class="cond-desc">태그가 존재하면 네거티브 프롬프트에 자동 추가/제거합니다</p>
+          <div v-for="(rule, ri) in condNegative" :key="'n'+ri" class="cond-rule">
+            <label class="cond-check"><input type="checkbox" v-model="rule.enabled" /></label>
+            <span class="cond-kw">IF</span>
+            <input v-model="rule.condition" placeholder="조건 태그" class="cond-input" />
+            <select v-model="rule.exists" class="cond-sel">
+              <option :value="true">있으면</option>
+              <option :value="false">없으면</option>
+            </select>
+            <input v-model="rule.target" placeholder="네거티브 태그" class="cond-input neg" />
+            <select v-model="rule.action" class="cond-sel">
+              <option value="add">추가</option>
+              <option value="remove">제거</option>
+            </select>
+            <button class="cond-rm" @click="condNegative.splice(ri, 1)">✕</button>
+          </div>
+          <button class="cond-add" @click="condNegative.push({enabled:true,condition:'',exists:true,target:'',action:'add'})">+ 규칙 추가</button>
+        </details>
+      </div>
     </template>
   </div>
 </template>
@@ -202,13 +252,17 @@ const viewMode = ref('single')
 const deepInclude = ref('')
 const deepExclude = ref('')
 const isFiltered = ref(false)
-const filterHistory = ref([])  // 분기 히스토리: [{label, count, data}]
+const filterHistory = ref([])
+
+// 조건부 프롬프트
+const condPositive = reactive([])
+const condNegative = reactive([])
 const listPage = ref(0)
 const listPageSize = 50
 let progressTimer = null
 
 const currentResult = computed(() => filteredResults.value[previewIdx.value] || null)
-const currentTags = computed(() => (currentResult.value?.general || '').split(/[\s,]+/).filter(Boolean).map(t => t.replace(/_/g, ' ')))
+const currentTags = computed(() => (currentResult.value?.general || '').split(',').map(t => t.trim()).filter(Boolean).map(t => t.replace(/_/g, ' ')))
 const totalListPages = computed(() => Math.max(1, Math.ceil(filteredResults.value.length / listPageSize)))
 const pagedResults = computed(() => filteredResults.value.slice(listPage.value * listPageSize, (listPage.value + 1) * listPageSize))
 
@@ -312,9 +366,10 @@ const catToColor = {
 const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
 
 function tagColor(tag) {
-  const t = tag.toLowerCase().replace(/ /g, '_')
+  const t = tag.trim().toLowerCase().replace(/ /g, '_')
   if (countPattern.test(t)) return 'count'
-  const cached = tagCategoryCache.value[t]
+  // 캐시 검색 (원본 + underscore 변환 둘 다)
+  const cached = tagCategoryCache.value[t] || tagCategoryCache.value[tag.trim()]
   if (cached) return catToColor[cached] || ''
   return ''
 }
@@ -322,7 +377,7 @@ function tagColor(tag) {
 // 현재 보고 있는 결과의 태그를 배치로 분류 요청
 async function classifyCurrentTags() {
   if (!currentResult.value) return
-  const tags = currentTags.value.map(t => t.replace(/ /g, '_'))
+  const tags = currentTags.value.map(t => t.trim().replace(/ /g, '_'))
   // 캐시에 없는 태그만 요청
   const uncached = tags.filter(t => !(t in tagCategoryCache.value))
   if (uncached.length === 0) return
@@ -345,8 +400,25 @@ watch(previewIdx, () => { classifyCurrentTags() })
 function prevResult() { if (previewIdx.value > 0) previewIdx.value-- }
 function nextResult() { if (previewIdx.value < filteredResults.value.length - 1) previewIdx.value++ }
 function randomResult() { if (filteredResults.value.length > 1) previewIdx.value = Math.floor(Math.random() * filteredResults.value.length) }
-function applyResult() { if (currentResult.value) requestAction('apply_search_result', currentResult.value) }
-function addToQueue() { if (currentResult.value) requestAction('add_search_to_queue', currentResult.value) }
+function applyResult() {
+  if (!currentResult.value) return
+  // 조건부 프롬프트 규칙도 함께 전달
+  const payload = {
+    ...currentResult.value,
+    cond_positive: condPositive.filter(r => r.enabled && r.condition && r.target),
+    cond_negative: condNegative.filter(r => r.enabled && r.condition && r.target),
+  }
+  requestAction('apply_search_result', payload)
+}
+function addToQueue() {
+  if (!currentResult.value) return
+  const payload = {
+    ...currentResult.value,
+    cond_positive: condPositive.filter(r => r.enabled && r.condition && r.target),
+    cond_negative: condNegative.filter(r => r.enabled && r.condition && r.target),
+  }
+  requestAction('add_search_to_queue', payload)
+}
 function exportResults() { requestAction('export_search_results', { count: results.value.length }) }
 function importResults() { requestAction('import_search_results') }
 </script>
@@ -485,4 +557,23 @@ function importResults() { requestAction('import_search_results') }
 .pager-info { font-size: 11px; color: var(--text-muted); font-family: monospace; }
 
 label.danger { color: #f87171; }
+
+/* 조건부 프롬프트 */
+.cond-section { padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; gap: 12px; }
+.cond-card { flex: 1; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.cond-card.neg { border-color: rgba(248,113,113,0.15); }
+.cond-title { font-size: 10px; font-weight: 900; letter-spacing: 1px; cursor: pointer; list-style: none; }
+.cond-title::-webkit-details-marker { display: none; }
+.cond-title.positive { color: #4ade80; }
+.cond-title.negative { color: #f87171; }
+.cond-desc { font-size: 9px; color: var(--text-muted); margin: 4px 0 8px; }
+.cond-rule { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; flex-wrap: wrap; }
+.cond-check input { accent-color: var(--accent); }
+.cond-kw { font-size: 9px; font-weight: 900; color: var(--accent); }
+.cond-input { width: 100px; padding: 3px 6px; font-size: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
+.cond-input.neg { border-color: rgba(248,113,113,0.2); }
+.cond-sel { padding: 3px 4px; font-size: 9px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); }
+.cond-sel.sm { width: 55px; }
+.cond-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; padding: 0 2px; }
+.cond-add { width: 100%; padding: 5px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); font-size: 9px; font-weight: 700; cursor: pointer; margin-top: 4px; }
 </style>

@@ -266,7 +266,12 @@ class GeneratorMainUI(
                 finally:
                     self.is_programmatic_change = False
 
-                # Vue 위젯 강제 동기화 (proxy → Vue store)
+                # 조건부 프롬프트 적용
+                cond_pos = payload.get('cond_positive', [])
+                cond_neg = payload.get('cond_negative', [])
+                if cond_pos or cond_neg:
+                    self._apply_vue_conditional_rules(cond_pos, cond_neg)
+
                 self.update_total_prompt_display()
 
                 if hasattr(self, 'vue_bridge'):
@@ -683,6 +688,61 @@ class GeneratorMainUI(
             # Vue Toast로 에러 알림
             if hasattr(self, 'vue_bridge'):
                 self.vue_bridge.showNotification.emit('error', f'{action}: {str(e)[:100]}')
+
+    def _apply_vue_conditional_rules(self, pos_rules: list, neg_rules: list):
+        """Vue에서 전달된 조건부 프롬프트 규칙 적용"""
+        try:
+            current_tags = set(t.strip().lower() for t in self.main_prompt_text.toPlainText().split(',') if t.strip())
+
+            for rule in pos_rules:
+                cond = rule.get('condition', '').strip().lower()
+                exists = rule.get('exists', True)
+                target = rule.get('target', '').strip()
+                action = rule.get('action', 'add')
+                location = rule.get('location', 'main')
+                if not cond or not target: continue
+
+                cond_met = (cond in current_tags) if exists else (cond not in current_tags)
+                if not cond_met: continue
+
+                widget_map = {
+                    'main': self.main_prompt_text,
+                    'prefix': self.prefix_prompt_text,
+                    'suffix': self.suffix_prompt_text,
+                }
+                widget = widget_map.get(location, self.main_prompt_text)
+                text = widget.toPlainText()
+
+                if action == 'add':
+                    if target.lower() not in text.lower():
+                        widget.setPlainText((text + ', ' + target).strip(', '))
+                elif action == 'remove':
+                    tags = [t.strip() for t in text.split(',')]
+                    tags = [t for t in tags if t.lower() != target.lower()]
+                    widget.setPlainText(', '.join(tags))
+                elif action == 'replace':
+                    widget.setPlainText(text.replace(cond, target))
+
+            for rule in neg_rules:
+                cond = rule.get('condition', '').strip().lower()
+                exists = rule.get('exists', True)
+                target = rule.get('target', '').strip()
+                action = rule.get('action', 'add')
+                if not cond or not target: continue
+
+                cond_met = (cond in current_tags) if exists else (cond not in current_tags)
+                if not cond_met: continue
+
+                neg_text = self.neg_prompt_text.toPlainText()
+                if action == 'add':
+                    if target.lower() not in neg_text.lower():
+                        self.neg_prompt_text.setPlainText((neg_text + ', ' + target).strip(', '))
+                elif action == 'remove':
+                    tags = [t.strip() for t in neg_text.split(',')]
+                    tags = [t for t in tags if t.lower() != target.lower()]
+                    self.neg_prompt_text.setPlainText(', '.join(tags))
+        except Exception as e:
+            print(f"[Error] Conditional rules: {e}")
 
     def _apply_settings_dict(self, settings: dict):
         """프리셋 딕셔너리를 UI에 적용"""

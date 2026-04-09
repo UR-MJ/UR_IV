@@ -91,7 +91,11 @@ const emit = defineEmits(['toggle-extend'])
 const store = useWidgetStore()
 const widgets = store.widgets
 
-const artistLocked = ref(false)
+// artistLocked는 proxy 'btn_lock_artist' 값과 동기화
+const artistLocked = computed({
+  get: () => widgets.btn_lock_artist === 'true',
+  set: (v) => { widgets.btn_lock_artist = v ? 'true' : 'false' }
+})
 const totalPromptRef = ref(null)
 const negRef = ref(null)
 const artistRef = ref(null)
