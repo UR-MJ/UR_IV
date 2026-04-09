@@ -70,24 +70,24 @@
               <div class="ext-field">
                 <label>Resolution</label>
                 <div class="ext-res-row">
-                  <input type="number" v-model="storeWidgets.width" />
+                  <input type="number" v-model="storeWidgets.width_input" />
                   <span>×</span>
-                  <input type="number" v-model="storeWidgets.height" />
+                  <input type="number" v-model="storeWidgets.height_input" />
                   <button class="ext-mini-btn" @click="action('swap_resolution')">↔</button>
                 </div>
               </div>
               <div class="ext-row">
                 <div class="ext-field"><label>Sampler</label>
-                  <CustomSelect v-model="storeWidgets.sampler" :options="samplerItems" placeholder="Sampler..." />
+                  <CustomSelect v-model="storeWidgets.sampler_combo" :options="samplerItems" placeholder="Sampler..." />
                 </div>
                 <div class="ext-field"><label>Scheduler</label>
-                  <CustomSelect v-model="storeWidgets.scheduler" :options="schedulerItems" placeholder="Scheduler..." />
+                  <CustomSelect v-model="storeWidgets.scheduler_combo" :options="schedulerItems" placeholder="Scheduler..." />
                 </div>
               </div>
               <div class="ext-row">
-                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets.steps" min="1" max="150" /></div>
-                <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets.cfg" step="0.5" /></div>
-                <div class="ext-field"><label>Seed</label><input type="text" v-model="storeWidgets.seed" /></div>
+                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets.steps_input" min="1" max="150" /></div>
+                <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets.cfg_input" step="0.5" /></div>
+                <div class="ext-field"><label>Seed</label><input type="text" v-model="storeWidgets.seed_input" /></div>
               </div>
             </div>
 

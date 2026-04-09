@@ -586,16 +586,66 @@ class VueBridge(QObject):
         """태그 목록을 분류하여 카테고리별로 반환 (tags_db 기반)"""
         try:
             tags = json.loads(tags_json) if isinstance(tags_json, str) else tags_json
-            from core.tag_classifier import TagClassifier
-            if not hasattr(self, '_tag_classifier'):
-                self._tag_classifier = TagClassifier()
-            tc = self._tag_classifier
             result = {}
+
+            # TagClassifier 시도
+            tc = None
+            try:
+                from core.tag_classifier import TagClassifier
+                if not hasattr(self, '_tag_classifier'):
+                    self._tag_classifier = TagClassifier()
+                tc = self._tag_classifier
+            except Exception:
+                pass
+
+            # fallback: clothes_list.txt 기반 간이 분류
+            if not hasattr(self, '_fallback_clothes'):
+                self._fallback_clothes = set()
+                self._fallback_sexual = set()
+                import os
+                tags_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tags_db')
+                # clothes_list.txt
+                cl_path = os.path.join(tags_db, 'clothes_list.txt')
+                if os.path.exists(cl_path):
+                    with open(cl_path, 'r', encoding='utf-8') as f:
+                        self._fallback_clothes = {line.strip().lower() for line in f if line.strip()}
+                # sexual keywords from known parquet names
+                for fn in ['sex_acts.parquet', 'nudity.parquet', 'pussy.parquet', 'sexual_positions.parquet', 'sexual_attire.parquet', 'sex_objects.parquet']:
+                    fp = os.path.join(tags_db, fn)
+                    if os.path.exists(fp):
+                        try:
+                            import pandas as pd
+                            df = pd.read_parquet(fp)
+                            col = df.columns[0] if len(df.columns) > 0 else None
+                            if col:
+                                self._fallback_sexual.update(df[col].str.lower().tolist())
+                        except Exception:
+                            pass
+
             for tag in tags:
-                cat = tc.classify_tag(tag)
-                result[tag] = cat
+                t = tag.strip().lower().replace(' ', '_')
+                if tc:
+                    cat = tc.classify_tag(t)
+                    result[tag] = cat
+                else:
+                    # fallback 분류
+                    if t in self._fallback_sexual:
+                        result[tag] = 'sexual'
+                    elif t in self._fallback_clothes:
+                        result[tag] = 'clothing'
+                    elif any(kw in t for kw in ['breast', 'thigh', 'ass', 'navel', 'nipple', 'penis', 'pussy', 'anus']):
+                        result[tag] = 'body_parts'
+                    elif any(kw in t for kw in ['stand', 'sit', 'ly', 'kneel', 'squat', 'walk', 'run', 'jump', 'smile', 'blush', 'cry', 'open_mouth']):
+                        result[tag] = 'pose'
+                    elif any(kw in t for kw in ['outdoor', 'indoor', 'sky', 'night', 'beach', 'forest', 'city', 'school', 'water', 'snow']):
+                        result[tag] = 'background'
+                    elif any(kw in t for kw in ['sex', 'vaginal', 'anal', 'oral', 'cum', 'nude', 'naked', 'penetrat']):
+                        result[tag] = 'sexual'
+                    else:
+                        result[tag] = 'general'
             return json.dumps(result)
         except Exception as e:
+            import traceback; traceback.print_exc()
             return json.dumps({'error': str(e)})
 
     @pyqtSlot(result=str)

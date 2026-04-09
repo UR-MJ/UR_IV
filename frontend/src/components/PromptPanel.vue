@@ -6,12 +6,12 @@
         FINAL OUTPUT PROMPT
         <span class="token-info">{{ tokenCount }} tokens</span>
       </div>
-      <textarea ref="totalPromptRef" v-model="widgets.total_prompt"
+      <textarea ref="totalPromptRef" v-model="widgets.total_prompt_display"
         class="total-prompt auto-grow" placeholder="인물수, 캐릭터, 작품, 작가, 선행, 메인, 후행 순서로 종합됩니다"
         @input="autoGrow($event.target)"></textarea>
       <div class="neg-section">
         <label class="danger-label">NEGATIVE</label>
-        <textarea ref="negRef" v-model="widgets.negative_prompt"
+        <textarea ref="negRef" v-model="widgets.neg_prompt_text"
           class="neg-prompt auto-grow" placeholder="Negative prompt..."
           @input="autoGrow($event.target)"></textarea>
       </div>
@@ -22,18 +22,18 @@
       <div class="card-header">CHARACTER & MODEL</div>
       <div class="input-group">
         <label>Char Count</label>
-        <input type="text" v-model="widgets.char_count" placeholder="e.g. 1girl, 2girls..." />
+        <input type="text" v-model="widgets.char_count_input" placeholder="e.g. 1girl, 2girls..." />
       </div>
       <div class="input-group">
         <label>Character</label>
         <div class="row">
-          <input type="text" v-model="widgets.character" placeholder="e.g. hatsune miku" />
+          <input type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku" />
           <button class="small-btn" @click="requestAction('open_character_preset')">PRESET</button>
         </div>
       </div>
       <div class="input-group">
         <label>Copyright</label>
-        <input type="text" v-model="widgets.copyright" placeholder="Copyright / Series..." />
+        <input type="text" v-model="widgets.copyright_input" placeholder="Copyright / Series..." />
       </div>
       <div class="input-group">
         <div class="row label-row">
@@ -42,12 +42,12 @@
             {{ artistLocked ? '🔒' : '🔓' }}
           </button>
         </div>
-        <textarea ref="artistRef" v-model="widgets.artist" class="auto-grow" placeholder="Artist tags..."
+        <textarea ref="artistRef" v-model="widgets.artist_input" class="auto-grow" placeholder="Artist tags..."
           @input="autoGrow($event.target)"></textarea>
       </div>
       <div class="input-group">
         <label>Checkpoint</label>
-        <CustomSelect v-model="widgets.model" :options="modelItems" placeholder="Select model..." />
+        <CustomSelect v-model="widgets.model_combo" :options="modelItems" placeholder="Select model..." />
       </div>
     </div>
 
@@ -56,7 +56,7 @@
       <summary class="card-header">PROMPT BLOCKS</summary>
       <div class="input-group autocomplete-wrap">
         <label>Main Tags</label>
-        <textarea ref="mainRef" v-model="widgets.main_prompt" class="auto-grow" placeholder="메인 태그..."
+        <textarea ref="mainRef" v-model="widgets.main_prompt_text" class="auto-grow" placeholder="메인 태그..."
           @input="onMainInput($event)" @keydown="onAutoKey($event)" rows="3"></textarea>
         <div class="ac-popup" v-if="acItems.length > 0">
           <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
@@ -65,15 +65,15 @@
       </div>
       <div class="grid-2">
         <div class="input-group"><label>Prefix</label>
-          <textarea ref="prefixRef" v-model="widgets.prefix_prompt" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
+          <textarea ref="prefixRef" v-model="widgets.prefix_prompt_text" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
         </div>
         <div class="input-group"><label>Suffix</label>
-          <textarea ref="suffixRef" v-model="widgets.suffix_prompt" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
+          <textarea ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
         </div>
       </div>
       <div class="input-group">
         <label>Exclude (Local)</label>
-        <input type="text" v-model="widgets.exclude_local" placeholder="제외 태그..." />
+        <input type="text" v-model="widgets.exclude_prompt_local_input" placeholder="제외 태그..." />
       </div>
     </details>
 
@@ -103,7 +103,7 @@ const modelItems = computed(() => store.getProperty('model_combo', 'items') || [
 const samplerItems = computed(() => store.getProperty('sampler_combo', 'items') || [])
 const schedulerItems = computed(() => store.getProperty('scheduler_combo', 'items') || [])
 const tokenCount = computed(() => {
-  const t = widgets.total_prompt
+  const t = widgets.total_prompt_display
   return t ? t.split(',').filter(s => s.trim()).length : 0
 })
 
@@ -143,9 +143,9 @@ function onAutoKey(e) {
 }
 
 function acceptSuggestion(tag) {
-  const text = widgets.main_prompt || ''
+  const text = widgets.main_prompt_text || ''
   const lastComma = text.lastIndexOf(',')
-  widgets.main_prompt = (lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : '') + tag + ', '
+  widgets.main_prompt_text = (lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : '') + tag + ', '
   acItems.value = []
   nextTick(() => { if (mainRef.value) { mainRef.value.focus(); autoGrow(mainRef.value) } })
 }
@@ -163,10 +163,10 @@ function growAll() {
 }
 
 onMounted(() => { setTimeout(growAll, 500); setTimeout(growAll, 1500) })
-watch(() => widgets.total_prompt, () => nextTick(() => { if (totalPromptRef.value) autoGrow(totalPromptRef.value) }))
-watch(() => widgets.negative_prompt, () => nextTick(() => { if (negRef.value) autoGrow(negRef.value) }))
-watch(() => widgets.artist, () => nextTick(() => { if (artistRef.value) autoGrow(artistRef.value) }))
-watch(() => widgets.main_prompt, () => nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) }))
+watch(() => widgets.total_prompt_display, () => nextTick(() => { if (totalPromptRef.value) autoGrow(totalPromptRef.value) }))
+watch(() => widgets.neg_prompt_text, () => nextTick(() => { if (negRef.value) autoGrow(negRef.value) }))
+watch(() => widgets.artist_input, () => nextTick(() => { if (artistRef.value) autoGrow(artistRef.value) }))
+watch(() => widgets.main_prompt_text, () => nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) }))
 </script>
 
 <style scoped>
