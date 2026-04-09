@@ -513,7 +513,7 @@ class UISetupMixin:
                 'prompt': TextEditProxy(b, f'{prefix}_prompt'),
                 'neg_prompt': TextEditProxy(b, f'{prefix}_neg'),
                 'model': ComboBoxProxy(b, f'{prefix}_model'),
-                'confidence': SliderProxy(b, f'{prefix}_conf'),
+                'confidence': SliderProxy(b, f'{prefix}_confidence'),
                 'strength': SliderProxy(b, f'{prefix}_str'),
                 'mask_blur': SliderProxy(b, f'{prefix}_mask_blur'),
                 'denoise': SliderProxy(b, f'{prefix}_denoise'),
