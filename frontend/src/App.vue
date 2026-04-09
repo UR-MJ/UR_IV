@@ -242,6 +242,7 @@
             <div class="ctx-item" @click="ctxSendI2I">🖼️ SEND TO I2I</div>
             <div class="ctx-item" @click="ctxSendInpaint">🎨 SEND TO INPAINT</div>
             <div class="ctx-item" @click="ctxSendEditor">✏️ SEND TO EDITOR</div>
+            <div class="ctx-item" @click="ctxCompare">🔍 COMPARE</div>
             <div class="ctx-separator"></div>
             <div class="ctx-item" @click="ctxCopyPath">📋 COPY PATH</div>
             <div class="ctx-item delete" @click="ctxDelete">🗑️ DELETE</div>
@@ -377,6 +378,7 @@ const ctxAddFavorite = () => { action('add_favorite', { path: ctxMenu.value.path
 const ctxSendI2I = () => { action('send_to_i2i', { path: ctxMenu.value.path }); hideCtxMenu() }
 const ctxSendInpaint = () => { action('send_to_inpaint', { path: ctxMenu.value.path }); hideCtxMenu() }
 const ctxSendEditor = () => { action('send_to_editor', { path: ctxMenu.value.path }); hideCtxMenu() }
+const ctxCompare = () => { action('send_to_compare', { path: ctxMenu.value.path, slot: 'before' }); hideCtxMenu() }
 const ctxCopyPath = () => { navigator.clipboard?.writeText(ctxMenu.value.path); hideCtxMenu() }
 const ctxDelete = () => { action('delete_image', { path: ctxMenu.value.path }); hideCtxMenu() }
 

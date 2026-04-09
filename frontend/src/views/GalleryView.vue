@@ -134,6 +134,7 @@
         <div class="ctx-item" @click="ctx('send_to_i2i')">🖼️ SEND TO I2I</div>
         <div class="ctx-item" @click="ctx('send_to_inpaint')">🎨 SEND TO INPAINT</div>
         <div class="ctx-item" @click="ctx('send_to_editor')">✏️ SEND TO EDITOR</div>
+        <div class="ctx-item" @click="sendToCompare">🔍 COMPARE (BEFORE)</div>
         <div class="ctx-separator"></div>
         <div class="ctx-item delete" @click="ctx('delete_image')">🗑️ DELETE FOREVER</div>
       </div>
@@ -268,6 +269,7 @@ function ctx(actionName) {
   ctxMenu.value.show = false
 }
 const quickAction = (name, path) => requestAction(name, { path })
+const sendToCompare = () => { requestAction('send_to_compare', { path: ctxMenu.value.path, slot: 'before' }); ctxMenu.value.show = false }
 const sendExifToT2I = () => { if (exifData.value) requestAction('gallery_send_exif_to_t2i', { exif: exifData.value.raw || '', path: exifData.value.path }) }
 const action = (name, payload = {}) => requestAction(name, payload)
 const hideMenu = () => ctxMenu.value.show = false

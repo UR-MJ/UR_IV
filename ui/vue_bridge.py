@@ -25,6 +25,8 @@ class VueBridge(QObject):
     yoloModelUpdated = pyqtSignal(str)   # model label text
     condRulesLoaded = pyqtSignal(str)    # JSON {positive, negative}
     batchFilesSelected = pyqtSignal(str) # JSON [paths]
+    ollamaResult = pyqtSignal(str)       # JSON {tags, mode} or {error}
+    compareImageLoaded = pyqtSignal(str) # JSON {slot, path}
     queueItemAdded = pyqtSignal(str)     # JSON {prompt, ...}
     queueCompleted = pyqtSignal(str)     # JSON {total}
     showNotification = pyqtSignal(str, str)  # (type: success|error|info, message)
@@ -377,9 +379,26 @@ class VueBridge(QObject):
                 try:
                     from rembg import remove
                     from PIL import Image as PILImage
+                    quality = params.get('quality', 'balanced')
                     pil_img = PILImage.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-                    result = remove(pil_img)
+
+                    rm_kwargs = {}
+                    if quality in ('balanced', 'quality'):
+                        rm_kwargs['alpha_matting'] = True
+                        rm_kwargs['alpha_matting_foreground_threshold'] = 240 if quality == 'balanced' else 270
+                        rm_kwargs['alpha_matting_background_threshold'] = 10 if quality == 'balanced' else 20
+                        rm_kwargs['alpha_matting_erode_size'] = 10 if quality == 'balanced' else 15
+
+                    result = remove(pil_img, **rm_kwargs)
                     img = cv2.cvtColor(np.array(result), cv2.COLOR_RGBA2BGRA)
+
+                    # Quality 모드: 엣지 정제
+                    if quality == 'quality':
+                        try:
+                            from core.edge_refiner import refine_alpha
+                            img = refine_alpha(img)
+                        except Exception as re:
+                            print(f"[Editor] Edge refine skipped: {re}")
                 except Exception as e:
                     return json.dumps({'error': f'배경 제거 실패: {e}'})
             
@@ -582,6 +601,32 @@ class VueBridge(QObject):
             return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
         except Exception:
             return ''
+
+    @pyqtSlot(str, str, str)
+    def ollamaEnhance(self, tags: str, mode: str, extra_json: str):
+        """Ollama로 태그 강화 (비동기)"""
+        try:
+            extra = json.loads(extra_json) if extra_json else {}
+            from workers.ollama_worker import OllamaWorker
+            url = extra.get('url', 'http://localhost:11434')
+            model = extra.get('model', 'llama3')
+            extra_prompt = extra.get('prompt', '')
+            self._ollama_worker = OllamaWorker(url, model, tags, mode, extra_prompt, self)
+            self._ollama_worker.finished.connect(lambda r: self.ollamaResult.emit(r))
+            self._ollama_worker.error.connect(lambda e: self.ollamaResult.emit(json.dumps({'error': e})))
+            self._ollama_worker.start()
+        except Exception as e:
+            self.ollamaResult.emit(json.dumps({'error': str(e)}))
+
+    @pyqtSlot(result=str)
+    def ollamaListModels(self) -> str:
+        """Ollama 모델 목록 반환"""
+        try:
+            from core.ollama_client import OllamaClient
+            client = OllamaClient()
+            return json.dumps(client.list_models())
+        except Exception:
+            return json.dumps([])
 
     @pyqtSlot(str, result=str)
     def classifyTags(self, tags_json: str) -> str:

@@ -113,7 +113,18 @@
       <button class="secondary-btn mt-8" @click="$emit('cancel-selection')">CANCEL SELECTION (ESC)</button>
     </div>
 
-    <!-- Section 6: Transformations -->
+    <!-- Section 6: Background Removal -->
+    <div class="control-group mt-12">
+      <label>BACKGROUND REMOVAL</label>
+      <div class="chip-grid-3">
+        <button class="chip-btn" :class="{ active: bgQuality === 'fast' }" @click="bgQuality = 'fast'">⚡ FAST</button>
+        <button class="chip-btn" :class="{ active: bgQuality === 'balanced' }" @click="bgQuality = 'balanced'">⚖️ BALANCED</button>
+        <button class="chip-btn" :class="{ active: bgQuality === 'quality' }" @click="bgQuality = 'quality'">💎 QUALITY</button>
+      </div>
+      <button class="action-btn primary mt-8" @click="$emit('remove-bg', { quality: bgQuality })">REMOVE BACKGROUND</button>
+    </div>
+
+    <!-- Section 7: Transformations -->
     <div class="control-group mt-12">
       <label>Transform</label>
       <div class="btn-grid-4">
@@ -158,6 +169,7 @@ const eraserMode = ref('brush')
 const eraserRestore = ref(false)
 const magneticLasso = ref(false)
 const stampSpacing = ref(30)
+const bgQuality = ref('balanced')
 
 function selectTool(id) { selectedTool.value = id; emit('tool-changed', { tool: id, size: toolSize.value }) }
 function selectEffect(id) { selectedEffect.value = id; emit('effect-changed', { effect: id }) }

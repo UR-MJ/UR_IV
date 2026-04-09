@@ -65,7 +65,20 @@
     <details class="glass-card" open>
       <summary class="card-header">PROMPT BLOCKS</summary>
       <div class="input-group autocomplete-wrap">
-        <label>Main Tags</label>
+        <div class="row label-row">
+          <label>Main Tags</label>
+          <div class="ai-btns">
+            <button class="ai-btn" @click="ollamaMode = 'expand'; runOllama()" :disabled="ollamaLoading" title="태그 확장">✨</button>
+            <button class="ai-btn" @click="showNlInput = !showNlInput" title="자연어→태그">💬</button>
+            <button class="ai-btn" @click="ollamaMode = 'suggest'; runOllama()" :disabled="ollamaLoading" title="유사 태그">🔄</button>
+          </div>
+        </div>
+        <!-- 자연어 입력 -->
+        <div class="nl-input-row" v-if="showNlInput">
+          <input v-model="nlPrompt" placeholder="이미지를 자연어로 설명하세요..." @keydown.enter="ollamaMode = 'nl2tags'; runOllama()" class="nl-input" />
+          <button class="ai-btn go" @click="ollamaMode = 'nl2tags'; runOllama()" :disabled="ollamaLoading">GO</button>
+        </div>
+        <div class="ai-loading" v-if="ollamaLoading">🤖 AI 처리 중...</div>
         <textarea ref="mainRef" v-model="widgets.main_prompt_text" class="auto-grow" placeholder="메인 태그..."
           @input="onMainInput($event)" @keydown="onAutoKey($event)" rows="3"></textarea>
         <div class="ac-popup" v-if="fieldAcTarget === 'main_prompt_text' && acItems.length > 0">
@@ -112,6 +125,23 @@ const artistRef = ref(null)
 const prefixRef = ref(null)
 const mainRef = ref(null)
 const suffixRef = ref(null)
+
+// Ollama
+const ollamaLoading = ref(false)
+const ollamaMode = ref('expand')
+const showNlInput = ref(false)
+const nlPrompt = ref('')
+
+async function runOllama() {
+  ollamaLoading.value = true
+  const backend = await getBackend()
+  if (!backend.ollamaEnhance) { ollamaLoading.value = false; return }
+  const tags = widgets.main_prompt_text || ''
+  const extra = { prompt: nlPrompt.value }
+  backend.ollamaEnhance(tags, ollamaMode.value, JSON.stringify(extra))
+}
+
+// 결과 수신은 onMounted에서
 
 const modelItems = computed(() => store.getProperty('model_combo', 'items') || [])
 const samplerItems = computed(() => store.getProperty('sampler_combo', 'items') || [])
@@ -209,7 +239,28 @@ function growAll() {
   })
 }
 
-onMounted(() => { setTimeout(growAll, 500); setTimeout(growAll, 1500) })
+onMounted(async () => {
+  setTimeout(growAll, 500); setTimeout(growAll, 1500)
+  // Ollama 결과 수신
+  const { onBackendEvent } = await import('../bridge.js')
+  onBackendEvent('ollamaResult', (json) => {
+    ollamaLoading.value = false
+    try {
+      const d = JSON.parse(json)
+      if (d.error) { alert('AI Error: ' + d.error); return }
+      if (d.tags) {
+        if (ollamaMode.value === 'suggest') {
+          widgets.main_prompt_text = d.tags
+        } else {
+          // expand/nl2tags: 기존 태그에 추가 또는 교체
+          widgets.main_prompt_text = d.tags
+        }
+        showNlInput.value = false; nlPrompt.value = ''
+        nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
+      }
+    } catch {}
+  })
+})
 watch(() => widgets.total_prompt_display, () => nextTick(() => { if (totalPromptRef.value) autoGrow(totalPromptRef.value) }))
 watch(() => widgets.neg_prompt_text, () => nextTick(() => { if (negRef.value) autoGrow(negRef.value) }))
 watch(() => widgets.artist_input, () => nextTick(() => { if (artistRef.value) autoGrow(artistRef.value) }))
@@ -243,6 +294,16 @@ summary::-webkit-details-marker { display: none; }
 label.danger { color: #f87171; }
 input[type="number"] { -moz-appearance: textfield; }
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.ai-btns { display: flex; gap: 3px; }
+.ai-btn { width: 26px; height: 22px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.ai-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ai-btn:disabled { opacity: 0.3; }
+.ai-btn.go { width: auto; padding: 0 8px; background: var(--accent); color: #000; border: none; font-weight: 700; font-size: 10px; }
+.nl-input-row { display: flex; gap: 4px; margin-bottom: 6px; }
+.nl-input { flex: 1; padding: 6px 10px; font-size: 11px; }
+.ai-loading { font-size: 10px; color: var(--accent); margin-bottom: 4px; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 .autocomplete-wrap { position: relative; }
 .ac-popup { position: absolute; left: 0; right: 0; top: 100%; z-index: 100; background: #1A1A1A; border: 1px solid var(--border); border-radius: 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }

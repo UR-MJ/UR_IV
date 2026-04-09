@@ -648,6 +648,21 @@ class GeneratorMainUI(
                 if order:
                     self.show_status(f"Tab order updated: {len(order)} tabs")
 
+            # ═══════ 비교 이미지 ═══════
+            elif action == 'open_compare_image':
+                slot = payload.get('slot', 'before')
+                path, _ = QFileDialog.getOpenFileName(self, "비교 이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
+                if path:
+                    self.vue_bridge.compareImageLoaded.emit(json.dumps({'slot': slot, 'path': path.replace('\\', '/')}))
+
+            elif action == 'send_to_compare':
+                path = payload.get('path', '')
+                slot = payload.get('slot', 'after')
+                if path:
+                    clean = path.replace('file:///', '').replace('\\', '/')
+                    self.vue_bridge.compareImageLoaded.emit(json.dumps({'slot': slot, 'path': clean}))
+                    self.vue_bridge.tabChanged.emit('png')
+
             # ═══════ LoRA 텍스트 설정 ═══════
             elif action == 'set_lora_text':
                 lora_text = payload.get('lora_text', '')

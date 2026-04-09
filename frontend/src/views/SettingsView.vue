@@ -153,6 +153,39 @@
             <button class="btn-pill" @click="resetDefaults">RESET TO FACTORY</button>
           </div>
         </div>
+
+        <!-- 7. AI Assist (Ollama) -->
+        <div v-show="currentTab === 'ollama'" class="section-fade">
+          <div class="glass-card">
+            <label>OLLAMA CONFIGURATION</label>
+            <div class="input-stack">
+              <div class="input-unit">
+                <span class="unit-label">SERVER URL</span>
+                <input v-model="ollamaUrl" placeholder="http://localhost:11434" />
+              </div>
+              <div class="input-unit mt-12">
+                <span class="unit-label">MODEL</span>
+                <input v-model="ollamaModel" placeholder="llama3, mistral, etc." />
+              </div>
+            </div>
+            <div class="btn-row-2 mt-16">
+              <button class="btn-pill primary" @click="testOllama">TEST CONNECTION</button>
+              <button class="btn-pill" @click="loadOllamaModels">REFRESH MODELS</button>
+            </div>
+            <div class="info-row mt-12" v-if="ollamaModels.length">
+              <span class="desc">AVAILABLE MODELS</span>
+              <span class="val-badge">{{ ollamaModels.join(', ') }}</span>
+            </div>
+          </div>
+          <div class="glass-card mt-16">
+            <label>USAGE</label>
+            <div class="shortcut-grid">
+              <div class="s-row"><span>✨ Expand Tags</span><span>기존 태그를 고품질 태그로 확장</span></div>
+              <div class="s-row"><span>💬 Natural Language</span><span>자연어 설명을 태그로 변환</span></div>
+              <div class="s-row"><span>🔄 Suggest Similar</span><span>유사하지만 다른 태그 추천</span></div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -169,6 +202,7 @@ const subTabs = [
   { id: 'tabs', label: 'WORKSPACE', icon: '🗂️' },
   { id: 'shortcuts', label: 'HOTKEYS', icon: '⌨️' },
   { id: 'defaults', label: 'DEFAULTS', icon: '🎛️' },
+  { id: 'ollama', label: 'AI ASSIST', icon: '🧠' },
 ]
 const currentTab = ref('general')
 const webuiUrl = ref('http://127.0.0.1:7860')
@@ -201,6 +235,26 @@ function saveDefaults() {
   // Toast는 Python에서 발송
 }
 function resetDefaults() { Object.assign(defaults, FACTORY_DEFAULTS) }
+
+// Ollama
+const ollamaUrl = ref('http://localhost:11434')
+const ollamaModel = ref('llama3')
+const ollamaModels = ref([])
+
+async function testOllama() {
+  const { getBackend } = await import('../bridge.js')
+  const backend = await getBackend()
+  if (backend.ollamaListModels) {
+    backend.ollamaListModels((json) => {
+      try {
+        const models = JSON.parse(json)
+        ollamaModels.value = models
+        alert(models.length > 0 ? `연결 성공! ${models.length}개 모델 발견` : '연결은 되었지만 모델 없음')
+      } catch { alert('연결 실패') }
+    })
+  }
+}
+function loadOllamaModels() { testOllama() }
 </script>
 
 <style scoped>
