@@ -295,9 +295,41 @@ class GeneratorMainUI(
                     move_to_trash(clean_path)
                     self.show_status("Moved to trash.")
 
-            # 10. 프리셋
-            elif action == 'save_preset': self._save_preset()
-            elif action == 'load_preset': self._load_preset()
+            # 10. 프리셋 (프롬프트 설정 저장/불러오기)
+            elif action == 'save_preset':
+                try:
+                    name, ok = QMessageBox.question(self, "프리셋", ""), None
+                    from PyQt6.QtWidgets import QInputDialog
+                    name, ok = QInputDialog.getText(self, "프리셋 저장", "프리셋 이름:")
+                    if ok and name:
+                        preset = self._build_settings_dict()
+                        preset_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets')
+                        os.makedirs(preset_dir, exist_ok=True)
+                        path = os.path.join(preset_dir, f"{name}.json")
+                        with open(path, 'w', encoding='utf-8') as f:
+                            json.dump(preset, f, ensure_ascii=False, indent=2)
+                        self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 저장됨')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'프리셋 저장 실패: {e}')
+
+            elif action == 'load_preset':
+                try:
+                    from PyQt6.QtWidgets import QInputDialog
+                    preset_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets')
+                    os.makedirs(preset_dir, exist_ok=True)
+                    files = [f.replace('.json', '') for f in os.listdir(preset_dir) if f.endswith('.json')]
+                    if not files:
+                        self.vue_bridge.showNotification.emit('info', '저장된 프리셋이 없습니다')
+                        return
+                    name, ok = QInputDialog.getItem(self, "프리셋 불러오기", "선택:", files, 0, False)
+                    if ok and name:
+                        path = os.path.join(preset_dir, f"{name}.json")
+                        with open(path, 'r', encoding='utf-8') as f:
+                            preset = json.load(f)
+                        self.load_settings_from_dict(preset) if hasattr(self, 'load_settings_from_dict') else self._apply_settings_dict(preset)
+                        self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 로드됨')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'프리셋 로드 실패: {e}')
 
             # 11. I2I/Inpaint 생성
             elif action == 'generate_i2i':
@@ -516,9 +548,9 @@ class GeneratorMainUI(
             # ═══════ 태그 가중치 편집기 ═══════
             elif action == 'open_tag_weight_editor':
                 try:
-                    from widgets.tag_weight_editor import TagWeightEditor
+                    from widgets.tag_weight_editor import TagWeightEditorDialog
                     text = self.main_prompt_text.toPlainText()
-                    dlg = TagWeightEditor(text, parent=self)
+                    dlg = TagWeightEditorDialog(text, parent=self)
                     if dlg.exec():
                         self.main_prompt_text.setPlainText(dlg.get_result())
                         self.show_status("Tag weights updated.")
@@ -609,6 +641,44 @@ class GeneratorMainUI(
             # Vue Toast로 에러 알림
             if hasattr(self, 'vue_bridge'):
                 self.vue_bridge.showNotification.emit('error', f'{action}: {str(e)[:100]}')
+
+    def _apply_settings_dict(self, settings: dict):
+        """프리셋 딕셔너리를 UI에 적용"""
+        try:
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.beginBatchUpdate()
+            mapping = {
+                'char_count': self.char_count_input,
+                'character': self.character_input,
+                'copyright': self.copyright_input,
+                'main_prompt': self.main_prompt_text,
+                'prefix_prompt': self.prefix_prompt_text,
+                'suffix_prompt': self.suffix_prompt_text,
+                'negative_prompt': self.neg_prompt_text,
+                'steps': self.steps_input,
+                'cfg': self.cfg_input,
+                'seed': self.seed_input,
+                'width': self.width_input,
+                'height': self.height_input,
+            }
+            for key, widget in mapping.items():
+                if key in settings:
+                    val = str(settings[key])
+                    if hasattr(widget, 'setPlainText'):
+                        widget.setPlainText(val)
+                    elif hasattr(widget, 'setText'):
+                        widget.setText(val)
+            if 'artist' in settings:
+                self.artist_input.setPlainText(str(settings['artist']))
+            if 'model' in settings and settings['model']:
+                self.model_combo.setCurrentText(str(settings['model']))
+            if 'sampler' in settings and settings['sampler']:
+                self.sampler_combo.setCurrentText(str(settings['sampler']))
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.endBatchUpdate()
+            self.update_total_prompt_display()
+        except Exception as e:
+            print(f"[Error] Apply settings dict: {e}")
 
     # ========== PNG Info → 즉시 생성 ==========
 

@@ -124,8 +124,17 @@
           <div class="tag-section">
             <label>General Tags ({{ currentTags.length }})</label>
             <div class="tag-cloud">
-              <span v-for="tag in currentTags" :key="tag" class="tag">{{ tag }}</span>
+              <span v-for="tag in currentTags" :key="tag" class="tag" :class="tagColor(tag)">{{ tag }}</span>
             </div>
+          </div>
+          <!-- 태그 색상 범례 -->
+          <div class="tag-legend">
+            <span class="legend-item count">인물수</span>
+            <span class="legend-item clothing">의상</span>
+            <span class="legend-item body">신체</span>
+            <span class="legend-item nsfw">NSFW</span>
+            <span class="legend-item action">행동/포즈</span>
+            <span class="legend-item bg">배경</span>
           </div>
           <div class="detail-actions">
             <button class="primary-btn" @click="applyResult">USE AS PROMPT</button>
@@ -286,6 +295,25 @@ function resetDeepSearch() {
   statusText.value = `${results.value.length} MATCHES`
 }
 
+// 태그 색상 분류
+const countWords = ['1girl','2girls','3girls','4girls','5girls','6+girls','1boy','2boys','3boys','4boys','5boys','6+boys','1other','multiple_girls','multiple_boys','solo']
+const clothingWords = ['dress','shirt','skirt','pants','uniform','bikini','swimsuit','armor','hat','shoes','boots','gloves','jacket','coat','hoodie','cape','ribbon','bow','tie','stockings','thighhighs','pantyhose','leotard','bodysuit','kimono','maid','apron','shorts','underwear','bra','panties','lingerie']
+const bodyWords = ['breasts','large_breasts','small_breasts','medium_breasts','huge_breasts','flat_chest','ass','thighs','navel','midriff','cleavage','nipples','pussy','penis','testicles','anus','armpits','feet','toes','legs','hips','waist','collarbone','abs','muscle']
+const nsfwWords = ['sex','vaginal','anal','oral','fellatio','cunnilingus','penetration','cum','ejaculation','masturbation','handjob','paizuri','nude','naked','spread','insertion','gangbang','threesome','bondage','tentacle','rape']
+const actionWords = ['standing','sitting','lying','walking','running','kneeling','squatting','bending','jumping','flying','fighting','sleeping','crying','smiling','laughing','looking','holding','pointing','hugging','kissing']
+const bgWords = ['outdoors','indoors','sky','night','day','sunset','water','forest','city','school','beach','snow','rain','cloud','grass','tree','flower','moon','sun','star']
+
+function tagColor(tag) {
+  const t = tag.toLowerCase().replace(/ /g, '_')
+  if (countWords.includes(t)) return 'count'
+  if (nsfwWords.some(w => t.includes(w))) return 'nsfw'
+  if (bodyWords.some(w => t.includes(w))) return 'body'
+  if (clothingWords.some(w => t.includes(w))) return 'clothing'
+  if (actionWords.some(w => t.includes(w))) return 'action'
+  if (bgWords.some(w => t.includes(w))) return 'bg'
+  return ''
+}
+
 function prevResult() { if (previewIdx.value > 0) previewIdx.value-- }
 function nextResult() { if (previewIdx.value < filteredResults.value.length - 1) previewIdx.value++ }
 function randomResult() { if (filteredResults.value.length > 1) previewIdx.value = Math.floor(Math.random() * filteredResults.value.length) }
@@ -389,6 +417,21 @@ function importResults() { requestAction('import_search_results') }
 .tag-section label { font-size: 10px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 10px; display: block; }
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 5px; max-height: 300px; overflow-y: auto; }
 .tag { padding: 4px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: #787878; font-size: 10px; }
+.tag.count { color: #60a5fa; border-color: rgba(96,165,250,0.3); background: rgba(96,165,250,0.05); }
+.tag.clothing { color: #a78bfa; border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.05); }
+.tag.body { color: #fb923c; border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.05); }
+.tag.nsfw { color: #f87171; border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.05); }
+.tag.action { color: #4ade80; border-color: rgba(74,222,128,0.3); background: rgba(74,222,128,0.05); }
+.tag.bg { color: #38bdf8; border-color: rgba(56,189,248,0.3); background: rgba(56,189,248,0.05); }
+
+.tag-legend { display: flex; gap: 8px; flex-wrap: wrap; }
+.legend-item { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 4px; }
+.legend-item.count { color: #60a5fa; background: rgba(96,165,250,0.1); }
+.legend-item.clothing { color: #a78bfa; background: rgba(167,139,250,0.1); }
+.legend-item.body { color: #fb923c; background: rgba(251,146,60,0.1); }
+.legend-item.nsfw { color: #f87171; background: rgba(248,113,113,0.1); }
+.legend-item.action { color: #4ade80; background: rgba(74,222,128,0.1); }
+.legend-item.bg { color: #38bdf8; background: rgba(56,189,248,0.1); }
 
 .detail-actions { display: flex; gap: 10px; }
 .primary-btn { flex: 2; height: 48px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 900; font-size: 13px; letter-spacing: 1px; cursor: pointer; }

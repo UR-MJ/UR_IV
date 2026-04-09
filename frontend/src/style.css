@@ -91,6 +91,12 @@ input, textarea, select {
   font-size: 14px;
   transition: var(--transition);
   width: 100%;
+  max-width: 100%;
+}
+textarea {
+  resize: vertical;
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 
 input:focus, textarea:focus, select:focus {

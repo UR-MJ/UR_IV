@@ -47,9 +47,7 @@
       </div>
       <div class="input-group">
         <label>Checkpoint</label>
-        <select v-model="widgets.model">
-          <option v-for="m in modelItems" :key="m" :value="m">{{ m }}</option>
-        </select>
+        <CustomSelect v-model="widgets.model" :options="modelItems" placeholder="Select model..." />
       </div>
     </div>
 
@@ -86,6 +84,7 @@
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
 import { getBackend } from '../bridge.js'
+import CustomSelect from './CustomSelect.vue'
 
 const emit = defineEmits(['toggle-extend'])
 

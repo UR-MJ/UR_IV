@@ -78,10 +78,10 @@
               </div>
               <div class="ext-row">
                 <div class="ext-field"><label>Sampler</label>
-                  <select v-model="storeWidgets.sampler"><option v-for="s in samplerItems" :key="s" :value="s">{{ s }}</option></select>
+                  <CustomSelect v-model="storeWidgets.sampler" :options="samplerItems" placeholder="Sampler..." />
                 </div>
                 <div class="ext-field"><label>Scheduler</label>
-                  <select v-model="storeWidgets.scheduler"><option v-for="s in schedulerItems" :key="s" :value="s">{{ s }}</option></select>
+                  <CustomSelect v-model="storeWidgets.scheduler" :options="schedulerItems" placeholder="Scheduler..." />
                 </div>
               </div>
               <div class="ext-row">
@@ -269,6 +269,7 @@ const storeWidgets = wStore.widgets
 const samplerItems = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
 const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 import PromptPanel from './components/PromptPanel.vue'
+import CustomSelect from './components/CustomSelect.vue'
 import TabBar from './components/TabBar.vue'
 import QueuePanel from './components/QueuePanel.vue'
 
