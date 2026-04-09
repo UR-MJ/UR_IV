@@ -105,8 +105,52 @@
               <div class="s-row"><span>Undo Action</span><kbd>Ctrl + Z</kbd></div>
               <div class="s-row"><span>Redo Action</span><kbd>Ctrl + Y</kbd></div>
               <div class="s-row"><span>Force Save</span><kbd>Ctrl + S</kbd></div>
+              <div class="s-row"><span>Generate</span><kbd>Ctrl + G</kbd></div>
               <div class="s-row"><span>Close Modal</span><kbd>Esc</kbd></div>
+              <div class="s-row"><span>Refresh</span><kbd>F5</kbd></div>
             </div>
+          </div>
+        </div>
+
+        <!-- 6. 기본값 설정 (탭별) -->
+        <div v-show="currentTab === 'defaults'" class="section-fade">
+          <div class="glass-card">
+            <label>T2I 기본값</label>
+            <div class="defaults-grid">
+              <div class="def-field"><span>Steps</span><input type="number" v-model.number="defaults.steps" /></div>
+              <div class="def-field"><span>CFG Scale</span><input type="number" v-model.number="defaults.cfg" step="0.5" /></div>
+              <div class="def-field"><span>Width</span><input type="number" v-model.number="defaults.width" /></div>
+              <div class="def-field"><span>Height</span><input type="number" v-model.number="defaults.height" /></div>
+              <div class="def-field"><span>Seed</span><input type="text" v-model="defaults.seed" /></div>
+              <div class="def-field"><span>Denoising (I2I)</span><input type="number" v-model.number="defaults.denoising" step="0.05" /></div>
+            </div>
+          </div>
+
+          <div class="glass-card mt-16">
+            <label>EDITOR 기본값</label>
+            <div class="defaults-grid">
+              <div class="def-field"><span>Brush Size</span><input type="number" v-model.number="defaults.brushSize" /></div>
+              <div class="def-field"><span>Effect Strength</span><input type="number" v-model.number="defaults.effectStrength" /></div>
+              <div class="def-field"><span>YOLO Confidence</span><input type="number" v-model.number="defaults.yoloConf" step="0.05" /></div>
+              <div class="def-field"><span>Snap Radius</span><input type="number" v-model.number="defaults.snapRadius" /></div>
+            </div>
+          </div>
+
+          <div class="glass-card mt-16">
+            <label>SEARCH 기본값</label>
+            <div class="defaults-grid">
+              <div class="def-field"><span>Default Rating</span>
+                <select v-model="defaults.defaultRating">
+                  <option value="g">General</option><option value="s">Sensitive</option>
+                  <option value="q">Questionable</option><option value="e">Explicit</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="btn-row-2 mt-16">
+            <button class="btn-pill primary" @click="saveDefaults">SAVE DEFAULTS</button>
+            <button class="btn-pill" @click="resetDefaults">RESET TO FACTORY</button>
           </div>
         </div>
       </div>
@@ -115,7 +159,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 
 const subTabs = [
@@ -124,6 +168,7 @@ const subTabs = [
   { id: 'prompt', label: 'LOGIC', icon: '📝' },
   { id: 'tabs', label: 'WORKSPACE', icon: '🗂️' },
   { id: 'shortcuts', label: 'HOTKEYS', icon: '⌨️' },
+  { id: 'defaults', label: 'DEFAULTS', icon: '🎛️' },
 ]
 const currentTab = ref('general')
 const webuiUrl = ref('http://127.0.0.1:7860')
@@ -146,6 +191,16 @@ function dragDrop(i) {
 const applyTabOrder = () => requestAction('set_tab_order', { order: tabOrder.value })
 const resetTabOrder = () => tabOrder.value = [...defaultOrder]
 const act = (name) => requestAction(name)
+
+// 기본값 설정
+const FACTORY_DEFAULTS = { steps: 20, cfg: 7, width: 1024, height: 1024, seed: '-1', denoising: 0.75, brushSize: 20, effectStrength: 15, yoloConf: 0.25, snapRadius: 12, defaultRating: 'g' }
+const defaults = reactive({ ...FACTORY_DEFAULTS })
+
+function saveDefaults() {
+  requestAction('save_tab_defaults', { ...defaults })
+  // Toast는 Python에서 발송
+}
+function resetDefaults() { Object.assign(defaults, FACTORY_DEFAULTS) }
 </script>
 
 <style scoped>
@@ -213,4 +268,10 @@ const act = (name) => requestAction(name)
 .s-row { display: flex; justify-content: space-between; align-items: center; }
 .s-row span { font-size: 13px; color: var(--text-secondary); }
 kbd { background: var(--bg-button); color: var(--accent); padding: 4px 10px; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 11px; border: 1px solid var(--border); }
+
+/* Defaults */
+.defaults-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.def-field { display: flex; flex-direction: column; gap: 3px; }
+.def-field span { font-size: 10px; font-weight: 700; color: var(--text-muted); }
+.def-field input, .def-field select { padding: 8px 10px; font-size: 12px; }
 </style>

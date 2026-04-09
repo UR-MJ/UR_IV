@@ -237,7 +237,10 @@ class GeneratorMainUI(
             # 6. 기타 스튜디오 도구
             elif action == 'show_prompt_history': self._show_prompt_history()
             elif action == 'open_lora_manager': self._open_lora_manager()
-            elif action == 'save_settings': self.save_settings()
+            elif action == 'save_settings':
+                self.save_settings()
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.showNotification.emit('success', '설정이 저장되었습니다')
             elif action == 'swap_resolution': self._swap_resolution()
             elif action == 'shuffle': self._shuffle_main_prompt()
             elif action == 'ab_test': self._open_ab_test()
@@ -567,6 +570,17 @@ class GeneratorMainUI(
                 order = payload.get('order', [])
                 if order:
                     self.show_status(f"Tab order updated: {len(order)} tabs")
+
+            # ═══════ 기본값 저장 ═══════
+            elif action == 'save_tab_defaults':
+                try:
+                    defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'tab_defaults.json')
+                    os.makedirs(os.path.dirname(defaults_path), exist_ok=True)
+                    with open(defaults_path, 'w', encoding='utf-8') as f:
+                        json.dump(payload, f, ensure_ascii=False, indent=2)
+                    self.vue_bridge.showNotification.emit('success', '기본값이 저장되었습니다')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'기본값 저장 실패: {e}')
 
             # ═══════ 대기열 제어 ═══════
             elif action == 'start_queue':

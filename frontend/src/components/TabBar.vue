@@ -1,19 +1,19 @@
 <template>
-  <div class="tab-bar">
-    <!-- Vue 탭 -->
-    <button v-for="tab in tabs" :key="tab.name"
-      class="tab-btn" :class="{ active: currentTab === tab.name }"
-      @click="switchTo(tab)"
-    >{{ tab.title }}</button>
+  <nav class="tab-bar">
+    <div class="tab-track">
+      <button v-for="tab in tabs" :key="tab.name"
+        class="tab-pill" :class="{ active: currentTab === tab.name }"
+        @click="switchTo(tab)"
+      >{{ tab.title }}</button>
 
-    <div class="sep" />
+      <div class="pill-sep" />
 
-    <!-- 네이티브 탭 (PyQt) -->
-    <button v-for="ntab in nativeTabs" :key="ntab.id"
-      class="tab-btn native" :class="{ active: currentTab === ntab.id }"
-      @click="switchToNative(ntab.id)"
-    >{{ ntab.title }}</button>
-  </div>
+      <button v-for="ntab in nativeTabs" :key="ntab.id"
+        class="tab-pill native" :class="{ active: currentTab === ntab.id }"
+        @click="switchToNative(ntab.id)"
+      >{{ ntab.title }}</button>
+    </div>
+  </nav>
 </template>
 
 <script setup>
@@ -34,7 +34,7 @@ const tabs = routes.map(r => ({
 
 const nativeTabs = [
   { id: 'web', title: 'Web' },
-  { id: 'backend', title: 'Backend UI' },
+  { id: 'backend', title: 'Backend' },
 ]
 
 watch(route, (r) => { currentTab.value = r.name })
@@ -57,17 +57,25 @@ function switchToNative(id) {
 
 <style scoped>
 .tab-bar {
-  display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 12px;
-  background: #0A0A0A; justify-content: center; align-items: center;
-  flex-shrink: 0;
+  width: 100%; display: flex; justify-content: center; align-items: center;
+  padding: 8px 16px;
 }
-.sep { width: 1px; height: 20px; background: #2A2A2A; margin: 0 4px; }
-.tab-btn {
-  padding: 6px 14px; background: #181818; border: 1px solid #1A1A1A;
-  border-radius: 6px; color: #585858; font-size: 11px; font-weight: 700;
-  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+.tab-track {
+  display: flex; gap: 3px; padding: 3px;
+  background: #0A0A0A; border: 1px solid var(--border);
+  border-radius: 28px;
 }
-.tab-btn:hover { background: #222; color: #E8E8E8; }
-.tab-btn.active { background: #1A1A1A; color: #E8E8E8; border-color: #E2B340; }
-.tab-btn.native { border-style: dashed; }
+.pill-sep { width: 1px; background: #2A2A2A; margin: 4px 2px; }
+.tab-pill {
+  padding: 7px 16px; background: transparent; border: none;
+  border-radius: 22px; color: #585858; font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.tab-pill:hover { color: #B0B0B0; background: rgba(255,255,255,0.03); }
+.tab-pill.active {
+  background: var(--accent); color: #000; font-weight: 800;
+  box-shadow: 0 2px 8px rgba(250, 204, 21, 0.25);
+}
+.tab-pill.native { font-style: italic; opacity: 0.7; }
+.tab-pill.native.active { opacity: 1; }
 </style>

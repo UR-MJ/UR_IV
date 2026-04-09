@@ -33,7 +33,13 @@
         </div>
       </aside>
 
-      <!-- Extended Panel (ADetailer / Hires / LoRA) — 뷰어 위에 오버레이 -->
+      <!-- 반달 화살표 (좌측 패널 옆, 항상 표시) -->
+      <div class="half-moon" v-if="showLeftPanel" @click="showExtendPanel = !showExtendPanel"
+        :class="{ open: showExtendPanel }">
+        <span>{{ showExtendPanel ? '◀' : '▶' }}</span>
+      </div>
+
+      <!-- Extended Panel — 뷰어 위에 오버레이 -->
       <transition name="slide">
         <aside class="extend-overlay" v-if="showExtendPanel && showLeftPanel">
           <div class="extend-header">
@@ -41,6 +47,33 @@
             <button class="close-btn" @click="showExtendPanel = false">✕</button>
           </div>
           <div class="extend-scroll">
+            <!-- Parameters (기본) -->
+            <div class="ext-card">
+              <div class="ext-title">PARAMETERS</div>
+              <div class="ext-field">
+                <label>Resolution</label>
+                <div class="ext-res-row">
+                  <input type="number" v-model="storeWidgets.width" />
+                  <span>×</span>
+                  <input type="number" v-model="storeWidgets.height" />
+                  <button class="ext-mini-btn" @click="action('swap_resolution')">↔</button>
+                </div>
+              </div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Sampler</label>
+                  <select v-model="storeWidgets.sampler"><option v-for="s in samplerItems" :key="s" :value="s">{{ s }}</option></select>
+                </div>
+                <div class="ext-field"><label>Scheduler</label>
+                  <select v-model="storeWidgets.scheduler"><option v-for="s in schedulerItems" :key="s" :value="s">{{ s }}</option></select>
+                </div>
+              </div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets.steps" min="1" max="150" /></div>
+                <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets.cfg" step="0.5" /></div>
+                <div class="ext-field"><label>Seed</label><input type="text" v-model="storeWidgets.seed" /></div>
+              </div>
+            </div>
+
             <!-- Hires.fix -->
             <details class="ext-card">
               <summary class="ext-title">HIRES.FIX</summary>
@@ -212,7 +245,12 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { initBridge, onBackendEvent, getBackend } from './bridge.js'
-import { requestAction } from './stores/widgetStore.js'
+import { requestAction, useWidgetStore } from './stores/widgetStore.js'
+
+const wStore = useWidgetStore()
+const storeWidgets = wStore.widgets
+const samplerItems = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
+const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 import PromptPanel from './components/PromptPanel.vue'
 import TabBar from './components/TabBar.vue'
 import QueuePanel from './components/QueuePanel.vue'
@@ -408,6 +446,18 @@ onMounted(async () => {
 .side-panel.right { width: 220px; border-right: none; border-left: 1px solid var(--border); }
 .panel-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 
+/* 반달 화살표 */
+.half-moon {
+  position: absolute; left: 360px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 60px; background: var(--bg-secondary);
+  border: 1px solid var(--border); border-left: none;
+  border-radius: 0 30px 30px 0; cursor: pointer; z-index: 55;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 10px; transition: all 0.2s;
+}
+.half-moon:hover { background: var(--bg-card); color: var(--accent); width: 24px; }
+.half-moon.open { background: var(--accent-dim); color: var(--accent); left: 680px; }
+
 /* Extended Panel Overlay */
 .extend-overlay {
   position: absolute; left: 360px; top: 0; bottom: 0; width: 320px;
@@ -436,6 +486,10 @@ onMounted(async () => {
 .lora-weight { font-size: 10px; color: var(--accent); min-width: 30px; text-align: right; font-family: monospace; }
 .lora-remove { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
 .ext-add-btn { width: 100%; padding: 8px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; margin-top: 4px; }
+.ext-res-row { display: flex; align-items: center; gap: 6px; }
+.ext-res-row input { text-align: center; flex: 1; }
+.ext-res-row span { color: var(--text-muted); }
+.ext-mini-btn { width: 32px; height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); cursor: pointer; flex-shrink: 0; }
 .ext-check-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px; }
 .ext-check-row input[type="checkbox"] { accent-color: var(--accent); }
 .ext-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
