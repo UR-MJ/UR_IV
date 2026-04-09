@@ -174,7 +174,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
@@ -295,24 +295,52 @@ function resetDeepSearch() {
   statusText.value = `${results.value.length} MATCHES`
 }
 
-// 태그 색상 분류
-const countWords = ['1girl','2girls','3girls','4girls','5girls','6+girls','1boy','2boys','3boys','4boys','5boys','6+boys','1other','multiple_girls','multiple_boys','solo']
-const clothingWords = ['dress','shirt','skirt','pants','uniform','bikini','swimsuit','armor','hat','shoes','boots','gloves','jacket','coat','hoodie','cape','ribbon','bow','tie','stockings','thighhighs','pantyhose','leotard','bodysuit','kimono','maid','apron','shorts','underwear','bra','panties','lingerie']
-const bodyWords = ['breasts','large_breasts','small_breasts','medium_breasts','huge_breasts','flat_chest','ass','thighs','navel','midriff','cleavage','nipples','pussy','penis','testicles','anus','armpits','feet','toes','legs','hips','waist','collarbone','abs','muscle']
-const nsfwWords = ['sex','vaginal','anal','oral','fellatio','cunnilingus','penetration','cum','ejaculation','masturbation','handjob','paizuri','nude','naked','spread','insertion','gangbang','threesome','bondage','tentacle','rape']
-const actionWords = ['standing','sitting','lying','walking','running','kneeling','squatting','bending','jumping','flying','fighting','sleeping','crying','smiling','laughing','looking','holding','pointing','hugging','kissing']
-const bgWords = ['outdoors','indoors','sky','night','day','sunset','water','forest','city','school','beach','snow','rain','cloud','grass','tree','flower','moon','sun','star']
+// 태그 색상 분류 — Python TagClassifier (tags_db 기반)
+const tagCategoryCache = ref({})  // tag → category
+
+// 카테고리 → CSS 클래스 매핑
+const catToColor = {
+  'sexual': 'nsfw', 'body_parts': 'body', 'clothing': 'clothing',
+  'pose': 'action', 'expression': 'action', 'background': 'bg',
+  'composition': 'bg', 'effect': 'bg', 'objects': 'general',
+  'character': 'count', 'copyright': 'count', 'artist': 'count',
+  'color': 'general', 'character_trait': 'general', 'animals': 'general',
+  'art_style': 'general', 'general': '',
+}
+
+// 인물수 태그는 프론트에서 직접 판단 (빠름)
+const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
 
 function tagColor(tag) {
   const t = tag.toLowerCase().replace(/ /g, '_')
-  if (countWords.includes(t)) return 'count'
-  if (nsfwWords.some(w => t.includes(w))) return 'nsfw'
-  if (bodyWords.some(w => t.includes(w))) return 'body'
-  if (clothingWords.some(w => t.includes(w))) return 'clothing'
-  if (actionWords.some(w => t.includes(w))) return 'action'
-  if (bgWords.some(w => t.includes(w))) return 'bg'
+  if (countPattern.test(t)) return 'count'
+  const cached = tagCategoryCache.value[t]
+  if (cached) return catToColor[cached] || ''
   return ''
 }
+
+// 현재 보고 있는 결과의 태그를 배치로 분류 요청
+async function classifyCurrentTags() {
+  if (!currentResult.value) return
+  const tags = currentTags.value.map(t => t.replace(/ /g, '_'))
+  // 캐시에 없는 태그만 요청
+  const uncached = tags.filter(t => !(t in tagCategoryCache.value))
+  if (uncached.length === 0) return
+  const backend = await getBackend()
+  if (backend.classifyTags) {
+    backend.classifyTags(JSON.stringify(uncached), (json) => {
+      try {
+        const result = JSON.parse(json)
+        if (!result.error) {
+          tagCategoryCache.value = { ...tagCategoryCache.value, ...result }
+        }
+      } catch {}
+    })
+  }
+}
+
+// previewIdx 변경 시 자동 분류
+watch(previewIdx, () => { classifyCurrentTags() })
 
 function prevResult() { if (previewIdx.value > 0) previewIdx.value-- }
 function nextResult() { if (previewIdx.value < filteredResults.value.length - 1) previewIdx.value++ }

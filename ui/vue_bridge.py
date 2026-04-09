@@ -571,6 +571,23 @@ class VueBridge(QObject):
         except Exception:
             return ''
 
+    @pyqtSlot(str, result=str)
+    def classifyTags(self, tags_json: str) -> str:
+        """태그 목록을 분류하여 카테고리별로 반환 (tags_db 기반)"""
+        try:
+            tags = json.loads(tags_json) if isinstance(tags_json, str) else tags_json
+            from core.tag_classifier import TagClassifier
+            if not hasattr(self, '_tag_classifier'):
+                self._tag_classifier = TagClassifier()
+            tc = self._tag_classifier
+            result = {}
+            for tag in tags:
+                cat = tc.classify_tag(tag)
+                result[tag] = cat
+            return json.dumps(result)
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
     @pyqtSlot(result=str)
     def getYoloModelLabel(self) -> str:
         """YOLO 모델 라벨 반환"""
