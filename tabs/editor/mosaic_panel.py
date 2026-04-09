@@ -15,35 +15,52 @@ from utils.theme_manager import get_color
 
 
 # YOLO 모델 경로 설정 파일
-_YOLO_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "yolo_model_config.json"
-)
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+_EDITOR_MODELS_DIR = os.path.join(_PROJECT_ROOT, "editor_models")
+_YOLO_CONFIG_PATH = os.path.join(_EDITOR_MODELS_DIR, "yolo_config.json")
+
+# editor_models 디렉토리 자동 생성
+os.makedirs(_EDITOR_MODELS_DIR, exist_ok=True)
 
 
 def _load_yolo_model_paths() -> list:
-    """저장된 YOLO 모델 경로 목록 불러오기"""
+    """저장된 YOLO 모델 경로 목록 불러오기 (editor_models/ 기준)"""
+    paths = []
     try:
+        # 1. config에서 등록된 경로 로드
         if os.path.exists(_YOLO_CONFIG_PATH):
             with open(_YOLO_CONFIG_PATH, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 paths = data.get('model_paths', [])
-                if paths:
-                    return paths
-                old = data.get('model_path', '')
-                return [old] if old else []
+                if not paths:
+                    old = data.get('model_path', '')
+                    paths = [old] if old else []
+
+        # 2. editor_models/ 디렉토리 내 .pt/.onnx 파일 자동 감지
+        for f in os.listdir(_EDITOR_MODELS_DIR):
+            fp = os.path.join(_EDITOR_MODELS_DIR, f)
+            if f.lower().endswith(('.pt', '.onnx', '.safetensors')) and fp not in paths:
+                paths.append(fp)
     except Exception:
         pass
-    return []
+
+    # 존재하지 않는 경로 필터링
+    return [p for p in paths if os.path.exists(p)]
 
 
 def _save_yolo_model_paths(paths: list):
-    """YOLO 모델 경로 목록 저장"""
+    """YOLO 모델 경로 목록 저장 (editor_models/yolo_config.json)"""
     try:
+        os.makedirs(_EDITOR_MODELS_DIR, exist_ok=True)
         with open(_YOLO_CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump({'model_paths': paths}, f, ensure_ascii=False)
+            json.dump({'model_paths': paths}, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+
+def get_editor_models_dir() -> str:
+    """editor_models 디렉토리 경로 반환"""
+    return _EDITOR_MODELS_DIR
 
 
 class ResizeDialog(QDialog):

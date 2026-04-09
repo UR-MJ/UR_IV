@@ -184,18 +184,26 @@ class GeneratorMainUI(
             elif action == 'editor_apply_auto_censor':
                 if hasattr(self, 'mosaic_editor'): self.mosaic_editor._on_auto_censor()
             elif action == 'editor_add_yolo_model':
-                # QFileDialog를 메인 윈도우(self) 기준으로 열어야 QWebEngineView 앞에 표시됨
                 from PyQt6.QtWidgets import QFileDialog as _QFD
+                from tabs.editor.mosaic_panel import get_editor_models_dir
+                models_dir = get_editor_models_dir()
                 paths, _ = _QFD.getOpenFileNames(
-                    self, "YOLO 모델 선택", "",
-                    "YOLO Model (*.pt *.onnx);;All Files (*)"
+                    self, "YOLO 모델 선택", models_dir,
+                    "YOLO Model (*.pt *.onnx *.safetensors);;All Files (*)"
                 )
                 if paths and hasattr(self, 'mosaic_editor') and self.mosaic_editor.mosaic_panel:
                     panel = self.mosaic_editor.mosaic_panel
+                    from tabs.editor.mosaic_panel import _save_yolo_model_paths, get_editor_models_dir
+                    models_dir = get_editor_models_dir()
                     for p in paths:
+                        # editor_models/ 외부 파일이면 복사
+                        if not p.startswith(models_dir.replace('\\', '/')) and not p.startswith(models_dir):
+                            dst = os.path.join(models_dir, os.path.basename(p))
+                            if not os.path.exists(dst):
+                                shutil.copy2(p, dst)
+                                p = dst
                         if p not in panel._yolo_model_paths:
                             panel._yolo_model_paths.append(p)
-                    from tabs.editor.mosaic_panel import _save_yolo_model_paths
                     _save_yolo_model_paths(panel._yolo_model_paths)
                     panel._update_model_label()
                     # Vue에 모델 라벨 업데이트 전달
