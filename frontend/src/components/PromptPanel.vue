@@ -39,7 +39,7 @@
           <input type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku"
             @input="onFieldInput($event, 'character_input')" @keydown="onFieldKey($event, 'character_input')"
             @blur="loadCharTags" />
-          <button class="small-btn" @click="requestAction('open_character_preset')">PRESET</button>
+          <button class="small-btn" @click="requestAction('open_character_preset'); loadCharTags()">PRESET</button>
         </div>
         <!-- 캐릭터 인사이트 카드 -->
         <div class="char-insight" v-if="charInsight.tags.length > 0">
@@ -89,6 +89,7 @@
         <div class="row label-row">
           <label>Main Tags</label>
           <div class="ai-btns">
+            <button class="ai-btn" :class="{ active: tagBlockMode }" @click="toggleBlockMode" title="블록/텍스트 전환">{{ tagBlockMode ? '📝' : '🧩' }}</button>
             <button class="ai-btn" @click="ollamaMode = 'expand'; runOllama()" :disabled="ollamaLoading" title="태그 확장">✨</button>
             <button class="ai-btn" @click="showNlInput = !showNlInput" title="자연어→태그">💬</button>
             <button class="ai-btn" @click="ollamaMode = 'suggest'; runOllama()" :disabled="ollamaLoading" title="유사 태그">🔄</button>
@@ -100,7 +101,20 @@
           <button class="ai-btn go" @click="ollamaMode = 'nl2tags'; runOllama()" :disabled="ollamaLoading">GO</button>
         </div>
         <div class="ai-loading" v-if="ollamaLoading">🤖 AI 처리 중...</div>
-        <textarea ref="mainRef" v-model="widgets.main_prompt_text" class="auto-grow" placeholder="메인 태그..."
+        <!-- 블록 모드 -->
+        <div class="tag-block-view" v-if="tagBlockMode">
+          <div class="tag-blocks">
+            <button v-for="(tb, ti) in mainTagBlocks" :key="ti"
+              class="tag-block" :class="{ disabled: tb.off }"
+              @click="toggleTagBlock(ti)"
+              @contextmenu.prevent="removeTagBlock(ti)">{{ tb.text }}</button>
+          </div>
+          <div class="tag-block-add">
+            <input v-model="newBlockTag" placeholder="태그 추가..." @keydown.enter="addTagBlock" class="block-input" />
+          </div>
+        </div>
+        <!-- 텍스트 모드 -->
+        <textarea v-else ref="mainRef" v-model="widgets.main_prompt_text" class="auto-grow" placeholder="메인 태그..."
           @input="onMainInput($event)" @keydown="onAutoKey($event)" rows="3"></textarea>
         <div class="ac-popup" v-if="fieldAcTarget === 'main_prompt_text' && acItems.length > 0">
           <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
@@ -146,6 +160,57 @@ const artistRef = ref(null)
 const prefixRef = ref(null)
 const mainRef = ref(null)
 const suffixRef = ref(null)
+
+// ── 태그 블록 모드 ──
+const tagBlockMode = ref(false)
+const mainTagBlocks = ref([])  // [{text, off}]
+const newBlockTag = ref('')
+
+function toggleBlockMode() {
+  tagBlockMode.value = !tagBlockMode.value
+  if (tagBlockMode.value) {
+    // 텍스트 → 블록 파싱
+    const text = widgets.main_prompt_text || ''
+    mainTagBlocks.value = text.split(',').map(t => t.trim()).filter(Boolean).map(t => ({ text: t, off: false }))
+  } else {
+    // 블록 → 텍스트 (활성 태그만)
+    syncBlocksToText()
+  }
+}
+
+function syncBlocksToText() {
+  const active = mainTagBlocks.value.filter(b => !b.off).map(b => b.text)
+  widgets.main_prompt_text = active.join(', ')
+}
+
+function toggleTagBlock(idx) {
+  mainTagBlocks.value[idx].off = !mainTagBlocks.value[idx].off
+  syncBlocksToText()
+}
+
+function removeTagBlock(idx) {
+  mainTagBlocks.value.splice(idx, 1)
+  syncBlocksToText()
+}
+
+function addTagBlock() {
+  const tag = newBlockTag.value.trim()
+  if (tag) {
+    mainTagBlocks.value.push({ text: tag, off: false })
+    newBlockTag.value = ''
+    syncBlocksToText()
+  }
+}
+
+// 텍스트 변경 시 블록 동기화 (블록 모드일 때)
+watch(() => widgets.main_prompt_text, (newVal) => {
+  if (tagBlockMode.value && newVal) {
+    const tags = newVal.split(',').map(t => t.trim()).filter(Boolean)
+    // 기존 off 상태 보존
+    const offSet = new Set(mainTagBlocks.value.filter(b => b.off).map(b => b.text.toLowerCase()))
+    mainTagBlocks.value = tags.map(t => ({ text: t, off: offSet.has(t.toLowerCase()) }))
+  }
+})
 
 // 딥 프롬프트 클리너
 const optResult = ref('')
@@ -378,9 +443,23 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .char-tag-chip { padding: 2px 8px; background: rgba(45,212,191,0.08); border: 1px solid rgba(45,212,191,0.2); border-radius: 4px; color: #2dd4bf; font-size: 9px; cursor: pointer; }
 .char-tag-chip:hover { background: rgba(45,212,191,0.15); border-color: #2dd4bf; }
 
+/* 태그 블록 모드 */
+.tag-block-view { border: 1px solid var(--border); border-radius: var(--radius-base); padding: 8px; background: var(--bg-input); }
+.tag-blocks { display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; }
+.tag-block {
+  padding: 4px 10px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-primary); font-size: 11px; cursor: pointer;
+  transition: all 0.15s; user-select: none;
+}
+.tag-block:hover { border-color: var(--accent); }
+.tag-block.disabled { opacity: 0.3; text-decoration: line-through; color: var(--text-muted); background: transparent; }
+.tag-block-add { margin-top: 6px; }
+.block-input { width: 100%; padding: 5px 8px; font-size: 10px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-primary); }
+
 .ai-btns { display: flex; gap: 3px; }
 .ai-btn { width: 26px; height: 22px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .ai-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ai-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .ai-btn:disabled { opacity: 0.3; }
 .ai-btn.go { width: auto; padding: 0 8px; background: var(--accent); color: #000; border: none; font-weight: 700; font-size: 10px; }
 .nl-input-row { display: flex; gap: 4px; margin-bottom: 6px; }
