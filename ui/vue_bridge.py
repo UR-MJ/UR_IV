@@ -23,6 +23,8 @@ class VueBridge(QObject):
 
     loraInserted = pyqtSignal(str)       # JSON {name, weight}
     yoloModelUpdated = pyqtSignal(str)   # model label text
+    condRulesLoaded = pyqtSignal(str)    # JSON {positive, negative}
+    batchFilesSelected = pyqtSignal(str) # JSON [paths]
     queueItemAdded = pyqtSignal(str)     # JSON {prompt, ...}
     queueCompleted = pyqtSignal(str)     # JSON {total}
     showNotification = pyqtSignal(str, str)  # (type: success|error|info, message)

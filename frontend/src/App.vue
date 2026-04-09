@@ -44,7 +44,7 @@
             </div>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
           </div>
-          <button class="btn-generate" @click="action('generate')" :disabled="isGenerating">
+          <button class="btn-generate" @click="doGenerate" :disabled="isGenerating">
             {{ isGenerating ? 'GENERATING...' : autoMode ? 'START AUTOMATION' : 'GENERATE IMAGE' }}
           </button>
         </div>
@@ -360,6 +360,16 @@ const ctxMenuStyle = computed(() => {
 })
 
 function action(name, payload = {}) { requestAction(name, payload) }
+
+function doGenerate() {
+  // LoRA Stack → Python lora 텍스트로 전달
+  const activeLoras = loraStack.filter(l => l.enabled)
+  if (activeLoras.length > 0) {
+    const loraText = activeLoras.map(l => `<lora:${l.name}:${(l.weight/100).toFixed(2)}>`).join(', ')
+    requestAction('set_lora_text', { lora_text: loraText })
+  }
+  action('generate')
+}
 
 function showHistoryMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
 function hideCtxMenu() { ctxMenu.value.show = false }

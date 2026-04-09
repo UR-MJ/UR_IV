@@ -155,8 +155,12 @@ function loadImage(path) {
   img.src = 'file:///' + path
 }
 
+const MAX_UNDO = 5
+
 function pushState(path, clearMask = true) {
   undoStack.value.push(path)
+  // undo 5회 제한
+  while (undoStack.value.length > MAX_UNDO + 1) undoStack.value.shift()
   redoStack.value = []
   imagePath.value = path
   // 타임스탬프 없이 경로만 변경 → watch에서 zoom/rotation 유지됨

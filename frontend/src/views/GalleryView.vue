@@ -36,10 +36,10 @@
           </div>
         </div>
       </div>
-      <div class="gallery-pager" v-if="images.length > galPageSize">
-        <button class="pager-btn" @click="galPage--" :disabled="galPage <= 0">◀ Prev</button>
-        <span class="pager-info">{{ galPage + 1 }} / {{ totalGalPages }}</span>
-        <button class="pager-btn" @click="galPage++" :disabled="galPage >= totalGalPages - 1">Next ▶</button>
+      <!-- 무한 스크롤 센티넬 -->
+      <div ref="sentinelRef" class="sentinel" v-if="visibleCount < images.length"></div>
+      <div class="load-more-info" v-if="visibleCount < images.length">
+        {{ visibleCount }} / {{ images.length }} loaded
       </div>
       
       <div v-if="isLoading" class="empty-placeholder">
@@ -146,14 +146,15 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 
 const images = ref([])
 const currentFolder = ref('')
-const galPage = ref(0)
-const galPageSize = 60
-const totalGalPages = computed(() => Math.max(1, Math.ceil(images.value.length / galPageSize)))
-const pagedImages = computed(() => images.value.slice(galPage.value * galPageSize, (galPage.value + 1) * galPageSize))
+const visibleCount = ref(40)
+const sentinelRef = ref(null)
+let observer = null
+
+const pagedImages = computed(() => images.value.slice(0, visibleCount.value))
 const sortBy = ref('date')
 const sortOptions = [{label: 'DATE', val: 'date'}, {label: 'NAME', val: 'name'}]
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
@@ -274,7 +275,18 @@ const hideMenu = () => ctxMenu.value.show = false
 onMounted(() => {
   document.addEventListener('click', hideMenu)
   loadImages()
-  onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; loadImages(true) })
+  onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
+
+  // 무한 스크롤
+  nextTick(() => {
+    observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && visibleCount.value < images.value.length) {
+        visibleCount.value = Math.min(visibleCount.value + 30, images.value.length)
+        nextTick(() => { if (sentinelRef.value) observer.observe(sentinelRef.value) })
+      }
+    }, { threshold: 0.1 })
+    if (sentinelRef.value) observer.observe(sentinelRef.value)
+  })
 })
 onUnmounted(() => document.removeEventListener('click', hideMenu))
 </script>
@@ -371,11 +383,8 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .exif-preview { position: relative; cursor: pointer; }
 .exif-preview:hover .click-hint { opacity: 1; }
 .mt-8 { margin-top: 8px; }
-.gallery-pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px; }
-.pager-btn { padding: 6px 14px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; cursor: pointer; }
-.pager-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.pager-btn:disabled { opacity: 0.3; }
-.pager-info { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+.sentinel { height: 20px; }
+.load-more-info { text-align: center; padding: 8px; font-size: 10px; color: var(--text-muted); }
 .spinner { width: 32px; height: 32px; border: 3px solid #222; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

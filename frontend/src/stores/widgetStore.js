@@ -51,14 +51,18 @@ export function connectStore(backend) {
 }
 
 /**
- * [중요] Vue -> Python: 자동 동기화 엔진
- * state.values의 어떤 값이든 바뀌면 즉시 Python 백엔드에 보고합니다.
+ * [중요] Vue -> Python: 최적화된 동기화 엔진
+ * 변경된 값만 Python 백엔드에 전송 (이전 값과 비교)
  */
+let _prevSnapshot = {}
 watch(() => state.values, (newVals) => {
   if (!_backend) return
   for (const [id, val] of Object.entries(newVals)) {
-    // 값이 존재하고 백엔드에 보고할 준비가 된 경우만 전송
-    _backend.onWidgetChanged(id, String(val))
+    const strVal = String(val)
+    if (_prevSnapshot[id] !== strVal) {
+      _prevSnapshot[id] = strVal
+      _backend.onWidgetChanged(id, strVal)
+    }
   }
 }, { deep: true })
 

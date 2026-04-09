@@ -120,8 +120,12 @@ function triggerFileInput() { fileInput.value?.click() }
 function handleFileSelect(e) { const f = e.target.files?.[0]; if (f) loadFile(f) }
 function handleDrop(e) {
   isDragging.value = false
+  // 파일 드롭
   const f = e.dataTransfer?.files?.[0]
-  if (f) { imagePath.value = f.path || ''; loadFile(f) }
+  if (f) { imagePath.value = f.path || ''; loadFile(f); return }
+  // History에서 경로 텍스트 드롭
+  const path = e.dataTransfer?.getData('text/plain')
+  if (path && path.includes('/')) loadFromPath(path)
 }
 function loadFile(file) {
   const reader = new FileReader()

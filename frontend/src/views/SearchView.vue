@@ -108,6 +108,10 @@
             @click="restoreBranch(fi)">{{ fh.label }} ({{ fh.count }})</button>
         </template>
         <button class="bar-btn" @click="resetDeepSearch" v-if="isFiltered">✕ RESET</button>
+        <select class="sort-sel" @change="sortResults($event.target.value)">
+          <option value="">정렬</option><option value="char">Character</option><option value="copy">Copyright</option>
+          <option value="artist">Artist</option><option value="rating">Rating</option>
+        </select>
         <span class="bar-count">{{ filteredResults.length }} / {{ results.length }}</span>
       </div>
 
@@ -223,6 +227,7 @@
           </div>
           <button class="cond-add" @click="condNegative.push({enabled:true,condition:'',exists:true,target:'',action:'add'})">+ 규칙 추가</button>
         </details>
+        <button class="cond-save-btn" @click="saveCondRules">💾 조건식 저장</button>
       </div>
     </template>
   </div>
@@ -320,6 +325,15 @@ onMounted(() => {
     if (progressTimer) { clearInterval(progressTimer); progressTimer = null }
   })
   onBackendEvent('searchStatus', (msg) => { statusText.value = msg.toUpperCase() })
+
+  // 조건부 프롬프트 로드
+  onBackendEvent('condRulesLoaded', (json) => {
+    try {
+      const d = JSON.parse(json)
+      if (d.positive) { condPositive.splice(0); d.positive.forEach(r => condPositive.push(r)) }
+      if (d.negative) { condNegative.splice(0); d.negative.forEach(r => condNegative.push(r)) }
+    } catch {}
+  })
 })
 
 function applyDeepSearch() {
@@ -403,6 +417,13 @@ async function classifyCurrentTags() {
 watch(previewIdx, () => { classifyCurrentTags() })
 watch(() => filteredResults.value.length, () => { if (filteredResults.value.length > 0) classifyCurrentTags() })
 
+function sortResults(by) {
+  if (!by) return
+  const key = { char: 'character', copy: 'copyright', artist: 'artist', rating: 'rating' }[by]
+  if (key) filteredResults.value.sort((a, b) => (a[key]||'').localeCompare(b[key]||''))
+  previewIdx.value = 0
+}
+
 function prevResult() { if (previewIdx.value > 0) previewIdx.value-- }
 function nextResult() { if (previewIdx.value < filteredResults.value.length - 1) previewIdx.value++ }
 function randomResult() { if (filteredResults.value.length > 1) previewIdx.value = Math.floor(Math.random() * filteredResults.value.length) }
@@ -425,6 +446,13 @@ function addToQueue() {
   }
   requestAction('add_search_to_queue', payload)
 }
+function saveCondRules() {
+  requestAction('save_cond_rules', {
+    positive: condPositive.filter(r => r.condition || r.target),
+    negative: condNegative.filter(r => r.condition || r.target),
+  })
+}
+
 function exportResults() { requestAction('export_search_results', { count: results.value.length }) }
 function importResults() { requestAction('import_search_results') }
 </script>
@@ -494,7 +522,8 @@ function importResults() { requestAction('import_search_results') }
 .bar-sep { color: #333; }
 .bar-idx { font-family: monospace; font-size: 11px; color: var(--text-secondary); }
 .bar-idx b { color: var(--accent); font-size: 14px; }
-.bar-count { font-size: 9px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; margin-left: auto; }
+.bar-count { font-size: 9px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
+.sort-sel { padding: 3px 6px; font-size: 9px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); width: 80px; }
 .bar-btn.parquet { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); color: #60a5fa; }
 
 /* Deep bar */
@@ -596,5 +625,6 @@ label.danger { color: #f87171; }
 .cond-sel { padding: 3px 4px; font-size: 9px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); }
 .cond-sel.sm { width: 55px; }
 .cond-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; padding: 0 2px; }
+.cond-save-btn { width: 100%; padding: 7px; background: var(--accent); border: none; border-radius: 6px; color: #000; font-size: 10px; font-weight: 800; cursor: pointer; margin-top: 8px; }
 .cond-add { width: 100%; padding: 5px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); font-size: 9px; font-weight: 700; cursor: pointer; margin-top: 4px; }
 </style>

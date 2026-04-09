@@ -109,7 +109,9 @@ function handleFileSelect(e) { const f = e.target.files?.[0]; if (f) loadFile(f)
 function handleDrop(e) {
   isDragging.value = false
   const f = e.dataTransfer?.files?.[0]
-  if (f) { imagePath.value = f.path || ''; loadFile(f) }
+  if (f) { imagePath.value = f.path || ''; loadFile(f); return }
+  const path = e.dataTransfer?.getData('text/plain')
+  if (path && path.includes('/')) loadFromPath(path)
 }
 
 function loadFile(file) {
@@ -171,11 +173,32 @@ function stopDrawing() { isDrawing.value = false }
 function clearMask() { /* 마스크 초기화 로직 */ }
 function undoMask() { /* 실행 취소 */ }
 
+function getMaskBase64() {
+  if (!canvasRef.value || !ctx.value) return ''
+  // 마스크 캔버스에서 그려진 영역을 흑백 마스크로 변환
+  const c = canvasRef.value
+  const maskCanvas = document.createElement('canvas')
+  maskCanvas.width = c.width; maskCanvas.height = c.height
+  const mCtx = maskCanvas.getContext('2d')
+  // 캔버스 현재 상태에서 원본 이미지 뺀 차이 = 마스크
+  const imgData = ctx.value.getImageData(0, 0, c.width, c.height)
+  const maskData = mCtx.createImageData(c.width, c.height)
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    // alpha가 줄어든 부분(destination-out으로 지운 부분)이 마스크
+    const alpha = imgData.data[i + 3]
+    const v = alpha < 200 ? 255 : 0  // 투명한 부분 = 마스크 영역
+    maskData.data[i] = v; maskData.data[i+1] = v; maskData.data[i+2] = v; maskData.data[i+3] = 255
+  }
+  mCtx.putImageData(maskData, 0, 0)
+  return maskCanvas.toDataURL('image/png')
+}
+
 function generate() {
-  // 마스크 데이터를 별도 캔버스에서 추출하여 전송
+  const mask = getMaskBase64()
   requestAction('generate_inpaint', {
     image: imageSrc.value,
     image_path: imagePath.value,
+    mask: mask,
     prompt: prompt.value,
     denoising: denoising.value,
     mask_content: maskContent.value,

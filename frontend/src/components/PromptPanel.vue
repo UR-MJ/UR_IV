@@ -24,16 +24,26 @@
         <label>Char Count</label>
         <input type="text" v-model="widgets.char_count_input" placeholder="e.g. 1girl, 2girls..." />
       </div>
-      <div class="input-group">
+      <div class="input-group autocomplete-wrap">
         <label>Character</label>
         <div class="row">
-          <input type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku" />
+          <input type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku"
+            @input="onFieldInput($event, 'character_input')" @keydown="onFieldKey($event, 'character_input')" />
           <button class="small-btn" @click="requestAction('open_character_preset')">PRESET</button>
         </div>
+        <div class="ac-popup" v-if="fieldAcTarget === 'character_input' && acItems.length > 0">
+          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
+            :class="{ selected: acIdx === i }" @mousedown.prevent="acceptFieldSuggestion(tag, 'character_input')">{{ tag }}</div>
+        </div>
       </div>
-      <div class="input-group">
+      <div class="input-group autocomplete-wrap">
         <label>Copyright</label>
-        <input type="text" v-model="widgets.copyright_input" placeholder="Copyright / Series..." />
+        <input type="text" v-model="widgets.copyright_input" placeholder="Copyright / Series..."
+          @input="onFieldInput($event, 'copyright_input')" @keydown="onFieldKey($event, 'copyright_input')" />
+        <div class="ac-popup" v-if="fieldAcTarget === 'copyright_input' && acItems.length > 0">
+          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
+            :class="{ selected: acIdx === i }" @mousedown.prevent="acceptFieldSuggestion(tag, 'copyright_input')">{{ tag }}</div>
+        </div>
       </div>
       <div class="input-group">
         <div class="row label-row">
@@ -58,7 +68,7 @@
         <label>Main Tags</label>
         <textarea ref="mainRef" v-model="widgets.main_prompt_text" class="auto-grow" placeholder="메인 태그..."
           @input="onMainInput($event)" @keydown="onAutoKey($event)" rows="3"></textarea>
-        <div class="ac-popup" v-if="acItems.length > 0">
+        <div class="ac-popup" v-if="fieldAcTarget === 'main_prompt_text' && acItems.length > 0">
           <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
             :class="{ selected: acIdx === i }" @mousedown.prevent="acceptSuggestion(tag)">{{ tag }}</div>
         </div>
@@ -119,10 +129,43 @@ function toggleArtistLock() {
 // 태그 자동완성
 const acItems = ref([])
 const acIdx = ref(0)
+const fieldAcTarget = ref('')
 let acTimer = null
+
+// 범용 필드 자동완성 (Character, Copyright 등)
+function onFieldInput(e, fieldId) {
+  fieldAcTarget.value = fieldId
+  const text = e.target.value
+  const lastComma = text.lastIndexOf(',')
+  const prefix = (lastComma >= 0 ? text.substring(lastComma + 1) : text).trim()
+  if (prefix.length < 2) { acItems.value = []; return }
+  clearTimeout(acTimer)
+  acTimer = setTimeout(async () => {
+    const backend = await getBackend()
+    if (backend.getTagSuggestions) {
+      backend.getTagSuggestions(prefix, (json) => {
+        try { acItems.value = JSON.parse(json).slice(0, 10); acIdx.value = 0 } catch { acItems.value = [] }
+      })
+    }
+  }, 300)
+}
+function onFieldKey(e, fieldId) {
+  if (fieldAcTarget.value !== fieldId || !acItems.value.length) return
+  if (e.key === 'ArrowDown') { e.preventDefault(); acIdx.value = Math.min(acIdx.value + 1, acItems.value.length - 1) }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); acIdx.value = Math.max(0, acIdx.value - 1) }
+  else if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); acceptFieldSuggestion(acItems.value[acIdx.value], fieldId) }
+  else if (e.key === 'Escape') { acItems.value = []; fieldAcTarget.value = '' }
+}
+function acceptFieldSuggestion(tag, fieldId) {
+  const text = widgets[fieldId] || ''
+  const lastComma = text.lastIndexOf(',')
+  widgets[fieldId] = (lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : '') + tag + ', '
+  acItems.value = []; fieldAcTarget.value = ''
+}
 
 function onMainInput(e) {
   autoGrow(e.target)
+  fieldAcTarget.value = 'main_prompt_text'
   const text = e.target.value
   const lastComma = text.lastIndexOf(',')
   const prefix = (lastComma >= 0 ? text.substring(lastComma + 1) : text).trim()

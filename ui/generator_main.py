@@ -93,6 +93,9 @@ class GeneratorMainUI(
 
             # 8. 초기값 강제 업데이트
             QTimer.singleShot(500, self.update_total_prompt_display)
+
+            # 9. 조건식 + 기본값 로드
+            QTimer.singleShot(1000, self._load_saved_configs)
             print("[System] Engine Ready.")
 
         except Exception as e:
@@ -547,24 +550,13 @@ class GeneratorMainUI(
                         self.queue_manager.start()
 
             # ═══════ 배치 파일 열기 ═══════
-            elif action == 'open_batch_files':
-                paths, _ = QFileDialog.getOpenFileNames(
-                    self, "배치 처리할 이미지 선택", "",
-                    "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)"
-                )
-                if paths:
-                    # Vue로 파일 목록 전달
-                    file_list = [p.replace('\\', '/') for p in paths]
-                    self.show_status(f"Batch: {len(file_list)} files selected.")
-
-            elif action == 'open_upscale_files':
-                paths, _ = QFileDialog.getOpenFileNames(
-                    self, "업스케일할 이미지 선택", "",
-                    "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)"
-                )
+            elif action in ('open_batch_files', 'open_upscale_files'):
+                title = "배치 처리할 이미지 선택" if 'batch' in action else "업스케일할 이미지 선택"
+                paths, _ = QFileDialog.getOpenFileNames(self, title, "", "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)")
                 if paths:
                     file_list = [p.replace('\\', '/') for p in paths]
-                    self.show_status(f"Upscale: {len(file_list)} files selected.")
+                    self.vue_bridge.batchFilesSelected.emit(json.dumps(file_list))
+                    self.show_status(f"{len(file_list)} files selected.")
 
             # ═══════ 클립보드 복사 ═══════
             elif action == 'copy_to_clipboard':
@@ -656,6 +648,22 @@ class GeneratorMainUI(
                 if order:
                     self.show_status(f"Tab order updated: {len(order)} tabs")
 
+            # ═══════ LoRA 텍스트 설정 ═══════
+            elif action == 'set_lora_text':
+                lora_text = payload.get('lora_text', '')
+                self._vue_lora_text = lora_text
+
+            # ═══════ 조건부 프롬프트 저장 ═══════
+            elif action == 'save_cond_rules':
+                try:
+                    cond_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'cond_rules.json')
+                    os.makedirs(os.path.dirname(cond_path), exist_ok=True)
+                    with open(cond_path, 'w', encoding='utf-8') as f:
+                        json.dump(payload, f, ensure_ascii=False, indent=2)
+                    self.vue_bridge.showNotification.emit('success', '조건식이 저장되었습니다')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'조건식 저장 실패: {e}')
+
             # ═══════ 기본값 저장 ═══════
             elif action == 'save_tab_defaults':
                 try:
@@ -688,6 +696,29 @@ class GeneratorMainUI(
             # Vue Toast로 에러 알림
             if hasattr(self, 'vue_bridge'):
                 self.vue_bridge.showNotification.emit('error', f'{action}: {str(e)[:100]}')
+
+    def _load_saved_configs(self):
+        """앱 시작 시 조건식 + 기본값 로드"""
+        try:
+            # 조건식 로드
+            cond_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'cond_rules.json')
+            if os.path.exists(cond_path):
+                with open(cond_path, 'r', encoding='utf-8') as f:
+                    rules = json.load(f)
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.condRulesLoaded.emit(json.dumps(rules))
+                print(f"[Config] Conditional rules loaded: {len(rules.get('positive',[]))}P + {len(rules.get('negative',[]))}N")
+        except Exception as e:
+            print(f"[Config] Failed to load cond rules: {e}")
+        try:
+            # 기본값 로드
+            defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'tab_defaults.json')
+            if os.path.exists(defaults_path):
+                with open(defaults_path, 'r', encoding='utf-8') as f:
+                    defaults = json.load(f)
+                print(f"[Config] Tab defaults loaded")
+        except Exception as e:
+            print(f"[Config] Failed to load defaults: {e}")
 
     def _apply_vue_conditional_rules(self, pos_rules: list, neg_rules: list):
         """Vue에서 전달된 조건부 프롬프트 규칙 적용"""
