@@ -13,15 +13,10 @@
             <label>Studio Tools</label>
             <div class="tool-grid">
               <button class="tool-btn" @click="action('save_settings')">SAVE</button>
-              <button class="tool-btn" @click="showPresetMenu = !showPresetMenu">PRESET</button>
+              <button class="tool-btn" @click="showPresetManager = true; loadPresetList()">PRESET</button>
               <button class="tool-btn" @click="showWeightManager = true">WEIGHT</button>
+              <button class="tool-btn" @click="showWcManager = true">WILDCARD</button>
               <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
-            </div>
-            <!-- 프리셋 서브메뉴 -->
-            <div class="preset-sub" v-if="showPresetMenu">
-              <button class="tool-btn" @click="action('save_preset'); showPresetMenu = false">💾 SAVE</button>
-              <button class="tool-btn" @click="action('load_preset'); showPresetMenu = false">📂 LOAD</button>
-              <button class="tool-btn" @click="showWcManager = true" v-if="wildcards.length">WILDCARD</button>
             </div>
           </div>
 
@@ -271,6 +266,42 @@
       <span class="vram-text">VRAM {{ vramInfo.used }}GB / {{ vramInfo.total }}GB ({{ vramInfo.pct }}%)</span>
     </div>
 
+    <!-- Preset Manager Modal -->
+    <transition name="fade">
+      <div v-if="showPresetManager" class="pm-overlay" @click.self="showPresetManager = false">
+        <div class="pm-modal">
+          <div class="pm-header">
+            <h3>PRESET MANAGER</h3>
+            <button class="close-btn" @click="showPresetManager = false">✕</button>
+          </div>
+          <div class="pm-body">
+            <div class="pm-list">
+              <div v-for="p in presetList" :key="p" class="pm-item"
+                :class="{ active: selectedPreset === p }" @click="selectedPreset = p; loadPresetPreview(p)">
+                {{ p }}
+              </div>
+              <div v-if="presetList.length === 0" class="pm-empty">저장된 프리셋 없음</div>
+            </div>
+            <div class="pm-preview">
+              <div v-if="presetPreview" class="pm-detail">
+                <div class="pm-field" v-for="(val, key) in presetPreview" :key="key">
+                  <span class="pm-key">{{ key }}</span>
+                  <span class="pm-val">{{ typeof val === 'string' ? val.substring(0, 100) : val }}</span>
+                </div>
+              </div>
+              <div v-else class="pm-empty">프리셋을 선택하세요</div>
+            </div>
+          </div>
+          <div class="pm-footer">
+            <button class="pm-btn" @click="loadSelectedPreset" :disabled="!selectedPreset">📂 LOAD</button>
+            <button class="pm-btn" @click="deleteSelectedPreset" :disabled="!selectedPreset">🗑 DELETE</button>
+            <div class="pm-spacer"></div>
+            <button class="pm-btn accent" @click="saveNewPreset">💾 SAVE CURRENT</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- Weight Manager Modal -->
     <transition name="fade">
       <div v-if="showWeightManager" class="wm-overlay" @click.self="showWeightManager = false">
@@ -320,29 +351,30 @@
             <div class="wc-content">
               <template v-if="selectedWcData">
                 <div class="wc-content-header">
-                  <h4>{{ selectedWc }}</h4>
-                  <span class="wc-syntax">사용문법: <code>{{'__' + selectedWc + '__'}}</code></span>
-                  <button class="wc-copy-btn" @click="copyWcSyntax">📋 COPY</button>
+                  <!-- 파일명 인라인 편집 -->
+                  <h4 v-if="!wcRenaming" @dblclick="startWcRename">{{ selectedWc }}</h4>
+                  <input v-else v-model="wcNewName" class="wc-rename-input" @blur="finishWcRename" @keydown.enter="finishWcRename" ref="wcRenameRef" />
+                  <span class="wc-syntax">문법: <code>{{'__' + selectedWc + '__'}}</code></span>
                 </div>
-                <!-- 블록 뷰: 한 줄 = 하나의 블록 -->
+                <!-- 블록 편집 -->
                 <div class="wc-blocks">
                   <div v-for="(line, li) in wcEditLines" :key="li" class="wc-block-row">
                     <span class="wc-block-idx">{{ li + 1 }}</span>
                     <input v-model="wcEditLines[li]" class="wc-block-input" @keydown.enter="addWcLine(li)" />
-                    <button class="wc-block-use" @click="useWcLine(li)" title="프롬프트에 삽입">USE</button>
                     <button class="wc-block-rm" @click="wcEditLines.splice(li, 1)">✕</button>
                   </div>
                   <button class="wc-add-line" @click="wcEditLines.push('')">+ 줄 추가</button>
                 </div>
-                <!-- 삽입 옵션 -->
-                <div class="wc-insert-bar">
-                  <span class="wc-insert-label">삽입 위치:</span>
+                <!-- 하단: 삽입 + 저장 -->
+                <div class="wc-bottom-bar">
                   <select v-model="wcInsertTarget" class="wc-insert-sel">
                     <option value="main">Main Tags</option>
                     <option value="prefix">Prefix</option>
                     <option value="suffix">Suffix</option>
                     <option value="clipboard">클립보드</option>
                   </select>
+                  <button class="wc-use-btn" @click="useWcSyntax">USE</button>
+                  <div class="wc-spacer"></div>
                   <button class="wc-save-btn" @click="saveCurrentWildcard">💾 SAVE</button>
                 </div>
               </template>
@@ -459,7 +491,38 @@ const ctxMenuStyle = computed(() => {
 })
 
 const wildcards = ref([])
-const showPresetMenu = ref(false)
+const showPresetManager = ref(false)
+const presetList = ref([])
+const selectedPreset = ref('')
+const presetPreview = ref(null)
+
+async function loadPresetList() {
+  const bk = await getBackend()
+  if (bk.getPresetList) bk.getPresetList((json) => { try { presetList.value = JSON.parse(json) } catch {} })
+}
+async function loadPresetPreview(name) {
+  const bk = await getBackend()
+  if (bk.getPresetData) bk.getPresetData(name, (json) => { try { presetPreview.value = JSON.parse(json) } catch {} })
+}
+function loadSelectedPreset() {
+  if (!selectedPreset.value) return
+  action('load_preset_by_name', { name: selectedPreset.value })
+  showPresetManager.value = false
+}
+function deleteSelectedPreset() {
+  if (!selectedPreset.value || !confirm(`"${selectedPreset.value}" 삭제?`)) return
+  action('delete_preset', { name: selectedPreset.value })
+  presetList.value = presetList.value.filter(p => p !== selectedPreset.value)
+  selectedPreset.value = ''; presetPreview.value = null
+}
+function saveNewPreset() {
+  const name = prompt('프리셋 이름:')
+  if (!name) return
+  action('save_preset_by_name', { name })
+  presetList.value.push(name)
+  addToast('success', `프리셋 "${name}" 저장됨`)
+}
+
 const showWeightManager = ref(false)
 const globalWeights = reactive([])  // [{tag, weight}]
 
@@ -543,26 +606,46 @@ async function renameWildcard(oldName) {
   })
 }
 
-function useWcLine(idx) {
-  const tag = wcEditLines.value[idx]
-  if (!tag) return
+const wcRenaming = ref(false)
+const wcNewName = ref('')
+const wcRenameRef = ref(null)
+
+function startWcRename() {
+  wcRenaming.value = true
+  wcNewName.value = selectedWc.value
+  nextTick(() => { if (wcRenameRef.value) wcRenameRef.value.focus() })
+}
+
+async function finishWcRename() {
+  wcRenaming.value = false
+  const newName = wcNewName.value.trim()
+  if (!newName || newName === selectedWc.value) return
+  const bk = await getBackend()
+  bk.renameWildcard(selectedWc.value, newName, () => {
+    const wc = wildcards.value.find(w => w.name === selectedWc.value)
+    if (wc) { wc.name = newName; wc.file = newName + '.txt' }
+    selectedWc.value = newName
+    addToast('success', '이름 변경됨')
+  })
+}
+
+// USE = 와일드카드 사용 문법 삽입 (__name__)
+function useWcSyntax() {
+  if (!selectedWc.value) return
+  const syntax = `__${selectedWc.value}__`
   if (wcInsertTarget.value === 'clipboard') {
-    navigator.clipboard?.writeText(tag)
-    addToast('info', '클립보드에 복사됨')
+    navigator.clipboard?.writeText(syntax)
+    addToast('info', '문법 복사됨: ' + syntax)
   } else {
     const targetMap = { main: 'main_prompt_text', prefix: 'prefix_prompt_text', suffix: 'suffix_prompt_text' }
     const key = targetMap[wcInsertTarget.value] || 'main_prompt_text'
     const cur = storeWidgets[key] || ''
-    storeWidgets[key] = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
+    storeWidgets[key] = cur ? cur.replace(/,?\s*$/, '') + ', ' + syntax + ', ' : syntax + ', '
+    addToast('success', syntax + ' 삽입됨')
   }
 }
 
 function addWcLine(afterIdx) { wcEditLines.value.splice(afterIdx + 1, 0, '') }
-
-function copyWcSyntax() {
-  navigator.clipboard?.writeText(`__${selectedWc.value}__`)
-  addToast('info', '문법 복사됨')
-}
 
 function action(name, payload = {}) { requestAction(name, payload) }
 
@@ -777,7 +860,29 @@ onMounted(async () => {
 .tool-btn { padding: 8px 4px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; transition: var(--transition); }
 .tool-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .tool-btn.highlight { color: var(--accent); border-color: var(--accent-dim); }
-.preset-sub { display: flex; gap: 4px; margin-top: 4px; }
+
+/* Preset Manager */
+.pm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.pm-modal { width: 650px; height: 450px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.pm-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.pm-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); flex: 1; }
+.pm-body { flex: 1; display: flex; overflow: hidden; }
+.pm-list { width: 180px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px; }
+.pm-item { padding: 7px 10px; font-size: 11px; color: var(--text-secondary); cursor: pointer; border-radius: 4px; margin-bottom: 2px; }
+.pm-item:hover { background: var(--bg-input); }
+.pm-item.active { background: var(--accent-dim); color: var(--accent); }
+.pm-preview { flex: 1; overflow-y: auto; padding: 12px; }
+.pm-detail { display: flex; flex-direction: column; gap: 4px; }
+.pm-field { display: flex; gap: 8px; font-size: 10px; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 3px 0; }
+.pm-key { color: var(--accent); font-weight: 700; min-width: 100px; }
+.pm-val { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); }
+.pm-footer { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-top: 1px solid var(--border); }
+.pm-btn { padding: 6px 14px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
+.pm-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pm-btn:disabled { opacity: 0.3; }
+.pm-btn.accent { background: var(--accent); color: #000; border: none; }
+.pm-spacer { flex: 1; }
 
 /* Weight Manager */
 .wm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
@@ -826,10 +931,13 @@ onMounted(async () => {
 .wc-block-use { padding: 2px 6px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 3px; color: var(--accent); font-size: 9px; font-weight: 700; cursor: pointer; }
 .wc-block-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
 .wc-add-line { width: 100%; padding: 4px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 3px; color: var(--text-muted); font-size: 9px; cursor: pointer; margin-top: 4px; }
-.wc-insert-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-.wc-insert-label { font-size: 9px; color: var(--text-muted); font-weight: 700; }
-.wc-insert-sel { padding: 3px 6px; font-size: 9px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); }
-.wc-save-btn { padding: 5px 14px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-size: 10px; font-weight: 800; cursor: pointer; margin-left: auto; }
+.wc-rename-input { font-size: 14px; background: var(--bg-input); border: 1px solid var(--accent); border-radius: 4px; color: var(--text-primary); padding: 2px 8px; width: 200px; }
+.wc-bottom-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.wc-insert-sel { padding: 4px 8px; font-size: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); }
+.wc-use-btn { padding: 5px 16px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-size: 10px; font-weight: 800; cursor: pointer; }
+.wc-spacer { flex: 1; }
+.wc-save-btn { padding: 5px 14px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
+.wc-save-btn:hover { border-color: var(--accent); color: var(--accent); }
 .wc-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 13px; }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

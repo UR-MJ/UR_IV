@@ -6,7 +6,15 @@
         FINAL OUTPUT PROMPT
         <span class="token-info">{{ tokenCount }} tokens</span>
       </div>
-      <textarea ref="totalPromptRef" v-model="widgets.total_prompt_display"
+      <!-- 블록 모드: 전체 프롬프트 -->
+      <div class="tag-block-view" v-if="tagBlockMode">
+        <div class="tag-blocks">
+          <button v-for="(tb, ti) in totalBlocks" :key="ti"
+            class="tag-block" :class="{ disabled: tb.off }"
+            @click="toggleTotalBlock(ti)">{{ tb.text }}</button>
+        </div>
+      </div>
+      <textarea v-else ref="totalPromptRef" v-model="widgets.total_prompt_display"
         class="total-prompt auto-grow" placeholder="인물수, 캐릭터, 작품, 작가, 선행, 메인, 후행 순서로 종합됩니다"
         @input="autoGrow($event.target)"></textarea>
       <div class="prompt-actions">
@@ -20,7 +28,14 @@
       </div>
       <div class="neg-section">
         <label class="danger-label">NEGATIVE</label>
-        <textarea ref="negRef" v-model="widgets.neg_prompt_text"
+        <div class="tag-block-view neg" v-if="tagBlockMode">
+          <div class="tag-blocks">
+            <button v-for="(tb, ti) in negBlocks" :key="ti"
+              class="tag-block neg-block" :class="{ disabled: tb.off }"
+              @click="toggleNegBlock(ti)">{{ tb.text }}</button>
+          </div>
+        </div>
+        <textarea v-else ref="negRef" v-model="widgets.neg_prompt_text"
           class="neg-prompt auto-grow" placeholder="Negative prompt..."
           @input="autoGrow($event.target)"></textarea>
       </div>
@@ -163,19 +178,33 @@ const suffixRef = ref(null)
 
 // ── 태그 블록 모드 ──
 const tagBlockMode = ref(false)
-const mainTagBlocks = ref([])  // [{text, off}]
+const mainTagBlocks = ref([])
+const totalBlocks = ref([])
+const negBlocks = ref([])
 const newBlockTag = ref('')
+
+function parseBlocks(text) {
+  return (text || '').split(',').map(t => t.trim()).filter(Boolean).map(t => ({ text: t, off: false }))
+}
 
 function toggleBlockMode() {
   tagBlockMode.value = !tagBlockMode.value
   if (tagBlockMode.value) {
-    // 텍스트 → 블록 파싱
-    const text = widgets.main_prompt_text || ''
-    mainTagBlocks.value = text.split(',').map(t => t.trim()).filter(Boolean).map(t => ({ text: t, off: false }))
+    mainTagBlocks.value = parseBlocks(widgets.main_prompt_text)
+    totalBlocks.value = parseBlocks(widgets.total_prompt_display)
+    negBlocks.value = parseBlocks(widgets.neg_prompt_text)
   } else {
-    // 블록 → 텍스트 (활성 태그만)
     syncBlocksToText()
   }
+}
+
+function toggleTotalBlock(idx) {
+  totalBlocks.value[idx].off = !totalBlocks.value[idx].off
+  // total은 읽기 전용이므로 off만 시각적 표시
+}
+function toggleNegBlock(idx) {
+  negBlocks.value[idx].off = !negBlocks.value[idx].off
+  widgets.neg_prompt_text = negBlocks.value.filter(b => !b.off).map(b => b.text).join(', ')
 }
 
 function syncBlocksToText() {
@@ -202,15 +231,19 @@ function addTagBlock() {
   }
 }
 
-// 텍스트 변경 시 블록 동기화 (블록 모드일 때)
-watch(() => widgets.main_prompt_text, (newVal) => {
-  if (tagBlockMode.value && newVal) {
-    const tags = newVal.split(',').map(t => t.trim()).filter(Boolean)
-    // 기존 off 상태 보존
-    const offSet = new Set(mainTagBlocks.value.filter(b => b.off).map(b => b.text.toLowerCase()))
-    mainTagBlocks.value = tags.map(t => ({ text: t, off: offSet.has(t.toLowerCase()) }))
-  }
-})
+// 텍스트 변경 시 블록 동기화
+function syncWatcher(widgetKey, blocksRef) {
+  watch(() => widgets[widgetKey], (newVal) => {
+    if (tagBlockMode.value && newVal) {
+      const tags = newVal.split(',').map(t => t.trim()).filter(Boolean)
+      const offSet = new Set(blocksRef.value.filter(b => b.off).map(b => b.text.toLowerCase()))
+      blocksRef.value = tags.map(t => ({ text: t, off: offSet.has(t.toLowerCase()) }))
+    }
+  })
+}
+syncWatcher('main_prompt_text', mainTagBlocks)
+syncWatcher('total_prompt_display', totalBlocks)
+syncWatcher('neg_prompt_text', negBlocks)
 
 // 딥 프롬프트 클리너
 const optResult = ref('')
@@ -453,6 +486,8 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 }
 .tag-block:hover { border-color: var(--accent); }
 .tag-block.disabled { opacity: 0.3; text-decoration: line-through; color: var(--text-muted); background: transparent; }
+.tag-block.neg-block { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
+.tag-block-view.neg { border-color: rgba(248,113,113,0.15); }
 .tag-block-add { margin-top: 6px; }
 .block-input { width: 100%; padding: 5px 8px; font-size: 10px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-primary); }
 

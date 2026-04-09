@@ -363,7 +363,42 @@ class GeneratorMainUI(
                     move_to_trash(clean_path)
                     self.show_status("Moved to trash.")
 
-            # 10. 프리셋 (프롬프트 설정 저장/불러오기)
+            # 10. 프리셋
+            elif action == 'save_preset_by_name':
+                try:
+                    name = payload.get('name', '')
+                    if name:
+                        preset = self._build_settings_dict()
+                        preset_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets')
+                        os.makedirs(preset_dir, exist_ok=True)
+                        with open(os.path.join(preset_dir, f"{name}.json"), 'w', encoding='utf-8') as f:
+                            json.dump(preset, f, ensure_ascii=False, indent=2)
+                        self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 저장됨')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'저장 실패: {e}')
+
+            elif action == 'load_preset_by_name':
+                try:
+                    name = payload.get('name', '')
+                    if name:
+                        fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets', f"{name}.json")
+                        with open(fp, 'r', encoding='utf-8') as f:
+                            preset = json.load(f)
+                        self._apply_settings_dict(preset)
+                        self.update_total_prompt_display()
+                        self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 로드됨')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'로드 실패: {e}')
+
+            elif action == 'delete_preset':
+                try:
+                    name = payload.get('name', '')
+                    fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets', f"{name}.json")
+                    if os.path.exists(fp): os.remove(fp)
+                    self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 삭제됨')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'삭제 실패: {e}')
+
             elif action == 'save_preset':
                 try:
                     name, ok = QMessageBox.question(self, "프리셋", ""), None

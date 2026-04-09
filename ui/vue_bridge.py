@@ -698,6 +698,28 @@ class VueBridge(QObject):
     vramUpdated = pyqtSignal(str)  # JSON {used, total, pct}
     seedExploreResult = pyqtSignal(str)  # JSON {index, path, seed}
 
+    @pyqtSlot(result=str)
+    def getPresetList(self) -> str:
+        """프리셋 목록 반환"""
+        import os
+        preset_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets')
+        os.makedirs(preset_dir, exist_ok=True)
+        files = [f.replace('.json', '') for f in sorted(os.listdir(preset_dir)) if f.endswith('.json')]
+        return json.dumps(files)
+
+    @pyqtSlot(str, result=str)
+    def getPresetData(self, name: str) -> str:
+        """프리셋 데이터 반환"""
+        import os
+        preset_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets')
+        fp = os.path.join(preset_dir, f"{name}.json")
+        try:
+            if os.path.exists(fp):
+                with open(fp, 'r', encoding='utf-8') as f:
+                    return f.read()
+        except: pass
+        return '{}'
+
     @pyqtSlot(str, str, result=str)
     def saveWildcard(self, filename: str, content: str) -> str:
         """와일드카드 파일 저장/수정"""
