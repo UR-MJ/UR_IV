@@ -28,8 +28,15 @@
         <label>Character</label>
         <div class="row">
           <input type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku"
-            @input="onFieldInput($event, 'character_input')" @keydown="onFieldKey($event, 'character_input')" />
+            @input="onFieldInput($event, 'character_input')" @keydown="onFieldKey($event, 'character_input')"
+            @blur="loadCharTags" />
           <button class="small-btn" @click="requestAction('open_character_preset')">PRESET</button>
+        </div>
+        <!-- 캐릭터 연관 태그 추천 -->
+        <div class="char-tags" v-if="charSuggestTags.length > 0">
+          <span class="char-tags-label">연관 태그</span>
+          <button v-for="ct in charSuggestTags" :key="ct.tag" class="char-tag-chip"
+            @click="insertCharTag(ct.tag)" :title="ct.count + '회'">{{ ct.tag.replace(/_/g, ' ') }}</button>
         </div>
         <div class="ac-popup" v-if="fieldAcTarget === 'character_input' && acItems.length > 0">
           <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
@@ -125,6 +132,28 @@ const artistRef = ref(null)
 const prefixRef = ref(null)
 const mainRef = ref(null)
 const suffixRef = ref(null)
+
+// 캐릭터 연관 태그 추천
+const charSuggestTags = ref([])
+async function loadCharTags() {
+  const char = widgets.character_input
+  if (!char || char.length < 2) { charSuggestTags.value = []; return }
+  const backend = await getBackend()
+  if (backend.getCharacterTags) {
+    backend.getCharacterTags(char, (json) => {
+      try {
+        const data = JSON.parse(json)
+        charSuggestTags.value = Array.isArray(data) ? data : []
+      } catch { charSuggestTags.value = [] }
+    })
+  }
+}
+function insertCharTag(tag) {
+  const cur = widgets.main_prompt_text || ''
+  if (!cur.toLowerCase().includes(tag.toLowerCase())) {
+    widgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
+  }
+}
 
 // Ollama
 const ollamaLoading = ref(false)
@@ -294,6 +323,11 @@ summary::-webkit-details-marker { display: none; }
 label.danger { color: #f87171; }
 input[type="number"] { -moz-appearance: textfield; }
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.char-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; align-items: center; }
+.char-tags-label { font-size: 8px; font-weight: 800; color: var(--text-muted); margin-right: 4px; }
+.char-tag-chip { padding: 2px 8px; background: rgba(45,212,191,0.08); border: 1px solid rgba(45,212,191,0.2); border-radius: 4px; color: #2dd4bf; font-size: 9px; cursor: pointer; }
+.char-tag-chip:hover { background: rgba(45,212,191,0.15); border-color: #2dd4bf; }
 
 .ai-btns { display: flex; gap: 3px; }
 .ai-btn { width: 26px; height: 22px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }

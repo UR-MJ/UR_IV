@@ -656,6 +656,38 @@ class GeneratorMainUI(
                 if order:
                     self.show_status(f"Tab order updated: {len(order)} tabs")
 
+            # ═══════ 시드 탐색 (3x3 그리드) ═══════
+            elif action == 'explore_seed':
+                base_seed = int(payload.get('seed', -1))
+                if base_seed < 0:
+                    import random
+                    base_seed = random.randint(0, 2**32 - 1)
+                # subseed_strength 0.05 단위로 9개 변형
+                variations = []
+                for i in range(9):
+                    subseed = base_seed + i * 1000
+                    strength = round(0.05 * (i % 5), 2) if i > 0 else 0
+                    p = {
+                        'prompt': self.total_prompt_display.toPlainText(),
+                        'negative_prompt': self.neg_prompt_text.toPlainText(),
+                        'sampler_name': self.sampler_combo.currentText(),
+                        'steps': int(self.steps_input.text() or 20),
+                        'cfg_scale': float(self.cfg_input.text() or 7),
+                        'seed': base_seed,
+                        'subseed': subseed,
+                        'subseed_strength': strength,
+                        'width': int(self.width_input.text() or 1024),
+                        'height': int(self.height_input.text() or 1024),
+                    }
+                    variations.append(p)
+                # 대기열에 추가
+                if hasattr(self, 'queue_panel'):
+                    for p in variations:
+                        self.queue_panel.add_single_item(p)
+                    if hasattr(self, 'queue_manager'):
+                        self.queue_manager.start()
+                self.vue_bridge.showNotification.emit('info', f'시드 탐색: {len(variations)}개 변형 생성 시작')
+
             # ═══════ 비교 이미지 ═══════
             elif action == 'open_compare_image':
                 slot = payload.get('slot', 'before')
@@ -996,8 +1028,11 @@ class GeneratorMainUI(
                 if stats and stats.get('vram_total', 0) > 0:
                     used = stats['vram_used'] / (1024**3)
                     total = stats['vram_total'] / (1024**3)
-                    if hasattr(self, 'vram_label') and self.vram_label:
-                        self.vram_label.setText(f"VRAM: {used:.1f}/{total:.1f}GB")
+                    pct = int(used / total * 100) if total > 0 else 0
+                    if hasattr(self, 'vue_bridge'):
+                        self.vue_bridge.vramUpdated.emit(json.dumps({
+                            'used': round(used, 1), 'total': round(total, 1), 'pct': pct
+                        }))
         except: pass
 
     def closeEvent(self, event): self._quit_app()

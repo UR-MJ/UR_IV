@@ -27,12 +27,14 @@
     <div class="info-bar" v-if="imageUrl">
       <span class="info-item">해상도 {{ resolution }}</span>
       <span class="info-item">시드 {{ seed }}</span>
+      <button class="explore-btn" @click="exploreSeed" v-if="seed">🔍 EXPLORE SEED</button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { requestAction } from '../stores/widgetStore.js'
 
 const props = defineProps({
   imageUrl: { type: String, default: '' },
@@ -40,6 +42,10 @@ const props = defineProps({
   seed: { type: String, default: '' },
   status: { type: String, default: '' },
 })
+
+function exploreSeed() {
+  requestAction('explore_seed', { seed: props.seed })
+}
 
 const progressPct = computed(() => {
   const m = props.status?.match(/(\d+)\/(\d+)/)
@@ -106,10 +112,12 @@ const progressPct = computed(() => {
   border-top: 1px solid #1A1A1A;
 }
 
-.info-item {
-  font-size: 12px;
-  color: #787878;
+.info-item { font-size: 12px; color: #787878; }
+.explore-btn {
+  padding: 3px 12px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--accent); font-size: 10px; font-weight: 700; cursor: pointer;
 }
+.explore-btn:hover { background: var(--accent-dim); border-color: var(--accent); }
 .generating { text-align: center; }
 .spinner {
   width: 40px; height: 40px; margin: 0 auto 12px;

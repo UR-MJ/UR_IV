@@ -18,6 +18,20 @@
               <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
             </div>
           </div>
+
+          <!-- 와일드카드 매니저 -->
+          <details class="tool-card" v-if="wildcards.length > 0">
+            <summary class="wc-header">WILDCARDS ({{ wildcards.length }})</summary>
+            <div class="wc-list">
+              <details v-for="wc in wildcards" :key="wc.name" class="wc-item">
+                <summary class="wc-name">{{ wc.name }} <span class="wc-count">({{ wc.tags.length }})</span></summary>
+                <div class="wc-tags">
+                  <button v-for="tag in wc.tags" :key="tag" class="wc-tag"
+                    @click="insertWildcardTag(tag)">{{ tag }}</button>
+                </div>
+              </details>
+            </div>
+          </details>
         </div>
         <div class="gen-footer">
           <div class="gen-actions">
@@ -257,6 +271,12 @@
 
     <QueuePanel />
 
+    <!-- VRAM 게이지 (하단 고정) -->
+    <div class="vram-bar" v-if="vramInfo.total > 0">
+      <div class="vram-fill" :style="{ width: vramInfo.pct + '%' }" :class="vramClass"></div>
+      <span class="vram-text">VRAM {{ vramInfo.used }}GB / {{ vramInfo.total }}GB ({{ vramInfo.pct }}%)</span>
+    </div>
+
     <!-- Global Toast Notifications -->
     <transition-group name="toast" tag="div" class="toast-container">
       <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type" @click="removeToast(t.id)">
@@ -315,6 +335,8 @@ const exifContent = computed(() => {
 })
 
 const autoMode = ref(false)
+const vramInfo = ref({ used: 0, total: 0, pct: 0 })
+const vramClass = computed(() => vramInfo.value.pct > 90 ? 'critical' : vramInfo.value.pct > 70 ? 'warn' : 'ok')
 const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false })
 
 // Toast 알림 시스템
@@ -360,7 +382,14 @@ const ctxMenuStyle = computed(() => {
   return { top: y + 'px', left: x + 'px' }
 })
 
+const wildcards = ref([])
+
 function action(name, payload = {}) { requestAction(name, payload) }
+
+function insertWildcardTag(tag) {
+  const cur = storeWidgets.main_prompt_text || ''
+  storeWidgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
+}
 
 function doGenerate() {
   // LoRA Stack → Python lora 텍스트로 전달
@@ -462,6 +491,13 @@ onMounted(async () => {
   })
   onBackendEvent('generationError', (msg) => { isGenerating.value = false; status.value = `Error: ${msg}` })
 
+  // 와일드카드 로드
+  const _bk = await getBackend()
+  if (_bk.getWildcardTree) _bk.getWildcardTree((json) => { try { wildcards.value = JSON.parse(json) } catch {} })
+
+  // VRAM 실시간 업데이트
+  onBackendEvent('vramUpdated', (json) => { try { vramInfo.value = JSON.parse(json) } catch {} })
+
   // Global Toast 알림 (Python → Vue)
   onBackendEvent('showNotification', (type, msg) => { addToast(type, msg) })
 
@@ -551,6 +587,18 @@ onMounted(async () => {
 .tool-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .tool-btn.highlight { color: var(--accent); border-color: var(--accent-dim); }
 
+/* Wildcards */
+.wc-header { font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; cursor: pointer; list-style: none; }
+.wc-header::-webkit-details-marker { display: none; }
+.wc-list { max-height: 200px; overflow-y: auto; margin-top: 8px; }
+.wc-item { margin-bottom: 4px; }
+.wc-name { font-size: 10px; font-weight: 700; color: var(--accent); cursor: pointer; list-style: none; }
+.wc-name::-webkit-details-marker { display: none; }
+.wc-count { color: var(--text-muted); font-weight: 400; }
+.wc-tags { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0; }
+.wc-tag { padding: 2px 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 9px; cursor: pointer; }
+.wc-tag:hover { border-color: var(--accent); color: var(--accent); }
+
 .gen-footer { padding: 12px 16px; background: var(--bg-card); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .gen-actions { display: flex; gap: 6px; }
 .action-btn { flex: 1; padding: 7px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; transition: var(--transition); }
@@ -602,6 +650,21 @@ onMounted(async () => {
 
 .pop-enter-active { animation: pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+/* VRAM Bar */
+.vram-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 18px;
+  background: #0A0A0A; border-top: 1px solid var(--border); z-index: 500;
+  display: flex; align-items: center;
+}
+.vram-fill { height: 100%; transition: width 1s ease; }
+.vram-fill.ok { background: rgba(74,222,128,0.3); }
+.vram-fill.warn { background: rgba(251,191,36,0.4); }
+.vram-fill.critical { background: rgba(248,113,113,0.5); }
+.vram-text {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 9px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px;
+}
 
 .global-progress { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: transparent; z-index: 1000; }
 .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }

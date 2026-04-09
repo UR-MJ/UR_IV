@@ -654,6 +654,73 @@ class VueBridge(QObject):
         except Exception:
             return json.dumps([])
 
+    @pyqtSlot(result=str)
+    def getWildcardTree(self) -> str:
+        """wildcards/ 디렉토리의 파일 트리 + 내용 반환"""
+        import os
+        wc_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wildcards')
+        if not os.path.isdir(wc_dir):
+            return json.dumps([])
+        tree = []
+        for f in sorted(os.listdir(wc_dir)):
+            fp = os.path.join(wc_dir, f)
+            if not f.endswith('.txt') or not os.path.isfile(fp):
+                continue
+            try:
+                with open(fp, 'r', encoding='utf-8') as fh:
+                    lines = [l.strip() for l in fh if l.strip() and not l.startswith('#')]
+                tree.append({'name': f.replace('.txt', ''), 'file': f, 'tags': lines})
+            except Exception:
+                pass
+        return json.dumps(tree)
+
+    vramUpdated = pyqtSignal(str)  # JSON {used, total, pct}
+    seedExploreResult = pyqtSignal(str)  # JSON {index, path, seed}
+
+    @pyqtSlot(result=str)
+    def getCharacterTags(self, character: str) -> str:
+        """캐릭터 연관 태그 TOP N 반환 (JSONL 기반)"""
+        try:
+            import os
+            jsonl_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'danbooru_character_description_full.jsonl')
+            if not os.path.exists(jsonl_path):
+                return json.dumps([])
+            # 캐시
+            if not hasattr(self, '_char_tag_cache'):
+                self._char_tag_cache = {}
+                print("[CharTags] Loading JSONL...")
+                with open(jsonl_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        try:
+                            d = json.loads(line)
+                            name = d.get('character', d.get('name', '')).lower().strip()
+                            tags = d.get('tags', d.get('general_tags', []))
+                            if isinstance(tags, str):
+                                tags = [t.strip() for t in tags.split(',')]
+                            if name and tags:
+                                if name not in self._char_tag_cache:
+                                    self._char_tag_cache[name] = {}
+                                for t in tags:
+                                    t = t.strip()
+                                    if t:
+                                        self._char_tag_cache[name][t] = self._char_tag_cache[name].get(t, 0) + 1
+                        except Exception:
+                            continue
+                print(f"[CharTags] Loaded {len(self._char_tag_cache)} characters")
+            # 검색
+            char_lower = character.lower().strip().replace(' ', '_')
+            tag_counts = self._char_tag_cache.get(char_lower, {})
+            if not tag_counts:
+                # 부분 매치
+                for k, v in self._char_tag_cache.items():
+                    if char_lower in k:
+                        tag_counts = v
+                        break
+            top = sorted(tag_counts.items(), key=lambda x: -x[1])[:20]
+            return json.dumps([{'tag': t, 'count': c} for t, c in top])
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
     @pyqtSlot(str, result=str)
     def classifyTags(self, tags_json: str) -> str:
         """태그 목록을 분류하여 카테고리별로 반환 (tags_db 기반)"""
