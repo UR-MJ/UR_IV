@@ -298,6 +298,32 @@ class VueBridge(QObject):
                                     detect_count += 1
                     print(f"[YOLO] Detected {detect_count} regions, mask coverage: {combined_mask.sum() / 255}")
 
+                    # SAM 정밀 마스킹 시도 (editor_models/에 SAM 모델 있으면)
+                    if detect_count > 0:
+                        try:
+                            from core.sam_refiner import refine_boxes_with_sam
+                            from tabs.editor.mosaic_panel import get_editor_models_dir
+                            # YOLO bbox 추출
+                            yolo_boxes = []
+                            for mp2 in model_paths:
+                                if not os.path.exists(mp2): continue
+                                model2 = YOLO(mp2)
+                                res2 = model2(img, conf=conf)
+                                for r2 in res2:
+                                    if r2.boxes is not None:
+                                        for box in r2.boxes.xyxy:
+                                            bx1, by1, bx2, by2 = map(int, box.tolist())
+                                            yolo_boxes.append((max(0,bx1), max(0,by1), min(w_img,bx2), min(h_img,by2)))
+                            if yolo_boxes:
+                                sam_mask = refine_boxes_with_sam(img, yolo_boxes, get_editor_models_dir())
+                                if sam_mask.any():
+                                    combined_mask = sam_mask
+                                    print(f"[SAM] Refined mask applied ({len(yolo_boxes)} boxes)")
+                        except ImportError:
+                            print("[SAM] SAM not installed, using YOLO mask")
+                        except Exception as sam_e:
+                            print(f"[SAM] Refinement failed: {sam_e}")
+
                     if operation == 'auto_detect':
                         # MASK ONLY: 마스크를 base64로 반환 (적용 안함)
                         import base64
