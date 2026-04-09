@@ -193,7 +193,8 @@ class ComboBoxProxy(_ProxyBase):
     def setCurrentIndex(self, idx: int):
         if self._index != idx and 0 <= idx < len(self._items):
             self._index = idx
-            self._bridge.pushWidgetValue(self._id, str(idx))
+            # 인덱스가 아닌 텍스트를 Vue로 전송
+            self._bridge.pushWidgetValue(self._id, self._items[idx])
             self.currentTextChanged.emit(self.currentText())
             self.currentIndexChanged.emit(idx)
 

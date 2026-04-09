@@ -16,22 +16,10 @@
               <button class="tool-btn" @click="action('save_preset')">PRESET</button>
               <button class="tool-btn" @click="action('open_tag_weight_editor')">WEIGHT</button>
               <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
+              <button class="tool-btn" @click="showWcManager = true" v-if="wildcards.length">WILDCARD</button>
             </div>
           </div>
 
-          <!-- 와일드카드 매니저 -->
-          <details class="tool-card" v-if="wildcards.length > 0">
-            <summary class="wc-header">WILDCARDS ({{ wildcards.length }})</summary>
-            <div class="wc-list">
-              <details v-for="wc in wildcards" :key="wc.name" class="wc-item">
-                <summary class="wc-name">{{ wc.name }} <span class="wc-count">({{ wc.tags.length }})</span></summary>
-                <div class="wc-tags">
-                  <button v-for="tag in wc.tags" :key="tag" class="wc-tag"
-                    @click="insertWildcardTag(tag)">{{ tag }}</button>
-                </div>
-              </details>
-            </div>
-          </details>
         </div>
         <div class="gen-footer">
           <div class="gen-actions">
@@ -256,7 +244,8 @@
             <div class="ctx-item" @click="ctxSendI2I">🖼️ SEND TO I2I</div>
             <div class="ctx-item" @click="ctxSendInpaint">🎨 SEND TO INPAINT</div>
             <div class="ctx-item" @click="ctxSendEditor">✏️ SEND TO EDITOR</div>
-            <div class="ctx-item" @click="ctxCompare">🔍 COMPARE</div>
+            <div class="ctx-item" @click="ctxCompare('before')">🔍 COMPARE (BEFORE)</div>
+            <div class="ctx-item" @click="ctxCompare('after')">🔍 COMPARE (AFTER)</div>
             <div class="ctx-separator"></div>
             <div class="ctx-item" @click="ctxCopyPath">📋 COPY PATH</div>
             <div class="ctx-item delete" @click="ctxDelete">🗑️ DELETE</div>
@@ -276,6 +265,41 @@
       <div class="vram-fill" :style="{ width: vramInfo.pct + '%' }" :class="vramClass"></div>
       <span class="vram-text">VRAM {{ vramInfo.used }}GB / {{ vramInfo.total }}GB ({{ vramInfo.pct }}%)</span>
     </div>
+
+    <!-- Wildcard Manager Modal -->
+    <transition name="fade">
+      <div v-if="showWcManager" class="wc-overlay" @click.self="showWcManager = false">
+        <div class="wc-modal">
+          <div class="wc-modal-header">
+            <h3>WILDCARD MANAGER</h3>
+            <span class="wc-path">wildcards/</span>
+            <button class="close-btn" @click="showWcManager = false">✕</button>
+          </div>
+          <div class="wc-modal-body">
+            <div class="wc-sidebar">
+              <div v-for="wc in wildcards" :key="wc.name" class="wc-file-item"
+                :class="{ active: selectedWc === wc.name }" @click="selectedWc = wc.name">
+                {{ wc.name }}
+                <span class="wc-file-count">{{ wc.tags.length }}</span>
+              </div>
+            </div>
+            <div class="wc-content">
+              <template v-if="selectedWcData">
+                <div class="wc-content-header">
+                  <h4>{{ selectedWc }}</h4>
+                  <span>사용: <code>{'~/' + selectedWc + '/~'}</code></span>
+                </div>
+                <div class="wc-tag-grid">
+                  <button v-for="tag in selectedWcData.tags" :key="tag" class="wc-tag-btn"
+                    @click="insertWildcardTag(tag)">{{ tag }}</button>
+                </div>
+              </template>
+              <div v-else class="wc-empty">좌측에서 와일드카드 파일을 선택하세요</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <!-- Global Toast Notifications -->
     <transition-group name="toast" tag="div" class="toast-container">
@@ -383,6 +407,9 @@ const ctxMenuStyle = computed(() => {
 })
 
 const wildcards = ref([])
+const showWcManager = ref(false)
+const selectedWc = ref('')
+const selectedWcData = computed(() => wildcards.value.find(w => w.name === selectedWc.value) || null)
 
 function action(name, payload = {}) { requestAction(name, payload) }
 
@@ -407,7 +434,7 @@ const ctxAddFavorite = () => { action('add_favorite', { path: ctxMenu.value.path
 const ctxSendI2I = () => { action('send_to_i2i', { path: ctxMenu.value.path }); hideCtxMenu() }
 const ctxSendInpaint = () => { action('send_to_inpaint', { path: ctxMenu.value.path }); hideCtxMenu() }
 const ctxSendEditor = () => { action('send_to_editor', { path: ctxMenu.value.path }); hideCtxMenu() }
-const ctxCompare = () => { action('send_to_compare', { path: ctxMenu.value.path, slot: 'before' }); hideCtxMenu() }
+const ctxCompare = (slot) => { action('send_to_compare', { path: ctxMenu.value.path, slot }); hideCtxMenu() }
 const ctxCopyPath = () => { navigator.clipboard?.writeText(ctxMenu.value.path); hideCtxMenu() }
 const ctxDelete = () => { action('delete_image', { path: ctxMenu.value.path }); hideCtxMenu() }
 
@@ -569,7 +596,7 @@ onMounted(async () => {
 .ext-res-row input { text-align: center; flex: 1; }
 .ext-res-row span { color: var(--text-muted); }
 .ext-mini-btn { width: 32px; height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); cursor: pointer; flex-shrink: 0; }
-.ext-check-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px; }
+.ext-check-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 4px; white-space: nowrap; }
 .ext-check-row input[type="checkbox"] { accent-color: var(--accent); }
 .ext-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
 .cond-textarea { min-height: 60px; font-size: 11px; line-height: 1.6; font-family: 'Consolas', monospace; }
@@ -587,17 +614,29 @@ onMounted(async () => {
 .tool-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .tool-btn.highlight { color: var(--accent); border-color: var(--accent-dim); }
 
-/* Wildcards */
-.wc-header { font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; cursor: pointer; list-style: none; }
-.wc-header::-webkit-details-marker { display: none; }
-.wc-list { max-height: 200px; overflow-y: auto; margin-top: 8px; }
-.wc-item { margin-bottom: 4px; }
-.wc-name { font-size: 10px; font-weight: 700; color: var(--accent); cursor: pointer; list-style: none; }
-.wc-name::-webkit-details-marker { display: none; }
-.wc-count { color: var(--text-muted); font-weight: 400; }
-.wc-tags { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0; }
-.wc-tag { padding: 2px 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 9px; cursor: pointer; }
-.wc-tag:hover { border-color: var(--accent); color: var(--accent); }
+/* Wildcard Manager Modal */
+.wc-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.wc-modal { width: 700px; height: 500px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.wc-modal-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.wc-modal-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); }
+.wc-path { font-size: 10px; color: var(--text-muted); font-family: monospace; flex: 1; }
+.wc-modal-body { flex: 1; display: flex; overflow: hidden; }
+.wc-sidebar { width: 180px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px; }
+.wc-file-item { padding: 6px 10px; font-size: 11px; color: var(--text-secondary); cursor: pointer; border-radius: 4px; display: flex; justify-content: space-between; }
+.wc-file-item:hover { background: var(--bg-input); }
+.wc-file-item.active { background: var(--accent-dim); color: var(--accent); }
+.wc-file-count { font-size: 9px; color: var(--text-muted); }
+.wc-content { flex: 1; overflow-y: auto; padding: 16px; }
+.wc-content-header { margin-bottom: 12px; }
+.wc-content-header h4 { font-size: 14px; color: var(--text-primary); }
+.wc-content-header span { font-size: 10px; color: var(--text-muted); }
+.wc-content-header code { background: var(--bg-input); padding: 2px 6px; border-radius: 3px; font-size: 10px; color: var(--accent); }
+.wc-tag-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.wc-tag-btn { padding: 5px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; cursor: pointer; }
+.wc-tag-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.wc-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 13px; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 
 .gen-footer { padding: 12px 16px; background: var(--bg-card); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .gen-actions { display: flex; gap: 6px; }
