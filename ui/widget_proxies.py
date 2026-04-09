@@ -182,11 +182,6 @@ class ComboBoxProxy(_ProxyBase):
         self._index = -1
         self._bridge.pushWidgetProperty(self._id, "items", [])
 
-    def currentText(self) -> str:
-        if 0 <= self._index < len(self._items):
-            return self._items[self._index]
-        return ""
-
     def currentIndex(self) -> int:
         return self._index
 
@@ -234,10 +229,19 @@ class ComboBoxProxy(_ProxyBase):
             idx = int(value)
         except ValueError:
             idx = self._items.index(value) if value in self._items else -1
-        if idx != self._index and 0 <= idx < len(self._items):
+        if idx >= 0 and idx != self._index and idx < len(self._items):
             self._index = idx
             self.currentTextChanged.emit(self.currentText())
             self.currentIndexChanged.emit(idx)
+        elif idx < 0 and value:
+            # items에 없는 값이라도 저장 (설정 로드 시 items보다 값이 먼저 올 수 있음)
+            self._fallback_text = value
+
+    def currentText(self) -> str:
+        if 0 <= self._index < len(self._items):
+            return self._items[self._index]
+        # fallback: items 로드 전에 설정된 텍스트 반환
+        return getattr(self, '_fallback_text', '')
 
 
 class CheckBoxProxy(_ProxyBase):

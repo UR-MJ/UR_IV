@@ -253,10 +253,18 @@ const viewImage = async (path) => {
 }
 
 function showMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
-function ctx(actionName) { 
-  requestAction(actionName, { path: ctxMenu.value.path })
-  if (actionName === 'gallery_load_exif') viewImage(ctxMenu.value.path)
-  ctxMenu.value.show = false 
+function ctx(actionName) {
+  const path = ctxMenu.value.path
+  requestAction(actionName, { path })
+  if (actionName === 'gallery_load_exif') viewImage(path)
+  // 삭제 시 즉시 목록에서 제거 (스크롤 유지)
+  if (actionName === 'delete_image') {
+    images.value = images.value.filter(img => img !== path)
+    // 캐시도 업데이트
+    const cacheKey = currentFolder.value || '__default__'
+    if (_cache.has(cacheKey)) _cache.get(cacheKey).images = images.value
+  }
+  ctxMenu.value.show = false
 }
 const quickAction = (name, path) => requestAction(name, { path })
 const sendExifToT2I = () => { if (exifData.value) requestAction('gallery_send_exif_to_t2i', { exif: exifData.value.raw || '', path: exifData.value.path }) }

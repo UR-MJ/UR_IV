@@ -133,8 +133,13 @@
             <span class="legend-item clothing">의상</span>
             <span class="legend-item body">신체</span>
             <span class="legend-item nsfw">NSFW</span>
-            <span class="legend-item action">행동/포즈</span>
+            <span class="legend-item action">포즈</span>
+            <span class="legend-item expression">표정</span>
             <span class="legend-item bg">배경</span>
+            <span class="legend-item objects">사물</span>
+            <span class="legend-item effect">효과</span>
+            <span class="legend-item color-tag">색상</span>
+            <span class="legend-item trait">특성</span>
           </div>
           <div class="detail-actions">
             <button class="primary-btn" @click="applyResult">USE AS PROMPT</button>
@@ -352,14 +357,14 @@ function resetDeepSearch() {
 // 태그 색상 분류 — Python TagClassifier (tags_db 기반)
 const tagCategoryCache = ref({})  // tag → category
 
-// 카테고리 → CSS 클래스 매핑
+// 카테고리 → CSS 클래스 매핑 (세분화)
 const catToColor = {
   'sexual': 'nsfw', 'body_parts': 'body', 'clothing': 'clothing',
-  'pose': 'action', 'expression': 'action', 'background': 'bg',
-  'composition': 'bg', 'effect': 'bg', 'objects': 'general',
-  'character': 'count', 'copyright': 'count', 'artist': 'count',
-  'color': 'general', 'character_trait': 'general', 'animals': 'general',
-  'art_style': 'general', 'general': '',
+  'pose': 'action', 'expression': 'expression', 'background': 'bg',
+  'composition': 'composition', 'effect': 'effect', 'objects': 'objects',
+  'character': 'char', 'copyright': 'copy', 'artist': 'artist-tag',
+  'color': 'color-tag', 'character_trait': 'trait', 'animals': 'objects',
+  'art_style': 'style', 'general': '',
 }
 
 // 인물수 태그는 프론트에서 직접 판단 (빠름)
@@ -394,8 +399,9 @@ async function classifyCurrentTags() {
   }
 }
 
-// previewIdx 변경 시 자동 분류
+// previewIdx 변경 시 + 결과 로드 시 자동 분류
 watch(previewIdx, () => { classifyCurrentTags() })
+watch(() => filteredResults.value.length, () => { if (filteredResults.value.length > 0) classifyCurrentTags() })
 
 function prevResult() { if (previewIdx.value > 0) previewIdx.value-- }
 function nextResult() { if (previewIdx.value < filteredResults.value.length - 1) previewIdx.value++ }
@@ -522,16 +528,31 @@ function importResults() { requestAction('import_search_results') }
 .tag.body { color: #fb923c; border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.05); }
 .tag.nsfw { color: #f87171; border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.05); }
 .tag.action { color: #4ade80; border-color: rgba(74,222,128,0.3); background: rgba(74,222,128,0.05); }
+.tag.expression { color: #fbbf24; border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.05); }
 .tag.bg { color: #38bdf8; border-color: rgba(56,189,248,0.3); background: rgba(56,189,248,0.05); }
+.tag.objects { color: #94a3b8; border-color: rgba(148,163,184,0.3); background: rgba(148,163,184,0.05); }
+.tag.effect { color: #c084fc; border-color: rgba(192,132,252,0.3); background: rgba(192,132,252,0.05); }
+.tag.color-tag { color: #f472b6; border-color: rgba(244,114,182,0.3); background: rgba(244,114,182,0.05); }
+.tag.trait { color: #34d399; border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.05); }
+.tag.composition { color: #818cf8; border-color: rgba(129,140,248,0.3); background: rgba(129,140,248,0.05); }
+.tag.style { color: #e879f9; border-color: rgba(232,121,249,0.3); background: rgba(232,121,249,0.05); }
+.tag.char { color: #2dd4bf; border-color: rgba(45,212,191,0.3); background: rgba(45,212,191,0.05); }
+.tag.copy { color: #22d3ee; border-color: rgba(34,211,238,0.3); background: rgba(34,211,238,0.05); }
+.tag.artist-tag { color: #facc15; border-color: rgba(250,204,21,0.3); background: rgba(250,204,21,0.05); }
 
-.tag-legend { display: flex; gap: 8px; flex-wrap: wrap; }
-.legend-item { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 4px; }
+.tag-legend { display: flex; gap: 6px; flex-wrap: wrap; }
+.legend-item { font-size: 8px; font-weight: 800; padding: 2px 6px; border-radius: 3px; }
 .legend-item.count { color: #60a5fa; background: rgba(96,165,250,0.1); }
 .legend-item.clothing { color: #a78bfa; background: rgba(167,139,250,0.1); }
 .legend-item.body { color: #fb923c; background: rgba(251,146,60,0.1); }
 .legend-item.nsfw { color: #f87171; background: rgba(248,113,113,0.1); }
 .legend-item.action { color: #4ade80; background: rgba(74,222,128,0.1); }
+.legend-item.expression { color: #fbbf24; background: rgba(251,191,36,0.1); }
 .legend-item.bg { color: #38bdf8; background: rgba(56,189,248,0.1); }
+.legend-item.objects { color: #94a3b8; background: rgba(148,163,184,0.1); }
+.legend-item.effect { color: #c084fc; background: rgba(192,132,252,0.1); }
+.legend-item.color-tag { color: #f472b6; background: rgba(244,114,182,0.1); }
+.legend-item.trait { color: #34d399; background: rgba(52,211,153,0.1); }
 
 .detail-actions { display: flex; gap: 10px; }
 .primary-btn { flex: 2; height: 48px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 900; font-size: 13px; letter-spacing: 1px; cursor: pointer; }
