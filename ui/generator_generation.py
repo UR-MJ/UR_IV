@@ -270,8 +270,12 @@ class GenerationMixin:
                     f"🔄 자동 생성 중... ({self.auto_gen_count}장 완료)"
                 )
         else:
-            self.viewer_label.setText(f"❌ 생성 실패\n\n{result}")
-            self.show_status(f"❌ 생성 실패: {result}", 5000)
+            error_msg = f"[E020] 생성 실패: {result}"
+            self.viewer_label.setText(f"❌ {error_msg}")
+            self.show_status(error_msg, 5000)
+            print(f"\n[E020] Generation Failed: {result}")
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.showNotification.emit('error', error_msg)
         
         # 대기열 매니저에 생성 완료 알림
         if hasattr(self, 'queue_manager') and self.queue_manager.is_running:

@@ -66,6 +66,10 @@ class GeneratorMainUI(
 
             # 3. UI 및 프록시 레이어 구축
             self._setup_ui()
+
+            # 에러 핸들러에 bridge 등록
+            from core.error_handler import set_bridge
+            set_bridge(self.vue_bridge)
             
             # 4. 시그널 및 설정 동기화
             self.connect_signals()
@@ -810,11 +814,8 @@ class GeneratorMainUI(
                 print(f"[Bridge] Unhandled action: {action}")
 
         except Exception as e:
-            print(f"[Error] Action '{action}' failed: {e}")
-            traceback.print_exc()
-            # Vue Toast로 에러 알림
-            if hasattr(self, 'vue_bridge'):
-                self.vue_bridge.showNotification.emit('error', f'{action}: {str(e)[:100]}')
+            from core.error_handler import handle_error
+            handle_error('E010', f'Action: {action}', e)
 
     def _load_saved_configs(self):
         """앱 시작 시 조건식 + 기본값 로드"""

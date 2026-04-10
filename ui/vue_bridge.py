@@ -97,8 +97,10 @@ class VueBridge(QObject):
         self.generationStarted.emit()
 
     def send_error(self, msg: str):
-        self.generationError.emit(msg)
-        self.showNotification.emit('error', msg)
+        error_msg = f'[E020] {msg}'
+        self.generationError.emit(error_msg)
+        self.showNotification.emit('error', error_msg)
+        print(f"[E020] Generation Error: {msg}")
 
     # ── Vue → Python 슬롯 ──
 
@@ -345,8 +347,9 @@ class VueBridge(QObject):
                         else:
                             return json.dumps({'error': f'감지된 영역이 없습니다 (conf={conf})'})
                 except Exception as e:
-                    import traceback; traceback.print_exc()
-                    return json.dumps({'error': f'Auto censor 실패: {e}'})
+                    from core.error_handler import handle_error
+                    handle_error('E100', 'Auto Censor', e)
+                    return json.dumps({'error': f'[E100] Auto censor 실패: {e}'})
 
             elif operation == 'text_watermark':
                 # 텍스트 워터마크
@@ -452,9 +455,9 @@ class VueBridge(QObject):
                 
             return json.dumps({'path': out_path.replace('\\', '/'), 'width': img.shape[1], 'height': img.shape[0]})
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return json.dumps({'error': str(e)})
+            from core.error_handler import handle_error
+            handle_error('E040', f'Editor: {operation}', e)
+            return json.dumps({'error': f'[E040] {operation}: {e}'})
 
     # ── 갤러리 ──
 
@@ -957,7 +960,8 @@ class VueBridge(QObject):
                         result[tag] = 'general'
             return json.dumps(result)
         except Exception as e:
-            import traceback; traceback.print_exc()
+            from core.error_handler import handle_error
+            handle_error('E050', 'ClassifyTags', e, notify=False)
             return json.dumps({'error': str(e)})
 
     @pyqtSlot(result=str)
