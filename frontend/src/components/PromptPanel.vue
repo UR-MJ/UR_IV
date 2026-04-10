@@ -120,13 +120,12 @@
         <div class="tag-block-view" v-if="tagBlockMode">
           <div class="tag-blocks">
             <button v-for="(tb, ti) in mainTagBlocks" :key="ti"
-              class="tag-block" :class="{ disabled: tb.off }"
+              class="tag-block" :class="{ disabled: tb.off, dragging: dragState.field === 'main' && dragState.idx === ti }"
               @click="toggleTagBlock(ti)"
-              @contextmenu.prevent="removeTagBlock(ti)">{{ tb.text }}</button>
+              @contextmenu.prevent="removeTagBlock(ti)"
+              draggable="true" @dragstart="blockDragStart('main', ti)" @dragover.prevent @drop="blockDrop('main', ti)">{{ tb.text }}</button>
           </div>
-          <div class="tag-block-add">
-            <input v-model="newBlockTag" placeholder="태그 추가..." @keydown.enter="addTagBlock" class="block-input" />
-          </div>
+          <input v-model="newBlockTag" placeholder="태그 추가... (Enter)" @keydown.enter="addTagBlock" class="block-input" />
         </div>
         <!-- 텍스트 모드 -->
         <textarea v-else ref="mainRef" v-model="widgets.main_prompt_text" class="auto-grow" placeholder="메인 태그..."
@@ -137,11 +136,29 @@
         </div>
       </div>
       <div class="grid-2">
-        <div class="input-group"><label>Prefix</label>
-          <textarea ref="prefixRef" v-model="widgets.prefix_prompt_text" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
+        <div class="input-group">
+          <label>Prefix</label>
+          <div class="tag-block-view" v-if="tagBlockMode">
+            <div class="tag-blocks">
+              <button v-for="(tb, ti) in prefixBlocks" :key="ti" class="tag-block" :class="{ disabled: tb.off }"
+                @click="toggleFieldBlock('prefix', ti)" @contextmenu.prevent="removeFieldBlock('prefix', ti)"
+                draggable="true" @dragstart="blockDragStart('prefix', ti)" @dragover.prevent @drop="blockDrop('prefix', ti)">{{ tb.text }}</button>
+            </div>
+            <input v-model="prefixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('prefix')" class="block-input" />
+          </div>
+          <textarea v-else ref="prefixRef" v-model="widgets.prefix_prompt_text" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
         </div>
-        <div class="input-group"><label>Suffix</label>
-          <textarea ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
+        <div class="input-group">
+          <label>Suffix</label>
+          <div class="tag-block-view" v-if="tagBlockMode">
+            <div class="tag-blocks">
+              <button v-for="(tb, ti) in suffixBlocks" :key="ti" class="tag-block" :class="{ disabled: tb.off }"
+                @click="toggleFieldBlock('suffix', ti)" @contextmenu.prevent="removeFieldBlock('suffix', ti)"
+                draggable="true" @dragstart="blockDragStart('suffix', ti)" @dragover.prevent @drop="blockDrop('suffix', ti)">{{ tb.text }}</button>
+            </div>
+            <input v-model="suffixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('suffix')" class="block-input" />
+          </div>
+          <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
         </div>
       </div>
       <div class="input-group">
@@ -181,10 +198,23 @@ const tagBlockMode = ref(false)
 const mainTagBlocks = ref([])
 const totalBlocks = ref([])
 const negBlocks = ref([])
+const prefixBlocks = ref([])
+const suffixBlocks = ref([])
 const newBlockTag = ref('')
+const prefixNewTag = ref('')
+const suffixNewTag = ref('')
+const dragState = reactive({ field: '', idx: -1 })
 
+// 와일드카드 문법(__name__) 보존하는 파싱
 function parseBlocks(text) {
-  return (text || '').split(',').map(t => t.trim()).filter(Boolean).map(t => ({ text: t, off: false }))
+  if (!text) return []
+  // __wildcard__ 내부의 쉼표를 보호
+  const protected_ = text.replace(/__([^_]+)__/g, (m) => m.replace(/,/g, '\x00'))
+  return protected_.split(',').map(t => t.trim().replace(/\x00/g, ',')).filter(Boolean).map(t => ({ text: t, off: false }))
+}
+
+function blocksToText(blocks) {
+  return blocks.filter(b => !b.off).map(b => b.text).join(', ')
 }
 
 function toggleBlockMode() {
@@ -193,57 +223,74 @@ function toggleBlockMode() {
     mainTagBlocks.value = parseBlocks(widgets.main_prompt_text)
     totalBlocks.value = parseBlocks(widgets.total_prompt_display)
     negBlocks.value = parseBlocks(widgets.neg_prompt_text)
+    prefixBlocks.value = parseBlocks(widgets.prefix_prompt_text)
+    suffixBlocks.value = parseBlocks(widgets.suffix_prompt_text)
   } else {
     syncBlocksToText()
   }
 }
 
-function toggleTotalBlock(idx) {
-  totalBlocks.value[idx].off = !totalBlocks.value[idx].off
-  // total은 읽기 전용이므로 off만 시각적 표시
-}
-function toggleNegBlock(idx) {
-  negBlocks.value[idx].off = !negBlocks.value[idx].off
-  widgets.neg_prompt_text = negBlocks.value.filter(b => !b.off).map(b => b.text).join(', ')
+const fieldBlockMap = {
+  main: { blocks: () => mainTagBlocks, widget: 'main_prompt_text' },
+  prefix: { blocks: () => prefixBlocks, widget: 'prefix_prompt_text' },
+  suffix: { blocks: () => suffixBlocks, widget: 'suffix_prompt_text' },
+  neg: { blocks: () => negBlocks, widget: 'neg_prompt_text' },
 }
 
+function syncFieldBlocks(field) {
+  const m = fieldBlockMap[field]
+  if (m) widgets[m.widget] = blocksToText(m.blocks().value)
+}
 function syncBlocksToText() {
-  const active = mainTagBlocks.value.filter(b => !b.off).map(b => b.text)
-  widgets.main_prompt_text = active.join(', ')
+  for (const f of ['main', 'prefix', 'suffix']) syncFieldBlocks(f)
 }
 
-function toggleTagBlock(idx) {
-  mainTagBlocks.value[idx].off = !mainTagBlocks.value[idx].off
-  syncBlocksToText()
-}
-
-function removeTagBlock(idx) {
-  mainTagBlocks.value.splice(idx, 1)
-  syncBlocksToText()
-}
-
+function toggleTagBlock(idx) { mainTagBlocks.value[idx].off = !mainTagBlocks.value[idx].off; syncFieldBlocks('main') }
+function removeTagBlock(idx) { mainTagBlocks.value.splice(idx, 1); syncFieldBlocks('main') }
 function addTagBlock() {
   const tag = newBlockTag.value.trim()
-  if (tag) {
-    mainTagBlocks.value.push({ text: tag, off: false })
-    newBlockTag.value = ''
-    syncBlocksToText()
-  }
+  if (tag) { mainTagBlocks.value.push({ text: tag, off: false }); newBlockTag.value = ''; syncFieldBlocks('main') }
 }
 
-// 텍스트 변경 시 블록 동기화
+function toggleFieldBlock(field, idx) { fieldBlockMap[field].blocks().value[idx].off = !fieldBlockMap[field].blocks().value[idx].off; syncFieldBlocks(field) }
+function removeFieldBlock(field, idx) { fieldBlockMap[field].blocks().value.splice(idx, 1); syncFieldBlocks(field) }
+function addFieldBlock(field) {
+  const tagRef = field === 'prefix' ? prefixNewTag : suffixNewTag
+  const tag = tagRef.value.trim()
+  if (tag) { fieldBlockMap[field].blocks().value.push({ text: tag, off: false }); tagRef.value = ''; syncFieldBlocks(field) }
+}
+
+function toggleTotalBlock(idx) { totalBlocks.value[idx].off = !totalBlocks.value[idx].off }
+function toggleNegBlock(idx) { negBlocks.value[idx].off = !negBlocks.value[idx].off; syncFieldBlocks('neg') }
+
+// 블록 드래그 앤 드롭
+function blockDragStart(field, idx) { dragState.field = field; dragState.idx = idx }
+function blockDrop(field, targetIdx) {
+  if (dragState.field !== field || dragState.idx < 0) { dragState.field = ''; dragState.idx = -1; return }
+  const bRef = field === 'main' ? mainTagBlocks : fieldBlockMap[field]?.blocks()
+  if (!bRef) return
+  const arr = bRef.value
+  const [item] = arr.splice(dragState.idx, 1)
+  arr.splice(targetIdx > dragState.idx ? targetIdx : targetIdx, 0, item)
+  dragState.field = ''; dragState.idx = -1
+  syncFieldBlocks(field)
+}
+
+// 텍스트 변경 시 블록 동기화 (와일드카드 문법 보존)
 function syncWatcher(widgetKey, blocksRef) {
   watch(() => widgets[widgetKey], (newVal) => {
-    if (tagBlockMode.value && newVal) {
-      const tags = newVal.split(',').map(t => t.trim()).filter(Boolean)
-      const offSet = new Set(blocksRef.value.filter(b => b.off).map(b => b.text.toLowerCase()))
-      blocksRef.value = tags.map(t => ({ text: t, off: offSet.has(t.toLowerCase()) }))
+    if (tagBlockMode.value && newVal != null) {
+      const newBlocks = parseBlocks(String(newVal))
+      const offSet = new Set(blocksRef.value.filter(b => b.off).map(b => b.text))
+      blocksRef.value = newBlocks.map(b => ({ ...b, off: offSet.has(b.text) }))
     }
   })
 }
 syncWatcher('main_prompt_text', mainTagBlocks)
 syncWatcher('total_prompt_display', totalBlocks)
 syncWatcher('neg_prompt_text', negBlocks)
+syncWatcher('prefix_prompt_text', prefixBlocks)
+syncWatcher('suffix_prompt_text', suffixBlocks)
 
 // 딥 프롬프트 클리너
 const optResult = ref('')
@@ -486,6 +533,9 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 }
 .tag-block:hover { border-color: var(--accent); }
 .tag-block.disabled { opacity: 0.3; text-decoration: line-through; color: var(--text-muted); background: transparent; }
+.tag-block.dragging { opacity: 0.5; border-style: dashed; }
+.tag-block[draggable="true"] { cursor: grab; }
+.tag-block[draggable="true"]:active { cursor: grabbing; }
 .tag-block.neg-block { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
 .tag-block-view.neg { border-color: rgba(248,113,113,0.15); }
 .tag-block-add { margin-top: 6px; }
