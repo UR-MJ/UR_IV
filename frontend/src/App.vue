@@ -8,7 +8,8 @@
       <!-- Left Panel -->
       <aside class="side-panel left" v-if="showLeftPanel">
         <div class="panel-scroll">
-          <PromptPanel @toggle-extend="showExtendPanel = !showExtendPanel" />
+          <PromptPanel @toggle-extend="showExtendPanel = !showExtendPanel"
+            @open-wildcard="openWildcardByName" />
           <div class="tool-card">
             <label>Studio Tools</label>
             <div class="tool-grid">
@@ -646,6 +647,11 @@ function useWcSyntax() {
 }
 
 function addWcLine(afterIdx) { wcEditLines.value.splice(afterIdx + 1, 0, '') }
+
+function openWildcardByName(name) {
+  showWcManager.value = true
+  selectWildcard(name)
+}
 
 function action(name, payload = {}) { requestAction(name, payload) }
 

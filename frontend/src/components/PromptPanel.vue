@@ -10,8 +10,10 @@
       <div class="tag-block-view" v-if="tagBlockMode">
         <div class="tag-blocks">
           <button v-for="(tb, ti) in totalBlocks" :key="ti"
-            class="tag-block" :class="{ disabled: tb.off }"
-            @click="toggleTotalBlock(ti)">{{ tb.text }}</button>
+            class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
+            @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleTotalBlock(ti)">
+            <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}
+          </button>
         </div>
       </div>
       <textarea v-else ref="totalPromptRef" v-model="widgets.total_prompt_display"
@@ -120,10 +122,12 @@
         <div class="tag-block-view" v-if="tagBlockMode">
           <div class="tag-blocks">
             <button v-for="(tb, ti) in mainTagBlocks" :key="ti"
-              class="tag-block" :class="{ disabled: tb.off, dragging: dragState.field === 'main' && dragState.idx === ti }"
-              @click="toggleTagBlock(ti)"
+              class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, dragging: dragState.field === 'main' && dragState.idx === ti, wildcard: isWildcard(tb.text) }]"
+              @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleTagBlock(ti)"
               @contextmenu.prevent="removeTagBlock(ti)"
-              draggable="true" @dragstart="blockDragStart('main', ti)" @dragover.prevent @drop="blockDrop('main', ti)">{{ tb.text }}</button>
+              draggable="true" @dragstart="blockDragStart('main', ti)" @dragover.prevent @drop="blockDrop('main', ti)">
+              <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}
+            </button>
           </div>
           <input v-model="newBlockTag" placeholder="태그 추가... (Enter)" @keydown.enter="addTagBlock" class="block-input" />
         </div>
@@ -140,9 +144,10 @@
           <label>Prefix</label>
           <div class="tag-block-view" v-if="tagBlockMode">
             <div class="tag-blocks">
-              <button v-for="(tb, ti) in prefixBlocks" :key="ti" class="tag-block" :class="{ disabled: tb.off }"
-                @click="toggleFieldBlock('prefix', ti)" @contextmenu.prevent="removeFieldBlock('prefix', ti)"
-                draggable="true" @dragstart="blockDragStart('prefix', ti)" @dragover.prevent @drop="blockDrop('prefix', ti)">{{ tb.text }}</button>
+              <button v-for="(tb, ti) in prefixBlocks" :key="ti" class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
+                @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleFieldBlock('prefix', ti)" @contextmenu.prevent="removeFieldBlock('prefix', ti)"
+                draggable="true" @dragstart="blockDragStart('prefix', ti)" @dragover.prevent @drop="blockDrop('prefix', ti)">
+                <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}</button>
             </div>
             <input v-model="prefixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('prefix')" class="block-input" />
           </div>
@@ -152,9 +157,10 @@
           <label>Suffix</label>
           <div class="tag-block-view" v-if="tagBlockMode">
             <div class="tag-blocks">
-              <button v-for="(tb, ti) in suffixBlocks" :key="ti" class="tag-block" :class="{ disabled: tb.off }"
-                @click="toggleFieldBlock('suffix', ti)" @contextmenu.prevent="removeFieldBlock('suffix', ti)"
-                draggable="true" @dragstart="blockDragStart('suffix', ti)" @dragover.prevent @drop="blockDrop('suffix', ti)">{{ tb.text }}</button>
+              <button v-for="(tb, ti) in suffixBlocks" :key="ti" class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
+                @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleFieldBlock('suffix', ti)" @contextmenu.prevent="removeFieldBlock('suffix', ti)"
+                draggable="true" @dragstart="blockDragStart('suffix', ti)" @dragover.prevent @drop="blockDrop('suffix', ti)">
+                <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}</button>
             </div>
             <input v-model="suffixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('suffix')" class="block-input" />
           </div>
@@ -176,7 +182,7 @@ import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from './CustomSelect.vue'
 
-const emit = defineEmits(['toggle-extend'])
+const emit = defineEmits(['toggle-extend', 'open-wildcard'])
 
 const store = useWidgetStore()
 const widgets = store.widgets
@@ -229,6 +235,61 @@ function toggleBlockMode() {
     syncBlocksToText()
   }
 }
+
+// 블록 색상 분류 (Search 탭과 동일 체계)
+const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
+const blockColorCache = ref({})
+
+function blockColorClass(text) {
+  const t = text.trim().toLowerCase().replace(/ /g, '_')
+  if (isWildcard(text)) return 'wc-block'
+  if (countPattern.test(t)) return 'bc-count'
+  const cached = blockColorCache.value[t]
+  if (cached) return 'bc-' + cached
+  return ''
+}
+
+function isWildcard(text) {
+  return text.includes('__') && text.match(/__[^_]+__/)
+}
+
+// 와일드카드 블록 클릭 → 매니저 열기 + 해당 항목 선택
+function openWildcardFor(text) {
+  const match = text.match(/__([^_]+)__/)
+  if (match) emit('open-wildcard', match[1])
+}
+
+// 태그 색상 배치 분류 요청
+async function classifyBlockTags() {
+  const allTags = new Set()
+  for (const blocks of [mainTagBlocks.value, prefixBlocks.value, suffixBlocks.value, totalBlocks.value]) {
+    for (const b of blocks) {
+      const t = b.text.trim().replace(/ /g, '_')
+      if (t && !isWildcard(b.text) && !countPattern.test(t.toLowerCase()) && !blockColorCache.value[t.toLowerCase()]) {
+        allTags.add(t)
+      }
+    }
+  }
+  if (allTags.size === 0) return
+  const backend = await getBackend()
+  if (backend.classifyTags) {
+    backend.classifyTags(JSON.stringify([...allTags]), (json) => {
+      try {
+        const result = JSON.parse(json)
+        if (!result.error) {
+          const catMap = { 'sexual':'nsfw', 'body_parts':'body', 'clothing':'clothing', 'pose':'action', 'expression':'expression', 'background':'bg', 'composition':'bg', 'effect':'effect', 'objects':'objects', 'color':'color', 'character_trait':'trait' }
+          for (const [tag, cat] of Object.entries(result)) {
+            blockColorCache.value[tag.toLowerCase()] = catMap[cat] || ''
+          }
+        }
+      } catch {}
+    })
+  }
+}
+
+// 블록 모드 진입 또는 블록 변경 시 색상 분류
+watch(tagBlockMode, (v) => { if (v) setTimeout(classifyBlockTags, 100) })
+watch(() => mainTagBlocks.value.length, () => { if (tagBlockMode.value) classifyBlockTags() })
 
 const fieldBlockMap = {
   main: { blocks: () => mainTagBlocks, widget: 'main_prompt_text' },
@@ -536,6 +597,23 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .tag-block.dragging { opacity: 0.5; border-style: dashed; }
 .tag-block[draggable="true"] { cursor: grab; }
 .tag-block[draggable="true"]:active { cursor: grabbing; }
+/* 블록 색상 (Search 탭과 동일) */
+.tag-block.bc-count { border-color: rgba(96,165,250,0.3); color: #60a5fa; }
+.tag-block.bc-nsfw { border-color: rgba(248,113,113,0.3); color: #f87171; }
+.tag-block.bc-body { border-color: rgba(251,146,60,0.3); color: #fb923c; }
+.tag-block.bc-clothing { border-color: rgba(167,139,250,0.3); color: #a78bfa; }
+.tag-block.bc-action { border-color: rgba(74,222,128,0.3); color: #4ade80; }
+.tag-block.bc-expression { border-color: rgba(251,191,36,0.3); color: #fbbf24; }
+.tag-block.bc-bg { border-color: rgba(56,189,248,0.3); color: #38bdf8; }
+.tag-block.bc-effect { border-color: rgba(192,132,252,0.3); color: #c084fc; }
+.tag-block.bc-objects { border-color: rgba(148,163,184,0.3); color: #94a3b8; }
+.tag-block.bc-color { border-color: rgba(244,114,182,0.3); color: #f472b6; }
+.tag-block.bc-trait { border-color: rgba(52,211,153,0.3); color: #34d399; }
+/* 와일드카드 블록 */
+.tag-block.wc-block { border-color: rgba(250,204,21,0.4); background: rgba(250,204,21,0.08); color: var(--accent); border-style: dashed; }
+.tag-block.wildcard { cursor: pointer; }
+.tag-block.wildcard:hover { background: rgba(250,204,21,0.15); }
+.wc-icon { margin-right: 3px; font-size: 10px; }
 .tag-block.neg-block { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
 .tag-block-view.neg { border-color: rgba(248,113,113,0.15); }
 .tag-block-add { margin-top: 6px; }
