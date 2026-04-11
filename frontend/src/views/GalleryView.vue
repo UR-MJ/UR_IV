@@ -55,7 +55,7 @@
 
     <!-- 이미지 확대 뷰 (풀스크린 오버레이) -->
     <transition name="fade">
-      <div v-if="largeView" class="large-view-overlay" @click.self="largeView = null">
+      <div v-if="largeView" class="large-view-overlay" @click.self="largeView = null; exifData = null">
         <div class="large-view-panel">
           <div class="large-view-header">
             <span class="large-filename">{{ largeView.filename }}</span>
@@ -66,7 +66,7 @@
               <button class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
               <button class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
               <button class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
-              <button class="lv-close" @click="largeView = null">✕</button>
+              <button class="lv-close" @click="largeView = null; exifData = null">✕</button>
             </div>
           </div>
           <div class="large-view-body">
@@ -258,8 +258,10 @@ const viewImage = async (path) => {
   if (backend.getImageExif) backend.getImageExif(path, (json) => {
     try {
       const d = JSON.parse(json)
-      exifData.value = d
-      largeView.value = d  // 클릭 시 바로 확대 뷰
+      largeView.value = d  // 항상 확대 뷰 (닫기 버튼으로 종료)
+      // METADATA OFF면 exifData는 설정하지 않음 (사이드바 안 뜸)
+      if (showMetadata.value) exifData.value = d
+      else exifData.value = null
     } catch {}
   })
 }
@@ -286,12 +288,16 @@ const hideMenu = () => ctxMenu.value.show = false
 
 onMounted(async () => {
   document.addEventListener('click', hideMenu)
-  // 마지막 폴더 경로 로드
+  // 마지막 폴더 경로 로드 후 이미지 로드
   const bk = await getBackend()
   if (bk.getLastGalleryFolder) {
-    bk.getLastGalleryFolder((f) => { if (f) { currentFolder.value = f } })
+    bk.getLastGalleryFolder((f) => {
+      if (f) currentFolder.value = f
+      loadImages()  // 경로 설정 후 로드
+    })
+  } else {
+    loadImages()
   }
-  loadImages()
   onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
 
   // 무한 스크롤

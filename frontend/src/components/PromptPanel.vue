@@ -450,6 +450,7 @@ onMounted(() => {
       if (typeof prefs.ad_s1_enabled === 'boolean') widgets.ad_slot1_group = prefs.ad_s1_enabled ? 'true' : 'false'
       if (typeof prefs.ad_s2_enabled === 'boolean') widgets.ad_slot2_group = prefs.ad_s2_enabled ? 'true' : 'false'
       if (typeof prefs.negpip_enabled === 'boolean') widgets.negpip_group = prefs.negpip_enabled ? 'true' : 'false'
+      if (typeof prefs.galleryShowMetadata === 'boolean') window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata))
     } catch {}
   })
   onBackendEvent('ollamaResult', (json) => {

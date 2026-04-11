@@ -254,7 +254,11 @@ onMounted(async () => {
   onBackendEvent('uiPrefsLoaded', (json) => {
     try {
       const prefs = JSON.parse(json)
-      if (typeof prefs.tagBlockMode === 'boolean') defaultBlockMode.value = prefs.tagBlockMode
+      if (typeof prefs.tagBlockMode === 'boolean') { defaultBlockMode.value = prefs.tagBlockMode; window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode)) }
+      if (typeof prefs.cleanDuplicates === 'boolean') cleanDuplicates.value = prefs.cleanDuplicates
+      if (typeof prefs.cleanSpaces === 'boolean') cleanSpaces.value = prefs.cleanSpaces
+      if (typeof prefs.cleanUnderscore === 'boolean') cleanUnderscore.value = prefs.cleanUnderscore
+      if (typeof prefs.galleryShowMetadata === 'boolean') { galleryMetadata.value = prefs.galleryShowMetadata; window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata)) }
     } catch {}
   })
 })
@@ -295,6 +299,7 @@ const act = (name) => {
       ad_s1_enabled: stWidgets.ad_slot1_group === 'true',
       ad_s2_enabled: stWidgets.ad_slot2_group === 'true',
       negpip_enabled: stWidgets.negpip_group === 'true',
+      galleryShowMetadata: galleryMetadata.value,
     })
   }
   requestAction(name)
