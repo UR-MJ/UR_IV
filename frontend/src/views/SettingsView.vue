@@ -67,7 +67,7 @@
               </label>
               <label class="toggle-row">
                 <span>Tag Block Mode</span>
-                <input type="checkbox" v-model="defaultBlockMode" @change="localStorage.setItem('tagBlockMode', String(defaultBlockMode))" />
+                <input type="checkbox" v-model="defaultBlockMode" @change="setBlockMode" />
               </label>
             </div>
           </div>
@@ -217,7 +217,11 @@ const comfyUrl = ref('http://127.0.0.1:8188')
 const cleanDuplicates = ref(true)
 const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
-const defaultBlockMode = ref(localStorage.getItem('tagBlockMode') === 'true')
+const defaultBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
+function setBlockMode() {
+  window.localStorage.setItem('tagBlockMode', String(defaultBlockMode.value))
+  console.log('[Settings] Block mode set to:', defaultBlockMode.value)
+}
 
 const defaultOrder = ['T2I','I2I','Inpaint','Event Gen','Search','Batch / Upscale','Gallery','XYZ Plot','PNG Info','Favorites','Settings']
 const tabOrder = ref([...defaultOrder])
@@ -235,7 +239,7 @@ const resetTabOrder = () => tabOrder.value = [...defaultOrder]
 const act = (name) => requestAction(name)
 
 // 기본값 설정
-const FACTORY_DEFAULTS = { steps: 20, cfg: 7, width: 1024, height: 1024, seed: '-1', denoising: 0.75, brushSize: 20, effectStrength: 15, yoloConf: 0.25, snapRadius: 12, defaultRating: 'g' }
+const FACTORY_DEFAULTS = { steps: 20, cfg: 7, width: 1024, height: 1024, seed: '-1', denoising: 0.75, sampler: '', scheduler: '', brushSize: 20, effectStrength: 15, yoloConf: 0.25, snapRadius: 12, defaultRating: 'g' }
 const defaults = reactive({ ...FACTORY_DEFAULTS })
 
 function saveDefaults() {

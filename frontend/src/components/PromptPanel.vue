@@ -119,7 +119,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from './CustomSelect.vue'
@@ -129,19 +129,22 @@ const emit = defineEmits(['toggle-extend', 'open-wildcard'])
 const store = useWidgetStore()
 const widgets = store.widgets
 
-// 블록 모드 (Settings에서 제어, localStorage + storage 이벤트)
-const tagBlockMode = ref(localStorage.getItem('tagBlockMode') === 'true')
-watch(tagBlockMode, v => localStorage.setItem('tagBlockMode', String(v)))
+// 블록 모드 (Settings에서 제어)
+const tagBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
+watch(tagBlockMode, v => window.localStorage.setItem('tagBlockMode', String(v)))
 
-// storage 이벤트로 다른 탭/컴포넌트에서 변경 시 즉시 반영
-window.addEventListener('storage', (e) => {
-  if (e.key === 'tagBlockMode') tagBlockMode.value = e.newValue === 'true'
+// 같은 SPA 내 변경 감지 (keep-alive 환경)
+let _blockModeTimer = null
+onMounted(() => {
+  _blockModeTimer = setInterval(() => {
+    const stored = window.localStorage.getItem('tagBlockMode') === 'true'
+    if (stored !== tagBlockMode.value) {
+      tagBlockMode.value = stored
+      console.log('[PromptPanel] Block mode synced:', stored)
+    }
+  }, 300)
 })
-// 같은 탭 내에서도 변경 감지 (setInterval fallback)
-setInterval(() => {
-  const stored = localStorage.getItem('tagBlockMode') === 'true'
-  if (stored !== tagBlockMode.value) tagBlockMode.value = stored
-}, 500)
+onUnmounted(() => { if (_blockModeTimer) clearInterval(_blockModeTimer) })
 
 const artistLocked = computed({
   get: () => widgets.btn_lock_artist === 'true',
