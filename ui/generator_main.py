@@ -763,6 +763,16 @@ class GeneratorMainUI(
                     self.vue_bridge.compareImageLoaded.emit(json.dumps({'slot': slot, 'path': clean}))
                     self.vue_bridge.tabChanged.emit('png')
 
+            # ═══════ UI 설정 저장 ═══════
+            elif action == 'save_ui_prefs':
+                try:
+                    prefs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ui_prefs.json')
+                    os.makedirs(os.path.dirname(prefs_path), exist_ok=True)
+                    with open(prefs_path, 'w', encoding='utf-8') as f:
+                        json.dump(payload, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+
             # ═══════ 글로벌 가중치 저장 ═══════
             elif action == 'save_global_weights':
                 try:
@@ -853,6 +863,16 @@ class GeneratorMainUI(
                 print(f"[Config] Global weights loaded: {len(weights)} tags")
         except Exception as e:
             print(f"[Config] Failed to load weights: {e}")
+        try:
+            prefs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ui_prefs.json')
+            if os.path.exists(prefs_path):
+                with open(prefs_path, 'r', encoding='utf-8') as f:
+                    prefs = json.load(f)
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.uiPrefsLoaded.emit(json.dumps(prefs))
+                print(f"[Config] UI prefs loaded")
+        except Exception as e:
+            print(f"[Config] Failed to load UI prefs: {e}")
 
     def _apply_vue_conditional_rules(self, pos_rules: list, neg_rules: list):
         """Vue에서 전달된 조건부 프롬프트 규칙 적용"""

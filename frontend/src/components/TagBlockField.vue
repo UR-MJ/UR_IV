@@ -87,7 +87,7 @@ function addBlock() {
 }
 
 function startEdit(idx) {
-  if (isWc(blocks.value[idx].text)) { emit('open-wildcard', blocks.value[idx].text.match(/__([^_]+)__/)?.[1]); return }
+  if (isWc(blocks.value[idx].text)) { emit('open-wildcard', blocks.value[idx].text.match(/__(.+?)__/)?.[1]); return }
   editIdx.value = idx
   editText.value = blocks.value[idx].text
   nextTick(() => { if (editInputRef.value?.[0]) editInputRef.value[0].focus() })
@@ -127,7 +127,7 @@ function onDrop() {
 }
 
 function colorClass(text) { return props.colorFn(text) }
-function isWc(text) { return text.includes('__') && /__[^_]+__/.test(text) }
+function isWc(text) { return /__.+__/.test(text) }
 </script>
 
 <style scoped>

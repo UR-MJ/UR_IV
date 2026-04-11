@@ -109,11 +109,18 @@
         <TagBlockField v-if="tagBlockMode" v-model="widgets.suffix_prompt_text" :color-fn="blockColorClass" placeholder="후행 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
       </div>
-      <div class="input-group">
-        <label>Exclude (Local)</label>
-        <TagBlockField v-if="tagBlockMode" v-model="widgets.exclude_prompt_local_input" :color-fn="() => 'bc-nsfw'" placeholder="제외 추가..." />
-        <input v-else type="text" v-model="widgets.exclude_prompt_local_input" placeholder="제외 태그..." />
-      </div>
+      <details class="input-group exclude-section">
+        <summary class="exclude-toggle">EXCLUDE (LOCAL) ▾</summary>
+        <div class="exclude-help">
+          <span>단어 → 완전 일치 제외</span>
+          <span>_단어 → 끝나는 태그 제외 (ex: _hair → blue_hair)</span>
+          <span>단어_ → 시작하는 태그 제외 (ex: red_ → red_hair)</span>
+          <span>_단어_ → 포함하는 태그 모두 제외 (ex: _hair_ → red_hair_ornament)</span>
+          <span>~단어 → 예외 (제외하지 않고 유지)</span>
+        </div>
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.exclude_prompt_local_input" :color-fn="excludeColorFn" placeholder="제외 규칙 추가..." />
+        <textarea v-else v-model="widgets.exclude_prompt_local_input" class="auto-grow exclude-textarea" placeholder="제외 규칙 (쉼표 구분)..." rows="2"></textarea>
+      </details>
     </details>
   </div>
 </template>
@@ -166,8 +173,17 @@ const tokenCount = computed(() => { const t = widgets.total_prompt_display; retu
 const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
 const blockColorCache = ref({})
 
+function excludeColorFn(text) {
+  const t = text.trim()
+  if (t.startsWith('~')) return 'bc-action'  // 예외 (초록)
+  if (t.startsWith('_') && t.endsWith('_')) return 'bc-nsfw'  // 양쪽 포함 (빨강)
+  if (t.startsWith('_')) return 'bc-body'  // 끝 매치 (주황)
+  if (t.endsWith('_')) return 'bc-expression'  // 시작 매치 (노랑)
+  return 'bc-nsfw'  // 완전 일치 (빨강)
+}
+
 function blockColorClass(text) {
-  if (text.includes('__') && /__[^_]+__/.test(text)) return 'wc-block'
+  if (text.includes('__') && /__(.+?)__/.test(text)) return 'wc-block'
   let t = text.trim().toLowerCase().replace(/ /g, '_').replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
   if (countPattern.test(t)) return 'bc-count'
   return blockColorCache.value[t] ? 'bc-' + blockColorCache.value[t] : ''
@@ -180,7 +196,7 @@ async function classifyVisibleTags() {
     const text = widgets[key] || ''
     for (const t of text.split(',')) {
       let tag = t.trim().replace(/ /g, '_').replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
-      if (tag && !countPattern.test(tag.toLowerCase()) && !blockColorCache.value[tag.toLowerCase()] && !/__[^_]+__/.test(tag)) allTags.add(tag)
+      if (tag && !countPattern.test(tag.toLowerCase()) && !blockColorCache.value[tag.toLowerCase()] && !/__(.+?)__/.test(tag)) allTags.add(tag)
     }
   }
   if (allTags.size === 0) return
@@ -285,6 +301,16 @@ function growAll() { nextTick(() => { ;[totalPromptRef, negRef, artistRef, prefi
 
 onMounted(() => {
   setTimeout(growAll, 500); setTimeout(growAll, 1500)
+  // UI prefs 로드 (재시작 시 블록 모드 복원)
+  onBackendEvent('uiPrefsLoaded', (json) => {
+    try {
+      const prefs = JSON.parse(json)
+      if (typeof prefs.tagBlockMode === 'boolean') {
+        window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode))
+        tagBlockMode.value = prefs.tagBlockMode
+      }
+    } catch {}
+  })
   onBackendEvent('ollamaResult', (json) => {
     ollamaLoading.value = false
     try { const d = JSON.parse(json); if (d.error) { alert('AI Error: ' + d.error); return }; if (d.tags) { widgets.main_prompt_text = d.tags; showNlInput.value = false; nlPrompt.value = '' } } catch {}
@@ -346,6 +372,12 @@ summary::-webkit-details-marker { display: none; }
 .ac-item { padding: 6px 12px; font-size: 11px; color: var(--text-secondary); cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); }
 .ac-item:hover, .ac-item.selected { background: var(--accent-dim); color: var(--accent); }
 label.danger { color: #f87171; }
+.exclude-section { margin-bottom: 0; }
+.exclude-toggle { font-size: 10px; font-weight: 800; color: #f87171; letter-spacing: 1px; cursor: pointer; list-style: none; }
+.exclude-toggle::-webkit-details-marker { display: none; }
+.exclude-help { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; padding: 6px 8px; background: rgba(248,113,113,0.03); border: 1px solid rgba(248,113,113,0.1); border-radius: 4px; }
+.exclude-help span { font-size: 9px; color: var(--text-muted); font-family: 'Consolas', monospace; }
+.exclude-textarea { color: #f87171; border-color: rgba(248,113,113,0.2); font-size: 11px; }
 input[type="number"] { -moz-appearance: textfield; }
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
 /* neg block field */

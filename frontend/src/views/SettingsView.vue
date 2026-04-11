@@ -199,7 +199,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 
 const subTabs = [
@@ -218,6 +218,17 @@ const cleanDuplicates = ref(true)
 const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
 const defaultBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
+
+// UI prefs 로드 시 동기화
+import { onBackendEvent } from '../bridge.js'
+onMounted(() => {
+  onBackendEvent('uiPrefsLoaded', (json) => {
+    try {
+      const prefs = JSON.parse(json)
+      if (typeof prefs.tagBlockMode === 'boolean') defaultBlockMode.value = prefs.tagBlockMode
+    } catch {}
+  })
+})
 function setBlockMode() {
   window.localStorage.setItem('tagBlockMode', String(defaultBlockMode.value))
   console.log('[Settings] Block mode set to:', defaultBlockMode.value)
@@ -236,7 +247,18 @@ function dragDrop(i) {
 }
 const applyTabOrder = () => requestAction('set_tab_order', { order: tabOrder.value })
 const resetTabOrder = () => tabOrder.value = [...defaultOrder]
-const act = (name) => requestAction(name)
+const act = (name) => {
+  // SAVE GLOBAL 시 localStorage 설정도 함께 저장
+  if (name === 'save_settings') {
+    requestAction('save_ui_prefs', {
+      tagBlockMode: defaultBlockMode.value,
+      cleanDuplicates: cleanDuplicates.value,
+      cleanSpaces: cleanSpaces.value,
+      cleanUnderscore: cleanUnderscore.value,
+    })
+  }
+  requestAction(name)
+}
 
 // 기본값 설정
 const FACTORY_DEFAULTS = { steps: 20, cfg: 7, width: 1024, height: 1024, seed: '-1', denoising: 0.75, sampler: '', scheduler: '', brushSize: 20, effectStrength: 15, yoloConf: 0.25, snapRadius: 12, defaultRating: 'g' }

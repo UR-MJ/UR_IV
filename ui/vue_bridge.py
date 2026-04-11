@@ -27,6 +27,7 @@ class VueBridge(QObject):
     batchFilesSelected = pyqtSignal(str) # JSON [paths]
     ollamaResult = pyqtSignal(str)       # JSON {tags, mode} or {error}
     globalWeightsLoaded = pyqtSignal(str) # JSON [{tag, weight}]
+    uiPrefsLoaded = pyqtSignal(str)      # JSON {tagBlockMode, ...}
     compareImageLoaded = pyqtSignal(str) # JSON {slot, path}
     queueItemAdded = pyqtSignal(str)     # JSON {prompt, ...}
     queueCompleted = pyqtSignal(str)     # JSON {total}
