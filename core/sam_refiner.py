@@ -29,9 +29,15 @@ def find_sam_model(models_dir: str) -> tuple:
         ('sam_vit_h', 'sam'),
     ]
 
+    # YOLO 모델 제외 키워드
+    yolo_keywords = ['yolo', 'nsfw', 'detect', 'censor']
+
     for fname in os.listdir(models_dir):
         flow = fname.lower()
         if not flow.endswith(('.pt', '.pth', '.onnx')):
+            continue
+        # YOLO 모델은 SAM으로 취급하지 않음
+        if any(yk in flow for yk in yolo_keywords):
             continue
         for keyword, sam_type in priority:
             if keyword.lower() in flow:
@@ -80,7 +86,9 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
         else:
             return _refine_with_sam(image, boxes, sam_model_path, sam_type, combined_mask)
     except Exception as e:
-        print(f"[SAM] Error: {e}, falling back to bbox")
+        import traceback
+        print(f"[SAM] Error: {e}")
+        traceback.print_exc()
         for (x1, y1, x2, y2) in boxes:
             combined_mask[y1:y2, x1:x2] = 255
         return combined_mask
@@ -91,21 +99,32 @@ def _refine_with_sam(image: np.ndarray, boxes: list, model_path: str,
     """MobileSAM / SAM으로 정밀 마스킹"""
     import torch
 
+    # SAM 라이브러리 로드 (여러 패키지 시도)
+    SamPredictor = None
+    sam_model_registry = None
+    model_type = 'vit_b'
+
     if sam_type == 'mobile_sam':
         try:
             from mobile_sam import sam_model_registry, SamPredictor
             model_type = 'vit_t'
+            print("[SAM] Using mobile_sam package (vit_t)")
         except ImportError:
+            pass
+
+    if SamPredictor is None:
+        try:
             from segment_anything import sam_model_registry, SamPredictor
-            model_type = 'vit_b'
-    else:
-        from segment_anything import sam_model_registry, SamPredictor
-        if 'vit_h' in model_path.lower():
-            model_type = 'vit_h'
-        elif 'vit_l' in model_path.lower():
-            model_type = 'vit_l'
-        else:
-            model_type = 'vit_b'
+            if 'vit_h' in model_path.lower(): model_type = 'vit_h'
+            elif 'vit_l' in model_path.lower(): model_type = 'vit_l'
+            elif 'vit_t' in model_path.lower() or 'mobile' in model_path.lower(): model_type = 'vit_t'
+            else: model_type = 'vit_b'
+            print(f"[SAM] Using segment_anything package ({model_type})")
+        except ImportError:
+            print("[SAM] Neither mobile_sam nor segment_anything installed")
+            for (x1, y1, x2, y2) in boxes:
+                mask[y1:y2, x1:x2] = 255
+            return mask
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     sam = sam_model_registry[model_type](checkpoint=model_path)

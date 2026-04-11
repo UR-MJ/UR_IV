@@ -304,36 +304,41 @@ class VueBridge(QObject):
                                     bx2, by2 = min(w_img, bx2), min(h_img, by2)
                                     combined_mask[by1:by2, bx1:bx2] = 255
                                     detect_count += 1
-                    print(f"[YOLO] Detected {detect_count} regions, mask coverage: {combined_mask.sum() / 255}")
+                    # YOLO bbox 수집 (SAM 정밀 마스킹용)
+                    yolo_boxes = []
+                    has_seg_mask = False
+                    for mp2 in model_paths:
+                        if not os.path.exists(mp2): continue
+                        try:
+                            model2 = YOLO(mp2)
+                        except Exception:
+                            continue
+                        res2 = model2(img, conf=conf)
+                        for r2 in res2:
+                            if r2.masks is not None:
+                                has_seg_mask = True  # seg 모델이면 YOLO 마스크 사용
+                            if r2.boxes is not None:
+                                for box in r2.boxes.xyxy:
+                                    bx1, by1, bx2, by2 = map(int, box.tolist())
+                                    yolo_boxes.append((max(0,bx1), max(0,by1), min(w_img,bx2), min(h_img,by2)))
 
-                    # SAM 정밀 마스킹 시도 (editor_models/에 SAM 모델 있으면)
-                    if detect_count > 0:
+                    print(f"[YOLO] Detected {detect_count} regions, {len(yolo_boxes)} boxes, seg_mask={has_seg_mask}")
+
+                    # SAM 정밀 마스킹: YOLO가 seg 마스크 없이 bbox만 반환했을 때 실행
+                    if yolo_boxes and not has_seg_mask:
                         try:
                             from core.sam_refiner import refine_boxes_with_sam
                             from tabs.editor.mosaic_panel import get_editor_models_dir
-                            # YOLO bbox 추출
-                            yolo_boxes = []
-                            for mp2 in model_paths:
-                                if not os.path.exists(mp2): continue
-                                try:
-                                    model2 = YOLO(mp2)
-                                except Exception:
-                                    continue
-                                res2 = model2(img, conf=conf)
-                                for r2 in res2:
-                                    if r2.boxes is not None:
-                                        for box in r2.boxes.xyxy:
-                                            bx1, by1, bx2, by2 = map(int, box.tolist())
-                                            yolo_boxes.append((max(0,bx1), max(0,by1), min(w_img,bx2), min(h_img,by2)))
-                            if yolo_boxes:
-                                sam_mask = refine_boxes_with_sam(img, yolo_boxes, get_editor_models_dir())
-                                if sam_mask.any():
-                                    combined_mask = sam_mask
-                                    print(f"[SAM] Refined mask applied ({len(yolo_boxes)} boxes)")
+                            sam_mask = refine_boxes_with_sam(img, yolo_boxes, get_editor_models_dir())
+                            if sam_mask.any():
+                                combined_mask = sam_mask
+                                print(f"[SAM] Refined mask applied ({len(yolo_boxes)} boxes → pixel-level)")
+                            else:
+                                print("[SAM] No mask generated, using YOLO bbox")
                         except ImportError:
-                            print("[SAM] SAM not installed, using YOLO mask")
+                            print("[SAM] SAM not installed, using YOLO bbox mask")
                         except Exception as sam_e:
-                            print(f"[SAM] Refinement failed: {sam_e}")
+                            print(f"[SAM] Refinement failed: {sam_e}, using YOLO bbox mask")
 
                     if operation == 'auto_detect':
                         # MASK ONLY: 마스크를 base64로 반환 (적용 안함)
