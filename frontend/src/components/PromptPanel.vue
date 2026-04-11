@@ -112,10 +112,8 @@
       <details class="input-group exclude-section">
         <summary class="exclude-toggle">EXCLUDE (LOCAL) ▾ <button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true">🔍 MANAGER</button></summary>
         <div class="exclude-help">
-          <span>단어 → 완전 일치 제외</span>
-          <span>_단어 → 끝나는 태그 제외 (ex: _hair → blue_hair)</span>
-          <span>단어_ → 시작하는 태그 제외 (ex: red_ → red_hair)</span>
-          <span>_단어_ → 포함하는 태그 모두 제외 (ex: _hair_ → red_hair_ornament)</span>
+          <span>단어 → 포함하는 모든 태그 제외 (ex: short → short hair, short pants...)</span>
+          <span>*단어 → 완전 일치만 제외 (ex: *blue hair → blue hair만)</span>
           <span>~단어 → 예외 (제외하지 않고 유지)</span>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.exclude_prompt_local_input" :color-fn="excludeColorFn" placeholder="제외 규칙 추가..." />
@@ -250,11 +248,9 @@ function addExcludeException(tag) {
 
 function excludeColorFn(text) {
   const t = text.trim()
-  if (t.startsWith('~')) return 'bc-action'  // 예외 (초록)
-  if (t.startsWith('_') && t.endsWith('_')) return 'bc-nsfw'  // 양쪽 포함 (빨강)
-  if (t.startsWith('_')) return 'bc-body'  // 끝 매치 (주황)
-  if (t.endsWith('_')) return 'bc-expression'  // 시작 매치 (노랑)
-  return 'bc-nsfw'  // 완전 일치 (빨강)
+  if (t.startsWith('~')) return 'bc-action'   // 예외 (초록)
+  if (t.startsWith('*')) return 'bc-expression' // 완전 일치 (노랑)
+  return 'bc-nsfw'  // 포함 제외 (빨강)
 }
 
 function blockColorClass(text) {

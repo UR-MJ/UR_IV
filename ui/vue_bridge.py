@@ -809,24 +809,19 @@ class VueBridge(QObject):
             # 규칙 매칭
             rule_lower = rule.lower().replace(' ', '_')
             matches = []
-            if rule_lower.startswith('_') and rule_lower.endswith('_'):
-                # _keyword_ = 포함
-                keyword = rule_lower.strip('_')
-                matches = [t for t in self._all_tags_set if keyword in t]
-            elif rule_lower.startswith('_'):
-                # _keyword = 끝나는
-                keyword = rule_lower.lstrip('_')
-                matches = [t for t in self._all_tags_set if t.endswith(keyword)]
-            elif rule_lower.endswith('_'):
-                # keyword_ = 시작하는
-                keyword = rule_lower.rstrip('_')
-                matches = [t for t in self._all_tags_set if t.startswith(keyword)]
+            if rule_lower.startswith('*'):
+                # *keyword = 완전 일치
+                keyword = rule_lower[1:]
+                matches = [t for t in self._all_tags_set if t == keyword]
+            elif rule_lower.startswith('~'):
+                # ~keyword = 예외 (매칭 없음)
+                matches = []
             else:
-                # 완전 일치
-                matches = [t for t in self._all_tags_set if t == rule_lower]
+                # keyword = 포함하는 모든 태그
+                matches = [t for t in self._all_tags_set if rule_lower in t]
 
             matches.sort()
-            return json.dumps(matches[:200])  # 최대 200개
+            return json.dumps(matches)
         except Exception as e:
             return json.dumps({'error': str(e)})
 

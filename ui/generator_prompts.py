@@ -79,53 +79,35 @@ class PromptHandlingMixin:
         exclude_rules = to_list(exclude_text)
         
         # 문법:
-        #   keyword        → 정확히 일치하는 태그 제거
-        #   __keyword      → keyword로 끝나는 태그 제거  (예: __hair → blue hair)
-        #   keyword__      → keyword로 시작하는 태그 제거 (예: hair__ → hair ornament)
-        #   __keyword__    → keyword를 포함하는 태그 제거 (예: __username__ → patreon username)
-        #   ~keyword       → 예외 (다른 규칙에 걸려도 유지)
-        contains_exc, prefix_exc, suffix_exc, exact_exc, excepts = [], [], [], set(), set()
+        #   단어       → 포함하는 모든 태그 제거 (ex: short → short hair, short pants)
+        #   *단어      → 완전 일치만 제거 (ex: *blue hair → blue hair만)
+        #   ~단어      → 예외 (제외하지 않고 유지)
+        contains_exc, exact_exc, excepts = [], set(), set()
         for r in exclude_rules:
             if r.startswith('~'):
                 excepts.add(r[1:].strip())
-            elif r.startswith('__') and r.endswith('__') and len(r) > 4:
-                contains_exc.append(r[2:-2])
-            elif r.startswith('__'):
-                prefix_exc.append(r[2:])
-            elif r.endswith('__'):
-                suffix_exc.append(r[:-2])
+            elif r.startswith('*'):
+                exact_exc.add(r[1:].strip())
             else:
-                exact_exc.add(r)
+                contains_exc.append(r.strip())
 
         def _normalize(tag):
-            """비교용 정규화: 밑줄 → 공백, 소문자"""
             return tag.replace('_', ' ').strip().lower()
 
         norm_exact = {_normalize(e) for e in exact_exc}
         norm_excepts = {_normalize(e) for e in excepts}
-        norm_contains = [_normalize(c) for c in contains_exc]
-        norm_prefix = [_normalize(p) for p in prefix_exc]
-        norm_suffix = [_normalize(s) for s in suffix_exc]
+        norm_contains = [_normalize(c) for c in contains_exc if c]
 
         def filter_tags(tags):
             res = []
             for t in tags:
                 nt = _normalize(t)
-                # 예외 규칙: ~keyword → 무조건 유지
                 if nt in norm_excepts:
                     res.append(t)
                     continue
-                # 정확히 일치
                 if nt in norm_exact:
                     continue
-                # 포함 (__keyword__)
                 if any(c in nt for c in norm_contains):
-                    continue
-                # 끝 일치 (__keyword)
-                if any(nt.endswith(p) for p in norm_prefix):
-                    continue
-                # 시작 일치 (keyword__)
-                if any(nt.startswith(s) for s in norm_suffix):
                     continue
                 res.append(t)
             return res
