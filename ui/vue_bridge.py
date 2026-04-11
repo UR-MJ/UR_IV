@@ -1096,7 +1096,7 @@ class VueBridge(QObject):
                 blended = PILImage.blend(img_a, img_b, alpha)
                 frames.append(blended)
 
-            out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'image_cache', 'compare')
+            out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'gif')
             os.makedirs(out_dir, exist_ok=True)
             out_path = os.path.join(out_dir, f"compare_{int(time.time())}.gif")
 
