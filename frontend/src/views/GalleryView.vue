@@ -130,6 +130,7 @@
     <!-- Context Menu -->
     <transition name="pop">
       <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
+        <div class="ctx-item" @click="ctx('add_favorite')">⭐ ADD TO FAVORITES</div>
         <div class="ctx-item" @click="ctx('gallery_load_exif')">📋 INSPECT EXIF</div>
         <div class="ctx-item" @click="ctx('send_to_i2i')">🖼️ SEND TO I2I</div>
         <div class="ctx-item" @click="ctx('send_to_inpaint')">🎨 SEND TO INPAINT</div>
@@ -163,7 +164,12 @@ const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
 const exifData = ref(null)
 const largeView = ref(null)
 const isLoading = ref(false)
-const showMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')  // 기본 ON
+const showMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
+// Settings에서 변경 시 실시간 반영
+setInterval(() => {
+  const v = window.localStorage.getItem('galleryShowMetadata') !== 'false'
+  if (v !== showMetadata.value) showMetadata.value = v
+}, 500)
 
 // ── 캐시 시스템 ──
 const _cache = new Map()  // folder → { images, timestamp }
@@ -241,7 +247,9 @@ async function loadImages(forceRefresh = false) {
 function sortImages() {
   if (sortBy.value === 'name') {
     images.value.sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()))
-  } else loadImages()
+  } else {
+    loadImages(true)  // DATE 정렬은 서버에서 새로 가져옴
+  }
 }
 
 const openFolder = () => requestAction('gallery_open_folder')

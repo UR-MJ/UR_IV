@@ -1159,12 +1159,22 @@ class GeneratorMainUI(
         except: pass
 
     def closeEvent(self, event):
-        reply = QMessageBox.question(
-            self, "종료 확인", "앱을 종료하시겠습니까?\n설정이 자동 저장됩니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
+        from PyQt6.QtWidgets import QMessageBox as _QMB
+        msg = _QMB(self)
+        msg.setWindowTitle("AI Studio Pro")
+        msg.setText("앱을 종료하시겠습니까?")
+        msg.setInformativeText("설정이 자동 저장됩니다.")
+        msg.setStandardButtons(_QMB.StandardButton.Yes | _QMB.StandardButton.No)
+        msg.setDefaultButton(_QMB.StandardButton.No)
+        msg.setStyleSheet("""
+            QMessageBox { background: #0D0D0D; color: #E8E8E8; }
+            QLabel { color: #E8E8E8; font-size: 13px; }
+            QPushButton { background: #1E1E1E; color: #E8E8E8; border: 1px solid #333;
+                          border-radius: 6px; padding: 6px 20px; font-weight: 600; }
+            QPushButton:hover { background: #333; }
+            QPushButton:default { background: #FACC15; color: #000; border: none; }
+        """)
+        if msg.exec() == _QMB.StandardButton.Yes:
             self._quit_app()
         else:
             event.ignore()

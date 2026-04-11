@@ -242,8 +242,15 @@ const samplerList = computed(() => wStore.getProperty('sampler_combo', 'items') 
 const schedulerList = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 
 // UI prefs 로드 시 동기화
-import { onBackendEvent } from '../bridge.js'
-onMounted(() => {
+import { onBackendEvent, getBackend } from '../bridge.js'
+onMounted(async () => {
+  // defaults 로드
+  const bk = await getBackend()
+  if (bk.getTabDefaults) {
+    bk.getTabDefaults((json) => {
+      try { const d = JSON.parse(json); Object.assign(defaults, d) } catch {}
+    })
+  }
   onBackendEvent('uiPrefsLoaded', (json) => {
     try {
       const prefs = JSON.parse(json)
@@ -267,7 +274,11 @@ function dragDrop(i) {
   tabOrder.value.splice(i, 0, item)
   dragIdx = -1
 }
-const applyTabOrder = () => requestAction('set_tab_order', { order: tabOrder.value })
+const applyTabOrder = () => {
+  window.localStorage.setItem('tabOrder', JSON.stringify(tabOrder.value))
+  requestAction('set_tab_order', { order: tabOrder.value })
+  requestAction('show_toast', { type: 'success', msg: '탭 순서가 적용되었습니다' })
+}
 const resetTabOrder = () => tabOrder.value = [...defaultOrder]
 const act = (name) => {
   // SAVE GLOBAL 시 localStorage 설정도 함께 저장

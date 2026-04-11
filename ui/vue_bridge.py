@@ -1044,6 +1044,18 @@ class VueBridge(QObject):
             return json.dumps({'error': str(e)})
 
     @pyqtSlot(result=str)
+    def getTabDefaults(self) -> str:
+        """tab_defaults.json 반환"""
+        import os
+        fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'tab_defaults.json')
+        try:
+            if os.path.exists(fp):
+                with open(fp, 'r', encoding='utf-8') as f:
+                    return f.read()
+        except: pass
+        return '{}'
+
+    @pyqtSlot(result=str)
     def getADetailerModels(self) -> str:
         """A1111 WebUI에서 ADetailer 모델 목록 반환"""
         try:

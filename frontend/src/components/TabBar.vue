@@ -26,11 +26,37 @@ const router = useRouter()
 const route = useRoute()
 const currentTab = ref(route.name || 't2i')
 
-const tabs = routes.map(r => ({
+const allTabs = routes.map(r => ({
   name: r.name,
   title: r.meta?.title || r.name,
   path: r.path,
 }))
+
+// localStorage에서 탭 순서 로드
+const tabs = ref(sortTabs())
+function sortTabs() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem('tabOrder') || '[]')
+    if (saved.length > 0) {
+      const byTitle = {}
+      allTabs.forEach(t => { byTitle[t.title] = t })
+      const ordered = saved.map(title => byTitle[title]).filter(Boolean)
+      // 저장 안 된 새 탭 추가
+      allTabs.forEach(t => { if (!ordered.find(o => o.name === t.name)) ordered.push(t) })
+      return ordered
+    }
+  } catch {}
+  return [...allTabs]
+}
+// 순서 변경 감시
+setInterval(() => {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem('tabOrder') || '[]')
+    if (saved.length > 0 && JSON.stringify(saved) !== JSON.stringify(tabs.value.map(t => t.title))) {
+      tabs.value = sortTabs()
+    }
+  } catch {}
+}, 2000)
 
 const nativeTabs = [
   { id: 'web', title: 'Web' },
