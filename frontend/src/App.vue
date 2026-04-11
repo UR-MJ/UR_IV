@@ -156,26 +156,12 @@
               <div class="ext-hint">(keyword:-1.0) 네거티브 가중치 문법</div>
             </div>
 
-            <!-- 조건부 프롬프트 -->
-            <details class="ext-card" open>
-              <summary class="ext-title">CONDITIONAL PROMPTS</summary>
-              <div class="ext-hint">태그 존재 여부에 따라 자동으로 다른 태그를 추가/제거합니다</div>
+            <!-- 조건부 프롬프트 → Search 탭에서 관리 -->
+            <div class="ext-card">
+              <div class="ext-title">CONDITIONAL PROMPTS</div>
+              <div class="ext-hint">조건부 프롬프트는 Search 탭 하단에서 관리합니다</div>
               <label class="ext-check-row"><input type="checkbox" v-model="extWidgets.cond_prevent_dupe" /><span>중복 방지</span></label>
-              <div class="cond-block">
-                <div class="cond-toggle-row">
-                  <button class="cond-toggle" :class="{ on: extWidgets.cond_pos_on }" @click="extWidgets.cond_pos_on = !extWidgets.cond_pos_on">{{ extWidgets.cond_pos_on ? 'ON' : 'OFF' }}</button>
-                  <label style="color: #4ade80;">Positive Rules</label>
-                </div>
-                <textarea v-model="extWidgets.cond_pos_rules" class="cond-textarea" placeholder="IF tag EXISTS → ADD target TO main&#10;한 줄에 하나씩"></textarea>
-              </div>
-              <div class="cond-block">
-                <div class="cond-toggle-row">
-                  <button class="cond-toggle" :class="{ on: extWidgets.cond_neg_on }" @click="extWidgets.cond_neg_on = !extWidgets.cond_neg_on">{{ extWidgets.cond_neg_on ? 'ON' : 'OFF' }}</button>
-                  <label style="color: #f87171;">Negative Rules</label>
-                </div>
-                <textarea v-model="extWidgets.cond_neg_rules" class="cond-textarea" placeholder="IF tag EXISTS → ADD target TO negative&#10;한 줄에 하나씩"></textarea>
-              </div>
-            </details>
+            </div>
 
             <!-- LoRA Stack -->
             <div class="ext-card">

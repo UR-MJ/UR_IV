@@ -197,6 +197,9 @@ onMounted(() => {
 .chip-row { display: flex; gap: 3px; }
 .chip { flex: 1; padding: 5px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); font-size: 9px; font-weight: 800; cursor: pointer; text-align: center; }
 .chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.eg-card label { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 2px; }
+.eg-card label input[type="checkbox"] { flex-shrink: 0; margin: 0; }
+.eg-carry label { white-space: nowrap; font-size: 10px; }
 .eg-row { display: flex; align-items: center; gap: 6px; }
 .eg-mini { font-size: 9px; color: var(--text-muted); font-weight: 700; }
 .eg-footer { padding: 12px; background: var(--bg-card); border-top: 1px solid var(--border); }

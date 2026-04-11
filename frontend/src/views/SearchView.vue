@@ -183,26 +183,20 @@
         <details class="cond-card">
           <summary class="cond-title positive">CONDITIONAL POSITIVE</summary>
           <p class="cond-desc">태그가 존재하면 자동으로 다른 태그를 추가/제거합니다</p>
-          <div v-for="(rule, ri) in condPositive" :key="'p'+ri" class="cond-rule">
-            <label class="cond-check"><input type="checkbox" v-model="rule.enabled" /></label>
-            <span class="cond-kw">IF</span>
-            <input v-model="rule.condition" placeholder="조건 태그" class="cond-input" />
-            <select v-model="rule.exists" class="cond-sel">
-              <option :value="true">있으면</option>
-              <option :value="false">없으면</option>
-            </select>
-            <input v-model="rule.target" placeholder="대상 태그" class="cond-input" />
-            <select v-model="rule.action" class="cond-sel">
-              <option value="add">추가</option>
-              <option value="remove">제거</option>
-              <option value="replace">대체</option>
-            </select>
-            <select v-model="rule.location" class="cond-sel sm">
-              <option value="main">main</option>
-              <option value="prefix">prefix</option>
-              <option value="suffix">suffix</option>
-            </select>
-            <button class="cond-rm" @click="condPositive.splice(ri, 1)">✕</button>
+          <div v-for="(rule, ri) in condPositive" :key="'p'+ri" class="cond-rule-block">
+            <div class="cond-row1">
+              <input type="checkbox" v-model="rule.enabled" />
+              <span class="cond-kw">IF</span>
+              <input v-model="rule.condition" placeholder="조건 태그" class="cond-input" />
+              <select v-model="rule.exists" class="cond-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
+              <button class="cond-rm" @click="condPositive.splice(ri, 1)">✕</button>
+            </div>
+            <div class="cond-row2">
+              <span class="cond-kw">→</span>
+              <input v-model="rule.target" placeholder="대상 태그" class="cond-input" />
+              <select v-model="rule.action" class="cond-sel"><option value="add">추가</option><option value="remove">제거</option><option value="replace">대체</option></select>
+              <select v-model="rule.location" class="cond-sel"><option value="main">main</option><option value="prefix">prefix</option><option value="suffix">suffix</option></select>
+            </div>
           </div>
           <button class="cond-add" @click="condPositive.push({enabled:true,condition:'',exists:true,target:'',action:'add',location:'main'})">+ 규칙 추가</button>
         </details>
@@ -210,20 +204,19 @@
         <details class="cond-card neg">
           <summary class="cond-title negative">CONDITIONAL NEGATIVE</summary>
           <p class="cond-desc">태그가 존재하면 네거티브 프롬프트에 자동 추가/제거합니다</p>
-          <div v-for="(rule, ri) in condNegative" :key="'n'+ri" class="cond-rule">
-            <label class="cond-check"><input type="checkbox" v-model="rule.enabled" /></label>
-            <span class="cond-kw">IF</span>
-            <input v-model="rule.condition" placeholder="조건 태그" class="cond-input" />
-            <select v-model="rule.exists" class="cond-sel">
-              <option :value="true">있으면</option>
-              <option :value="false">없으면</option>
-            </select>
-            <input v-model="rule.target" placeholder="네거티브 태그" class="cond-input neg" />
-            <select v-model="rule.action" class="cond-sel">
-              <option value="add">추가</option>
-              <option value="remove">제거</option>
-            </select>
-            <button class="cond-rm" @click="condNegative.splice(ri, 1)">✕</button>
+          <div v-for="(rule, ri) in condNegative" :key="'n'+ri" class="cond-rule-block">
+            <div class="cond-row1">
+              <input type="checkbox" v-model="rule.enabled" />
+              <span class="cond-kw">IF</span>
+              <input v-model="rule.condition" placeholder="조건 태그" class="cond-input" />
+              <select v-model="rule.exists" class="cond-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
+              <button class="cond-rm" @click="condNegative.splice(ri, 1)">✕</button>
+            </div>
+            <div class="cond-row2">
+              <span class="cond-kw">→</span>
+              <input v-model="rule.target" placeholder="네거티브 태그" class="cond-input neg" />
+              <select v-model="rule.action" class="cond-sel"><option value="add">추가</option><option value="remove">제거</option></select>
+            </div>
           </div>
           <button class="cond-add" @click="condNegative.push({enabled:true,condition:'',exists:true,target:'',action:'add'})">+ 규칙 추가</button>
         </details>
@@ -618,6 +611,9 @@ label.danger { color: #f87171; }
 .cond-title.negative { color: #f87171; }
 .cond-desc { font-size: 9px; color: var(--text-muted); margin: 4px 0 8px; }
 .cond-rule { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; flex-wrap: wrap; }
+.cond-rule-block { border: 1px solid var(--border); border-radius: 6px; padding: 6px; margin-bottom: 4px; }
+.cond-row1, .cond-row2 { display: flex; align-items: center; gap: 4px; }
+.cond-row2 { margin-top: 3px; }
 .cond-check input { accent-color: var(--accent); }
 .cond-kw { font-size: 9px; font-weight: 900; color: var(--accent); }
 .cond-input { width: 100px; padding: 3px 6px; font-size: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
