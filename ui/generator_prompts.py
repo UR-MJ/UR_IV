@@ -88,16 +88,18 @@ class PromptHandlingMixin:
         #   ~_단어     → 예외 접미 (ex: ~_tank top → tank top, blue tank top 유지)
         #   ~단어_     → 예외 접두 (ex: ~tank_ → tank top 유지)
         contains_exc, exact_exc, prefix_exc, suffix_exc = [], set(), [], []
-        excepts_exact, excepts_suffix, excepts_prefix = set(), [], []
+        excepts_exact, excepts_suffix, excepts_prefix, excepts_contains = set(), [], [], []
         for r in exclude_rules:
             r = r.strip()
             if not r:
                 continue
             if r.startswith('~'):
                 inner = r[1:].strip()
-                if inner.startswith('_') and not inner.endswith('_'):
-                    excepts_suffix.append(inner[1:].strip())  # ~_tank top → 끝이 "tank top"인 태그 유지
-                elif inner.endswith('_') and not inner.startswith('_'):
+                if inner.startswith('_') and inner.endswith('_') and len(inner) > 2:
+                    excepts_contains.append(inner[1:-1].strip())  # ~_tank top_ → "tank top" 포함 태그 유지
+                elif inner.startswith('_'):
+                    excepts_suffix.append(inner[1:].strip())  # ~_tank top → "tank top"으로 끝나는 태그 유지
+                elif inner.endswith('_'):
                     excepts_prefix.append(inner[:-1].strip())  # ~tank_ → "tank"로 시작하는 태그 유지
                 else:
                     excepts_exact.add(inner)
@@ -119,6 +121,7 @@ class PromptHandlingMixin:
         norm_excepts_exact = {_normalize(e) for e in excepts_exact}
         norm_excepts_suffix = [_normalize(s) for s in excepts_suffix if s]
         norm_excepts_prefix = [_normalize(p) for p in excepts_prefix if p]
+        norm_excepts_contains = [_normalize(c) for c in excepts_contains if c]
         norm_contains = [_normalize(c) for c in contains_exc if c]
         norm_prefix = [_normalize(p) for p in prefix_exc if p]
         norm_suffix = [_normalize(s) for s in suffix_exc if s]
@@ -130,6 +133,8 @@ class PromptHandlingMixin:
             if any(nt.endswith(s) for s in norm_excepts_suffix):
                 return True
             if any(nt.startswith(p) for p in norm_excepts_prefix):
+                return True
+            if any(c in nt for c in norm_excepts_contains):
                 return True
             return False
 

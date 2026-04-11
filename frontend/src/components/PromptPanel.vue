@@ -119,8 +119,9 @@
           <span>단어_ → 뒤에 붙는 태그 제외 (short_ → short hair, short pants)</span>
           <span>_단어_ → 포함 (단어와 동일, 명시적)</span>
           <span>~단어 → 예외 완전일치 유지</span>
-          <span>~_단어 → 예외 접미 유지 (tank, ~_tank top → tank top 유지)</span>
-          <span>~단어_ → 예외 접두 유지 (tank, ~tank_ → tank top 유지)</span>
+          <span>~_단어 → 예외 접미 유지 (~_tank top → tank top 유지)</span>
+          <span>~단어_ → 예외 접두 유지 (~tank_ → tank top 유지)</span>
+          <span>~_단어_ → 예외 포함 유지 (~_tank top_ → blue tank top 등 유지)</span>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.exclude_prompt_local_input" :color-fn="excludeColorFn" placeholder="제외 규칙 추가..." />
         <textarea v-else v-model="widgets.exclude_prompt_local_input" class="auto-grow exclude-textarea" placeholder="제외 규칙 (쉼표 구분)..." rows="2"></textarea>
