@@ -134,25 +134,31 @@
             <button class="close-btn" @click="showExcludeManager = false">✕</button>
           </div>
           <div class="em-body">
-            <!-- 좌측: 규칙 목록 -->
+            <!-- 좌측: 규칙 목록 + 추가 -->
             <div class="em-rules">
               <div v-for="(rule, ri) in excludeRules" :key="ri" class="em-rule-item"
                 :class="[excludeColorFn(rule), { active: selectedExRule === ri }]"
                 @click="selectedExRule = ri; loadExcludeMatches(rule)">
                 <span class="em-rule-text">{{ rule }}</span>
                 <span class="em-match-count">{{ excludeMatches[ri]?.length || '...' }}</span>
+                <button class="em-rule-rm" @click.stop="removeExcludeRule(ri)">✕</button>
               </div>
-              <div v-if="excludeRules.length === 0" class="em-empty">제외 규칙 없음</div>
+              <div v-if="excludeRules.length === 0" class="em-empty-sm">제외 규칙 없음</div>
+              <div class="em-add-row">
+                <input v-model="newExcludeRule" placeholder="규칙 추가..." class="em-add-input" @keydown.enter="addExcludeRule" />
+                <button class="em-add-btn" @click="addExcludeRule">+</button>
+              </div>
             </div>
             <!-- 우측: 매칭 태그 목록 -->
             <div class="em-matches">
               <template v-if="selectedExRule >= 0 && currentExMatches.length > 0">
                 <div class="em-match-header">
-                  <span>"{{ excludeRules[selectedExRule] }}" 에 의해 제외되는 태그 ({{ currentExMatches.length }}개)</span>
+                  "{{ excludeRules[selectedExRule] }}" — {{ currentExMatches.length }}개 매칭
                 </div>
                 <div class="em-match-list">
                   <button v-for="tag in currentExMatches" :key="tag" class="em-tag"
-                    @click="addExcludeException(tag)" :title="'~' + tag + ' 으로 예외 추가'">
+                    :class="{ excepted: isExcepted(tag) }"
+                    @click="toggleException(tag)">
                     {{ tag.replace(/_/g, ' ') }}
                   </button>
                 </div>
@@ -241,10 +247,37 @@ async function loadExcludeMatches(rule) {
   })
 }
 
-function addExcludeException(tag) {
+const newExcludeRule = ref('')
+
+function addExcludeRule() {
+  const rule = newExcludeRule.value.trim()
+  if (!rule) return
+  const cur = widgets.exclude_prompt_local_input || ''
+  widgets.exclude_prompt_local_input = cur ? cur + ', ' + rule : rule
+  newExcludeRule.value = ''
+}
+
+function removeExcludeRule(idx) {
+  const rules = excludeRules.value.slice()
+  rules.splice(idx, 1)
+  widgets.exclude_prompt_local_input = rules.join(', ')
+  if (selectedExRule.value >= rules.length) selectedExRule.value = -1
+}
+
+function isExcepted(tag) {
+  const cur = (widgets.exclude_prompt_local_input || '').toLowerCase()
+  return cur.includes('~' + tag.toLowerCase())
+}
+
+function toggleException(tag) {
   const cur = widgets.exclude_prompt_local_input || ''
   const exception = '~' + tag
-  if (!cur.includes(exception)) {
+  if (isExcepted(tag)) {
+    // 예외 해제 — ~tag 제거
+    const rules = cur.split(',').map(r => r.trim()).filter(r => r.toLowerCase() !== exception.toLowerCase())
+    widgets.exclude_prompt_local_input = rules.join(', ')
+  } else {
+    // 예외 추가
     widgets.exclude_prompt_local_input = cur ? cur + ', ' + exception : exception
   }
 }
@@ -474,9 +507,16 @@ label.danger { color: #f87171; }
 .em-matches { flex: 1; overflow-y: auto; padding: 12px; }
 .em-match-header { font-size: 10px; color: var(--text-muted); margin-bottom: 8px; }
 .em-match-list { display: flex; flex-wrap: wrap; gap: 4px; }
-.em-tag { padding: 3px 10px; background: rgba(248,113,113,0.05); border: 1px solid rgba(248,113,113,0.2); border-radius: 4px; color: #f87171; font-size: 10px; cursor: pointer; }
-.em-tag:hover { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); color: #4ade80; }
-.em-tag:hover::after { content: ' → ~예외'; font-size: 8px; }
+.em-tag { padding: 3px 10px; background: rgba(248,113,113,0.05); border: 1px solid rgba(248,113,113,0.2); border-radius: 4px; color: #f87171; font-size: 10px; cursor: pointer; transition: all 0.12s; }
+.em-tag:hover { border-color: rgba(248,113,113,0.5); }
+.em-tag.excepted { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); color: #4ade80; text-decoration: line-through; opacity: 0.6; }
+.em-tag.excepted:hover { opacity: 1; }
+.em-rule-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 11px; opacity: 0; transition: 0.15s; }
+.em-rule-item:hover .em-rule-rm { opacity: 1; }
+.em-add-row { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.em-add-input { flex: 1; padding: 4px 8px; font-size: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
+.em-add-btn { width: 28px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 3px; color: var(--accent); font-weight: 800; cursor: pointer; }
+.em-empty-sm { padding: 8px; text-align: center; color: var(--text-muted); font-size: 10px; }
 .em-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 12px; }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
