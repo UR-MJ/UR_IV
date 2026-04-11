@@ -254,6 +254,8 @@ class GeneratorMainUI(
             elif action == 'open_lora_manager': self._open_lora_manager()
             elif action == 'save_settings':
                 self.save_settings()
+                # 저장 후 즉시 재로드 (Vue에 반영)
+                QTimer.singleShot(200, self.load_settings)
                 # defaults도 동시 업데이트
                 try:
                     defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'tab_defaults.json')
@@ -778,6 +780,9 @@ class GeneratorMainUI(
                     os.makedirs(os.path.dirname(prefs_path), exist_ok=True)
                     with open(prefs_path, 'w', encoding='utf-8') as f:
                         json.dump(payload, f, ensure_ascii=False, indent=2)
+                    # 저장 후 즉시 Vue로 재전송
+                    if hasattr(self, 'vue_bridge'):
+                        self.vue_bridge.uiPrefsLoaded.emit(json.dumps(payload))
                 except Exception:
                     pass
 
