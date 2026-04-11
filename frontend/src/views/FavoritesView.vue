@@ -2,11 +2,16 @@
   <div class="fav-view">
     <div class="fav-header">
       <h3>Favorites</h3>
-      <button class="btn" @click="loadFavorites">🔄 새로고침</button>
-      <span class="count">{{ favorites.length }}장</span>
+      <div class="fav-search">
+        <input v-model="exifSearch" placeholder="🔍 EXIF 검색..." class="fav-search-input" @keydown.enter="runExifSearch" />
+        <button class="fav-search-btn" @click="runExifSearch" :disabled="exifSearching">{{ exifSearching ? '...' : 'GO' }}</button>
+        <button class="fav-search-clr" v-if="exifFiltered" @click="clearExifSearch">✕</button>
+      </div>
+      <button class="btn" @click="loadFavorites">🔄</button>
+      <span class="count">{{ exifFiltered ? displayFavs.length + '/' : '' }}{{ favorites.length }}장</span>
     </div>
     <div class="fav-grid">
-      <div v-for="(img, i) in favorites" :key="img" class="fav-item"
+      <div v-for="(img, i) in displayFavs" :key="img" class="fav-item"
         @click="openViewer(img)"
         @contextmenu.prevent="showMenu($event, img, i)"
       >
@@ -73,6 +78,37 @@ const favorites = ref([])
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '', index: -1 })
 const viewerData = ref(null)
 
+// EXIF 검색
+const exifSearch = ref('')
+const exifFiltered = ref(false)
+const exifSearching = ref(false)
+const filteredFavs = ref([])
+const exifCache = ref({})
+
+const displayFavs = computed(() => exifFiltered.value ? filteredFavs.value : favorites.value)
+
+async function runExifSearch() {
+  const q = exifSearch.value.trim().toLowerCase()
+  if (!q) { clearExifSearch(); return }
+  exifSearching.value = true
+  const backend = await getBackend()
+  for (const img of favorites.value) {
+    if (img in exifCache.value) continue
+    await new Promise(resolve => {
+      if (backend.getImageExif) {
+        backend.getImageExif(img, (json) => {
+          try { const d = JSON.parse(json); exifCache.value[img] = `${d.prompt||''} ${d.negative||''} ${d.raw||''}`.toLowerCase() }
+          catch { exifCache.value[img] = '' }
+          resolve()
+        })
+      } else resolve()
+    })
+  }
+  filteredFavs.value = favorites.value.filter(img => (exifCache.value[img] || '').includes(q))
+  exifFiltered.value = true; exifSearching.value = false
+}
+function clearExifSearch() { exifSearch.value = ''; exifFiltered.value = false; filteredFavs.value = [] }
+
 const ctxMenuStyle = computed(() => {
   const menuW = 200, menuH = 200
   let x = ctxMenu.value.x, y = ctxMenu.value.y
@@ -129,6 +165,12 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .fav-view { width: 100%; height: 100%; display: flex; flex-direction: column; position: relative; }
 .fav-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-shrink: 0; }
 .fav-header h3 { color: #E8E8E8; font-size: 14px; margin: 0; }
+.fav-search { display: flex; align-items: center; gap: 4px; flex: 1; margin: 0 8px; }
+.fav-search-input { flex: 1; padding: 4px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-primary); font-size: 11px; }
+.fav-search-input:focus { border-color: var(--accent); }
+.fav-search-btn { padding: 4px 10px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-size: 9px; font-weight: 800; cursor: pointer; }
+.fav-search-btn:disabled { opacity: 0.4; }
+.fav-search-clr { background: none; border: none; color: #f87171; cursor: pointer; font-size: 13px; }
 .count { color: #585858; font-size: 12px; }
 .btn { padding: 5px 12px; background: #181818; border: none; border-radius: 4px; color: #787878; font-size: 11px; cursor: pointer; }
 .btn:hover { background: #222; color: #E8E8E8; }

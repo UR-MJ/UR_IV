@@ -8,9 +8,17 @@
       </div>
       
       <div class="spacer"></div>
-      
+
+      <!-- EXIF 검색 -->
+      <div class="search-box">
+        <input v-model="exifSearch" placeholder="🔍 EXIF 검색..." class="search-input"
+          @keydown.enter="runExifSearch" />
+        <button class="search-go" @click="runExifSearch" :disabled="exifSearching">{{ exifSearching ? '...' : 'GO' }}</button>
+        <button class="search-clear" v-if="exifFiltered" @click="clearExifSearch">✕</button>
+      </div>
+
       <div class="control-group">
-        <button class="icon-btn" @click="loadImages(true)" title="Refresh (캐시 무시)">🔄</button>
+        <button class="icon-btn" @click="loadImages(true)" title="Refresh">🔄</button>
         <div class="sep"></div>
         <div class="sort-chips">
           <button v-for="s in sortOptions" :key="s.val"
@@ -18,14 +26,14 @@
             @click="sortBy = s.val; sortImages()"
           >{{ s.label }}</button>
         </div>
-        <span class="count-badge">{{ images.length }} ITEMS</span>
+        <span class="count-badge">{{ exifFiltered ? filteredImages.length + '/' : '' }}{{ images.length }}</span>
       </div>
     </header>
 
     <!-- Masonry-style Grid -->
     <section class="gallery-content" ref="galleryContentRef" @scroll="onGalleryScroll">
       <div class="masonry-grid">
-        <div v-for="img in pagedImages" :key="img" class="gallery-card"
+        <div v-for="img in displayImages" :key="img" class="gallery-card"
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
         >
@@ -36,8 +44,8 @@
           </div>
         </div>
       </div>
-      <div class="load-more-info" v-if="visibleCount < images.length">
-        {{ visibleCount }} / {{ images.length }} loaded — 스크롤하여 더 보기
+      <div class="load-more-info" v-if="visibleCount < (exifFiltered ? filteredImages.length : images.length)">
+        {{ visibleCount }} / {{ exifFiltered ? filteredImages.length : images.length }} — 스크롤하여 더 보기
       </div>
       
       <div v-if="isLoading" class="empty-placeholder">
@@ -155,6 +163,62 @@ const currentFolder = ref('')
 const visibleCount = ref(40)
 
 const pagedImages = computed(() => images.value.slice(0, visibleCount.value))
+
+// EXIF 검색
+const exifSearch = ref('')
+const exifFiltered = ref(false)
+const exifSearching = ref(false)
+const filteredImages = ref([])
+const exifCache = ref({})  // path → exif text
+
+const displayImages = computed(() => {
+  const source = exifFiltered.value ? filteredImages.value : images.value
+  return source.slice(0, visibleCount.value)
+})
+
+async function runExifSearch() {
+  const query = exifSearch.value.trim().toLowerCase()
+  if (!query) { clearExifSearch(); return }
+  exifSearching.value = true
+
+  const backend = await getBackend()
+  const toCheck = images.value.filter(img => !(img in exifCache.value))
+
+  // 캐시에 없는 이미지의 EXIF 로드
+  let loaded = 0
+  const batchSize = 20
+  for (let i = 0; i < toCheck.length; i += batchSize) {
+    const batch = toCheck.slice(i, i + batchSize)
+    await Promise.all(batch.map(img => new Promise(resolve => {
+      if (backend.getImageExif) {
+        backend.getImageExif(img, (json) => {
+          try {
+            const d = JSON.parse(json)
+            exifCache.value[img] = `${d.prompt || ''} ${d.negative || ''} ${d.raw || ''}`.toLowerCase()
+          } catch { exifCache.value[img] = '' }
+          resolve()
+        })
+      } else resolve()
+    })))
+    loaded += batch.length
+  }
+
+  // 필터
+  filteredImages.value = images.value.filter(img => {
+    const text = exifCache.value[img] || ''
+    return text.includes(query)
+  })
+  exifFiltered.value = true
+  exifSearching.value = false
+  visibleCount.value = 40
+}
+
+function clearExifSearch() {
+  exifSearch.value = ''
+  exifFiltered.value = false
+  filteredImages.value = []
+  visibleCount.value = 40
+}
 const galleryContentRef = ref(null)
 const sortBy = ref('date')
 const sortOptions = [{label: 'DATE', val: 'date'}, {label: 'NAME', val: 'name'}]
@@ -252,10 +316,10 @@ function sortImages() {
 
 function onGalleryScroll(e) {
   const el = e.target
-  // 하단 200px 이내에 도달하면 더 로드
+  const total = exifFiltered.value ? filteredImages.value.length : images.value.length
   if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
-    if (visibleCount.value < images.value.length) {
-      visibleCount.value = Math.min(visibleCount.value + 30, images.value.length)
+    if (visibleCount.value < total) {
+      visibleCount.value = Math.min(visibleCount.value + 30, total)
     }
   }
 }
@@ -327,6 +391,12 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .mini-chip { padding: 4px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-muted); font-size: 9px; font-weight: 800; cursor: pointer; }
 .mini-chip.active { border-color: var(--accent); color: var(--accent); }
 .count-badge { font-size: 10px; font-weight: 900; color: var(--text-muted); margin-left: 8px; }
+.search-box { display: flex; align-items: center; gap: 4px; margin-right: 12px; }
+.search-input { width: 180px; padding: 5px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-primary); font-size: 11px; }
+.search-input:focus { border-color: var(--accent); }
+.search-go { padding: 5px 10px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-size: 10px; font-weight: 800; cursor: pointer; }
+.search-go:disabled { opacity: 0.4; }
+.search-clear { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; }
 
 /* Grid */
 .gallery-content { flex: 1; overflow-y: auto; padding: 20px; }
