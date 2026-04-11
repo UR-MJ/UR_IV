@@ -66,8 +66,8 @@
                 <input type="checkbox" v-model="cleanUnderscore" />
               </label>
               <label class="toggle-row">
-                <span>Tag Block Mode (기본)</span>
-                <input type="checkbox" v-model="defaultBlockMode" />
+                <span>Tag Block Mode</span>
+                <input type="checkbox" v-model="defaultBlockMode" @change="localStorage.setItem('tagBlockMode', defaultBlockMode)" />
               </label>
             </div>
           </div>
@@ -217,7 +217,7 @@ const comfyUrl = ref('http://127.0.0.1:8188')
 const cleanDuplicates = ref(true)
 const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
-const defaultBlockMode = ref(false)
+const defaultBlockMode = ref(localStorage.getItem('tagBlockMode') === 'true')
 
 const defaultOrder = ['T2I','I2I','Inpaint','Event Gen','Search','Batch / Upscale','Gallery','XYZ Plot','PNG Info','Favorites','Settings']
 const tabOrder = ref([...defaultOrder])

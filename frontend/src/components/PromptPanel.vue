@@ -6,40 +6,20 @@
         FINAL OUTPUT PROMPT
         <span class="token-info">{{ tokenCount }} tokens</span>
       </div>
-      <!-- 블록 모드: 전체 프롬프트 -->
-      <div class="tag-block-view" v-if="tagBlockMode">
-        <div class="tag-blocks">
-          <button v-for="(tb, ti) in totalBlocks" :key="ti"
-            class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
-            @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleTotalBlock(ti)">
-            <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}
-          </button>
-        </div>
-      </div>
+      <TagBlockField v-if="tagBlockMode" :model-value="widgets.total_prompt_display" :color-fn="blockColorClass" placeholder="" @open-wildcard="(n) => emit('open-wildcard', n)" />
       <textarea v-else ref="totalPromptRef" v-model="widgets.total_prompt_display"
-        class="total-prompt auto-grow" placeholder="인물수, 캐릭터, 작품, 작가, 선행, 메인, 후행 순서로 종합됩니다"
-        @input="autoGrow($event.target)"></textarea>
+        class="total-prompt auto-grow" placeholder="최종 프롬프트" @input="autoGrow($event.target)"></textarea>
       <div class="prompt-actions">
         <button class="optimize-btn" @click="optimizePrompt">🧹 OPTIMIZE</button>
         <span class="opt-result" v-if="optResult">{{ optResult }}</span>
       </div>
       <div class="conflicts" v-if="promptConflicts.length > 0">
-        <div v-for="c in promptConflicts" :key="c.group" class="conflict-item">
-          ⚠ {{ c.group }}: {{ c.tags.join(', ') }}
-        </div>
+        <div v-for="c in promptConflicts" :key="c.group" class="conflict-item">⚠ {{ c.group }}: {{ c.tags.join(', ') }}</div>
       </div>
       <details class="neg-section">
         <summary class="danger-label neg-toggle">NEGATIVE ▾</summary>
-        <div class="tag-block-view neg" v-if="tagBlockMode">
-          <div class="tag-blocks">
-            <button v-for="(tb, ti) in negBlocks" :key="ti"
-              class="tag-block neg-block" :class="{ disabled: tb.off }"
-              @click="toggleNegBlock(ti)">{{ tb.text }}</button>
-          </div>
-        </div>
-        <textarea v-else ref="negRef" v-model="widgets.neg_prompt_text"
-          class="neg-prompt auto-grow" placeholder="Negative prompt..."
-          @input="autoGrow($event.target)"></textarea>
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.neg_prompt_text" :color-fn="() => 'neg'" class="neg" placeholder="네거티브 추가..." />
+        <textarea v-else ref="negRef" v-model="widgets.neg_prompt_text" class="neg-prompt auto-grow" placeholder="Negative prompt..." @input="autoGrow($event.target)"></textarea>
       </details>
     </div>
 
@@ -48,50 +28,46 @@
       <div class="card-header">CHARACTER & MODEL</div>
       <div class="input-group">
         <label>Char Count</label>
-        <input type="text" v-model="widgets.char_count_input" placeholder="e.g. 1girl, 2girls..." />
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.char_count_input" :color-fn="() => 'bc-count'" placeholder="인물수..." />
+        <input v-else type="text" v-model="widgets.char_count_input" placeholder="e.g. 1girl, 2girls..." />
       </div>
       <div class="input-group autocomplete-wrap">
-        <label>Character</label>
-        <div class="row">
-          <input type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku"
-            @input="onFieldInput($event, 'character_input')" @keydown="onFieldKey($event, 'character_input')"
-            @blur="loadCharTags" />
+        <div class="row label-row">
+          <label>Character</label>
           <button class="small-btn" @click="requestAction('open_character_preset'); loadCharTags()">PRESET</button>
         </div>
-        <!-- 캐릭터 인사이트 카드 -->
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.character_input" :color-fn="() => 'bc-count'" placeholder="캐릭터..." @open-wildcard="(n) => emit('open-wildcard', n)" />
+        <input v-else type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku"
+          @input="onFieldInput($event, 'character_input')" @keydown="onFieldKey($event, 'character_input')" @blur="loadCharTags" />
         <div class="char-insight" v-if="charInsight.tags.length > 0">
           <div class="insight-header">
             <span class="insight-label">📖 Official Tags</span>
             <button class="insight-apply" @click="applyOfficialTags">APPLY ALL</button>
           </div>
           <div class="insight-tags">
-            <button v-for="tag in charInsight.tags" :key="tag" class="char-tag-chip"
-              @click="insertCharTag(tag)">{{ tag.replace(/_/g, ' ') }}</button>
+            <button v-for="tag in charInsight.tags" :key="tag" class="char-tag-chip" @click="insertCharTag(tag)">{{ tag.replace(/_/g, ' ') }}</button>
           </div>
         </div>
-        <div class="ac-popup" v-if="fieldAcTarget === 'character_input' && acItems.length > 0">
-          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
-            :class="{ selected: acIdx === i }" @mousedown.prevent="acceptFieldSuggestion(tag, 'character_input')">{{ tag }}</div>
+        <div class="ac-popup" v-if="!tagBlockMode && fieldAcTarget === 'character_input' && acItems.length > 0">
+          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item" :class="{ selected: acIdx === i }" @mousedown.prevent="acceptFieldSuggestion(tag, 'character_input')">{{ tag }}</div>
         </div>
       </div>
       <div class="input-group autocomplete-wrap">
         <label>Copyright</label>
-        <input type="text" v-model="widgets.copyright_input" placeholder="Copyright / Series..."
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.copyright_input" :color-fn="() => ''" placeholder="작품..." />
+        <input v-else type="text" v-model="widgets.copyright_input" placeholder="Copyright / Series..."
           @input="onFieldInput($event, 'copyright_input')" @keydown="onFieldKey($event, 'copyright_input')" />
-        <div class="ac-popup" v-if="fieldAcTarget === 'copyright_input' && acItems.length > 0">
-          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
-            :class="{ selected: acIdx === i }" @mousedown.prevent="acceptFieldSuggestion(tag, 'copyright_input')">{{ tag }}</div>
+        <div class="ac-popup" v-if="!tagBlockMode && fieldAcTarget === 'copyright_input' && acItems.length > 0">
+          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item" :class="{ selected: acIdx === i }" @mousedown.prevent="acceptFieldSuggestion(tag, 'copyright_input')">{{ tag }}</div>
         </div>
       </div>
       <div class="input-group">
         <div class="row label-row">
           <label>Artist</label>
-          <button class="lock-btn" :class="{ locked: artistLocked }" @click="toggleArtistLock">
-            {{ artistLocked ? '🔒' : '🔓' }}
-          </button>
+          <button class="lock-btn" :class="{ locked: artistLocked }" @click="toggleArtistLock">{{ artistLocked ? '🔒' : '🔓' }}</button>
         </div>
-        <textarea ref="artistRef" v-model="widgets.artist_input" class="auto-grow" placeholder="Artist tags..."
-          @input="autoGrow($event.target)"></textarea>
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.artist_input" :color-fn="() => ''" placeholder="작가..." />
+        <textarea v-else ref="artistRef" v-model="widgets.artist_input" class="auto-grow" placeholder="Artist tags..." @input="autoGrow($event.target)"></textarea>
       </div>
       <div class="input-group">
         <label>Checkpoint</label>
@@ -106,71 +82,39 @@
         <div class="row label-row">
           <label>Main Tags</label>
           <div class="ai-btns">
-            <button class="ai-btn" :class="{ active: tagBlockMode }" @click="toggleBlockMode" title="블록/텍스트 전환">{{ tagBlockMode ? '📝' : '🧩' }}</button>
             <button class="ai-btn" @click="ollamaMode = 'expand'; runOllama()" :disabled="ollamaLoading" title="태그 확장">✨</button>
             <button class="ai-btn" @click="showNlInput = !showNlInput" title="자연어→태그">💬</button>
             <button class="ai-btn" @click="ollamaMode = 'suggest'; runOllama()" :disabled="ollamaLoading" title="유사 태그">🔄</button>
           </div>
         </div>
-        <!-- 자연어 입력 -->
         <div class="nl-input-row" v-if="showNlInput">
           <input v-model="nlPrompt" placeholder="이미지를 자연어로 설명하세요..." @keydown.enter="ollamaMode = 'nl2tags'; runOllama()" class="nl-input" />
           <button class="ai-btn go" @click="ollamaMode = 'nl2tags'; runOllama()" :disabled="ollamaLoading">GO</button>
         </div>
         <div class="ai-loading" v-if="ollamaLoading">🤖 AI 처리 중...</div>
-        <!-- 블록 모드 -->
-        <div class="tag-block-view" v-if="tagBlockMode">
-          <div class="tag-blocks">
-            <button v-for="(tb, ti) in mainTagBlocks" :key="ti"
-              class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, dragging: dragState.field === 'main' && dragState.idx === ti, wildcard: isWildcard(tb.text) }]"
-              @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleTagBlock(ti)"
-              @contextmenu.prevent="removeTagBlock(ti)"
-              draggable="true" @dragstart="blockDragStart('main', ti)" @dragover.prevent @drop="blockDrop('main', ti)">
-              <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}
-            </button>
-          </div>
-          <input v-model="newBlockTag" placeholder="태그 추가... (Enter)" @keydown.enter="addTagBlock" class="block-input" />
-        </div>
-        <!-- 텍스트 모드 -->
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.main_prompt_text" :color-fn="blockColorClass" placeholder="태그 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="mainRef" v-model="widgets.main_prompt_text" class="auto-grow" placeholder="메인 태그..."
           @input="onMainInput($event)" @keydown="onAutoKey($event)" rows="3"></textarea>
-        <div class="ac-popup" v-if="fieldAcTarget === 'main_prompt_text' && acItems.length > 0">
-          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
-            :class="{ selected: acIdx === i }" @mousedown.prevent="acceptSuggestion(tag)">{{ tag }}</div>
+        <div class="ac-popup" v-if="!tagBlockMode && fieldAcTarget === 'main_prompt_text' && acItems.length > 0">
+          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item" :class="{ selected: acIdx === i }" @mousedown.prevent="acceptSuggestion(tag)">{{ tag }}</div>
         </div>
       </div>
       <div class="input-group">
         <label>Prefix</label>
-        <div class="tag-block-view" v-if="tagBlockMode">
-          <div class="tag-blocks">
-            <button v-for="(tb, ti) in prefixBlocks" :key="ti" class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
-              @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleFieldBlock('prefix', ti)" @contextmenu.prevent="removeFieldBlock('prefix', ti)"
-              draggable="true" @dragstart="blockDragStart('prefix', ti)" @dragover.prevent @drop="blockDrop('prefix', ti)">
-              <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}</button>
-          </div>
-          <input v-model="prefixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('prefix')" class="block-input" />
-        </div>
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.prefix_prompt_text" :color-fn="blockColorClass" placeholder="선행 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="prefixRef" v-model="widgets.prefix_prompt_text" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <div class="input-group">
         <label>Suffix</label>
-        <div class="tag-block-view" v-if="tagBlockMode">
-          <div class="tag-blocks">
-            <button v-for="(tb, ti) in suffixBlocks" :key="ti" class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
-              @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleFieldBlock('suffix', ti)" @contextmenu.prevent="removeFieldBlock('suffix', ti)"
-              draggable="true" @dragstart="blockDragStart('suffix', ti)" @dragover.prevent @drop="blockDrop('suffix', ti)">
-              <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}</button>
-          </div>
-          <input v-model="suffixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('suffix')" class="block-input" />
-        </div>
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.suffix_prompt_text" :color-fn="blockColorClass" placeholder="후행 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <div class="input-group">
         <label>Exclude (Local)</label>
-        <input type="text" v-model="widgets.exclude_prompt_local_input" placeholder="제외 태그..." />
+        <TagBlockField v-if="tagBlockMode" v-model="widgets.exclude_prompt_local_input" :color-fn="() => 'bc-nsfw'" placeholder="제외 추가..." />
+        <input v-else type="text" v-model="widgets.exclude_prompt_local_input" placeholder="제외 태그..." />
       </div>
     </details>
-
   </div>
 </template>
 
@@ -179,17 +123,31 @@ import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from './CustomSelect.vue'
+import TagBlockField from './TagBlockField.vue'
 
 const emit = defineEmits(['toggle-extend', 'open-wildcard'])
-
 const store = useWidgetStore()
 const widgets = store.widgets
 
-// artistLocked는 proxy 'btn_lock_artist' 값과 동기화
+// 블록 모드 (Settings에서 제어, 로컬 스토리지 연동)
+const tagBlockMode = ref(localStorage.getItem('tagBlockMode') === 'true')
+watch(tagBlockMode, v => localStorage.setItem('tagBlockMode', v))
+
+// Settings에서 변경 시 반영
+onBackendEvent && onMounted(() => {
+  // localStorage 폴링 (Settings 탭에서 변경 시)
+  setInterval(() => {
+    const stored = localStorage.getItem('tagBlockMode') === 'true'
+    if (stored !== tagBlockMode.value) tagBlockMode.value = stored
+  }, 1000)
+})
+
 const artistLocked = computed({
   get: () => widgets.btn_lock_artist === 'true',
   set: (v) => { widgets.btn_lock_artist = v ? 'true' : 'false' }
 })
+function toggleArtistLock() { artistLocked.value = !artistLocked.value; requestAction('set_artist_locked', { locked: artistLocked.value }) }
+
 const totalPromptRef = ref(null)
 const negRef = ref(null)
 const artistRef = ref(null)
@@ -197,89 +155,28 @@ const prefixRef = ref(null)
 const mainRef = ref(null)
 const suffixRef = ref(null)
 
-// ── 태그 블록 모드 ──
-const tagBlockMode = ref(false)
-const mainTagBlocks = ref([])
-const totalBlocks = ref([])
-const negBlocks = ref([])
-const prefixBlocks = ref([])
-const suffixBlocks = ref([])
-const newBlockTag = ref('')
-const prefixNewTag = ref('')
-const suffixNewTag = ref('')
-const dragState = reactive({ field: '', idx: -1 })
+const modelItems = computed(() => store.getProperty('model_combo', 'items') || [])
+const tokenCount = computed(() => { const t = widgets.total_prompt_display; return t ? t.split(',').filter(s => s.trim()).length : 0 })
 
-// 와일드카드 + 괄호 내부 쉼표 보존하는 파싱
-function parseBlocks(text) {
-  if (!text) return []
-  // 1. 괄호 내부 쉼표를 보호 (depth 추적)
-  let depth = 0
-  let protected_ = ''
-  for (const ch of text) {
-    if (ch === '(' || ch === '[' || ch === '{') depth++
-    else if (ch === ')' || ch === ']' || ch === '}') depth = Math.max(0, depth - 1)
-    protected_ += (ch === ',' && depth > 0) ? '\x01' : ch
-  }
-  // 2. __wildcard__ 내부 쉼표 보호
-  protected_ = protected_.replace(/__([^_]+)__/g, (m) => m.replace(/,/g, '\x01'))
-  // 3. 쉼표로 분리 후 복원
-  return protected_.split(',').map(t => t.trim().replace(/\x01/g, ',')).filter(Boolean).map(t => ({ text: t, off: false }))
-}
-
-function blocksToText(blocks) {
-  return blocks.filter(b => !b.off).map(b => b.text).join(', ')
-}
-
-function toggleBlockMode() {
-  tagBlockMode.value = !tagBlockMode.value
-  if (tagBlockMode.value) {
-    mainTagBlocks.value = parseBlocks(widgets.main_prompt_text)
-    totalBlocks.value = parseBlocks(widgets.total_prompt_display)
-    negBlocks.value = parseBlocks(widgets.neg_prompt_text)
-    prefixBlocks.value = parseBlocks(widgets.prefix_prompt_text)
-    suffixBlocks.value = parseBlocks(widgets.suffix_prompt_text)
-  } else {
-    syncBlocksToText()
-  }
-}
-
-// 블록 색상 분류 (Search 탭과 동일 체계)
+// 블록 색상 분류
 const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
 const blockColorCache = ref({})
 
 function blockColorClass(text) {
-  if (isWildcard(text)) return 'wc-block'
-  // 괄호 제거 후 분류 (tag:1.2 → tag)
-  let t = text.trim().toLowerCase().replace(/ /g, '_')
-  t = t.replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
+  if (text.includes('__') && /__[^_]+__/.test(text)) return 'wc-block'
+  let t = text.trim().toLowerCase().replace(/ /g, '_').replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
   if (countPattern.test(t)) return 'bc-count'
-  const cached = blockColorCache.value[t]
-  if (cached) return 'bc-' + cached
-  return ''
+  return blockColorCache.value[t] ? 'bc-' + blockColorCache.value[t] : ''
 }
 
-function isWildcard(text) {
-  return text.includes('__') && text.match(/__[^_]+__/)
-}
-
-// 와일드카드 블록 클릭 → 매니저 열기 + 해당 항목 선택
-function openWildcardFor(text) {
-  const match = text.match(/__([^_]+)__/)
-  if (match) emit('open-wildcard', match[1])
-}
-
-// 태그 색상 배치 분류 요청
-async function classifyBlockTags() {
+// 태그 분류 요청
+async function classifyVisibleTags() {
   const allTags = new Set()
-  for (const blocks of [mainTagBlocks.value, prefixBlocks.value, suffixBlocks.value, totalBlocks.value]) {
-    for (const b of blocks) {
-      if (isWildcard(b.text)) continue
-      // 괄호/가중치 제거 후 순수 태그만
-      let t = b.text.trim().replace(/ /g, '_')
-      t = t.replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
-      if (t && !countPattern.test(t.toLowerCase()) && !blockColorCache.value[t.toLowerCase()]) {
-        allTags.add(t)
-      }
+  for (const key of ['main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text', 'total_prompt_display']) {
+    const text = widgets[key] || ''
+    for (const t of text.split(',')) {
+      let tag = t.trim().replace(/ /g, '_').replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
+      if (tag && !countPattern.test(tag.toLowerCase()) && !blockColorCache.value[tag.toLowerCase()] && !/__[^_]+__/.test(tag)) allTags.add(tag)
     }
   }
   if (allTags.size === 0) return
@@ -287,83 +184,16 @@ async function classifyBlockTags() {
   if (backend.classifyTags) {
     backend.classifyTags(JSON.stringify([...allTags]), (json) => {
       try {
-        const result = JSON.parse(json)
-        if (!result.error) {
-          const catMap = { 'sexual':'nsfw', 'body_parts':'body', 'clothing':'clothing', 'pose':'action', 'expression':'expression', 'background':'bg', 'composition':'bg', 'effect':'effect', 'objects':'objects', 'color':'color', 'character_trait':'trait' }
-          for (const [tag, cat] of Object.entries(result)) {
-            blockColorCache.value[tag.toLowerCase()] = catMap[cat] || ''
-          }
+        const r = JSON.parse(json)
+        if (!r.error) {
+          const m = { sexual:'nsfw', body_parts:'body', clothing:'clothing', pose:'action', expression:'expression', background:'bg', composition:'bg', effect:'effect', objects:'objects', color:'color', character_trait:'trait' }
+          for (const [tag, cat] of Object.entries(r)) blockColorCache.value[tag.toLowerCase()] = m[cat] || ''
         }
       } catch {}
     })
   }
 }
-
-// 블록 모드 진입 또는 블록 변경 시 색상 분류
-watch(tagBlockMode, (v) => { if (v) setTimeout(classifyBlockTags, 100) })
-watch(() => mainTagBlocks.value.length, () => { if (tagBlockMode.value) classifyBlockTags() })
-
-const fieldBlockMap = {
-  main: { blocks: () => mainTagBlocks, widget: 'main_prompt_text' },
-  prefix: { blocks: () => prefixBlocks, widget: 'prefix_prompt_text' },
-  suffix: { blocks: () => suffixBlocks, widget: 'suffix_prompt_text' },
-  neg: { blocks: () => negBlocks, widget: 'neg_prompt_text' },
-}
-
-function syncFieldBlocks(field) {
-  const m = fieldBlockMap[field]
-  if (m) widgets[m.widget] = blocksToText(m.blocks().value)
-}
-function syncBlocksToText() {
-  for (const f of ['main', 'prefix', 'suffix']) syncFieldBlocks(f)
-}
-
-function toggleTagBlock(idx) { mainTagBlocks.value[idx].off = !mainTagBlocks.value[idx].off; syncFieldBlocks('main') }
-function removeTagBlock(idx) { mainTagBlocks.value.splice(idx, 1); syncFieldBlocks('main') }
-function addTagBlock() {
-  const tag = newBlockTag.value.trim()
-  if (tag) { mainTagBlocks.value.push({ text: tag, off: false }); newBlockTag.value = ''; syncFieldBlocks('main') }
-}
-
-function toggleFieldBlock(field, idx) { fieldBlockMap[field].blocks().value[idx].off = !fieldBlockMap[field].blocks().value[idx].off; syncFieldBlocks(field) }
-function removeFieldBlock(field, idx) { fieldBlockMap[field].blocks().value.splice(idx, 1); syncFieldBlocks(field) }
-function addFieldBlock(field) {
-  const tagRef = field === 'prefix' ? prefixNewTag : suffixNewTag
-  const tag = tagRef.value.trim()
-  if (tag) { fieldBlockMap[field].blocks().value.push({ text: tag, off: false }); tagRef.value = ''; syncFieldBlocks(field) }
-}
-
-function toggleTotalBlock(idx) { totalBlocks.value[idx].off = !totalBlocks.value[idx].off }
-function toggleNegBlock(idx) { negBlocks.value[idx].off = !negBlocks.value[idx].off; syncFieldBlocks('neg') }
-
-// 블록 드래그 앤 드롭
-function blockDragStart(field, idx) { dragState.field = field; dragState.idx = idx }
-function blockDrop(field, targetIdx) {
-  if (dragState.field !== field || dragState.idx < 0) { dragState.field = ''; dragState.idx = -1; return }
-  const bRef = field === 'main' ? mainTagBlocks : fieldBlockMap[field]?.blocks()
-  if (!bRef) return
-  const arr = bRef.value
-  const [item] = arr.splice(dragState.idx, 1)
-  arr.splice(targetIdx > dragState.idx ? targetIdx : targetIdx, 0, item)
-  dragState.field = ''; dragState.idx = -1
-  syncFieldBlocks(field)
-}
-
-// 텍스트 변경 시 블록 동기화 (와일드카드 문법 보존)
-function syncWatcher(widgetKey, blocksRef) {
-  watch(() => widgets[widgetKey], (newVal) => {
-    if (tagBlockMode.value && newVal != null) {
-      const newBlocks = parseBlocks(String(newVal))
-      const offSet = new Set(blocksRef.value.filter(b => b.off).map(b => b.text))
-      blocksRef.value = newBlocks.map(b => ({ ...b, off: offSet.has(b.text) }))
-    }
-  })
-}
-syncWatcher('main_prompt_text', mainTagBlocks)
-syncWatcher('total_prompt_display', totalBlocks)
-syncWatcher('neg_prompt_text', negBlocks)
-syncWatcher('prefix_prompt_text', prefixBlocks)
-syncWatcher('suffix_prompt_text', suffixBlocks)
+watch(tagBlockMode, v => { if (v) setTimeout(classifyVisibleTags, 200) })
 
 // 딥 프롬프트 클리너
 const optResult = ref('')
@@ -371,8 +201,7 @@ const promptConflicts = ref([])
 async function optimizePrompt() {
   const backend = await getBackend()
   if (!backend.deepCleanPrompt) return
-  const prompt = widgets.total_prompt_display || ''
-  backend.deepCleanPrompt(JSON.stringify({ prompt }), (json) => {
+  backend.deepCleanPrompt(JSON.stringify({ prompt: widgets.total_prompt_display || '' }), (json) => {
     try {
       const d = JSON.parse(json)
       if (d.error) { optResult.value = d.error; return }
@@ -380,12 +209,11 @@ async function optimizePrompt() {
       promptConflicts.value = d.conflicts || []
       optResult.value = `${d.removed}개 중복 제거, ${d.tag_count}개 태그`
       setTimeout(() => { optResult.value = '' }, 5000)
-      nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
     } catch {}
   })
 }
 
-// 캐릭터 인사이트 카드
+// 캐릭터 인사이트
 const charInsight = ref({ tags: [], raw: '' })
 async function loadCharTags() {
   const char = widgets.character_input
@@ -393,77 +221,43 @@ async function loadCharTags() {
   const backend = await getBackend()
   if (backend.getCharacterInsight) {
     backend.getCharacterInsight(char, (json) => {
-      try {
-        const data = JSON.parse(json)
-        charInsight.value = { tags: data.tags || [], raw: data.raw || '' }
-      } catch { charInsight.value = { tags: [], raw: '' } }
+      try { const d = JSON.parse(json); charInsight.value = { tags: d.tags || [], raw: d.raw || '' } } catch { charInsight.value = { tags: [], raw: '' } }
     })
   }
 }
 function insertCharTag(tag) {
   const cur = widgets.main_prompt_text || ''
-  if (!cur.toLowerCase().includes(tag.toLowerCase())) {
-    widgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
-  }
+  if (!cur.toLowerCase().includes(tag.toLowerCase())) widgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
 }
-function applyOfficialTags() {
-  if (charInsight.value.raw) {
-    widgets.main_prompt_text = charInsight.value.raw
-    nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
-  }
-}
+function applyOfficialTags() { if (charInsight.value.raw) { widgets.main_prompt_text = charInsight.value.raw; nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) }) } }
 
 // Ollama
 const ollamaLoading = ref(false)
 const ollamaMode = ref('expand')
 const showNlInput = ref(false)
 const nlPrompt = ref('')
-
 async function runOllama() {
   ollamaLoading.value = true
   const backend = await getBackend()
   if (!backend.ollamaEnhance) { ollamaLoading.value = false; return }
-  const tags = widgets.main_prompt_text || ''
-  const extra = { prompt: nlPrompt.value }
-  backend.ollamaEnhance(tags, ollamaMode.value, JSON.stringify(extra))
+  backend.ollamaEnhance(widgets.main_prompt_text || '', ollamaMode.value, JSON.stringify({ prompt: nlPrompt.value }))
 }
 
-// 결과 수신은 onMounted에서
-
-const modelItems = computed(() => store.getProperty('model_combo', 'items') || [])
-const samplerItems = computed(() => store.getProperty('sampler_combo', 'items') || [])
-const schedulerItems = computed(() => store.getProperty('scheduler_combo', 'items') || [])
-const tokenCount = computed(() => {
-  const t = widgets.total_prompt_display
-  return t ? t.split(',').filter(s => s.trim()).length : 0
-})
-
-function toggleArtistLock() {
-  artistLocked.value = !artistLocked.value
-  requestAction('set_artist_locked', { locked: artistLocked.value })
-}
-
-// 태그 자동완성
+// 자동완성
 const acItems = ref([])
 const acIdx = ref(0)
 const fieldAcTarget = ref('')
 let acTimer = null
 
-// 범용 필드 자동완성 (Character, Copyright 등)
 function onFieldInput(e, fieldId) {
   fieldAcTarget.value = fieldId
-  const text = e.target.value
-  const lastComma = text.lastIndexOf(',')
+  const text = e.target.value; const lastComma = text.lastIndexOf(',')
   const prefix = (lastComma >= 0 ? text.substring(lastComma + 1) : text).trim()
   if (prefix.length < 2) { acItems.value = []; return }
   clearTimeout(acTimer)
   acTimer = setTimeout(async () => {
     const backend = await getBackend()
-    if (backend.getTagSuggestions) {
-      backend.getTagSuggestions(prefix, (json) => {
-        try { acItems.value = JSON.parse(json).slice(0, 10); acIdx.value = 0 } catch { acItems.value = [] }
-      })
-    }
+    if (backend.getTagSuggestions) backend.getTagSuggestions(prefix, (json) => { try { acItems.value = JSON.parse(json).slice(0, 10); acIdx.value = 0 } catch { acItems.value = [] } })
   }, 300)
 }
 function onFieldKey(e, fieldId) {
@@ -474,83 +268,29 @@ function onFieldKey(e, fieldId) {
   else if (e.key === 'Escape') { acItems.value = []; fieldAcTarget.value = '' }
 }
 function acceptFieldSuggestion(tag, fieldId) {
-  const text = widgets[fieldId] || ''
-  const lastComma = text.lastIndexOf(',')
+  const text = widgets[fieldId] || ''; const lastComma = text.lastIndexOf(',')
   widgets[fieldId] = (lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : '') + tag + ', '
   acItems.value = []; fieldAcTarget.value = ''
 }
+function onMainInput(e) { autoGrow(e.target); fieldAcTarget.value = 'main_prompt_text'; onFieldInput(e, 'main_prompt_text') }
+function onAutoKey(e) { onFieldKey(e, 'main_prompt_text') }
+function acceptSuggestion(tag) { acceptFieldSuggestion(tag, 'main_prompt_text'); nextTick(() => { if (mainRef.value) { mainRef.value.focus(); autoGrow(mainRef.value) } }) }
 
-function onMainInput(e) {
-  autoGrow(e.target)
-  fieldAcTarget.value = 'main_prompt_text'
-  const text = e.target.value
-  const lastComma = text.lastIndexOf(',')
-  const prefix = (lastComma >= 0 ? text.substring(lastComma + 1) : text).trim()
-  if (prefix.length < 2) { acItems.value = []; return }
-  clearTimeout(acTimer)
-  acTimer = setTimeout(async () => {
-    const backend = await getBackend()
-    if (backend.getTagSuggestions) {
-      backend.getTagSuggestions(prefix, (json) => {
-        try { const tags = JSON.parse(json); acItems.value = Array.isArray(tags) ? tags.slice(0, 10) : []; acIdx.value = 0 } catch { acItems.value = [] }
-      })
-    }
-  }, 300)
-}
-
-function onAutoKey(e) {
-  if (acItems.value.length === 0) return
-  if (e.key === 'ArrowDown') { e.preventDefault(); acIdx.value = Math.min(acIdx.value + 1, acItems.value.length - 1) }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); acIdx.value = Math.max(acIdx.value - 1, 0) }
-  else if (e.key === 'Tab' || e.key === 'Enter') { if (acItems.value.length > 0) { e.preventDefault(); acceptSuggestion(acItems.value[acIdx.value]) } }
-  else if (e.key === 'Escape') { acItems.value = [] }
-}
-
-function acceptSuggestion(tag) {
-  const text = widgets.main_prompt_text || ''
-  const lastComma = text.lastIndexOf(',')
-  widgets.main_prompt_text = (lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : '') + tag + ', '
-  acItems.value = []
-  nextTick(() => { if (mainRef.value) { mainRef.value.focus(); autoGrow(mainRef.value) } })
-}
-
-function autoGrow(el) {
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = el.scrollHeight + 'px'
-}
-
-function growAll() {
-  nextTick(() => {
-    ;[totalPromptRef, negRef, artistRef, prefixRef, mainRef, suffixRef].forEach(r => { if (r.value) autoGrow(r.value) })
-  })
-}
+function autoGrow(el) { if (!el) return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }
+function growAll() { nextTick(() => { ;[totalPromptRef, negRef, artistRef, prefixRef, mainRef, suffixRef].forEach(r => { if (r.value) autoGrow(r.value) }) }) }
 
 onMounted(() => {
   setTimeout(growAll, 500); setTimeout(growAll, 1500)
-  // Ollama 결과 수신
   onBackendEvent('ollamaResult', (json) => {
     ollamaLoading.value = false
-    try {
-      const d = JSON.parse(json)
-      if (d.error) { alert('AI Error: ' + d.error); return }
-      if (d.tags) {
-        if (ollamaMode.value === 'suggest') {
-          widgets.main_prompt_text = d.tags
-        } else {
-          // expand/nl2tags: 기존 태그에 추가 또는 교체
-          widgets.main_prompt_text = d.tags
-        }
-        showNlInput.value = false; nlPrompt.value = ''
-        nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
-      }
-    } catch {}
+    try { const d = JSON.parse(json); if (d.error) { alert('AI Error: ' + d.error); return }; if (d.tags) { widgets.main_prompt_text = d.tags; showNlInput.value = false; nlPrompt.value = '' } } catch {}
   })
 })
+
 watch(() => widgets.total_prompt_display, () => nextTick(() => { if (totalPromptRef.value) autoGrow(totalPromptRef.value) }))
 watch(() => widgets.neg_prompt_text, () => nextTick(() => { if (negRef.value) autoGrow(negRef.value) }))
 watch(() => widgets.artist_input, () => nextTick(() => { if (artistRef.value) autoGrow(artistRef.value) }))
-watch(() => widgets.main_prompt_text, () => nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) }))
+watch(() => widgets.main_prompt_text, () => { nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) }); if (tagBlockMode.value) classifyVisibleTags() })
 </script>
 
 <style scoped>
@@ -564,9 +304,7 @@ summary::-webkit-details-marker { display: none; }
 .input-group { margin-bottom: 10px; }
 .row { display: flex; gap: 6px; }
 .label-row { align-items: center; margin-bottom: 4px; }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .small-btn { padding: 0 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-.icon-btn { width: 36px; height: 36px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-primary); cursor: pointer; flex-shrink: 0; }
 .lock-btn { background: none; border: none; cursor: pointer; font-size: 14px; padding: 0 4px; opacity: 0.5; }
 .lock-btn.locked { opacity: 1; }
 .total-prompt { min-height: 60px; font-family: 'Consolas', monospace; font-size: 12px; line-height: 1.5; color: var(--accent); border-color: var(--accent-dim); }
@@ -577,19 +315,12 @@ summary::-webkit-details-marker { display: none; }
 .neg-prompt { min-height: 30px; color: #f87171; border-color: rgba(248,113,113,0.2); }
 .auto-grow { resize: none; overflow: hidden; min-height: 32px; }
 .token-info { font-size: 9px; color: var(--text-muted); }
-.check-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
-.check-row input { accent-color: var(--accent); }
-label.danger { color: #f87171; }
-input[type="number"] { -moz-appearance: textfield; }
-input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
-
 .prompt-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .optimize-btn { padding: 3px 10px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 9px; font-weight: 700; cursor: pointer; }
 .optimize-btn:hover { border-color: var(--accent); color: var(--accent); }
 .opt-result { font-size: 9px; color: #4ade80; }
 .conflicts { margin-top: 4px; }
 .conflict-item { font-size: 9px; color: #fbbf24; padding: 2px 0; }
-
 .char-insight { margin-top: 6px; background: rgba(45,212,191,0.03); border: 1px solid rgba(45,212,191,0.1); border-radius: 6px; padding: 8px; }
 .insight-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .insight-label { font-size: 9px; font-weight: 800; color: #2dd4bf; }
@@ -597,55 +328,23 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .insight-tags { display: flex; flex-wrap: wrap; gap: 3px; max-height: 80px; overflow-y: auto; }
 .char-tag-chip { padding: 2px 8px; background: rgba(45,212,191,0.08); border: 1px solid rgba(45,212,191,0.2); border-radius: 4px; color: #2dd4bf; font-size: 9px; cursor: pointer; }
 .char-tag-chip:hover { background: rgba(45,212,191,0.15); border-color: #2dd4bf; }
-
-/* 태그 블록 모드 */
-.tag-block-view { border: 1px solid var(--border); border-radius: var(--radius-base); padding: 8px; background: var(--bg-input); }
-.tag-blocks { display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; }
-.tag-block {
-  padding: 4px 10px; background: var(--bg-button); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text-primary); font-size: 11px; cursor: pointer;
-  transition: all 0.15s; user-select: none;
-}
-.tag-block:hover { border-color: var(--accent); }
-.tag-block.disabled { opacity: 0.3; text-decoration: line-through; color: var(--text-muted); background: transparent; }
-.tag-block.dragging { opacity: 0.5; border-style: dashed; }
-.tag-block[draggable="true"] { cursor: grab; }
-.tag-block[draggable="true"]:active { cursor: grabbing; }
-/* 블록 색상 (Search 탭과 동일) */
-.tag-block.bc-count { border-color: rgba(96,165,250,0.3); color: #60a5fa; }
-.tag-block.bc-nsfw { border-color: rgba(248,113,113,0.3); color: #f87171; }
-.tag-block.bc-body { border-color: rgba(251,146,60,0.3); color: #fb923c; }
-.tag-block.bc-clothing { border-color: rgba(167,139,250,0.3); color: #a78bfa; }
-.tag-block.bc-action { border-color: rgba(74,222,128,0.3); color: #4ade80; }
-.tag-block.bc-expression { border-color: rgba(251,191,36,0.3); color: #fbbf24; }
-.tag-block.bc-bg { border-color: rgba(56,189,248,0.3); color: #38bdf8; }
-.tag-block.bc-effect { border-color: rgba(192,132,252,0.3); color: #c084fc; }
-.tag-block.bc-objects { border-color: rgba(148,163,184,0.3); color: #94a3b8; }
-.tag-block.bc-color { border-color: rgba(244,114,182,0.3); color: #f472b6; }
-.tag-block.bc-trait { border-color: rgba(52,211,153,0.3); color: #34d399; }
-/* 와일드카드 블록 */
-.tag-block.wc-block { border-color: rgba(250,204,21,0.4); background: rgba(250,204,21,0.08); color: var(--accent); border-style: dashed; }
-.tag-block.wildcard { cursor: pointer; }
-.tag-block.wildcard:hover { background: rgba(250,204,21,0.15); }
-.wc-icon { margin-right: 3px; font-size: 10px; }
-.tag-block.neg-block { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
-.tag-block-view.neg { border-color: rgba(248,113,113,0.15); }
-.tag-block-add { margin-top: 6px; }
-.block-input { width: 100%; padding: 5px 8px; font-size: 10px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-primary); }
-
 .ai-btns { display: flex; gap: 3px; }
 .ai-btn { width: 26px; height: 22px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .ai-btn:hover { border-color: var(--accent); color: var(--accent); }
-.ai-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .ai-btn:disabled { opacity: 0.3; }
 .ai-btn.go { width: auto; padding: 0 8px; background: var(--accent); color: #000; border: none; font-weight: 700; font-size: 10px; }
 .nl-input-row { display: flex; gap: 4px; margin-bottom: 6px; }
 .nl-input { flex: 1; padding: 6px 10px; font-size: 11px; }
 .ai-loading { font-size: 10px; color: var(--accent); margin-bottom: 4px; animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-
 .autocomplete-wrap { position: relative; }
 .ac-popup { position: absolute; left: 0; right: 0; top: 100%; z-index: 100; background: #1A1A1A; border: 1px solid var(--border); border-radius: 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
 .ac-item { padding: 6px 12px; font-size: 11px; color: var(--text-secondary); cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); }
 .ac-item:hover, .ac-item.selected { background: var(--accent-dim); color: var(--accent); }
+label.danger { color: #f87171; }
+input[type="number"] { -moz-appearance: textfield; }
+input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+/* neg block field */
+.neg :deep(.tbf) { border-color: rgba(248,113,113,0.15); }
+.neg :deep(.tbf-block) { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
 </style>
