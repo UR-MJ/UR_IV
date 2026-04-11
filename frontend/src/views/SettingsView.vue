@@ -127,8 +127,12 @@
               <div class="def-field"><span>Height</span><input type="number" v-model.number="defaults.height" /></div>
               <div class="def-field"><span>Seed</span><input type="text" v-model="defaults.seed" /></div>
               <div class="def-field"><span>Denoising (I2I)</span><input type="number" v-model.number="defaults.denoising" step="0.05" /></div>
-              <div class="def-field"><span>Sampler</span><input type="text" v-model="defaults.sampler" /></div>
-              <div class="def-field"><span>Scheduler</span><input type="text" v-model="defaults.scheduler" /></div>
+              <div class="def-field"><span>Sampler</span>
+                <select v-model="defaults.sampler"><option value="">Auto</option><option v-for="s in samplerList" :key="s" :value="s">{{ s }}</option></select>
+              </div>
+              <div class="def-field"><span>Scheduler</span>
+                <select v-model="defaults.scheduler"><option value="">Auto</option><option v-for="s in schedulerList" :key="s" :value="s">{{ s }}</option></select>
+              </div>
             </div>
             <button class="btn-pill mt-12" @click="syncFromT2I">SYNC FROM T2I</button>
           </div>
@@ -207,7 +211,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 
 const subTabs = [
@@ -226,6 +230,11 @@ const cleanDuplicates = ref(true)
 const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
 const defaultBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
+
+// API에서 sampler/scheduler 목록 가져오기
+const wStore = useWidgetStore()
+const samplerList = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
+const schedulerList = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 
 // UI prefs 로드 시 동기화
 import { onBackendEvent } from '../bridge.js'
@@ -281,8 +290,16 @@ const defaults = reactive({ ...FACTORY_DEFAULTS })
 
 function saveDefaults() {
   requestAction('save_tab_defaults', { ...defaults })
-  // Toast는 Python에서 발송
 }
+
+// defaults 변경 감시 → 자동 저장 알림
+let defaultsTimer = null
+watch(defaults, () => {
+  clearTimeout(defaultsTimer)
+  defaultsTimer = setTimeout(() => {
+    requestAction('save_tab_defaults', { ...defaults })
+  }, 1500)
+}, { deep: true })
 function resetDefaults() { Object.assign(defaults, FACTORY_DEFAULTS) }
 
 const t2iSynced = ref(false)
@@ -314,8 +331,14 @@ async function testOllama() {
       try {
         const models = JSON.parse(json)
         ollamaModels.value = models
-        alert(models.length > 0 ? `연결 성공! ${models.length}개 모델 발견` : '연결은 되었지만 모델 없음')
-      } catch { alert('연결 실패') }
+        if (models.length > 0) {
+          requestAction('show_toast', { type: 'success', msg: `Ollama 연결 성공! ${models.length}개 모델 발견` })
+        } else {
+          requestAction('show_toast', { type: 'info', msg: 'Ollama 연결됨 — 모델 없음' })
+        }
+      } catch {
+        requestAction('show_toast', { type: 'error', msg: 'Ollama 연결 실패' })
+      }
     })
   }
 }

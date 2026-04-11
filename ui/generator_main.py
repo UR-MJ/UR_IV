@@ -823,6 +823,13 @@ class GeneratorMainUI(
                     self.queue_manager.stop()
                     self.show_status("Queue stopped.")
 
+            # ═══════ Toast 표시 ═══════
+            elif action == 'show_toast':
+                t = payload.get('type', 'info')
+                m = payload.get('msg', '')
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.showNotification.emit(t, m)
+
             # ═══════ 미처리 액션 로그 ═══════
             else:
                 print(f"[Bridge] Unhandled action: {action}")
