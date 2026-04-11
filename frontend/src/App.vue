@@ -78,6 +78,10 @@
                   <input type="number" v-model="storeWidgets.height_input" />
                   <button class="ext-mini-btn" @click="action('swap_resolution')">↔</button>
                 </div>
+                <div class="ext-res-opts">
+                  <label class="ext-check-row"><input type="checkbox" v-model="randomResEnabled" /><span>랜덤 해상도</span></label>
+                  <label class="ext-check-row"><input type="checkbox" v-model="autoResEnabled" /><span>자동 해상도 (Parquet)</span></label>
+                </div>
               </div>
               <div class="ext-row">
                 <div class="ext-field"><label>Sampler</label>
@@ -120,7 +124,7 @@
               <div class="ext-sub-title">Slot 1</div>
               <label class="ext-check-row"><input type="checkbox" v-model="ad_s1_enabled" /><span>Slot 1 활성화</span></label>
               <div class="ext-field"><label>Model</label>
-                <input type="text" v-model="storeWidgets._ad_s1_model" placeholder="face_yolov8n.pt" /></div>
+                <CustomSelect v-model="storeWidgets._ad_s1_model" :options="adModelItems" placeholder="AD Model..." /></div>
               <div class="ext-field"><label>Prompt</label>
                 <input type="text" v-model="storeWidgets._ad_s1_prompt" placeholder="ADetailer prompt..." /></div>
               <div class="ext-row">
@@ -133,7 +137,7 @@
                 <summary>Slot 2</summary>
                 <label class="ext-check-row"><input type="checkbox" v-model="ad_s2_enabled" /><span>Slot 2 활성화</span></label>
                 <div class="ext-field"><label>Model</label>
-                  <input type="text" v-model="storeWidgets._ad_s2_model" placeholder="hand_yolov8n.pt" /></div>
+                  <CustomSelect v-model="storeWidgets._ad_s2_model" :options="adModelItems" placeholder="AD Model..." /></div>
                 <div class="ext-field"><label>Prompt</label>
                   <input type="text" v-model="storeWidgets._ad_s2_prompt" placeholder="Slot 2 prompt..." /></div>
                 <div class="ext-row">
@@ -155,13 +159,14 @@
             <!-- 조건부 프롬프트 -->
             <details class="ext-card">
               <summary class="ext-title">CONDITIONAL PROMPTS</summary>
+              <div class="ext-hint">태그 존재 여부에 따라 자동으로 다른 태그를 추가/제거합니다</div>
               <label class="ext-check-row">
                 <input type="checkbox" v-model="extWidgets.cond_enabled" />
-                <span>조건부 프롬프트 활성화</span>
+                <span>활성화 — 생성 시 조건부 규칙 적용</span>
               </label>
               <label class="ext-check-row">
                 <input type="checkbox" v-model="extWidgets.cond_prevent_dupe" />
-                <span>중복 태그 방지</span>
+                <span>중복 방지 — 이미 있는 태그는 추가하지 않음</span>
               </label>
               <div class="ext-field" v-if="extWidgets.cond_enabled">
                 <label style="color: #4ade80;">Positive Rules</label>
@@ -406,8 +411,11 @@ const storeWidgets = wStore.widgets
 const samplerItems = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
 const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 const upscalerItems = computed(() => wStore.getProperty('upscaler_combo', 'items') || [])
+const adModelItems = ref([])
 
 // Hires/ADetailer 체크박스 (proxy 연동)
+const randomResEnabled = computed({ get: () => storeWidgets.random_res_check === 'true', set: v => { storeWidgets.random_res_check = v ? 'true' : 'false' } })
+const autoResEnabled = computed({ get: () => storeWidgets.auto_res_check === 'true', set: v => { storeWidgets.auto_res_check = v ? 'true' : 'false' } })
 const negpipEnabled = computed({ get: () => storeWidgets.negpip_group === 'true', set: v => { storeWidgets.negpip_group = v ? 'true' : 'false' } })
 
 const hires_enabled = computed({ get: () => storeWidgets.hires_options_group === 'true', set: v => { storeWidgets.hires_options_group = v ? 'true' : 'false' } })
@@ -773,8 +781,11 @@ onMounted(async () => {
     try { const d = JSON.parse(json); globalWeights.splice(0); d.forEach(w => globalWeights.push(w)) } catch {}
   })
 
-  // 와일드카드 로드
+  // ADetailer 모델 로드
   const _bk = await getBackend()
+  if (_bk.getADetailerModels) _bk.getADetailerModels((json) => { try { adModelItems.value = JSON.parse(json) } catch {} })
+
+  // 와일드카드 로드
   if (_bk.getWildcardTree) _bk.getWildcardTree((json) => { try { wildcards.value = JSON.parse(json) } catch {} })
 
   // VRAM 실시간 업데이트
@@ -811,7 +822,7 @@ onMounted(async () => {
   position: absolute; left: 360px; top: 50%; transform: translateY(-50%);
   width: 20px; height: 60px; background: var(--bg-secondary);
   border: 1px solid var(--border); border-left: none;
-  border-radius: 0 30px 30px 0; cursor: pointer; z-index: 55;
+  border-radius: 0 30px 30px 0; cursor: pointer; z-index: 45;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-muted); font-size: 10px; transition: all 0.2s;
 }
@@ -851,6 +862,7 @@ onMounted(async () => {
 .ext-res-row input { text-align: center; flex: 1; }
 .ext-res-row span { color: var(--text-muted); }
 .ext-mini-btn { width: 32px; height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); cursor: pointer; flex-shrink: 0; }
+.ext-res-opts { display: flex; gap: 12px; margin-top: 4px; }
 .ext-check-row { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 4px; white-space: nowrap; }
 .ext-check-row input[type="checkbox"] { flex-shrink: 0; margin: 0; }
 .ext-check-row span { overflow: hidden; text-overflow: ellipsis; }

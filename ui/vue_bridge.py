@@ -1044,6 +1044,25 @@ class VueBridge(QObject):
             return json.dumps({'error': str(e)})
 
     @pyqtSlot(result=str)
+    def getADetailerModels(self) -> str:
+        """A1111 WebUI에서 ADetailer 모델 목록 반환"""
+        try:
+            from backends import get_backend
+            backend = get_backend()
+            if backend:
+                import requests
+                # ADetailer API endpoint
+                r = requests.get(f"{backend.api_url}/adetailer/v1/ad_model", timeout=5)
+                if r.status_code == 200:
+                    data = r.json()
+                    models = data if isinstance(data, list) else data.get('ad_model', [])
+                    return json.dumps(models)
+        except Exception:
+            pass
+        # fallback: 기본 모델명
+        return json.dumps(["face_yolov8n.pt", "hand_yolov8n.pt", "person_yolov8n-seg.pt", "mediapipe_face_full", "mediapipe_face_short"])
+
+    @pyqtSlot(result=str)
     def getYoloModelLabel(self) -> str:
         """YOLO 모델 라벨 반환 (editor_models/ 자동 감지 포함)"""
         try:
