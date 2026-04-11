@@ -110,7 +110,7 @@
         <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <details class="input-group exclude-section">
-        <summary class="exclude-toggle">EXCLUDE (LOCAL) ▾</summary>
+        <summary class="exclude-toggle">EXCLUDE (LOCAL) ▾ <button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true">🔍 MANAGER</button></summary>
         <div class="exclude-help">
           <span>단어 → 완전 일치 제외</span>
           <span>_단어 → 끝나는 태그 제외 (ex: _hair → blue_hair)</span>
@@ -122,6 +122,46 @@
         <textarea v-else v-model="widgets.exclude_prompt_local_input" class="auto-grow exclude-textarea" placeholder="제외 규칙 (쉼표 구분)..." rows="2"></textarea>
       </details>
     </details>
+
+    <!-- Exclude Manager Modal -->
+    <transition name="fade">
+      <div v-if="showExcludeManager" class="em-overlay" @click.self="showExcludeManager = false">
+        <div class="em-modal">
+          <div class="em-header">
+            <h3>EXCLUDE MANAGER</h3>
+            <span class="em-desc">제외 규칙별 매칭 태그 미리보기</span>
+            <button class="close-btn" @click="showExcludeManager = false">✕</button>
+          </div>
+          <div class="em-body">
+            <!-- 좌측: 규칙 목록 -->
+            <div class="em-rules">
+              <div v-for="(rule, ri) in excludeRules" :key="ri" class="em-rule-item"
+                :class="[excludeColorFn(rule), { active: selectedExRule === ri }]"
+                @click="selectedExRule = ri; loadExcludeMatches(rule)">
+                <span class="em-rule-text">{{ rule }}</span>
+                <span class="em-match-count">{{ excludeMatches[ri]?.length || '...' }}</span>
+              </div>
+              <div v-if="excludeRules.length === 0" class="em-empty">제외 규칙 없음</div>
+            </div>
+            <!-- 우측: 매칭 태그 목록 -->
+            <div class="em-matches">
+              <template v-if="selectedExRule >= 0 && currentExMatches.length > 0">
+                <div class="em-match-header">
+                  <span>"{{ excludeRules[selectedExRule] }}" 에 의해 제외되는 태그 ({{ currentExMatches.length }}개)</span>
+                </div>
+                <div class="em-match-list">
+                  <button v-for="tag in currentExMatches" :key="tag" class="em-tag"
+                    @click="addExcludeException(tag)" :title="'~' + tag + ' 으로 예외 추가'">
+                    {{ tag.replace(/_/g, ' ') }}
+                  </button>
+                </div>
+              </template>
+              <div v-else class="em-empty">좌측에서 규칙을 선택하세요</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -172,6 +212,41 @@ const tokenCount = computed(() => { const t = widgets.total_prompt_display; retu
 // 블록 색상 분류
 const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
 const blockColorCache = ref({})
+
+// ── Exclude Manager ──
+const showExcludeManager = ref(false)
+const selectedExRule = ref(-1)
+const excludeMatches = ref({})  // {ruleIdx: [tags]}
+
+const excludeRules = computed(() => {
+  const text = widgets.exclude_prompt_local_input || ''
+  return text.split(',').map(t => t.trim()).filter(Boolean)
+})
+
+const currentExMatches = computed(() => {
+  return excludeMatches.value[selectedExRule.value] || []
+})
+
+async function loadExcludeMatches(rule) {
+  const backend = await getBackend()
+  if (!backend.getExcludeMatches) return
+  backend.getExcludeMatches(rule, (json) => {
+    try {
+      const tags = JSON.parse(json)
+      if (Array.isArray(tags)) {
+        excludeMatches.value = { ...excludeMatches.value, [selectedExRule.value]: tags }
+      }
+    } catch {}
+  })
+}
+
+function addExcludeException(tag) {
+  const cur = widgets.exclude_prompt_local_input || ''
+  const exception = '~' + tag
+  if (!cur.includes(exception)) {
+    widgets.exclude_prompt_local_input = cur ? cur + ', ' + exception : exception
+  }
+}
 
 function excludeColorFn(text) {
   const t = text.trim()
@@ -378,6 +453,31 @@ label.danger { color: #f87171; }
 .exclude-help { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; padding: 6px 8px; background: rgba(248,113,113,0.03); border: 1px solid rgba(248,113,113,0.1); border-radius: 4px; }
 .exclude-help span { font-size: 9px; color: var(--text-muted); font-family: 'Consolas', monospace; }
 .exclude-textarea { color: #f87171; border-color: rgba(248,113,113,0.2); font-size: 11px; }
+.excl-mgr-btn { padding: 1px 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); font-size: 8px; cursor: pointer; margin-left: 8px; }
+.excl-mgr-btn:hover { border-color: #f87171; color: #f87171; }
+
+/* Exclude Manager Modal */
+.em-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.em-modal { width: 700px; height: 500px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.em-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.em-header h3 { font-size: 12px; letter-spacing: 2px; color: #f87171; }
+.em-desc { font-size: 9px; color: var(--text-muted); flex: 1; }
+.em-body { flex: 1; display: flex; overflow: hidden; }
+.em-rules { width: 200px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px; }
+.em-rule-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 11px; cursor: pointer; border-radius: 4px; margin-bottom: 2px; border: 1px solid transparent; }
+.em-rule-item:hover { background: var(--bg-input); }
+.em-rule-item.active { border-color: #f87171; background: rgba(248,113,113,0.05); }
+.em-rule-text { font-family: 'Consolas', monospace; }
+.em-match-count { font-size: 9px; color: var(--text-muted); background: var(--bg-button); padding: 1px 6px; border-radius: 8px; }
+.em-matches { flex: 1; overflow-y: auto; padding: 12px; }
+.em-match-header { font-size: 10px; color: var(--text-muted); margin-bottom: 8px; }
+.em-match-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.em-tag { padding: 3px 10px; background: rgba(248,113,113,0.05); border: 1px solid rgba(248,113,113,0.2); border-radius: 4px; color: #f87171; font-size: 10px; cursor: pointer; }
+.em-tag:hover { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); color: #4ade80; }
+.em-tag:hover::after { content: ' → ~예외'; font-size: 8px; }
+.em-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 12px; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 input[type="number"] { -moz-appearance: textfield; }
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
 /* neg block field */

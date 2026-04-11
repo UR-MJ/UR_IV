@@ -764,6 +764,73 @@ class VueBridge(QObject):
             return json.dumps({'error': str(e)})
 
     @pyqtSlot(str, result=str)
+    def getExcludeMatches(self, rule: str) -> str:
+        """제외 규칙에 매칭되는 태그 목록 반환 (tags_db 기반)"""
+        try:
+            rule = rule.strip()
+            if not rule or rule.startswith('~'):
+                return json.dumps([])
+
+            # tags_db에서 모든 태그 수집
+            if not hasattr(self, '_all_tags_set'):
+                self._all_tags_set = set()
+                import os
+                tags_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tags_db')
+                # clothes_list.txt
+                for txt_file in ['clothes_list.txt', 'characteristic_list.txt']:
+                    fp = os.path.join(tags_db, txt_file)
+                    if os.path.exists(fp):
+                        with open(fp, 'r', encoding='utf-8') as f:
+                            for line in f:
+                                t = line.strip().lower()
+                                if t: self._all_tags_set.add(t)
+                # parquet 파일들
+                try:
+                    import pandas as pd
+                    for fn in os.listdir(tags_db):
+                        if fn.endswith('.parquet'):
+                            try:
+                                df = pd.read_parquet(os.path.join(tags_db, fn))
+                                col = df.columns[0] if len(df.columns) > 0 else None
+                                if col:
+                                    for v in df[col].dropna():
+                                        self._all_tags_set.add(str(v).strip().lower())
+                            except: pass
+                except: pass
+                # TagClassifier의 tag_to_category
+                try:
+                    from core.tag_classifier import TagClassifier
+                    if not hasattr(self, '_tag_classifier'):
+                        self._tag_classifier = TagClassifier()
+                    self._all_tags_set.update(self._tag_classifier.tag_to_category.keys())
+                except: pass
+                print(f"[Exclude] Tag DB loaded: {len(self._all_tags_set)} tags")
+
+            # 규칙 매칭
+            rule_lower = rule.lower().replace(' ', '_')
+            matches = []
+            if rule_lower.startswith('_') and rule_lower.endswith('_'):
+                # _keyword_ = 포함
+                keyword = rule_lower.strip('_')
+                matches = [t for t in self._all_tags_set if keyword in t]
+            elif rule_lower.startswith('_'):
+                # _keyword = 끝나는
+                keyword = rule_lower.lstrip('_')
+                matches = [t for t in self._all_tags_set if t.endswith(keyword)]
+            elif rule_lower.endswith('_'):
+                # keyword_ = 시작하는
+                keyword = rule_lower.rstrip('_')
+                matches = [t for t in self._all_tags_set if t.startswith(keyword)]
+            else:
+                # 완전 일치
+                matches = [t for t in self._all_tags_set if t == rule_lower]
+
+            matches.sort()
+            return json.dumps(matches[:200])  # 최대 200개
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+    @pyqtSlot(str, result=str)
     def deepCleanPrompt(self, prompt_json: str) -> str:
         """딥 프롬프트 클리너: 충돌 감지 + 중복 제거 + 최적 순서 재배치"""
         try:
