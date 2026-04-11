@@ -157,26 +157,23 @@
             </div>
 
             <!-- 조건부 프롬프트 -->
-            <details class="ext-card">
+            <details class="ext-card" open>
               <summary class="ext-title">CONDITIONAL PROMPTS</summary>
               <div class="ext-hint">태그 존재 여부에 따라 자동으로 다른 태그를 추가/제거합니다</div>
-              <label class="ext-check-row">
-                <input type="checkbox" v-model="extWidgets.cond_enabled" />
-                <span>활성화 — 생성 시 조건부 규칙 적용</span>
-              </label>
-              <label class="ext-check-row">
-                <input type="checkbox" v-model="extWidgets.cond_prevent_dupe" />
-                <span>중복 방지 — 이미 있는 태그는 추가하지 않음</span>
-              </label>
-              <div class="ext-field" v-if="extWidgets.cond_enabled">
-                <label style="color: #4ade80;">Positive Rules</label>
-                <textarea v-model="extWidgets.cond_pos_rules" class="cond-textarea"
-                  placeholder="IF tag EXISTS → ADD target TO main&#10;한 줄에 하나씩"></textarea>
+              <label class="ext-check-row"><input type="checkbox" v-model="extWidgets.cond_prevent_dupe" /><span>중복 방지</span></label>
+              <div class="cond-block">
+                <div class="cond-toggle-row">
+                  <button class="cond-toggle" :class="{ on: extWidgets.cond_pos_on }" @click="extWidgets.cond_pos_on = !extWidgets.cond_pos_on">{{ extWidgets.cond_pos_on ? 'ON' : 'OFF' }}</button>
+                  <label style="color: #4ade80;">Positive Rules</label>
+                </div>
+                <textarea v-model="extWidgets.cond_pos_rules" class="cond-textarea" placeholder="IF tag EXISTS → ADD target TO main&#10;한 줄에 하나씩"></textarea>
               </div>
-              <div class="ext-field" v-if="extWidgets.cond_enabled">
-                <label style="color: #f87171;">Negative Rules</label>
-                <textarea v-model="extWidgets.cond_neg_rules" class="cond-textarea"
-                  placeholder="IF tag EXISTS → ADD target TO negative&#10;한 줄에 하나씩"></textarea>
+              <div class="cond-block">
+                <div class="cond-toggle-row">
+                  <button class="cond-toggle" :class="{ on: extWidgets.cond_neg_on }" @click="extWidgets.cond_neg_on = !extWidgets.cond_neg_on">{{ extWidgets.cond_neg_on ? 'ON' : 'OFF' }}</button>
+                  <label style="color: #f87171;">Negative Rules</label>
+                </div>
+                <textarea v-model="extWidgets.cond_neg_rules" class="cond-textarea" placeholder="IF tag EXISTS → ADD target TO negative&#10;한 줄에 하나씩"></textarea>
               </div>
             </details>
 
@@ -471,7 +468,8 @@ function removeToast(id) { toasts.value = toasts.value.filter(t => t.id !== id) 
 // Extended panel state (NegPiP/조건부만 로컬)
 const extWidgets = reactive({
   negpip_enabled: false,
-  cond_enabled: false, cond_prevent_dupe: true,
+  cond_prevent_dupe: true,
+  cond_pos_on: false, cond_neg_on: false,
   cond_pos_rules: '', cond_neg_rules: '',
 })
 const loraStack = reactive([])
@@ -822,7 +820,7 @@ onMounted(async () => {
   position: absolute; left: 360px; top: 50%; transform: translateY(-50%);
   width: 20px; height: 60px; background: var(--bg-secondary);
   border: 1px solid var(--border); border-left: none;
-  border-radius: 0 30px 30px 0; cursor: pointer; z-index: 45;
+  border-radius: 0 30px 30px 0; cursor: pointer; z-index: 10;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-muted); font-size: 10px; transition: all 0.2s;
 }
@@ -869,6 +867,10 @@ onMounted(async () => {
 .ext-check-row input[type="checkbox"] { accent-color: var(--accent); }
 .ext-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
 .cond-textarea { min-height: 60px; font-size: 11px; line-height: 1.6; font-family: 'Consolas', monospace; }
+.cond-block { margin-top: 6px; }
+.cond-toggle-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.cond-toggle { padding: 2px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-button); color: var(--text-muted); font-size: 9px; font-weight: 800; cursor: pointer; }
+.cond-toggle.on { background: rgba(74,222,128,0.15); border-color: #4ade80; color: #4ade80; }
 .lora-check { flex-shrink: 0; }
 .lora-check input { accent-color: var(--accent); }
 .lora-empty { font-size: 11px; color: var(--text-muted); text-align: center; padding: 12px; }

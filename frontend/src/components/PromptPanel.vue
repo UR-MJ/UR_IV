@@ -527,8 +527,7 @@ label.danger { color: #f87171; }
 .em-tag:hover { border-color: rgba(248,113,113,0.5); }
 .em-tag.excepted { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); color: #4ade80; text-decoration: line-through; opacity: 0.6; }
 .em-tag.excepted:hover { opacity: 1; }
-.em-rule-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 11px; opacity: 0; transition: 0.15s; }
-.em-rule-item:hover .em-rule-rm { opacity: 1; }
+.em-rule-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 11px; flex-shrink: 0; }
 .em-add-row { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .em-add-input { flex: 1; padding: 4px 8px; font-size: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
 .em-add-btn { width: 28px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 3px; color: var(--accent); font-weight: 800; cursor: pointer; }

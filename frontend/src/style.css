@@ -105,20 +105,20 @@ input:focus, textarea:focus, select:focus {
   background: var(--bg-card);
 }
 
-/* select 스타일 */
+/* select 전역 스타일 — 다크 테마 통일 */
 select {
   appearance: none;
   -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23909090'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
+  background-position: right 10px center;
+  padding-right: 28px;
   cursor: pointer;
 }
-
-/* Chromium select 내부 option — 배경색 강제 */
-option { background: #181818 !important; color: #E8E8E8; }
-option:checked { background: #FACC15 !important; color: #000 !important; }
+select:focus { border-color: var(--accent); outline: none; }
+option { background: #1A1A1A; color: #E8E8E8; padding: 6px 10px; }
+option:checked { background: #FACC15; color: #000; }
+option:hover { background: #252525; }
 
 label {
   font-size: 11px;
