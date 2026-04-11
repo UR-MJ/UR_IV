@@ -804,6 +804,16 @@ class VueBridge(QObject):
                         self._tag_classifier = TagClassifier()
                     self._all_tags_set.update(self._tag_classifier.tag_to_category.keys())
                 except: pass
+                # character/copyright/artist 사전도 추가
+                try:
+                    from core.tag_classifier import TagClassifier
+                    if not hasattr(self, '_tag_classifier'):
+                        self._tag_classifier = TagClassifier()
+                    tc = self._tag_classifier
+                    if hasattr(tc, 'characters'): self._all_tags_set.update(t.lower() for t in tc.characters)
+                    if hasattr(tc, 'copyrights'): self._all_tags_set.update(t.lower() for t in tc.copyrights)
+                    if hasattr(tc, 'artists'): self._all_tags_set.update(t.lower() for t in tc.artists)
+                except: pass
                 print(f"[Exclude] Tag DB loaded: {len(self._all_tags_set)} tags")
 
             # 규칙 매칭

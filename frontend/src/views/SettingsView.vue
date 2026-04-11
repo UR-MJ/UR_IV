@@ -155,6 +155,14 @@
             </div>
           </div>
 
+          <div class="glass-card mt-16">
+            <label>확장 기본값</label>
+            <div class="toggle-grid">
+              <label class="toggle-row"><input type="checkbox" v-model="defaults.hires_enabled" /><span>Hires.fix 기본 활성화</span></label>
+              <label class="toggle-row"><input type="checkbox" v-model="defaults.ad_enabled" /><span>ADetailer 기본 활성화</span></label>
+              <label class="toggle-row"><input type="checkbox" v-model="defaults.negpip_enabled" /><span>NegPiP 기본 활성화</span></label>
+            </div>
+          </div>
           <div class="btn-row-2 mt-16">
             <button class="btn-pill primary" @click="saveDefaults">SAVE DEFAULTS</button>
             <button class="btn-pill" @click="resetDefaults">RESET TO FACTORY</button>
@@ -200,7 +208,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { requestAction } from '../stores/widgetStore.js'
+import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 
 const subTabs = [
   { id: 'general', label: 'GENERAL', icon: '⚙️' },
@@ -250,18 +258,25 @@ const resetTabOrder = () => tabOrder.value = [...defaultOrder]
 const act = (name) => {
   // SAVE GLOBAL 시 localStorage 설정도 함께 저장
   if (name === 'save_settings') {
+    const stWidgets = useWidgetStore().widgets
     requestAction('save_ui_prefs', {
       tagBlockMode: defaultBlockMode.value,
       cleanDuplicates: cleanDuplicates.value,
       cleanSpaces: cleanSpaces.value,
       cleanUnderscore: cleanUnderscore.value,
+      // Hires/ADetailer/NegPiP 상태
+      hires_enabled: stWidgets.hires_options_group === 'true',
+      ad_enabled: stWidgets.adetailer_group === 'true',
+      ad_s1_enabled: stWidgets.ad_slot1_group === 'true',
+      ad_s2_enabled: stWidgets.ad_slot2_group === 'true',
+      negpip_enabled: stWidgets.negpip_group === 'true',
     })
   }
   requestAction(name)
 }
 
 // 기본값 설정
-const FACTORY_DEFAULTS = { steps: 20, cfg: 7, width: 1024, height: 1024, seed: '-1', denoising: 0.75, sampler: '', scheduler: '', brushSize: 20, effectStrength: 15, yoloConf: 0.25, snapRadius: 12, defaultRating: 'g' }
+const FACTORY_DEFAULTS = { steps: 20, cfg: 7, width: 1024, height: 1024, seed: '-1', denoising: 0.75, sampler: '', scheduler: '', brushSize: 20, effectStrength: 15, yoloConf: 0.25, snapRadius: 12, defaultRating: 'g', hires_enabled: false, ad_enabled: false, negpip_enabled: false }
 const defaults = reactive({ ...FACTORY_DEFAULTS })
 
 function saveDefaults() {

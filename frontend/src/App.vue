@@ -146,7 +146,7 @@
             <!-- NegPiP -->
             <div class="ext-card">
               <label class="ext-check-row">
-                <input type="checkbox" v-model="extWidgets.negpip_enabled" />
+                <input type="checkbox" v-model="negpipEnabled" />
                 <span class="ext-title" style="margin:0">NegPiP 확장</span>
               </label>
               <div class="ext-hint">(keyword:-1.0) 네거티브 가중치 문법</div>
@@ -408,6 +408,8 @@ const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'ite
 const upscalerItems = computed(() => wStore.getProperty('upscaler_combo', 'items') || [])
 
 // Hires/ADetailer 체크박스 (proxy 연동)
+const negpipEnabled = computed({ get: () => storeWidgets.negpip_group === 'true', set: v => { storeWidgets.negpip_group = v ? 'true' : 'false' } })
+
 const hires_enabled = computed({ get: () => storeWidgets.hires_options_group === 'true', set: v => { storeWidgets.hires_options_group = v ? 'true' : 'false' } })
 const ad_enabled = computed({ get: () => storeWidgets.adetailer_group === 'true', set: v => { storeWidgets.adetailer_group = v ? 'true' : 'false' } })
 const ad_s1_enabled = computed({ get: () => storeWidgets.ad_slot1_group === 'true', set: v => { storeWidgets.ad_slot1_group = v ? 'true' : 'false' } })
@@ -849,7 +851,9 @@ onMounted(async () => {
 .ext-res-row input { text-align: center; flex: 1; }
 .ext-res-row span { color: var(--text-muted); }
 .ext-mini-btn { width: 32px; height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); cursor: pointer; flex-shrink: 0; }
-.ext-check-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 4px; white-space: nowrap; }
+.ext-check-row { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 4px; white-space: nowrap; }
+.ext-check-row input[type="checkbox"] { flex-shrink: 0; margin: 0; }
+.ext-check-row span { overflow: hidden; text-overflow: ellipsis; }
 .ext-check-row input[type="checkbox"] { accent-color: var(--accent); }
 .ext-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
 .cond-textarea { min-height: 60px; font-size: 11px; line-height: 1.6; font-family: 'Consolas', monospace; }

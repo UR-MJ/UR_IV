@@ -158,7 +158,8 @@
                 <div class="em-match-list">
                   <button v-for="tag in currentExMatches" :key="tag" class="em-tag"
                     :class="{ excepted: isExcepted(tag) }"
-                    @click="toggleException(tag)">
+                    @click="toggleException(tag)"
+                    @contextmenu.prevent="addExactExclude(tag)">
                     {{ tag.replace(/_/g, ' ') }}
                   </button>
                 </div>
@@ -267,6 +268,15 @@ function removeExcludeRule(idx) {
 function isExcepted(tag) {
   const cur = (widgets.exclude_prompt_local_input || '').toLowerCase()
   return cur.includes('~' + tag.toLowerCase())
+}
+
+function addExactExclude(tag) {
+  // 우클릭: *완전일치 제외 규칙 추가
+  const cur = widgets.exclude_prompt_local_input || ''
+  const rule = '*' + tag
+  if (!cur.includes(rule)) {
+    widgets.exclude_prompt_local_input = cur ? cur + ', ' + rule : rule
+  }
 }
 
 function toggleException(tag) {
@@ -419,6 +429,12 @@ onMounted(() => {
         window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode))
         tagBlockMode.value = prefs.tagBlockMode
       }
+      // Hires/ADetailer/NegPiP 복원
+      if (typeof prefs.hires_enabled === 'boolean') widgets.hires_options_group = prefs.hires_enabled ? 'true' : 'false'
+      if (typeof prefs.ad_enabled === 'boolean') widgets.adetailer_group = prefs.ad_enabled ? 'true' : 'false'
+      if (typeof prefs.ad_s1_enabled === 'boolean') widgets.ad_slot1_group = prefs.ad_s1_enabled ? 'true' : 'false'
+      if (typeof prefs.ad_s2_enabled === 'boolean') widgets.ad_slot2_group = prefs.ad_s2_enabled ? 'true' : 'false'
+      if (typeof prefs.negpip_enabled === 'boolean') widgets.negpip_group = prefs.negpip_enabled ? 'true' : 'false'
     } catch {}
   })
   onBackendEvent('ollamaResult', (json) => {
@@ -492,7 +508,7 @@ label.danger { color: #f87171; }
 .excl-mgr-btn:hover { border-color: #f87171; color: #f87171; }
 
 /* Exclude Manager Modal */
-.em-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.em-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: flex; align-items: center; justify-content: center; }
 .em-modal { width: 700px; height: 500px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .em-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .em-header h3 { font-size: 12px; letter-spacing: 2px; color: #f87171; }
