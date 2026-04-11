@@ -154,14 +154,16 @@ class GeneratorMainUI(
                     print(f"[Send] File not found: {clean_path} (original: {path})")
                     return
 
+                fwd_path = clean_path.replace('\\', '/')
+                print(f"[Send] {action}: {fwd_path}")
                 if action == 'send_to_i2i':
-                    self.vue_bridge.i2iImageLoaded.emit(clean_path.replace('\\', '/'))
+                    self.vue_bridge.i2iImageLoaded.emit(fwd_path)
                     self.vue_bridge.tabChanged.emit('i2i')
                 elif action == 'send_to_inpaint':
-                    self.vue_bridge.inpaintImageLoaded.emit(clean_path.replace('\\', '/'))
+                    self.vue_bridge.inpaintImageLoaded.emit(fwd_path)
                     self.vue_bridge.tabChanged.emit('inpaint')
                 elif action == 'send_to_editor':
-                    self.vue_bridge.editorImageLoaded.emit(clean_path.replace('\\', '/'))
+                    self.vue_bridge.editorImageLoaded.emit(fwd_path)
                     self.vue_bridge.tabChanged.emit('editor')
                 self.show_status("Asset Transfer Successful.")
 

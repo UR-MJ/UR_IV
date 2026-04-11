@@ -117,13 +117,15 @@ def _refine_with_sam(image: np.ndarray, boxes: list, model_path: str,
     sam_model_registry = None
     model_type = 'vit_b'
 
+    _mobile_err = None
     if sam_type == 'mobile_sam':
         try:
             from mobile_sam import sam_model_registry, SamPredictor
             model_type = 'vit_t'
             print("[SAM] Using mobile_sam package (vit_t)")
-        except ImportError:
-            pass
+        except ImportError as ie:
+            _mobile_err = ie
+            print(f"[SAM] mobile_sam import failed: {ie}")
 
     if SamPredictor is None:
         try:
@@ -133,8 +135,10 @@ def _refine_with_sam(image: np.ndarray, boxes: list, model_path: str,
             elif 'vit_t' in model_path.lower() or 'mobile' in model_path.lower(): model_type = 'vit_t'
             else: model_type = 'vit_b'
             print(f"[SAM] Using segment_anything package ({model_type})")
-        except ImportError:
-            print("[SAM] Neither mobile_sam nor segment_anything installed")
+        except ImportError as ie2:
+            print(f"[SAM] Neither mobile_sam nor segment_anything installed")
+            print(f"[SAM] mobile_sam error: {_mobile_err}")
+            print(f"[SAM] segment_anything error: {ie2}")
             for (x1, y1, x2, y2) in boxes:
                 mask[y1:y2, x1:x2] = 255
             return mask
