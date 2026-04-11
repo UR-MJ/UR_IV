@@ -55,7 +55,7 @@
 
     <!-- 이미지 확대 뷰 (풀스크린 오버레이) -->
     <transition name="fade">
-      <div v-if="largeView" class="large-view-overlay" @click.self="largeView = null; exifData = null">
+      <div v-if="largeView" class="large-view-overlay" @click.self="largeView = null">
         <div class="large-view-panel">
           <div class="large-view-header">
             <span class="large-filename">{{ largeView.filename }}</span>
@@ -66,7 +66,7 @@
               <button class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
               <button class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
               <button class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
-              <button class="lv-close" @click="largeView = null; exifData = null">✕</button>
+              <button class="lv-close" @click="largeView = null">✕</button>
             </div>
           </div>
           <div class="large-view-body">
@@ -258,10 +258,8 @@ const viewImage = async (path) => {
   if (backend.getImageExif) backend.getImageExif(path, (json) => {
     try {
       const d = JSON.parse(json)
-      largeView.value = d  // 항상 확대 뷰 (닫기 버튼으로 종료)
-      // METADATA OFF면 exifData는 설정하지 않음 (사이드바 안 뜸)
-      if (showMetadata.value) exifData.value = d
-      else exifData.value = null
+      largeView.value = d  // 확대 뷰
+      exifData.value = d   // 사이드바 데이터 (showMetadata로 표시 여부 제어)
     } catch {}
   })
 }
