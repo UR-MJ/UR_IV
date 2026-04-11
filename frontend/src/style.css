@@ -105,6 +105,12 @@ input:focus, textarea:focus, select:focus {
   background: var(--bg-card);
 }
 
+/* 전역 체크박스 행 */
+label:has(input[type="checkbox"]) {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
+}
+input[type="checkbox"] { accent-color: var(--accent); flex-shrink: 0; margin: 0; }
+
 /* select 전역 스타일 — 다크 테마 통일 */
 select {
   appearance: none;

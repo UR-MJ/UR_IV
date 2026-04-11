@@ -1158,7 +1158,16 @@ class GeneratorMainUI(
                         }))
         except: pass
 
-    def closeEvent(self, event): self._quit_app()
+    def closeEvent(self, event):
+        reply = QMessageBox.question(
+            self, "종료 확인", "앱을 종료하시겠습니까?\n설정이 자동 저장됩니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._quit_app()
+        else:
+            event.ignore()
 
     def _quit_app(self):
         try: self.save_settings()

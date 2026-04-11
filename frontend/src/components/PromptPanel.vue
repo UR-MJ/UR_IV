@@ -6,7 +6,8 @@
         FINAL OUTPUT PROMPT
         <span class="token-info">{{ tokenCount }} tokens</span>
       </div>
-      <TagBlockField v-if="tagBlockMode" :model-value="widgets.total_prompt_display" :color-fn="blockColorClass" placeholder="" @open-wildcard="(n) => emit('open-wildcard', n)" />
+      <TagBlockField v-if="tagBlockMode" :model-value="widgets.total_prompt_display" :color-fn="blockColorClass" placeholder=""
+        @update:model-value="onTotalBlockChange" @open-wildcard="(n) => emit('open-wildcard', n)" />
       <textarea v-else ref="totalPromptRef" v-model="widgets.total_prompt_display"
         class="total-prompt auto-grow" placeholder="최종 프롬프트" @input="autoGrow($event.target)"></textarea>
       <div class="prompt-actions">
@@ -289,6 +290,20 @@ function toggleException(tag) {
   } else {
     // 예외 추가
     widgets.exclude_prompt_local_input = cur ? cur + ', ' + exception : exception
+  }
+}
+
+// 최종 프롬프트 블록 변경 시 → 원본 필드에서 태그 제거
+function onTotalBlockChange(newVal) {
+  const newTags = new Set(newVal.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))
+  // 각 필드에서 없어진 태그 제거
+  for (const key of ['main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text']) {
+    const cur = widgets[key] || ''
+    const filtered = cur.split(',').map(t => t.trim()).filter(t => {
+      return t && newTags.has(t.toLowerCase())
+    })
+    const result = filtered.join(', ')
+    if (result !== cur.trim()) widgets[key] = result
   }
 }
 

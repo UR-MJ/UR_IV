@@ -95,7 +95,7 @@
 
     <!-- Slide-out EXIF Panel (간단 사이드바 — 하위호환) -->
     <transition name="slide">
-      <aside v-if="exifData && !largeView" class="exif-sidebar">
+      <aside v-if="exifData && !largeView && showMetadata" class="exif-sidebar">
         <div class="exif-close" @click="exifData = null">➔</div>
         <div class="exif-content">
           <div class="exif-preview" @click="largeView = exifData">
@@ -163,6 +163,7 @@ const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
 const exifData = ref(null)
 const largeView = ref(null)
 const isLoading = ref(false)
+const showMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')  // 기본 ON
 
 // ── 캐시 시스템 ──
 const _cache = new Map()  // folder → { images, timestamp }

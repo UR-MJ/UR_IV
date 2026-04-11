@@ -69,6 +69,10 @@
                 <span>Tag Block Mode</span>
                 <input type="checkbox" v-model="defaultBlockMode" @change="setBlockMode" />
               </label>
+              <label class="toggle-row">
+                <span>Gallery Metadata Panel</span>
+                <input type="checkbox" v-model="galleryMetadata" @change="window.localStorage.setItem('galleryShowMetadata', String(galleryMetadata))" />
+              </label>
             </div>
           </div>
           <div class="glass-card mt-16">
@@ -230,6 +234,7 @@ const cleanDuplicates = ref(true)
 const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
 const defaultBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
+const galleryMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
 
 // API에서 sampler/scheduler 목록 가져오기
 const wStore = useWidgetStore()
