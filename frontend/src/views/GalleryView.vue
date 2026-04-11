@@ -65,6 +65,7 @@
               <button class="lv-btn" @click="action('send_to_i2i', { path: largeView.path })">I2I</button>
               <button class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
               <button class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
+              <button class="lv-btn" @click="quickAction('add_favorite', largeView.path)">⭐ FAV</button>
               <button class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
               <button class="lv-close" @click="largeView = null">✕</button>
             </div>

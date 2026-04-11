@@ -282,7 +282,11 @@ class VueBridge(QObject):
                     detect_count = 0
                     for mp in model_paths:
                         if not os.path.exists(mp): continue
-                        model = YOLO(mp)
+                        try:
+                            model = YOLO(mp)
+                        except Exception as me:
+                            print(f"[YOLO] Model load failed: {mp} — {me}")
+                            continue
                         results = model(img, conf=conf)
                         for r in results:
                             # 세그먼트 마스크 우선 (성기 형태에 맞춤)
@@ -311,7 +315,10 @@ class VueBridge(QObject):
                             yolo_boxes = []
                             for mp2 in model_paths:
                                 if not os.path.exists(mp2): continue
-                                model2 = YOLO(mp2)
+                                try:
+                                    model2 = YOLO(mp2)
+                                except Exception:
+                                    continue
                                 res2 = model2(img, conf=conf)
                                 for r2 in res2:
                                     if r2.boxes is not None:

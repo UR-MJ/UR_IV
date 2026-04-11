@@ -22,6 +22,15 @@
           </div>
         </div>
 
+        <!-- 올가미 모드 -->
+        <div class="glass-card" v-if="currentTool === 'lasso'">
+          <label>Lasso Mode</label>
+          <div class="tool-grid small">
+            <button class="tool-chip" :class="{ active: !magneticLasso }" @click="magneticLasso = false">➰ FREE</button>
+            <button class="tool-chip magnet" :class="{ active: magneticLasso }" @click="enableMagnetic">🧲 MAGNETIC</button>
+          </div>
+        </div>
+
         <!-- 지우개 모드 -->
         <div class="glass-card" v-if="currentTool === 'eraser'">
           <label>Eraser Shape</label>
@@ -113,6 +122,8 @@ const maskContent = ref(0)
 const inpaintArea = ref(0)
 const currentTool = ref('brush')
 const eraserMode = ref('brush')
+const magneticLasso = ref(false)
+let edgeMapData = null, edgeMapW = 0, edgeMapH = 0
 const maskContents = ['FILL', 'ORIGINAL', 'LATENT NOISE', 'LATENT NOTHING']
 const inpaintAreas = ['WHOLE IMAGE', 'ONLY MASKED']
 const tools = [
@@ -195,7 +206,7 @@ function onDown(e) {
   saveUndo(); drawing = true
   const p = getPos(e); startX = p.x; startY = p.y; lastX = p.x; lastY = p.y
 
-  if (currentTool.value === 'lasso') { lassoPoints = [{ x: p.x, y: p.y }] }
+  if (currentTool.value === 'lasso') { const sp = magneticLasso.value ? snapToEdge(p.x, p.y) : p; lassoPoints = [{ x: sp.x, y: sp.y }] }
   else if (currentTool.value === 'brush') { paintCircle(p.x, p.y); render() }
   else if (currentTool.value === 'eraser') {
     if (eraserMode.value === 'brush') { eraseCircle(p.x, p.y); render() }
@@ -219,9 +230,10 @@ function onMove(e) {
     render()
     if (mCtx) { mCtx.strokeStyle = '#E2B340'; mCtx.lineWidth = 2; mCtx.setLineDash([6,4]); mCtx.strokeRect(startX, startY, p.x-startX, p.y-startY); mCtx.setLineDash([]) }
   } else if (currentTool.value === 'lasso') {
-    lassoPoints.push({ x: p.x, y: p.y }); render()
+    const sp = magneticLasso.value ? snapToEdge(p.x, p.y) : p
+    lassoPoints.push({ x: sp.x, y: sp.y }); render()
     if (mCtx && lassoPoints.length > 1) {
-      mCtx.strokeStyle = '#E2B340'; mCtx.lineWidth = 2; mCtx.setLineDash([4,3])
+      mCtx.strokeStyle = magneticLasso.value ? '#60a5fa' : '#E2B340'; mCtx.lineWidth = 2; mCtx.setLineDash([4,3])
       mCtx.beginPath(); mCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y)
       for (let i = 1; i < lassoPoints.length; i++) mCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y)
       mCtx.closePath(); mCtx.stroke(); mCtx.setLineDash([])
@@ -271,6 +283,36 @@ function render() {
   mCtx.putImageData(id, 0, 0)
 }
 
+// 자석 올가미
+async function enableMagnetic() {
+  magneticLasso.value = true
+  if (!imagePath.value) return
+  const bk = await getBackend()
+  if (bk.getEdgeMap) {
+    bk.getEdgeMap(imagePath.value, 50, 150, (b64) => {
+      if (!b64) return
+      const img = new Image()
+      img.onload = () => {
+        const tc = document.createElement('canvas'); tc.width = img.naturalWidth; tc.height = img.naturalHeight
+        const tctx = tc.getContext('2d'); tctx.drawImage(img, 0, 0)
+        const id = tctx.getImageData(0, 0, tc.width, tc.height)
+        edgeMapW = tc.width; edgeMapH = tc.height
+        edgeMapData = new Uint8Array(edgeMapW * edgeMapH)
+        for (let i = 0; i < edgeMapData.length; i++) edgeMapData[i] = id.data[i * 4]
+      }
+      img.src = b64
+    })
+  }
+}
+function snapToEdge(x, y) {
+  if (!edgeMapData || !magneticLasso.value) return { x, y }
+  const r = 12; let best = Infinity, bx = x, by = y
+  for (let py = Math.max(0, Math.floor(y-r)); py < Math.min(edgeMapH, Math.ceil(y+r)); py++)
+    for (let px = Math.max(0, Math.floor(x-r)); px < Math.min(edgeMapW, Math.ceil(x+r)); px++)
+      if (edgeMapData[py * edgeMapW + px] > 127) { const d = (px-x)**2+(py-y)**2; if (d < best) { best=d; bx=px; by=py } }
+  return { x: bx, y: by }
+}
+
 function updateHasMask() { hasMask.value = maskData ? maskData.some(v => v > 0) : false }
 function saveUndo() { if (maskData) { undoStack.push(new Uint8Array(maskData)); if (undoStack.length > 10) undoStack.shift(); redoStack = [] } }
 function clearMask() { if (maskData) { saveUndo(); maskData.fill(0) }; hasMask.value = false; render() }
@@ -307,6 +349,7 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path) => loadFromPath(pa
 .tool-chip { padding: 6px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 9px; font-weight: 800; cursor: pointer; text-align: center; }
 .tool-chip:hover { border-color: var(--text-muted); }
 .tool-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.tool-chip.magnet.active { background: rgba(96,165,250,0.1); border-color: #60a5fa; color: #60a5fa; }
 .slider-row { display: flex; align-items: center; gap: 6px; }
 .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
 .slider-val { font-size: 10px; color: var(--accent); min-width: 36px; text-align: right; font-family: monospace; }
