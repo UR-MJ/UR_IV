@@ -67,7 +67,7 @@
               </label>
               <label class="toggle-row">
                 <span>Tag Block Mode</span>
-                <input type="checkbox" v-model="defaultBlockMode" @change="localStorage.setItem('tagBlockMode', defaultBlockMode)" />
+                <input type="checkbox" v-model="defaultBlockMode" @change="localStorage.setItem('tagBlockMode', String(defaultBlockMode))" />
               </label>
             </div>
           </div>

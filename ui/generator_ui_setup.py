@@ -1459,9 +1459,8 @@ class UISetupMixin:
             action = menu.addAction(f"{i+1}. {prompt_preview}")
             action.setData(entry)
 
-        chosen = menu.exec(self.btn_prompt_history.mapToGlobal(
-            self.btn_prompt_history.rect().bottomLeft()
-        ))
+        from PyQt6.QtGui import QCursor
+        chosen = menu.exec(QCursor.pos())
         if chosen:
             data = chosen.data()
             self.main_prompt_text.setPlainText(data.get("prompt", ""))

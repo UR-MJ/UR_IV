@@ -703,8 +703,12 @@ class GeneratorMainUI(
 
             # ═══════ API 관리자 ═══════
             elif action == 'show_api_manager':
-                if hasattr(self, 'settings_tab') and hasattr(self.settings_tab, '_open_api_manager'):
-                    self.settings_tab._open_api_manager()
+                try:
+                    self._startup_backend_check()
+                    self._apply_backend_startup_result()
+                    self.vue_bridge.showNotification.emit('success', 'API 연결 확인 완료')
+                except Exception as e:
+                    self.vue_bridge.showNotification.emit('error', f'API 연결 실패: {e}')
 
             # ═══════ 탭 순서 설정 ═══════
             elif action == 'set_tab_order':
