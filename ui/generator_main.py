@@ -157,14 +157,15 @@ class GeneratorMainUI(
                 fwd_path = clean_path.replace('\\', '/')
                 print(f"[Send] {action}: {fwd_path}")
                 if action == 'send_to_i2i':
-                    self.vue_bridge.i2iImageLoaded.emit(fwd_path)
                     self.vue_bridge.tabChanged.emit('i2i')
+                    QTimer.singleShot(100, lambda p=fwd_path: self.vue_bridge.i2iImageLoaded.emit(p))
                 elif action == 'send_to_inpaint':
-                    self.vue_bridge.inpaintImageLoaded.emit(fwd_path)
                     self.vue_bridge.tabChanged.emit('inpaint')
+                    QTimer.singleShot(100, lambda p=fwd_path: self.vue_bridge.inpaintImageLoaded.emit(p))
                 elif action == 'send_to_editor':
-                    self.vue_bridge.editorImageLoaded.emit(fwd_path)
+                    # 탭 전환 먼저 → 100ms 후 이미지 로드 (keep-alive 렌더링 대기)
                     self.vue_bridge.tabChanged.emit('editor')
+                    QTimer.singleShot(100, lambda p=fwd_path: self.vue_bridge.editorImageLoaded.emit(p))
                 self.show_status("Asset Transfer Successful.")
 
             # 4. 에디터 정밀 조작 (먹통 해결)
