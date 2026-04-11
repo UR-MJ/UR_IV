@@ -1,0 +1,18 @@
+{
+  "steps": 28,
+  "cfg": 5,
+  "width": 832,
+  "height": 1216,
+  "seed": "-1",
+  "denoising": 0.75,
+  "sampler": "Euler a",
+  "scheduler": "beta",
+  "brushSize": 20,
+  "effectStrength": 15,
+  "yoloConf": 0.25,
+  "snapRadius": 12,
+  "defaultRating": "g",
+  "hires_enabled": true,
+  "ad_enabled": true,
+  "negpip_enabled": true
+}

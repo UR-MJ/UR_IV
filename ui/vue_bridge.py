@@ -787,6 +787,23 @@ class VueBridge(QObject):
         except Exception as e:
             return json.dumps({'error': str(e)})
 
+    @pyqtSlot(result=str)
+    def getDefaultExcludes(self) -> str:
+        """기본 제외 프롬프트 로드"""
+        import os
+        fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'default_excludes.txt')
+        try:
+            if os.path.exists(fp):
+                with open(fp, 'r', encoding='utf-8') as f:
+                    lines = []
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith('#'): continue
+                        lines.append(line)
+                    return ', '.join(lines)
+        except: pass
+        return ''
+
     @pyqtSlot(str, result=str)
     def getExcludeMatches(self, rule: str) -> str:
         """제외 규칙에 매칭되는 태그 목록 반환 (tags_db 기반)"""

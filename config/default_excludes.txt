@@ -1,0 +1,41 @@
+# ═══ 품질/메타 ═══
+bad, bad id, bad twitter id, error, typo, deformed, cropped, username, signature, watermark, logo, text, title, address, dated, hashtag, content rating, commentary, song name, circle name, group name, artist name, company name, copyright name, pixiv, pixiv id, twitter, twitch, patreon, weibo, *drawstring, *letterboxed, *to be continued, *snapchat, *qr code
+
+# ═══ UI/레이아웃 ═══
+border, speech bubble, thought bubble, bubble, koma, ~2koma, comic, *2koma, *4koma, dialogue, *multiple views, *collage, *spot color, *partially colored, *monochrome, *greyscale, *limited palette, *flat color, *sepia, *muted color, outline, *doodle inset, *photo inset, *game screenshot inset, *chibi inset, *reference inset, *chibi only, variations, *sequential, *image macro (meme), *impact (font), *cover, *video game cover (object), *multiple monochrome, *art program in frame, *expressions, *color guide, source, *stats
+
+# ═══ 검열/워터마크 ═══
+censor, ~uncensored, ~out-of-frame censoring, ~hair censor
+
+# ═══ 수염/체모 ═══
+beard, goatee, facial hair, mustache, *beard stubble, *sparse stubble, *back hair, *thick ass hair, *chest hair, *leg hair, *hand hair, *arm hair, *navel hair, *ass hair, nipple hair, *chest tuft, *alternate facial hair
+
+# ═══ 대머리/헤어스타일 ═══
+*bald, *bald spot, *undercut, *sidecut, *buzz cut, *crew cut, *bowl cut, *pompadour, *pompadou, *mohawk, *topknot, *bob cut, *hime cut, *double bun, *hair tubes, *hairpods
+
+# ═══ 수컷/남성 특징 ═══
+boy, ~1boy, ~2boys, ~3boys, ~4boys, ~5boys, ~6+boys, ~cowboy shot, ~playboy bunny, ~nontraditional playboy bunny, ~male playboy bunny, ~cowboy western, ~cowboy boots, ~boy sandwich, ~magical boy, ~boy on top, ~cowboy hat, otoko no ko, crossdressing, fat man, old, *pectorals, *hetero
+
+# ═══ 수인/동물/몬스터 ═══
+furry, bestiality, furrification, chibikemo, anthro, monster, monsterification, _fur, ~animal hood, ~holding animal, ~animal costume, ~animal on hand, ~animal hat, ~looking at animal, ~animal on shoulder, ~stuffed animal, ~animal ear headwear, ~animal hug, ~animal on lap, ~animal skull, ~animal on arm, ~animal around neck, ~sitting on animal, ~animal ears, ~animal on head, ~holding another's tail, *interspecies, paw, ~paw pose, *paw gloves, *paw shoes, claws, centaur, taur, mermaid, harpy, lamia, slime, arthropod, fins, *fish boy, *plant boy, *spider boy, *dragon boy, *shark boy, *lion boy, *octopus boy, talons, minotaur, *orc, *female orc, goblin, gnome, troll, *gorilla, *monkey, *pig, *elephant, *horse, *hedgehog, *tiger, *kirby, serval, *vampire, *fangs, *demon, *zombie, *skeleton, skull, *ghost, bug, cephalopod, octarian
+
+# ═══ 게임/작품 ═══
+pokemon, poke ball, pokephilia, digimon, splatoon, undertale, yu-gi-oh!, *duel monster, *duel disk, jojo, bleach, dragon ball, fate, *death note, zelda, (zelda), love live, ensemble stars!, project sekai, (project sekai), umamusume, (kamen rider), *demon slayer, *azur rane, super saiyan
+
+# ═══ 군사/기계 ═══
+tank, *panzer iv, *t-34, *military vehicle, mecha, robot, *super robot, mecha musume, *turret, *cannon, aircraft, airplane, *bf 109, *lagg-3, *savoia s.21, *a-10 thunderbolt ii, *t-65 x-wing, *x-wing, *ju 87, *m3 lee, *m4 sherman, *type 97 chi-ha, *caterpillar tracks, *propeller, tokusatsu, *machinery, *torpedo, *rocket launcher, *rpg-7, *rpg (weapon), world war ii, *japanese armor
+
+# ═══ NSFW/기형 ═══
+guro, intestines, decapitation, severed, headless, *body horror, amputee, vore, *egg laying, *inflation, *giving birth, loli, toddlercon, futanari, sex toy, *anal beads, *chastity cage, *flat chastity cage, *butt plug, condom, nipple jewelry, *nipple rings, clitor, *cuntboy, *green penis, *blue anus, *blue pussy, *no nipples, dark nipples, *blue nipples, *green nipples, *purple nipples, *grey nipples, *aqua nipples, *yellow nipples, *orange nipples, dark areolae, *pee stain
+
+# ═══ 비인간 특징 ═══
+elf, pointy ears, oni, antlers, antennae, scales, gills, *doll joints, *cracked skin, *gradient skin, *two-tone skin, colored skin, *colored sclera, sclera, *eye socket, *stomach mouth, *chest mouth, *third eyes, hidden eyes, cyclops, *hollow, extra, *winged arms, *fewer digits, eyeball, *patchwork skin, *stitched face, stitch, dark-skinned, _skin, ~shiny skin, ~skindentation, ~skin tight, ~foreskin, ~foreskin insertion, ~foreskin pull
+
+# ═══ 액세서리/의상 제거 ═══
+glasses, eyewear, bespectacled, monocle, *monocle chain, blindfold, *eye mask, *domino mask, *pince-nez, beret, *cabbie hat, *mob cap, crown, *forehead protector, headgear, hairband, eyepatch, *bird mask, *mascot head, ribbon, *hair bow, frills, frilled, skirt, *bra, *high heels, *pumps, *thighhighs, *detached sleeves, serafuku, lolita, goth fashion, *chinese clothes, chinese, *changpao, cosplay, braid, tied hair, *spiked collar, *spikes, *jewelry, *necklace, *earrings, *forehead jewel, forehead, ~licking another's lips, ~parted lips, ~licking lips, eyeshadow, eyeliner, lipstick, *makeup, *runny makeup
+
+# ═══ 기타 제거 ═══
+theme, style, (medium), (style), checkered, two-tone, alternate, official, gender, *drawstring, number, calendar, new year, *happy halloween, *happy new year, *happy birthday, *merry christmas, *anniversary, *countdown, *chinese zodiac, *nengajou, *thank you, *talking, *milestone celebration, *imagining, *request inset, *guilty challenge (meme), *special feeling (meme), *command spell, *borrowed character, outline, *realistic, *full body, *chibi, *plump, *thin, *slender, *skinny, *giant, *giantess, *destruction, *miniboy, *mini person, *minigirl, person between, *upside-down, *aged down, *aged up, 3d, sketch, *traditional media, *interface headset, *gameplay mechanics, *hand cursor, *photo inset, *game screenshot inset, large hands, *sharp teeth, *drawn whiskers, *fangs out, *fang out, *cheekbones, *grumpy, *nostrils, *snot, gag, nose, ~nose blush, big belly, *outie navel, *body horror, *breathing fire, *pumpkin head, girl, ~1girl, ~2girls, ~3girls, ~4girls, ~5girls, ~6+girls, female, middle finger, lips, *tusks, *tusk, *masked, bat wing, *interspecies, *dual persona, *animalization, *multilingual, *2021, *2022, *2023, *2020, logo, *creature, *spirit, piercings, ~ear piercing, *tattoo, *chess, ~sunglasses, ~aviator sunglasses, ~sports sunglasses
+
+# ═══ 예외 (유지) ═══
+~tongue, ~tongue out, ~finger to tongue, ~cum on tongue, ~tonguejob, ~doggystyle, ~nose blush, ~extra ears, ~multitasking, ~tears, ~dog ears, ~umbrakinesis, ~mouth holding, ~condom in mouth, ~paw pose, ~animal hood, ~holding animal, ~animal costume, ~animal on hand, ~animal hat, ~looking at animal, ~animal on shoulder, ~stuffed animal, ~animal ear headwear, ~animal hug, ~animal on lap, ~animal skull, ~animal on arm, ~animal around neck, ~sitting on animal, ~animal ears, ~animal on head, ~holding another's tail, ~out-of-frame censoring, ~hair censor, ~ear piercing, ~sunglasses, ~aviator sunglasses, ~sports sunglasses, ~shiny skin, ~skindentation, ~skin tight, ~foreskin, ~foreskin insertion, ~foreskin pull, ~2koma, ~licking another's lips, ~parted lips, ~licking lips, ~lifted by self, ~holding clothes, ~holding underwear, ~holding, ~cum on self, ~curled horns, ~demon horns, ~bowtie, ~headband, ~bow, ~traditional bowtie, ~pulled by self, ~holding sword, ~holding weapon, ~scar on nose, ~multicolored hair, ~food, ~bandaid on nose, ~bandaid, ~selfie, ~red headband, ~reference sheet, ~blank eyes, ~halloween costume, ~closed eyes, ~one eye closed, ~yellow eyes, ~closed mouth, ~holding surfboard, ~solo, ~looking at viewer, ~beckoning, ~flower, ~shelf, ~long sleeves, ~comic, ~looking at another, ~black tank top, ~tank top, ~looking at object, ~open clothes, ~belt, ~blonde hair, ~holding can, ~holding food, ~looking to the side, ~gloves, ~gears, ~loving aura, ~looking back, ~hair ornament, ~japanese clothes, ~glowing eyes, ~glowing, ~solo focus, ~holding gun, ~fingerless gloves, ~wet clothes, ~wet, ~see-through clothes, ~clothes lift, ~clothes pull, ~from below, ~glowing hair, ~white cloak, ~cloak, ~hooded cloak, ~black gloves, ~removing glove, ~gold trim, ~sound effects, ~pillow, ~heterochromia, ~white bowtie, ~white bow, ~holding card, ~pink petals, ~lower teeth only, ~branch, ~ribbon, ~two-tone eyes, ~pink flower, ~bad end, ~defeat, ~holding book, ~earrings, ~navel, ~wings, ~cosplay, ~multiple boys

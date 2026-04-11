@@ -1,0 +1,12 @@
+{
+  "tagBlockMode": true,
+  "cleanDuplicates": true,
+  "cleanSpaces": true,
+  "cleanUnderscore": true,
+  "hires_enabled": true,
+  "ad_enabled": true,
+  "ad_s1_enabled": true,
+  "ad_s2_enabled": false,
+  "negpip_enabled": true,
+  "galleryShowMetadata": true
+}

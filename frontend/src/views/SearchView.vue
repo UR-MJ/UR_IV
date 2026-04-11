@@ -178,8 +178,8 @@
           <button class="bar-btn" @click="listPage++" :disabled="listPage >= totalListPages - 1">▶</button>
         </div>
       </div>
-      <!-- 조건부 프롬프트 (결과 하단에 항상 표시) -->
-      <div class="cond-section">
+      <!-- 조건부 프롬프트 (항상 표시) -->
+      <div class="cond-section" v-if="results.length > 0 || condPositive.length > 0 || condNegative.length > 0">
         <details class="cond-card">
           <summary class="cond-title positive">CONDITIONAL POSITIVE</summary>
           <p class="cond-desc">태그가 존재하면 자동으로 다른 태그를 추가/제거합니다</p>
@@ -305,13 +305,27 @@ function restoreAndRandom() {
 }
 
 onMounted(() => {
+  // 이전 검색 결과 복원
+  try {
+    const saved = window.localStorage.getItem('lastSearchResults')
+    if (saved) {
+      const data = JSON.parse(saved)
+      if (Array.isArray(data) && data.length > 0) {
+        results.value = data; filteredResults.value = data; lastResults.value = data
+        statusText.value = `${data.length} MATCHES (복원)`
+      }
+    }
+  } catch {}
+
   onBackendEvent('searchResultsReady', (json) => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
         results.value = data; filteredResults.value = data; previewIdx.value = 0
-        lastResults.value = data  // 보존
+        lastResults.value = data
         statusText.value = `${data.length} MATCHES`
+        // 자동 저장 (재시작 시 복원용)
+        try { window.localStorage.setItem('lastSearchResults', JSON.stringify(data.slice(0, 500))) } catch {}
       } else statusText.value = 'FAILED'
     } catch { statusText.value = 'PARSE ERROR' }
     searching.value = false; searchProgress.value = 100
