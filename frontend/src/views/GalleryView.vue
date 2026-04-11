@@ -23,7 +23,7 @@
     </header>
 
     <!-- Masonry-style Grid -->
-    <section class="gallery-content">
+    <section class="gallery-content" ref="galleryContentRef" @scroll="onGalleryScroll">
       <div class="masonry-grid">
         <div v-for="img in pagedImages" :key="img" class="gallery-card"
           @click="viewImage(img)"
@@ -36,10 +36,8 @@
           </div>
         </div>
       </div>
-      <!-- 무한 스크롤 센티넬 -->
-      <div ref="sentinelRef" class="sentinel" v-if="visibleCount < images.length"></div>
       <div class="load-more-info" v-if="visibleCount < images.length">
-        {{ visibleCount }} / {{ images.length }} loaded
+        {{ visibleCount }} / {{ images.length }} loaded — 스크롤하여 더 보기
       </div>
       
       <div v-if="isLoading" class="empty-placeholder">
@@ -155,10 +153,9 @@ import { computed, nextTick } from 'vue'
 const images = ref([])
 const currentFolder = ref('')
 const visibleCount = ref(40)
-const sentinelRef = ref(null)
-let observer = null
 
 const pagedImages = computed(() => images.value.slice(0, visibleCount.value))
+const galleryContentRef = ref(null)
 const sortBy = ref('date')
 const sortOptions = [{label: 'DATE', val: 'date'}, {label: 'NAME', val: 'name'}]
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
@@ -253,6 +250,16 @@ function sortImages() {
   }
 }
 
+function onGalleryScroll(e) {
+  const el = e.target
+  // 하단 200px 이내에 도달하면 더 로드
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+    if (visibleCount.value < images.value.length) {
+      visibleCount.value = Math.min(visibleCount.value + 30, images.value.length)
+    }
+  }
+}
+
 const openFolder = () => requestAction('gallery_open_folder')
 const viewImage = async (path) => {
   const backend = await getBackend()
@@ -298,17 +305,6 @@ onMounted(async () => {
     loadImages()
   }
   onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
-
-  // 무한 스크롤
-  nextTick(() => {
-    observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting && visibleCount.value < images.value.length) {
-        visibleCount.value = Math.min(visibleCount.value + 30, images.value.length)
-        nextTick(() => { if (sentinelRef.value) observer.observe(sentinelRef.value) })
-      }
-    }, { threshold: 0.1 })
-    if (sentinelRef.value) observer.observe(sentinelRef.value)
-  })
 })
 onUnmounted(() => document.removeEventListener('click', hideMenu))
 </script>
@@ -405,7 +401,6 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .exif-preview { position: relative; cursor: pointer; }
 .exif-preview:hover .click-hint { opacity: 1; }
 .mt-8 { margin-top: 8px; }
-.sentinel { height: 20px; }
 .load-more-info { text-align: center; padding: 8px; font-size: 10px; color: var(--text-muted); }
 .spinner { width: 32px; height: 32px; border: 3px solid #222; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
