@@ -28,8 +28,8 @@
           ⚠ {{ c.group }}: {{ c.tags.join(', ') }}
         </div>
       </div>
-      <div class="neg-section">
-        <label class="danger-label">NEGATIVE</label>
+      <details class="neg-section">
+        <summary class="danger-label neg-toggle">NEGATIVE ▾</summary>
         <div class="tag-block-view neg" v-if="tagBlockMode">
           <div class="tag-blocks">
             <button v-for="(tb, ti) in negBlocks" :key="ti"
@@ -40,7 +40,7 @@
         <textarea v-else ref="negRef" v-model="widgets.neg_prompt_text"
           class="neg-prompt auto-grow" placeholder="Negative prompt..."
           @input="autoGrow($event.target)"></textarea>
-      </div>
+      </details>
     </div>
 
     <!-- 2. CHARACTER & MODEL -->
@@ -139,33 +139,31 @@
             :class="{ selected: acIdx === i }" @mousedown.prevent="acceptSuggestion(tag)">{{ tag }}</div>
         </div>
       </div>
-      <div class="grid-2">
-        <div class="input-group">
-          <label>Prefix</label>
-          <div class="tag-block-view" v-if="tagBlockMode">
-            <div class="tag-blocks">
-              <button v-for="(tb, ti) in prefixBlocks" :key="ti" class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
-                @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleFieldBlock('prefix', ti)" @contextmenu.prevent="removeFieldBlock('prefix', ti)"
-                draggable="true" @dragstart="blockDragStart('prefix', ti)" @dragover.prevent @drop="blockDrop('prefix', ti)">
-                <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}</button>
-            </div>
-            <input v-model="prefixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('prefix')" class="block-input" />
+      <div class="input-group">
+        <label>Prefix</label>
+        <div class="tag-block-view" v-if="tagBlockMode">
+          <div class="tag-blocks">
+            <button v-for="(tb, ti) in prefixBlocks" :key="ti" class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
+              @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleFieldBlock('prefix', ti)" @contextmenu.prevent="removeFieldBlock('prefix', ti)"
+              draggable="true" @dragstart="blockDragStart('prefix', ti)" @dragover.prevent @drop="blockDrop('prefix', ti)">
+              <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}</button>
           </div>
-          <textarea v-else ref="prefixRef" v-model="widgets.prefix_prompt_text" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
+          <input v-model="prefixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('prefix')" class="block-input" />
         </div>
-        <div class="input-group">
-          <label>Suffix</label>
-          <div class="tag-block-view" v-if="tagBlockMode">
-            <div class="tag-blocks">
-              <button v-for="(tb, ti) in suffixBlocks" :key="ti" class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
-                @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleFieldBlock('suffix', ti)" @contextmenu.prevent="removeFieldBlock('suffix', ti)"
-                draggable="true" @dragstart="blockDragStart('suffix', ti)" @dragover.prevent @drop="blockDrop('suffix', ti)">
-                <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}</button>
-            </div>
-            <input v-model="suffixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('suffix')" class="block-input" />
+        <textarea v-else ref="prefixRef" v-model="widgets.prefix_prompt_text" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
+      </div>
+      <div class="input-group">
+        <label>Suffix</label>
+        <div class="tag-block-view" v-if="tagBlockMode">
+          <div class="tag-blocks">
+            <button v-for="(tb, ti) in suffixBlocks" :key="ti" class="tag-block" :class="[blockColorClass(tb.text), { disabled: tb.off, wildcard: isWildcard(tb.text) }]"
+              @click="isWildcard(tb.text) ? openWildcardFor(tb.text) : toggleFieldBlock('suffix', ti)" @contextmenu.prevent="removeFieldBlock('suffix', ti)"
+              draggable="true" @dragstart="blockDragStart('suffix', ti)" @dragover.prevent @drop="blockDrop('suffix', ti)">
+              <span class="wc-icon" v-if="isWildcard(tb.text)">🎲</span>{{ tb.text }}</button>
           </div>
-          <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
+          <input v-model="suffixNewTag" placeholder="추가..." @keydown.enter="addFieldBlock('suffix')" class="block-input" />
         </div>
+        <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <div class="input-group">
         <label>Exclude (Local)</label>
@@ -211,12 +209,21 @@ const prefixNewTag = ref('')
 const suffixNewTag = ref('')
 const dragState = reactive({ field: '', idx: -1 })
 
-// 와일드카드 문법(__name__) 보존하는 파싱
+// 와일드카드 + 괄호 내부 쉼표 보존하는 파싱
 function parseBlocks(text) {
   if (!text) return []
-  // __wildcard__ 내부의 쉼표를 보호
-  const protected_ = text.replace(/__([^_]+)__/g, (m) => m.replace(/,/g, '\x00'))
-  return protected_.split(',').map(t => t.trim().replace(/\x00/g, ',')).filter(Boolean).map(t => ({ text: t, off: false }))
+  // 1. 괄호 내부 쉼표를 보호 (depth 추적)
+  let depth = 0
+  let protected_ = ''
+  for (const ch of text) {
+    if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') depth = Math.max(0, depth - 1)
+    protected_ += (ch === ',' && depth > 0) ? '\x01' : ch
+  }
+  // 2. __wildcard__ 내부 쉼표 보호
+  protected_ = protected_.replace(/__([^_]+)__/g, (m) => m.replace(/,/g, '\x01'))
+  // 3. 쉼표로 분리 후 복원
+  return protected_.split(',').map(t => t.trim().replace(/\x01/g, ',')).filter(Boolean).map(t => ({ text: t, off: false }))
 }
 
 function blocksToText(blocks) {
@@ -241,8 +248,10 @@ const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
 const blockColorCache = ref({})
 
 function blockColorClass(text) {
-  const t = text.trim().toLowerCase().replace(/ /g, '_')
   if (isWildcard(text)) return 'wc-block'
+  // 괄호 제거 후 분류 (tag:1.2 → tag)
+  let t = text.trim().toLowerCase().replace(/ /g, '_')
+  t = t.replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
   if (countPattern.test(t)) return 'bc-count'
   const cached = blockColorCache.value[t]
   if (cached) return 'bc-' + cached
@@ -264,8 +273,11 @@ async function classifyBlockTags() {
   const allTags = new Set()
   for (const blocks of [mainTagBlocks.value, prefixBlocks.value, suffixBlocks.value, totalBlocks.value]) {
     for (const b of blocks) {
-      const t = b.text.trim().replace(/ /g, '_')
-      if (t && !isWildcard(b.text) && !countPattern.test(t.toLowerCase()) && !blockColorCache.value[t.toLowerCase()]) {
+      if (isWildcard(b.text)) continue
+      // 괄호/가중치 제거 후 순수 태그만
+      let t = b.text.trim().replace(/ /g, '_')
+      t = t.replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
+      if (t && !countPattern.test(t.toLowerCase()) && !blockColorCache.value[t.toLowerCase()]) {
         allTags.add(t)
       }
     }
@@ -559,6 +571,8 @@ summary::-webkit-details-marker { display: none; }
 .lock-btn.locked { opacity: 1; }
 .total-prompt { min-height: 60px; font-family: 'Consolas', monospace; font-size: 12px; line-height: 1.5; color: var(--accent); border-color: var(--accent-dim); }
 .neg-section { margin-top: 8px; }
+.neg-toggle { cursor: pointer; list-style: none; }
+.neg-toggle::-webkit-details-marker { display: none; }
 .danger-label { color: #f87171; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
 .neg-prompt { min-height: 30px; color: #f87171; border-color: rgba(248,113,113,0.2); }
 .auto-grow { resize: none; overflow: hidden; min-height: 32px; }
