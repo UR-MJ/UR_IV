@@ -779,7 +779,9 @@ class GeneratorMainUI(
                 slot = payload.get('slot', 'after')
                 if path:
                     clean = path.replace('file:///', '').replace('\\', '/')
-                    self.vue_bridge.compareImageLoaded.emit(json.dumps({'slot': slot, 'path': clean}))
+                    if clean.startswith('/') and ':' in clean[1:3]: clean = clean[1:]
+                    self.vue_bridge.tabChanged.emit('png')
+                    QTimer.singleShot(100, lambda: self.vue_bridge.compareImageLoaded.emit(json.dumps({'slot': slot, 'path': clean})))
                     self.vue_bridge.tabChanged.emit('png')
 
             # ═══════ UI 설정 저장 ═══════

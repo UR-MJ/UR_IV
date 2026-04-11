@@ -1067,6 +1067,47 @@ class VueBridge(QObject):
             handle_error('E050', 'ClassifyTags', e, notify=False)
             return json.dumps({'error': str(e)})
 
+    @pyqtSlot(str, str, int, int, result=str)
+    def exportCompareGif(self, before_path: str, after_path: str, duration: int, loops: int) -> str:
+        """Before/After 비교 GIF 생성"""
+        try:
+            from PIL import Image as PILImage
+            import os, time
+
+            img_a = PILImage.open(before_path)
+            img_b = PILImage.open(after_path)
+
+            # 크기 통일 (작은 쪽에 맞춤)
+            w = min(img_a.width, img_b.width)
+            h = min(img_a.height, img_b.height)
+            img_a = img_a.resize((w, h), PILImage.LANCZOS)
+            img_b = img_b.resize((w, h), PILImage.LANCZOS)
+
+            # 중간 프레임 생성 (부드러운 전환)
+            frames = []
+            steps = 8
+            for i in range(steps + 1):
+                alpha = i / steps
+                blended = PILImage.blend(img_a, img_b, alpha)
+                frames.append(blended)
+            # 역방향
+            for i in range(steps - 1, 0, -1):
+                alpha = i / steps
+                blended = PILImage.blend(img_a, img_b, alpha)
+                frames.append(blended)
+
+            out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'image_cache', 'compare')
+            os.makedirs(out_dir, exist_ok=True)
+            out_path = os.path.join(out_dir, f"compare_{int(time.time())}.gif")
+
+            frames[0].save(
+                out_path, save_all=True, append_images=frames[1:],
+                duration=duration, loop=loops, optimize=True
+            )
+            return json.dumps({'path': out_path.replace('\\', '/'), 'frames': len(frames)})
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
     @pyqtSlot(result=str)
     def getTabDefaults(self) -> str:
         """tab_defaults.json 반환"""

@@ -65,6 +65,20 @@
           <p class="sub">우클릭 메뉴의 "비교로 보내기"로도 이미지를 추가할 수 있습니다</p>
         </div>
       </div>
+      <!-- GIF 내보내기 -->
+      <div class="gif-bar" v-if="compareBefore && compareAfter">
+        <span class="gif-label">GIF Export</span>
+        <label>Speed</label>
+        <select v-model.number="gifDuration">
+          <option :value="200">Fast</option>
+          <option :value="400">Normal</option>
+          <option :value="700">Slow</option>
+        </select>
+        <button class="gif-btn" @click="exportGif" :disabled="gifExporting">
+          {{ gifExporting ? 'Exporting...' : '🎬 Export GIF' }}
+        </button>
+        <a v-if="gifResult" :href="'file:///' + gifResult" class="gif-link" target="_blank">📥 {{ gifResult.split('/').pop() }}</a>
+      </div>
     </div>
   </div>
 </template>
@@ -120,8 +134,28 @@ function sendToCompare() {
 }
 
 async function loadCompareImage(slot) {
-  // Python에서 파일 다이얼로그
   requestAction('open_compare_image', { slot })
+}
+
+// GIF 내보내기
+const gifDuration = ref(400)
+const gifExporting = ref(false)
+const gifResult = ref('')
+
+async function exportGif() {
+  if (!compareBefore.value || !compareAfter.value) return
+  gifExporting.value = true; gifResult.value = ''
+  const backend = await getBackend()
+  if (backend.exportCompareGif) {
+    backend.exportCompareGif(compareBefore.value, compareAfter.value, gifDuration.value, 0, (json) => {
+      try {
+        const d = JSON.parse(json)
+        if (d.path) { gifResult.value = d.path; requestAction('show_toast', { type: 'success', msg: `GIF 생성 완료 (${d.frames} frames)` }) }
+        else if (d.error) requestAction('show_toast', { type: 'error', msg: d.error })
+      } catch {}
+      gifExporting.value = false
+    })
+  }
 }
 
 onMounted(() => {
@@ -178,4 +212,13 @@ onMounted(() => {
 .compare-hint .icon { font-size: 48px; opacity: 0.3; margin-bottom: 12px; }
 .compare-hint p { color: #484848; font-size: 13px; }
 .compare-hint .sub { font-size: 11px; color: #383838; margin-top: 4px; }
+
+/* GIF Export */
+.gif-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.gif-label { font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; }
+.gif-bar label { font-size: 10px; color: var(--text-muted); }
+.gif-bar select { padding: 3px 8px; font-size: 10px; }
+.gif-btn { padding: 5px 14px; background: var(--accent); border: none; border-radius: 6px; color: #000; font-size: 10px; font-weight: 800; cursor: pointer; }
+.gif-btn:disabled { opacity: 0.4; }
+.gif-link { font-size: 10px; color: #60a5fa; text-decoration: none; margin-left: auto; }
 </style>
