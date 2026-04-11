@@ -140,7 +140,12 @@
               <div v-for="(rule, ri) in excludeRules" :key="ri" class="em-rule-item"
                 :class="[excludeColorFn(rule), { active: selectedExRule === ri }]"
                 @click="selectedExRule = ri; loadExcludeMatches(rule)">
-                <span class="em-rule-text">{{ rule }}</span>
+                <!-- 편집 모드 -->
+                <input v-if="editingExRule === ri" class="em-rule-edit" v-model="editExRuleText"
+                  @blur="finishEditExRule(ri)" @keydown.enter="finishEditExRule(ri)" @keydown.escape="editingExRule = -1"
+                  @click.stop ref="exRuleEditRef" />
+                <!-- 표시 모드 -->
+                <span v-else class="em-rule-text" @dblclick.stop="startEditExRule(ri)">{{ rule }}</span>
                 <span class="em-match-count">{{ excludeMatches[ri]?.length || '...' }}</span>
                 <button class="em-rule-rm" @click.stop="removeExcludeRule(ri)">✕</button>
               </div>
@@ -250,6 +255,28 @@ async function loadExcludeMatches(rule) {
 }
 
 const newExcludeRule = ref('')
+const editingExRule = ref(-1)
+const editExRuleText = ref('')
+const exRuleEditRef = ref(null)
+
+function startEditExRule(idx) {
+  editingExRule.value = idx
+  editExRuleText.value = excludeRules.value[idx]
+  nextTick(() => { if (exRuleEditRef.value?.[0]) exRuleEditRef.value[0].focus() })
+}
+
+function finishEditExRule(idx) {
+  if (editingExRule.value !== idx) return
+  const newText = editExRuleText.value.trim()
+  editingExRule.value = -1
+  if (!newText) { removeExcludeRule(idx); return }
+  const rules = excludeRules.value.slice()
+  rules[idx] = newText
+  widgets.exclude_prompt_local_input = rules.join(', ')
+  // 매칭 갱신
+  selectedExRule.value = idx
+  loadExcludeMatches(newText)
+}
 
 function addExcludeRule() {
   const rule = newExcludeRule.value.trim()
@@ -544,6 +571,8 @@ label.danger { color: #f87171; }
 .em-tag.excepted { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); color: #4ade80; text-decoration: line-through; opacity: 0.6; }
 .em-tag.excepted:hover { opacity: 1; }
 .em-rule-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 11px; flex-shrink: 0; }
+.em-rule-edit { flex: 1; padding: 2px 6px; font-size: 11px; background: var(--bg-card); border: 1px solid var(--accent); border-radius: 3px; color: var(--text-primary); font-family: 'Consolas', monospace; }
+.em-rule-text { cursor: default; }
 .em-add-row { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .em-add-input { flex: 1; padding: 4px 8px; font-size: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
 .em-add-btn { width: 28px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 3px; color: var(--accent); font-weight: 800; cursor: pointer; }
