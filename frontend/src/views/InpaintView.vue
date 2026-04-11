@@ -1,81 +1,86 @@
 <template>
   <div class="inpaint-workspace">
-    <!-- Left Sidebar: Controls -->
+    <!-- Left Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-scroll">
-        <!-- Mask Settings -->
         <div class="glass-card">
-          <label>Inpaint Masking</label>
+          <label>Source Image</label>
+          <div class="source-thumb" @click="triggerFileInput">
+            <img v-if="imageSrc" :src="imageSrc" />
+            <div v-else class="upload-hint">DROP OR CLICK</div>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <label>Brush Size</label>
           <div class="brush-row">
-            <label class="mini">Brush Size</label>
-            <input type="range" min="1" max="100" v-model.number="brushSize" class="modern-slider" />
-            <span class="val">{{ brushSize }}</span>
-          </div>
-          <div class="btn-row mt-12">
-            <button class="ghost-btn" @click="clearMask">CLEAR MASK</button>
-            <button class="ghost-btn" @click="undoMask">UNDO</button>
+            <input type="range" min="5" max="200" v-model.number="brushSize" />
+            <span class="brush-val">{{ brushSize }}px</span>
           </div>
         </div>
 
-        <!-- Inpaint Modes -->
-        <div class="glass-card">
-          <label>Mask Content</label>
-          <div class="chip-grid">
-            <button v-for="(m, i) in maskContents" :key="i"
-              class="chip-btn" :class="{ active: maskContent === i }"
-              @click="maskContent = i"
-            >{{ m }}</button>
-          </div>
-          
-          <label class="mt-12">Inpaint Area</label>
-          <div class="chip-grid">
-            <button v-for="(a, i) in inpaintAreas" :key="i"
-              class="chip-btn" :class="{ active: inpaintArea === i }"
-              @click="inpaintArea = i"
-            >{{ a }}</button>
-          </div>
-        </div>
-
-        <!-- Prompt & Denoising -->
         <div class="glass-card">
           <label>Denoising Strength</label>
-          <div class="premium-slider">
+          <div class="brush-row">
             <input type="range" min="0" max="1" step="0.01" v-model.number="denoising" />
-            <div class="slider-display">
-              <span class="val">{{ denoising.toFixed(2) }}</span>
-            </div>
+            <span class="brush-val">{{ denoising.toFixed(2) }}</span>
           </div>
-          <textarea v-model="prompt" class="mt-12" rows="3" placeholder="Describe the change..."></textarea>
+        </div>
+
+        <div class="glass-card">
+          <label>Override Prompt</label>
+          <textarea v-model="prompt" rows="3" placeholder="Describe the change..."></textarea>
+        </div>
+
+        <div class="glass-card">
+          <label>Mask Settings</label>
+          <div class="mask-opts">
+            <select v-model="maskContent">
+              <option v-for="(mc, i) in maskContents" :key="i" :value="i">{{ mc }}</option>
+            </select>
+            <select v-model="inpaintArea">
+              <option v-for="(ia, i) in inpaintAreas" :key="i" :value="i">{{ ia }}</option>
+            </select>
+          </div>
         </div>
       </div>
 
       <div class="sidebar-footer">
-        <button class="btn-generate primary" @click="generate" :disabled="!imageSrc">
+        <div class="mask-actions">
+          <button class="action-btn" @click="clearMask">CLEAR MASK</button>
+          <button class="action-btn" @click="undoMask">UNDO</button>
+        </div>
+        <button class="btn-generate" @click="generate" :disabled="!imageSrc">
           START INPAINTING
         </button>
       </div>
     </aside>
 
-    <!-- Main Content: Canvas -->
+    <!-- Canvas Area -->
     <section class="canvas-area">
       <div class="canvas-container" :class="{ 'drag-over': isDragging }"
         @dragover.prevent="isDragging = true" @dragleave="isDragging = false"
-        @drop.prevent="handleDrop"
+        @drop.prevent="handleDrop" @click="!imageSrc && triggerFileInput()"
       >
-        <div v-if="!imageSrc" class="drop-empty" @click="triggerFileInput">
+        <div v-if="!imageSrc" class="drop-empty">
           <div class="icon">✎</div>
           <h2>MASK EDITOR</h2>
-          <p>Drop image to start painting</p>
+          <p>Drop image or click to start</p>
         </div>
-        
-        <div v-else class="editor-wrap">
-          <canvas ref="canvasRef" @mousedown="startDrawing" @mousemove="draw" @mouseup="stopDrawing" @mouseleave="stopDrawing"></canvas>
-          <div class="canvas-toolbar">
-            <button class="tool-btn" @click="triggerFileInput" title="Change Image">📁</button>
-            <div class="sep"></div>
-            <div class="brush-preview" :style="{ width: brushSize + 'px', height: brushSize + 'px' }"></div>
+
+        <template v-else>
+          <!-- 이미지 캔버스 -->
+          <canvas ref="imgCanvasRef" class="paint-canvas" :style="canvasTransform"></canvas>
+          <!-- 마스크 오버레이 캔버스 -->
+          <canvas ref="maskCanvasRef" class="paint-canvas mask-layer" :style="canvasTransform"
+            @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp"
+            @mouseleave="onMouseUp" @wheel.prevent="onWheel" @contextmenu.prevent
+          ></canvas>
+          <div class="canvas-info">
+            {{ imgW }} × {{ imgH }} | {{ Math.round(zoom * 100) }}%
+            <template v-if="hasMask"> | MASK</template>
           </div>
-        </div>
+        </template>
       </div>
       <input ref="fileInput" type="file" accept="image/*" hidden @change="handleFileSelect" />
     </section>
@@ -83,7 +88,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 
@@ -91,19 +96,40 @@ const isDragging = ref(false)
 const imageSrc = ref('')
 const imagePath = ref('')
 const fileInput = ref(null)
-const canvasRef = ref(null)
-const ctx = ref(null)
-const isDrawing = ref(false)
-const brushSize = ref(30)
-
+const imgCanvasRef = ref(null)
+const maskCanvasRef = ref(null)
+const brushSize = ref(40)
 const prompt = ref('')
 const denoising = ref(0.75)
 const maskContent = ref(0)
 const inpaintArea = ref(0)
-
 const maskContents = ['FILL', 'ORIGINAL', 'LATENT NOISE', 'LATENT NOTHING']
 const inpaintAreas = ['WHOLE IMAGE', 'ONLY MASKED']
 
+const imgW = ref(0)
+const imgH = ref(0)
+const zoom = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const hasMask = ref(false)
+
+let imgCtx = null
+let maskCtx = null
+let sourceImg = null
+let maskData = null  // Uint8Array
+let drawing = false
+let panning = false
+let lastX = -1, lastY = -1
+let panStartX = 0, panStartY = 0
+let maskUndoStack = []
+
+const canvasTransform = computed(() => ({
+  transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
+  transformOrigin: 'center center',
+  cursor: panning ? 'grabbing' : 'none',
+}))
+
+// ── 이미지 로드 ──
 function triggerFileInput() { fileInput.value?.click() }
 function handleFileSelect(e) { const f = e.target.files?.[0]; if (f) loadFile(f) }
 function handleDrop(e) {
@@ -116,10 +142,7 @@ function handleDrop(e) {
 
 function loadFile(file) {
   const reader = new FileReader()
-  reader.onload = (ev) => {
-    imageSrc.value = ev.target.result
-    initCanvas(ev.target.result)
-  }
+  reader.onload = (ev) => { imageSrc.value = ev.target.result; initCanvas(ev.target.result) }
   reader.readAsDataURL(file)
   if (file.path) imagePath.value = file.path.replace(/\\/g, '/')
 }
@@ -128,121 +151,207 @@ async function loadFromPath(path) {
   imagePath.value = path
   const backend = await getBackend()
   if (backend.loadImageBase64) {
-    backend.loadImageBase64(path, (b64) => {
-      if (b64) { imageSrc.value = b64; initCanvas(b64) }
-    })
+    backend.loadImageBase64(path, (b64) => { if (b64) { imageSrc.value = b64; initCanvas(b64) } })
   }
+}
+
+function initCanvas(src) {
+  const img = new Image()
+  img.onload = () => {
+    sourceImg = img
+    imgW.value = img.naturalWidth; imgH.value = img.naturalHeight
+    zoom.value = 1; panX.value = 0; panY.value = 0
+
+    // 이미지 캔버스
+    const ic = imgCanvasRef.value; if (!ic) return
+    ic.width = img.naturalWidth; ic.height = img.naturalHeight
+    imgCtx = ic.getContext('2d')
+    imgCtx.drawImage(img, 0, 0)
+
+    // 마스크 캔버스
+    const mc = maskCanvasRef.value; if (!mc) return
+    mc.width = img.naturalWidth; mc.height = img.naturalHeight
+    maskCtx = mc.getContext('2d')
+    maskCtx.clearRect(0, 0, mc.width, mc.height)
+
+    // 마스크 데이터 초기화
+    maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
+    hasMask.value = false
+    maskUndoStack = []
+  }
+  img.src = src
+}
+
+// ── 좌표 변환 ──
+function getPos(e) {
+  if (!maskCanvasRef.value) return { x: 0, y: 0 }
+  const rect = maskCanvasRef.value.getBoundingClientRect()
+  return {
+    x: (e.clientX - rect.left) / rect.width * maskCanvasRef.value.width,
+    y: (e.clientY - rect.top) / rect.height * maskCanvasRef.value.height,
+  }
+}
+
+// ── 마우스 이벤트 ──
+function onMouseDown(e) {
+  if (e.altKey || e.button === 1) {
+    panning = true; panStartX = e.clientX - panX.value; panStartY = e.clientY - panY.value; return
+  }
+  // undo 저장
+  if (maskData) maskUndoStack.push(new Uint8Array(maskData))
+  if (maskUndoStack.length > 10) maskUndoStack.shift()
+
+  drawing = true
+  const pos = getPos(e)
+  lastX = pos.x; lastY = pos.y
+  paintCircle(pos.x, pos.y)
+  renderMask()
+}
+
+function onMouseMove(e) {
+  if (panning) { panX.value = e.clientX - panStartX; panY.value = e.clientY - panStartY; return }
+  // 커서 그리기 (큰 브러시)
+  if (maskCtx && !drawing) {
+    renderMask()
+    const pos = getPos(e)
+    const r = brushSize.value
+    maskCtx.strokeStyle = 'rgba(226, 179, 64, 0.6)'
+    maskCtx.lineWidth = 2
+    maskCtx.beginPath(); maskCtx.arc(pos.x, pos.y, r, 0, Math.PI * 2); maskCtx.stroke()
+  }
+  if (!drawing) return
+  const pos = getPos(e)
+  paintLine(lastX, lastY, pos.x, pos.y)
+  lastX = pos.x; lastY = pos.y
+  renderMask()
+}
+
+function onMouseUp() {
+  if (panning) { panning = false; return }
+  drawing = false
+}
+
+function onWheel(e) {
+  const delta = e.deltaY > 0 ? 0.9 : 1.1
+  zoom.value = Math.max(0.2, Math.min(5, zoom.value * delta))
+}
+
+// ── 마스크 페인트 ──
+function paintCircle(cx, cy) {
+  if (!maskData || !sourceImg) return
+  const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
+  const r = brushSize.value
+  for (let y = Math.max(0, Math.floor(cy - r)); y < Math.min(h, Math.ceil(cy + r)); y++) {
+    for (let x = Math.max(0, Math.floor(cx - r)); x < Math.min(w, Math.ceil(cx + r)); x++) {
+      if ((x - cx) ** 2 + (y - cy) ** 2 <= r ** 2) maskData[y * w + x] = 255
+    }
+  }
+  hasMask.value = true
+}
+
+function paintLine(x0, y0, x1, y1) {
+  const dist = Math.hypot(x1 - x0, y1 - y0)
+  const steps = Math.max(1, Math.ceil(dist / Math.max(1, brushSize.value * 0.3)))
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    paintCircle(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
+  }
+}
+
+function renderMask() {
+  if (!maskCtx || !maskData || !sourceImg) return
+  const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
+  maskCtx.clearRect(0, 0, w, h)
+  const id = maskCtx.createImageData(w, h)
+  for (let i = 0; i < maskData.length; i++) {
+    if (maskData[i] > 0) {
+      id.data[i * 4] = 226; id.data[i * 4 + 1] = 179
+      id.data[i * 4 + 2] = 64; id.data[i * 4 + 3] = 100
+    }
+  }
+  maskCtx.putImageData(id, 0, 0)
+}
+
+function clearMask() {
+  if (maskData) { maskUndoStack.push(new Uint8Array(maskData)); maskData.fill(0) }
+  hasMask.value = false
+  renderMask()
+}
+
+function undoMask() {
+  if (maskUndoStack.length === 0 || !maskData) return
+  maskData.set(maskUndoStack.pop())
+  hasMask.value = maskData.some(v => v > 0)
+  renderMask()
+}
+
+// ── 생성 ──
+function getMaskBase64() {
+  if (!maskData || !sourceImg) return ''
+  const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
+  const tc = document.createElement('canvas'); tc.width = w; tc.height = h
+  const tctx = tc.getContext('2d')
+  const id = tctx.createImageData(w, h)
+  for (let i = 0; i < maskData.length; i++) {
+    const v = maskData[i]
+    id.data[i * 4] = v; id.data[i * 4 + 1] = v; id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255
+  }
+  tctx.putImageData(id, 0, 0)
+  return tc.toDataURL('image/png')
+}
+
+function generate() {
+  requestAction('generate_inpaint', {
+    image: imageSrc.value,
+    image_path: imagePath.value,
+    mask: getMaskBase64(),
+    prompt: prompt.value,
+    denoising: denoising.value,
+    mask_content: maskContent.value,
+    inpaint_area: inpaintArea.value,
+  })
 }
 
 onMounted(() => {
   onBackendEvent('inpaintImageLoaded', (path) => loadFromPath(path))
 })
-
-function initCanvas(src) {
-  const img = new Image()
-  img.onload = () => {
-    const canvas = canvasRef.value
-    if (!canvas) return
-    canvas.width = img.width
-    canvas.height = img.height
-    ctx.value = canvas.getContext('2d')
-    ctx.value.drawImage(img, 0, 0)
-    // 마스크 데이터를 위한 투명 레이어 설정 등 필요
-  }
-  img.src = src
-}
-
-function startDrawing(e) {
-  isDrawing.value = true
-  draw(e)
-}
-function draw(e) {
-  if (!isDrawing.value || !ctx.value) return
-  const rect = canvasRef.value.getBoundingClientRect()
-  const scaleX = canvasRef.value.width / rect.width
-  const scaleY = canvasRef.value.height / rect.height
-  const x = (e.clientX - rect.left) * scaleX
-  const y = (e.clientY - rect.top) * scaleY
-
-  ctx.value.globalCompositeOperation = 'destination-out' // 예시: 일단 지우기 형태로 마스크 시각화
-  ctx.value.beginPath()
-  ctx.value.arc(x, y, brushSize.value / 2, 0, Math.PI * 2)
-  ctx.value.fill()
-}
-function stopDrawing() { isDrawing.value = false }
-function clearMask() { /* 마스크 초기화 로직 */ }
-function undoMask() { /* 실행 취소 */ }
-
-function getMaskBase64() {
-  if (!canvasRef.value || !ctx.value) return ''
-  // 마스크 캔버스에서 그려진 영역을 흑백 마스크로 변환
-  const c = canvasRef.value
-  const maskCanvas = document.createElement('canvas')
-  maskCanvas.width = c.width; maskCanvas.height = c.height
-  const mCtx = maskCanvas.getContext('2d')
-  // 캔버스 현재 상태에서 원본 이미지 뺀 차이 = 마스크
-  const imgData = ctx.value.getImageData(0, 0, c.width, c.height)
-  const maskData = mCtx.createImageData(c.width, c.height)
-  for (let i = 0; i < imgData.data.length; i += 4) {
-    // alpha가 줄어든 부분(destination-out으로 지운 부분)이 마스크
-    const alpha = imgData.data[i + 3]
-    const v = alpha < 200 ? 255 : 0  // 투명한 부분 = 마스크 영역
-    maskData.data[i] = v; maskData.data[i+1] = v; maskData.data[i+2] = v; maskData.data[i+3] = 255
-  }
-  mCtx.putImageData(maskData, 0, 0)
-  return maskCanvas.toDataURL('image/png')
-}
-
-function generate() {
-  const mask = getMaskBase64()
-  requestAction('generate_inpaint', {
-    image: imageSrc.value,
-    image_path: imagePath.value,
-    mask: mask,
-    prompt: prompt.value,
-    denoising: denoising.value,
-    mask_content: maskContent.value,
-    inpaint_area: inpaintArea.value
-  })
-}
 </script>
 
 <style scoped>
 .inpaint-workspace { height: 100%; display: flex; background: var(--bg-primary); }
 
-/* Sidebar & Cards (Reuse I2I style) */
-.sidebar { width: 340px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); }
-.sidebar-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-.sidebar-footer { padding: 16px; background: var(--bg-card); border-top: 1px solid var(--border); }
-.glass-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px; }
+.sidebar { width: 300px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); }
+.sidebar-scroll { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.sidebar-footer { padding: 12px; background: var(--bg-card); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.glass-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 12px; }
 
-.brush-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.mini { font-size: 9px; min-width: 60px; }
-.val { font-size: 12px; font-weight: 800; color: var(--accent); min-width: 24px; }
+.source-thumb { height: 120px; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
+.source-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.upload-hint { color: var(--text-muted); font-size: 11px; font-weight: 700; }
 
-.chip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
-.chip-btn { height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); font-size: 9px; font-weight: 800; cursor: pointer; transition: var(--transition); }
-.chip-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.brush-row { display: flex; align-items: center; gap: 8px; }
+.brush-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.brush-val { font-size: 11px; color: var(--accent); min-width: 40px; text-align: right; font-family: monospace; }
 
-.ghost-btn { flex: 1; height: 30px; background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
+.mask-opts { display: flex; flex-direction: column; gap: 6px; }
+.mask-actions { display: flex; gap: 4px; }
+.action-btn { flex: 1; padding: 6px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
+.btn-generate { width: 100%; height: 44px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 800; font-size: 13px; cursor: pointer; }
+.btn-generate:disabled { opacity: 0.4; }
 
-/* Canvas Area */
-.canvas-area { flex: 1; padding: 24px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.canvas-container { width: 100%; height: 100%; background: #000; border-radius: 20px; position: relative; border: 1px solid var(--border); overflow: hidden; }
-.editor-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-canvas { max-width: 100%; max-height: 100%; object-fit: contain; cursor: crosshair; }
+.canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #080808; position: relative; }
+.canvas-container { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+.canvas-container.drag-over { background: rgba(250,204,21,0.05); }
+.drop-empty { text-align: center; cursor: pointer; }
+.drop-empty .icon { font-size: 48px; opacity: 0.3; }
+.drop-empty h2 { color: var(--text-muted); letter-spacing: 4px; }
+.drop-empty p { color: #484848; font-size: 12px; }
 
-.canvas-toolbar {
-  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-  background: rgba(20,20,20,0.8); backdrop-filter: blur(10px); padding: 8px 16px;
-  border-radius: var(--radius-pill); border: 1px solid var(--border);
-  display: flex; align-items: center; gap: 16px;
+.paint-canvas { position: absolute; max-width: 85%; max-height: 85%; }
+.mask-layer { pointer-events: auto; cursor: crosshair; }
+.canvas-info {
+  position: absolute; bottom: 8px; right: 12px;
+  color: #585858; font-size: 11px; background: rgba(0,0,0,0.6);
+  padding: 2px 8px; border-radius: 4px; pointer-events: none;
 }
-.tool-btn { background: transparent; border: none; font-size: 18px; cursor: pointer; }
-.brush-preview { border-radius: 50%; border: 1px solid var(--accent); background: var(--accent-dim); pointer-events: none; }
-
-.drop-empty { text-align: center; cursor: pointer; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.drop-empty h2 { letter-spacing: 4px; color: var(--text-secondary); margin: 16px 0 8px; }
-
-.btn-generate.primary { width: 100%; height: 46px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 900; font-size: 12px; letter-spacing: 1px; cursor: pointer; }
 </style>
