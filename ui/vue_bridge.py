@@ -809,15 +809,21 @@ class VueBridge(QObject):
             # 규칙 매칭
             rule_lower = rule.lower().replace(' ', '_')
             matches = []
-            if rule_lower.startswith('*'):
-                # *keyword = 완전 일치
+            if rule_lower.startswith('~'):
+                matches = []
+            elif rule_lower.startswith('*'):
                 keyword = rule_lower[1:]
                 matches = [t for t in self._all_tags_set if t == keyword]
-            elif rule_lower.startswith('~'):
-                # ~keyword = 예외 (매칭 없음)
-                matches = []
+            elif rule_lower.startswith('_') and rule_lower.endswith('_') and len(rule_lower) > 2:
+                keyword = rule_lower[1:-1]
+                matches = [t for t in self._all_tags_set if keyword in t]
+            elif rule_lower.startswith('_'):
+                keyword = rule_lower[1:]
+                matches = [t for t in self._all_tags_set if t.endswith(keyword)]
+            elif rule_lower.endswith('_'):
+                keyword = rule_lower[:-1]
+                matches = [t for t in self._all_tags_set if t.startswith(keyword)]
             else:
-                # keyword = 포함하는 모든 태그
                 matches = [t for t in self._all_tags_set if rule_lower in t]
 
             matches.sort()

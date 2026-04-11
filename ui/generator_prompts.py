@@ -79,17 +79,29 @@ class PromptHandlingMixin:
         exclude_rules = to_list(exclude_text)
         
         # 문법:
-        #   단어       → 포함하는 모든 태그 제거 (ex: short → short hair, short pants)
+        #   단어       → 포함하는 모든 태그 제거 (ex: short → short hair, very short hair)
         #   *단어      → 완전 일치만 제거 (ex: *blue hair → blue hair만)
+        #   _단어      → 앞에 뭔가 붙은 태그 제거 (ex: _short → very short, too short)
+        #   단어_      → 뒤에 뭔가 붙은 태그 제거 (ex: short_ → short hair, short pants)
+        #   _단어_     → 포함하는 모든 태그 (단어와 동일하나 명시적)
         #   ~단어      → 예외 (제외하지 않고 유지)
-        contains_exc, exact_exc, excepts = [], set(), set()
+        contains_exc, exact_exc, prefix_exc, suffix_exc, excepts = [], set(), [], [], set()
         for r in exclude_rules:
+            r = r.strip()
+            if not r:
+                continue
             if r.startswith('~'):
                 excepts.add(r[1:].strip())
             elif r.startswith('*'):
                 exact_exc.add(r[1:].strip())
+            elif r.startswith('_') and r.endswith('_') and len(r) > 2:
+                contains_exc.append(r[1:-1].strip())
+            elif r.startswith('_'):
+                suffix_exc.append(r[1:].strip())  # _short → 앞에 뭔가 + short
+            elif r.endswith('_'):
+                prefix_exc.append(r[:-1].strip())  # short_ → short + 뒤에 뭔가
             else:
-                contains_exc.append(r.strip())
+                contains_exc.append(r)
 
         def _normalize(tag):
             return tag.replace('_', ' ').strip().lower()
@@ -97,6 +109,8 @@ class PromptHandlingMixin:
         norm_exact = {_normalize(e) for e in exact_exc}
         norm_excepts = {_normalize(e) for e in excepts}
         norm_contains = [_normalize(c) for c in contains_exc if c]
+        norm_prefix = [_normalize(p) for p in prefix_exc if p]
+        norm_suffix = [_normalize(s) for s in suffix_exc if s]
 
         def filter_tags(tags):
             res = []
@@ -108,6 +122,12 @@ class PromptHandlingMixin:
                 if nt in norm_exact:
                     continue
                 if any(c in nt for c in norm_contains):
+                    continue
+                # short_ → short로 시작하는 태그
+                if any(nt.startswith(p) for p in norm_prefix):
+                    continue
+                # _short → short로 끝나는 태그
+                if any(nt.endswith(s) for s in norm_suffix):
                     continue
                 res.append(t)
             return res
