@@ -32,16 +32,27 @@ def find_sam_model(models_dir: str) -> tuple:
     # YOLO 모델 제외 키워드
     yolo_keywords = ['yolo', 'nsfw', 'detect', 'censor']
 
+    # 1차: 키워드 매칭
     for fname in os.listdir(models_dir):
         flow = fname.lower()
         if not flow.endswith(('.pt', '.pth', '.onnx')):
             continue
-        # YOLO 모델은 SAM으로 취급하지 않음
         if any(yk in flow for yk in yolo_keywords):
             continue
         for keyword, sam_type in priority:
             if keyword.lower() in flow:
                 return os.path.join(models_dir, fname), sam_type
+
+    # 2차: 'sam'이 포함된 모든 파일 (폴백)
+    for fname in os.listdir(models_dir):
+        flow = fname.lower()
+        if not flow.endswith(('.pt', '.pth', '.onnx')):
+            continue
+        if any(yk in flow for yk in yolo_keywords):
+            continue
+        if 'sam' in flow:
+            sam_type = 'mobile_sam' if 'mobile' in flow else 'sam'
+            return os.path.join(models_dir, fname), sam_type
 
     return None, None
 
@@ -72,13 +83,15 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
         sam_model_path, sam_type = find_sam_model(models_dir)
 
     if sam_model_path is None or not os.path.exists(sam_model_path):
-        # SAM 없으면 bbox 기반 마스크만 (fallback)
-        print("[SAM] No SAM model found, using bbox fallback")
+        print(f"[SAM] No SAM model found in {models_dir}")
+        print(f"[SAM] Files: {os.listdir(models_dir) if os.path.isdir(models_dir) else 'dir not found'}")
+        print("[SAM] Falling back to bbox mask")
         for (x1, y1, x2, y2) in boxes:
             combined_mask[y1:y2, x1:x2] = 255
         return combined_mask
 
-    print(f"[SAM] Using {sam_type}: {os.path.basename(sam_model_path)}")
+    print(f"[SAM] Found model: {sam_type} → {sam_model_path}")
+    print(f"[SAM] Processing {len(boxes)} boxes...")
 
     try:
         if sam_type == 'fast_sam':

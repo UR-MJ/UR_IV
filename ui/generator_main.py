@@ -145,8 +145,14 @@ class GeneratorMainUI(
             elif action in ('send_to_i2i', 'send_to_inpaint', 'send_to_editor'):
                 path = payload.get('path', '')
                 if not path: return
-                clean_path = os.path.normpath(path.replace('file:///', ''))
-                if not os.path.exists(clean_path): return
+                # file:/// 제거 + 경로 정규화
+                clean_path = path.replace('file:///', '')
+                if clean_path.startswith('/') and ':' in clean_path[1:3]:
+                    clean_path = clean_path[1:]  # /C:/... → C:/...
+                clean_path = os.path.normpath(clean_path)
+                if not os.path.exists(clean_path):
+                    print(f"[Send] File not found: {clean_path} (original: {path})")
+                    return
 
                 if action == 'send_to_i2i':
                     self.vue_bridge.i2iImageLoaded.emit(clean_path.replace('\\', '/'))

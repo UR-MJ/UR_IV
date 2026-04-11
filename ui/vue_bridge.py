@@ -324,21 +324,33 @@ class VueBridge(QObject):
 
                     print(f"[YOLO] Detected {detect_count} regions, {len(yolo_boxes)} boxes, seg_mask={has_seg_mask}")
 
-                    # SAM 정밀 마스킹: YOLO가 seg 마스크 없이 bbox만 반환했을 때 실행
-                    if yolo_boxes and not has_seg_mask:
+                    # SAM 정밀 마스킹
+                    if yolo_boxes:
                         try:
-                            from core.sam_refiner import refine_boxes_with_sam
+                            from core.sam_refiner import refine_boxes_with_sam, find_sam_model
                             from tabs.editor.mosaic_panel import get_editor_models_dir
-                            sam_mask = refine_boxes_with_sam(img, yolo_boxes, get_editor_models_dir())
-                            if sam_mask.any():
-                                combined_mask = sam_mask
-                                print(f"[SAM] Refined mask applied ({len(yolo_boxes)} boxes → pixel-level)")
+                            models_dir = get_editor_models_dir()
+                            sam_path, sam_type = find_sam_model(models_dir)
+                            print(f"[SAM] models_dir={models_dir}, found={sam_path}, type={sam_type}, has_seg={has_seg_mask}")
+
+                            if has_seg_mask:
+                                print("[SAM] YOLO seg mask available, skipping SAM")
+                            elif sam_path:
+                                sam_mask = refine_boxes_with_sam(img, yolo_boxes, models_dir)
+                                if sam_mask.any():
+                                    combined_mask = sam_mask
+                                    pixel_count = int(sam_mask.sum() / 255)
+                                    print(f"[SAM] ✓ Refined mask applied ({len(yolo_boxes)} boxes → {pixel_count} pixels)")
+                                else:
+                                    print("[SAM] No mask generated, using YOLO bbox")
                             else:
-                                print("[SAM] No mask generated, using YOLO bbox")
-                        except ImportError:
-                            print("[SAM] SAM not installed, using YOLO bbox mask")
+                                print(f"[SAM] No SAM model in {models_dir}, using YOLO bbox")
+                        except ImportError as ie:
+                            print(f"[SAM] Import error: {ie}")
                         except Exception as sam_e:
-                            print(f"[SAM] Refinement failed: {sam_e}, using YOLO bbox mask")
+                            import traceback
+                            print(f"[SAM] Error: {sam_e}")
+                            traceback.print_exc()
 
                     if operation == 'auto_detect':
                         # MASK ONLY: 마스크를 base64로 반환 (적용 안함)
