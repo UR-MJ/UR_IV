@@ -375,9 +375,14 @@ class WebUIMixin:
         elif skip_clicked['value']:
             self._backend_startup_result = 'skipped'
         else:
-            # X 버튼 — 앱 종료
-            import sys
-            sys.exit(0)
+            # X 버튼
+            if getattr(self, '_api_manager_mode', False):
+                # Settings에서 호출된 경우 — 취소만
+                self._backend_startup_result = 'skipped'
+            else:
+                # 앱 시작 시 — 종료
+                import sys
+                sys.exit(0)
 
     def _apply_backend_startup_result(self):
         """UI 생성 후 백엔드 선택 결과 적용"""

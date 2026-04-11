@@ -704,10 +704,18 @@ class GeneratorMainUI(
             # ═══════ API 관리자 ═══════
             elif action == 'show_api_manager':
                 try:
+                    # Settings에서 호출 시 X버튼=종료 방지
+                    self._api_manager_mode = True
                     self._startup_backend_check()
                     self._apply_backend_startup_result()
+                    self._api_manager_mode = False
                     self.vue_bridge.showNotification.emit('success', 'API 연결 확인 완료')
+                except SystemExit:
+                    # X버튼으로 다이얼로그 닫힘 — 앱 종료 안 함
+                    self._api_manager_mode = False
+                    self.vue_bridge.showNotification.emit('info', 'API 설정 취소됨')
                 except Exception as e:
+                    self._api_manager_mode = False
                     self.vue_bridge.showNotification.emit('error', f'API 연결 실패: {e}')
 
             # ═══════ 탭 순서 설정 ═══════
@@ -857,7 +865,16 @@ class GeneratorMainUI(
             if os.path.exists(defaults_path):
                 with open(defaults_path, 'r', encoding='utf-8') as f:
                     defaults = json.load(f)
-                print(f"[Config] Tab defaults loaded")
+                # 확장 기본값을 proxy에 직접 적용
+                if defaults.get('hires_enabled'):
+                    self.hires_options_group.setChecked(True)
+                if defaults.get('ad_enabled'):
+                    self.adetailer_group.setChecked(True)
+                if defaults.get('ad_s1_enabled') and hasattr(self, 'ad_slot1_group'):
+                    self.ad_slot1_group.setChecked(True)
+                if defaults.get('negpip_enabled'):
+                    self.negpip_group.setChecked(True)
+                print(f"[Config] Tab defaults loaded + extensions applied")
         except Exception as e:
             print(f"[Config] Failed to load defaults: {e}")
         try:
