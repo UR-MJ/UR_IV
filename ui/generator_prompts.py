@@ -84,22 +84,31 @@ class PromptHandlingMixin:
         #   _단어      → 앞에 뭔가 붙은 태그 제거 (ex: _short → very short, too short)
         #   단어_      → 뒤에 뭔가 붙은 태그 제거 (ex: short_ → short hair, short pants)
         #   _단어_     → 포함하는 모든 태그 (단어와 동일하나 명시적)
-        #   ~단어      → 예외 (제외하지 않고 유지)
-        contains_exc, exact_exc, prefix_exc, suffix_exc, excepts = [], set(), [], [], set()
+        #   ~단어      → 예외 완전 일치 (제외하지 않고 유지)
+        #   ~_단어     → 예외 접미 (ex: ~_tank top → tank top, blue tank top 유지)
+        #   ~단어_     → 예외 접두 (ex: ~tank_ → tank top 유지)
+        contains_exc, exact_exc, prefix_exc, suffix_exc = [], set(), [], []
+        excepts_exact, excepts_suffix, excepts_prefix = set(), [], []
         for r in exclude_rules:
             r = r.strip()
             if not r:
                 continue
             if r.startswith('~'):
-                excepts.add(r[1:].strip())
+                inner = r[1:].strip()
+                if inner.startswith('_') and not inner.endswith('_'):
+                    excepts_suffix.append(inner[1:].strip())  # ~_tank top → 끝이 "tank top"인 태그 유지
+                elif inner.endswith('_') and not inner.startswith('_'):
+                    excepts_prefix.append(inner[:-1].strip())  # ~tank_ → "tank"로 시작하는 태그 유지
+                else:
+                    excepts_exact.add(inner)
             elif r.startswith('*'):
                 exact_exc.add(r[1:].strip())
             elif r.startswith('_') and r.endswith('_') and len(r) > 2:
                 contains_exc.append(r[1:-1].strip())
             elif r.startswith('_'):
-                suffix_exc.append(r[1:].strip())  # _short → 앞에 뭔가 + short
+                suffix_exc.append(r[1:].strip())
             elif r.endswith('_'):
-                prefix_exc.append(r[:-1].strip())  # short_ → short + 뒤에 뭔가
+                prefix_exc.append(r[:-1].strip())
             else:
                 contains_exc.append(r)
 
@@ -107,26 +116,41 @@ class PromptHandlingMixin:
             return tag.replace('_', ' ').strip().lower()
 
         norm_exact = {_normalize(e) for e in exact_exc}
-        norm_excepts = {_normalize(e) for e in excepts}
+        norm_excepts_exact = {_normalize(e) for e in excepts_exact}
+        norm_excepts_suffix = [_normalize(s) for s in excepts_suffix if s]
+        norm_excepts_prefix = [_normalize(p) for p in excepts_prefix if p]
         norm_contains = [_normalize(c) for c in contains_exc if c]
         norm_prefix = [_normalize(p) for p in prefix_exc if p]
         norm_suffix = [_normalize(s) for s in suffix_exc if s]
+
+        def _is_excepted(nt):
+            """예외 규칙에 해당하면 True (유지)"""
+            if nt in norm_excepts_exact:
+                return True
+            if any(nt.endswith(s) for s in norm_excepts_suffix):
+                return True
+            if any(nt.startswith(p) for p in norm_excepts_prefix):
+                return True
+            return False
 
         def filter_tags(tags):
             res = []
             for t in tags:
                 nt = _normalize(t)
-                if nt in norm_excepts:
+                # 예외 규칙: 유지
+                if _is_excepted(nt):
                     res.append(t)
                     continue
+                # 완전 일치
                 if nt in norm_exact:
                     continue
+                # 포함
                 if any(c in nt for c in norm_contains):
                     continue
-                # short_ → short로 시작하는 태그
+                # 접두 (short_ → short로 시작)
                 if any(nt.startswith(p) for p in norm_prefix):
                     continue
-                # _short → short로 끝나는 태그
+                # 접미 (_short → short로 끝남)
                 if any(nt.endswith(s) for s in norm_suffix):
                     continue
                 res.append(t)

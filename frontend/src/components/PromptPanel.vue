@@ -118,7 +118,9 @@
           <span>_단어 → 앞에 붙는 태그 제외 (_short → very short, too short)</span>
           <span>단어_ → 뒤에 붙는 태그 제외 (short_ → short hair, short pants)</span>
           <span>_단어_ → 포함 (단어와 동일, 명시적)</span>
-          <span>~단어 → 예외 (제외하지 않고 유지)</span>
+          <span>~단어 → 예외 완전일치 유지</span>
+          <span>~_단어 → 예외 접미 유지 (tank, ~_tank top → tank top 유지)</span>
+          <span>~단어_ → 예외 접두 유지 (tank, ~tank_ → tank top 유지)</span>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.exclude_prompt_local_input" :color-fn="excludeColorFn" placeholder="제외 규칙 추가..." />
         <textarea v-else v-model="widgets.exclude_prompt_local_input" class="auto-grow exclude-textarea" placeholder="제외 규칙 (쉼표 구분)..." rows="2"></textarea>
@@ -336,12 +338,12 @@ function onTotalBlockChange(newVal) {
 
 function excludeColorFn(text) {
   const t = text.trim()
-  if (t.startsWith('~')) return 'bc-action'      // 예외 (초록)
+  if (t.startsWith('~')) return 'bc-action'       // 예외 계열 (초록)
   if (t.startsWith('*')) return 'bc-expression'   // 완전 일치 (노랑)
-  if (t.startsWith('_') && t.endsWith('_')) return 'bc-nsfw'  // 포함 (빨강)
+  if (t.startsWith('_') && t.endsWith('_')) return 'bc-nsfw'
   if (t.startsWith('_')) return 'bc-body'         // 끝 매치 (주황)
   if (t.endsWith('_')) return 'bc-clothing'       // 시작 매치 (보라)
-  return 'bc-nsfw'  // 포함 제외 (빨강)
+  return 'bc-nsfw'
 }
 
 function blockColorClass(text) {
