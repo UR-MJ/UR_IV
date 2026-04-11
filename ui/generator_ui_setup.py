@@ -48,7 +48,7 @@ class UISetupMixin:
         # 캐시 및 데이터 경로 설정 (프로세스 간 충돌 방지 및 액세스 거부 방지)
         # 고정된 경로가 아닌 앱 전용 독립 경로 사용
         import tempfile
-        base_cache_path = os.path.join(tempfile.gettempdir(), 'AIStudioPro_cache')
+        base_cache_path = os.path.join(tempfile.gettempdir(), f'AIStudioPro_{os.getpid()}')
         os.makedirs(base_cache_path, exist_ok=True)
         
         # 독립적인 프로필 생성 (defaultProfile 대신 사용)

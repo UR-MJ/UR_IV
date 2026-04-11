@@ -1,7 +1,9 @@
+# Core
 PyQt6>=6.5.0
 PyQt6-WebEngine>=6.5.0
 requests>=2.31.0
 pandas>=2.0.0
+pyarrow>=12.0.0
 Pillow>=9.0.0
 opencv-python>=4.8.0
 numpy>=1.24.0
@@ -9,6 +11,16 @@ exifread>=2.3.2
 websocket-client>=1.6.0
 send2trash>=1.8.0
 
-# Optional (기능별 필요 시 설치)
-# ultralytics>=8.0.0    # YOLO 자동 검열
-# rembg>=2.0.0          # 배경 제거
+# YOLO Auto Censor
+ultralytics>=8.0.0
+
+# MobileSAM (정밀 마스킹)
+# pip install git+https://github.com/ChaoningZhang/MobileSAM.git
+timm>=0.9.0
+
+# 배경 제거
+rembg>=2.0.50
+pymatting>=1.1.0
+
+# OpenCV 고급 (가이디드 필터 등)
+# opencv-contrib-python>=4.8.0  # opencv-python 대체 시
