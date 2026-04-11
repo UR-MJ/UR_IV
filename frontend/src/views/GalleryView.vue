@@ -61,7 +61,7 @@
 
     <!-- 이미지 확대 뷰 (풀스크린 오버레이) -->
     <transition name="fade">
-      <div v-if="largeView" class="large-view-overlay" @click.self="largeView = null">
+      <div v-if="largeView" class="large-view-overlay" @click.self="closeLargeView">
         <div class="large-view-panel">
           <div class="large-view-header">
             <span class="large-filename">{{ largeView.filename }}</span>
@@ -73,7 +73,7 @@
               <button class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
               <button class="lv-btn" @click="quickAction('add_favorite', largeView.path)">⭐ FAV</button>
               <button class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
-              <button class="lv-close" @click="largeView = null">✕</button>
+              <button class="lv-close" @click="closeLargeView">✕</button>
             </div>
           </div>
           <div class="large-view-body">
@@ -93,6 +93,10 @@
               <div v-if="largeView.raw && !largeView.prompt" class="meta-block">
                 <label>RAW</label>
                 <div class="code-box">{{ largeView.raw }}</div>
+              </div>
+              <div v-if="largeViewParams" class="meta-block mt-8">
+                <label>PARAMETERS</label>
+                <div class="code-box params">{{ largeViewParams }}</div>
               </div>
             </div>
           </div>
@@ -121,6 +125,10 @@
             <div v-if="exifData.negative" class="meta-block mt-12">
               <label class="danger">NEGATIVE</label>
               <div class="code-box">{{ exifData.negative }}</div>
+            </div>
+            <div v-if="sidebarParams" class="meta-block mt-12">
+              <label>PARAMETERS</label>
+              <div class="code-box params">{{ sidebarParams }}</div>
             </div>
           </div>
           <div class="exif-footer">
@@ -163,6 +171,18 @@ const currentFolder = ref('')
 const visibleCount = ref(40)
 
 const pagedImages = computed(() => images.value.slice(0, visibleCount.value))
+
+// largeView에서 Parameters 라인 추출
+const largeViewParams = computed(() => {
+  if (!largeView.value?.raw) return ''
+  const match = largeView.value.raw.match(/Steps:.*$/m)
+  return match ? match[0] : ''
+})
+const sidebarParams = computed(() => {
+  if (!exifData.value?.raw) return ''
+  const match = exifData.value.raw.match(/Steps:.*$/m)
+  return match ? match[0] : ''
+})
 
 // EXIF 검색
 const exifSearch = ref('')
@@ -324,6 +344,12 @@ function onGalleryScroll(e) {
   }
 }
 
+function closeLargeView() {
+  largeView.value = null
+  // metadata OFF면 사이드바도 닫기
+  if (!showMetadata.value) exifData.value = null
+}
+
 const openFolder = () => requestAction('gallery_open_folder')
 const viewImage = async (path) => {
   const backend = await getBackend()
@@ -465,6 +491,7 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .large-img-area { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; padding: 16px; }
 .large-img-area img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .large-exif { width: 340px; overflow-y: auto; padding: 16px; border-left: 1px solid var(--border); }
+.code-box.params { color: #94a3b8; font-size: 10px; }
 .code-box.editable { cursor: text; border: 1px solid transparent; }
 .code-box.editable:focus { border-color: var(--accent-dim); outline: none; }
 .click-hint { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--text-muted); background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; opacity: 0; transition: 0.2s; }

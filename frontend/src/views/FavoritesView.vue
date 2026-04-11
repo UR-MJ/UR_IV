@@ -55,6 +55,10 @@
                 <label>RAW</label>
                 <pre>{{ viewerData.raw }}</pre>
               </div>
+              <div v-if="viewerParams" class="vi-section">
+                <label>PARAMETERS</label>
+                <pre>{{ viewerParams }}</pre>
+              </div>
               <div class="vi-actions">
                 <button class="vi-btn accent" @click="action('gallery_send_exif_to_t2i', { exif: viewerData.raw, path: viewerData.path })">📤 T2I</button>
                 <button class="vi-btn" @click="action('send_to_i2i', { path: viewerData.path })">I2I</button>
@@ -86,6 +90,11 @@ const filteredFavs = ref([])
 const exifCache = ref({})
 
 const displayFavs = computed(() => exifFiltered.value ? filteredFavs.value : favorites.value)
+const viewerParams = computed(() => {
+  if (!viewerData.value?.raw) return ''
+  const m = viewerData.value.raw.match(/Steps:.*$/m)
+  return m ? m[0] : ''
+})
 
 async function runExifSearch() {
   const q = exifSearch.value.trim().toLowerCase()
