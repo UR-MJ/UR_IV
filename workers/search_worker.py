@@ -13,16 +13,23 @@ class PandasSearchWorker(QThread):
     REQUIRED_COLUMNS = ['copyright', 'character', 'artist', 'general', 'meta']
 
     cached_df = None
-    cached_col_lower = {}  # {col_name: lowercase Series} — rating 변경 시 무효화
+    cached_col_lower = {}  # {col_name: lowercase Series} — rating/year 변경 시 무효화
     loaded_ratings = set()
+    loaded_year = ''       # 현재 캐시에 로드된 년도 ('2025' | '2026' | '')
+
+    # 사용 가능한 년도 — danbooru_optimized/ 에서 자동 감지 가능하지만 단순화 위해 고정
+    AVAILABLE_YEARS = ('2026', '2025')
+    DEFAULT_YEAR = '2026'
 
     def __init__(self, parquet_dir, selected_ratings, queries, exclude_queries=None,
-                 combine_mode: str = 'and'):
+                 combine_mode: str = 'and', dataset_year: str = None):
         """
         :param queries: { col: 'pattern' } 포함 검색 — 필드 간 결합은 combine_mode로 제어
         :param exclude_queries: { col: 'pattern' } 제외 검색 — 모드와 무관하게
             언제나 AND-NOT (제외는 "이건 절대 안 됨"의 의미라 OR 모드여도 항상 제외 적용)
         :param combine_mode: 'and' (교집합) | 'or' (합집합) — 필드 간 결합 방식
+        :param dataset_year: '2026' (기본) | '2025' — 데이터셋 년도 선택
+            2026은 2025를 포함하는 확장판이므로 둘을 동시 선택할 필요 없음
         """
         super().__init__()
         self.parquet_dir = parquet_dir
@@ -32,6 +39,10 @@ class PandasSearchWorker(QThread):
         self.combine_mode = (combine_mode or 'and').lower()
         if self.combine_mode not in ('and', 'or'):
             self.combine_mode = 'and'
+        # 년도 검증 — 허용 목록에 없으면 기본값으로
+        self.dataset_year = str(dataset_year or self.DEFAULT_YEAR)
+        if self.dataset_year not in self.AVAILABLE_YEARS:
+            self.dataset_year = self.DEFAULT_YEAR
         self.is_running = True
 
     def run(self):
@@ -128,18 +139,19 @@ class PandasSearchWorker(QThread):
         return lower
 
     def _load_data(self):
-        """선택된 등급의 Parquet 파일 로드"""
+        """선택된 등급의 Parquet 파일 로드 (년도 + rating set으로 캐시 키)"""
         if (PandasSearchWorker.cached_df is not None and
-            PandasSearchWorker.loaded_ratings == self.selected_ratings):
+            PandasSearchWorker.loaded_ratings == self.selected_ratings and
+            PandasSearchWorker.loaded_year == self.dataset_year):
             return True
 
-        # rating set이 바뀌면 lowercase 캐시도 무효화
+        # rating set 또는 년도가 바뀌면 lowercase 캐시도 무효화
         PandasSearchWorker.cached_df = None
         PandasSearchWorker.cached_col_lower.clear()
         dfs = []
-        
+
         for rating in self.selected_ratings:
-            file_name = f"danbooru_2026_{rating}.parquet"
+            file_name = f"danbooru_{self.dataset_year}_{rating}.parquet"
             path = os.path.join(self.parquet_dir, file_name)
             
             if os.path.exists(path):
@@ -159,9 +171,10 @@ class PandasSearchWorker(QThread):
             self.status_update.emit("❌ 로드된 데이터가 없습니다.")
             return False
 
-        self.status_update.emit("📊 데이터 병합 중...")
+        self.status_update.emit(f"📊 {self.dataset_year} 데이터 병합 중...")
         PandasSearchWorker.cached_df = pd.concat(dfs, ignore_index=True)
         PandasSearchWorker.loaded_ratings = self.selected_ratings
+        PandasSearchWorker.loaded_year = self.dataset_year
         
         # 문자열 컬럼 결측치 처리
         text_cols = ['copyright', 'character', 'artist', 'general', 'meta'] 

@@ -619,6 +619,7 @@ class VueBridge(QObject):
           queries: { character: '...', copyright: '...', ... }    # 포함 조건
           excludes: { character: '...', ... }                     # 제외 조건
           combine_mode: 'and' | 'or'  (필드 간 결합 — 기본 'and')
+          dataset_year: '2025' | '2026'  (단일 선택 — 기본 '2026')
         """
         try:
             if isinstance(query_json, str):
@@ -635,13 +636,20 @@ class VueBridge(QObject):
             from workers.search_worker import PandasSearchWorker
             from config import PARQUET_DIR
 
+            dataset_year = str(q.get('dataset_year', PandasSearchWorker.DEFAULT_YEAR))
+            if dataset_year not in PandasSearchWorker.AVAILABLE_YEARS:
+                dataset_year = PandasSearchWorker.DEFAULT_YEAR
+
             self._search_worker = PandasSearchWorker(
                 PARQUET_DIR, ratings, queries, excludes,
                 combine_mode=combine_mode,
+                dataset_year=dataset_year,
             )
             self._search_worker.results_ready.connect(self._on_search_results)
             self._search_worker.start()
-            self.searchStatus.emit(f"검색 중... (모드: {combine_mode.upper()})")
+            self.searchStatus.emit(
+                f"검색 중... ({dataset_year} · {combine_mode.upper()})"
+            )
         except Exception as e:
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
 

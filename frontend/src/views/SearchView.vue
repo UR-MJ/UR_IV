@@ -73,6 +73,17 @@
             <button v-for="r in ratings" :key="r.key" class="rating-chip"
               :class="{ active: r.checked }" @click="r.checked = !r.checked">{{ r.label }}</button>
           </div>
+          <!-- 데이터셋 년도 — 단일 선택 (2026은 2025 포함) -->
+          <div class="combine-row" title="데이터셋 년도 — 단일 선택&#10;2026은 2025를 포함하는 확장판이라 둘 다 선택할 필요 없음">
+            <span class="combine-label">데이터셋:</span>
+            <button v-for="y in AVAILABLE_YEARS" :key="y"
+              class="combine-chip year-chip"
+              :class="{ active: datasetYear === y }"
+              @click="datasetYear = y">
+              {{ y }}
+            </button>
+          </div>
+
           <!-- 검색 결합 모드: AND (교집합) / OR (합집합) -->
           <!-- 모드는 필드 간 결합 + 필드 내 콤마 토큰 + 제외 검색에 모두 적용됨 -->
           <div class="combine-row">
@@ -101,7 +112,7 @@
         <span>[A,B] = AND (명시)</span>
         <span>Exclude로 제외 조건 설정</span>
         <span class="hint-mode" :class="combineMode">
-          현재: <strong>{{ combineMode === 'and' ? '모든 조건 매칭 (AND)' : '하나라도 매칭 (OR)' }}</strong>
+          현재: <strong>{{ combineMode === 'and' ? 'AND' : 'OR' }}</strong> · <strong>{{ datasetYear }}</strong>
         </span>
       </div>
 
@@ -397,6 +408,13 @@ watch(combineMode, (v) => { try { localStorage.setItem('search.combineMode', v) 
 const hasSearched = ref(false)
 // 마지막 쿼리 요약 (사용자가 무엇을 검색했는지 보여주기 위함)
 const lastQuerySummary = ref('')
+
+// 데이터셋 년도 — 2025 / 2026 단일 선택
+// 2026은 2025를 포함하는 확장판이라 둘 다 선택할 필요 없음 (중복)
+const AVAILABLE_YEARS = ['2026', '2025']
+const datasetYear = ref(localStorage.getItem('search.datasetYear') || '2026')
+if (!AVAILABLE_YEARS.includes(datasetYear.value)) datasetYear.value = '2026'
+watch(datasetYear, (v) => { try { localStorage.setItem('search.datasetYear', v) } catch {} })
 const PAGE_SIZE = 50
 const currentPage = ref(0)
 // 결과/필터/정렬이 바뀌면 1페이지로
@@ -480,6 +498,7 @@ async function search() {
     queries: Object.fromEntries(fields.map(f => [f.key, f.include])),
     excludes: Object.fromEntries(fields.map(f => [f.key, f.exclude])),
     combine_mode: combineMode.value,  // 'and' | 'or' — 필드 간 결합 방식
+    dataset_year: datasetYear.value,  // '2025' | '2026' — 데이터셋 년도
   }
   // 사용자에게 보여줄 쿼리 요약 (0건 시 활용)
   const includeParts = fields
@@ -489,7 +508,7 @@ async function search() {
     .filter(f => f.exclude?.trim())
     .map(f => `~${f.key}: ${f.exclude}`)
   const ratingSel = ratings.filter(r => r.checked).map(r => r.label).join('+') || 'no rating'
-  lastQuerySummary.value = `[${combineMode.value.toUpperCase()}] [${ratingSel}] ${[...includeParts, ...excludeParts].join(' / ') || '(빈 검색)'}`
+  lastQuerySummary.value = `[${datasetYear.value}] [${combineMode.value.toUpperCase()}] [${ratingSel}] ${[...includeParts, ...excludeParts].join(' / ') || '(빈 검색)'}`
   if (backend.searchDanbooru) backend.searchDanbooru(JSON.stringify(query))
 }
 
@@ -881,6 +900,7 @@ function importResults() { requestAction('import_search_results') }
   background: var(--accent-dim);
   box-shadow: 0 0 0 1px var(--accent-dim);
 }
+.year-chip { min-width: 56px; padding: 5px 12px; }
 .hint-mode {
   margin-left: 8px;
   padding: 2px 8px;
