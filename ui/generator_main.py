@@ -1714,37 +1714,47 @@ class GeneratorMainUI(
             }
 
         def _set_main_geometry(state: dict) -> None:
-            # 풀스크린 / 최대화는 별도 처리
+            """저장된 윈도우 기하 복원 — 타이틀바가 가려지지 않도록 보정."""
             if not isinstance(state, dict):
                 return
             try:
-                # 먼저 위치/크기 적용 — 화면 밖으로 나가지 않게 보정
-                w = max(int(state.get("width", self.width())), 600)
-                h = max(int(state.get("height", self.height())), 400)
-                x = int(state.get("x", self.x()))
-                y = int(state.get("y", self.y()))
-
-                # 화면 영역 안인지 확인 (멀티모니터 환경에서 모니터 분리됐을 경우)
                 from PyQt6.QtGui import QGuiApplication
-                screens = QGuiApplication.screens()
-                if screens:
-                    in_any = False
-                    for sc in screens:
-                        g = sc.availableGeometry()
-                        if g.contains(x + 50, y + 50):  # 일부라도 화면 안이면 OK
-                            in_any = True
-                            break
-                    if not in_any:
-                        # 안 보이면 primary 화면 중앙으로
-                        pg = QGuiApplication.primaryScreen().availableGeometry()
-                        x = pg.x() + (pg.width() - w) // 2
-                        y = pg.y() + (pg.height() - h) // 2
+
+                # 1) 최대화/풀스크린 상태면 setGeometry 건너뛰기
+                #    main.py가 이미 showMaximized 호출했으므로 중복 호출하면 깜빡임
+                if state.get("maximized"):
+                    if not self.isMaximized():
+                        self.showMaximized()
+                    return
+                if state.get("full_screen"):
+                    if not self.isFullScreen():
+                        self.showFullScreen()
+                    return
+
+                # 2) 일반 윈도우 — 현재 최대화돼있으면 먼저 normal로 풀기
+                if self.isMaximized() or self.isFullScreen():
+                    self.showNormal()
+
+                # 3) 기하 + 화면 영역 보정 (타이틀바 가림 방지)
+                w = max(int(state.get("width", 1280)), 600)
+                h = max(int(state.get("height", 720)), 400)
+                x = int(state.get("x", 100))
+                y = int(state.get("y", 100))
+
+                # 어느 모니터인지 — 중심점 기준
+                target_screen = QGuiApplication.primaryScreen()
+                for sc in QGuiApplication.screens():
+                    if sc.geometry().contains(x + w // 2, y + h // 2):
+                        target_screen = sc
+                        break
+
+                avail = target_screen.availableGeometry()
+                # x: 좌측 이상, 우측에서 폭 빼고 이하
+                # y: 상단 이상 — ★ 타이틀바 보임 보장
+                x = max(avail.left(), min(x, avail.right() - w))
+                y = max(avail.top(), min(y, avail.bottom() - h))
 
                 self.setGeometry(x, y, w, h)
-                if state.get("maximized"):
-                    self.showMaximized()
-                elif state.get("full_screen"):
-                    self.showFullScreen()
             except Exception as e:
                 print(f"[Warning] UI 상태 복원 실패: {e}")
 
