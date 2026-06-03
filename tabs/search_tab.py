@@ -492,23 +492,39 @@ class SearchTab(QWidget):
     def on_search_finished(self, results, total_count):
         """검색 완료 처리"""
         self.btn_search.setEnabled(True)
-        self.original_results = results 
-        self.preview_results = results  
+        self.original_results = results
+        self.preview_results = results
         self.current_preview_index = 0
-        
+
         # 부모 UI에 결과 전달
         self._update_parent_results(results)
-            
+
         if results:
             self.update_preview_display()
             self.btn_export.setEnabled(True)
             self._set_nav_buttons_enabled(True)
             self.lbl_status.setText(f"✅ 검색 완료: {total_count:,} 건")
         else:
-            self.search_preview_card.clear()
+            # 빈 결과 — 친절한 안내 + 검색 조건 표시
+            criteria = {
+                "Copyright": self.input_copyright.text().strip(),
+                "Character": self.input_character.text().strip(),
+                "Artist": self.input_artist.text().strip(),
+                "General": self.input_general.text().strip(),
+            }
+            # 제외 조건도 포함
+            ex = {
+                "제외 Copyright": self.exclude_copyright.text().strip(),
+                "제외 Character": self.exclude_character.text().strip(),
+                "제외 Artist": self.exclude_artist.text().strip(),
+                "제외 General": self.exclude_general.text().strip(),
+            }
+            criteria.update({k: v for k, v in ex.items() if v})
+            self.search_preview_card._show_empty_state('no_results', criteria=criteria)
             self.lbl_preview_index.setText("[ 0 / 0 ]")
             self.btn_export.setEnabled(False)
             self._set_nav_buttons_enabled(False)
+            self.lbl_status.setText("🔎 일치 결과 없음 — 조건을 조정해보세요")
             
     def _set_nav_buttons_enabled(self, enabled):
         """네비게이션 버튼 활성화/비활성화"""

@@ -26,13 +26,21 @@
             @click="sortBy = s.val; sortImages()"
           >{{ s.label }}</button>
         </div>
+        <div class="sep"></div>
+        <!-- 썸네일 크기 슬라이더 -->
+        <div class="thumb-size-ctl" :title="`썸네일 크기: ${thumbSize}px`">
+          <span class="thumb-icon-small">▫</span>
+          <input type="range" v-model.number="thumbSize" min="100" max="380" step="20" class="thumb-slider" />
+          <span class="thumb-icon-large">▪</span>
+          <span class="thumb-size-val">{{ thumbSize }}px</span>
+        </div>
         <span class="count-badge">{{ exifFiltered ? filteredImages.length + '/' : '' }}{{ images.length }}</span>
       </div>
     </header>
 
     <!-- Masonry-style Grid -->
     <section class="gallery-content" ref="galleryContentRef" @scroll="onGalleryScroll">
-      <div class="masonry-grid">
+      <div class="masonry-grid" :style="{ 'columns': `auto ${thumbSize}px` }">
         <div v-for="img in displayImages" :key="img" class="gallery-card"
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
@@ -172,7 +180,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
@@ -181,6 +189,12 @@ import { computed, nextTick } from 'vue'
 const images = ref([])
 const currentFolder = ref('')
 const visibleCount = ref(40)
+
+// 썸네일 크기 — localStorage 영속, 100~380px
+const thumbSize = ref(parseInt(window.localStorage.getItem('gallery_thumb_size') || '200'))
+watch(thumbSize, (v) => {
+  window.localStorage.setItem('gallery_thumb_size', String(v))
+})
 
 const pagedImages = computed(() => images.value.slice(0, visibleCount.value))
 
@@ -439,7 +453,28 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 
 /* Grid */
 .gallery-content { flex: 1; overflow-y: auto; padding: 20px; }
-.masonry-grid { columns: 5 200px; column-gap: 12px; }
+.masonry-grid { columns: auto 200px; column-gap: 12px; }
+
+/* 썸네일 크기 슬라이더 */
+.thumb-size-ctl {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 8px; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+}
+.thumb-icon-small { font-size: 8px; color: var(--text-muted); }
+.thumb-icon-large { font-size: 14px; color: var(--text-muted); }
+.thumb-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 90px; height: 4px; background: rgba(255,255,255,0.15);
+  border-radius: 2px; outline: none; cursor: pointer;
+}
+.thumb-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px; background: var(--accent);
+  border-radius: 50%; cursor: pointer; transition: transform 0.1s;
+}
+.thumb-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
+.thumb-size-val { font-size: 9px; color: var(--text-muted); font-weight: 700; min-width: 36px; text-align: right; }
 .gallery-card {
   break-inside: avoid; margin-bottom: 12px; border-radius: var(--radius-card);
   overflow: hidden; border: 1px solid var(--border); position: relative;
