@@ -171,8 +171,9 @@ function resumeQueue() { requestAction('resume_queue') }
 // 이벤트 disconnect 핸들 — onUnmounted에서 정리 (메모리 누수 방지)
 const _unsubs = []
 
-// 자동화 자동 재시작 옵션 — 시작 시 복구된 큐가 있고 사용자가 켜뒀으면 자동 start
-const autoResumeOnStart = ref(localStorage.getItem('queue.autoResumeOnStart') === 'true')
+// 자동화 자동 재시작 옵션 — 시작 시 복구된 큐가 있으면 자동 start
+// 기본값 ON — 사용자가 명시적으로 'false' 저장한 경우만 OFF
+const autoResumeOnStart = ref(localStorage.getItem('queue.autoResumeOnStart') !== 'false')
 watch(autoResumeOnStart, (v) => {
   try { localStorage.setItem('queue.autoResumeOnStart', v ? 'true' : 'false') } catch {}
 })
