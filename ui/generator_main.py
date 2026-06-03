@@ -130,6 +130,11 @@ class GeneratorMainUI(
             # vue_bridge가 준비되고 Vue가 시그널 받을 준비 끝난 후 (1.5초 후) 적용
             QTimer.singleShot(1500, self.automation_persistence.initialize)
 
+            # 12. PR 2 — GenerationQueueV2 이벤트 브리지
+            #     기존 queue_panel은 그대로, V2는 AppContext 서비스로 노출
+            #     queue_panel.queue_changed → V2.publish → 다른 모듈 구독 가능
+            self._setup_queue_v2_bridge()
+
             print("[System] Engine Ready.")
 
         except Exception as e:
@@ -1510,6 +1515,54 @@ class GeneratorMainUI(
             lambda: self.vue_bridge.showNotification.emit('success', f'SAM3 배치 완료 ({len(paths)}장)'))
         self._sam3_batch_worker.start()
         self.vue_bridge.showNotification.emit('info', f'SAM3 배치 시작 ({len(paths)}장)')
+
+    # ── PR 2: Queue v2 이벤트 브리지 ───────────────────────
+    def _setup_queue_v2_bridge(self) -> None:
+        """기존 queue_panel과 GenerationQueueV2 사이의 이벤트 브리지.
+
+        설계:
+        - V2를 실제 작업 처리에 쓰지 않음 (기존 queue_panel + workers가 담당)
+        - V2는 AppContext "queue_v2" 서비스로 노출 — 다른 모듈이 queue 상태를
+          구조화된 형태로 조회 / 이벤트 구독 가능
+        - queue_panel.queue_changed 시그널 → V2를 미러링 + AppContext 이벤트 발행
+        """
+        try:
+            from core.generation_queue_v2 import GenerationQueueV2, QueueEvents
+            from core.app_context import get_context
+
+            # V2 인스턴스 — processor는 사용 안 함 (no-op), 워커도 시작 안 함
+            qv2 = GenerationQueueV2(
+                processor=lambda payload: None,
+                publish_events=True,
+            )
+            get_context().register_service("queue_v2", qv2)
+            self._queue_v2 = qv2
+
+            qp = getattr(self, "queue_panel", None)
+            if qp is None or not hasattr(qp, "queue_changed"):
+                return
+
+            def _sync_to_v2(count: int) -> None:
+                """queue_panel 상태를 V2에 미러링 + 이벤트 발행."""
+                try:
+                    # V2 비우기
+                    qv2.clear_pending()
+                    # queue_panel 아이템을 우선순위 순으로 enqueue (인덱스가 priority)
+                    items = getattr(qp, "queue_items", []) or []
+                    for idx, item in enumerate(items):
+                        qv2.enqueue(
+                            payload=dict(item),
+                            priority=idx,
+                            label=item.get("id", f"item-{idx}"),
+                        )
+                except Exception:
+                    pass
+
+            qp.queue_changed.connect(_sync_to_v2)
+            # 초기 1회 동기화
+            _sync_to_v2(len(getattr(qp, "queue_items", []) or []))
+        except Exception as e:
+            print(f"[Warning] queue v2 bridge setup 실패: {e}")
 
     # ── PR 8: Instant Wildcards ────────────────────────────
     def _get_instant_wildcards(self):
