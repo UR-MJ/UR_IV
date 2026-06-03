@@ -1,5 +1,12 @@
 <template>
   <div class="tbf">
+    <!-- 모두 비우기 버튼: 평소 왼쪽으로 반달처럼 살짝 튀어나옴, hover 시 원형+X -->
+    <button v-if="blocks.length > 0"
+      class="tbf-clear-all"
+      @click.stop="clearAllBlocks"
+      :title="`블록 ${blocks.length}개 모두 비우기 (Ctrl+Z로 복구 가능)`">
+      <span class="tbf-clear-x">✕</span>
+    </button>
     <div class="tbf-blocks" @dragover.prevent="onDragOver" @drop="onDrop" @dragleave="dropIdx = -1">
       <template v-for="(tb, ti) in blocks" :key="ti">
         <!-- 드롭 위치 미리보기 -->
@@ -83,6 +90,15 @@ watch(() => props.modelValue, (v) => {
 // 블록 조작
 function toggleBlock(idx) {
   blocks.value[idx].off = !blocks.value[idx].off
+  syncToModel()
+}
+
+function clearAllBlocks() {
+  // 전체 블록 삭제 — Ctrl+Z로 복구 가능 (PromptPanel의 undoStack이 widget 변경 추적)
+  blocks.value = []
+  editIdx.value = -1
+  newTag.value = ''
+  acItems.value = []
   syncToModel()
 }
 
@@ -235,7 +251,52 @@ function isWc(text) { return /__.+__/.test(text) }
 </script>
 
 <style scoped>
-.tbf { border: 1px solid var(--border); border-radius: var(--radius-base); padding: 6px; background: var(--bg-input); min-height: 36px; }
+.tbf { position: relative; border: 1px solid var(--border); border-radius: var(--radius-base); padding: 6px; background: var(--bg-input); min-height: 36px; }
+
+/* 모두 비우기 버튼 — 평소엔 반달, hover 시 원형 X */
+.tbf-clear-all {
+  position: absolute;
+  left: -10px;             /* 왼쪽으로 튀어나오게 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-right: none;       /* 필드 경계와 매끄럽게 */
+  border-radius: 50% 0 0 50%;  /* 반달 — 왼쪽이 둥글고 오른쪽이 직선 */
+  background: rgba(248, 113, 113, 0.15);
+  color: transparent;       /* X 숨김 */
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;             /* 텍스트 안 보이게 */
+  font-weight: bold;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+  overflow: hidden;
+}
+.tbf-clear-all:hover {
+  left: -22px;              /* 더 튀어나오면서 */
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;       /* 원형 변형 */
+  border: 1px solid #f87171;
+  background: #f87171;
+  color: #fff;
+  font-size: 12px;
+  box-shadow: 0 4px 14px rgba(248, 113, 113, 0.45), 0 0 0 2px rgba(248,113,113,0.15);
+  overflow: visible;
+}
+.tbf-clear-all:active {
+  transform: translateY(-50%) scale(0.9);
+}
+.tbf-clear-x {
+  opacity: 0;
+  transition: opacity 0.15s ease 0.05s;
+}
+.tbf-clear-all:hover .tbf-clear-x { opacity: 1; }
 .tbf-blocks { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .tbf-block {
   padding: 3px 10px; background: var(--bg-button); border: 1px solid var(--border);
