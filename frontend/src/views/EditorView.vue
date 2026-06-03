@@ -1,20 +1,29 @@
 <template>
   <div class="editor-view" @dragover.prevent="isDragging = true" @dragleave="isDragging = false" @drop.prevent="onDrop">
     <template v-if="imagePath">
-      <!-- 상단 도구바 (개선: 넓고 깔끔) -->
+      <!-- 상단 도구바 -->
       <div class="top-bar">
         <div class="bar-group">
-          <button class="bar-btn accent" @click="openFile">📂 파일 열기</button>
-          <button class="bar-btn save" @click="saveImage">💾 저장</button>
+          <button class="bar-btn accent" @click="openFile" title="Ctrl+O">📂 열기</button>
+          <button class="bar-btn save" @click="saveImage" title="Ctrl+S">💾 저장</button>
+          <button class="bar-btn" @click="saveAsImage" title="Ctrl+Shift+S">💾→ 다른 이름</button>
+          <button class="bar-btn" @click="pasteFromClipboard" title="Ctrl+V">📋 붙여넣기</button>
         </div>
         <div class="bar-group center">
-          <button class="bar-btn" @click="doUndo" :disabled="undoStack.length <= 1">↩ Undo</button>
-          <button class="bar-btn" @click="doRedo" :disabled="redoStack.length === 0">↪ Redo</button>
+          <button class="bar-btn" @click="doUndo" :disabled="undoStack.length <= 1" title="Ctrl+Z">
+            ↩ Undo <span class="bar-counter">({{ Math.max(0, undoStack.length - 1) }}/{{ MAX_UNDO }})</span>
+          </button>
+          <button class="bar-btn" @click="doRedo" :disabled="redoStack.length === 0" title="Ctrl+Y">
+            ↪ Redo <span class="bar-counter">({{ redoStack.length }})</span>
+          </button>
           <span class="bar-sep">|</span>
-          <span class="bar-info">{{ imgWidth }}×{{ imgHeight }}</span>
+          <span class="bar-filename" :title="imagePath">
+            <span v-if="isDirty" class="dirty-mark">●</span>{{ baseName }}
+          </span>
+          <span class="bar-info">{{ imgWidth }}×{{ imgHeight }}{{ fileInfoExtra }}</span>
         </div>
         <div class="bar-group">
-          <button class="bar-btn danger" @click="resetEditor">✕ 닫기</button>
+          <button class="bar-btn danger" @click="confirmClose">✕ 닫기</button>
         </div>
       </div>
 
@@ -106,7 +115,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import EditorCanvas from '../components/editor/EditorCanvas.vue'
@@ -122,7 +131,14 @@ const imagePath = ref('')
 const imageDisplay = ref('')
 const imgWidth = ref(0)
 const imgHeight = ref(0)
-const activeTab = ref(0)
+// 마지막 사용 탭 영속화 (localStorage)
+const activeTab = ref(parseInt(window.localStorage.getItem('editorActiveTab') || '0'))
+// 파일 정보 (포맷/용량)
+const fileSize = ref(0)
+const fileFormat = ref('')
+// 미저장 변경 추적
+const isDirty = ref(false)
+const initialImagePath = ref('')
 const currentTool = ref('box')
 const brushSize = ref(20)
 const eraserMode = ref('brush')
@@ -150,25 +166,92 @@ const tabs = [
   { icon: '✂️', label: '이동' },
 ]
 
+// 파일명 / 확장자 / 정보 표시용 computed
+const baseName = computed(() => {
+  if (!imagePath.value) return ''
+  const p = imagePath.value.replace(/\\/g, '/')
+  return p.substring(p.lastIndexOf('/') + 1) || imagePath.value
+})
+function _formatSize(bytes) {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+const fileInfoExtra = computed(() => {
+  const parts = []
+  if (fileFormat.value) parts.push(fileFormat.value)
+  if (fileSize.value) parts.push(_formatSize(fileSize.value))
+  return parts.length > 0 ? ' · ' + parts.join(' · ') : ''
+})
+
+// 마지막 탭 영속
+watch(activeTab, (v) => {
+  window.localStorage.setItem('editorActiveTab', String(v))
+})
+
+// 최근 파일 관리 (드롭존용)
+const recentFiles = ref([])
+function _loadRecentFiles() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem('editorRecentFiles') || '[]')
+    if (Array.isArray(saved)) recentFiles.value = saved.slice(0, 6)
+  } catch {}
+}
+function _pushRecentFile(path) {
+  if (!path) return
+  const arr = recentFiles.value.filter(p => p !== path)
+  arr.unshift(path)
+  recentFiles.value = arr.slice(0, 6)
+  window.localStorage.setItem('editorRecentFiles', JSON.stringify(recentFiles.value))
+}
+
 function loadImage(path) {
   if (!path) return
   undoStack.value = [path]
   redoStack.value = []
   imagePath.value = path
+  initialImagePath.value = path
+  isDirty.value = false
   imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
+  _pushRecentFile(path)
   const img = new Image()
   img.onload = () => { imgWidth.value = img.naturalWidth; imgHeight.value = img.naturalHeight }
   img.src = 'file:///' + path
+  // 파일 정보 조회 (포맷/용량)
+  _loadFileInfo(path)
 }
 
-const MAX_UNDO = 5
+async function _loadFileInfo(path) {
+  fileFormat.value = ''
+  fileSize.value = 0
+  try {
+    const backend = await getBackend()
+    if (backend.getFileInfo) {
+      backend.getFileInfo(path, (json) => {
+        try {
+          const d = JSON.parse(json)
+          if (d.size) fileSize.value = d.size
+          if (d.format) fileFormat.value = d.format
+        } catch {}
+      })
+    } else {
+      // 폴백: 확장자만 표시
+      const m = path.match(/\.([a-zA-Z0-9]+)$/)
+      if (m) fileFormat.value = m[1].toUpperCase()
+    }
+  } catch {}
+}
+
+const MAX_UNDO = 30
 
 function pushState(path, clearMask = true) {
   undoStack.value.push(path)
-  // undo 5회 제한
+  // undo 한도 (MAX_UNDO + 초기 상태 1개)
   while (undoStack.value.length > MAX_UNDO + 1) undoStack.value.shift()
   redoStack.value = []
   imagePath.value = path
+  isDirty.value = (path !== initialImagePath.value)
   // 타임스탬프 없이 경로만 변경 → watch에서 zoom/rotation 유지됨
   imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
   const img = new Image()
@@ -338,9 +421,63 @@ function onDrop(e) {
 }
 
 function openFile() { requestAction('editor_open_file') }
-function saveImage() { requestAction('editor_save', { path: imagePath.value }) }
+function saveImage() {
+  requestAction('editor_save', { path: imagePath.value })
+  // 저장 완료 신호는 별도지만, 사용자 입장에서는 곧바로 깨끗 상태
+  isDirty.value = false
+  initialImagePath.value = imagePath.value
+}
+function saveAsImage() {
+  requestAction('editor_save_as', { path: imagePath.value })
+}
+
+// 클립보드에서 이미지 붙여넣기 — navigator.clipboard.read() → base64 → Python에 저장 요청
+async function pasteFromClipboard() {
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      requestAction('show_toast', { type: 'info', msg: '브라우저가 클립보드 API를 지원하지 않습니다 — 파일로 열어주세요' })
+      return
+    }
+    const items = await navigator.clipboard.read()
+    for (const item of items) {
+      const imageType = item.types.find(t => t.startsWith('image/'))
+      if (imageType) {
+        const blob = await item.getType(imageType)
+        const buf = await blob.arrayBuffer()
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+        const backend = await getBackend()
+        if (backend.editorPasteImage) {
+          backend.editorPasteImage(b64, imageType, (json) => {
+            try {
+              const r = JSON.parse(json)
+              if (r.path) {
+                loadImage(r.path)
+                requestAction('show_toast', { type: 'success', msg: '클립보드 이미지 로드 완료' })
+              } else {
+                requestAction('show_toast', { type: 'error', msg: r.error || '붙여넣기 실패' })
+              }
+            } catch {}
+          })
+        }
+        return
+      }
+    }
+    requestAction('show_toast', { type: 'info', msg: '클립보드에 이미지가 없습니다' })
+  } catch (e) {
+    requestAction('show_toast', { type: 'error', msg: `클립보드 접근 실패: ${e.message || e}` })
+  }
+}
+
+function confirmClose() {
+  if (isDirty.value) {
+    if (!window.confirm('저장하지 않은 변경 사항이 있습니다.\n정말 닫으시겠습니까?')) return
+  }
+  resetEditor()
+}
 function resetEditor() {
-  imagePath.value = ''; imageDisplay.value = ''; undoStack.value = []; redoStack.value = []
+  imagePath.value = ''; imageDisplay.value = ''
+  undoStack.value = []; redoStack.value = []
+  isDirty.value = false; initialImagePath.value = ''
 }
 
 // 앱 시작 시 YOLO 라벨 로드
@@ -351,20 +488,42 @@ async function refreshYoloLabel() {
   }
 }
 
+function onEditorKeyDown(e) {
+  // Ctrl+O / Ctrl+V는 이미지 없어도 동작 (열기/붙여넣기)
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
+    e.preventDefault(); openFile(); return
+  }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'v') {
+    e.preventDefault(); pasteFromClipboard(); return
+  }
+  // 이미지가 없으면 그 외 단축키는 무시
+  if (!imagePath.value) return
+  // 저장
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveAsImage(); return }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveImage(); return }
+  // Undo / Redo (마스크 우선, 그 다음 작업)
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z') {
+    e.preventDefault(); canvasRef.value?.redoMask() || doRedo(); return
+  }
+  if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+    e.preventDefault(); canvasRef.value?.undoMask() || doUndo(); return
+  }
+  if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+    e.preventDefault(); canvasRef.value?.redoMask() || doRedo(); return
+  }
+  if (e.key === 'Escape') canvasRef.value?.clearSelection()
+}
+
 onMounted(() => {
   onBackendEvent('editorImageLoaded', (path) => loadImage(path))
   onBackendEvent('yoloModelUpdated', (label) => { modelLabel.value = label })
-  // 앱 시작 시 YOLO 모델 자동 감지
+  // 앱 시작 시 YOLO 모델 자동 감지 + 최근 파일 로드
   refreshYoloLabel()
-
-  document.addEventListener('keydown', (e) => {
-    if (!imagePath.value) return
-    if (e.ctrlKey && e.shiftKey && e.key === 'z') { e.preventDefault(); canvasRef.value?.redoMask() }
-    else if (e.ctrlKey && e.key === 'z') { e.preventDefault(); canvasRef.value?.undoMask() || doUndo() }
-    if (e.ctrlKey && e.key === 'y') { e.preventDefault(); canvasRef.value?.redoMask() || doRedo() }
-    if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveImage() }
-    if (e.key === 'Escape') canvasRef.value?.clearSelection()
-  })
+  _loadRecentFiles()
+  document.addEventListener('keydown', onEditorKeyDown)
+})
+onUnmounted(() => {
+  document.removeEventListener('keydown', onEditorKeyDown)
 })
 </script>
 
@@ -391,6 +550,13 @@ onMounted(() => {
 .bar-btn.danger { color: #f87171; border-color: rgba(248,113,113,0.2); }
 .bar-sep { color: #333; margin: 0 4px; }
 .bar-info { color: #585858; font-size: 11px; font-family: 'Consolas', monospace; }
+.bar-filename {
+  color: #c8c8c8; font-size: 12px; font-weight: 600;
+  max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0 8px;
+}
+.dirty-mark { color: #fbbf24; margin-right: 4px; font-size: 14px; vertical-align: middle; }
+.bar-counter { color: #585858; font-size: 9px; font-family: 'Consolas', monospace; margin-left: 4px; }
 
 .editor-body { flex: 1; display: flex; overflow: hidden; }
 

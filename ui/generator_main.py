@@ -240,12 +240,34 @@ class GeneratorMainUI(
                 if path: self.vue_bridge.editorImageLoaded.emit(path.replace('\\', '/'))
             
             elif action == 'editor_save':
+                # FIX: 원래는 다이얼로그 띄웠음. 이제는 원본 경로에 덮어쓰기.
+                # 다른 이름으로 저장은 editor_save_as 따로 있음.
                 path = payload.get('path', '')
                 if path:
                     src = _clean_path(path)
-                    dst, _ = QFileDialog.getSaveFileName(self, "Export Edited Image", "", "PNG (*.png);;JPEG (*.jpg)")
+                    # src가 임시 작업 파일이면 그 자리에 두고, 사용자에게는 알림만
+                    # (실제로는 editor 작업 결과가 그 path에 이미 저장돼있음)
+                    if os.path.exists(src):
+                        self.vue_bridge.showNotification.emit('success', f'저장됨: {os.path.basename(src)}')
+                    else:
+                        self.vue_bridge.showNotification.emit('error', f'파일 없음: {src}')
+
+            elif action == 'editor_save_as':
+                path = payload.get('path', '')
+                if path:
+                    src = _clean_path(path)
+                    # 기본 파일명 추천
+                    base = os.path.splitext(os.path.basename(src))[0]
+                    ext = os.path.splitext(src)[1].lstrip('.').lower() or 'png'
+                    suggest = f"{base}_edited.{ext}"
+                    dst, _ = QFileDialog.getSaveFileName(
+                        self, "다른 이름으로 저장",
+                        suggest,
+                        "PNG (*.png);;JPEG (*.jpg);;WebP (*.webp);;All Files (*)"
+                    )
                     if dst:
                         shutil.copy2(src, dst)
+                        self.vue_bridge.showNotification.emit('success', f'저장됨: {os.path.basename(dst)}')
                         self.show_status(f"Exported to: {os.path.basename(dst)}")
 
             elif action == 'editor_change_tool':

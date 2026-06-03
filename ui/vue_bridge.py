@@ -737,6 +737,46 @@ class VueBridge(QObject):
         except Exception as e:
             self.ollamaResult.emit(json.dumps({'error': str(e)}))
 
+    @pyqtSlot(str, str, result=str)
+    def editorPasteImage(self, b64_data: str, mime_type: str) -> str:
+        """클립보드 이미지를 임시 파일로 저장하고 경로 반환.
+
+        Vue에서 navigator.clipboard.read()로 받은 base64 이미지 받음.
+        """
+        try:
+            import base64
+            import tempfile
+            from pathlib import Path
+            # mime_type 예: 'image/png', 'image/jpeg', ...
+            ext = mime_type.split('/')[-1] if '/' in mime_type else 'png'
+            if ext == 'jpeg':
+                ext = 'jpg'
+            raw = base64.b64decode(b64_data)
+            # tempdir 경로 (앱 캐시 폴더 안에)
+            tmp_dir = Path(tempfile.gettempdir()) / "AIStudioPro_editor"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            import time
+            tmp_path = tmp_dir / f"clipboard_{int(time.time())}.{ext}"
+            tmp_path.write_bytes(raw)
+            return json.dumps({"path": str(tmp_path).replace('\\', '/')})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def getFileInfo(self, path: str) -> str:
+        """파일 기본 정보 반환 (포맷/용량)."""
+        try:
+            import os
+            from pathlib import Path
+            p = Path(path)
+            if not p.is_file():
+                return json.dumps({})
+            stat = p.stat()
+            ext = p.suffix.lstrip('.').upper() or ''
+            return json.dumps({"size": stat.st_size, "format": ext})
+        except Exception:
+            return json.dumps({})
+
     @pyqtSlot(str, result=str)
     def ollamaListModels(self, base_url: str = '') -> str:
         """Ollama 모델 목록 반환.
