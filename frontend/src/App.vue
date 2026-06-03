@@ -33,15 +33,20 @@
           <!-- 자동화 설정 (AUTO ON일 때만) -->
           <div class="auto-settings" v-if="autoMode">
             <div class="auto-row">
-              <label>{{ autoSettings.mode === 'count' ? '횟수' : '시간(분)' }}</label>
-              <input type="number" v-model.number="autoSettings.limit" min="1" class="auto-input" />
-              <CustomSelect v-model="autoSettings.mode" :options="['count', 'timer']" placeholder="모드" class="auto-select" />
+              <label>{{ autoSettings.mode === 'unlimited' ? '무제한' : autoSettings.mode === 'count' ? '횟수' : '시간(분)' }}</label>
+              <input v-if="autoSettings.mode !== 'unlimited'" type="number" v-model.number="autoSettings.limit" min="1" class="auto-input" />
+              <span v-else class="auto-unlimited-mark">∞</span>
+              <CustomSelect v-model="autoSettings.mode" :options="['count', 'timer', 'unlimited']" placeholder="모드" class="auto-select" />
             </div>
             <div class="auto-row">
               <label>반복</label>
               <input type="number" v-model.number="autoSettings.repeat" min="1" max="100" class="auto-input" />
               <label>대기(초)</label>
               <input type="number" v-model.number="autoSettings.delay" min="0" step="0.5" class="auto-input" />
+            </div>
+            <div class="auto-row">
+              <label title="생성 실패 시 자동 재시도 횟수 (지수 백오프)">재시도</label>
+              <input type="number" v-model.number="autoSettings.maxRetries" min="0" max="10" class="auto-input" />
             </div>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
           </div>
@@ -57,7 +62,9 @@
             <button class="btn-generate" :class="{ automating: isAutomating }" @click="doGenerate" :disabled="isGenerating && !isAutomating">
               {{ isAutomating ? '⏹ STOP AUTOMATION' : isGenerating ? 'GENERATING...' : autoMode ? '▶ START AUTOMATION' : 'GENERATE IMAGE' }}
             </button>
+            <button v-if="isGenerating && !isAutomating" class="btn-cancel" @click="cancelGeneration" title="생성 취소">✕</button>
           </div>
+          <div class="gen-eta" v-if="isGenerating && genEta">{{ genEta }}</div>
         </div>
       </aside>
 
@@ -119,6 +126,7 @@
               <div class="ext-row">
                 <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets.steps_input" min="1" max="150" /></div>
                 <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets.cfg_input" step="0.5" /></div>
+                <div class="ext-field"><label>Shift</label><input type="number" v-model="storeWidgets.shift_input" step="0.5" min="0" max="24" title="0이면 미사용 (Distilled CFG Scale)" /></div>
                 <div class="ext-field"><label>Seed</label><input type="text" v-model="storeWidgets.seed_input" /></div>
               </div>
             </div>
@@ -255,6 +263,63 @@
               </details>
             </details>
 
+            <!-- SAM3 -->
+            <details class="ext-card">
+              <summary class="ext-title">SAM3</summary>
+              <label class="ext-check-row"><input type="checkbox" v-model="sam3_enabled" /><span>SAM3 활성화</span></label>
+              <div class="ext-field"><label>Detect Prompt</label>
+                <input type="text" v-model="storeWidgets._sam3_detect_prompt" placeholder="face" /></div>
+              <div class="ext-field"><label>Inpaint Prompt</label>
+                <input type="text" v-model="storeWidgets._sam3_inpaint_prompt" placeholder="비워두면 메인 프롬프트 사용" /></div>
+              <div class="ext-field"><label>Negative Prompt</label>
+                <input type="text" v-model="storeWidgets._sam3_neg_prompt" placeholder="비워두면 메인 네거티브 사용" /></div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Mode</label>
+                  <CustomSelect v-model="storeWidgets._sam3_mode" :options="['Inpaint', 'Mask only']" placeholder="Inpaint" /></div>
+                <div class="ext-field"><label>Mask Mode</label>
+                  <CustomSelect v-model="storeWidgets._sam3_mask_mode" :options="['Individual', 'Combined']" placeholder="Individual" /></div>
+              </div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Threshold</label><input type="number" v-model="storeWidgets._sam3_threshold" step="0.01" min="0" max="1" /></div>
+                <div class="ext-field"><label>Denoise</label><input type="number" v-model="storeWidgets._sam3_denoise" step="0.01" min="0" max="1" /></div>
+              </div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Mask Blur</label><input type="number" v-model="storeWidgets._sam3_mask_blur" min="0" /></div>
+                <div class="ext-field"><label>Padding</label><input type="number" v-model="storeWidgets._sam3_padding" min="0" /></div>
+              </div>
+              <div class="ext-field"><label>Checkpoint</label>
+                <CustomSelect v-model="storeWidgets._sam3_checkpoint"
+                  :options="sam3CheckpointItems"
+                  placeholder="sam3.pt" /></div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_preview_overlay" true-value="true" false-value="false" /><span>Overlay Preview</span></label>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_save_artifacts" true-value="true" false-value="false" /><span>Artifacts 저장</span></label>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_inp_size" true-value="true" false-value="false" /><span>별도 Inpaint 크기</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_inp_size === 'true'">
+                <div class="ext-field"><label>Width</label><input type="number" v-model="storeWidgets._sam3_inp_w" /></div>
+                <div class="ext-field"><label>Height</label><input type="number" v-model="storeWidgets._sam3_inp_h" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_steps" true-value="true" false-value="false" /><span>별도 Steps</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_steps === 'true'">
+                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets._sam3_steps" min="1" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_cfg" true-value="true" false-value="false" /><span>별도 CFG</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_cfg === 'true'">
+                <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets._sam3_cfg" step="0.5" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_sampler" true-value="true" false-value="false" /><span>별도 Sampler</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_sampler === 'true'">
+                <div class="ext-field"><label>Sampler</label>
+                  <CustomSelect v-model="storeWidgets._sam3_sampler" :options="['Use same sampler', ...samplerItems]" placeholder="Use same sampler" /></div>
+                <div class="ext-field"><label>Scheduler</label>
+                  <CustomSelect v-model="storeWidgets._sam3_scheduler" :options="['Use same scheduler', ...schedulerItems]" placeholder="Use same scheduler" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_noise_mul" true-value="true" false-value="false" /><span>Noise Multiplier</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_noise_mul === 'true'">
+                <div class="ext-field"><label>Multiplier</label><input type="number" v-model="storeWidgets._sam3_noise_mul" step="0.01" min="0" max="2" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_restore_face" true-value="true" false-value="false" /><span>Restore Face</span></label>
+            </details>
+
             <!-- NegPiP -->
             <div class="ext-card">
               <label class="ext-check-row">
@@ -299,9 +364,10 @@
       <!-- Center: Viewport + EXIF Bar -->
       <section class="viewport-area">
         <div class="viewport-main">
-          <router-view v-slot="{ Component }">
+          <router-view v-slot="{ Component, route }">
             <keep-alive>
               <component :is="Component"
+                :key="route.name"
                 :image-url="currentImage"
                 :resolution="resolution"
                 :seed="seed"
@@ -345,7 +411,7 @@
             :class="{ selected: currentImage === img }"
             draggable="true" @dragstart="onDragStart($event, img)"
           >
-            <img :src="'file:///' + img" loading="lazy" />
+            <img :key="historyImageSrc(img)" :src="historyImageSrc(img)" loading="lazy" />
           </div>
         </div>
         <button class="hist-nav-btn" @click="histPage++" :disabled="(histPage + 1) * histPerPage >= historyImages.length">▼</button>
@@ -593,6 +659,7 @@ const storeWidgets = wStore.widgets
 const samplerItems = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
 const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 const upscalerItems = computed(() => wStore.getProperty('upscaler_combo', 'items') || [])
+const sam3CheckpointItems = computed(() => wStore.getProperty('_sam3_checkpoint', 'items') || ['sam3.pt'])
 const adModelItems = ref([])
 
 // Hires/ADetailer 체크박스 (proxy 연동)
@@ -656,6 +723,7 @@ const removeCensorship = computed({ get: () => storeWidgets.chk_remove_censorshi
 const removeText = computed({ get: () => storeWidgets.chk_remove_text === 'true', set: v => { storeWidgets.chk_remove_text = v ? 'true' : 'false' } })
 const autoCharFeatures = computed({ get: () => storeWidgets.chk_auto_char_features === 'true', set: v => { storeWidgets.chk_auto_char_features = v ? 'true' : 'false' } })
 const ad_enabled = computed({ get: () => storeWidgets.adetailer_group === 'true', set: v => { storeWidgets.adetailer_group = v ? 'true' : 'false' } })
+const sam3_enabled = computed({ get: () => storeWidgets.sam3_group === 'true', set: v => { storeWidgets.sam3_group = v ? 'true' : 'false' } })
 const ad_s1_enabled = computed({ get: () => storeWidgets.ad_slot1_group === 'true', set: v => { storeWidgets.ad_slot1_group = v ? 'true' : 'false' } })
 const ad_s2_enabled = computed({ get: () => storeWidgets.ad_slot2_group === 'true', set: v => { storeWidgets.ad_slot2_group = v ? 'true' : 'false' } })
 import PromptPanel from './components/PromptPanel.vue'
@@ -664,11 +732,14 @@ import TabBar from './components/TabBar.vue'
 import QueuePanel from './components/QueuePanel.vue'
 
 const currentImage = ref('')
+const imageVersions = reactive({})
 const resolution = ref('')
 const seed = ref('')
 const status = ref('')
 const isGenerating = ref(false)
 const progressVal = ref(0)
+const genStartTime = ref(0)
+const genEta = ref('')
 const showLeftPanel = ref(true)
 const showExtendPanel = ref(false)
 const historyImages = ref([])
@@ -695,12 +766,13 @@ const autoGenCount = ref(0)
 const autoWaiting = ref(false)
 const vramInfo = ref({ used: 0, total: 0, pct: 0 })
 const vramClass = computed(() => vramInfo.value.pct > 90 ? 'critical' : vramInfo.value.pct > 70 ? 'warn' : 'ok')
-const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false })
+const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, maxRetries: 2 })
 
 function syncAutomationSettings() {
   const limit = Number(autoSettings.limit)
   const repeat = Number(autoSettings.repeat)
   const delay = Number(autoSettings.delay)
+  const maxRetries = Number(autoSettings.maxRetries)
 
   action('set_automation_settings', {
     mode: autoSettings.mode,
@@ -708,6 +780,7 @@ function syncAutomationSettings() {
     repeat: Number.isFinite(repeat) && repeat > 0 ? repeat : 1,
     delay: Number.isFinite(delay) && delay >= 0 ? delay : 1,
     allowDupes: !!autoSettings.allowDupes,
+    maxRetries: Number.isFinite(maxRetries) && maxRetries >= 0 ? maxRetries : 2,
   })
 }
 
@@ -1014,7 +1087,13 @@ function doGenerate() {
     requestAction('set_lora_text', { lora_text: loraText })
   }
   syncAutomationSettings()
+  genStartTime.value = Date.now()
+  genEta.value = ''
   action('generate')
+}
+
+function cancelGeneration() {
+  action('cancel_generation')
 }
 
 function showHistoryMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
@@ -1040,10 +1119,11 @@ const ctxDelete = () => {
 }
 
 async function selectHistoryImage(path) {
+  imageVersions[path] = Date.now()
   currentImage.value = path
   const img = new Image()
   img.onload = () => { resolution.value = `${img.naturalWidth} × ${img.naturalHeight}` }
-  img.src = 'file:///' + path
+  img.src = historyImageSrc(path)
   // EXIF 로드
   const backend = await getBackend()
   if (backend.getImageExif) {
@@ -1054,6 +1134,11 @@ async function selectHistoryImage(path) {
       } catch {}
     })
   }
+}
+
+function historyImageSrc(path) {
+  if (!path) return ''
+  return `file:///${path}?t=${imageVersions[path] || 0}`
 }
 
 // 드래그 앤 드롭 지원
@@ -1104,10 +1189,12 @@ onMounted(async () => {
 
   onBackendEvent('imageGenerated', async (data) => {
     const parsed = JSON.parse(data)
+    if (parsed.path) imageVersions[parsed.path] = Date.now()
     currentImage.value = parsed.path
     resolution.value = `${parsed.width} × ${parsed.height}`
     seed.value = String(parsed.seed)
     isGenerating.value = false
+    genEta.value = ''
     status.value = ''
     if (parsed.path) {
       historyImages.value.unshift(parsed.path)
@@ -1125,7 +1212,7 @@ onMounted(async () => {
       }
     }
   })
-  onBackendEvent('generationStarted', () => { isGenerating.value = true; autoWaiting.value = false; progressVal.value = 0 })
+  onBackendEvent('generationStarted', () => { isGenerating.value = true; autoWaiting.value = false; progressVal.value = 0; genStartTime.value = Date.now(); genEta.value = '' })
   onBackendEvent('automationStatus', (json) => {
     try {
       const d = JSON.parse(json)
@@ -1138,8 +1225,16 @@ onMounted(async () => {
   onBackendEvent('generationProgress', (step, total) => {
     progressVal.value = Math.round(step / total * 100)
     status.value = `Generating... ${step}/${total}`
+    // 간단 ETA: 시작 시각 기준
+    if (step > 0 && genStartTime.value) {
+      const elapsed = (Date.now() - genStartTime.value) / 1000
+      const remaining = Math.max(0, elapsed / step * (total - step))
+      genEta.value = remaining >= 60
+        ? `ETA ${Math.floor(remaining / 60)}m${String(Math.floor(remaining % 60)).padStart(2, '0')}s`
+        : `ETA ${remaining.toFixed(0)}s`
+    }
   })
-  onBackendEvent('generationError', (msg) => { isGenerating.value = false; status.value = `Error: ${msg}` })
+  onBackendEvent('generationError', (msg) => { isGenerating.value = false; genEta.value = ''; status.value = `Error: ${msg}` })
 
   // 글로벌 가중치 로드
   onBackendEvent('globalWeightsLoaded', (json) => {
@@ -1458,6 +1553,8 @@ onMounted(async () => {
 .auto-row { display: flex; align-items: center; gap: 4px; }
 .auto-row label { font-size: 9px; color: var(--text-muted); font-weight: 700; min-width: 32px; }
 .auto-input { width: 50px; padding: 4px 6px; font-size: 11px; text-align: center; }
+.auto-unlimited-mark { display: inline-block; width: 50px; padding: 4px 6px; font-size: 14px;
+  color: var(--accent); text-align: center; font-weight: bold; }
 .auto-select { min-width: 90px; padding: 4px; font-size: 10px; }
 
 /* 자동화 상태 */
@@ -1466,7 +1563,10 @@ onMounted(async () => {
 .auto-status-sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
 .auto-pulse { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-.generate-row { display: flex; gap: 6px; }
+.generate-row { display: flex; gap: 6px; align-items: stretch; }
+.btn-cancel { width: 50px; height: 50px; background: transparent; border: 2px solid #f87171; border-radius: var(--radius-pill); color: #f87171; font-size: 18px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.btn-cancel:hover { background: #f87171; color: #fff; }
+.gen-eta { margin-top: 6px; font-size: 11px; color: var(--muted); text-align: center; letter-spacing: 0.5px; }
 .auto-check { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer; }
 .auto-check input { accent-color: #4ade80; }
 .btn-generate { width: 100%; height: 50px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 800; font-size: 14px; letter-spacing: 1px; cursor: pointer; transition: var(--transition); }

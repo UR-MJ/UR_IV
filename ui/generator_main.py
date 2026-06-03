@@ -641,6 +641,8 @@ class GeneratorMainUI(
                     'repeat': payload.get('repeat', 1),
                     'delay': payload.get('delay', 1.0),
                     'allowDupes': bool(payload.get('allowDupes', False)),
+                    # PR 3: 재시도 설정 (기본 2회)
+                    'maxRetries': int(payload.get('maxRetries', 2)),
                 }
 
             elif action == 'toggle_automation':
