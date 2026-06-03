@@ -488,7 +488,27 @@ async function refreshYoloLabel() {
   }
 }
 
+// Ctrl 빠른 두 번 누름 감지 — 변환(zoom/rotation/pan) 초기화
+let _lastCtrlTime = 0
+const CTRL_DOUBLE_TAP_MS = 300
+
 function onEditorKeyDown(e) {
+  // ── Ctrl 단독 두 번 빠르게 → 변환 reset (모자이크/그리기는 유지)
+  // (다른 Ctrl 조합은 _lastCtrlTime 갱신 안 함 — Ctrl+Z 등과 충돌 회피)
+  if (e.key === 'Control' && !e.altKey && !e.shiftKey) {
+    const now = Date.now()
+    if (now - _lastCtrlTime < CTRL_DOUBLE_TAP_MS) {
+      _lastCtrlTime = 0
+      if (imagePath.value && canvasRef.value?.resetTransform) {
+        canvasRef.value.resetTransform()
+        requestAction('show_toast', { type: 'info', msg: '확대/회전/위치 초기화' })
+      }
+    } else {
+      _lastCtrlTime = now
+    }
+    return
+  }
+
   // Ctrl+O / Ctrl+V는 이미지 없어도 동작 (열기/붙여넣기)
   if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
     e.preventDefault(); openFile(); return

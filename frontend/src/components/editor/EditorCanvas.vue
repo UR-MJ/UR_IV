@@ -167,25 +167,46 @@ function renderMaskOverlay() {
   hasMask.value = anyMask
 }
 
-// ── 좌표 변환: 화면 → 이미지 (getBoundingClientRect 기반 — CSS 변환 포함) ──
+// ── 좌표 변환: 화면 → 이미지 ──
+// FIX: 회전 미반영 버그 — getBoundingClientRect의 AABB로 비율 계산하면
+// 회전된 이미지에서 클릭 위치가 어긋남. 올바른 역변환:
+//   delta_screen = scale * rotate * delta_internal
+//   ∴ delta_internal = rotate^-1 * scale^-1 * delta_screen
 function getImagePos(e) {
   if (!canvasEl.value) return { x: 0, y: 0 }
-  // getBoundingClientRect는 CSS transform(zoom/rotate/pan)이 적용된 후의 실제 화면 좌표를 반환
   const rect = canvasEl.value.getBoundingClientRect()
-  // 화면 좌표 → 캔버스 내부 비율 좌표 (0~1)
-  const ratioX = (e.clientX - rect.left) / rect.width
-  const ratioY = (e.clientY - rect.top) / rect.height
-  // 이미지 좌표로 변환
-  const imgX = ratioX * canvasEl.value.width
-  const imgY = ratioY * canvasEl.value.height
-  return { x: imgX, y: imgY }
+  // AABB 중심 = transform 적용된 캔버스 중심의 화면 좌표
+  const cx = rect.left + rect.width / 2
+  const cy = rect.top + rect.height / 2
+  // 1) 화면 좌표 → 중심 기준 상대 벡터 (screen space)
+  const dx = e.clientX - cx
+  const dy = e.clientY - cy
+  // 2) 역 스케일 (1/zoom)
+  const sx = dx / zoom.value
+  const sy = dy / zoom.value
+  // 3) 역 회전 (-rotation rad)
+  const theta = -rotation.value * Math.PI / 180
+  const cos = Math.cos(theta), sin = Math.sin(theta)
+  const lx = sx * cos - sy * sin
+  const ly = sx * sin + sy * cos
+  // 4) 중심 기준 → 캔버스 좌상단 기준 (내부 좌표)
+  return {
+    x: lx + canvasEl.value.width / 2,
+    y: ly + canvasEl.value.height / 2,
+  }
+}
+
+// ── 변환 초기화 (확대/회전/이동 전부 reset) ──
+function resetTransform() {
+  zoom.value = 1
+  rotation.value = 0
+  panX.value = 0
+  panY.value = 0
 }
 
 // ── Alt 더블클릭: 위치 복귀 ──
 function onDblClick(e) {
-  if (e.altKey) {
-    zoom.value = 1; rotation.value = 0; panX.value = 0; panY.value = 0
-  }
+  if (e.altKey) resetTransform()
 }
 
 function saveMaskState() {
@@ -600,9 +621,9 @@ function loadMaskFromBase64(b64) {
 }
 
 // zoom/rotation 초기화
-function resetView() { zoom.value = 1; rotation.value = 0; panX.value = 0; panY.value = 0 }
+function resetView() { resetTransform() }  // 하위 호환 alias
 
-defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, loadEdgeMap, drawAll, resetView, undoMask, redoMask })
+defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, loadEdgeMap, drawAll, resetView, resetTransform, undoMask, redoMask })
 
 onMounted(() => {
   if (props.imageSrc) loadNewImage(props.imageSrc, false)

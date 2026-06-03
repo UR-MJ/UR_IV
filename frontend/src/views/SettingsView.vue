@@ -108,14 +108,41 @@
         <!-- 5. Shortcuts -->
         <div v-show="currentTab === 'shortcuts'" class="section-fade">
           <div class="glass-card">
-            <label>HOTKEYS</label>
+            <label>전역 단축키</label>
             <div class="shortcut-grid">
-              <div class="s-row"><span>Undo Action</span><kbd>Ctrl + Z</kbd></div>
-              <div class="s-row"><span>Redo Action</span><kbd>Ctrl + Y</kbd></div>
-              <div class="s-row"><span>Force Save</span><kbd>Ctrl + S</kbd></div>
-              <div class="s-row"><span>Generate</span><kbd>Ctrl + G</kbd></div>
-              <div class="s-row"><span>Close Modal</span><kbd>Esc</kbd></div>
-              <div class="s-row"><span>Refresh</span><kbd>F5</kbd></div>
+              <div class="s-row"><span>실행 취소</span><kbd>Ctrl + Z</kbd></div>
+              <div class="s-row"><span>다시 실행</span><kbd>Ctrl + Y</kbd></div>
+              <div class="s-row"><span>설정 저장</span><kbd>Ctrl + S</kbd></div>
+              <div class="s-row"><span>이미지 생성</span><kbd>Ctrl + G</kbd></div>
+              <div class="s-row"><span>모달 닫기</span><kbd>Esc</kbd></div>
+              <div class="s-row"><span>새로고침</span><kbd>F5</kbd></div>
+            </div>
+          </div>
+          <div class="glass-card mt-16">
+            <label>EDITOR 탭 단축키</label>
+            <div class="shortcut-grid">
+              <div class="s-row"><span>파일 열기</span><kbd>Ctrl + O</kbd></div>
+              <div class="s-row"><span>클립보드 붙여넣기</span><kbd>Ctrl + V</kbd></div>
+              <div class="s-row"><span>저장 (원본 덮어쓰기)</span><kbd>Ctrl + S</kbd></div>
+              <div class="s-row"><span>다른 이름으로 저장</span><kbd>Ctrl + Shift + S</kbd></div>
+              <div class="s-row"><span>편집 Undo</span><kbd>Ctrl + Z</kbd></div>
+              <div class="s-row"><span>편집 Redo</span><kbd>Ctrl + Y</kbd></div>
+              <div class="s-row"><span>선택 해제</span><kbd>Esc</kbd></div>
+              <div class="s-row"><span>이미지 확대/축소</span><kbd>마우스 휠</kbd></div>
+              <div class="s-row"><span>이미지 회전 (5°)</span><kbd>Shift + 휠</kbd></div>
+              <div class="s-row"><span>확대/회전/위치 초기화</span><kbd>Ctrl 빠르게 2회</kbd></div>
+              <div class="s-row"><span>화면 이동 (팬)</span><kbd>Alt + 드래그</kbd></div>
+              <div class="s-row"><span>변환 초기화 (대체)</span><kbd>Alt + 더블클릭</kbd></div>
+            </div>
+          </div>
+          <div class="glass-card mt-16">
+            <label>프롬프트 편집 단축키</label>
+            <div class="shortcut-grid">
+              <div class="s-row"><span>프롬프트 Undo</span><kbd>Ctrl + Z</kbd></div>
+              <div class="s-row"><span>프롬프트 Redo</span><kbd>Ctrl + Y / Ctrl + Shift + Z</kbd></div>
+              <div class="s-row"><span>자동완성 이동</span><kbd>↑ ↓</kbd></div>
+              <div class="s-row"><span>자동완성 선택</span><kbd>Tab / Enter</kbd></div>
+              <div class="s-row"><span>자동완성 닫기</span><kbd>Esc</kbd></div>
             </div>
           </div>
         </div>
@@ -165,6 +192,7 @@
             <div class="toggle-grid">
               <label class="toggle-row"><input type="checkbox" v-model="defaults.hires_enabled" /><span>Hires.fix 기본 활성화</span></label>
               <label class="toggle-row"><input type="checkbox" v-model="defaults.ad_enabled" /><span>ADetailer 기본 활성화</span></label>
+              <label class="toggle-row"><input type="checkbox" v-model="defaults.sam3_enabled" /><span>SAM3 기본 활성화</span></label>
               <label class="toggle-row"><input type="checkbox" v-model="defaults.negpip_enabled" /><span>NegPiP 기본 활성화</span></label>
             </div>
           </div>
@@ -341,18 +369,11 @@ const resetTabOrder = () => {
 const act = (name) => {
   // SAVE GLOBAL 시 localStorage 설정도 함께 저장
   if (name === 'save_settings') {
-    const stWidgets = useWidgetStore().widgets
     requestAction('save_ui_prefs', {
       tagBlockMode: defaultBlockMode.value,
       cleanDuplicates: cleanDuplicates.value,
       cleanSpaces: cleanSpaces.value,
       cleanUnderscore: cleanUnderscore.value,
-      // Hires/ADetailer/NegPiP 상태
-      hires_enabled: stWidgets.hires_options_group === 'true',
-      ad_enabled: stWidgets.adetailer_group === 'true',
-      ad_s1_enabled: stWidgets.ad_slot1_group === 'true',
-      ad_s2_enabled: stWidgets.ad_slot2_group === 'true',
-      negpip_enabled: stWidgets.negpip_group === 'true',
       galleryShowMetadata: galleryMetadata.value,
       tabOrder: tabOrder.value,
       // Ollama
@@ -364,7 +385,7 @@ const act = (name) => {
 }
 
 // 기본값 설정
-const FACTORY_DEFAULTS = { steps: 20, cfg: 7, width: 1024, height: 1024, seed: '-1', denoising: 0.75, sampler: '', scheduler: '', brushSize: 20, effectStrength: 15, yoloConf: 0.25, snapRadius: 12, defaultRating: 'g', hires_enabled: false, ad_enabled: false, negpip_enabled: false }
+const FACTORY_DEFAULTS = { steps: 20, cfg: 7, width: 1024, height: 1024, seed: '-1', denoising: 0.75, sampler: '', scheduler: '', brushSize: 20, effectStrength: 15, yoloConf: 0.25, snapRadius: 12, defaultRating: 'g', hires_enabled: false, ad_enabled: false, sam3_enabled: false, negpip_enabled: false }
 const defaults = reactive({ ...FACTORY_DEFAULTS })
 
 function saveDefaults() {
