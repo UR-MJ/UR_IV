@@ -1041,8 +1041,28 @@ class PngInfoTab(QWidget):
         """)
         self.btn_save_meta.clicked.connect(self._save_metadata)
 
+        # PR 5: 메타 이식 — 현재 이미지의 메타데이터를 다른 이미지에 박아 저장
+        self.btn_transplant_meta = QPushButton("🔀 이 메타 → 다른 이미지에 이식")
+        self.btn_transplant_meta.setFixedHeight(32)
+        self.btn_transplant_meta.setEnabled(False)
+        self.btn_transplant_meta.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #8B5CF6; color: white;
+                border-radius: 4px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: #9F75FF; }}
+            QPushButton:disabled {{ background-color: {get_color('bg_button')}; color: {get_color('text_muted')}; }}
+        """)
+        self.btn_transplant_meta.setToolTip(
+            "현재 이미지의 메타데이터(프롬프트/파라미터/ComfyUI workflow)를\n"
+            "다른 이미지에 박아서 PNG로 저장합니다.\n"
+            "원본 이미지의 픽셀은 그대로, 메타만 교체됩니다."
+        )
+        self.btn_transplant_meta.clicked.connect(self._transplant_metadata)
+
         edit_bar.addWidget(self.btn_edit_meta)
         edit_bar.addWidget(self.btn_save_meta)
+        edit_bar.addWidget(self.btn_transplant_meta)
         edit_bar.addStretch()
         right_layout.addLayout(edit_bar)
 
@@ -1086,6 +1106,9 @@ class PngInfoTab(QWidget):
 
     def process_image(self, path):
         self.current_image_path = path
+        # PR 5: 이미지가 로드되면 메타 이식 버튼 활성화 (실제 메타 유무는 클릭 시 검사)
+        if hasattr(self, 'btn_transplant_meta'):
+            self.btn_transplant_meta.setEnabled(True)
         pixmap = QPixmap(path)
         if not pixmap.isNull():
             self.image_label.setPixmap(
@@ -1888,3 +1911,72 @@ class PngInfoTab(QWidget):
             QMessageBox.information(self, "완료", "메타데이터가 저장되었습니다.")
         except Exception as e:
             QMessageBox.critical(self, "오류", f"메타데이터 저장 실패:\n{e}")
+
+    def _transplant_metadata(self):
+        """현재 이미지의 메타를 다른 이미지에 박아 새 PNG로 저장.
+
+        core/image_metadata.py의 transplant() 사용.
+        - 원본 이미지(self.current_image_path)의 메타만 추출
+        - 사용자가 선택한 대상 이미지의 픽셀 데이터는 그대로
+        - 결과는 새 PNG로 저장 (덮어쓰기 안 함)
+        """
+        if not self.current_image_path:
+            QMessageBox.warning(self, "오류", "먼저 이미지를 열어주세요.")
+            return
+
+        # 메타 확인
+        from core.image_metadata import extract_from_file, transplant
+        meta = extract_from_file(self.current_image_path)
+        if not meta.has_any():
+            QMessageBox.warning(
+                self, "메타 없음",
+                "현재 이미지에 추출 가능한 메타데이터가 없습니다.\n"
+                "WebUI Parameters / ComfyUI workflow 둘 다 못 찾음."
+            )
+            return
+
+        # 대상 이미지 선택
+        dst_path, _ = QFileDialog.getOpenFileName(
+            self, "메타를 이식할 대상 이미지 선택", "",
+            "Images (*.png *.jpg *.jpeg *.webp)"
+        )
+        if not dst_path:
+            return
+
+        # 출력 경로 선택 (기본: 대상 파일명 + _withmeta.png)
+        dst_dir = os.path.dirname(dst_path)
+        dst_base = os.path.splitext(os.path.basename(dst_path))[0]
+        suggest = os.path.join(dst_dir, f"{dst_base}_withmeta.png")
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "결과 PNG 저장 위치", suggest, "PNG (*.png)"
+        )
+        if not out_path:
+            return
+        if not out_path.lower().endswith(".png"):
+            out_path += ".png"
+
+        # ComfyUI workflow 포함 여부 (메타에 있을 때만 묻기)
+        include_workflow = True
+        if meta.workflow is not None or meta.prompt_graph is not None:
+            reply = QMessageBox.question(
+                self, "ComfyUI workflow 포함?",
+                "현재 이미지에 ComfyUI workflow가 포함돼 있습니다.\n"
+                "결과 이미지에도 함께 박을까요? (대상 이미지로 같은 워크플로우 재현 가능)",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            include_workflow = (reply == QMessageBox.StandardButton.Yes)
+
+        # 이식 실행
+        ok = transplant(self.current_image_path, dst_path, out_path,
+                        include_workflow=include_workflow)
+        if ok:
+            QMessageBox.information(
+                self, "완료",
+                f"메타 이식 완료:\n{os.path.basename(out_path)}\n\n"
+                f"소스: {os.path.basename(self.current_image_path)}\n"
+                f"대상: {os.path.basename(dst_path)}\n"
+                f"ComfyUI workflow: {'포함' if include_workflow else '제외'}"
+            )
+        else:
+            QMessageBox.critical(self, "오류", "메타 이식 실패. 로그를 확인하세요.")
