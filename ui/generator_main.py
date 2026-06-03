@@ -135,6 +135,14 @@ class GeneratorMainUI(
             #     queue_panel.queue_changed → V2.publish → 다른 모듈 구독 가능
             self._setup_queue_v2_bridge()
 
+            # 13. PR 1 — PromptPipeline 표준 훅 등록
+            #     기존 처리 뒤에 호출되어 비파괴적 — 회귀 위험 없음
+            try:
+                from core.standard_hooks import register_standard_hooks
+                register_standard_hooks()
+            except Exception as e:
+                print(f"[Warning] 표준 훅 등록 실패: {e}")
+
             print("[System] Engine Ready.")
 
         except Exception as e:
