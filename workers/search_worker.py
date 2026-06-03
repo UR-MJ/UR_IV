@@ -13,6 +13,7 @@ class PandasSearchWorker(QThread):
     REQUIRED_COLUMNS = ['copyright', 'character', 'artist', 'general', 'meta']
 
     cached_df = None
+    cached_col_lower = {}  # {col_name: lowercase Series} — rating 변경 시 무효화
     loaded_ratings = set()
 
     def __init__(self, parquet_dir, selected_ratings, queries, exclude_queries=None,
@@ -103,17 +104,38 @@ class PandasSearchWorker(QThread):
         - 'and': 콤마=AND (기존)
         - 'or':  콤마=OR (필드 내 콤마도 OR로 결합)
         명시적 [A|B], [A,B] 그룹은 모드와 무관하게 항상 OR/AND.
+
+        성능: col_lower 캐시 사용 — 같은 rating set 내에서 lowercase 재사용.
+        쿼리 1회당 ~수백ms (5M rows) 절약.
         """
         from core.tag_matcher import filter_dataframe
-        return filter_dataframe(df, col, query_text, default_combine=self.combine_mode)
+        col_lower = self._get_col_lower(df, col)
+        return filter_dataframe(df, col, query_text,
+                                default_combine=self.combine_mode,
+                                col_lower=col_lower)
+
+    @classmethod
+    def _get_col_lower(cls, df, col: str):
+        """lowercase Series 캐시 — 같은 rating set 내에서 재사용.
+        cached_df가 바뀌면 _load_data에서 cache가 clear됨.
+        """
+        if col in cls.cached_col_lower:
+            return cls.cached_col_lower[col]
+        if col not in df.columns:
+            return None
+        lower = df[col].fillna('').str.lower()
+        cls.cached_col_lower[col] = lower
+        return lower
 
     def _load_data(self):
         """선택된 등급의 Parquet 파일 로드"""
-        if (PandasSearchWorker.cached_df is not None and 
+        if (PandasSearchWorker.cached_df is not None and
             PandasSearchWorker.loaded_ratings == self.selected_ratings):
             return True
 
-        PandasSearchWorker.cached_df = None 
+        # rating set이 바뀌면 lowercase 캐시도 무효화
+        PandasSearchWorker.cached_df = None
+        PandasSearchWorker.cached_col_lower.clear()
         dfs = []
         
         for rating in self.selected_ratings:

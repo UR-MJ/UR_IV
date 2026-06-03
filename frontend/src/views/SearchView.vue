@@ -1,7 +1,30 @@
 <template>
   <div class="search-view">
+    <!-- 검색 결과 0건: 안내 + 메인으로 돌아가기 -->
+    <div v-if="results.length === 0 && !searching && hasSearched" class="no-results">
+      <div class="nr-icon">🔍</div>
+      <h2>검색 결과가 없습니다</h2>
+      <p class="nr-hint">
+        조건을 조금 더 느슨하게 하거나, <strong class="nr-accent">∪ OR 모드</strong>로 전환해보세요.<br>
+        정확 매칭(<code>*word</code>)을 풀거나 제외 검색을 비워보는 것도 도움이 됩니다.
+      </p>
+      <div class="nr-actions">
+        <button class="nr-btn primary" @click="hasSearched = false">
+          ← 검색 화면으로
+        </button>
+        <button class="nr-btn" v-if="combineMode === 'and'"
+          @click="combineMode = 'or'; search()">
+          ∪ OR 모드로 재검색
+        </button>
+      </div>
+      <div class="nr-summary" v-if="lastQuerySummary">
+        <span class="nr-label">방금 검색:</span>
+        <code>{{ lastQuerySummary }}</code>
+      </div>
+    </div>
+
     <!-- 검색 전: 중앙 검색 폼 -->
-    <div v-if="results.length === 0 && !searching" class="welcome">
+    <div v-else-if="results.length === 0 && !searching" class="welcome">
       <div class="ws-header">
         <div class="ws-icon">🔍</div>
         <h1>TAG EXPLORER</h1>
@@ -369,6 +392,11 @@ watch(sortDir, (v) => { try { localStorage.setItem('search.sortDir', v) } catch 
 //   OR  → 라이덴 쇼군이거나 원신 캐릭터 누구든
 const combineMode = ref(localStorage.getItem('search.combineMode') || 'and')
 watch(combineMode, (v) => { try { localStorage.setItem('search.combineMode', v) } catch {} })
+
+// 0건 결과 안내용 — 검색 한 번이라도 실행했는지
+const hasSearched = ref(false)
+// 마지막 쿼리 요약 (사용자가 무엇을 검색했는지 보여주기 위함)
+const lastQuerySummary = ref('')
 const PAGE_SIZE = 50
 const currentPage = ref(0)
 // 결과/필터/정렬이 바뀌면 1페이지로
@@ -444,6 +472,7 @@ function persistSearchFields() {
 async function search() {
   searching.value = true; statusText.value = 'EXPLORING...'
   searchProgress.value = 0
+  hasSearched.value = true  // 0건 UI 분기용
   progressTimer = setInterval(() => { if (searchProgress.value < 90) searchProgress.value += Math.random() * 12 }, 500)
   const backend = await getBackend()
   const query = {
@@ -452,6 +481,15 @@ async function search() {
     excludes: Object.fromEntries(fields.map(f => [f.key, f.exclude])),
     combine_mode: combineMode.value,  // 'and' | 'or' — 필드 간 결합 방식
   }
+  // 사용자에게 보여줄 쿼리 요약 (0건 시 활용)
+  const includeParts = fields
+    .filter(f => f.include?.trim())
+    .map(f => `${f.key}: ${f.include}`)
+  const excludeParts = fields
+    .filter(f => f.exclude?.trim())
+    .map(f => `~${f.key}: ${f.exclude}`)
+  const ratingSel = ratings.filter(r => r.checked).map(r => r.label).join('+') || 'no rating'
+  lastQuerySummary.value = `[${combineMode.value.toUpperCase()}] [${ratingSel}] ${[...includeParts, ...excludeParts].join(' / ') || '(빈 검색)'}`
   if (backend.searchDanbooru) backend.searchDanbooru(JSON.stringify(query))
 }
 
@@ -870,6 +908,58 @@ function importResults() { requestAction('import_search_results') }
 
 .hints { display: flex; gap: 14px; }
 .hints span { font-size: 10px; color: var(--text-muted); background: var(--bg-card); padding: 4px 12px; border-radius: 4px; }
+
+/* ═══ No Results ═══ */
+.no-results {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 40px; gap: 16px; text-align: center;
+}
+.nr-icon { font-size: 64px; opacity: 0.3; filter: grayscale(0.5); }
+.no-results h2 {
+  color: var(--text-primary); font-size: 22px;
+  font-weight: 800; letter-spacing: 1px;
+}
+.nr-hint {
+  color: var(--text-muted); font-size: 13px; line-height: 1.7;
+  max-width: 520px;
+}
+.nr-hint strong.nr-accent { color: var(--accent); font-weight: 900; }
+.nr-hint code {
+  background: var(--bg-card); padding: 2px 6px;
+  border-radius: 4px; color: var(--accent);
+  font-family: 'Consolas', monospace; font-size: 12px;
+}
+.nr-actions { display: flex; gap: 10px; margin-top: 8px; }
+.nr-btn {
+  padding: 10px 22px; background: var(--bg-button);
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+  color: var(--text-secondary); font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+}
+.nr-btn:hover {
+  background: var(--bg-card); color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+.nr-btn.primary {
+  background: var(--accent); color: #000; border-color: var(--accent);
+}
+.nr-btn.primary:hover {
+  background: var(--accent-hover); transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(250, 204, 21, 0.25);
+}
+.nr-summary {
+  margin-top: 12px; padding: 10px 16px;
+  background: var(--bg-card); border-radius: 8px;
+  display: flex; align-items: center; gap: 10px;
+  max-width: 80%; overflow-x: auto;
+}
+.nr-label { font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; }
+.nr-summary code {
+  font-family: 'Consolas', monospace; font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
 
 /* ═══ Loading ═══ */
 .loading { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }

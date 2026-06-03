@@ -122,8 +122,30 @@ def match_query(query: str, tag_text: str) -> bool:
     return True
 
 
+def _eval_condition(col_lower: pd.Series, cond: dict, index) -> pd.Series:
+    """단일 조건(dict)을 평가하여 Boolean mask 반환.
+    cond['type']: 'or' | 'and' | 'single'
+    """
+    if cond['type'] == 'or':
+        # [A|B] — 명시적 OR
+        cm = pd.Series(False, index=index)
+        for term in cond['terms']:
+            cm |= _apply_pattern(col_lower, term)
+        return cm
+    elif cond['type'] == 'and':
+        # [A,B] — 명시적 AND 그룹
+        cm = pd.Series(True, index=index)
+        for term in cond['terms']:
+            cm &= _apply_pattern(col_lower, term)
+        return cm
+    else:
+        # single — bare 콤마 토큰
+        return _apply_pattern(col_lower, cond['terms'][0])
+
+
 def filter_dataframe(df: pd.DataFrame, col: str, query: str,
-                     default_combine: str = 'and') -> pd.Series:
+                     default_combine: str = 'and',
+                     col_lower: pd.Series = None) -> pd.Series:
     """DataFrame에 쿼리를 적용하여 Boolean mask 반환
 
     :param df: DataFrame
@@ -133,44 +155,32 @@ def filter_dataframe(df: pd.DataFrame, col: str, query: str,
         - 명시적 대괄호 그룹은 모드 무관:
           [A|B] → 항상 OR, [A,B] → 항상 AND
         - bare 콤마(대괄호 밖) 토큰 결합 방식만 모드에 따라 변경
+    :param col_lower: 미리 lowercase한 시리즈 (성능 최적화용).
+        넘기면 .str.lower() 호출 생략. None이면 내부에서 계산.
+
+    구현: 누적식 평가 (마스크를 한 번에 들고 다니지 않음).
+      AND 모드: True에서 시작해 &= 누적 → short-circuit 비슷한 효과
+      OR  모드: False에서 시작해 |= 누적
     """
     conditions = parse_query(query)
     if not conditions:
         return pd.Series(True, index=df.index)
 
-    col_lower = df[col].fillna('').str.lower()
+    if col_lower is None:
+        col_lower = df[col].fillna('').str.lower()
     use_or = (str(default_combine).lower() == 'or')
 
-    # 각 condition을 개별 마스크로 평가 → 마지막에 모드대로 결합
-    cond_masks = []
-    for cond in conditions:
-        if cond['type'] == 'or':
-            # [A|B] — 명시적 OR (모드 무관)
-            cm = pd.Series(False, index=df.index)
-            for term in cond['terms']:
-                cm |= _apply_pattern(col_lower, term)
-            cond_masks.append(cm)
-        elif cond['type'] == 'and':
-            # [A,B] — 명시적 AND 그룹 (모드 무관, 그룹 내부는 항상 AND)
-            cm = pd.Series(True, index=df.index)
-            for term in cond['terms']:
-                cm &= _apply_pattern(col_lower, term)
-            cond_masks.append(cm)
-        else:
-            # single — bare 콤마 토큰, 결합 방식은 default_combine에 따라
-            cond_masks.append(_apply_pattern(col_lower, cond['terms'][0]))
-
     if use_or:
-        # OR 모드: 콤마/그룹들을 모두 OR로 결합
+        # OR 모드: False에서 시작해 누적 |=
         result = pd.Series(False, index=df.index)
-        for cm in cond_masks:
-            result |= cm
+        for cond in conditions:
+            result |= _eval_condition(col_lower, cond, df.index)
         return result
     else:
-        # AND 모드 (기존): 콤마/그룹들을 모두 AND로 결합
+        # AND 모드: True에서 시작해 누적 &= (기존과 동일한 메모리 패턴)
         result = pd.Series(True, index=df.index)
-        for cm in cond_masks:
-            result &= cm
+        for cond in conditions:
+            result &= _eval_condition(col_lower, cond, df.index)
         return result
 
 
