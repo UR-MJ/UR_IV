@@ -743,6 +743,14 @@ class GenerationMixin:
         if not widgets:
             return None
 
+        # SAM3 sampler/scheduler 결정 — 사용자 기대대로:
+        # '별도 Sampler' 체크박스가 켜져있어도 콤보가 'Use same X'면
+        # use_sampler=False로 강제하여 base의 ER SDE/Beta57 등이 유지되게.
+        _sampler_v = _widget_text(widgets['sampler'], 'Use same sampler')
+        _scheduler_v = _widget_text(widgets['scheduler'], 'Use same scheduler')
+        _use_ss = (widgets['use_sampler_check'].isChecked()
+                   and _sampler_v != 'Use same sampler')
+
         _txt, _float, _int = _widget_text, _widget_float, _widget_int
 
         detect_prompt = _txt(widgets['detect_prompt'], 'face').strip() or 'face'
@@ -766,9 +774,10 @@ class GenerationMixin:
             "sam3_steps": _int(widgets['steps'], 28),
             "sam3_use_cfg_scale": widgets['use_cfg_check'].isChecked(),
             "sam3_cfg_scale": _float(widgets['cfg'], 7.0),
-            "sam3_use_sampler": widgets['use_sampler_check'].isChecked(),
-            "sam3_sampler": _txt(widgets['sampler'], 'Use same sampler'),
-            "sam3_scheduler": _txt(widgets['scheduler'], 'Use same scheduler'),
+            # 위에서 미리 계산한 _use_ss / _sampler_v / _scheduler_v 사용
+            "sam3_use_sampler": _use_ss,
+            "sam3_sampler": _sampler_v if _use_ss else 'Use same sampler',
+            "sam3_scheduler": _scheduler_v if _use_ss else 'Use same scheduler',
             "sam3_use_noise_multiplier": widgets['use_noise_multiplier_check'].isChecked(),
             "sam3_noise_multiplier": _float(widgets['noise_multiplier'], 1.0),
             "sam3_restore_face": widgets['restore_face'].isChecked(),

@@ -350,12 +350,18 @@
               <div class="ext-row" v-if="storeWidgets._sam3_use_cfg === 'true'">
                 <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets._sam3_cfg" step="0.5" /></div>
               </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_sampler" true-value="true" false-value="false" /><span>별도 Sampler</span></label>
+              <label class="ext-check-row" title="OFF면 base 생성과 동일한 sampler/scheduler 사용&#10;ON이고 콤보가 'Use same ...' 이외 값이면 SAM3 단계에서 override">
+                <input type="checkbox" v-model="storeWidgets._sam3_use_sampler" true-value="true" false-value="false" />
+                <span>별도 Sampler/Scheduler</span>
+              </label>
               <div class="ext-row" v-if="storeWidgets._sam3_use_sampler === 'true'">
                 <div class="ext-field"><label>Sampler</label>
                   <CustomSelect v-model="storeWidgets._sam3_sampler" :options="['Use same sampler', ...samplerItems]" placeholder="Use same sampler" /></div>
                 <div class="ext-field"><label>Scheduler</label>
                   <CustomSelect v-model="storeWidgets._sam3_scheduler" :options="['Use same scheduler', ...schedulerItems]" placeholder="Use same scheduler" /></div>
+                <div class="ext-note" v-if="storeWidgets._sam3_sampler === 'Use same sampler' || !storeWidgets._sam3_sampler">
+                  💡 'Use same sampler' 선택 시 base의 sampler·scheduler 유지됨
+                </div>
               </div>
               <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_noise_mul" true-value="true" false-value="false" /><span>Noise Multiplier</span></label>
               <div class="ext-row" v-if="storeWidgets._sam3_use_noise_mul === 'true'">
