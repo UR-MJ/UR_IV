@@ -476,15 +476,23 @@ let progressTimer = null
 const currentResult = computed(() => filteredResults.value[previewIdx.value] || null)
 const currentTags = computed(() => (currentResult.value?.general || '').split(',').map(t => t.trim()).filter(Boolean).map(t => t.replace(/_/g, ' ')))
 
+// 검색 입력 영속 — localStorage는 sync (앱 빨리 닫혀도 안 잃어버림)
+// 백엔드 ui_prefs.json 쓰기는 디바운스 (키스트로크마다 파일 쓰지 않게)
+let _persistBackendTimer = null
 function persistSearchFields() {
   const payload = {
     fields: fields.map(f => ({ include: f.include, exclude: f.exclude })),
     ratings: ratings.map(r => ({ key: r.key, checked: r.checked })),
+    combineMode: combineMode.value,
+    datasetYear: datasetYear.value,
   }
-  try {
-    window.localStorage.setItem('lastSearchFields', JSON.stringify(payload))
-  } catch {}
-  requestAction('save_ui_prefs', { searchState: payload })
+  // ① localStorage 즉시 저장 — 한 글자 입력 후 바로 닫아도 보존
+  try { window.localStorage.setItem('lastSearchFields', JSON.stringify(payload)) } catch {}
+  // ② 백엔드 ui_prefs 쓰기는 600ms 디바운스 — 파일 IO 줄이기
+  if (_persistBackendTimer) clearTimeout(_persistBackendTimer)
+  _persistBackendTimer = setTimeout(() => {
+    requestAction('save_ui_prefs', { searchState: payload })
+  }, 600)
 }
 
 async function search() {
@@ -534,6 +542,9 @@ function restoreAndRandom() {
   statusText.value = `${lastResults.value.length} MATCHES (랜덤)`
 }
 
+// localStorage가 진실의 원천 — 복원 여부 추적해서 uiPrefsLoaded 덮어쓰기 방지
+let _restoredFromLocalStorage = false
+
 onMounted(() => {
   // 이전 검색 입력 필드 복원
   try {
@@ -542,6 +553,9 @@ onMounted(() => {
       const d = JSON.parse(sf)
       if (d.fields) d.fields.forEach((f, i) => { if (fields[i]) { fields[i].include = f.include || ''; fields[i].exclude = f.exclude || '' } })
       if (d.ratings) d.ratings.forEach(r => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = r.checked })
+      if (d.combineMode && (d.combineMode === 'and' || d.combineMode === 'or')) combineMode.value = d.combineMode
+      if (d.datasetYear && AVAILABLE_YEARS.includes(d.datasetYear)) datasetYear.value = d.datasetYear
+      _restoredFromLocalStorage = true
     }
   } catch {}
   // 이전 검색 결과 복원
@@ -583,6 +597,9 @@ onMounted(() => {
   })
   onBackendEvent('searchStatus', (msg) => { statusText.value = msg.toUpperCase() })
   onBackendEvent('uiPrefsLoaded', (json) => {
+    // localStorage에서 이미 복원했으면 ui_prefs는 무시 — localStorage가 더 최신/신뢰
+    // (백엔드 ui_prefs.json 쓰기는 디바운스라 사용자가 빨리 닫으면 옛 값일 수 있음)
+    if (_restoredFromLocalStorage) return
     try {
       const prefs = JSON.parse(json)
       const state = prefs.searchState
@@ -616,6 +633,9 @@ onMounted(() => {
 
 watch(fields, persistSearchFields, { deep: true })
 watch(ratings, persistSearchFields, { deep: true })
+// 모드/년도 토글도 통합 payload에 자동 반영 (개별 키와 별개로 묶음 백업)
+watch(combineMode, persistSearchFields)
+watch(datasetYear, persistSearchFields)
 
 function applyDeepSearch() {
   const inc = deepInclude.value.toLowerCase().trim()

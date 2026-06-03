@@ -654,22 +654,60 @@ class VueBridge(QObject):
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
 
     def _on_search_results(self, results, total_count):
-        """검색 결과 수신 → Vue 전달 + Python filtered_results 업데이트"""
+        """검색 결과 수신 → Vue 전달 + Python filtered_results 업데이트
+
+        BUG FIX: search_worker는 to_dict('records')로 list[dict]를 emit하지만
+        과거 코드가 DataFrame 가정으로 hasattr(iterrows)만 체크 → list 무시 → 0건.
+        list / DataFrame 양쪽 지원 + 컬럼명도 두 스키마 (tag_string_* / *) 호환.
+        """
         try:
             import random as _rnd
             out = []
-            if hasattr(results, 'iterrows'):
+
+            def _pick(row, primary, alt):
+                """tag_string_X 우선, 없으면 X — 양쪽 parquet 스키마 호환"""
+                v = row.get(primary)
+                if v is None or v == '':
+                    v = row.get(alt, '')
+                return str(v) if v is not None else ''
+
+            if isinstance(results, list):
+                # 새 형식 (현재): list of dicts
+                for row in results:
+                    out.append({
+                        'copyright': _pick(row, 'tag_string_copyright', 'copyright'),
+                        'character': _pick(row, 'tag_string_character', 'character'),
+                        'artist':    _pick(row, 'tag_string_artist',    'artist'),
+                        'general':   _pick(row, 'tag_string_general',   'general'),
+                        'rating':    str(row.get('rating') or ''),
+                    })
+            elif hasattr(results, 'iterrows'):
+                # 옛 형식 fallback: DataFrame
                 for _, row in results.iterrows():
                     out.append({
-                        'copyright': str(row.get('tag_string_copyright', '')),
-                        'character': str(row.get('tag_string_character', '')),
-                        'artist': str(row.get('tag_string_artist', '')),
-                        'general': str(row.get('tag_string_general', '')),
-                        'rating': str(row.get('rating', '')),
+                        'copyright': _pick(row, 'tag_string_copyright', 'copyright'),
+                        'character': _pick(row, 'tag_string_character', 'character'),
+                        'artist':    _pick(row, 'tag_string_artist',    'artist'),
+                        'general':   _pick(row, 'tag_string_general',   'general'),
+                        'rating':    str(row.get('rating') or ''),
                     })
+            else:
+                print(f"[Search] _on_search_results: unknown type {type(results)}")
+
+            print(f"[Search] _on_search_results: built {len(out):,} dicts from {type(results).__name__}")
+
+            # 큰 결과셋 안전장치 — Vue에 너무 많이 보내면 JSON 직렬화/전송이 느려짐
+            # 50만 건 초과 시 cap (UI 페이지네이션은 어차피 50개/페이지)
+            MAX_RESULTS_TO_VUE = 500_000
+            if len(out) > MAX_RESULTS_TO_VUE:
+                print(f"[Search] capping {len(out):,} → {MAX_RESULTS_TO_VUE:,} (UI 부하 방지)")
+                # 무작위 샘플링 (앞부분만 보내면 편향됨)
+                _rnd.shuffle(out)
+                out = out[:MAX_RESULTS_TO_VUE]
+
             # Vue로 전달
             self.searchResultsReady.emit(json.dumps(out))
-            self.searchStatus.emit(f'{len(out)}개 결과 (전체 {total_count}개)')
+            self.searchStatus.emit(f'{len(out):,}개 결과 (전체 {total_count:,}개)')
 
             # Python 메인 윈도우의 filtered_results도 업데이트 (랜덤 프롬프트용)
             main_win = self.parent()
