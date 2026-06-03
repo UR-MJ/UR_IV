@@ -11,6 +11,7 @@ YOLO가 찾은 bbox를 SAM에 전달하여 픽셀 단위 마스크 생성
 editor_models/ 디렉토리에 모델 파일을 넣으면 자동 감지
 """
 import os
+import re
 import numpy as np
 import cv2
 
@@ -462,60 +463,90 @@ def _refine_with_sam3(image: np.ndarray, boxes: list, model_path: str,
     # ── 제외 프롬프트 처리 ──
     # 사용자가 'face' 같은 텍스트로 마스크에서 빼고 싶은 영역을 지정한 경우
     # SAM3를 한 번 더 돌려 해당 영역 검출 → mask에서 0으로 빼기
+    #
+    # Forge SAM3와 동일하게 콤마/세미콜론/파이프로 토큰 분할 → 각각 별도 패스
+    # (SAM3 set_text_prompt는 단일 개념에 최적화되어 있어 다중 토큰은 결과가 불안)
+    #
+    # 안전장치: 제외가 main mask의 80% 이상을 지워버리면 의도와 다를 가능성이
+    # 매우 높으므로 적용을 취소 (mask 보존). 그렇지 않으면 vue_bridge에서
+    # sam_mask.any()가 False가 되어 YOLO bbox로 폴백되어버림 — 사용자가
+    # "exclude 넣으니까 bbox만 나옴" 증상을 보게 됨.
     if exclude_prompt and exclude_prompt.strip():
         excl_text = exclude_prompt.strip()
-        try:
-            print(f"[SAM3] running exclude pass: '{excl_text}'")
-            if device == 'cuda':
-                with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-                    excl_state = processor.set_image(pil)
-                    excl_state = processor.set_text_prompt(prompt=excl_text, state=excl_state)
-            else:
-                excl_state = processor.set_image(pil)
-                excl_state = processor.set_text_prompt(prompt=excl_text, state=excl_state)
+        excl_tokens = [t.strip() for t in re.split(r'[,;|\n]', excl_text) if t.strip()]
+        if not excl_tokens:
+            excl_tokens = [excl_text]
+        print(f"[SAM3] exclude tokens ({len(excl_tokens)}): {excl_tokens}")
 
-            excl_arr = excl_state.get('masks', None) if isinstance(excl_state, dict) else None
-            if excl_arr is None:
-                print(f"[SAM3] exclude '{excl_text}': no masks returned")
-            else:
+        excl_union = np.zeros((h, w), dtype=bool)
+        total_n = 0
+
+        for tok in excl_tokens:
+            try:
+                if device == 'cuda':
+                    with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                        excl_state = processor.set_image(pil)
+                        excl_state = processor.set_text_prompt(prompt=tok, state=excl_state)
+                else:
+                    excl_state = processor.set_image(pil)
+                    excl_state = processor.set_text_prompt(prompt=tok, state=excl_state)
+
+                excl_arr = excl_state.get('masks', None) if isinstance(excl_state, dict) else None
+                if excl_arr is None:
+                    print(f"[SAM3]   exclude '{tok}': no masks returned")
+                    continue
                 if hasattr(excl_arr, 'detach'):
                     excl_arr = excl_arr.detach().float().cpu().numpy()
                 excl_arr = np.asarray(excl_arr)
                 if excl_arr.size == 0:
-                    print(f"[SAM3] exclude '{excl_text}': no detections")
+                    print(f"[SAM3]   exclude '{tok}': no detections")
+                    continue
+                if excl_arr.ndim == 2:
+                    excl_arr = excl_arr[None, ...]
+                elif excl_arr.ndim > 3:
+                    excl_arr = excl_arr.reshape((-1, excl_arr.shape[-2], excl_arr.shape[-1]))
+
+                n_here = 0
+                for em in excl_arr:
+                    if em.shape != (h, w):
+                        em = cv2.resize(em.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
+                    em_bool = (em > 0.5)
+                    if em_bool.any():
+                        excl_union |= em_bool
+                        n_here += 1
+                total_n += n_here
+                print(f"[SAM3]   exclude '{tok}': {n_here} masks ({int(excl_union.sum())} cum px)")
+            except Exception as e:
+                import traceback
+                print(f"[SAM3]   exclude '{tok}' failed: {e}")
+                traceback.print_exc()
+                continue  # 다음 토큰 시도 — 한 토큰 실패가 main 패스 결과를 망치지 않게
+
+        if total_n > 0:
+            # 검출 누락 보강용 1px dilation
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            excl_u8 = excl_union.astype(np.uint8) * 255
+            excl_u8 = cv2.dilate(excl_u8, kernel, iterations=1)
+            excl_bool = excl_u8 > 0
+
+            before_px = int((mask > 0).sum())
+            if before_px == 0:
+                print(f"[SAM3] exclude '{excl_text}': main mask가 비어있음 — skip")
+            else:
+                overlap_px = int(((mask > 0) & excl_bool).sum())
+                kill_ratio = overlap_px / before_px
+                # 80% 이상 지워버리면 의도와 다를 가능성 — 적용 취소
+                if kill_ratio > 0.8:
+                    print(f"[SAM3] exclude '{excl_text}' would remove "
+                          f"{overlap_px}/{before_px} px ({kill_ratio*100:.1f}%) "
+                          f"— main mask 거의 전체 — 적용 취소 (의도와 다를 가능성 높음)")
                 else:
-                    if excl_arr.ndim == 2:
-                        excl_arr = excl_arr[None, ...]
-                    elif excl_arr.ndim > 3:
-                        excl_arr = excl_arr.reshape((-1, excl_arr.shape[-2], excl_arr.shape[-1]))
-
-                    excl_union = np.zeros((h, w), dtype=bool)
-                    n_excl = 0
-                    for em in excl_arr:
-                        if em.shape != (h, w):
-                            em = cv2.resize(em.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
-                        em_bool = (em > 0.5)
-                        if em_bool.any():
-                            excl_union |= em_bool
-                            n_excl += 1
-
-                    if n_excl > 0:
-                        # 마스크에서 제외 영역 잘라내기 + 가장자리 약간 부드럽게 (얇은 erosion으로 확장)
-                        # 검출 누락 보강용 1px dilation
-                        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-                        excl_u8 = excl_union.astype(np.uint8) * 255
-                        excl_u8 = cv2.dilate(excl_u8, kernel, iterations=1)
-                        excl_bool = excl_u8 > 0
-                        before_px = int((mask > 0).sum())
-                        mask[excl_bool] = 0
-                        after_px = int((mask > 0).sum())
-                        print(f"[SAM3] excluded '{excl_text}': {n_excl} masks, "
-                              f"removed {before_px - after_px} px from final mask")
-                    else:
-                        print(f"[SAM3] exclude '{excl_text}': all masks empty")
-        except Exception as e:
-            import traceback
-            print(f"[SAM3] exclude prompt '{excl_text}' processing failed: {e}")
-            traceback.print_exc()
+                    mask[excl_bool] = 0
+                    after_px = int((mask > 0).sum())
+                    print(f"[SAM3] excluded '{excl_text}': {total_n} masks total, "
+                          f"removed {before_px - after_px} px "
+                          f"({(before_px - after_px) / max(before_px, 1) * 100:.1f}% of main mask)")
+        else:
+            print(f"[SAM3] exclude '{excl_text}': 모든 토큰이 검출 없음 — main mask 유지")
 
     return mask
