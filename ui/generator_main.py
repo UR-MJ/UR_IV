@@ -66,6 +66,14 @@ class GeneratorMainUI(
             self.generation_data = {}
             self.filtered_results = []
 
+            # 1-A. UI 상태 영속화 매니저 — 창 크기/위치 자동 저장/복원
+            from pathlib import Path
+            from core.ui_state_manager import UIStateManager
+            _save_dir = Path(__file__).resolve().parent.parent / "save"
+            _save_dir.mkdir(exist_ok=True)
+            self.ui_state = UIStateManager(_save_dir / "ui_state.json")
+            self._register_ui_state_handlers()
+
             # 2. 아이콘 설정
             from PyQt6.QtGui import QIcon
             icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icons', 'app_icon.svg')
@@ -110,6 +118,11 @@ class GeneratorMainUI(
 
             # 9. 조건식 + 기본값 로드
             QTimer.singleShot(1000, self._load_saved_configs)
+
+            # 10. UI 상태 복원 (150ms 지연 — 위젯 레이아웃 자리 잡은 후)
+            #     showMaximized() 등 다른 main의 호출과 충돌 회피 위해 약간 더 늦춤
+            QTimer.singleShot(200, lambda: self.ui_state.restore_all_delayed(150))
+
             print("[System] Engine Ready.")
 
         except Exception as e:
@@ -146,10 +159,29 @@ class GeneratorMainUI(
                 if hasattr(self, '_main_stack'): self._main_stack.setCurrentIndex(idx)
                 self.show_status(f"Workspace Switched: {tab_id}")
 
+            elif action == 'vue_tab_switch':
+                # Vue SPA 내부 탭(T2I/I2I/Inpaint/Search 등) 전환 알림.
+                # 라우팅 자체는 Vue Router가 처리하므로 Python은 스택을 SPA(0)로
+                # 맞추고 tabChanged 시그널만 전달한다.
+                tab_id = payload.get('tab', 't2i')
+                if hasattr(self, '_main_stack'):
+                    self._main_stack.setCurrentIndex(0)
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.tabChanged.emit(tab_id)
+                self.show_status(f"Tab: {tab_id}")
+
             # 2. 이미지 생성 엔진
             elif action == 'generate':
                 # Vue 데이터가 Store를 통해 Proxy에 이미 동기화되어 있어야 함
                 self.on_generate_clicked()
+
+            elif action == 'cancel_generation':
+                worker = getattr(self, 'gen_worker', None)
+                if worker is not None and hasattr(worker, 'cancel') and worker.isRunning():
+                    worker.cancel()
+                    self.show_status("생성 취소 요청")
+                else:
+                    self.show_status("취소할 생성이 없습니다")
 
             # 3. 탭 간 데이터 전송 (이미지 & 프롬프트)
             elif action in ('send_to_i2i', 'send_to_inpaint', 'send_to_editor'):
@@ -325,6 +357,10 @@ class GeneratorMainUI(
                 self._run_adetailer_single(payload)
             elif action == 'run_adetailer_batch':
                 self._run_adetailer_batch(payload)
+            elif action == 'run_sam3_single':
+                self._run_sam3_single(payload)
+            elif action == 'run_sam3_batch':
+                self._run_sam3_batch(payload)
             elif action == 'open_ad_files':
                 paths, _ = QFileDialog.getOpenFileNames(self, "ADetailer 이미지 선택", "",
                     "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)")
@@ -844,17 +880,21 @@ class GeneratorMainUI(
             # ═══════ UI 설정 저장 ═══════
             elif action == 'save_ui_prefs':
                 try:
+                    from core.config_migration import load_ui_prefs, save_ui_prefs
                     prefs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ui_prefs.json')
-                    os.makedirs(os.path.dirname(prefs_path), exist_ok=True)
-                    prefs = {}
-                    if os.path.exists(prefs_path):
-                        with open(prefs_path, 'r', encoding='utf-8') as f:
-                            loaded = json.load(f)
-                            if isinstance(loaded, dict):
-                                prefs = loaded
+                    prefs = load_ui_prefs(prefs_path)
+                    for legacy_key in (
+                        'hires_enabled',
+                        'ad_enabled',
+                        'sam3_enabled',
+                        'ad_s1_enabled',
+                        'ad_s2_enabled',
+                        'negpip_enabled',
+                    ):
+                        prefs.pop(legacy_key, None)
+                        payload.pop(legacy_key, None)
                     prefs.update(payload)
-                    with open(prefs_path, 'w', encoding='utf-8') as f:
-                        json.dump(prefs, f, ensure_ascii=False, indent=2)
+                    save_ui_prefs(prefs_path, prefs)
                     # 재전송 하지 않음 — uiPrefsLoaded는 앱 시작 시에만 emit
                     # 재전송하면 watch → save → emit → watch 무한 루프 발생
                 except Exception as e:
@@ -951,15 +991,20 @@ class GeneratorMainUI(
             if os.path.exists(defaults_path):
                 with open(defaults_path, 'r', encoding='utf-8') as f:
                     defaults = json.load(f)
-                # 확장 기본값을 proxy에 직접 적용
-                if defaults.get('hires_enabled'):
-                    self.hires_options_group.setChecked(True)
-                if defaults.get('ad_enabled'):
-                    self.adetailer_group.setChecked(True)
-                if defaults.get('ad_s1_enabled') and hasattr(self, 'ad_slot1_group'):
-                    self.ad_slot1_group.setChecked(True)
-                if defaults.get('negpip_enabled'):
-                    self.negpip_group.setChecked(True)
+                from config import PROMPT_SETTINGS_FILE
+                if not os.path.exists(PROMPT_SETTINGS_FILE):
+                    if 'hires_enabled' in defaults:
+                        self.hires_options_group.setChecked(bool(defaults.get('hires_enabled')))
+                    if 'ad_enabled' in defaults:
+                        self.adetailer_group.setChecked(bool(defaults.get('ad_enabled')))
+                    if 'sam3_enabled' in defaults and hasattr(self, 'sam3_group'):
+                        self.sam3_group.setChecked(bool(defaults.get('sam3_enabled')))
+                    if 'ad_s1_enabled' in defaults and hasattr(self, 'ad_slot1_group'):
+                        self.ad_slot1_group.setChecked(bool(defaults.get('ad_s1_enabled')))
+                    if 'ad_s2_enabled' in defaults and hasattr(self, 'ad_slot2_group'):
+                        self.ad_slot2_group.setChecked(bool(defaults.get('ad_s2_enabled')))
+                    if 'negpip_enabled' in defaults:
+                        self.negpip_group.setChecked(bool(defaults.get('negpip_enabled')))
                 print(f"[Config] Tab defaults loaded + extensions applied")
         except Exception as e:
             print(f"[Config] Failed to load defaults: {e}")
@@ -974,12 +1019,11 @@ class GeneratorMainUI(
         except Exception as e:
             print(f"[Config] Failed to load weights: {e}")
         try:
+            from core.config_migration import load_ui_prefs
             prefs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ui_prefs.json')
-            if os.path.exists(prefs_path):
-                with open(prefs_path, 'r', encoding='utf-8') as f:
-                    prefs = json.load(f)
-                if hasattr(self, 'vue_bridge'):
-                    self.vue_bridge.uiPrefsLoaded.emit(json.dumps(prefs))
+            prefs = load_ui_prefs(prefs_path)
+            if prefs and hasattr(self, 'vue_bridge'):
+                self.vue_bridge.uiPrefsLoaded.emit(json.dumps(prefs))
                 print(f"[Config] UI prefs loaded")
         except Exception as e:
             print(f"[Config] Failed to load UI prefs: {e}")
@@ -1405,9 +1449,98 @@ class GeneratorMainUI(
         self._ad_batch_worker.start()
         self.vue_bridge.showNotification.emit('info', f'ADetailer 배치 시작 ({len(paths)}장)')
 
+    def _run_sam3_single(self, payload):
+        """단일 이미지에 SAM3 적용"""
+        from workers.sam3_worker import Sam3SingleWorker
+        path = payload.get('path', '')
+        settings = payload.get('settings', {})
+        if not path:
+            self.vue_bridge.showNotification.emit('error', '이미지 경로가 없습니다')
+            return
+        self._sam3_worker = Sam3SingleWorker(path, settings, self)
+        self._sam3_worker.finished.connect(lambda r: self.vue_bridge.sam3Result.emit(r))
+        self._sam3_worker.start()
+        self.vue_bridge.showNotification.emit('info', 'SAM3 처리 중...')
+
+    def _run_sam3_batch(self, payload):
+        """배치 이미지에 SAM3 적용"""
+        from workers.sam3_worker import Sam3BatchWorker
+        paths = payload.get('paths', [])
+        settings = payload.get('settings', {})
+        if not paths:
+            self.vue_bridge.showNotification.emit('error', '이미지가 없습니다')
+            return
+        self._sam3_batch_worker = Sam3BatchWorker(paths, settings, self)
+        self._sam3_batch_worker.progress.connect(
+            lambda cur, tot: self.vue_bridge.sam3Progress.emit(cur, tot))
+        self._sam3_batch_worker.single_done.connect(
+            lambda r: self.vue_bridge.sam3Result.emit(r))
+        self._sam3_batch_worker.all_done.connect(
+            lambda: self.vue_bridge.showNotification.emit('success', f'SAM3 배치 완료 ({len(paths)}장)'))
+        self._sam3_batch_worker.start()
+        self.vue_bridge.showNotification.emit('info', f'SAM3 배치 시작 ({len(paths)}장)')
+
+    def _register_ui_state_handlers(self) -> None:
+        """UIStateManager에 메인 윈도우 기하/상태 등록.
+
+        다른 모듈(스플리터 등)이 자기 상태를 더 등록할 수 있음 — register는 멱등.
+        """
+        def _get_main_geometry() -> dict:
+            return {
+                "x": self.x(),
+                "y": self.y(),
+                "width": self.width(),
+                "height": self.height(),
+                "maximized": self.isMaximized(),
+                "full_screen": self.isFullScreen(),
+            }
+
+        def _set_main_geometry(state: dict) -> None:
+            # 풀스크린 / 최대화는 별도 처리
+            if not isinstance(state, dict):
+                return
+            try:
+                # 먼저 위치/크기 적용 — 화면 밖으로 나가지 않게 보정
+                w = max(int(state.get("width", self.width())), 600)
+                h = max(int(state.get("height", self.height())), 400)
+                x = int(state.get("x", self.x()))
+                y = int(state.get("y", self.y()))
+
+                # 화면 영역 안인지 확인 (멀티모니터 환경에서 모니터 분리됐을 경우)
+                from PyQt6.QtGui import QGuiApplication
+                screens = QGuiApplication.screens()
+                if screens:
+                    in_any = False
+                    for sc in screens:
+                        g = sc.availableGeometry()
+                        if g.contains(x + 50, y + 50):  # 일부라도 화면 안이면 OK
+                            in_any = True
+                            break
+                    if not in_any:
+                        # 안 보이면 primary 화면 중앙으로
+                        pg = QGuiApplication.primaryScreen().availableGeometry()
+                        x = pg.x() + (pg.width() - w) // 2
+                        y = pg.y() + (pg.height() - h) // 2
+
+                self.setGeometry(x, y, w, h)
+                if state.get("maximized"):
+                    self.showMaximized()
+                elif state.get("full_screen"):
+                    self.showFullScreen()
+            except Exception as e:
+                print(f"[Warning] UI 상태 복원 실패: {e}")
+
+        self.ui_state.register("main_window", _get_main_geometry, _set_main_geometry)
+
     def _quit_app(self):
         try:
             self.save_settings()
         except Exception as e:
             print(f"[Warning] 종료 시 설정 저장 실패: {e}")
+        try:
+            # UI 상태 (창 크기/위치/스플리터 등) 저장
+            if hasattr(self, "ui_state"):
+                self.ui_state.save_all()
+        except Exception as e:
+            print(f"[Warning] UI 상태 저장 실패: {e}")
         os._exit(0)
