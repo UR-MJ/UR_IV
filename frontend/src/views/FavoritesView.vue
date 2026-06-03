@@ -44,19 +44,31 @@
             <div class="viewer-info">
               <div class="vi-size">{{ viewerData.size }}</div>
               <div v-if="viewerData.prompt" class="vi-section">
-                <label>PROMPT</label>
+                <div class="vi-head">
+                  <label>PROMPT</label>
+                  <button class="copy-btn" @click="copySection(viewerData.prompt, 'Prompt')" title="Prompt 복사">📋</button>
+                </div>
                 <pre>{{ viewerData.prompt }}</pre>
               </div>
               <div v-if="viewerData.negative" class="vi-section">
-                <label class="neg">NEGATIVE</label>
+                <div class="vi-head">
+                  <label class="neg">NEGATIVE</label>
+                  <button class="copy-btn" @click="copySection(viewerData.negative, 'Negative')" title="Negative 복사">📋</button>
+                </div>
                 <pre>{{ viewerData.negative }}</pre>
               </div>
               <div v-if="viewerData.raw && !viewerData.prompt" class="vi-section">
-                <label>RAW</label>
+                <div class="vi-head">
+                  <label>RAW</label>
+                  <button class="copy-btn" @click="copySection(viewerData.raw, 'Raw')" title="Raw 복사">📋</button>
+                </div>
                 <pre>{{ viewerData.raw }}</pre>
               </div>
               <div v-if="viewerData.params" class="vi-section">
-                <label>PARAMETERS</label>
+                <div class="vi-head">
+                  <label>PARAMETERS</label>
+                  <button class="copy-btn" @click="copySection(viewerParams || JSON.stringify(viewerData.params, null, 2), 'Parameters')" title="Parameters 복사">📋</button>
+                </div>
                 <div class="params-grid">
                   <div class="param-line" v-if="viewerData.params.generation"><span class="pl">GEN</span><span>{{ viewerData.params.generation }}</span></div>
                   <div class="param-line" v-if="viewerData.params.core"><span class="pl">CORE</span><span>{{ viewerData.params.core }}</span></div>
@@ -67,14 +79,32 @@
                 </div>
               </div>
               <div v-else-if="viewerParams" class="vi-section">
-                <label>PARAMETERS</label>
+                <div class="vi-head">
+                  <label>PARAMETERS</label>
+                  <button class="copy-btn" @click="copySection(viewerParams, 'Parameters')" title="Parameters 복사">📋</button>
+                </div>
                 <pre>{{ viewerParams }}</pre>
               </div>
-              <div class="vi-actions">
-                <button class="vi-btn accent" @click="action('gallery_send_exif_to_t2i', { exif: viewerData.raw, path: viewerData.path })">📤 T2I</button>
-                <button class="vi-btn" @click="action('send_to_i2i', { path: viewerData.path })">I2I</button>
-                <button class="vi-btn" @click="action('send_to_inpaint', { path: viewerData.path })">INPAINT</button>
-                <button class="vi-btn" @click="action('send_to_editor', { path: viewerData.path })">EDITOR</button>
+              <div class="vi-actions-section">
+                <label class="vi-actions-label">SEND TO</label>
+                <div class="vi-send-grid">
+                  <button class="send-card primary" @click="action('gallery_send_exif_to_t2i', { exif: viewerData.raw, path: viewerData.path })" title="EXIF + 이미지를 T2I 탭에 전송">
+                    <span class="send-ico">📤</span>
+                    <span class="send-name">T2I</span>
+                  </button>
+                  <button class="send-card" @click="action('send_to_i2i', { path: viewerData.path })" title="I2I 탭으로">
+                    <span class="send-ico">🖼️</span>
+                    <span class="send-name">I2I</span>
+                  </button>
+                  <button class="send-card" @click="action('send_to_inpaint', { path: viewerData.path })" title="Inpaint 탭으로">
+                    <span class="send-ico">✂️</span>
+                    <span class="send-name">Inpaint</span>
+                  </button>
+                  <button class="send-card" @click="action('send_to_editor', { path: viewerData.path })" title="Editor 탭으로">
+                    <span class="send-ico">🎨</span>
+                    <span class="send-name">Editor</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -186,6 +216,17 @@ function removeFav() {
 
 function action(name, payload = {}) { requestAction(name, payload) }
 
+// 항목별 복사 — 호버 시 노출되는 작은 버튼에서 호출
+async function copySection(text, label) {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    requestAction('show_toast', { type: 'success', msg: `${label} 복사됨` })
+  } catch (e) {
+    requestAction('show_toast', { type: 'error', msg: `복사 실패: ${e?.message || e}` })
+  }
+}
+
 function hideMenu() { ctxMenu.value.show = false }
 onMounted(() => { document.addEventListener('click', hideMenu); loadFavorites() })
 onUnmounted(() => document.removeEventListener('click', hideMenu))
@@ -226,18 +267,63 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .viewer-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .viewer-info { width: 300px; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; border-left: 1px solid #1A1A1A; }
 .vi-size { color: #585858; font-size: 11px; }
-.vi-section label { color: #E2B340; font-size: 10px; font-weight: 700; display: block; margin-bottom: 4px; }
-.vi-section label.neg { color: #f87171; }
+.vi-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px; min-height: 18px;
+}
+.vi-head label { color: #E2B340; font-size: 10px; font-weight: 700; margin: 0; }
+.vi-head label.neg { color: #f87171; }
+.copy-btn {
+  opacity: 0; transition: opacity 0.15s, background 0.15s;
+  background: none; border: 1px solid transparent;
+  color: var(--text-muted); font-size: 11px;
+  width: 22px; height: 22px; border-radius: 4px;
+  cursor: pointer; padding: 0; display: inline-flex;
+  align-items: center; justify-content: center;
+}
+.vi-section:hover .copy-btn { opacity: 0.7; }
+.copy-btn:hover { opacity: 1 !important; background: var(--bg-button); border-color: var(--border); color: var(--accent); }
 .vi-section pre { color: #B0B0B0; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #111; padding: 8px; border-radius: 4px; margin: 0; max-height: 200px; overflow-y: auto; }
 
 .params-grid { background: #111; border-radius: 4px; padding: 6px 8px; }
 .param-line { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 11px; color: #B0B0B0; border-bottom: 1px solid #1a1a1a; font-family: 'Consolas', monospace; }
 .param-line:last-child { border-bottom: none; }
 .pl { font-size: 9px; font-weight: 900; color: #E2B340; letter-spacing: 1px; min-width: 45px; flex-shrink: 0; }
-.vi-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
-.vi-btn { padding: 6px 12px; background: #181818; border: none; border-radius: 4px; color: #787878; font-size: 11px; cursor: pointer; }
-.vi-btn:hover { background: #222; color: #E8E8E8; }
-.vi-btn.accent { background: #E2B340; color: #000; }
+
+/* 전송 버튼 그리드 — PngInfo와 동일 스타일 */
+.vi-actions-section { margin-top: auto; padding-top: 12px; }
+.vi-actions-label {
+  display: block; font-size: 9px; font-weight: 900;
+  color: var(--text-muted); letter-spacing: 1.5px;
+  margin-bottom: 8px;
+}
+.vi-send-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.send-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding: 10px 6px;
+  background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer;
+  transition: all 0.15s;
+}
+.send-card:hover {
+  background: var(--bg-input); border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+.send-card.primary {
+  background: var(--accent-dim);
+  border-color: rgba(250, 204, 21, 0.4);
+}
+.send-card.primary:hover {
+  background: rgba(250, 204, 21, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(250, 204, 21, 0.2);
+}
+.send-ico { font-size: 18px; line-height: 1; }
+.send-name {
+  font-size: 10px; font-weight: 700;
+  color: var(--text-secondary); letter-spacing: 0.3px;
+}
+.send-card.primary .send-name { color: var(--accent); }
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

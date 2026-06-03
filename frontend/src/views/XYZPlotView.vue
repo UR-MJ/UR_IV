@@ -18,7 +18,43 @@
     </div>
     <div class="result-area">
       <div v-if="resultImages.length === 0" class="empty">
-        축을 설정하고 시작하면 결과가 여기에 표시됩니다
+        <!-- 빈 상태 일러스트 — 격자 + X/Y 축 + 점들을 SVG로 -->
+        <svg class="empty-illustration" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <pattern id="xyz-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1a1a1a" stroke-width="0.5"/>
+            </pattern>
+            <linearGradient id="xyz-axis" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#FACC15" stop-opacity="0.05"/>
+              <stop offset="50%" stop-color="#FACC15" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#FACC15" stop-opacity="0.05"/>
+            </linearGradient>
+          </defs>
+          <!-- 격자 배경 -->
+          <rect width="320" height="240" fill="url(#xyz-grid)"/>
+          <!-- 축 -->
+          <line x1="40" y1="200" x2="280" y2="200" stroke="url(#xyz-axis)" stroke-width="1.5"/>
+          <line x1="40" y1="40" x2="40" y2="200" stroke="url(#xyz-axis)" stroke-width="1.5"/>
+          <!-- 축 라벨 -->
+          <text x="282" y="204" fill="#FACC15" font-size="9" font-weight="900" opacity="0.4" font-family="Consolas, monospace">X</text>
+          <text x="36" y="36" fill="#FACC15" font-size="9" font-weight="900" opacity="0.4" font-family="Consolas, monospace">Y</text>
+          <!-- 가상 데이터 포인트 (얇은 grid 노드들) -->
+          <g opacity="0.25">
+            <circle cx="80"  cy="170" r="3" fill="#FACC15"/>
+            <circle cx="120" cy="140" r="3" fill="#FACC15"/>
+            <circle cx="160" cy="105" r="3" fill="#FACC15"/>
+            <circle cx="200" cy="80"  r="3" fill="#FACC15"/>
+            <circle cx="240" cy="60"  r="3" fill="#FACC15"/>
+          </g>
+          <!-- 연결선 (그리드 다이어그램 느낌) -->
+          <polyline points="80,170 120,140 160,105 200,80 240,60"
+            fill="none" stroke="#FACC15" stroke-width="1" opacity="0.2"
+            stroke-dasharray="3,3"/>
+        </svg>
+        <div class="empty-text">
+          <span class="empty-title">축을 설정하고 시작하세요</span>
+          <span class="empty-sub">X·Y·Z 조합이 격자에 펼쳐집니다</span>
+        </div>
       </div>
       <div v-else>
         <div class="result-actions">
@@ -172,7 +208,23 @@ function exportCSV() {
   cursor: pointer; transition: all 0.15s;
 }
 .btn-export:hover { background: #222; border-color: #E2B340; }
-.empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #484848; font-size: 14px; }
+.empty {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px;
+  color: #484848; font-size: 14px;
+}
+.empty-illustration {
+  width: 320px; max-width: 60%; height: auto;
+  opacity: 0.7; animation: empty-pulse 4s ease-in-out infinite;
+}
+@keyframes empty-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+.empty-text { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.empty-title { font-size: 14px; color: var(--text-secondary); font-weight: 700; }
+.empty-sub { font-size: 11px; color: var(--text-muted); }
 .result-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 4px; align-content: start;

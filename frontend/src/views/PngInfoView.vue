@@ -23,10 +23,25 @@
           <button class="btn" @click="sendToCompare" v-if="imagePath">🔍 비교로</button>
         </div>
         <div class="info-body" v-if="exif.raw">
-          <div v-if="exif.prompt" class="section"><label>Prompt</label><pre>{{ exif.prompt }}</pre></div>
-          <div v-if="exif.negative" class="section"><label>Negative</label><pre>{{ exif.negative }}</pre></div>
+          <div v-if="exif.prompt" class="section">
+            <div class="section-head">
+              <label>Prompt</label>
+              <button class="copy-btn" @click="copySection(exif.prompt, 'Prompt')" title="Prompt 복사">📋</button>
+            </div>
+            <pre>{{ exif.prompt }}</pre>
+          </div>
+          <div v-if="exif.negative" class="section">
+            <div class="section-head">
+              <label>Negative</label>
+              <button class="copy-btn" @click="copySection(exif.negative, 'Negative')" title="Negative 복사">📋</button>
+            </div>
+            <pre>{{ exif.negative }}</pre>
+          </div>
           <div v-if="exif.params" class="section params-section">
-            <label>Parameters</label>
+            <div class="section-head">
+              <label>Parameters</label>
+              <button class="copy-btn" @click="copySection(exif.params_line || JSON.stringify(exif.params, null, 2), 'Parameters')" title="Parameters 복사">📋</button>
+            </div>
             <div class="params-grid">
               <div class="param-line" v-if="exif.params.generation"><span class="pl">GEN</span><span>{{ exif.params.generation }}</span></div>
               <div class="param-line" v-if="exif.params.core"><span class="pl">CORE</span><span>{{ exif.params.core }}</span></div>
@@ -36,15 +51,48 @@
               <div class="param-line" v-if="exif.params.other"><span class="pl">ETC</span><span>{{ exif.params.other }}</span></div>
             </div>
           </div>
-          <div v-else-if="exif.params_line" class="section"><label>Parameters</label><pre>{{ exif.params_line }}</pre></div>
-          <div v-if="!exif.prompt" class="section"><label>Raw</label><pre>{{ exif.raw }}</pre></div>
-          <div class="action-bar">
-            <button class="btn accent" @click="sendPrompt">📤 T2I 전송</button>
-            <button class="btn" @click="sendGenerate">⚡ 즉시 생성</button>
-            <button class="btn" @click="action('send_to_i2i', { path: imagePath })">I2I</button>
-            <button class="btn" @click="action('send_to_inpaint', { path: imagePath })">Inpaint</button>
-            <button class="btn" @click="action('send_to_editor', { path: imagePath })">Editor</button>
-            <button class="btn" @click="action('add_favorite', { path: imagePath })">⭐</button>
+          <div v-else-if="exif.params_line" class="section">
+            <div class="section-head">
+              <label>Parameters</label>
+              <button class="copy-btn" @click="copySection(exif.params_line, 'Parameters')" title="Parameters 복사">📋</button>
+            </div>
+            <pre>{{ exif.params_line }}</pre>
+          </div>
+          <div v-if="!exif.prompt" class="section">
+            <div class="section-head">
+              <label>Raw</label>
+              <button class="copy-btn" @click="copySection(exif.raw, 'Raw')" title="Raw 복사">📋</button>
+            </div>
+            <pre>{{ exif.raw }}</pre>
+          </div>
+          <div class="action-section">
+            <label class="action-label">SEND TO</label>
+            <div class="send-grid">
+              <button class="send-card primary" @click="sendPrompt" title="현재 프롬프트를 T2I 탭으로 전송">
+                <span class="send-ico">📤</span>
+                <span class="send-name">T2I 전송</span>
+              </button>
+              <button class="send-card" @click="sendGenerate" title="현재 EXIF로 즉시 생성">
+                <span class="send-ico">⚡</span>
+                <span class="send-name">즉시 생성</span>
+              </button>
+              <button class="send-card" @click="action('send_to_i2i', { path: imagePath })" title="I2I 탭으로 전송">
+                <span class="send-ico">🖼️</span>
+                <span class="send-name">I2I</span>
+              </button>
+              <button class="send-card" @click="action('send_to_inpaint', { path: imagePath })" title="Inpaint 탭으로 전송">
+                <span class="send-ico">✂️</span>
+                <span class="send-name">Inpaint</span>
+              </button>
+              <button class="send-card" @click="action('send_to_editor', { path: imagePath })" title="Editor 탭으로 전송">
+                <span class="send-ico">🎨</span>
+                <span class="send-name">Editor</span>
+              </button>
+              <button class="send-card star" @click="action('add_favorite', { path: imagePath })" title="즐겨찾기에 추가">
+                <span class="send-ico">⭐</span>
+                <span class="send-name">즐겨찾기</span>
+              </button>
+            </div>
           </div>
         </div>
         <div v-else class="info-empty">이미지를 선택하면 메타데이터가 표시됩니다</div>
@@ -210,7 +258,20 @@ function onDrop(e) {
 }
 
 function openFile() { requestAction('open_png_info_file') }
-function copyAll() { navigator.clipboard?.writeText(exif.value.raw || '') }
+function copyAll() {
+  navigator.clipboard?.writeText(exif.value.raw || '')
+  requestAction('show_toast', { type: 'success', msg: '전체 메타데이터 복사됨' })
+}
+// 항목별 복사 — 호버 시 노출되는 작은 버튼에서 호출
+async function copySection(text, label) {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    requestAction('show_toast', { type: 'success', msg: `${label} 복사됨` })
+  } catch (e) {
+    requestAction('show_toast', { type: 'error', msg: `복사 실패: ${e?.message || e}` })
+  }
+}
 function sendPrompt() { requestAction('pnginfo_send_prompt', { prompt: exif.value.prompt || '', negative: exif.value.negative || '' }) }
 function sendGenerate() { requestAction('pnginfo_generate', exif.value) }
 function action(name, payload = {}) { requestAction(name, payload) }
@@ -307,9 +368,60 @@ onUnmounted(() => {
 .btn.accent { background: #E2B340; color: #000; }
 .info-body { flex: 1; overflow-y: auto; padding: 8px 12px; }
 .section { margin-bottom: 10px; }
-.section label { color: #E2B340; font-size: 11px; font-weight: 600; display: block; margin-bottom: 2px; }
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 2px; min-height: 16px;
+}
+.section-head label { color: #E2B340; font-size: 11px; font-weight: 600; margin: 0; }
+/* 호버 시에만 보이는 복사 버튼 — 평소엔 부재감 없이 깔끔 */
+.copy-btn {
+  opacity: 0; transition: opacity 0.15s, background 0.15s;
+  background: none; border: 1px solid transparent;
+  color: var(--text-muted); font-size: 11px;
+  width: 20px; height: 20px; border-radius: 4px;
+  cursor: pointer; padding: 0; display: inline-flex;
+  align-items: center; justify-content: center;
+}
+.section:hover .copy-btn { opacity: 0.7; }
+.copy-btn:hover { opacity: 1 !important; background: var(--bg-button); border-color: var(--border); color: var(--accent); }
 .section pre { color: #B0B0B0; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #111; padding: 6px 8px; border-radius: 4px; margin: 0; max-height: 150px; overflow-y: auto; }
-.action-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
+.action-section { margin-top: 16px; }
+.action-label {
+  display: block; font-size: 9px; font-weight: 900;
+  color: var(--text-muted); letter-spacing: 1.5px;
+  margin-bottom: 8px;
+}
+.send-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.send-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding: 10px 6px;
+  background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer;
+  transition: all 0.15s;
+}
+.send-card:hover {
+  background: var(--bg-input); border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+.send-card.primary {
+  background: var(--accent-dim);
+  border-color: rgba(250, 204, 21, 0.4);
+}
+.send-card.primary:hover {
+  background: rgba(250, 204, 21, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(250, 204, 21, 0.2);
+}
+.send-card.star:hover { border-color: var(--accent); }
+.send-ico { font-size: 18px; line-height: 1; }
+.send-name {
+  font-size: 10px; font-weight: 700;
+  color: var(--text-secondary); letter-spacing: 0.3px;
+}
+.send-card.primary .send-name { color: var(--accent); }
 .info-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #484848; font-size: 14px; }
 
 .params-grid { background: #111; border-radius: 4px; padding: 6px 8px; }

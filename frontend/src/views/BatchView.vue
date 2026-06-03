@@ -8,21 +8,17 @@
       <button class="sub-tab" :class="{ active: subTab === 'sam3' }" @click="subTab = 'sam3'">SAM3</button>
     </div>
 
-    <!-- Batch 탭 -->
-    <div v-if="subTab === 'batch'" class="tab-body">
-      <div class="panel">
+    <!-- Batch 탭 — 듀얼 패널 (좌측 설정 / 우측 썸네일 그리드) -->
+    <div v-if="subTab === 'batch'" class="tab-body ad-layout">
+      <div class="ad-settings">
         <h3>BATCH PROCESSING</h3>
-        <div class="file-drop" @dragover.prevent @drop.prevent="onDropBatch">
-          <div v-if="batchFiles.length === 0" class="drop-hint">
-            이미지 드래그 또는 <button class="link-btn" @click="action('open_batch_files')">파일 선택</button>
-          </div>
-          <div v-else class="file-list">
-            <div v-for="(f, i) in batchFiles" :key="f" class="file-item">
-              <span>{{ basename(f) }}</span>
-              <button class="rm-btn" @click="batchFiles.splice(i, 1)">×</button>
-            </div>
+        <div class="file-drop compact" @dragover.prevent @drop.prevent="onDropBatch">
+          <div class="drop-hint">
+            이미지 드래그 또는
+            <button class="link-btn" @click="action('open_batch_files')">파일 선택</button>
           </div>
         </div>
+        <div class="file-count" v-if="batchFiles.length">{{ batchFiles.length }}개 파일</div>
         <label class="s-label">작업</label>
         <CustomSelect v-model="batchOp" :options="['resize', 'format']" placeholder="작업 선택" />
         <div v-if="batchOp === 'resize'" class="op-settings">
@@ -35,23 +31,34 @@
           배치 시작 ({{ batchFiles.length }}파일)
         </button>
       </div>
-    </div>
-
-    <!-- Upscale 탭 -->
-    <div v-if="subTab === 'upscale'" class="tab-body">
-      <div class="panel">
-        <h3>UPSCALE</h3>
-        <div class="file-drop" @dragover.prevent @drop.prevent="onDropUpscale">
-          <div v-if="upscaleFiles.length === 0" class="drop-hint">
-            이미지 드래그 또는 <button class="link-btn" @click="action('open_upscale_files')">파일 선택</button>
-          </div>
-          <div v-else class="file-list">
-            <div v-for="(f, i) in upscaleFiles" :key="f" class="file-item">
-              <span>{{ basename(f) }}</span>
-              <button class="rm-btn" @click="upscaleFiles.splice(i, 1)">×</button>
-            </div>
+      <!-- 우측: 썸네일 그리드 -->
+      <div class="ad-compare">
+        <div v-if="batchFiles.length === 0" class="grid-empty">
+          <div class="grid-empty-ico">📦</div>
+          <div class="grid-empty-title">이미지를 드래그하여 추가</div>
+          <div class="grid-empty-sub">여러 장을 한꺼번에 처리할 수 있습니다</div>
+        </div>
+        <div v-else class="thumb-grid">
+          <div v-for="(f, i) in batchFiles" :key="f" class="thumb-card">
+            <img :src="'file:///' + f" :alt="basename(f)" loading="lazy" />
+            <div class="thumb-name" :title="f">{{ basename(f) }}</div>
+            <button class="thumb-rm" @click="batchFiles.splice(i, 1)" title="제거">×</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Upscale 탭 — 듀얼 패널 -->
+    <div v-if="subTab === 'upscale'" class="tab-body ad-layout">
+      <div class="ad-settings">
+        <h3>UPSCALE</h3>
+        <div class="file-drop compact" @dragover.prevent @drop.prevent="onDropUpscale">
+          <div class="drop-hint">
+            이미지 드래그 또는
+            <button class="link-btn" @click="action('open_upscale_files')">파일 선택</button>
+          </div>
+        </div>
+        <div class="file-count" v-if="upscaleFiles.length">{{ upscaleFiles.length }}개 파일</div>
         <label class="s-label">업스케일러</label>
         <CustomSelect v-model="upscaler" :options="upscalers" placeholder="업스케일러 선택..." />
         <label class="s-label">배율</label>
@@ -62,6 +69,21 @@
         <button class="btn-start" @click="startUpscale" :disabled="upscaleFiles.length === 0">
           업스케일 시작 ({{ upscaleFiles.length }}파일)
         </button>
+      </div>
+      <!-- 우측: 썸네일 그리드 -->
+      <div class="ad-compare">
+        <div v-if="upscaleFiles.length === 0" class="grid-empty">
+          <div class="grid-empty-ico">🔍</div>
+          <div class="grid-empty-title">업스케일할 이미지를 드래그</div>
+          <div class="grid-empty-sub">2~4배 해상도 향상</div>
+        </div>
+        <div v-else class="thumb-grid">
+          <div v-for="(f, i) in upscaleFiles" :key="f" class="thumb-card">
+            <img :src="'file:///' + f" :alt="basename(f)" loading="lazy" />
+            <div class="thumb-name" :title="f">{{ basename(f) }}</div>
+            <button class="thumb-rm" @click="upscaleFiles.splice(i, 1)" title="제거">×</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -638,6 +660,8 @@ onMounted(async () => {
 
 /* Compare */
 .ad-compare { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; overflow: hidden; }
+/* 썸네일 그리드가 있으면 stretch — top-left 채움 */
+.ad-compare:has(.thumb-grid) { align-items: stretch; justify-content: stretch; }
 .compare-split { display: flex; gap: 12px; width: 100%; height: 100%; }
 .compare-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .compare-label { font-size: 10px; font-weight: 900; color: var(--text-muted); letter-spacing: 2px; }
@@ -645,4 +669,65 @@ onMounted(async () => {
 .preview-single { display: flex; align-items: center; justify-content: center; }
 .preview-single img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
 .compare-empty { color: var(--text-muted); font-size: 13px; }
+
+/* Batch/Upscale 우측 썸네일 그리드 */
+.file-drop.compact { min-height: 80px; padding: 14px; }
+.thumb-grid {
+  width: 100%; height: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px; padding: 4px;
+  align-content: start;
+  overflow-y: auto;
+}
+.thumb-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  transition: all 0.15s;
+  aspect-ratio: 1;
+}
+.thumb-card:hover {
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.thumb-card img {
+  flex: 1; min-height: 0;
+  width: 100%; object-fit: cover;
+  background: #000;
+}
+.thumb-name {
+  font-size: 10px; color: var(--text-secondary);
+  padding: 5px 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+}
+.thumb-rm {
+  position: absolute; top: 4px; right: 4px;
+  width: 22px; height: 22px;
+  background: rgba(0, 0, 0, 0.7); border: none;
+  border-radius: 50%; color: #f87171;
+  font-size: 16px; font-weight: 700;
+  cursor: pointer; opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  line-height: 1;
+}
+.thumb-card:hover .thumb-rm { opacity: 1; }
+.thumb-rm:hover { background: rgba(248, 113, 113, 0.9); color: #000; }
+
+/* 우측 빈 상태 */
+.grid-empty {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+  color: var(--text-muted);
+}
+.grid-empty-ico { font-size: 56px; opacity: 0.3; line-height: 1; }
+.grid-empty-title { font-size: 15px; font-weight: 700; color: var(--text-secondary); }
+.grid-empty-sub { font-size: 12px; color: var(--text-muted); }
 </style>

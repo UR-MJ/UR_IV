@@ -141,3 +141,46 @@ label {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Keycap — 기계식 키보드 키캡 스타일 ── */
+/* 사용: <kbd class="keycap">Ctrl</kbd> + <kbd class="keycap">Z</kbd>          */
+/* SettingsView 등 단축키 표시 일관성용. var(--keycap-*) 토큰으로 라이트테마 */
+/* 전환 시 한 곳만 바꾸면 됨.                                                  */
+:root {
+  --keycap-bg:        #1A1A1A;
+  --keycap-bg-grad:   linear-gradient(180deg, #232323 0%, #161616 100%);
+  --keycap-border:    #2A2A2A;
+  --keycap-shadow:    0 1px 0 #0A0A0A, 0 2px 0 #050505, 0 3px 4px rgba(0,0,0,0.6);
+  --keycap-color:     var(--accent);
+}
+kbd.keycap, .keycap {
+  display: inline-block;
+  min-width: 22px;
+  padding: 3px 8px 4px;
+  margin: 0 1px;
+  background: var(--keycap-bg-grad);
+  border: 1px solid var(--keycap-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  box-shadow: var(--keycap-shadow);
+  color: var(--keycap-color);
+  font-family: 'Consolas', 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
+  user-select: none;
+}
+kbd.keycap.large, .keycap.large { font-size: 12px; padding: 5px 12px 6px; min-width: 32px; }
+kbd.keycap.muted, .keycap.muted { color: var(--text-secondary); }
+/* + 같은 구분자도 같은 라인에 정렬 */
+.keycap-sep {
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  margin: 0 2px;
+  vertical-align: middle;
+}

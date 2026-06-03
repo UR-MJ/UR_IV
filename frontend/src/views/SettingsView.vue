@@ -577,16 +577,40 @@ function loadOllamaModels() { testOllama() }
 .drag-item .handle { color: var(--text-muted); }
 .drag-item .name { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--text-primary); }
 
-.shortcut-grid { display: flex; flex-direction: column; gap: 12px; }
-.s-row { display: flex; justify-content: space-between; align-items: center; }
+.shortcut-grid { display: flex; flex-direction: column; gap: 4px; }
+.s-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 10px; border-radius: 6px;
+  transition: background 0.15s;
+}
+.s-row:hover { background: rgba(255, 255, 255, 0.025); }
 .s-row span { font-size: 13px; color: var(--text-secondary); }
-kbd { background: var(--bg-button); color: var(--accent); padding: 4px 10px; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 11px; border: 1px solid var(--border); }
+/* kbd 단축키 표시 — style.css의 .keycap 스타일 토큰을 그대로 사용
+   (전역 일관성 위해 클래스 없이도 키캡 모양이 나오도록) */
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 4px 10px 5px;
+  margin: 0 1px;
+  background: var(--keycap-bg-grad);
+  border: 1px solid var(--keycap-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  box-shadow: var(--keycap-shadow);
+  color: var(--keycap-color);
+  font-family: 'Consolas', 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
+}
 .hint-banner {
   background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.3);
   border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;
   font-size: 12px; line-height: 1.6; color: var(--text-secondary);
 }
-.hint-banner kbd { font-size: 10px; padding: 2px 6px; }
+.hint-banner kbd { font-size: 10px; padding: 3px 7px 4px; }
 .hint-banner strong { color: var(--accent); }
 
 /* Defaults */
