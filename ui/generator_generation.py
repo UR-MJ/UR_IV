@@ -104,6 +104,16 @@ class GenerationMixin:
         else:
             width = int(self.width_input.text() or '1024')
             height = int(self.height_input.text() or '1024')
+
+        # 고해상도 모드 — Vue의 'set_high_res_factor' 액션이 self._high_res_factor 설정
+        # 입력 해상도는 그대로 두고 생성 시점에만 곱함 → UI에 base 값 유지
+        hr_factor = getattr(self, '_high_res_factor', 1.0) or 1.0
+        if hr_factor > 1.0:
+            base_w, base_h = width, height
+            # SD 호환을 위해 8 배수로 내림 정렬
+            width = max(8, (int(base_w * hr_factor) // 8) * 8)
+            height = max(8, (int(base_h * hr_factor) // 8) * 8)
+            print(f"[HighRes] {hr_factor}x → {base_w}x{base_h} → {width}x{height}")
         
         combined_neg_prompt = self.neg_prompt_text.toPlainText().strip()
 

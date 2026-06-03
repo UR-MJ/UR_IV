@@ -114,6 +114,23 @@
                 <div class="ext-res-opts">
                   <label class="ext-check-sm"><input type="checkbox" v-model="randomResEnabled" /><span>랜덤</span></label>
                   <label class="ext-check-sm"><input type="checkbox" v-model="autoResEnabled" /><span>자동(Parquet)</span></label>
+                  <label class="ext-check-sm hr-toggle" :class="{ active: highResEnabled }">
+                    <input type="checkbox" v-model="highResEnabled" />
+                    <span>고해상도 {{ highResFactor.toFixed(2) }}×</span>
+                  </label>
+                </div>
+                <!-- 고해상도 미리보기 + 배율 슬라이더 -->
+                <div v-if="highResEnabled" class="hr-preview">
+                  <div class="hr-row">
+                    <span class="hr-label">배율</span>
+                    <input type="range" min="1.1" max="2.5" step="0.05" v-model.number="highResFactor"
+                      class="hr-slider" />
+                    <span class="hr-val">{{ highResFactor.toFixed(2) }}×</span>
+                  </div>
+                  <div class="hr-result">
+                    실제 생성: <strong>{{ hrActualW }}×{{ hrActualH }}</strong>
+                    <span class="hr-note">(8 배수 정렬)</span>
+                  </div>
                 </div>
                 <!-- 랜덤 해상도 편집기 -->
                 <div v-if="randomResEnabled" class="rand-res-editor">
@@ -817,6 +834,35 @@ const adModelItems = ref([])
 // Hires/ADetailer 체크박스 (proxy 연동)
 const randomResEnabled = computed({ get: () => storeWidgets.random_res_check === 'true', set: v => { storeWidgets.random_res_check = v ? 'true' : 'false'; if (v) loadRandomResList() } })
 const autoResEnabled = computed({ get: () => storeWidgets.auto_res_check === 'true', set: v => { storeWidgets.auto_res_check = v ? 'true' : 'false' } })
+
+// 고해상도 모드 — 생성 시점에 width/height × factor 적용 (Python이 처리)
+// 입력 해상도는 그대로 유지 (UI에 보이는 값은 base, 실제 생성만 확대)
+const highResEnabled = ref(localStorage.getItem('highRes.enabled') === 'true')
+const highResFactor = ref(parseFloat(localStorage.getItem('highRes.factor') || '1.5') || 1.5)
+// 미리보기 — 8 배수 정렬된 실제 생성 해상도
+const hrActualW = computed(() => {
+  const w = parseInt(storeWidgets.width_input || 0) || 0
+  return Math.max(8, Math.floor((w * highResFactor.value) / 8) * 8)
+})
+const hrActualH = computed(() => {
+  const h = parseInt(storeWidgets.height_input || 0) || 0
+  return Math.max(8, Math.floor((h * highResFactor.value) / 8) * 8)
+})
+// 토글/배율 변경 시 즉시 Python으로 동기화 + localStorage 영속
+function _syncHighRes() {
+  try {
+    localStorage.setItem('highRes.enabled', highResEnabled.value ? 'true' : 'false')
+    localStorage.setItem('highRes.factor', String(highResFactor.value))
+  } catch {}
+  requestAction('set_high_res_factor', {
+    enabled: highResEnabled.value,
+    factor: highResFactor.value,
+  })
+}
+watch(highResEnabled, _syncHighRes)
+watch(highResFactor, _syncHighRes)
+// 앱 시작 직후 한 번 — Python이 옛 상태 갖고 있을 수 있어 동기화
+setTimeout(_syncHighRes, 400)
 
 // 랜덤 해상도 관리
 const randomResList = ref([])
@@ -1773,9 +1819,32 @@ onMounted(async () => {
 .ext-res-row input { text-align: center; flex: 1; }
 .ext-res-row span { color: var(--text-muted); }
 .ext-mini-btn { width: 32px; height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); cursor: pointer; flex-shrink: 0; }
-.ext-res-opts { display: flex; gap: 8px; margin-top: 4px; }
+.ext-res-opts { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 .ext-check-sm { display: flex; align-items: center; gap: 3px; font-size: 9px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
 .ext-check-sm input { width: 12px; height: 12px; margin: 0; }
+/* 고해상도 토글 — 활성 시 골드 강조 */
+.hr-toggle.active { color: var(--accent); font-weight: 700; }
+.hr-toggle.active span { text-shadow: 0 0 4px rgba(250, 204, 21, 0.3); }
+
+/* 고해상도 미리보기 박스 */
+.hr-preview {
+  margin-top: 8px; padding: 8px 10px;
+  background: var(--accent-dim); border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 6px; display: flex; flex-direction: column; gap: 6px;
+}
+.hr-row { display: flex; align-items: center; gap: 8px; }
+.hr-label { font-size: 9px; font-weight: 800; color: var(--accent); letter-spacing: 1px; min-width: 26px; }
+.hr-slider { flex: 1; accent-color: var(--accent); cursor: pointer; height: 4px; }
+.hr-val {
+  font-family: 'Consolas', monospace; font-size: 10px; font-weight: 800;
+  color: var(--accent); min-width: 36px; text-align: right;
+}
+.hr-result {
+  font-size: 10px; color: var(--text-secondary);
+  font-family: 'Consolas', monospace;
+}
+.hr-result strong { color: var(--accent); font-weight: 900; font-size: 11px; }
+.hr-note { color: var(--text-muted); font-size: 9px; margin-left: 4px; }
 
 /* 랜덤 해상도 편집기 */
 .rand-res-editor { margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: rgba(0,0,0,0.15); }

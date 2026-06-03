@@ -195,6 +195,19 @@ class GeneratorMainUI(
                 # Vue 데이터가 Store를 통해 Proxy에 이미 동기화되어 있어야 함
                 self.on_generate_clicked()
 
+            elif action == 'set_high_res_factor':
+                # Vue 고해상도 토글 → 생성 시점에 width/height × factor 적용
+                # generator_generation.py가 self._high_res_factor 읽음
+                try:
+                    enabled = bool(payload.get('enabled', False))
+                    factor = float(payload.get('factor', 1.5))
+                    if not enabled:
+                        factor = 1.0
+                    self._high_res_factor = max(1.0, min(4.0, factor))
+                    self.show_status(f"고해상도: {'ON ' + str(round(self._high_res_factor, 2)) + 'x' if enabled else 'OFF'}")
+                except Exception as e:
+                    self.show_status(f"고해상도 설정 실패: {e}")
+
             elif action == 'cancel_generation':
                 worker = getattr(self, 'gen_worker', None)
                 if worker is not None and hasattr(worker, 'cancel') and worker.isRunning():
