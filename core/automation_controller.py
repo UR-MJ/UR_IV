@@ -298,9 +298,28 @@ class AutomationController:
                 attempts += 1
                 self.stats.total_retries += 1
                 _logger.warning(f"iter {iteration} attempt {attempts} failed: {e}")
+                # OOM 회복 시도 — 재시도 전에 CUDA 캐시 + Python GC 강제
+                # 같은 메모리 상태로 재시도하면 또 OOM이라 무의미
+                err_str = str(e).lower()
+                is_oom = ('out of memory' in err_str or 'cuda' in err_str
+                          or 'allocation' in err_str)
+                if is_oom:
+                    _logger.warning(f"iter {iteration}: OOM 감지 → CUDA 캐시 + GC 정리")
+                    try:
+                        import gc
+                        gc.collect()
+                        import torch
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                            torch.cuda.synchronize()
+                    except Exception:
+                        pass
                 if attempts <= cfg.max_retries:
-                    # 짧게 쉬고 재시도
-                    time.sleep(min(2.0 ** attempts, 30.0))
+                    # OOM은 더 오래 쉬고 (메모리 회복 시간), 일반 에러는 짧게
+                    wait = min(2.0 ** attempts, 30.0)
+                    if is_oom:
+                        wait = max(wait, 5.0)  # OOM은 최소 5초
+                    time.sleep(wait)
         if last_err is not None:
             _logger.error(f"iter {iteration} failed after {cfg.max_retries} retries")
         return False

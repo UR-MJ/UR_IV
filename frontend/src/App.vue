@@ -114,9 +114,10 @@
                 <div class="ext-res-opts">
                   <label class="ext-check-sm"><input type="checkbox" v-model="randomResEnabled" /><span>랜덤</span></label>
                   <label class="ext-check-sm"><input type="checkbox" v-model="autoResEnabled" /><span>자동(Parquet)</span></label>
-                  <label class="ext-check-sm hr-toggle" :class="{ active: highResEnabled }">
+                  <label class="ext-check-sm hr-toggle" :class="{ active: highResEnabled }"
+                    title="입력 해상도 × 배율로 처음부터 더 크게 생성 (hires.fix와 다른 단일 패스)&#10;&#10;⚠ SAM3 자동 검열과 동시 사용 시 VRAM OOM 위험&#10;⚠ 16GB GPU + 1.5× + SAM3 = inpaint 단계에서 메모리 부족&#10;⚠ 모델 학습 해상도(보통 1024±)를 크게 넘으면 이중 캐릭터/왜곡 가능&#10;&#10;권장: 1.5× 단독 사용 또는 SAM3 단독 사용 (둘 중 하나)">
                     <input type="checkbox" v-model="highResEnabled" />
-                    <span>고해상도 {{ highResFactor.toFixed(2) }}×</span>
+                    <span>고해상도 {{ highResFactor.toFixed(2) }}×<span v-if="highResEnabled" class="hr-warn">⚠</span></span>
                   </label>
                 </div>
                 <!-- 고해상도 미리보기 + 배율 슬라이더 -->
@@ -130,6 +131,10 @@
                   <div class="hr-result">
                     실제 생성: <strong>{{ hrActualW }}×{{ hrActualH }}</strong>
                     <span class="hr-note">(8 배수 정렬)</span>
+                  </div>
+                  <div class="hr-warn-banner">
+                    ⚠ SAM3·ADetailer 등 후처리 동시 사용 시 VRAM OOM 위험.
+                    16GB GPU + 1.5× = 한계.
                   </div>
                 </div>
                 <!-- 랜덤 해상도 편집기 -->
@@ -1845,6 +1850,15 @@ onMounted(async () => {
 }
 .hr-result strong { color: var(--accent); font-weight: 900; font-size: 11px; }
 .hr-note { color: var(--text-muted); font-size: 9px; margin-left: 4px; }
+.hr-warn { color: #fb923c; margin-left: 4px; font-weight: 900; }
+.hr-warn-banner {
+  margin-top: 4px; padding: 6px 8px;
+  background: rgba(251, 146, 60, 0.08);
+  border: 1px solid rgba(251, 146, 60, 0.3);
+  border-radius: 4px;
+  font-size: 9.5px; line-height: 1.5;
+  color: #fb923c;
+}
 
 /* 랜덤 해상도 편집기 */
 .rand-res-editor { margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: rgba(0,0,0,0.15); }
