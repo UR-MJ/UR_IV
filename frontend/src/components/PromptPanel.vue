@@ -97,7 +97,13 @@
 
     <!-- 3. PROMPT BLOCKS -->
     <details class="glass-card" open>
-      <summary class="card-header">PROMPT BLOCKS</summary>
+      <summary class="card-header">
+        <span>PROMPT BLOCKS</span>
+        <span class="undo-btns" @click.stop>
+          <button class="undo-btn" :disabled="undoStack.length < 2" @click="performUndo" title="실행 취소 (Ctrl+Z)">↶</button>
+          <button class="undo-btn" :disabled="redoStack.length === 0" @click="performRedo" title="다시 실행 (Ctrl+Y)">↷</button>
+        </span>
+      </summary>
       <div class="input-group autocomplete-wrap">
         <div class="row label-row">
           <label>Main Tags <span v-if="sectionTokens.main" class="tk-badge" :class="tokenBadgeClass(sectionTokens.main)">{{ sectionTokens.main }}t</span></label>
@@ -226,8 +232,15 @@ onMounted(() => {
       console.log('[PromptPanel] Block mode synced:', stored)
     }
   }, 300)
+  // Undo/Redo 키보드 단축키 + 초기 스냅 (현재 상태)
+  window.addEventListener('keydown', onKeyDownGlobal)
+  // 초기 스냅은 약간 지연 (widgets 초기 로드 후)
+  setTimeout(pushUndoSnapshot, 800)
 })
-onUnmounted(() => { if (_blockModeTimer) clearInterval(_blockModeTimer) })
+onUnmounted(() => {
+  if (_blockModeTimer) clearInterval(_blockModeTimer)
+  window.removeEventListener('keydown', onKeyDownGlobal)
+})
 
 const artistLocked = computed({
   get: () => widgets.btn_lock_artist === 'true',
@@ -297,6 +310,82 @@ function tokenBadgeClass(n) {
   if (n < 75) return 'tk-ok'
   if (n < 150) return 'tk-warn'
   return 'tk-over'
+}
+
+// ── Undo/Redo ──
+// 추적 필드: 6개 프롬프트 입력 + 캐릭터/저작권/작가
+const UNDO_KEYS = [
+  'character_input', 'copyright_input', 'artist_input',
+  'main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text',
+  'neg_prompt_text',
+  'exclude_prompt_local_input',
+]
+const undoStack = ref([])    // 과거 스냅샷
+const redoStack = ref([])    // 미래 (Ctrl+Y용)
+const MAX_UNDO = 50
+let applying = false         // undo 적용 중에는 watch 다시 push 안 함
+let debounceTimer = null     // 빠른 타이핑 묶기
+
+function _snap() {
+  const s = {}
+  for (const k of UNDO_KEYS) s[k] = widgets[k] || ''
+  return s
+}
+function _eq(a, b) {
+  for (const k of UNDO_KEYS) if ((a[k] || '') !== (b[k] || '')) return false
+  return true
+}
+function pushUndoSnapshot() {
+  const cur = _snap()
+  const last = undoStack.value[undoStack.value.length - 1]
+  if (last && _eq(last, cur)) return
+  undoStack.value.push(cur)
+  if (undoStack.value.length > MAX_UNDO) undoStack.value.shift()
+  redoStack.value = []  // 새 변경 시 redo 초기화
+}
+function applySnapshot(snap) {
+  applying = true
+  for (const k of UNDO_KEYS) {
+    if (widgets[k] !== snap[k]) widgets[k] = snap[k]
+  }
+  nextTick(() => { applying = false })
+}
+function performUndo() {
+  if (undoStack.value.length < 2) return  // 첫 스냅(현재) 외에 없으면 안 함
+  const cur = undoStack.value.pop()       // 현재 상태
+  redoStack.value.push(cur)
+  const prev = undoStack.value[undoStack.value.length - 1]
+  applySnapshot(prev)
+}
+function performRedo() {
+  if (redoStack.value.length === 0) return
+  const next = redoStack.value.pop()
+  undoStack.value.push(next)
+  applySnapshot(next)
+}
+
+// 디바운스 watch — 빠른 타이핑이 끝나면 스냅샷 (500ms)
+for (const k of UNDO_KEYS) {
+  watch(() => widgets[k], () => {
+    if (applying) return
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(pushUndoSnapshot, 500)
+  })
+}
+
+// 키보드 단축키 (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
+function onKeyDownGlobal(e) {
+  if (!(e.ctrlKey || e.metaKey)) return
+  // 입력 요소 안에서도 동작 — input 자체 undo는 우회됨 (덜 자주 쓰임)
+  // 단, contenteditable이나 textarea의 native undo는 그대로 (이건 우리가 못 막음)
+  const key = e.key.toLowerCase()
+  if (key === 'z' && !e.shiftKey) {
+    e.preventDefault()
+    performUndo()
+  } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+    e.preventDefault()
+    performRedo()
+  }
 }
 
 // 블록 색상 분류
@@ -729,6 +818,17 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .tk-badge.tk-ok    { background: rgba(74,222,128,0.12); color: #4ade80; border-color: rgba(74,222,128,0.3); }
 .tk-badge.tk-warn  { background: rgba(251,191,36,0.12); color: #fbbf24; border-color: rgba(251,191,36,0.4); }
 .tk-badge.tk-over  { background: rgba(248,113,113,0.18); color: #f87171; border-color: rgba(248,113,113,0.5); }
+
+/* Undo/Redo 버튼 */
+.undo-btns { float: right; display: inline-flex; gap: 4px; margin-left: auto; }
+.undo-btn {
+  width: 24px; height: 22px; padding: 0; font-size: 13px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px; color: var(--text-primary);
+}
+.undo-btn:hover:not(:disabled) { background: rgba(96,165,250,0.18); color: #93c5fd; border-color: #60a5fa; }
+.undo-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+summary.card-header { display: flex; align-items: center; }
 .te-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .te-chip {
   font-size: 10px;
