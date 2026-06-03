@@ -640,6 +640,9 @@ class VueBridge(QObject):
             if dataset_year not in PandasSearchWorker.AVAILABLE_YEARS:
                 dataset_year = PandasSearchWorker.DEFAULT_YEAR
 
+            # 결과 cap 비활성화 — 사용자가 "무제한" 모드 선택 시
+            self._disable_result_cap = bool(q.get('disable_result_cap', False))
+
             self._search_worker = PandasSearchWorker(
                 PARQUET_DIR, ratings, queries, excludes,
                 combine_mode=combine_mode,
@@ -647,8 +650,9 @@ class VueBridge(QObject):
             )
             self._search_worker.results_ready.connect(self._on_search_results)
             self._search_worker.start()
+            cap_note = " · cap OFF" if self._disable_result_cap else ""
             self.searchStatus.emit(
-                f"검색 중... ({dataset_year} · {combine_mode.upper()})"
+                f"검색 중... ({dataset_year} · {combine_mode.upper()}{cap_note})"
             )
         except Exception as e:
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
@@ -697,9 +701,12 @@ class VueBridge(QObject):
             print(f"[Search] _on_search_results: built {len(out):,} dicts from {type(results).__name__}")
 
             # 큰 결과셋 안전장치 — Vue에 너무 많이 보내면 JSON 직렬화/전송이 느려짐
-            # 50만 건 초과 시 cap (UI 페이지네이션은 어차피 50개/페이지)
+            # 사용자가 "무제한" 토글로 끌 수 있음 (disable_result_cap)
             MAX_RESULTS_TO_VUE = 500_000
-            if len(out) > MAX_RESULTS_TO_VUE:
+            disable_cap = getattr(self, '_disable_result_cap', False)
+            if disable_cap:
+                print(f"[Search] cap DISABLED — emitting all {len(out):,} rows (UI 느려질 수 있음)")
+            elif len(out) > MAX_RESULTS_TO_VUE:
                 print(f"[Search] capping {len(out):,} → {MAX_RESULTS_TO_VUE:,} (UI 부하 방지)")
                 # 무작위 샘플링 (앞부분만 보내면 편향됨)
                 _rnd.shuffle(out)

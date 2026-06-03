@@ -84,6 +84,23 @@
             </button>
           </div>
 
+          <!-- 결과 cap 토글 — UI 부하 방지 / 무제한 -->
+          <div class="combine-row">
+            <span class="combine-label">결과 제한:</span>
+            <button class="combine-chip"
+              :class="{ active: resultCapMode === 'capped' }"
+              @click="resultCapMode = 'capped'"
+              title="50만 건 cap (권장) — 그 이상은 무작위 샘플링&#10;UI 안정성 보장">
+              50만 건
+            </button>
+            <button class="combine-chip warn-chip"
+              :class="{ active: resultCapMode === 'unlimited' }"
+              @click="resultCapMode = 'unlimited'"
+              title="모든 결과를 받음 — JSON 직렬화 + Vue 메모리가 수 GB 가능&#10;⚠ 대규모 결과 시 화면 멈춤/렉 가능">
+              무제한 ⚠
+            </button>
+          </div>
+
           <!-- 검색 결합 모드: AND (교집합) / OR (합집합) -->
           <!-- 모드는 필드 간 결합 + 필드 내 콤마 토큰 + 제외 검색에 모두 적용됨 -->
           <div class="combine-row">
@@ -113,6 +130,7 @@
         <span>Exclude로 제외 조건 설정</span>
         <span class="hint-mode" :class="combineMode">
           현재: <strong>{{ combineMode === 'and' ? 'AND' : 'OR' }}</strong> · <strong>{{ datasetYear }}</strong>
+          · <strong>{{ resultCapMode === 'capped' ? 'cap 50만' : 'cap OFF ⚠' }}</strong>
         </span>
       </div>
 
@@ -432,6 +450,12 @@ const AVAILABLE_YEARS = ['2026', '2025']
 const datasetYear = ref(localStorage.getItem('search.datasetYear') || '2026')
 if (!AVAILABLE_YEARS.includes(datasetYear.value)) datasetYear.value = '2026'
 watch(datasetYear, (v) => { try { localStorage.setItem('search.datasetYear', v) } catch {} })
+
+// 결과 cap — 기본 50만 (UI 부하 방지), 'unlimited' 선택 시 전체 결과 받음
+// 무제한이면 JSON 직렬화 + Vue 메모리가 무거워질 수 있음 (수 GB 가능)
+const resultCapMode = ref(localStorage.getItem('search.resultCapMode') || 'capped')
+if (!['capped', 'unlimited'].includes(resultCapMode.value)) resultCapMode.value = 'capped'
+watch(resultCapMode, (v) => { try { localStorage.setItem('search.resultCapMode', v) } catch {} })
 const PAGE_SIZE = 50
 const currentPage = ref(0)
 // 결과/필터/정렬이 바뀌면 1페이지로
@@ -502,6 +526,7 @@ function persistSearchFields() {
     ratings: ratings.map(r => ({ key: r.key, checked: r.checked })),
     combineMode: combineMode.value,
     datasetYear: datasetYear.value,
+    resultCapMode: resultCapMode.value,
   }
   // ① localStorage 즉시 저장 — 한 글자 입력 후 바로 닫아도 보존
   try { window.localStorage.setItem('lastSearchFields', JSON.stringify(payload)) } catch {}
@@ -524,6 +549,7 @@ async function search() {
     excludes: Object.fromEntries(fields.map(f => [f.key, f.exclude])),
     combine_mode: combineMode.value,  // 'and' | 'or' — 필드 간 결합 방식
     dataset_year: datasetYear.value,  // '2025' | '2026' — 데이터셋 년도
+    disable_result_cap: resultCapMode.value === 'unlimited',  // true면 50만 cap 무시
   }
   // 사용자에게 보여줄 쿼리 요약 (0건 시 활용)
   const includeParts = fields
@@ -572,6 +598,7 @@ onMounted(() => {
       if (d.ratings) d.ratings.forEach(r => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = r.checked })
       if (d.combineMode && (d.combineMode === 'and' || d.combineMode === 'or')) combineMode.value = d.combineMode
       if (d.datasetYear && AVAILABLE_YEARS.includes(d.datasetYear)) datasetYear.value = d.datasetYear
+      if (d.resultCapMode && ['capped', 'unlimited'].includes(d.resultCapMode)) resultCapMode.value = d.resultCapMode
       _restoredFromLocalStorage = true
     }
   } catch {}
@@ -650,9 +677,10 @@ onMounted(() => {
 
 watch(fields, persistSearchFields, { deep: true })
 watch(ratings, persistSearchFields, { deep: true })
-// 모드/년도 토글도 통합 payload에 자동 반영 (개별 키와 별개로 묶음 백업)
+// 모드/년도/cap 토글도 통합 payload에 자동 반영 (개별 키와 별개로 묶음 백업)
 watch(combineMode, persistSearchFields)
 watch(datasetYear, persistSearchFields)
+watch(resultCapMode, persistSearchFields)
 
 function applyDeepSearch() {
   const inc = deepInclude.value.toLowerCase().trim()
@@ -938,6 +966,14 @@ function importResults() { requestAction('import_search_results') }
   box-shadow: 0 0 0 1px var(--accent-dim);
 }
 .year-chip { min-width: 56px; padding: 5px 12px; }
+
+/* 무제한 cap 모드 — 활성 시 위험 색상 (orange/red) */
+.warn-chip.active {
+  border-color: #fb923c !important;
+  color: #fb923c !important;
+  background: rgba(251, 146, 60, 0.1) !important;
+  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.2) !important;
+}
 .hint-mode {
   margin-left: 8px;
   padding: 2px 8px;
