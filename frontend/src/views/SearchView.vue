@@ -126,9 +126,20 @@
 
     <!-- 검색 중 -->
     <div v-else-if="results.length === 0 && searching" class="loading">
-      <div class="spinner"></div>
+      <!-- 원형 진행률 — 중앙에 % 표시 -->
+      <div class="ring-loader">
+        <svg viewBox="0 0 100 100">
+          <!-- 배경 트랙 -->
+          <circle cx="50" cy="50" r="42" class="ring-track" />
+          <!-- 진행 호 — stroke-dasharray로 진행률 시각화 -->
+          <circle cx="50" cy="50" r="42" class="ring-progress"
+            :stroke-dashoffset="ringOffset" />
+        </svg>
+        <div class="ring-center">
+          <div class="ring-pct">{{ Math.round(searchProgress) }}%</div>
+        </div>
+      </div>
       <h2>SEARCHING...</h2>
-      <div class="progress-bar"><div class="progress-fill" :style="{ width: searchProgress + '%' }"></div></div>
       <p>{{ statusText }}</p>
     </div>
 
@@ -385,6 +396,12 @@ const previewIdx = ref(0)
 const searching = ref(false)
 const statusText = ref('READY')
 const searchProgress = ref(0)
+// 원형 진행률 — 반지름 42 → 둘레 = 2π·42 ≈ 263.89
+// stroke-dashoffset = 둘레 × (1 - 진행률/100)
+const RING_CIRCUMFERENCE = 263.89
+const ringOffset = computed(() =>
+  RING_CIRCUMFERENCE * (1 - Math.max(0, Math.min(100, searchProgress.value)) / 100)
+)
 const viewMode = ref('single')
 const deepInclude = ref('')
 const deepExclude = ref('')
@@ -1002,12 +1019,60 @@ function importResults() { requestAction('import_search_results') }
 }
 
 /* ═══ Loading ═══ */
-.loading { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
-.spinner { width: 40px; height: 40px; border: 3px solid #222; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.loading { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
 .loading h2 { color: var(--text-muted); letter-spacing: 4px; }
-.progress-bar { width: 200px; height: 3px; background: var(--bg-input); border-radius: 2px; overflow: hidden; }
-.progress-fill { height: 100%; background: var(--accent); transition: width 0.4s; }
+.loading p { color: var(--text-muted); font-size: 12px; }
+
+/* 원형 진행률 — 90% > 99% 식으로 안에 표시 */
+.ring-loader {
+  position: relative;
+  width: 100px; height: 100px;
+}
+.ring-loader svg {
+  width: 100%; height: 100%;
+  /* -90도 회전: 12시 방향에서 시작 (기본은 3시) */
+  transform: rotate(-90deg);
+}
+.ring-track {
+  stroke: var(--bg-button);
+  stroke-width: 6;
+  fill: none;
+}
+.ring-progress {
+  stroke: var(--accent);
+  stroke-width: 6;
+  stroke-linecap: round;
+  fill: none;
+  /* 둘레 (2π·42 ≈ 263.89) */
+  stroke-dasharray: 263.89;
+  /* dashoffset은 :stroke-dashoffset 바인딩으로 동적 — 부드러운 전환 */
+  transition: stroke-dashoffset 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 살아있는 느낌의 글로우 */
+  filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.4));
+  animation: ring-pulse 2s ease-in-out infinite;
+}
+@keyframes ring-pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+.ring-center {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.ring-pct {
+  font-family: 'Consolas', 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--accent);
+  letter-spacing: -0.5px;
+  text-shadow: 0 0 8px rgba(250, 204, 21, 0.3);
+  /* 숫자 변경 시 살짝 튀게 */
+  transition: transform 0.15s;
+}
+.ring-pct::after {
+  content: ''; /* % 부호는 텍스트에 포함되어 있음 */
+}
 
 /* ═══ Result Bar ═══ */
 .result-bar { display: flex; align-items: center; padding: 6px 12px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); gap: 8px; flex-shrink: 0; }
