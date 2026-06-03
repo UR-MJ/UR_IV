@@ -543,13 +543,17 @@ async function search() {
   searching.value = true; statusText.value = 'EXPLORING...'
   searchProgress.value = 0
   hasSearched.value = true  // 0건 UI 분기용
-  // 가짜 진행률: 95%까지만 부드럽게 증가 (실제 결과 도착 시 100%로 점프)
-  // Math.min 클램프 — 단계 +5~+10 무작위라도 95를 넘지 않게
+  // 가짜 진행률 — 지수 곡선(asymptotic)으로 스르륵 99%에 수렴, 100%는 결과 도착 시 점프
+  //   100ms tick = 10 fps 업데이트, CSS transition 0.4s 가 보간해서 더 부드러움
+  //   곡선식: target = 99 * (1 - exp(-elapsed / TAU))
+  //     TAU=3000 → 3초까지 63%, 6초까지 86%, 9초까지 95%, 12초까지 98%
+  const startTime = Date.now()
+  const TAU = 3000  // 시간 상수 (ms)
   progressTimer = setInterval(() => {
-    if (searchProgress.value < 95) {
-      searchProgress.value = Math.min(95, searchProgress.value + Math.random() * 8)
-    }
-  }, 500)
+    const elapsed = Date.now() - startTime
+    const target = 99 * (1 - Math.exp(-elapsed / TAU))
+    searchProgress.value = Math.min(99, target)
+  }, 100)
   const backend = await getBackend()
   const query = {
     ratings: ratings.filter(r => r.checked).map(r => r.key),
