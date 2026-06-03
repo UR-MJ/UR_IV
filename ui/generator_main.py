@@ -678,6 +678,61 @@ class GeneratorMainUI(
                 if self.is_automating:
                     self._stop_automation("사용자가 자동화를 중지했습니다.")
 
+            # ═══════ 워크플로우 프로파일 ═══════
+            elif action == 'workflow_profile_list':
+                self._send_workflow_profiles_list()
+            elif action == 'workflow_profile_save':
+                name = str(payload.get('name', '')).strip()
+                if name:
+                    from core.workflow_profiles import collect_from_host, save_profile
+                    snap = collect_from_host(self)
+                    ok = save_profile(name, snap['fields'], snap['lora_stack'])
+                    if ok:
+                        self._send_workflow_profiles_list()
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit(
+                                'success', f'프로파일 저장: {name}'
+                            )
+                    else:
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit(
+                                'error', f'프로파일 저장 실패: {name}'
+                            )
+            elif action == 'workflow_profile_load':
+                name = str(payload.get('name', '')).strip()
+                if name:
+                    from core.workflow_profiles import load_profile, apply_profile_to_host
+                    data = load_profile(name)
+                    if data:
+                        result = apply_profile_to_host(data, self)
+                        # 전체 프롬프트 다시 업데이트
+                        if hasattr(self, 'update_total_prompt_display'):
+                            self.update_total_prompt_display()
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit(
+                                'success',
+                                f'프로파일 적용: {name} '
+                                f'({len(result["applied"])}개)'
+                            )
+                    else:
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit(
+                                'error', f'프로파일을 찾을 수 없음: {name}'
+                            )
+            elif action == 'workflow_profile_delete':
+                name = str(payload.get('name', '')).strip()
+                if name:
+                    from core.workflow_profiles import delete_profile
+                    delete_profile(name)
+                    self._send_workflow_profiles_list()
+            elif action == 'workflow_profile_rename':
+                old = str(payload.get('old', '')).strip()
+                new = str(payload.get('new', '')).strip()
+                if old and new:
+                    from core.workflow_profiles import rename_profile
+                    if rename_profile(old, new):
+                        self._send_workflow_profiles_list()
+
             # ═══════ 프롬프트 섹션 순서 (사용자 지정) ═══════
             elif action == 'prompt_order_list':
                 self._send_prompt_order()
@@ -1539,6 +1594,18 @@ class GeneratorMainUI(
             lambda: self.vue_bridge.showNotification.emit('success', f'SAM3 배치 완료 ({len(paths)}장)'))
         self._sam3_batch_worker.start()
         self.vue_bridge.showNotification.emit('info', f'SAM3 배치 시작 ({len(paths)}장)')
+
+    # ── 워크플로우 프로파일 ────────────────────────────────
+    def _send_workflow_profiles_list(self):
+        """현재 프로파일 목록을 Vue로 전송."""
+        import json as _json
+        try:
+            from core.workflow_profiles import list_profiles
+            self.vue_bridge.workflowProfilesList.emit(
+                _json.dumps(list_profiles())
+            )
+        except Exception:
+            pass
 
     # ── 프롬프트 섹션 순서 (사용자 지정) ──────────────────
     def _send_prompt_order(self):

@@ -10,6 +10,18 @@
         <div class="panel-scroll">
           <PromptPanel @toggle-extend="showExtendPanel = !showExtendPanel"
             @open-wildcard="openWildcardByName" />
+          <!-- 워크플로우 프로파일 -->
+          <div class="tool-card profile-card">
+            <div class="profile-row">
+              <label class="profile-label">프로파일</label>
+              <CustomSelect :modelValue="''" @update:modelValue="loadWorkflowProfile"
+                :options="profileNames"
+                :placeholder="profileNames.length === 0 ? '(저장된 프로파일 없음)' : '선택하여 적용...'" />
+              <button class="profile-mini-btn" @click="saveCurrentAsProfile" title="현재 세팅을 새 프로파일로 저장">+</button>
+              <button class="profile-mini-btn" @click="showProfileManager = true; loadWorkflowProfilesList()" title="프로파일 관리 (삭제/이름변경)">⚙</button>
+            </div>
+          </div>
+
           <div class="tool-card">
             <label>Studio Tools</label>
             <div class="tool-grid">
@@ -561,6 +573,41 @@
       </div>
     </transition>
 
+    <!-- 워크플로우 프로파일 관리 모달 -->
+    <transition name="fade">
+      <div v-if="showProfileManager" class="wc-overlay" @click.self="showProfileManager = false">
+        <div class="wc-modal" style="max-width: 520px;">
+          <div class="wc-modal-header">
+            <h3>워크플로우 프로파일</h3>
+            <span class="wc-path">config/profiles/*.json</span>
+            <button class="close-btn" @click="showProfileManager = false">✕</button>
+          </div>
+          <div class="order-modal-body">
+            <div v-if="workflowProfiles.length === 0" class="wc-empty" style="padding: 20px;">
+              저장된 프로파일이 없습니다.<br/>
+              <small style="color: var(--text-muted)">상단의 + 버튼으로 현재 세팅을 저장하세요.</small>
+            </div>
+            <div v-else class="order-list">
+              <div v-for="prof in workflowProfiles" :key="prof.name" class="profile-item">
+                <div class="profile-info">
+                  <div class="profile-name">{{ prof.name }}</div>
+                  <div class="profile-meta">{{ prof.model || '모델 미지정' }}{{ prof.vae ? ' · VAE: ' + prof.vae : '' }}</div>
+                </div>
+                <button class="order-btn" @click="loadWorkflowProfile(prof.name)" title="적용">▶</button>
+                <button class="order-btn" @click="renameWorkflowProfile(prof.name)" title="이름 변경">✏</button>
+                <button class="order-btn" @click="deleteWorkflowProfile(prof.name)" title="삭제" style="color: #f87171;">✕</button>
+              </div>
+            </div>
+            <div class="order-actions">
+              <button class="order-save" @click="saveCurrentAsProfile">+ 현재 세팅 저장</button>
+              <div style="flex: 1;"></div>
+              <button class="order-cancel" @click="showProfileManager = false">닫기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- 프롬프트 섹션 순서 매니저 모달 -->
     <transition name="fade">
       <div v-if="showOrderManager" class="wc-overlay" @click.self="showOrderManager = false">
@@ -1059,6 +1106,37 @@ const selectedWcData = computed(() => wildcards.value.find(w => w.name === selec
 const wcEditLines = ref([])
 const wcInsertTarget = ref('main')
 
+// 워크플로우 프로파일
+const showProfileManager = ref(false)
+const workflowProfiles = ref([])  // [{name, created_at, model, vae}]
+const profileNames = computed(() => workflowProfiles.value.map(p => p.name))
+
+function loadWorkflowProfilesList() {
+  action('workflow_profile_list', {})
+}
+function loadWorkflowProfile(name) {
+  if (!name) return
+  action('workflow_profile_load', { name })
+}
+function saveCurrentAsProfile() {
+  const name = window.prompt('프로파일 이름 (예: ANIMA Pony, Flux 표준):', '')
+  if (!name || !name.trim()) return
+  // 이미 있으면 덮어쓰기 확인
+  const existing = workflowProfiles.value.find(p => p.name === name.trim())
+  if (existing && !window.confirm(`'${name}' 이미 존재합니다. 덮어쓸까요?`)) return
+  action('workflow_profile_save', { name: name.trim() })
+}
+function deleteWorkflowProfile(name) {
+  if (!window.confirm(`'${name}' 삭제할까요?`)) return
+  action('workflow_profile_delete', { name })
+  workflowProfiles.value = workflowProfiles.value.filter(p => p.name !== name)
+}
+function renameWorkflowProfile(oldName) {
+  const newName = window.prompt(`'${oldName}' → 새 이름:`, oldName)
+  if (!newName || !newName.trim() || newName.trim() === oldName) return
+  action('workflow_profile_rename', { old: oldName, new: newName.trim() })
+}
+
 // 프롬프트 섹션 순서 매니저
 const showOrderManager = ref(false)
 const promptOrderList = ref([])  // [{key, label}, ...]
@@ -1358,6 +1436,9 @@ onMounted(async () => {
   // 초기 rating 필터 전달
   requestAction('set_rating_filter', { ratings: ratingFilters.filter(r => r.on).map(r => r.key) })
 
+  // 워크플로우 프로파일 목록 미리 로드 (드롭다운에 즉시 보이도록)
+  setTimeout(loadWorkflowProfilesList, 800)
+
   onBackendEvent('tabChanged', (tabId) => {
     const targetPath = tabId === 't2i' ? '/' : `/${tabId}`
     router.push(targetPath)
@@ -1397,6 +1478,13 @@ onMounted(async () => {
       autoGenCount.value = d.count || 0
       autoWaiting.value = d.waiting || false
       if (!d.running) { isGenerating.value = false }
+    } catch {}
+  })
+  // 워크플로우 프로파일 목록 수신
+  onBackendEvent('workflowProfilesList', (json) => {
+    try {
+      const arr = JSON.parse(json)
+      if (Array.isArray(arr)) workflowProfiles.value = arr
     } catch {}
   })
   // 프롬프트 섹션 순서 수신
@@ -1761,6 +1849,27 @@ onMounted(async () => {
 .auto-input { width: 50px; padding: 4px 6px; font-size: 11px; text-align: center; }
 .auto-unlimited-mark { display: inline-block; width: 50px; padding: 4px 6px; font-size: 14px;
   color: var(--accent); text-align: center; font-weight: bold; }
+
+/* 워크플로우 프로파일 */
+.profile-card { background: rgba(96,165,250,0.04); border: 1px solid rgba(96,165,250,0.15);
+  border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+.profile-row { display: flex; align-items: center; gap: 6px; }
+.profile-label { font-size: 10px; color: #60a5fa; font-weight: 700; flex-shrink: 0;
+  letter-spacing: 0.5px; }
+.profile-row :deep(.csel) { flex: 1; }
+.profile-mini-btn { width: 24px; height: 24px; flex-shrink: 0; cursor: pointer;
+  background: rgba(96,165,250,0.15); color: #93c5fd;
+  border: 1px solid rgba(96,165,250,0.3); border-radius: 4px; font-weight: bold; }
+.profile-mini-btn:hover { background: rgba(96,165,250,0.3); border-color: #60a5fa; color: #fff; }
+.profile-item { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+  background: rgba(255,255,255,0.04); border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08); }
+.profile-item:hover { background: rgba(96,165,250,0.08); }
+.profile-info { flex: 1; min-width: 0; }
+.profile-name { font-size: 13px; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.profile-meta { font-size: 10px; color: var(--text-muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* 프롬프트 순서 모달 */
 .order-modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
