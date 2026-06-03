@@ -113,6 +113,29 @@ def analyze_workflow(file_path: str) -> dict:
         result['node_count'] = len([k for k, v in data.items() if isinstance(v, dict)])
         result['nodes_summary'] = [f"{t} x{c}" for t, c in sorted(nodes_by_type.items())]
 
+    # 3-state 분류 (API 포맷에서만 동작 — Web 포맷은 기본값)
+    # 모델 콤보 활성/잠금 결정에 사용
+    result['classification'] = 'unknown'
+    result['is_locked'] = False
+    result['model_node_id'] = None
+    result['model_class'] = ''
+    result['model_param'] = ''
+    result['patch_chain'] = []
+    if result['format'] == 'api':
+        try:
+            from backends.comfyui_workflow_inspector import inspect_workflow
+            ins = inspect_workflow(data)
+            result['classification'] = ins.classification.value
+            result['is_locked'] = ins.is_locked
+            result['model_node_id'] = ins.model_node_id
+            result['model_class'] = ins.model_class
+            result['model_param'] = ins.model_param
+            result['patch_chain'] = list(ins.patch_chain)
+            if ins.notes:
+                result.setdefault('inspector_notes', []).extend(ins.notes)
+        except Exception as e:
+            _logger.warning(f"workflow inspector 실패: {e}")
+
     # 유효성 검사
     errors = []
     if not result['ksampler_type']:
@@ -151,8 +174,9 @@ class ComfyUIBackend(AbstractBackend):
         """ComfyUI /object_info에서 모델/샘플러/스케줄러 추출"""
         info = BackendInfo()
 
-        obj_info = requests.get(
-            f'{self.api_url}/object_info', timeout=15
+        from core.http_retry import get_with_retry
+        obj_info = get_with_retry(
+            f'{self.api_url}/object_info', timeout=15, retries=3,
         ).json()
 
         # 체크포인트 모델
@@ -246,13 +270,13 @@ class ComfyUIBackend(AbstractBackend):
                 "API 관리에서 워크플로우 JSON 파일을 선택해주세요."
             )
 
-        import os
-        if not os.path.exists(workflow_path):
-            raise RuntimeError(
-                f"워크플로우 파일을 찾을 수 없습니다:\n{workflow_path}"
-            )
+        from core.path_safety import safe_config_file, UnsafePathError
+        try:
+            safe_path = safe_config_file(workflow_path, must_exist=True)
+        except UnsafePathError as e:
+            raise RuntimeError(f"워크플로우 파일 경로가 유효하지 않습니다: {e}") from e
 
-        with open(workflow_path, 'r', encoding='utf-8') as f:
+        with open(safe_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
         # 포맷 감지: 웹 포맷은 'nodes' 키가 있음
@@ -525,9 +549,25 @@ class ComfyUIBackend(AbstractBackend):
             # ★ WebSocket 먼저 연결 (프롬프트 제출 전에 연결해야 메시지를 놓치지 않음)
             ws_url = self.api_url.replace('http://', 'ws://').replace('https://', 'wss://')
             _logger.info(f"WebSocket 연결: {ws_url}/ws?clientId={client_id}")
+            # WSS일 때만 인증서 검증(로컬 루프백은 http/ws라 해당 없음).
+            ws_kwargs = {'timeout': 600}
+            if ws_url.startswith('wss://'):
+                import ssl
+                try:
+                    import certifi
+                    ws_kwargs['sslopt'] = {
+                        'cert_reqs': ssl.CERT_REQUIRED,
+                        'ca_certs': certifi.where(),
+                        'check_hostname': True,
+                    }
+                except ImportError:
+                    ws_kwargs['sslopt'] = {
+                        'cert_reqs': ssl.CERT_REQUIRED,
+                        'check_hostname': True,
+                    }
             ws = websocket.create_connection(
                 f'{ws_url}/ws?clientId={client_id}',
-                timeout=600
+                **ws_kwargs,
             )
 
             # 프롬프트 제출
@@ -558,10 +598,11 @@ class ComfyUIBackend(AbstractBackend):
                 except Exception:
                     error_msg = error_text
 
+                from core.error_handler import sanitize_for_ui
                 _logger.error(f"프롬프트 제출 실패: {error_msg}")
                 return GenerationResult(
                     success=False,
-                    error=f"ComfyUI 큐 등록 실패 (HTTP {prompt_response.status_code}):\n{error_msg}"
+                    error=f"ComfyUI 큐 등록 실패 (HTTP {prompt_response.status_code}): {sanitize_for_ui(error_msg)}"
                 )
 
             resp_data = prompt_response.json()
@@ -830,4 +871,11 @@ class ComfyUIBackend(AbstractBackend):
         raise NotImplementedError(
             "ComfyUI에서는 ADetailer가 지원되지 않습니다.\n"
             "워크플로우에 디테일러 노드를 추가하여 사용하세요."
+        )
+
+    def sam3(self, image_b64: str, settings: Dict) -> str:
+        """SAM3 (ComfyUI에서는 지원하지 않음)"""
+        raise NotImplementedError(
+            "ComfyUI에서는 Forge SAM3 확장이 지원되지 않습니다.\n"
+            "Forge Neo WebUI 백엔드에서 사용하세요."
         )

@@ -165,11 +165,22 @@ class WebUIMixin:
             info = analyze_workflow(path)
             if info.get('valid'):
                 w, h = info.get('width', '?'), info.get('height', '?')
+                # 3-state 분류 아이콘 (모델 콤보 잠금 여부 시각화)
+                lock_icon = '🔒' if info.get('is_locked') else '🔓'
+                cls = info.get('classification', 'unknown')
+                cls_label = {
+                    'native_checkpoint': 'Checkpoint',
+                    'native_unet': 'UNet',
+                    'locked_unknown': '커스텀',
+                    'no_sampler': '샘플러 없음',
+                    'unknown': '?',
+                }.get(cls, cls)
                 startup_wf_preview.setText(
                     f"✅ {info['format'].upper()} | 노드 {info['node_count']}개 | "
-                    f"{info.get('ksampler_type', '?')} | {w}x{h}"
+                    f"{info.get('ksampler_type', '?')} | {w}x{h} | {lock_icon} {cls_label}"
                 )
-                startup_wf_preview.setStyleSheet("font-size: 10px; padding: 4px; color: #4ade80;")
+                color = "#facc15" if info.get('is_locked') else "#4ade80"
+                startup_wf_preview.setStyleSheet(f"font-size: 10px; padding: 4px; color: {color};")
             else:
                 startup_wf_preview.setText(f"❌ {info.get('error', '알 수 없는 오류')}")
                 startup_wf_preview.setStyleSheet("font-size: 10px; padding: 4px; color: #f87171;")
@@ -473,6 +484,43 @@ class WebUIMixin:
             slot_widgets['vae_combo'].clear()
             slot_widgets['vae_combo'].addItems(vae_list)
 
+        # 메인 체크포인트 VAE / TE / SAM3 — Forge models 디렉토리 직접 스캔
+        try:
+            from core.forge_modules import (
+                list_vae_files, list_te_files, list_sam3_checkpoints, get_forge_root
+            )
+            disk_vae = list_vae_files()
+            disk_te = list_te_files()
+            disk_sam3 = list_sam3_checkpoints()
+        except Exception:
+            disk_vae, disk_te, disk_sam3 = [], [], []
+
+        if disk_vae:
+            main_vae_list = ["Use checkpoint default"] + disk_vae
+        else:
+            main_vae_list = ["Use checkpoint default"] + [
+                v for v in vae_list if v not in ("Use same VAE", "Use checkpoint default")
+            ]
+        self.vae_main_combo.clear()
+        self.vae_main_combo.addItems(main_vae_list)
+
+        # SAM3 체크포인트 드롭다운 — models/sam3/sam3*.{pt,safetensors}
+        if disk_sam3:
+            sam3_ckpt_proxy = self.sam3_widgets.get('checkpoint') if hasattr(self, 'sam3_widgets') else None
+            if sam3_ckpt_proxy is not None and hasattr(sam3_ckpt_proxy, 'clear'):
+                try:
+                    sam3_ckpt_proxy.clear()
+                    sam3_ckpt_proxy.addItems(disk_sam3)
+                except Exception:
+                    pass
+
+        # TE 파일 목록을 Vue로 전달 — te_main_input의 'items' property
+        if disk_te:
+            try:
+                self.vue_bridge.pushWidgetProperty('te_main_input', 'items', disk_te)
+            except Exception:
+                pass
+
         # Checkpoint
         checkpoints = info.get('checkpoints', ["Use same checkpoint"])
         for slot_widgets in [self.s1_widgets, self.s2_widgets]:
@@ -570,6 +618,10 @@ class WebUIMixin:
             self.adetailer_group.setEnabled(not is_comfyui)
             self.adetailer_group.setToolTip(comfyui_tip if is_comfyui else "")
 
+        if hasattr(self, 'sam3_group'):
+            self.sam3_group.setEnabled(not is_comfyui)
+            self.sam3_group.setToolTip(comfyui_tip if is_comfyui else "")
+
         if hasattr(self, 'negpip_group'):
             self.negpip_group.setEnabled(not is_comfyui)
 
@@ -596,7 +648,13 @@ class WebUIMixin:
                     pass  # Vue 모드에서는 center_tabs가 더미
 
     def _auto_select_workflow_model(self, available_models: list):
-        """ComfyUI 워크플로우에 설정된 체크포인트를 모델 콤보박스에서 자동 선택"""
+        """ComfyUI 워크플로우에 설정된 체크포인트를 모델 콤보박스에서 자동 선택.
+
+        WorkflowInspector가 LOCKED_UNKNOWN으로 분류한 경우 (GGUF, NF4 등 커스텀 로더):
+        - 모델 콤보 비활성화 (사용자가 잘못 바꾸지 못하게)
+        - 자동 선택 안 함
+        - 사용자에게 노티
+        """
         import config
         wf_path = getattr(config, 'COMFYUI_WORKFLOW_PATH', '')
         if not wf_path:
@@ -604,6 +662,37 @@ class WebUIMixin:
 
         from backends.comfyui_backend import analyze_workflow
         info = analyze_workflow(wf_path)
+
+        # 3-state 분류 처리
+        is_locked = info.get('is_locked', False)
+        classification = info.get('classification', 'unknown')
+
+        if is_locked:
+            # 커스텀 로더 — 모델 선택 비활성화
+            try:
+                self.model_combo.setEnabled(False)
+                self.model_combo.setToolTip(
+                    f"이 워크플로우는 커스텀 모델 로더('{info.get('model_class', '?')}')를\n"
+                    f"사용해서 UR_IV에서 모델을 바꿀 수 없습니다.\n"
+                    f"워크플로우 JSON을 직접 편집해주세요."
+                )
+                # Vue로도 알림
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.showNotification.emit(
+                        'warning',
+                        f"커스텀 로더 감지: {info.get('model_class', '?')} — 모델 선택 비활성"
+                    )
+            except Exception:
+                pass
+            return
+
+        # 표준 로더 — 콤보 활성화 + 자동 선택
+        try:
+            self.model_combo.setEnabled(True)
+            self.model_combo.setToolTip("")
+        except Exception:
+            pass
+
         ckpt = info.get('checkpoint')
         if not ckpt:
             return
@@ -754,11 +843,24 @@ class WebUIMixin:
                     lines.append(f"🎲 샘플러: {info['ksampler_type']}")
                 if info.get('width') and info.get('height'):
                     lines.append(f"📐 해상도: {info['width']}x{info['height']}")
+                # 3-state 모델 로더 분류
+                cls = info.get('classification', 'unknown')
+                if cls == 'native_checkpoint':
+                    lines.append(f"🔓 모델 콤보 활성 (CheckpointLoader)")
+                elif cls == 'native_unet':
+                    lines.append(f"🔓 모델 콤보 활성 (UNETLoader · {info.get('model_param', '?')})")
+                elif cls == 'locked_unknown':
+                    lines.append(f"🔒 모델 콤보 잠금 (커스텀: {info.get('model_class', '?')})")
+                if info.get('patch_chain'):
+                    lines.append(f"🔧 패치 체인: {', '.join(info['patch_chain'][:3])}"
+                                 + ("..." if len(info['patch_chain']) > 3 else ""))
                 if info.get('error'):
                     lines.append(f"⚠️ 경고: {info['error']}")
+                # 잠긴 워크플로우는 노란색, 정상은 녹색
+                border_color = "#facc15" if info.get('is_locked') else "#4ade80"
                 wf_preview_label.setStyleSheet(
                     f"font-size: 11px; padding: 6px; background: {get_color('bg_input')}; "
-                    f"border: 1px solid #4ade80; border-radius: 4px; color: #4ade80;"
+                    f"border: 1px solid {border_color}; border-radius: 4px; color: {border_color};"
                 )
                 wf_preview_label.setText("\n".join(lines))
             wf_preview_label.show()
