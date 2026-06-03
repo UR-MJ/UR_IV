@@ -86,8 +86,14 @@ def parse_query(query: str) -> list:
             inner = m.group(1)
             if '|' in inner:
                 raw = [t.strip() for t in inner.split('|')]
-                # 빈 토큰이 하나라도 있으면 → 이 OR 그룹은 와일드카드(필드 면제)
-                has_wildcard = any(not t for t in raw)
+                # 와일드카드는 trailing 빈 토큰(`|]` 직전)에서만 인식 — 명시적 신호로 한정.
+                # 중간 `||`(이중 파이프)는 사용자 오타/정렬 흔적이라 와일드카드 발동 X,
+                # 그냥 빈 토큰은 필터링하여 정리. 양 끝의 leading `|`도 동일하게 무시.
+                #   예) [A|B|]     → has_wildcard=True  (trailing empty)
+                #   예) [A||B]     → has_wildcard=False (중간 || 는 그냥 정리)
+                #   예) [|A|B]     → has_wildcard=False (leading empty 는 무시)
+                #   예) [|A|B|]    → has_wildcard=True  (trailing empty 가 있으면 wildcard)
+                has_wildcard = len(raw) > 0 and raw[-1] == ''
                 terms = [t for t in raw if t]
                 conditions.append({
                     'type': 'or',

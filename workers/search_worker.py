@@ -70,16 +70,22 @@ class PandasSearchWorker(QThread):
             ]
             print(f"[Search] non_empty_fields: {[(c, t[:50]) for c, t in non_empty_fields]}")
 
+            n_total = len(df)
+
+            def _wc_note(n: int) -> str:
+                """매칭 수가 전체와 같으면 wildcard(필드 면제) 발동 표시"""
+                return ' [WILDCARD — 필드 면제]' if n == n_total else ''
+
             if not non_empty_fields:
                 total_mask = pd.Series(True, index=df.index)
-                print(f"[Search] no fields → all rows pass ({len(df):,})")
+                print(f"[Search] no fields → all rows pass ({n_total:,})")
             elif self.combine_mode == 'or':
                 # OR: 빈 마스크에서 시작해 |= 누적
                 total_mask = pd.Series(False, index=df.index)
                 for col, search_text in non_empty_fields:
                     cm = self._parse_condition(df, col, search_text)
                     n_match = int(cm.sum())
-                    print(f"[Search] OR  | {col:>10s} '{search_text[:60]}...' → {n_match:,} matches")
+                    print(f"[Search] OR  | {col:>10s} '{search_text[:60]}...' → {n_match:,} matches{_wc_note(n_match)}")
                     total_mask |= cm
             else:
                 # AND: True에서 시작해 &= 누적
@@ -87,7 +93,7 @@ class PandasSearchWorker(QThread):
                 for col, search_text in non_empty_fields:
                     cm = self._parse_condition(df, col, search_text)
                     n_match = int(cm.sum())
-                    print(f"[Search] AND | {col:>10s} '{search_text[:60]}...' → {n_match:,} matches")
+                    print(f"[Search] AND | {col:>10s} '{search_text[:60]}...' → {n_match:,} matches{_wc_note(n_match)}")
                     total_mask &= cm
                     print(f"[Search]     ↳ cumulative AND mask: {int(total_mask.sum()):,}")
 

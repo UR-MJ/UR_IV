@@ -127,7 +127,7 @@
         <span>쉼표(,) = {{ combineMode === 'or' ? 'OR (모드 따라)' : 'AND (모드 따라)' }}</span>
         <span>[A|B] = OR (명시)</span>
         <span>[A,B] = AND (명시)</span>
-        <span :title="'AND 모드에서 copyright=[X|Y|] → X 또는 Y 또는 무관\n→ 이 필드 조건 사실상 면제'">[A|B|<i>빈칸</i>] = 필드 와일드카드</span>
+        <span :title="'마지막 | 다음을 비워두면 → 이 필드 조건은 매칭 안 되어도 통과\n예: copyright=[tots|alc|] → TOT/ALC 매치 또는 무관\n\n⚠ 중간 ||(이중 파이프)는 wildcard 아님 — 그냥 빈 토큰 무시\n예: character=[A||B] → A 또는 B만 (필드 조건 면제 안 됨)'">[A|B|<b>↵</b>] = 끝에 비우면 필드 면제</span>
         <span>Exclude로 제외 조건 설정</span>
         <span class="hint-mode" :class="combineMode">
           현재: <strong>{{ combineMode === 'and' ? 'AND' : 'OR' }}</strong> · <strong>{{ datasetYear }}</strong>
