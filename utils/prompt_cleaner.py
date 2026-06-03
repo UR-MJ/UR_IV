@@ -22,6 +22,9 @@ class PromptCleaner:
         self.underscore_to_space = True  # 밑줄 → 공백
         self.remove_empty_parens = True  # 빈 괄호 제거
         self.trim_trailing_comma = True  # 마지막 쉼표 제거
+        # 밑줄을 보존할 태그/패턴 (정확 일치 또는 패턴 매치)
+        # 예: score_9, score_8 등이 score 9, score 8로 안 바뀌게
+        self._underscore_preserve_load()
     
     def clean(self, text: str) -> str:
         """전체 정리 실행"""
@@ -90,23 +93,72 @@ class PromptCleaner:
         return text
     
     def _convert_underscores(self, text: str) -> str:
-        """밑줄을 공백으로 변환 (태그 내부만)"""
-        # 이스케이프된 밑줄은 유지
-        # 단순히 _ → 공백
-        # 단, \_ 는 유지
-        result = []
-        i = 0
-        while i < len(text):
-            if text[i] == '\\' and i + 1 < len(text) and text[i + 1] == '_':
-                result.append('_')  # \_ → _
-                i += 2
-            elif text[i] == '_':
-                result.append(' ')
-                i += 1
-            else:
-                result.append(text[i])
-                i += 1
-        return ''.join(result)
+        """밑줄을 공백으로 변환 (태그 내부만).
+
+        예외 리스트 (``underscore_preserve_set``)에 정확히 일치하는 태그는
+        밑줄을 유지한다. 예: ``score_9``, ``score_8`` → 그대로 보존.
+
+        이스케이프된 밑줄(``\\_``)은 항상 ``_``로 환원 (기존 동작 유지).
+        """
+        # 태그 단위로 split → 각 태그가 예외 리스트인지 확인 → 변환 결정
+        preserve = self._get_underscore_preserve_set()
+        tags = self._split_by_top_level_commas(text) if hasattr(self, '_split_by_top_level_commas') else text.split(',')
+        out_tags: list[str] = []
+        for raw_tag in tags:
+            stripped = raw_tag.strip()
+            # 정확 일치 (대소문자 무시)
+            if stripped.lower() in preserve:
+                out_tags.append(raw_tag)  # 원본 그대로 (밑줄 유지)
+                continue
+            # 일반 변환 (이스케이프 처리 포함)
+            converted = []
+            i = 0
+            while i < len(raw_tag):
+                if raw_tag[i] == '\\' and i + 1 < len(raw_tag) and raw_tag[i + 1] == '_':
+                    converted.append('_')
+                    i += 2
+                elif raw_tag[i] == '_':
+                    converted.append(' ')
+                    i += 1
+                else:
+                    converted.append(raw_tag[i])
+                    i += 1
+            out_tags.append(''.join(converted))
+        return ','.join(out_tags)
+
+    def _underscore_preserve_load(self) -> None:
+        """기본값 + ``config/underscore_preserve.txt`` 로딩 (한 줄당 한 태그).
+
+        파일이 없거나 비어있으면 기본값만 사용. ``#``로 시작하는 줄은 주석.
+        """
+        # 기본 — Pony/SDXL score 태그 + 일부 자주 쓰이는 underscore 보존 태그
+        self.underscore_preserve_set: set[str] = {
+            "score_9", "score_8", "score_7", "score_6", "score_5", "score_4",
+            "score_3", "score_2", "score_1", "score_0",
+            "score_9_up", "score_8_up", "score_7_up", "score_6_up", "score_5_up",
+            "rating_safe", "rating_questionable", "rating_explicit", "rating_general",
+            "source_anime", "source_furry", "source_cartoon", "source_pony",
+        }
+        # config 파일 머지
+        try:
+            import os
+            from pathlib import Path
+            project_root = Path(__file__).resolve().parent.parent
+            cfg = project_root / "config" / "underscore_preserve.txt"
+            if cfg.is_file():
+                for line in cfg.read_text(encoding="utf-8").splitlines():
+                    s = line.strip()
+                    if not s or s.startswith("#"):
+                        continue
+                    self.underscore_preserve_set.add(s.lower())
+        except Exception:
+            pass  # 보수적 — 파일 파싱 실패해도 기본값으로 동작
+
+    def _get_underscore_preserve_set(self) -> set[str]:
+        """예외 리스트 조회 — 외부 변경에 안전한 사본 반환."""
+        if not hasattr(self, "underscore_preserve_set"):
+            self._underscore_preserve_load()
+        return self.underscore_preserve_set
     
     def _remove_duplicate_tags(self, text: str) -> str:
         """중복 태그 제거"""

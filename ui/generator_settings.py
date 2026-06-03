@@ -66,10 +66,13 @@ class SettingsMixin:
             "exclude_prompt_local": self.exclude_prompt_local_input.toPlainText(),
 
             "model": model_val,
+            "vae_main": self.vae_main_combo.currentText() if hasattr(self, 'vae_main_combo') else "",
+            "te_main": self.te_main_input.text() if hasattr(self, 'te_main_input') else "",
             "sampler": sampler_val,
             "scheduler": scheduler_val,
             "steps": self.steps_input.text(),
             "cfg": self.cfg_input.text(),
+            "shift": self.shift_input.text(),
             "seed": self.seed_input.text(),
             "width": self.width_input.text(),
             "height": self.height_input.text(),
@@ -99,6 +102,8 @@ class SettingsMixin:
             
             "adetailer_slot1": self._get_slot_settings(self.s1_widgets),
             "adetailer_slot2": self._get_slot_settings(self.s2_widgets),
+            "sam3_enabled": self.sam3_group.isChecked() if hasattr(self, 'sam3_group') else False,
+            "sam3_settings": self._get_sam3_settings(self.sam3_widgets) if hasattr(self, 'sam3_widgets') else {},
             
             "prefix_toggle": self.prefix_toggle_button.isChecked(),
             "suffix_toggle": self.suffix_toggle_button.isChecked(),
@@ -185,9 +190,22 @@ class SettingsMixin:
             # 생성 파라미터
             model_text = settings.get("model", "")
             idx = self.model_combo.findText(model_text)
-            if idx >= 0: 
+            if idx >= 0:
                 self.model_combo.setCurrentIndex(idx)
-            
+
+            # VAE / TE 복원
+            # 중요: load_settings는 백엔드 정보가 채워지기 전에 실행되므로
+            # vae_main_combo는 비어있는 상태일 수 있음.
+            # ComboBoxProxy.setText()는 items에 있으면 즉시 적용,
+            # 없으면 _fallback_text에 저장 → addItems() 호출 시 자동 복원.
+            if hasattr(self, 'vae_main_combo'):
+                vae_main_text = settings.get("vae_main", "")
+                if vae_main_text:
+                    self.vae_main_combo.setText(vae_main_text)
+            if hasattr(self, 'te_main_input'):
+                # LineEditProxy — Vue로 즉시 push (chips 자동 렌더링)
+                self.te_main_input.setText(settings.get("te_main", ""))
+
             sampler_text = settings.get("sampler", "")
             idx = self.sampler_combo.findText(sampler_text)
             if idx >= 0: 
@@ -200,8 +218,10 @@ class SettingsMixin:
             
             self.steps_input.setText(settings.get("steps", "25"))
             self.cfg_input.setText(settings.get("cfg", "7.0"))
+            self.shift_input.setText(settings.get("shift", "0"))
             self._sync_slider(self.steps_input)
             self._sync_slider(self.cfg_input)
+            self._sync_slider(self.shift_input)
             self.seed_input.setText(settings.get("seed", "-1"))
             self.width_input.setText(settings.get("width", "1024"))
             self.height_input.setText(settings.get("height", "1024"))
@@ -273,6 +293,10 @@ class SettingsMixin:
                 self._set_slot_settings(self.s1_widgets, settings["adetailer_slot1"])
             if "adetailer_slot2" in settings:
                 self._set_slot_settings(self.s2_widgets, settings["adetailer_slot2"])
+            if hasattr(self, 'sam3_group'):
+                self.sam3_group.setChecked(settings.get("sam3_enabled", False))
+            if hasattr(self, 'sam3_widgets') and "sam3_settings" in settings:
+                self._set_sam3_settings(self.sam3_widgets, settings["sam3_settings"])
             
             # 토글 상태
             self.prefix_toggle_button.setChecked(settings.get("prefix_toggle", True))
@@ -493,6 +517,36 @@ class SettingsMixin:
             "sampler": widgets['sampler_combo'].currentText(),
             "scheduler": widgets['scheduler_combo'].currentText(),
         }
+
+    def _get_sam3_settings(self, widgets):
+        """SAM3 설정 가져오기"""
+        return {
+            "detect_prompt": widgets['detect_prompt'].toPlainText(),
+            "inpaint_prompt": widgets['inpaint_prompt'].toPlainText(),
+            "neg_prompt": widgets['neg_prompt'].toPlainText(),
+            "mode": widgets['mode'].currentText(),
+            "mask_mode": widgets['mask_mode'].currentText(),
+            "threshold": widgets['threshold'].text(),
+            "mask_blur": widgets['mask_blur'].text(),
+            "denoise": widgets['denoise'].text(),
+            "padding": widgets['padding'].text(),
+            "checkpoint": widgets['checkpoint'].text(),
+            "preview_overlay": widgets['preview_overlay'].isChecked(),
+            "save_artifacts": widgets['save_artifacts'].isChecked(),
+            "use_inpaint_size": widgets['use_inpaint_size_check'].isChecked(),
+            "inpaint_width": widgets['inpaint_width'].text(),
+            "inpaint_height": widgets['inpaint_height'].text(),
+            "use_steps": widgets['use_steps_check'].isChecked(),
+            "steps": widgets['steps'].text(),
+            "use_cfg": widgets['use_cfg_check'].isChecked(),
+            "cfg": widgets['cfg'].text(),
+            "use_sampler": widgets['use_sampler_check'].isChecked(),
+            "sampler": widgets['sampler'].currentText(),
+            "scheduler": widgets['scheduler'].currentText(),
+            "use_noise_multiplier": widgets['use_noise_multiplier_check'].isChecked(),
+            "noise_multiplier": widgets['noise_multiplier'].text(),
+            "restore_face": widgets['restore_face'].isChecked(),
+        }
     
     def _set_slot_settings(self, widgets, settings):
         """ADetailer 슬롯 설정 적용"""
@@ -535,6 +589,49 @@ class SettingsMixin:
         idx = widgets['scheduler_combo'].findText(scheduler_text)
         if idx >= 0:
             widgets['scheduler_combo'].setCurrentIndex(idx)
+
+    def _set_sam3_settings(self, widgets, settings):
+        """SAM3 설정 적용"""
+        widgets['detect_prompt'].setPlainText(settings.get("detect_prompt", "face"))
+        widgets['inpaint_prompt'].setPlainText(settings.get("inpaint_prompt", ""))
+        widgets['neg_prompt'].setPlainText(settings.get("neg_prompt", ""))
+
+        mode_text = settings.get("mode", "Inpaint")
+        idx = widgets['mode'].findText(mode_text)
+        if idx >= 0:
+            widgets['mode'].setCurrentIndex(idx)
+
+        mask_mode_text = settings.get("mask_mode", "Individual")
+        idx = widgets['mask_mode'].findText(mask_mode_text)
+        if idx >= 0:
+            widgets['mask_mode'].setCurrentIndex(idx)
+
+        widgets['threshold'].setText(settings.get("threshold", "0.40"))
+        widgets['mask_blur'].setText(settings.get("mask_blur", "4"))
+        widgets['denoise'].setText(settings.get("denoise", "0.40"))
+        widgets['padding'].setText(settings.get("padding", "32"))
+        widgets['checkpoint'].setText(settings.get("checkpoint", "sam3.pt"))
+        widgets['preview_overlay'].setChecked(settings.get("preview_overlay", False))
+        widgets['save_artifacts'].setChecked(settings.get("save_artifacts", True))
+        widgets['use_inpaint_size_check'].setChecked(settings.get("use_inpaint_size", False))
+        widgets['inpaint_width'].setText(settings.get("inpaint_width", "1024"))
+        widgets['inpaint_height'].setText(settings.get("inpaint_height", "1024"))
+        widgets['use_steps_check'].setChecked(settings.get("use_steps", False))
+        widgets['steps'].setText(settings.get("steps", "28"))
+        widgets['use_cfg_check'].setChecked(settings.get("use_cfg", False))
+        widgets['cfg'].setText(settings.get("cfg", "7.0"))
+        widgets['use_sampler_check'].setChecked(settings.get("use_sampler", False))
+        sampler_text = settings.get("sampler", "Use same sampler")
+        idx = widgets['sampler'].findText(sampler_text)
+        if idx >= 0:
+            widgets['sampler'].setCurrentIndex(idx)
+        scheduler_text = settings.get("scheduler", "Use same scheduler")
+        idx = widgets['scheduler'].findText(scheduler_text)
+        if idx >= 0:
+            widgets['scheduler'].setCurrentIndex(idx)
+        widgets['use_noise_multiplier_check'].setChecked(settings.get("use_noise_multiplier", False))
+        widgets['noise_multiplier'].setText(settings.get("noise_multiplier", "1.0"))
+        widgets['restore_face'].setChecked(settings.get("restore_face", False))
 
     # ── I2I 탭 설정 ──
 
