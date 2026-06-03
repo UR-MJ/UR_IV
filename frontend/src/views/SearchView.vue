@@ -51,14 +51,16 @@
               :class="{ active: r.checked }" @click="r.checked = !r.checked">{{ r.label }}</button>
           </div>
           <!-- 필드 간 결합 모드: AND (교집합) / OR (합집합) -->
-          <div class="combine-row" :title="combineMode === 'and'
-              ? '필드들이 AND로 결합 — 모두 만족하는 결과만 (예: Character + Copyright + Tags 전부 매칭)'
-              : '필드들이 OR로 결합 — 하나라도 만족하면 통과 (예: 캐릭터 X 또는 작품 Y 또는 태그 Z 중 하나라도)'">
+          <div class="combine-row">
             <span class="combine-label">필드 결합:</span>
-            <button class="combine-chip" :class="{ active: combineMode === 'and' }" @click="combineMode = 'and'">
+            <button class="combine-chip" :class="{ active: combineMode === 'and' }"
+              @click="combineMode = 'and'"
+              title="AND (교집합) — 모든 필드 조건 동시 만족&#10;&#10;예) character=raiden_shogun + copyright=genshin&#10;→ 라이덴 쇼군만 (두 조건 모두 충족하는 캐릭터)">
               ∩ AND
             </button>
-            <button class="combine-chip" :class="{ active: combineMode === 'or' }" @click="combineMode = 'or'">
+            <button class="combine-chip" :class="{ active: combineMode === 'or' }"
+              @click="combineMode = 'or'"
+              title="OR (합집합) — 하나라도 만족하면 통과&#10;&#10;예) character=ike + copyright=arknights&#10;→ Fire Emblem의 Ike + Arknights 작품 모든 캐릭터&#10;&#10;💡 정확 매칭이 필요하면 *ike 처럼 별표를 붙이세요">
               ∪ OR
             </button>
           </div>
