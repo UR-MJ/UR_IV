@@ -784,7 +784,11 @@ function syncAutomationSettings() {
   })
 }
 
+// PR 9: 서버 → Vue 푸시 중에는 watch가 다시 서버로 보내지 않도록 가드
+let _applyingAutoFromServer = false
+
 watch(autoSettings, () => {
+  if (_applyingAutoFromServer) return
   syncAutomationSettings()
 }, { deep: true })
 
@@ -1220,6 +1224,21 @@ onMounted(async () => {
       autoGenCount.value = d.count || 0
       autoWaiting.value = d.waiting || false
       if (!d.running) { isGenerating.value = false }
+    } catch {}
+  })
+  // PR 9: 백엔드가 모드별 자동화 설정을 푸시 (시작 시 + 백엔드 모드 전환 시)
+  onBackendEvent('automationSettingsLoaded', (json) => {
+    try {
+      const d = JSON.parse(json)
+      _applyingAutoFromServer = true  // watch에서 다시 서버로 보내는 루프 방지
+      if (typeof d.mode === 'string') autoSettings.mode = d.mode
+      if (typeof d.limit === 'number') autoSettings.limit = d.limit
+      if (typeof d.repeat === 'number') autoSettings.repeat = d.repeat
+      if (typeof d.delay === 'number') autoSettings.delay = d.delay
+      if (typeof d.allowDupes === 'boolean') autoSettings.allowDupes = d.allowDupes
+      if (typeof d.maxRetries === 'number') autoSettings.maxRetries = d.maxRetries
+      // watch 콜백이 큐잉 처리되도록 microtask 끝난 후 가드 해제
+      Promise.resolve().then(() => { _applyingAutoFromServer = false })
     } catch {}
   })
   onBackendEvent('generationProgress', (step, total) => {

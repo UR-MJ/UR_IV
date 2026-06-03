@@ -123,6 +123,13 @@ class GeneratorMainUI(
             #     showMaximized() 등 다른 main의 호출과 충돌 회피 위해 약간 더 늦춤
             QTimer.singleShot(200, lambda: self.ui_state.restore_all_delayed(150))
 
+            # 11. PR 9 — 모드별 자동화 설정 영속 (webui/comfyui 분리)
+            #     백엔드 전환 시 자동 저장/복원, Vue로 자동 전파
+            from core.mode_aware_automation import ModeAwareAutomationSettings
+            self.automation_persistence = ModeAwareAutomationSettings(self)
+            # vue_bridge가 준비되고 Vue가 시그널 받을 준비 끝난 후 (1.5초 후) 적용
+            QTimer.singleShot(1500, self.automation_persistence.initialize)
+
             print("[System] Engine Ready.")
 
         except Exception as e:
@@ -644,6 +651,9 @@ class GeneratorMainUI(
                     # PR 3: 재시도 설정 (기본 2회)
                     'maxRetries': int(payload.get('maxRetries', 2)),
                 }
+                # PR 9: 모드별로 자동 저장
+                if hasattr(self, 'automation_persistence'):
+                    self.automation_persistence.save_mode_settings()
 
             elif action == 'toggle_automation':
                 checked = payload.get('checked', False)
