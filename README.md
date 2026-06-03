@@ -141,7 +141,7 @@ Hugging Face에서 다운로드 가능: `wd-tagger` 또는 Danbooru 덤프 프�
 
 | 문법 | 의미 | 예 |
 |---|---|---|
-| `word` | 포함 매칭 | `1girl` → `1girls`, `1girl_with_hat` 모두 매칭 |
+| `word` | 포함 매칭 | `girl` → `1girl`, `multiple girls` 모두 매칭 |
 | `*word` | 완전 일치 | `*1girl` → 정확히 `1girl` 태그만 |
 | `_word` | 접미 | `_hair` → `short hair`, `long hair` |
 | `word_` | 접두 | `hair_` → `hair ornament`, `hair ribbon` |
