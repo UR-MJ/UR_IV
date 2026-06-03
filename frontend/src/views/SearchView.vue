@@ -155,7 +155,8 @@
             :stroke-dashoffset="ringOffset" />
         </svg>
         <div class="ring-center">
-          <div class="ring-pct">{{ Math.round(searchProgress) }}%</div>
+          <!-- 표시값은 항상 [0, 100] 범위로 클램프 — 가짜 진행률 오차 흡수 -->
+          <div class="ring-pct">{{ Math.min(100, Math.max(0, Math.round(searchProgress))) }}%</div>
         </div>
       </div>
       <h2>SEARCHING...</h2>
@@ -542,7 +543,13 @@ async function search() {
   searching.value = true; statusText.value = 'EXPLORING...'
   searchProgress.value = 0
   hasSearched.value = true  // 0건 UI 분기용
-  progressTimer = setInterval(() => { if (searchProgress.value < 90) searchProgress.value += Math.random() * 12 }, 500)
+  // 가짜 진행률: 95%까지만 부드럽게 증가 (실제 결과 도착 시 100%로 점프)
+  // Math.min 클램프 — 단계 +5~+10 무작위라도 95를 넘지 않게
+  progressTimer = setInterval(() => {
+    if (searchProgress.value < 95) {
+      searchProgress.value = Math.min(95, searchProgress.value + Math.random() * 8)
+    }
+  }, 500)
   const backend = await getBackend()
   const query = {
     ratings: ratings.filter(r => r.checked).map(r => r.key),
