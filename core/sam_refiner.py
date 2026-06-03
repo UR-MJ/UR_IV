@@ -120,7 +120,8 @@ def _build_sam3_prompt(yolo_model_paths: list) -> str:
 def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
                           sam_model_path: str = None, sam_type: str = None,
                           text_prompt: str = None,
-                          yolo_model_paths: list = None) -> np.ndarray:
+                          yolo_model_paths: list = None,
+                          exclude_prompt: str = None) -> np.ndarray:
     """
     YOLO bbox 목록을 SAM으로 정밀 마스킹
 
@@ -132,6 +133,8 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
         sam_type: 'sam3', 'mobile_sam', 'fast_sam', 'sam'
         text_prompt: SAM3 전용. None이면 yolo_model_paths에서 자동 생성
         yolo_model_paths: SAM3 텍스트 프롬프트 자동 생성에 사용
+        exclude_prompt: SAM3 전용. 마스크에서 제외할 영역을 텍스트로 지정
+            예: 'face' → 얼굴 영역을 검출해서 최종 마스크에서 빼기
 
     Returns:
         combined_mask: uint8 마스크 (0 or 255)
@@ -167,6 +170,7 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
             return _refine_with_sam3(
                 image, boxes, sam_model_path, combined_mask,
                 text_prompt=(text_prompt or _build_sam3_prompt(yolo_model_paths or [])),
+                exclude_prompt=exclude_prompt,
             )
         if sam_type == 'fast_sam':
             return _refine_with_fastsam(image, boxes, sam_model_path, combined_mask)
@@ -329,9 +333,11 @@ def _find_sam3_bpe_vocab() -> str:
 
 
 def _refine_with_sam3(image: np.ndarray, boxes: list, model_path: str,
-                      mask: np.ndarray, text_prompt: str = 'person') -> np.ndarray:
+                      mask: np.ndarray, text_prompt: str = 'person',
+                      exclude_prompt: str = None) -> np.ndarray:
     """SAM3로 정밀 마스킹.
     SAM3는 text-prompted (bbox 입력 불가). YOLO bbox는 출력 마스크 필터링에만 사용.
+    exclude_prompt가 주어지면 해당 영역(예: 'face')을 SAM3로 찾아서 최종 마스크에서 뺀다.
     """
     try:
         from sam3.model_builder import build_sam3_image_model
@@ -452,5 +458,64 @@ def _refine_with_sam3(image: np.ndarray, boxes: list, model_path: str,
             union |= m_bool
         mask[union] = 255
         print(f"[SAM3] no YOLO bbox — used all {len(sam3_masks)} SAM3 masks")
+
+    # ── 제외 프롬프트 처리 ──
+    # 사용자가 'face' 같은 텍스트로 마스크에서 빼고 싶은 영역을 지정한 경우
+    # SAM3를 한 번 더 돌려 해당 영역 검출 → mask에서 0으로 빼기
+    if exclude_prompt and exclude_prompt.strip():
+        excl_text = exclude_prompt.strip()
+        try:
+            print(f"[SAM3] running exclude pass: '{excl_text}'")
+            if device == 'cuda':
+                with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                    excl_state = processor.set_image(pil)
+                    excl_state = processor.set_text_prompt(prompt=excl_text, state=excl_state)
+            else:
+                excl_state = processor.set_image(pil)
+                excl_state = processor.set_text_prompt(prompt=excl_text, state=excl_state)
+
+            excl_arr = excl_state.get('masks', None) if isinstance(excl_state, dict) else None
+            if excl_arr is None:
+                print(f"[SAM3] exclude '{excl_text}': no masks returned")
+            else:
+                if hasattr(excl_arr, 'detach'):
+                    excl_arr = excl_arr.detach().float().cpu().numpy()
+                excl_arr = np.asarray(excl_arr)
+                if excl_arr.size == 0:
+                    print(f"[SAM3] exclude '{excl_text}': no detections")
+                else:
+                    if excl_arr.ndim == 2:
+                        excl_arr = excl_arr[None, ...]
+                    elif excl_arr.ndim > 3:
+                        excl_arr = excl_arr.reshape((-1, excl_arr.shape[-2], excl_arr.shape[-1]))
+
+                    excl_union = np.zeros((h, w), dtype=bool)
+                    n_excl = 0
+                    for em in excl_arr:
+                        if em.shape != (h, w):
+                            em = cv2.resize(em.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
+                        em_bool = (em > 0.5)
+                        if em_bool.any():
+                            excl_union |= em_bool
+                            n_excl += 1
+
+                    if n_excl > 0:
+                        # 마스크에서 제외 영역 잘라내기 + 가장자리 약간 부드럽게 (얇은 erosion으로 확장)
+                        # 검출 누락 보강용 1px dilation
+                        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                        excl_u8 = excl_union.astype(np.uint8) * 255
+                        excl_u8 = cv2.dilate(excl_u8, kernel, iterations=1)
+                        excl_bool = excl_u8 > 0
+                        before_px = int((mask > 0).sum())
+                        mask[excl_bool] = 0
+                        after_px = int((mask > 0).sum())
+                        print(f"[SAM3] excluded '{excl_text}': {n_excl} masks, "
+                              f"removed {before_px - after_px} px from final mask")
+                    else:
+                        print(f"[SAM3] exclude '{excl_text}': all masks empty")
+        except Exception as e:
+            import traceback
+            print(f"[SAM3] exclude prompt '{excl_text}' processing failed: {e}")
+            traceback.print_exc()
 
     return mask

@@ -363,10 +363,17 @@ class VueBridge(QObject):
                                 # YOLO seg 마스크가 이미 있고 SAM3가 아니면 정밀화 생략
                                 print("[SAM] YOLO seg mask available, skipping SAM")
                             elif sam_path:
+                                # SAM3 전용: 마스크에서 빼고 싶은 영역의 텍스트 프롬프트
+                                #   예: 'face' → 얼굴 영역을 검출해서 최종 마스크에서 빼기
+                                excl_prompt = params.get('exclude_prompt') or params.get('excludePrompt')
+                                excl_prompt = str(excl_prompt).strip() if excl_prompt else None
+                                if excl_prompt and sam_type == 'sam3':
+                                    print(f"[SAM3] exclude prompt requested: '{excl_prompt}'")
                                 sam_mask = refine_boxes_with_sam(
                                     img, yolo_boxes, models_dir,
                                     sam_model_path=sam_path, sam_type=sam_type,
                                     yolo_model_paths=model_paths,
+                                    exclude_prompt=excl_prompt,
                                 )
                                 if sam_mask.any():
                                     combined_mask = sam_mask

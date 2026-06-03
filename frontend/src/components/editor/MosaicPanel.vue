@@ -56,9 +56,24 @@
           <span class="label">{{ m.label }}</span>
         </button>
       </div>
+      <!-- SAM3 전용: 제외 프롬프트 (마스크에서 빼고 싶은 영역) -->
+      <div v-if="samModel === 'sam3'" class="sam3-exclude mt-8">
+        <label class="sub-label" style="margin-bottom:4px;">
+          Exclude Prompt
+          <span class="hint" :title="'마스크에서 제외할 영역을 영어로 입력 (예: face, eyes, hand)\nSAM3가 검출하면 최종 마스크에서 빠집니다.'">ⓘ</span>
+        </label>
+        <input
+          type="text"
+          v-model="samExcludePrompt"
+          class="exclude-input"
+          placeholder="face, eyes, hand"
+          spellcheck="false"
+          autocomplete="off"
+        />
+      </div>
       <div class="btn-row mt-12">
-        <button class="action-btn primary" @click="$emit('auto-censor', { confidence: detectConf, samModel })">AUTO CENSOR</button>
-        <button class="action-btn" @click="$emit('auto-detect', { confidence: detectConf, samModel })">MASK ONLY</button>
+        <button class="action-btn primary" @click="$emit('auto-censor', { confidence: detectConf, samModel, excludePrompt: samExcludePrompt })">AUTO CENSOR</button>
+        <button class="action-btn" @click="$emit('auto-detect', { confidence: detectConf, samModel, excludePrompt: samExcludePrompt })">MASK ONLY</button>
       </div>
     </div>
 
@@ -206,6 +221,14 @@ try {
   if (saved && samModels.some(m => m.id === saved)) samModel.value = saved
 } catch {}
 watch(samModel, (v) => { try { localStorage.setItem('editor.samModel', v) } catch {} })
+
+// SAM3 전용 제외 프롬프트 (예: 'face' — 얼굴 영역을 마스크에서 빼기)
+const samExcludePrompt = ref('')
+try {
+  const savedEx = localStorage.getItem('editor.samExcludePrompt')
+  if (typeof savedEx === 'string') samExcludePrompt.value = savedEx
+} catch {}
+watch(samExcludePrompt, (v) => { try { localStorage.setItem('editor.samExcludePrompt', v || '') } catch {} })
 const eraserMode = ref('brush')
 const eraserRestore = ref(false)
 const magneticLasso = ref(false)
@@ -303,6 +326,21 @@ watch([toolSize, strength, stampSpacing, stampShapeLocal, barW, barH, selectedEf
 }
 
 .btn-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+
+.sam3-exclude { display: flex; flex-direction: column; }
+.sam3-exclude .hint {
+  display: inline-block; margin-left: 4px; opacity: 0.5;
+  font-size: 10px; cursor: help;
+}
+.exclude-input {
+  width: 100%; height: 30px; box-sizing: border-box;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-primary);
+  padding: 0 10px; font-size: 11px; font-family: inherit;
+  outline: none; transition: border-color 0.15s;
+}
+.exclude-input:focus { border-color: var(--accent); }
+.exclude-input::placeholder { color: var(--text-muted); opacity: 0.6; }
 .mini-btn {
   height: 30px; background: var(--bg-button); border: 1px solid var(--border);
   border-radius: 4px; color: var(--text-secondary); cursor: pointer;

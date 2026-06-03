@@ -168,22 +168,26 @@ function renderMaskOverlay() {
 }
 
 // ── 좌표 변환: 화면 → 이미지 ──
-// FIX: 회전 미반영 버그 — getBoundingClientRect의 AABB로 비율 계산하면
-// 회전된 이미지에서 클릭 위치가 어긋남. 올바른 역변환:
-//   delta_screen = scale * rotate * delta_internal
-//   ∴ delta_internal = rotate^-1 * scale^-1 * delta_screen
+// FIX 1 (이전): 회전 미반영 — getBoundingClientRect의 AABB로 비율 계산
+// FIX 2 (이번): CSS max-width로 캔버스가 축소 표시되는 경우, zoom으로 나누면
+//              실제 표시 배율과 안 맞아 클릭 위치가 좌측 위로 어긋남.
+//              base scale = clientWidth/canvas.width 로 정확히 계산.
 function getImagePos(e) {
   if (!canvasEl.value) return { x: 0, y: 0 }
-  const rect = canvasEl.value.getBoundingClientRect()
-  // AABB 중심 = transform 적용된 캔버스 중심의 화면 좌표
+  const c = canvasEl.value
+  const rect = c.getBoundingClientRect()
   const cx = rect.left + rect.width / 2
   const cy = rect.top + rect.height / 2
-  // 1) 화면 좌표 → 중심 기준 상대 벡터 (screen space)
+  // 1) 화면 좌표 → AABB 중심 기준 상대 벡터
   const dx = e.clientX - cx
   const dy = e.clientY - cy
-  // 2) 역 스케일 (1/zoom)
-  const sx = dx / zoom.value
-  const sy = dy / zoom.value
+  // 2) CSS 레이아웃 배율 (max-width 등 반영) + zoom 적용 = 총 화면-내부 배율
+  //    clientWidth/Height는 transform 적용 전 CSS 크기 → 안정적
+  const baseScale = (c.clientWidth || 1) / (c.width || 1)
+  const totalScale = baseScale * (zoom.value || 1)
+  if (totalScale === 0) return { x: c.width / 2, y: c.height / 2 }
+  const sx = dx / totalScale
+  const sy = dy / totalScale
   // 3) 역 회전 (-rotation rad)
   const theta = -rotation.value * Math.PI / 180
   const cos = Math.cos(theta), sin = Math.sin(theta)
@@ -191,8 +195,8 @@ function getImagePos(e) {
   const ly = sx * sin + sy * cos
   // 4) 중심 기준 → 캔버스 좌상단 기준 (내부 좌표)
   return {
-    x: lx + canvasEl.value.width / 2,
-    y: ly + canvasEl.value.height / 2,
+    x: lx + c.width / 2,
+    y: ly + c.height / 2,
   }
 }
 

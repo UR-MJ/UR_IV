@@ -392,10 +392,16 @@ async function runAutoCensor(params) {
   detectStatus.value = '감지 중...'
   const backend = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
-  backend.editorProcess(cleanPath, 'auto_censor', JSON.stringify({
+  const samModel = params?.samModel || 'auto'
+  const payload = {
     confidence: (params?.confidence || 25) / 100,
-    sam_model: params?.samModel || 'auto',
-  }), (json) => {
+    sam_model: samModel,
+  }
+  // SAM3일 때만 exclude_prompt 전달 (다른 SAM 모델은 텍스트 프롬프트를 받지 않음)
+  if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
+    payload.exclude_prompt = String(params.excludePrompt).trim()
+  }
+  backend.editorProcess(cleanPath, 'auto_censor', JSON.stringify(payload), (json) => {
     try {
       const result = JSON.parse(json)
       if (result.path) { pushState(result.path); detectStatus.value = '완료' }
@@ -409,10 +415,15 @@ async function runAutoDetect(params) {
   detectStatus.value = '감지 중...'
   const backend = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
-  backend.editorProcess(cleanPath, 'auto_detect', JSON.stringify({
+  const samModel = params?.samModel || 'auto'
+  const payload = {
     confidence: (params?.confidence || 25) / 100,
-    sam_model: params?.samModel || 'auto',
-  }), (json) => {
+    sam_model: samModel,
+  }
+  if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
+    payload.exclude_prompt = String(params.excludePrompt).trim()
+  }
+  backend.editorProcess(cleanPath, 'auto_detect', JSON.stringify(payload), (json) => {
     try {
       const result = JSON.parse(json)
       if (result.mask_base64) {
