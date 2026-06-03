@@ -665,6 +665,25 @@ class GeneratorMainUI(
                 if self.is_automating:
                     self._stop_automation("사용자가 자동화를 중지했습니다.")
 
+            # ═══════ PR 8: Instant Wildcards (JSON 인라인) ═══════
+            elif action == 'instant_wildcards_list':
+                self._send_instant_wildcards_list()
+            elif action == 'instant_wildcards_save':
+                name = str(payload.get('name', '')).strip()
+                lines = payload.get('lines', [])
+                if name and isinstance(lines, list):
+                    iw = self._get_instant_wildcards()
+                    iw.set(name, [str(l) for l in lines])
+                    iw.save()
+                    self._send_instant_wildcards_list()
+            elif action == 'instant_wildcards_delete':
+                name = str(payload.get('name', '')).strip()
+                if name:
+                    iw = self._get_instant_wildcards()
+                    iw.delete(name)
+                    iw.save()
+                    self._send_instant_wildcards_list()
+
             # ═══════ 이벤트 생성 (EventGen) ═══════
             elif action == 'search_events':
                 self._start_event_search(payload)
@@ -1491,6 +1510,37 @@ class GeneratorMainUI(
             lambda: self.vue_bridge.showNotification.emit('success', f'SAM3 배치 완료 ({len(paths)}장)'))
         self._sam3_batch_worker.start()
         self.vue_bridge.showNotification.emit('info', f'SAM3 배치 시작 ({len(paths)}장)')
+
+    # ── PR 8: Instant Wildcards ────────────────────────────
+    def _get_instant_wildcards(self):
+        """싱글톤 InstantWildcards 인스턴스 — 게으른 초기화 + PromptPipeline 훅 등록."""
+        if not hasattr(self, '_instant_wildcards'):
+            from pathlib import Path
+            from core.instant_wildcards import InstantWildcards
+            store = Path(__file__).resolve().parent.parent / "save" / "instant_wildcards.json"
+            self._instant_wildcards = InstantWildcards(store_path=store)
+            # PromptPipeline에 자동 등록 — 와일드카드 확장 단계에 추가
+            try:
+                from core.prompt_pipeline import get_pipeline, HookPoint
+                get_pipeline().register(
+                    HookPoint.POST_PROCESSING,
+                    self._instant_wildcards.make_hook(),
+                    priority=80,
+                    name="instant_wildcards",
+                )
+            except Exception:
+                pass
+        return self._instant_wildcards
+
+    def _send_instant_wildcards_list(self):
+        """현재 인스턴트 와일드카드 목록을 Vue로 푸시."""
+        import json as _json
+        iw = self._get_instant_wildcards()
+        items = [{"name": n, "lines": iw.get(n)} for n in iw.names()]
+        try:
+            self.vue_bridge.instantWildcardsList.emit(_json.dumps(items))
+        except Exception:
+            pass
 
     def _register_ui_state_handlers(self) -> None:
         """UIStateManager에 메인 윈도우 기하/상태 등록.

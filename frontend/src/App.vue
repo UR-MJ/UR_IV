@@ -17,6 +17,7 @@
               <button class="tool-btn" @click="showPresetManager = true; loadPresetList()">PRESET</button>
               <button class="tool-btn" @click="showWeightManager = true">WEIGHT</button>
               <button class="tool-btn" @click="showWcManager = true">WILDCARD</button>
+              <button class="tool-btn" @click="showInstantWcManager = true; loadInstantWcList()" title="JSON 기반 인라인 와일드카드 ($$name$$)">INSTANT WC</button>
               <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
               <button class="tool-btn" @click="showStatsModal = true; loadGenStats()">STATS</button>
             </div>
@@ -559,6 +560,61 @@
       </div>
     </transition>
 
+    <!-- PR 8: INSTANT WILDCARD Manager Modal -->
+    <transition name="fade">
+      <div v-if="showInstantWcManager" class="wc-overlay" @click.self="showInstantWcManager = false">
+        <div class="wc-modal">
+          <div class="wc-modal-header">
+            <h3>INSTANT WILDCARD MANAGER</h3>
+            <span class="wc-path">save/instant_wildcards.json &nbsp;·&nbsp; 문법: <code>$$name$$</code></span>
+            <button class="wc-new-btn" @click="createNewInstantWc">+ NEW</button>
+            <button class="close-btn" @click="showInstantWcManager = false">✕</button>
+          </div>
+          <div class="wc-modal-body">
+            <!-- 이름 목록 -->
+            <div class="wc-sidebar">
+              <div v-for="iw in instantWildcards" :key="iw.name" class="wc-file-item"
+                :class="{ active: selectedInstantWc === iw.name }" @click="selectInstantWc(iw.name)">
+                <span class="wc-fname">{{ iw.name }}</span>
+                <span class="wc-file-count">{{ iw.lines.length }}</span>
+                <button class="wc-del" @click.stop="deleteInstantWc(iw.name)">✕</button>
+              </div>
+              <div v-if="instantWildcards.length === 0" class="wc-empty" style="padding: 12px; font-size: 11px;">
+                와일드카드가 없습니다. + NEW로 추가하세요.
+              </div>
+            </div>
+            <!-- 편집 영역 -->
+            <div class="wc-content">
+              <template v-if="selectedInstantWcData">
+                <div class="wc-content-header">
+                  <h4>{{ selectedInstantWc }}</h4>
+                  <span class="wc-syntax">사용: <code>{{'$$' + selectedInstantWc + '$$'}}</code> ·
+                    가중치: <code>{100}:tag</code></span>
+                </div>
+                <div class="wc-blocks">
+                  <div v-for="(line, li) in iwEditLines" :key="li" class="wc-block-row">
+                    <span class="wc-block-idx">{{ li + 1 }}</span>
+                    <input v-model="iwEditLines[li]" class="wc-block-input"
+                      :placeholder="li === 0 ? '예: happy 또는 {100}:happy (가중치)' : ''"
+                      @keydown.enter="iwEditLines.push('')" />
+                    <button class="wc-block-rm" @click="iwEditLines.splice(li, 1)">✕</button>
+                  </div>
+                  <button class="wc-add-line" @click="iwEditLines.push('')">+ 줄 추가</button>
+                </div>
+                <div class="wc-bottom-bar">
+                  <span style="font-size: 11px; color: var(--text-muted); margin-right: auto;">
+                    💡 <b>$$name$$</b>을 프롬프트에 넣으면 생성 시 라인 중 하나를 뽑아 치환합니다.
+                  </span>
+                  <button class="wc-save-btn" @click="saveCurrentInstantWc">💾 SAVE</button>
+                </div>
+              </template>
+              <div v-else class="wc-empty">좌측에서 선택하거나 NEW를 클릭하세요</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- Generation Stats Modal -->
     <transition name="fade">
       <div v-if="showStatsModal" class="stats-overlay" @click.self="showStatsModal = false">
@@ -969,6 +1025,58 @@ const selectedWcData = computed(() => wildcards.value.find(w => w.name === selec
 const wcEditLines = ref([])
 const wcInsertTarget = ref('main')
 
+// PR 8: Instant Wildcards 상태
+const showInstantWcManager = ref(false)
+const instantWildcards = ref([])  // [{name, lines}]
+const selectedInstantWc = ref('')
+const selectedInstantWcData = computed(() =>
+  instantWildcards.value.find(w => w.name === selectedInstantWc.value) || null
+)
+const iwEditLines = ref([])
+
+function selectInstantWc(name) {
+  selectedInstantWc.value = name
+  const iw = instantWildcards.value.find(w => w.name === name)
+  iwEditLines.value = iw ? [...iw.lines] : []
+}
+
+function loadInstantWcList() {
+  action('instant_wildcards_list', {})
+}
+
+function createNewInstantWc() {
+  const name = window.prompt('새 인스턴트 와일드카드 이름 (영숫자/_/.만):', '')
+  if (!name || !/^[\w./]+$/.test(name)) return
+  if (instantWildcards.value.find(w => w.name === name)) {
+    addToast('error', '이미 존재함')
+    return
+  }
+  instantWildcards.value.push({ name, lines: [''] })
+  selectedInstantWc.value = name
+  iwEditLines.value = ['']
+  action('instant_wildcards_save', { name, lines: [''] })
+}
+
+function saveCurrentInstantWc() {
+  if (!selectedInstantWc.value) return
+  const lines = iwEditLines.value.filter(l => l !== undefined)
+  action('instant_wildcards_save', { name: selectedInstantWc.value, lines })
+  // 로컬 미러
+  const iw = instantWildcards.value.find(w => w.name === selectedInstantWc.value)
+  if (iw) iw.lines = lines
+  addToast('success', `인스턴트 와일드카드 저장: $$${selectedInstantWc.value}$$`)
+}
+
+function deleteInstantWc(name) {
+  if (!window.confirm(`'${name}' 삭제할까요?`)) return
+  action('instant_wildcards_delete', { name })
+  instantWildcards.value = instantWildcards.value.filter(w => w.name !== name)
+  if (selectedInstantWc.value === name) {
+    selectedInstantWc.value = ''
+    iwEditLines.value = []
+  }
+}
+
 function selectWildcard(name) {
   selectedWc.value = name
   const wc = wildcards.value.find(w => w.name === name)
@@ -1224,6 +1332,13 @@ onMounted(async () => {
       autoGenCount.value = d.count || 0
       autoWaiting.value = d.waiting || false
       if (!d.running) { isGenerating.value = false }
+    } catch {}
+  })
+  // PR 8: 인스턴트 와일드카드 목록 수신
+  onBackendEvent('instantWildcardsList', (json) => {
+    try {
+      const arr = JSON.parse(json)
+      if (Array.isArray(arr)) instantWildcards.value = arr
     } catch {}
   })
   // PR 9: 백엔드가 모드별 자동화 설정을 푸시 (시작 시 + 백엔드 모드 전환 시)

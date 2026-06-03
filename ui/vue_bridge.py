@@ -46,6 +46,7 @@ class VueBridge(QObject):
     eventSearchProgress = pyqtSignal(int, int) # (current, total)
     automationStatus = pyqtSignal(str)        # JSON {running, count, waiting}
     automationSettingsLoaded = pyqtSignal(str)  # JSON {mode, limit, repeat, delay, allowDupes, maxRetries} — PR 9 mode-aware
+    instantWildcardsList = pyqtSignal(str)      # JSON [{name, lines: [...]}] — PR 8
     eventImportResults = pyqtSignal(str)      # JSON event list
 
     # 위젯 값/속성 동기화 (Python → Vue)
