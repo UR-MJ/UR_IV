@@ -58,44 +58,54 @@ class PandasSearchWorker(QThread):
             self.status_update.emit(
                 f"🔍 데이터 검색 중 (모드: {self.combine_mode.upper()})..."
             )
+            print(f"[Search] === START === year={self.dataset_year} ratings={sorted(self.selected_ratings)} mode={self.combine_mode}")
 
             df = self.cached_df
+            print(f"[Search] cached_df shape: {df.shape}")
 
             # ── 포함 검색 — 필드 간 결합은 combine_mode에 따라 ──
-            # AND: 모든 필드 조건을 만족해야 함 (교집합)
-            # OR : 하나라도 만족하면 됨 (합집합) — 단, 비어있는 필드는 제외
             non_empty_fields = [
                 (col, txt) for col, txt in self.queries.items()
                 if txt and col in df.columns
             ]
+            print(f"[Search] non_empty_fields: {[(c, t[:50]) for c, t in non_empty_fields]}")
 
             if not non_empty_fields:
-                # 검색어 자체가 없으면 모든 행 매칭
                 total_mask = pd.Series(True, index=df.index)
+                print(f"[Search] no fields → all rows pass ({len(df):,})")
             elif self.combine_mode == 'or':
                 # OR: 빈 마스크에서 시작해 |= 누적
                 total_mask = pd.Series(False, index=df.index)
                 for col, search_text in non_empty_fields:
-                    total_mask |= self._parse_condition(df, col, search_text)
+                    cm = self._parse_condition(df, col, search_text)
+                    n_match = int(cm.sum())
+                    print(f"[Search] OR  | {col:>10s} '{search_text[:60]}...' → {n_match:,} matches")
+                    total_mask |= cm
             else:
-                # AND: True에서 시작해 &= 누적 (기존 동작)
+                # AND: True에서 시작해 &= 누적
                 total_mask = pd.Series(True, index=df.index)
                 for col, search_text in non_empty_fields:
-                    total_mask &= self._parse_condition(df, col, search_text)
+                    cm = self._parse_condition(df, col, search_text)
+                    n_match = int(cm.sum())
+                    print(f"[Search] AND | {col:>10s} '{search_text[:60]}...' → {n_match:,} matches")
+                    total_mask &= cm
+                    print(f"[Search]     ↳ cumulative AND mask: {int(total_mask.sum()):,}")
 
             # ── 제외 검색 — 모드와 무관하게 항상 AND-NOT ──
-            # 제외 조건은 "이건 절대 안 됨"의 의미라, OR 모드에서도 모두 적용해 빼야 함.
             for col, search_text in self.exclude_queries.items():
                 if not search_text:
                     continue
                 if col not in df.columns:
                     continue
                 exclude_mask = self._parse_condition(df, col, search_text)
+                n_excl = int(exclude_mask.sum())
+                print(f"[Search] EXC | {col:>10s} '{search_text[:60]}...' → {n_excl:,} excluded")
                 total_mask &= ~exclude_mask
 
             # 결과 필터링
             filtered_df = df[total_mask]
             total_count = len(filtered_df)
+            print(f"[Search] === DONE === final mask: {int(total_mask.sum()):,} → emitting {total_count:,} rows")
 
             final_df = filtered_df.fillna("")
             results = final_df.to_dict('records')
