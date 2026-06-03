@@ -722,9 +722,53 @@ class VueBridge(QObject):
                 main_win.filtered_results = out
                 main_win.shuffled_prompt_deck = out.copy()
                 _rnd.shuffle(main_win.shuffled_prompt_deck)
+
+            # ── 디스크 백업: 재시작 시 자동 복원 → 자동화 즉시 사용 가능 ──
+            # localStorage 5MB cap을 우회 — 파일은 무제한
+            try:
+                import os
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                cache_dir = os.path.join(base_dir, 'config')
+                os.makedirs(cache_dir, exist_ok=True)
+                path = os.path.join(cache_dir, 'last_search_results.json')
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(out, f, ensure_ascii=False)
+                print(f"[Search] saved {len(out):,} rows to {path}")
+            except Exception as e:
+                print(f"[Search] disk backup failed: {e}")
                 print(f"[Search] filtered_results updated: {len(out)} items")
         except Exception as e:
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
+
+    @pyqtSlot(result=str)
+    def loadLastSearchResults(self) -> str:
+        """디스크에서 마지막 검색 결과 로드 (Vue가 onMounted에서 호출)
+        Returns: JSON string of list[dict] (빈 경우 '[]')
+        """
+        try:
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            path = os.path.join(base_dir, 'config', 'last_search_results.json')
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = f.read()
+                # main_win.filtered_results 도 미리 복원해두면 자동화 즉시 사용 가능
+                try:
+                    parsed = json.loads(data)
+                    if isinstance(parsed, list) and parsed:
+                        main_win = self.parent()
+                        if main_win and hasattr(main_win, 'filtered_results'):
+                            import random as _rnd
+                            main_win.filtered_results = parsed
+                            main_win.shuffled_prompt_deck = parsed.copy()
+                            _rnd.shuffle(main_win.shuffled_prompt_deck)
+                            print(f"[Search] restored {len(parsed):,} rows from disk → filtered_results")
+                except Exception:
+                    pass
+                return data
+        except Exception as e:
+            print(f"[Search] loadLastSearchResults failed: {e}")
+        return '[]'
 
     @pyqtSlot(str, result=str)
     def loadImageBase64(self, filepath: str) -> str:

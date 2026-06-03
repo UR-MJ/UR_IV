@@ -358,8 +358,14 @@
             <div class="cond-row2">
               <span class="cond-kw">→</span>
               <input v-model="rule.target" placeholder="대상 태그" class="cond-input" />
-              <select v-model="rule.action" class="cond-sel"><option value="add">추가</option><option value="remove">제거</option><option value="replace">대체</option></select>
-              <select v-model="rule.location" class="cond-sel"><option value="main">main</option><option value="prefix">prefix</option><option value="suffix">suffix</option></select>
+              <select v-model="rule.action" class="cond-sel">
+                <option value="add">추가</option><option value="remove">제거</option><option value="replace">대체</option>
+              </select>
+              <select v-model="rule.location" class="cond-sel" title="삽입 위치">
+                <option value="main">본문(main)</option>
+                <option value="prefix">선행 고정</option>
+                <option value="suffix">후행 고정</option>
+              </select>
             </div>
           </div>
           <button class="cond-add" @click="condPositive.push({enabled:true,condition:'',exists:true,target:'',action:'add',location:'main'})">+ 규칙 추가</button>
@@ -379,12 +385,22 @@
             <div class="cond-row2">
               <span class="cond-kw">→</span>
               <input v-model="rule.target" placeholder="네거티브 태그" class="cond-input neg" />
-              <select v-model="rule.action" class="cond-sel"><option value="add">추가</option><option value="remove">제거</option></select>
+              <select v-model="rule.action" class="cond-sel">
+                <option value="add">추가</option><option value="remove">제거</option>
+              </select>
+              <select v-model="rule.location" class="cond-sel" title="네거티브 내 삽입 위치">
+                <option value="main">본문(main)</option>
+                <option value="prefix">선행 고정</option>
+                <option value="suffix">후행 고정</option>
+              </select>
             </div>
           </div>
-          <button class="cond-add" @click="condNegative.push({enabled:true,condition:'',exists:true,target:'',action:'add'})">+ 규칙 추가</button>
+          <button class="cond-add" @click="condNegative.push({enabled:true,condition:'',exists:true,target:'',action:'add',location:'main'})">+ 규칙 추가</button>
         </details>
-        <button class="cond-save-btn" @click="saveCondRules">💾 조건식 저장</button>
+        <div class="cond-save-row">
+          <span class="cond-autosave">💾 자동 저장됨</span>
+          <button class="cond-save-btn" @click="saveCondRules">💾 즉시 저장</button>
+        </div>
       </div>
     </template>
   </div>
@@ -614,17 +630,35 @@ onMounted(() => {
       _restoredFromLocalStorage = true
     }
   } catch {}
-  // 이전 검색 결과 복원
-  try {
-    const saved = window.localStorage.getItem('lastSearchResults')
-    if (saved) {
-      const data = JSON.parse(saved)
-      if (Array.isArray(data) && data.length > 0) {
-        results.value = data; filteredResults.value = data; lastResults.value = data
-        statusText.value = `${data.length} MATCHES (복원)`
+  // 이전 검색 결과 복원 — backend 파일 우선, fallback으로 localStorage
+  // backend는 무제한 (파일), localStorage는 5MB cap → 큰 결과는 backend에서만 보존됨
+  ;(async () => {
+    try {
+      const backend = await getBackend()
+      if (backend.loadLastSearchResults) {
+        const json = await new Promise(resolve => {
+          backend.loadLastSearchResults((s) => resolve(s))
+        })
+        const data = JSON.parse(json)
+        if (Array.isArray(data) && data.length > 0) {
+          results.value = data; filteredResults.value = data; lastResults.value = data
+          statusText.value = `${data.length.toLocaleString()} MATCHES (디스크 복원)`
+          return  // 성공하면 localStorage 불필요
+        }
       }
-    }
-  } catch {}
+    } catch (e) { console.warn('[Search] backend restore failed:', e) }
+    // fallback: localStorage (옛 데이터, 또는 backend slot 없을 때)
+    try {
+      const saved = window.localStorage.getItem('lastSearchResults')
+      if (saved) {
+        const data = JSON.parse(saved)
+        if (Array.isArray(data) && data.length > 0) {
+          results.value = data; filteredResults.value = data; lastResults.value = data
+          statusText.value = `${data.length.toLocaleString()} MATCHES (localStorage 복원)`
+        }
+      }
+    } catch {}
+  })()
 
   onBackendEvent('searchResultsReady', (json) => {
     try {
@@ -677,12 +711,27 @@ onMounted(() => {
     } catch {}
   })
 
-  // 조건부 프롬프트 로드
+  // 조건부 프롬프트 로드 — localStorage 즉시 + backend 비동기로 보강
+  // 1) localStorage 우선 (sync, 가장 최신)
+  try {
+    const cr = window.localStorage.getItem('searchCondRules')
+    if (cr) {
+      const d = JSON.parse(cr)
+      if (Array.isArray(d.positive)) { condPositive.splice(0); d.positive.forEach(r => condPositive.push(r)) }
+      if (Array.isArray(d.negative)) { condNegative.splice(0); d.negative.forEach(r => condNegative.push(r)) }
+    }
+  } catch {}
+  // 2) backend에서 추가 로드 — localStorage가 비어있을 때만 덮어쓰기 (역방향 동기화)
   onBackendEvent('condRulesLoaded', (json) => {
     try {
       const d = JSON.parse(json)
-      if (d.positive) { condPositive.splice(0); d.positive.forEach(r => condPositive.push(r)) }
-      if (d.negative) { condNegative.splice(0); d.negative.forEach(r => condNegative.push(r)) }
+      // localStorage에 이미 값 있으면 backend는 보조용 (덮어쓰지 않음)
+      if (condPositive.length === 0 && Array.isArray(d.positive) && d.positive.length > 0) {
+        d.positive.forEach(r => condPositive.push(r))
+      }
+      if (condNegative.length === 0 && Array.isArray(d.negative) && d.negative.length > 0) {
+        d.negative.forEach(r => condNegative.push(r))
+      }
     } catch {}
   })
 })
@@ -923,6 +972,22 @@ function saveCondRules() {
     negative: condNegative.filter(r => r.condition || r.target),
   })
 }
+// 자동 저장 — condPositive/condNegative 변경 시 800ms 디바운스 후 backend로
+// localStorage에도 즉시 백업 (앱 빨리 닫혀도 안 잃어버림)
+let _condSaveTimer = null
+function _autoSaveCondRules() {
+  const payload = {
+    positive: condPositive.filter(r => r.condition || r.target),
+    negative: condNegative.filter(r => r.condition || r.target),
+  }
+  try { window.localStorage.setItem('searchCondRules', JSON.stringify(payload)) } catch {}
+  if (_condSaveTimer) clearTimeout(_condSaveTimer)
+  _condSaveTimer = setTimeout(() => {
+    requestAction('save_cond_rules', payload)
+  }, 800)
+}
+watch(condPositive, _autoSaveCondRules, { deep: true })
+watch(condNegative, _autoSaveCondRules, { deep: true })
 
 function exportResults() { requestAction('export_search_results', { count: filteredResults.value.length, data: filteredResults.value }) }
 function importResults() { requestAction('import_search_results') }
@@ -1293,6 +1358,12 @@ label.danger { color: #f87171; }
 .cond-sel { padding: 3px 4px; font-size: 9px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); }
 .cond-sel.sm { width: 55px; }
 .cond-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; padding: 0 2px; }
-.cond-save-btn { width: 100%; padding: 8px; background: var(--accent); border: none; border-radius: 8px; color: #000; font-size: 10px; font-weight: 800; cursor: pointer; }
+.cond-save-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.cond-autosave {
+  font-size: 10px; color: #4ade80;
+  background: rgba(74, 222, 128, 0.08); padding: 6px 10px;
+  border-radius: 6px; font-weight: 700; letter-spacing: 0.5px;
+}
+.cond-save-btn { flex: 1; padding: 8px; background: var(--accent); border: none; border-radius: 8px; color: #000; font-size: 10px; font-weight: 800; cursor: pointer; }
 .cond-add { width: 100%; padding: 5px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); font-size: 9px; font-weight: 700; cursor: pointer; margin-top: 4px; }
 </style>

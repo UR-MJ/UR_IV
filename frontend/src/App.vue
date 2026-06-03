@@ -1479,8 +1479,23 @@ async function loadHistory() {
 import { useRouter } from 'vue-router'
 const router = useRouter()
 
+// UI 크기 — Chromium zoom 으로 전역 확대 (폰트/아이콘/패딩 비례)
+// 변경 시 즉시 반영, localStorage 영속, 다른 탭(Settings)에서 변경하면 storage event로 동기화
+const _applyUiScale = (val) => {
+  const n = parseFloat(val)
+  const scale = (!isNaN(n) && n >= 0.7 && n <= 2.0) ? n : 1.0
+  try { document.documentElement.style.zoom = String(scale) } catch {}
+}
+_applyUiScale(localStorage.getItem('ui.scale') || '1.0')
+
 onMounted(async () => {
   await initBridge()
+  // Settings 등 다른 곳에서 ui.scale 변경 시 즉시 반영
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'ui.scale') _applyUiScale(e.newValue)
+  })
+  // 같은 창에서의 변경 (Settings 슬라이더)도 즉시 — 커스텀 이벤트
+  window.addEventListener('uiScaleChanged', (e) => _applyUiScale(e.detail?.value))
   // History는 앱 시작 시 비어있음 — 생성된 이미지만 추가됨
   document.addEventListener('click', hideCtxMenu)
   document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault() }, { passive: false })

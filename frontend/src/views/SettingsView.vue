@@ -160,7 +160,25 @@
 
         <!-- 6. 기본값 설정 (탭별) -->
         <div v-show="currentTab === 'defaults'" class="section-fade">
+          <!-- UI 크기 조절 -->
           <div class="glass-card">
+            <label>UI 크기 (전역 zoom)</label>
+            <div class="def-field-wide">
+              <span>{{ Math.round(uiScale * 100) }}% — 폰트·아이콘·패딩 비례 확대</span>
+              <input type="range" min="0.8" max="1.5" step="0.05" v-model.number="uiScale"
+                @input="onUiScaleChange" class="w-slider" />
+              <div class="scale-presets">
+                <button v-for="p in [0.9, 1.0, 1.1, 1.2, 1.3]" :key="p"
+                  class="scale-btn"
+                  :class="{ active: Math.abs(uiScale - p) < 0.025 }"
+                  @click="uiScale = p; onUiScaleChange()">
+                  {{ Math.round(p * 100) }}%
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card mt-16">
             <label>T2I 기본값 <span class="sync-badge" v-if="t2iSynced">SYNCED</span></label>
             <div class="defaults-grid">
               <div class="def-field"><span>Steps</span><input type="number" v-model.number="defaults.steps" /></div>
@@ -443,6 +461,16 @@ function resetDefaults() { Object.assign(defaults, FACTORY_DEFAULTS) }
 
 // 사이드 패널 너비 — localStorage 직접 (EditorView가 호출하는 같은 키)
 const editorSidePanelWidth = ref(parseInt(window.localStorage.getItem('editorSidePanelWidth') || '280'))
+
+// UI 크기 (전역 zoom) — App.vue가 _applyUiScale로 적용
+const uiScale = ref(parseFloat(window.localStorage.getItem('ui.scale') || '1.0') || 1.0)
+function onUiScaleChange() {
+  const v = Math.max(0.8, Math.min(1.5, uiScale.value))
+  uiScale.value = v
+  try { window.localStorage.setItem('ui.scale', String(v)) } catch {}
+  // 같은 창에서 즉시 반영
+  try { window.dispatchEvent(new CustomEvent('uiScaleChanged', { detail: { value: v } })) } catch {}
+}
 function onSidePanelWidthChange() {
   window.localStorage.setItem('editorSidePanelWidth', String(editorSidePanelWidth.value))
   // EditorView가 storage 이벤트 듣고 즉시 반영
@@ -619,6 +647,20 @@ kbd {
 .def-field-wide { display: flex; flex-direction: column; gap: 6px; }
 .def-field-wide span { font-size: 11px; color: var(--text-secondary); font-weight: 700; }
 .w-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
+
+/* UI 크기 프리셋 버튼 */
+.scale-presets { display: flex; gap: 6px; margin-top: 10px; }
+.scale-btn {
+  flex: 1; padding: 8px 6px; background: var(--bg-input);
+  border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-secondary); font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s; font-family: 'Consolas', monospace;
+}
+.scale-btn:hover { background: var(--bg-button); color: var(--text-primary); border-color: var(--text-muted); }
+.scale-btn.active {
+  background: var(--accent-dim); border-color: var(--accent); color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
 .def-field span { font-size: 10px; font-weight: 700; color: var(--text-muted); }
 .sync-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 4px; font-size: 8px; font-weight: 900; margin-left: 8px; }
 .def-field input, .def-field select { padding: 8px 10px; font-size: 12px; }
