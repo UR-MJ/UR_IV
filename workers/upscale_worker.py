@@ -1,8 +1,12 @@
 # workers/upscale_worker.py
 import os
 import base64
+import logging
 from PyQt6.QtCore import QThread, pyqtSignal
 from backends import get_backend
+from core.path_safety import safe_input_path, safe_output_dir, UnsafePathError
+
+logger = logging.getLogger(__name__)
 
 
 def _build_adetailer_slot(model: str, confidence: float = 0.3, denoise: float = 0.4, prompt: str = '') -> dict:
@@ -72,7 +76,7 @@ def _save_base64_image(b64_data: str, output_path: str):
 
 
 class BatchUpscaleWorker(QThread):
-    """배치 업스케일/ADetailer 워커"""
+    """배치 업스케일/ADetailer/SAM3 워커"""
     single_finished = pyqtSignal(int, bool, str)  # index, success, message
     all_finished = pyqtSignal()
     progress = pyqtSignal(int, int)  # current, total
@@ -80,7 +84,7 @@ class BatchUpscaleWorker(QThread):
     def __init__(self, image_paths: list, settings: dict):
         """
         settings = {
-            'mode': 'upscale_only' | 'adetailer_only' | 'both',
+            'mode': 'upscale_only' | 'adetailer_only' | 'sam3_only' | 'both',
             'upscaler_name': str,
             'scale_mode': 'factor' | 'size',
             'scale_factor': float,
@@ -102,36 +106,57 @@ class BatchUpscaleWorker(QThread):
         """배치 처리 실행"""
         total = len(self.image_paths)
 
+        try:
+            output_folder = safe_output_dir(self.settings.get('output_folder', ''), create=True)
+        except UnsafePathError as e:
+            logger.error("batch upscale: invalid output_folder: %s", e)
+            for i in range(total):
+                self.single_finished.emit(i, False, "출력 폴더가 유효하지 않습니다")
+            self.all_finished.emit()
+            return
+
         for i, path in enumerate(self.image_paths):
             if self._stop_requested:
                 break
 
             self.progress.emit(i, total)
             try:
-                b64_image = _image_to_base64(path)
+                safe_src = safe_input_path(path)
+                if not safe_src:
+                    raise ValueError("유효하지 않은 입력 이미지 경로")
+
+                b64_image = _image_to_base64(safe_src)
                 result_b64 = b64_image
                 mode = self.settings['mode']
                 backend = get_backend()
+                applied_steps = []
 
                 # 업스케일
                 if mode in ('upscale_only', 'both'):
                     result_b64 = backend.upscale(result_b64, self.settings)
+                    applied_steps.append('upscaled')
 
                 # ADetailer
-                if mode in ('adetailer_only', 'both'):
+                if mode in ('adetailer_only', 'both') and self.settings.get('ad_enabled', True):
                     result_b64 = backend.adetailer(result_b64, self.settings)
+                    applied_steps.append('ad')
 
-                # 저장
-                output_folder = self.settings['output_folder']
-                basename = os.path.splitext(os.path.basename(path))[0]
-                suffix = "_upscaled" if mode == 'upscale_only' else "_ad" if mode == 'adetailer_only' else "_upscaled_ad"
+                # SAM3
+                if mode in ('sam3_only', 'both') and self.settings.get('sam3_enabled', True):
+                    result_b64 = backend.sam3(result_b64, self.settings)
+                    applied_steps.append('sam3')
+
+                # 저장 (output_folder 아래로만 허용)
+                basename = os.path.splitext(os.path.basename(safe_src))[0]
+                suffix = "_" + "_".join(applied_steps) if applied_steps else "_result"
                 output_path = os.path.join(output_folder, f"{basename}{suffix}.png")
                 _save_base64_image(result_b64, output_path)
 
                 self.single_finished.emit(i, True, os.path.basename(output_path))
 
             except Exception as e:
-                self.single_finished.emit(i, False, str(e))
+                logger.warning("upscale failed for %s: %s", path, e)
+                self.single_finished.emit(i, False, "처리 실패 (로그 참조)")
 
         self.progress.emit(total, total)
         self.all_finished.emit()

@@ -5,8 +5,32 @@
 """
 import os
 import re
+import ast
 import json
 from typing import Optional
+
+
+def _safe_load_dict_literals(py_path: str, names: tuple[str, ...]) -> dict:
+    """Python 파일의 최상위 dict-literal 할당문을 ast.literal_eval로 안전하게 로드.
+
+    exec()를 쓰지 않아 임의 코드 실행을 차단한다.
+    names에 포함된 이름(예: 'character_dict')의 할당만 반환한다.
+    """
+    with open(py_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    tree = ast.parse(source, filename=py_path)
+    out: dict = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name) or target.id not in names:
+            continue
+        try:
+            out[target.id] = ast.literal_eval(node.value)
+        except (ValueError, SyntaxError) as e:
+            print(f"⚠️ {target.id} literal_eval 실패: {e}")
+    return out
 
 # ── 의상/액세서리 키워드 (word-level 매칭) ──
 # 태그를 단어로 분리한 뒤, 이 집합과 교집합이 있으면 의상으로 분류
@@ -121,9 +145,7 @@ class CharacterFeatureLookup:
         py_path = os.path.join(base, "danbooru_character.py")
         if os.path.exists(py_path):
             try:
-                ns: dict = {}
-                with open(py_path, "r", encoding="utf-8") as f:
-                    exec(f.read(), ns)
+                ns = _safe_load_dict_literals(py_path, ("character_dict", "character_dict_count"))
                 self._full_dict = ns.get("character_dict", {})
                 self._full_count = ns.get("character_dict_count", {})
                 # 정규화 인덱스 빌드 (O(1) 조회용)

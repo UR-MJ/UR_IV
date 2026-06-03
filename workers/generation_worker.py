@@ -1,7 +1,15 @@
 # workers/generation_worker.py
+import base64
 import json
+import logging
+import time
+
 from PyQt6.QtCore import QThread, pyqtSignal
+
 from backends import get_backend
+from core.error_handler import sanitize_for_ui
+
+logger = logging.getLogger(__name__)
 
 
 class WebUIInfoWorker(QThread):
@@ -24,61 +32,157 @@ class WebUIInfoWorker(QThread):
                 'checkpoints': info.checkpoints,
             })
         except Exception as e:
-            self.error_occurred.emit(str(e))
+            logger.exception("WebUIInfoWorker failed")
+            self.error_occurred.emit(sanitize_for_ui(e))
 
 
-class GenerationFlowWorker(QThread):
+class _CancellableMixin:
+    """QThread 생성 워커에 공통으로 쓰는 취소 플래그."""
+
+    def __init__(self):
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancelled
+
+
+def _run_postprocess_chain(backend, image_data: bytes, chain: list[dict],
+                           *, cancelled_cb=None) -> tuple[bytes, list[str]]:
+    """후처리 체인을 실행하되 한 단계 실패해도 이전 결과를 보존.
+
+    Returns:
+        (final_bytes, errors) — errors는 사람이 읽을 수 있는 실패 메시지 리스트.
+    """
+    if not chain:
+        return image_data, []
+
+    errors: list[str] = []
+    last_good_b64 = base64.b64encode(image_data).decode("utf-8")
+    current_b64 = last_good_b64
+
+    for step in chain:
+        if cancelled_cb and cancelled_cb():
+            errors.append("후처리 취소됨")
+            break
+        step_type = step.get("type")
+        settings = dict(step.get("settings", {}))
+        try:
+            if step_type == "adetailer":
+                current_b64 = backend.adetailer(current_b64, settings)
+            elif step_type == "sam3":
+                current_b64 = backend.sam3(current_b64, settings)
+            else:
+                errors.append(f"알 수 없는 후처리 타입: {step_type}")
+                continue
+            last_good_b64 = current_b64  # 이 단계 성공 확정
+        except Exception as e:
+            logger.exception("postprocess step '%s' failed", step_type)
+            errors.append(f"{step_type}: {sanitize_for_ui(e)}")
+            # 실패 시 이전 성공 결과로 롤백하여 다음 단계는 그것을 기반으로 시도
+            current_b64 = last_good_b64
+
+    return base64.b64decode(last_good_b64), errors
+
+
+class GenerationFlowWorker(QThread, _CancellableMixin):
     """이미지 생성 워커"""
     finished = pyqtSignal(object, dict)
     progress = pyqtSignal(int, int, object)  # step, total_steps, preview_bytes|None
 
     def __init__(self, model_name: str, payload: dict):
-        super().__init__()
+        QThread.__init__(self)
+        _CancellableMixin.__init__(self)
         self.model_name = model_name
         self.payload = payload
+        self._start_time: float | None = None
+
+    # 기존 호출부 호환용 static wrapper
+    @staticmethod
+    def _run_postprocess_chain(backend, image_data: bytes, chain: list[dict]) -> bytes:
+        final, _errors = _run_postprocess_chain(backend, image_data, chain)
+        return final
 
     def run(self):
-        """모델 변경 후 이미지 생성"""
+        self._start_time = time.monotonic()
         try:
             backend = get_backend()
+            payload = dict(self.payload)
+            postprocess_chain = list(payload.pop("_postprocess_chain", []) or [])
 
             def on_progress(step: int, total: int, preview):
+                if self.is_cancelled:
+                    return
                 self.progress.emit(step, total, preview)
 
-            result = backend.txt2img(self.model_name, self.payload, progress_callback=on_progress)
+            if self.is_cancelled:
+                self.finished.emit("생성 취소됨", {'cancelled': True})
+                return
 
-            if result.success:
-                self.finished.emit(result.image_data, result.info)
-            else:
+            result = backend.txt2img(self.model_name, payload, progress_callback=on_progress)
+
+            if not result.success:
                 self.finished.emit(result.error, {})
+                return
+
+            final_image, pp_errors = _run_postprocess_chain(
+                backend, result.image_data, postprocess_chain,
+                cancelled_cb=lambda: self.is_cancelled,
+            )
+            info = dict(result.info or {})
+            if pp_errors:
+                info['postprocess_errors'] = pp_errors
+            self.finished.emit(final_image, info)
 
         except Exception as e:
-            self.finished.emit(f"이미지 생성 중 오류: {e}", {})
+            logger.exception("GenerationFlowWorker failed")
+            self.finished.emit(f"이미지 생성 중 오류: {sanitize_for_ui(e)}", {})
 
 
-class Img2ImgFlowWorker(QThread):
+class Img2ImgFlowWorker(QThread, _CancellableMixin):
     """img2img / inpaint 생성 워커"""
     finished = pyqtSignal(object, dict)
-    progress = pyqtSignal(int, int, object)  # step, total_steps, preview_bytes|None
+    progress = pyqtSignal(int, int, object)
 
     def __init__(self, model_name: str, payload: dict):
-        super().__init__()
+        QThread.__init__(self)
+        _CancellableMixin.__init__(self)
         self.model_name = model_name
         self.payload = payload
 
     def run(self):
         try:
             backend = get_backend()
+            payload = dict(self.payload)
+            postprocess_chain = list(payload.pop("_postprocess_chain", []) or [])
 
             def on_progress(step: int, total: int, preview):
+                if self.is_cancelled:
+                    return
                 self.progress.emit(step, total, preview)
 
-            result = backend.img2img(self.model_name, self.payload, progress_callback=on_progress)
+            if self.is_cancelled:
+                self.finished.emit("생성 취소됨", {'cancelled': True})
+                return
 
-            if result.success:
-                self.finished.emit(result.image_data, result.info)
-            else:
+            result = backend.img2img(self.model_name, payload, progress_callback=on_progress)
+
+            if not result.success:
                 self.finished.emit(result.error, {})
+                return
+
+            final_image, pp_errors = _run_postprocess_chain(
+                backend, result.image_data, postprocess_chain,
+                cancelled_cb=lambda: self.is_cancelled,
+            )
+            info = dict(result.info or {})
+            if pp_errors:
+                info['postprocess_errors'] = pp_errors
+            self.finished.emit(final_image, info)
 
         except Exception as e:
-            self.finished.emit(f"img2img 생성 중 오류: {e}", {})
+            logger.exception("Img2ImgFlowWorker failed")
+            self.finished.emit(f"img2img 생성 중 오류: {sanitize_for_ui(e)}", {})

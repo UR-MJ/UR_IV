@@ -1,11 +1,14 @@
 # workers/gallery_worker.py
 import os
 import hashlib
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PyQt6.QtCore import QThread, pyqtSignal
 from PIL import Image, PngImagePlugin
 
 from core.image_utils import normalize_path as _normalize_path
+
+logger = logging.getLogger(__name__)
 
 try:
     import exifread
@@ -51,15 +54,15 @@ def _process_single(path: str, thumb_dir: str) -> tuple:
             img = Image.open(path)
             img.thumbnail((200, 200), Image.LANCZOS)
             img.convert("RGB").save(thumb_path, "JPEG", quality=85)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("thumbnail generation failed (%s): %s", os.path.basename(path), e)
 
     # EXIF 읽기
     exif = ""
     try:
         exif = _read_exif(path)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("EXIF read failed (%s): %s", os.path.basename(path), e)
 
     return (norm_path, exif)
 
@@ -155,8 +158,8 @@ class GalleryCacheWorker(QThread):
                 try:
                     norm_path, exif = future.result()
                     batch_results.append((norm_path, exif))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("gallery task failed: %s", e)
 
                 done_count += 1
 
@@ -180,8 +183,8 @@ class GalleryCacheWorker(QThread):
         for norm_path, exif in batch:
             try:
                 self.db.add_or_update_exif(norm_path, exif)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("DB exif update failed (%s): %s", norm_path, e)
 
     def request_stop(self):
         self._stop_requested = True

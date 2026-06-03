@@ -1,10 +1,11 @@
 # tabs/upscale_tab.py
 import os
+from enum import IntEnum
 import requests
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
     QComboBox, QListWidget, QGroupBox, QRadioButton, QButtonGroup,
-    QProgressBar, QFileDialog, QMessageBox, QSplitter
+    QProgressBar, QFileDialog, QMessageBox, QSplitter, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from widgets.sliders import NumericSlider
@@ -13,8 +14,25 @@ from config import WEBUI_API_URL
 from utils.theme_manager import get_color
 
 
+class ProcessMode(IntEnum):
+    """upscale_tab의 처리 모드 — 라디오 버튼 id와 1:1 대응."""
+    UPSCALE_ONLY = 0
+    ADETAILER_ONLY = 1
+    SAM3_ONLY = 2
+    BOTH = 3
+
+    @property
+    def slug(self) -> str:
+        return {
+            ProcessMode.UPSCALE_ONLY: "upscale_only",
+            ProcessMode.ADETAILER_ONLY: "adetailer_only",
+            ProcessMode.SAM3_ONLY: "sam3_only",
+            ProcessMode.BOTH: "both",
+        }[self]
+
+
 class UpscaleTab(QWidget):
-    """업스케일 + ADetailer 탭"""
+    """업스케일 + ADetailer/SAM3 탭"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -141,16 +159,20 @@ class UpscaleTab(QWidget):
         self.radio_upscale_only.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
         self.radio_ad_only = QRadioButton("ADetailer만")
         self.radio_ad_only.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
-        self.radio_both = QRadioButton("둘 다 (업스케일 → ADetailer)")
+        self.radio_sam3_only = QRadioButton("SAM3만")
+        self.radio_sam3_only.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
+        self.radio_both = QRadioButton("둘 다 (업스케일 → ADetailer → SAM3)")
         self.radio_both.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 13px;")
 
         self.mode_btn_group = QButtonGroup(self)
-        self.mode_btn_group.addButton(self.radio_upscale_only, 0)
-        self.mode_btn_group.addButton(self.radio_ad_only, 1)
-        self.mode_btn_group.addButton(self.radio_both, 2)
+        self.mode_btn_group.addButton(self.radio_upscale_only, int(ProcessMode.UPSCALE_ONLY))
+        self.mode_btn_group.addButton(self.radio_ad_only, int(ProcessMode.ADETAILER_ONLY))
+        self.mode_btn_group.addButton(self.radio_sam3_only, int(ProcessMode.SAM3_ONLY))
+        self.mode_btn_group.addButton(self.radio_both, int(ProcessMode.BOTH))
 
         mg_layout.addWidget(self.radio_upscale_only)
         mg_layout.addWidget(self.radio_ad_only)
+        mg_layout.addWidget(self.radio_sam3_only)
         mg_layout.addWidget(self.radio_both)
         sl.addWidget(mode_group)
 
@@ -198,6 +220,101 @@ class UpscaleTab(QWidget):
         ad_layout.addLayout(ad_prompt_row)
 
         sl.addWidget(self.ad_group)
+
+        # SAM3 설정
+        self.sam3_group = QGroupBox("SAM3 설정")
+        self.sam3_group.setCheckable(True)
+        self.sam3_group.setChecked(False)
+        self.sam3_group.setStyleSheet(f"""
+            QGroupBox {{ border: 1px solid {get_color('border')}; border-radius: 6px;
+                        margin-top: 12px; padding-top: 18px;
+                        font-weight: bold; color: {get_color('text_muted')}; }}
+            QGroupBox::title {{ subcontrol-origin: margin; padding: 0 6px; }}
+            QGroupBox::indicator {{ width: 16px; height: 16px; }}
+        """)
+        sam3_layout = QVBoxLayout(self.sam3_group)
+
+        sam3_prompt_row = QHBoxLayout()
+        sam3_prompt_label = QLabel("Detect:")
+        sam3_prompt_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
+        self.txt_sam3_prompt = QLineEdit("face")
+        self.txt_sam3_prompt.setStyleSheet(
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            "border-radius: 4px; padding: 4px; font-size: 12px;"
+        )
+        sam3_prompt_row.addWidget(sam3_prompt_label)
+        sam3_prompt_row.addWidget(self.txt_sam3_prompt)
+        sam3_layout.addLayout(sam3_prompt_row)
+
+        sam3_inpaint_row = QHBoxLayout()
+        sam3_inpaint_label = QLabel("Inpaint:")
+        sam3_inpaint_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
+        self.txt_sam3_inpaint_prompt = QLineEdit()
+        self.txt_sam3_inpaint_prompt.setPlaceholderText("(비워두면 원본 프롬프트 유지)")
+        self.txt_sam3_inpaint_prompt.setStyleSheet(
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            "border-radius: 4px; padding: 4px; font-size: 12px;"
+        )
+        sam3_inpaint_row.addWidget(sam3_inpaint_label)
+        sam3_inpaint_row.addWidget(self.txt_sam3_inpaint_prompt)
+        sam3_layout.addLayout(sam3_inpaint_row)
+
+        self.slider_sam3_threshold = NumericSlider("Threshold", 1, 100, 40)
+        self.slider_sam3_denoise = NumericSlider("Denoise", 1, 100, 40)
+        self.slider_sam3_mask_blur = NumericSlider("Mask Blur", 0, 64, 8)
+        self.slider_sam3_padding = NumericSlider("Padding", 0, 256, 32)
+        sam3_layout.addWidget(self.slider_sam3_threshold)
+        sam3_layout.addWidget(self.slider_sam3_denoise)
+        sam3_layout.addWidget(self.slider_sam3_mask_blur)
+        sam3_layout.addWidget(self.slider_sam3_padding)
+
+        sam3_checkpoint_row = QHBoxLayout()
+        sam3_checkpoint_label = QLabel("Checkpoint:")
+        sam3_checkpoint_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
+        self.txt_sam3_checkpoint = QLineEdit("sam3.pt")
+        self.txt_sam3_checkpoint.setStyleSheet(
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            "border-radius: 4px; padding: 4px; font-size: 12px;"
+        )
+        sam3_checkpoint_row.addWidget(sam3_checkpoint_label)
+        sam3_checkpoint_row.addWidget(self.txt_sam3_checkpoint)
+        sam3_layout.addLayout(sam3_checkpoint_row)
+
+        sam3_mode_row = QHBoxLayout()
+        sam3_mode_label = QLabel("Mask:")
+        sam3_mode_label.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 12px;")
+        self.combo_sam3_mask_mode = QComboBox()
+        self.combo_sam3_mask_mode.addItems(["Individual", "Combined"])
+        self.combo_sam3_mask_mode.setStyleSheet(
+            f"background-color: {get_color('bg_input')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; "
+            "border-radius: 4px; padding: 4px; font-size: 12px;"
+        )
+        self.chk_sam3_preview = QCheckBox("Overlay Preview")
+        self.chk_sam3_preview.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 12px;")
+        self.chk_sam3_save_artifacts = QCheckBox("Artifacts 저장")
+        self.chk_sam3_save_artifacts.setChecked(True)
+        self.chk_sam3_save_artifacts.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 12px;")
+        sam3_mode_row.addWidget(sam3_mode_label)
+        sam3_mode_row.addWidget(self.combo_sam3_mask_mode, 1)
+        sam3_mode_row.addWidget(self.chk_sam3_preview)
+        sam3_mode_row.addWidget(self.chk_sam3_save_artifacts)
+        sam3_layout.addLayout(sam3_mode_row)
+
+        self.chk_sam3_use_inpaint_size = QCheckBox("별도의 너비/높이 사용")
+        self.chk_sam3_use_inpaint_size.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 12px;")
+        sam3_layout.addWidget(self.chk_sam3_use_inpaint_size)
+
+        sam3_size_row = QHBoxLayout()
+        self.spin_sam3_width = NumericSlider("W", 64, 2048, 1024)
+        self.spin_sam3_height = NumericSlider("H", 64, 2048, 1024)
+        sam3_size_row.addWidget(self.spin_sam3_width)
+        sam3_size_row.addWidget(self.spin_sam3_height)
+        self.sam3_size_container = QWidget()
+        self.sam3_size_container.setLayout(sam3_size_row)
+        self.sam3_size_container.hide()
+        sam3_layout.addWidget(self.sam3_size_container)
+
+        sl.addWidget(self.sam3_group)
         sl.addStretch()
 
         splitter.addWidget(settings_widget)
@@ -285,7 +402,9 @@ class UpscaleTab(QWidget):
 
         self.radio_factor.toggled.connect(self._on_scale_mode_changed)
         self.radio_ad_only.toggled.connect(self._on_mode_changed)
+        self.radio_sam3_only.toggled.connect(self._on_mode_changed)
         self.radio_both.toggled.connect(self._on_mode_changed)
+        self.chk_sam3_use_inpaint_size.toggled.connect(self.sam3_size_container.setVisible)
 
     # ── 이미지 입력 ──
 
@@ -374,9 +493,11 @@ class UpscaleTab(QWidget):
             self.size_container.show()
 
     def _on_mode_changed(self):
-        """처리 모드 변경 시 ADetailer 그룹 자동 활성화"""
+        """처리 모드 변경 시 후처리 그룹 자동 활성화"""
         if self.radio_ad_only.isChecked() or self.radio_both.isChecked():
             self.ad_group.setChecked(True)
+        if self.radio_sam3_only.isChecked() or self.radio_both.isChecked():
+            self.sam3_group.setChecked(True)
 
     # ── 출력 폴더 ──
 
@@ -396,8 +517,10 @@ class UpscaleTab(QWidget):
 
     def _get_settings(self) -> dict:
         """현재 UI에서 설정 딕셔너리 생성"""
-        mode_id = self.mode_btn_group.checkedId()
-        mode = ['upscale_only', 'adetailer_only', 'both'][mode_id]
+        try:
+            mode = ProcessMode(self.mode_btn_group.checkedId()).slug
+        except ValueError:
+            mode = ProcessMode.UPSCALE_ONLY.slug
 
         return {
             'mode': mode,
@@ -410,6 +533,23 @@ class UpscaleTab(QWidget):
             'ad_confidence': self.slider_ad_confidence.value() / 100.0,
             'ad_denoise': self.slider_ad_denoise.value() / 100.0,
             'ad_prompt': self.txt_ad_prompt.text(),
+            'ad_enabled': self.ad_group.isChecked(),
+            'sam3_enabled': self.sam3_group.isChecked(),
+            'sam3_mode': 'Inpaint',
+            'sam3_mask_mode': self.combo_sam3_mask_mode.currentText(),
+            'sam3_prompt': self.txt_sam3_prompt.text().strip() or 'face',
+            'sam3_inpaint_prompt': self.txt_sam3_inpaint_prompt.text(),
+            'sam3_threshold': self.slider_sam3_threshold.value() / 100.0,
+            'sam3_checkpoint': self.txt_sam3_checkpoint.text().strip() or 'sam3.pt',
+            'sam3_mask_blur': int(self.slider_sam3_mask_blur.value()),
+            'sam3_denoising_strength': self.slider_sam3_denoise.value() / 100.0,
+            'sam3_inpaint_only_masked': True,
+            'sam3_inpaint_only_masked_padding': int(self.slider_sam3_padding.value()),
+            'sam3_use_inpaint_width_height': self.chk_sam3_use_inpaint_size.isChecked(),
+            'sam3_inpaint_width': int(self.spin_sam3_width.value()),
+            'sam3_inpaint_height': int(self.spin_sam3_height.value()),
+            'sam3_preview_overlay': self.chk_sam3_preview.isChecked(),
+            'sam3_save_artifacts': self.chk_sam3_save_artifacts.isChecked(),
             'output_folder': self.txt_output_folder.text(),
         }
 
@@ -438,11 +578,33 @@ class UpscaleTab(QWidget):
         self.progress_bar.setMaximum(len(paths))
         self.progress_bar.setValue(0)
 
+        self._cleanup_worker()
         self._worker = BatchUpscaleWorker(paths, settings)
         self._worker.progress.connect(self._on_progress)
         self._worker.single_finished.connect(self._on_single_finished)
         self._worker.all_finished.connect(self._on_all_finished)
         self._worker.start()
+
+    def _cleanup_worker(self):
+        """이전 BatchUpscaleWorker가 남아 있으면 시그널 해제 + 종료."""
+        worker = getattr(self, '_worker', None)
+        if worker is None:
+            return
+        for sig_name in ('progress', 'single_finished', 'all_finished'):
+            try:
+                sig = getattr(worker, sig_name, None)
+                if sig is not None:
+                    sig.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+        try:
+            if worker.isRunning():
+                worker.request_stop()
+                worker.quit()
+                worker.wait(2000)
+        except RuntimeError:
+            pass
+        self._worker = None
 
     def _stop_processing(self):
         """처리 중지"""

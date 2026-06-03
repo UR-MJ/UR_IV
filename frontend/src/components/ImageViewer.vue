@@ -3,7 +3,7 @@
     <!-- 이미지 표시 영역 -->
     <div class="image-area">
       <template v-if="imageUrl">
-        <img :src="'file:///' + imageUrl" alt="Generated" class="generated-image" />
+        <img :key="imageSrc" :src="imageSrc" alt="Generated" class="generated-image" />
       </template>
       <template v-else>
         <div class="placeholder">
@@ -33,7 +33,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 
 const props = defineProps({
@@ -46,6 +46,13 @@ const props = defineProps({
 function exploreSeed() {
   requestAction('explore_seed', { seed: props.seed })
 }
+
+const imageNonce = ref(Date.now())
+watch(() => props.imageUrl, () => {
+  imageNonce.value = Date.now()
+})
+
+const imageSrc = computed(() => props.imageUrl ? `file:///${props.imageUrl}?t=${imageNonce.value}` : '')
 
 const progressPct = computed(() => {
   const m = props.status?.match(/(\d+)\/(\d+)/)

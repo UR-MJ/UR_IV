@@ -32,6 +32,22 @@ favorites.json
 event_gen_settings.json
 search_tab_settings.json
 yolo_model_config.json
+prompt_history.json
+
+# Runtime / user state (런타임에 자동 생성·갱신)
+config/gen_stats.json
+config/queue_state.json
+config/ui_prefs.json
+config/tab_defaults.json
+config/prompt_order.json
+config/profiles/
+config/gallery_last_folder.txt
+Editor_models/yolo_config.json
+
+# User outputs
+save/
+ex/
+generated_images/
 
 # Large data files
 *.parquet

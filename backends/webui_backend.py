@@ -1,21 +1,119 @@
 # backends/webui_backend.py
 """WebUI (A1111/Forge) 백엔드 구현"""
 import base64
+import copy
+import io
 import json
+import logging
 import threading
 import time
 import requests
 from typing import Dict, Optional
+from PIL import Image
 
 from backends.base import (
     AbstractBackend, BackendInfo, GenerationResult, ProgressCallback
 )
+from core.http_retry import get_with_retry
+
+logger = logging.getLogger(__name__)
 
 _HEADERS = {"accept": "application/json", "Content-Type": "application/json"}
 
 
 class WebUIBackend(AbstractBackend):
     """Stable Diffusion WebUI API 백엔드"""
+
+    @staticmethod
+    def _build_postprocess_payload(image_b64: str, settings: Dict, *, prompt: str, negative_prompt: str) -> Dict:
+        base_payload = copy.deepcopy(settings.get('_postprocess_base_payload', {}))
+        passthrough_scripts = copy.deepcopy(base_payload.pop('alwayson_scripts', {}))
+        for key in (
+            "images",
+            "image",
+            "mask",
+            "mask_blur",
+            "init_images",
+            "include_init_images",
+            "infotext",
+            "enable_hr",
+            "hr_upscaler",
+            "hr_second_pass_steps",
+            "hr_scale",
+            "hr_cfg",
+            "hr_additional_modules",
+            "hr_checkpoint_name",
+            "hr_sampler_name",
+            "hr_scheduler",
+            "hr_prompt",
+            "hr_negative_prompt",
+        ):
+            base_payload.pop(key, None)
+
+        image_bytes = base64.b64decode(image_b64)
+        with Image.open(io.BytesIO(image_bytes)) as init_image:
+            init_width, init_height = init_image.size
+
+        payload = base_payload
+        payload.update({
+            "init_images": [image_b64],
+            "resize_mode": int(payload.get("resize_mode", 0)),
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "send_images": True,
+            "save_images": False,
+            "width": init_width,
+            "height": init_height,
+        })
+        payload.setdefault("denoising_strength", float(settings.get('denoising_strength', payload.get('denoising_strength', 0.1))))
+        payload["alwayson_scripts"] = passthrough_scripts
+        return payload
+
+    @staticmethod
+    def _build_sam3_script_state(settings: Dict) -> Dict:
+        detect_prompt = str(settings.get('sam3_prompt', 'face') or 'face').strip() or 'face'
+        return {
+            "sam3_enable": True,
+            "enabled": True,
+            "sam3_mode": settings.get('sam3_mode', 'Inpaint'),
+            "sam3_mask_mode": settings.get('sam3_mask_mode', 'Individual'),
+            "sam3_prompt": detect_prompt,
+            "sam3_inpaint_prompt": settings.get('sam3_inpaint_prompt', settings.get('prompt', '')),
+            "sam3_negative_prompt": settings.get('sam3_negative_prompt', settings.get('negative_prompt', '')),
+            "sam3_threshold": float(settings.get('sam3_threshold', 0.4)),
+            "sam3_checkpoint": settings.get('sam3_checkpoint', 'sam3.pt'),
+            "sam3_device": settings.get('sam3_device', 'auto'),
+            "sam3_mask_blur": int(settings.get('sam3_mask_blur', 4)),
+            "sam3_denoising_strength": float(settings.get('sam3_denoising_strength', settings.get('denoising_strength', 0.4))),
+            "sam3_inpaint_only_masked": bool(settings.get('sam3_inpaint_only_masked', True)),
+            "sam3_inpaint_only_masked_padding": int(settings.get('sam3_inpaint_only_masked_padding', 32)),
+            "sam3_use_inpaint_width_height": bool(settings.get('sam3_use_inpaint_width_height', False)),
+            "sam3_inpaint_width": int(settings.get('sam3_inpaint_width', 512)),
+            "sam3_inpaint_height": int(settings.get('sam3_inpaint_height', 512)),
+            "sam3_use_steps": bool(settings.get('sam3_use_steps', False)),
+            "sam3_steps": int(settings.get('sam3_steps', 28)),
+            "sam3_use_cfg_scale": bool(settings.get('sam3_use_cfg_scale', False)),
+            "sam3_cfg_scale": float(settings.get('sam3_cfg_scale', 7.0)),
+            "sam3_use_sampler": bool(settings.get('sam3_use_sampler', False)),
+            "sam3_sampler": settings.get('sam3_sampler', 'Use same sampler'),
+            "sam3_scheduler": settings.get('sam3_scheduler', 'Use same scheduler'),
+            "sam3_use_noise_multiplier": bool(settings.get('sam3_use_noise_multiplier', False)),
+            "sam3_noise_multiplier": float(settings.get('sam3_noise_multiplier', 1.0)),
+            "sam3_restore_face": bool(settings.get('sam3_restore_face', False)),
+            "sam3_preview_overlay": bool(settings.get('sam3_preview_overlay', False)),
+            "sam3_save_artifacts": bool(settings.get('sam3_save_artifacts', True)),
+        }
+
+    def _run_img2img_postprocess(self, image_b64: str, payload: Dict) -> str:
+        response = requests.post(
+            f'{self.api_url}/sdapi/v1/img2img',
+            json=payload, headers=_HEADERS, timeout=600
+        )
+        response.raise_for_status()
+        r = response.json()
+        if 'images' in r and r['images']:
+            return r['images'][-1]
+        raise RuntimeError("img2img 후처리 API 응답에 이미지가 없습니다.")
 
     def get_backend_type(self) -> str:
         return "webui"
@@ -39,10 +137,10 @@ class WebUIBackend(AbstractBackend):
         timeout = 5
         info = BackendInfo()
 
-        # 모델 목록 (필수 - 동기 호출)
-        res = requests.get(
+        # 모델 목록 (필수 - 재시도 포함 동기 호출)
+        res = get_with_retry(
             f'{self.api_url}/sdapi/v1/sd-models',
-            headers=headers, timeout=timeout
+            headers=headers, timeout=timeout, retries=3,
         )
         res.raise_for_status()
         sd_models = res.json()
@@ -53,9 +151,9 @@ class WebUIBackend(AbstractBackend):
             ]
 
         def _fetch(endpoint):
-            return requests.get(
+            return get_with_retry(
                 f'{self.api_url}{endpoint}',
-                headers=headers, timeout=timeout
+                headers=headers, timeout=timeout, retries=2,
             ).json()
 
         # 나머지 5개 병렬 호출
@@ -83,8 +181,8 @@ class WebUIBackend(AbstractBackend):
                         info.vae = ["Use same VAE"] + [v.get('model_name', '') for v in r]
                     elif name == 'options':
                         info.options = r
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("get_info endpoint '%s' failed: %s", name, e)
 
         return info
 
@@ -101,8 +199,8 @@ class WebUIBackend(AbstractBackend):
                     'vram_total': sys_info.get('total', 0),
                     'vram_free': sys_info.get('free', 0),
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("get_system_stats failed: %s", e)
         return {}
 
     def get_loras(self) -> list:
@@ -156,8 +254,8 @@ class WebUIBackend(AbstractBackend):
                                     ]
                     result.append(lora)
                 return result
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("get_loras failed: %s", e)
         return []
 
     def _switch_model_if_needed(self, model_name: str):
@@ -194,8 +292,9 @@ class WebUIBackend(AbstractBackend):
                     callback(step, total, None)
                 elif progress_val > 0:
                     callback(int(progress_val * 100), 100, None)
-            except Exception:
-                pass
+            except Exception as e:
+                # 진행률 폴링은 반복 호출 — 노이즈 방지 위해 debug 로그만
+                logger.debug("progress poll failed: %s", e)
             stop_event.wait(0.5)
 
     def _generate(self, endpoint: str, model_name: str, payload: Dict,
@@ -275,43 +374,37 @@ class WebUIBackend(AbstractBackend):
 
     def adetailer(self, image_b64: str, settings: Dict) -> str:
         """img2img + ADetailer로 디테일 보정"""
-        from workers.upscale_worker import _build_adetailer_slot, _build_empty_adetailer_slot
+        adetailer_args = settings.get('adetailer_args')
+        if not adetailer_args:
+            from workers.upscale_worker import _build_adetailer_slot
 
-        ad_slot = _build_adetailer_slot(
-            model=settings.get('ad_model', 'face_yolov8s.pt'),
-            confidence=settings.get('ad_confidence', 0.3),
-            denoise=settings.get('ad_denoise', 0.25),
+            ad_slot = _build_adetailer_slot(
+                model=settings.get('ad_model', 'face_yolov8s.pt'),
+                confidence=settings.get('ad_confidence', 0.3),
+                denoise=settings.get('ad_denoise', 0.25),
+                prompt=settings.get('ad_prompt', ''),
+            )
+            if settings.get('ad_negative'):
+                ad_slot['ad_negative_prompt'] = settings['ad_negative']
+            adetailer_args = [True, False, ad_slot]
+
+        payload = self._build_postprocess_payload(
+            image_b64,
+            settings,
             prompt=settings.get('ad_prompt', ''),
+            negative_prompt=settings.get('ad_negative', ''),
         )
-        # EXIF negative prompt 지원
-        if settings.get('ad_negative'):
-            ad_slot['ad_negative_prompt'] = settings['ad_negative']
+        payload["alwayson_scripts"]["ADetailer"] = {"args": adetailer_args}
+        return self._run_img2img_postprocess(image_b64, payload)
 
-        payload = {
-            "init_images": [image_b64],
-            "denoising_strength": 0.1,
-            "width": -1,
-            "height": -1,
-            "resize_mode": 0,
-            "prompt": settings.get('ad_prompt', ''),
-            "negative_prompt": settings.get('ad_negative', ''),
-            "sampler_name": "DPM++ 2M Karras",
-            "steps": 20,
-            "cfg_scale": 7,
-            "send_images": True,
-            "save_images": False,
-            "alwayson_scripts": {
-                "ADetailer": {
-                    "args": [True, False, ad_slot]
-                }
-            }
-        }
-        response = requests.post(
-            f'{self.api_url}/sdapi/v1/img2img',
-            json=payload, headers=_HEADERS, timeout=600
+    def sam3(self, image_b64: str, settings: Dict) -> str:
+        """img2img + SAM3 확장으로 마스킹/인페인트"""
+        sam3_state = self._build_sam3_script_state(settings)
+        payload = self._build_postprocess_payload(
+            image_b64,
+            settings,
+            prompt=sam3_state.get('sam3_inpaint_prompt', '') or settings.get('prompt', ''),
+            negative_prompt=sam3_state.get('sam3_negative_prompt', '') or settings.get('negative_prompt', ''),
         )
-        response.raise_for_status()
-        r = response.json()
-        if 'images' in r and r['images']:
-            return r['images'][0]
-        raise RuntimeError("ADetailer API 응답에 이미지가 없습니다.")
+        payload["alwayson_scripts"]["SAM3 Mask"] = {"args": [sam3_state]}
+        return self._run_img2img_postprocess(image_b64, payload)

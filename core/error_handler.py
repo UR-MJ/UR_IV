@@ -1,7 +1,25 @@
 # core/error_handler.py
 """전역 에러 핸들러 — 에러 코드 + CMD 출력 + Vue Toast 연동"""
+import re
 import traceback
 import sys
+
+# 절대 경로를 감지하는 정규식 — 로그용/UI 분리에 활용.
+# Windows: C:\foo\bar, C:/foo/bar / POSIX: /home/foo 등
+_ABS_PATH_RE = re.compile(r"(?:[A-Za-z]:[\\/][^\s'\"<>]+|/(?:home|Users|root|etc|var|usr|tmp)/[^\s'\"<>]*)")
+
+
+def sanitize_for_ui(message: str, max_len: int = 160) -> str:
+    """UI로 보내기 전 민감 정보(절대 경로)를 제거하고 길이를 제한.
+
+    로그에는 원본을, 프론트엔드에는 이 값만 전달하여 내부 파일 구조 노출을 막는다.
+    """
+    if not message:
+        return ""
+    text = _ABS_PATH_RE.sub("[path]", str(message))
+    if len(text) > max_len:
+        text = text[: max_len - 1] + "…"
+    return text
 
 # 에러 코드 정의
 ERROR_CODES = {
