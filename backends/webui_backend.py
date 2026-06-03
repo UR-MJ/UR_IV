@@ -274,6 +274,52 @@ class WebUIBackend(AbstractBackend):
                 headers=_HEADERS, timeout=60
             )
 
+    def cleanup_models(self, full_reload: bool = False) -> bool:
+        """LoRA patches + 캐시 정리.
+        Forge/A1111의 API 호출 누적으로 patches가 쌓일 때 호출.
+
+        :param full_reload: True면 checkpoint unload+reload (확실하지만 느림 ~10s)
+                            False면 LoRA 리프레시만 (빠르지만 patches 일부 남을 수도)
+        :return: 성공 여부
+        """
+        try:
+            if full_reload:
+                # 가장 확실한 cleanup — checkpoint unload → 다음 generation 시 자동 reload
+                # patches 완전 초기화, VRAM 회수
+                try:
+                    requests.post(
+                        url=f'{self.api_url}/sdapi/v1/unload-checkpoint',
+                        headers=_HEADERS, timeout=30
+                    )
+                    logger.info("[cleanup] checkpoint unloaded — fresh state on next gen")
+                except requests.exceptions.RequestException:
+                    pass  # 엔드포인트 없는 버전 — 무시
+            # LoRA 캐시 리프레시 (가벼움)
+            try:
+                requests.post(
+                    url=f'{self.api_url}/sdapi/v1/refresh-loras',
+                    headers=_HEADERS, timeout=20
+                )
+            except requests.exceptions.RequestException:
+                pass
+            # Forge: gc/cache clear 트리거 (있다면)
+            try:
+                requests.post(
+                    url=f'{self.api_url}/sdapi/v1/options',
+                    json={'memmon_poll_rate': 8},  # no-op 같은 옵션 set로 forge gc 유발
+                    headers=_HEADERS, timeout=10
+                )
+            except requests.exceptions.RequestException:
+                pass
+            return True
+        except Exception as e:
+            logger.warning("cleanup_models failed: %s", e)
+            return False
+
+    # 기존 코드와의 호환 — D6에서 vram-bar 클릭 핸들러가 unload_models() 찾음
+    def unload_models(self):
+        return self.cleanup_models(full_reload=True)
+
     def _start_progress_polling(self, callback: Optional[ProgressCallback],
                                 stop_event: threading.Event):
         """별도 스레드에서 /sdapi/v1/progress 폴링"""

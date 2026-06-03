@@ -62,6 +62,10 @@
               <label title="한 생성이 실패(서버 에러/타임아웃/OOM 등)했을 때 자동으로 다시 시도할 횟수.&#10;반복과 별개 — 반복은 같은 프롬프트로 N장 생성, 재시도는 실패 1회당 N번까지 다시 시도.&#10;지수 백오프(2s → 4s → 8s, 최대 30s)로 대기 후 재시도.&#10;&#10;예) 반복=3, 재시도=2:&#10;  · 2번째 시도가 실패하면 2초 대기 → 재시도 → 4초 → 재시도&#10;  · 두 재시도도 모두 실패 시 포기, 3번째 반복으로 진행">재시도</label>
               <input type="number" v-model.number="autoSettings.maxRetries" min="0" max="10" class="auto-input" />
             </div>
+            <div class="auto-row">
+              <label title="N회 generation마다 백엔드(WebUI/Forge)에 LoRA 캐시 정리 요청.&#10;Forge가 API 호출에서 LoRA patches를 누적시키는 버그 회피용.&#10;&#10;0 = 사용 안 함 (기본)&#10;5 = 매 5회마다 cleanup (LoRA 4개+SAM3 사용 시 권장)&#10;10 = 매 10회마다 (가벼운 워크플로우)&#10;&#10;cleanup은 ~1초 소요. OOM 발생 후 재시도 전엔 자동으로 full reload 실행됨.">cleanup 주기</label>
+              <input type="number" v-model.number="autoSettings.cleanupEveryN" min="0" max="100" class="auto-input" />
+            </div>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
           </div>
           <!-- 자동화 상태 표시 -->
@@ -987,13 +991,14 @@ function onVramClick() {
   requestAction('unload_model_request', {})
   requestAction('show_toast', { type: 'info', msg: '백엔드에 모델 unload 요청 전송됨' })
 }
-const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, maxRetries: 2 })
+const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, maxRetries: 2, cleanupEveryN: 0 })
 
 function syncAutomationSettings() {
   const limit = Number(autoSettings.limit)
   const repeat = Number(autoSettings.repeat)
   const delay = Number(autoSettings.delay)
   const maxRetries = Number(autoSettings.maxRetries)
+  const cleanupEveryN = Number(autoSettings.cleanupEveryN)
 
   action('set_automation_settings', {
     mode: autoSettings.mode,
@@ -1002,6 +1007,7 @@ function syncAutomationSettings() {
     delay: Number.isFinite(delay) && delay >= 0 ? delay : 1,
     allowDupes: !!autoSettings.allowDupes,
     maxRetries: Number.isFinite(maxRetries) && maxRetries >= 0 ? maxRetries : 2,
+    cleanupEveryN: Number.isFinite(cleanupEveryN) && cleanupEveryN >= 0 ? cleanupEveryN : 0,
   })
 }
 

@@ -84,6 +84,9 @@ class AutomationConfig:
     delay: float = 1.0              # 반복 간 대기 (초)
     max_retries: int = 3            # 실패 시 재시도 횟수
     stop_on_failure: bool = False   # True면 max_retries 초과 시 전체 중단
+    # 0이면 비활성. N이면 매 N회 generation 후 backend cleanup_models 호출
+    # (Forge API의 LoRA patches 누적 문제 회피용)
+    cleanup_every_n: int = 0
     # CONDITIONAL일 때: 매 반복 전 호출, False 반환 시 종료
     continue_predicate: Optional[Callable[[], bool]] = None
 
@@ -270,6 +273,18 @@ class AutomationController:
                     "success": success,
                 })
 
+                # 정기 cleanup — N회마다 backend LoRA patches 정리
+                # OOM 발생 전에 예방 (Forge API 호출 누적 회피)
+                if cfg.cleanup_every_n > 0 and iteration % cfg.cleanup_every_n == 0:
+                    try:
+                        from core.app_context import get_context
+                        backend = get_context().get_service('backend')
+                        if backend and hasattr(backend, 'cleanup_models'):
+                            _logger.info(f"iter {iteration}: 정기 cleanup (매 {cfg.cleanup_every_n}회)")
+                            backend.cleanup_models(full_reload=False)  # 빠른 cleanup
+                    except Exception as ce:
+                        _logger.debug(f"periodic cleanup failed: {ce}")
+
                 # 카운트다운 (delay)
                 if cfg.delay > 0:
                     if not self._countdown(cfg.delay, iteration):
@@ -298,13 +313,13 @@ class AutomationController:
                 attempts += 1
                 self.stats.total_retries += 1
                 _logger.warning(f"iter {iteration} attempt {attempts} failed: {e}")
-                # OOM 회복 시도 — 재시도 전에 CUDA 캐시 + Python GC 강제
+                # OOM 회복 시도 — 재시도 전에 CUDA 캐시 + Python GC + backend LoRA cleanup
                 # 같은 메모리 상태로 재시도하면 또 OOM이라 무의미
                 err_str = str(e).lower()
                 is_oom = ('out of memory' in err_str or 'cuda' in err_str
                           or 'allocation' in err_str)
                 if is_oom:
-                    _logger.warning(f"iter {iteration}: OOM 감지 → CUDA 캐시 + GC 정리")
+                    _logger.warning(f"iter {iteration}: OOM 감지 → CUDA 캐시 + GC + backend cleanup")
                     try:
                         import gc
                         gc.collect()
@@ -314,6 +329,15 @@ class AutomationController:
                             torch.cuda.synchronize()
                     except Exception:
                         pass
+                    # backend에 LoRA patches 정리 요청 — Forge API 호출 누적 문제 회피
+                    try:
+                        from core.app_context import get_context
+                        backend = get_context().get_service('backend')
+                        if backend and hasattr(backend, 'cleanup_models'):
+                            _logger.warning(f"iter {iteration}: backend cleanup (full reload)")
+                            backend.cleanup_models(full_reload=True)
+                    except Exception as ce:
+                        _logger.warning(f"backend cleanup failed: {ce}")
                 if attempts <= cfg.max_retries:
                     # OOM은 더 오래 쉬고 (메모리 회복 시간), 일반 에러는 짧게
                     wait = min(2.0 ** attempts, 30.0)

@@ -698,7 +698,17 @@ class GeneratorMainUI(
                     'allowDupes': bool(payload.get('allowDupes', False)),
                     # PR 3: 재시도 설정 (기본 2회)
                     'maxRetries': int(payload.get('maxRetries', 2)),
+                    # F2: 정기 cleanup 주기 (LoRA patches 누적 회피용, 0=비활성)
+                    'cleanupEveryN': int(payload.get('cleanupEveryN', 0)),
                 }
+                # queue_manager에 즉시 반영
+                try:
+                    if hasattr(self, 'queue_manager'):
+                        self.queue_manager.cleanup_every_n = int(payload.get('cleanupEveryN', 0))
+                        delay_v = float(payload.get('delay', 1.0))
+                        self.queue_manager.delay_seconds = max(0.0, delay_v)
+                except Exception:
+                    pass
                 # PR 9: 모드별로 자동 저장
                 if hasattr(self, 'automation_persistence'):
                     self.automation_persistence.save_mode_settings()

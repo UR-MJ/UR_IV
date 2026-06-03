@@ -25,6 +25,9 @@ class QueueManager(QObject):
         self.generated_count = 0
         self.total_count = 0
         self.delay_seconds = 1.0
+        # F2: cleanup 주기 — N회마다 backend cleanup_models 호출 (LoRA patches 회피)
+        # 0이면 비활성. Vue UI에서 set_automation_settings로 동기화
+        self.cleanup_every_n = 0
 
         # 배치 리포트용
         self._batch_start_time: float = 0.0
@@ -120,6 +123,22 @@ class QueueManager(QObject):
         self.queue_panel.remove_first_item()
         self.generated_count += 1
         self.queue_panel.update_progress(self.generated_count, self.total_count)
+
+        # F2: 정기 cleanup — N회마다 backend의 LoRA patches/모델 캐시 정리
+        # Forge API 호출 누적으로 OOM 나는 케이스 회피
+        if self.cleanup_every_n > 0 and self.generated_count % self.cleanup_every_n == 0:
+            try:
+                from backends import get_backend
+                backend = get_backend()
+                if backend and hasattr(backend, 'cleanup_models'):
+                    import logging
+                    logging.getLogger(__name__).info(
+                        f"queue_manager: 정기 cleanup (매 {self.cleanup_every_n}회, "
+                        f"현재 {self.generated_count}회 생성)"
+                    )
+                    backend.cleanup_models(full_reload=False)
+            except Exception:
+                pass
 
         from PyQt6.QtCore import QTimer
 
