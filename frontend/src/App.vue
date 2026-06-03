@@ -457,10 +457,14 @@
 
     <QueuePanel />
 
-    <!-- VRAM 게이지 (하단 고정) -->
-    <div class="vram-bar" v-if="vramInfo.total > 0">
+    <!-- VRAM 게이지 (하단 고정) — 클릭으로 상세 메모리 정보 + 권장사항 -->
+    <div class="vram-bar" v-if="vramInfo.total > 0" @click="onVramClick" :title="vramTooltip">
       <div class="vram-fill" :style="{ width: vramInfo.pct + '%' }" :class="vramClass"></div>
-      <span class="vram-text">VRAM {{ vramInfo.used }}GB / {{ vramInfo.total }}GB ({{ vramInfo.pct }}%)</span>
+      <span class="vram-text">
+        VRAM {{ vramInfo.used }}GB / {{ vramInfo.total }}GB ({{ vramInfo.pct }}%)
+        <span v-if="vramClass === 'critical'" class="vram-warn">⚠ 위험</span>
+        <span v-else-if="vramClass === 'warn'" class="vram-warn">▲ 주의</span>
+      </span>
     </div>
 
     <!-- Preset Manager Modal -->
@@ -914,6 +918,24 @@ const autoGenCount = ref(0)
 const autoWaiting = ref(false)
 const vramInfo = ref({ used: 0, total: 0, pct: 0 })
 const vramClass = computed(() => vramInfo.value.pct > 90 ? 'critical' : vramInfo.value.pct > 70 ? 'warn' : 'ok')
+const vramTooltip = computed(() => {
+  const v = vramInfo.value
+  if (!v.total) return ''
+  const free = (v.total - v.used).toFixed(1)
+  let msg = `사용: ${v.used}GB / 전체: ${v.total}GB (여유: ${free}GB)`
+  if (vramClass.value === 'critical') msg += '\n⚠ VRAM 부족 — 해상도/배치 크기를 줄이거나 모델 unload 권장'
+  else if (vramClass.value === 'warn') msg += '\n▲ 70% 초과 — 추가 작업 시 OOM 가능성'
+  msg += '\n\n클릭하여 백엔드 모델 unload 요청'
+  return msg
+})
+function onVramClick() {
+  // 백엔드에 unload 요청 — 사용자가 명시적으로 메모리 정리하고 싶을 때
+  if (vramClass.value === 'critical') {
+    if (!confirm(`VRAM 사용량이 ${vramInfo.value.pct}%입니다. 백엔드에서 모델을 unload 할까요?`)) return
+  }
+  requestAction('unload_model_request', {})
+  requestAction('show_toast', { type: 'info', msg: '백엔드에 모델 unload 요청 전송됨' })
+}
 const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, maxRetries: 2 })
 
 function syncAutomationSettings() {
@@ -1468,6 +1490,11 @@ onMounted(async () => {
     if (e.ctrlKey && e.key === 'g') { e.preventDefault(); doGenerate() }
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); action('save_settings') }
     if (e.key === 'F5') { e.preventDefault(); loadHistory() }
+    // Ctrl+Tab / Ctrl+Shift+Tab — 다음/이전 탭 탐색
+    if (e.ctrlKey && e.key === 'Tab') {
+      e.preventDefault()
+      try { window.dispatchEvent(new CustomEvent('tabBarNavigate', { detail: { direction: e.shiftKey ? -1 : 1 } })) } catch {}
+    }
     // ESC — 열려있는 오버레이/모달을 최상위 우선순위로 닫기
     if (e.key === 'Escape') {
       // 1) 최상위 모달이 있으면 그것부터 (z-index 2000)
@@ -2019,6 +2046,9 @@ onMounted(async () => {
 @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
 
 /* VRAM Bar */
+.vram-warn { color: #fbbf24; font-weight: 900; margin-left: 6px; }
+.vram-bar { cursor: pointer; }
+.vram-bar:hover .vram-fill { filter: brightness(1.15); }
 .vram-bar {
   position: fixed; bottom: 0; left: 0; right: 0; height: 22px;
   background: #080808; border-top: 1px solid var(--border); z-index: 500;

@@ -730,9 +730,7 @@ function clearAllFilters() {
   requestAction('show_toast', { type: 'info', msg: '필터 해제됨' })
 }
 
-function clearSortFilter() {
-  clearAllFilters()
-}
+// (clearSortFilter: clearAllFilters의 단순 alias였음 — 미사용으로 제거)
 
 function prevResult() { if (previewIdx.value > 0) previewIdx.value-- }
 function nextResult() { if (previewIdx.value < filteredResults.value.length - 1) previewIdx.value++ }

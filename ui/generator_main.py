@@ -1099,6 +1099,27 @@ class GeneratorMainUI(
                     self.show_status("Queue stopped.")
                     self._sync_queue_to_vue()
 
+            elif action == 'unload_model_request':
+                # VRAM 게이지 클릭으로 사용자가 수동 unload 요청 — 백엔드에 위임
+                try:
+                    backend = getattr(self, 'backend', None) or getattr(self, '_backend', None)
+                    if backend and hasattr(backend, 'unload_models'):
+                        backend.unload_models()
+                        self.show_status("Model unload requested.")
+                    elif backend and hasattr(backend, 'unload'):
+                        backend.unload()
+                        self.show_status("Model unload requested.")
+                    else:
+                        # 폴백: AppContext를 통한 통보
+                        try:
+                            from core.app_context import get_context
+                            get_context().emit('model_unload_requested', {})
+                        except Exception:
+                            pass
+                        self.show_status("Unload signal sent (no direct backend method).")
+                except Exception as e:
+                    self.show_status(f"Unload failed: {e}")
+
             elif action == 'pause_queue':
                 if hasattr(self, 'queue_manager'):
                     self.queue_manager.pause()

@@ -1,15 +1,23 @@
 <template>
-  <div class="settings-workspace">
+  <div class="settings-workspace" @keydown.ctrl.f.prevent="focusSearch">
     <!-- Left: Sub-navigation -->
     <aside class="settings-nav">
       <div class="nav-header">PREFERENCES</div>
-      <button v-for="tab in subTabs" :key="tab.id"
+      <div class="settings-search-wrap">
+        <input ref="searchInputRef" v-model="settingsSearch" class="settings-search"
+          placeholder="🔍 설정 검색 (Ctrl+F)" />
+        <button v-if="settingsSearch" class="search-clear" @click="settingsSearch = ''" title="지우기">✕</button>
+      </div>
+      <button v-for="tab in filteredSubTabs" :key="tab.id"
         class="nav-item" :class="{ active: currentTab === tab.id }"
         @click="currentTab = tab.id"
       >
         <span class="icon">{{ tab.icon }}</span>
         <span class="label">{{ tab.label }}</span>
       </button>
+      <div v-if="settingsSearch && filteredSubTabs.length === 0" class="nav-empty">
+        검색 결과 없음
+      </div>
     </aside>
 
     <!-- Right: Content Area -->
@@ -287,15 +295,36 @@ import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
 
 const subTabs = [
-  { id: 'general', label: 'GENERAL', icon: '⚙️' },
-  { id: 'api', label: 'NETWORK', icon: '🌐' },
-  { id: 'prompt', label: 'LOGIC', icon: '📝' },
-  { id: 'tabs', label: 'WORKSPACE', icon: '🗂️' },
-  { id: 'shortcuts', label: 'HOTKEYS', icon: '⌨️' },
-  { id: 'defaults', label: 'DEFAULTS', icon: '🎛️' },
-  { id: 'ollama', label: 'AI ASSIST', icon: '🧠' },
+  // keywords: 사용자 검색 시 라벨 외에도 매칭할 한/영 키워드들
+  { id: 'general',   label: 'GENERAL',   icon: '⚙️', keywords: 'general 일반 시스템 코어 버전' },
+  { id: 'api',       label: 'NETWORK',   icon: '🌐', keywords: 'network api 네트워크 webui comfy url 백엔드 연결' },
+  { id: 'prompt',    label: 'LOGIC',     icon: '📝', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
+  { id: 'tabs',      label: 'WORKSPACE', icon: '🗂️', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
+  { id: 'shortcuts', label: 'HOTKEYS',   icon: '⌨️', keywords: 'hotkeys shortcuts 단축키 키보드 ctrl shift z y s g' },
+  { id: 'defaults',  label: 'DEFAULTS',  icon: '🎛️', keywords: 'defaults 기본값 t2i i2i inpaint 해상도 steps cfg sampler 시드' },
+  { id: 'ollama',    label: 'AI ASSIST', icon: '🧠', keywords: 'ollama ai assist 어시스트 자동완성 번역' },
 ]
 const currentTab = ref('general')
+const settingsSearch = ref('')
+const searchInputRef = ref(null)
+const filteredSubTabs = computed(() => {
+  const q = settingsSearch.value.trim().toLowerCase()
+  if (!q) return subTabs
+  return subTabs.filter(t =>
+    t.label.toLowerCase().includes(q) ||
+    (t.keywords || '').toLowerCase().includes(q)
+  )
+})
+// 검색 결과가 1개면 자동 선택
+watch(filteredSubTabs, (val) => {
+  if (settingsSearch.value && val.length === 1 && currentTab.value !== val[0].id) {
+    currentTab.value = val[0].id
+  }
+})
+function focusSearch() {
+  searchInputRef.value?.focus()
+  searchInputRef.value?.select()
+}
 const webuiUrl = ref('http://127.0.0.1:7860')
 const comfyUrl = ref('http://127.0.0.1:8188')
 const cleanDuplicates = ref(true)
@@ -481,6 +510,21 @@ function loadOllamaModels() { testOllama() }
   padding: 24px 12px; display: flex; flex-direction: column; gap: 4px;
 }
 .nav-header { font-size: 10px; font-weight: 900; color: var(--text-muted); letter-spacing: 2px; padding: 0 12px 12px; }
+.settings-search-wrap { position: relative; padding: 0 12px 12px; }
+.settings-search {
+  width: 100%; padding: 7px 28px 7px 10px;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-primary); font-size: 11px; outline: none;
+  font-family: inherit;
+}
+.settings-search:focus { border-color: var(--accent); }
+.search-clear {
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 12px; padding: 0 4px;
+}
+.search-clear:hover { color: #f87171; }
+.nav-empty { padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center; font-style: italic; }
 .nav-item {
   height: 44px; padding: 0 16px; border: none; background: transparent;
   border-radius: var(--radius-base); display: flex; align-items: center; gap: 12px;

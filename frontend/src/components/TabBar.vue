@@ -62,13 +62,28 @@ function _onTabOrderChange() {
 function _onStorageEvent(e) {
   if (e.key === 'tabOrder' || e.key === null /* clear */) _onTabOrderChange()
 }
+// Ctrl+Tab / Ctrl+Shift+Tab — 다음/이전 탭으로 이동
+function _onTabNavigate(e) {
+  const direction = e.detail?.direction || 1
+  const allTabsArr = tabs.value
+  if (!allTabsArr.length) return
+  const curIdx = allTabsArr.findIndex(t => t.name === currentTab.value)
+  if (curIdx < 0) { switchTo(allTabsArr[0]); return }
+  let nextIdx = curIdx + direction
+  if (nextIdx < 0) nextIdx = allTabsArr.length - 1
+  if (nextIdx >= allTabsArr.length) nextIdx = 0
+  switchTo(allTabsArr[nextIdx])
+}
+
 onMounted(() => {
   window.addEventListener('storage', _onStorageEvent)
   window.addEventListener('tabOrderChanged', _onTabOrderChange)
+  window.addEventListener('tabBarNavigate', _onTabNavigate)
 })
 onUnmounted(() => {
   window.removeEventListener('storage', _onStorageEvent)
   window.removeEventListener('tabOrderChanged', _onTabOrderChange)
+  window.removeEventListener('tabBarNavigate', _onTabNavigate)
 })
 
 const nativeTabs = [

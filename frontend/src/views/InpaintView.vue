@@ -259,7 +259,9 @@ function onMove(e) {
 
 function onUp(e) {
   if (panning) { panning = false; return }
-  if (!drawing) return; drawing = false
+  if (!drawing) return
+  // FIX: drawing=false 를 좌표/도구 완성 처리 후로 이동 — 그래야 box/lasso 완성 시점에
+  // 다른 핸들러가 짧게 끼어들어 좌표를 더럽히는 것을 막을 수 있음.
   const p = getPos(e)
   if (currentTool.value === 'box') { fillRect(Math.min(startX,p.x), Math.min(startY,p.y), Math.max(startX,p.x), Math.max(startY,p.y)) }
   else if (currentTool.value === 'lasso') { if (lassoPoints.length > 2) fillPoly(lassoPoints); lassoPoints = [] }
@@ -268,6 +270,7 @@ function onUp(e) {
     else if (eraserMode.value === 'lasso') { if (lassoPoints.length > 2) erasePoly(lassoPoints); lassoPoints = [] }
   }
   render(); updateHasMask()
+  drawing = false  // 모든 처리 완료 후에만 false
 }
 
 function onWheel(e) { zoom.value = Math.max(0.2, Math.min(5, zoom.value * (e.deltaY > 0 ? 0.9 : 1.1))) }

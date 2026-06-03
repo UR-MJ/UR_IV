@@ -60,6 +60,13 @@
             <input type="range" min="1" max="20" step="0.5" v-model.number="cfg" class="modern-slider" />
             <div class="val-tag">{{ cfg }}</div>
           </div>
+          <div class="input-group mt-12">
+            <label>Seed (−1 = 랜덤)</label>
+            <div class="seed-row">
+              <input v-model="seed" type="text" class="seed-input" placeholder="-1" />
+              <button class="seed-btn" @click="seed = '-1'" title="랜덤으로 초기화">🎲</button>
+            </div>
+          </div>
         </details>
       </div>
 
@@ -207,6 +214,18 @@ function generate() {
 
 .modern-slider { appearance: none; width: 100%; height: 4px; background: var(--bg-input); border-radius: 2px; outline: none; accent-color: var(--accent); }
 .val-tag { font-size: 11px; font-weight: 800; color: var(--text-secondary); text-align: right; margin-top: 4px; }
+.seed-row { display: flex; gap: 6px; align-items: center; }
+.seed-input {
+  flex: 1; padding: 8px 10px; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-primary); font-size: 12px; outline: none;
+  font-family: 'Consolas', monospace;
+}
+.seed-input:focus { border-color: var(--accent); }
+.seed-btn {
+  padding: 8px 12px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 14px; cursor: pointer;
+}
+.seed-btn:hover { background: var(--bg-input); border-color: var(--accent); }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .mt-12 { margin-top: 12px; }

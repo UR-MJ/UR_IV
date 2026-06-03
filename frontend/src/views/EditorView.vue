@@ -459,10 +459,12 @@ function doCrop() {
 }
 function doResize(params) { doOp('resize', params) }
 function applyAdj(adj) { doOp('color_adjust', adj) }
-function previewAdj() {}
-function resetAdj() {}
+// previewAdj / previewAdvAdj — 미구현 빈 함수였음. 실시간 프리뷰는 향후 구현 예정 (TODO).
+// resetAdj — ColorPanel 내부에서 자체 reset만 수행하면 됨 (백엔드 호출 불필요).
+function previewAdj(_adj) { /* TODO: 실시간 색감 프리뷰 (마스크 영역만 임시 렌더) */ }
+function resetAdj() { /* ColorPanel이 자체적으로 처리 — 백엔드 액션 없음 */ }
+function previewAdvAdj(_adj) { /* TODO: Advanced 색감 실시간 프리뷰 */ }
 function applyFilter(filter) { doOp(filter.name || filter.type, filter) }
-function previewAdvAdj() {}
 function applyAdvAdj(adj) { doOp('adv_color', adj) }
 function applyTextWm(params) { doOp('text_watermark', params) }
 function applyImageWm(params) { doOp('image_watermark', params) }
