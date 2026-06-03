@@ -739,13 +739,26 @@ class VueBridge(QObject):
 
     @pyqtSlot(str, result=str)
     def ollamaListModels(self, base_url: str = '') -> str:
-        """Ollama 모델 목록 반환"""
+        """Ollama 모델 목록 반환.
+
+        실패해도 빈 리스트 — Vue에서 toast로 사용자에게 안내.
+        """
         try:
             from core.ollama_client import OllamaClient
             url = base_url.strip() if base_url.strip() else 'http://localhost:11434'
             client = OllamaClient(base_url=url)
-            return json.dumps(client.list_models())
-        except Exception:
+            models = client.list_models()
+            if not models:
+                # 연결은 되지만 모델 없음 — 디버깅 출력
+                import requests
+                try:
+                    r = requests.get(f"{url}/api/tags", timeout=3)
+                    print(f"[Ollama] {url}/api/tags status={r.status_code}, body={r.text[:200]}")
+                except Exception as e:
+                    print(f"[Ollama] 연결 자체 실패: {e}")
+            return json.dumps(models)
+        except Exception as e:
+            print(f"[Ollama] ollamaListModels 오류: {e}")
             return json.dumps([])
 
     @pyqtSlot(result=str)

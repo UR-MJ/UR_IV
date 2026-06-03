@@ -1010,6 +1010,9 @@ class GeneratorMainUI(
                         payload.pop(legacy_key, None)
                     prefs.update(payload)
                     save_ui_prefs(prefs_path, prefs)
+                    # FIX: Vue의 LOGIC 토글을 prompt_cleaner에 즉시 적용
+                    # (이전에는 저장만 되고 효과 없었음)
+                    self._apply_ui_prefs_to_cleaner(prefs)
                     # 재전송 하지 않음 — uiPrefsLoaded는 앱 시작 시에만 emit
                     # 재전송하면 watch → save → emit → watch 무한 루프 발생
                 except Exception as e:
@@ -1101,13 +1104,17 @@ class GeneratorMainUI(
         except Exception as e:
             print(f"[Config] Failed to load cond rules: {e}")
         try:
-            # 기본값 로드
+            # 기본값 로드 + 적용
+            # FIX: 이전엔 prompt_settings.json 없을 때만 적용 → 사실상 첫 실행만.
+            # 이제 처음 실행이면 모든 필드, 이후엔 빈 위젯만 채우기.
             defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'tab_defaults.json')
             if os.path.exists(defaults_path):
                 with open(defaults_path, 'r', encoding='utf-8') as f:
                     defaults = json.load(f)
                 from config import PROMPT_SETTINGS_FILE
-                if not os.path.exists(PROMPT_SETTINGS_FILE):
+                first_run = not os.path.exists(PROMPT_SETTINGS_FILE)
+                # 첫 실행이면 모든 defaults 적용
+                if first_run:
                     if 'hires_enabled' in defaults:
                         self.hires_options_group.setChecked(bool(defaults.get('hires_enabled')))
                     if 'ad_enabled' in defaults:
@@ -1120,7 +1127,11 @@ class GeneratorMainUI(
                         self.ad_slot2_group.setChecked(bool(defaults.get('ad_s2_enabled')))
                     if 'negpip_enabled' in defaults:
                         self.negpip_group.setChecked(bool(defaults.get('negpip_enabled')))
-                print(f"[Config] Tab defaults loaded + extensions applied")
+
+                # 첫 실행이든 아니든 — 핵심 생성 파라미터를 위젯이 비어있을 때만 채움
+                # (사용자가 저장한 값을 덮어쓰지 않음)
+                self._apply_tab_defaults_to_empty_widgets(defaults, first_run=first_run)
+                print(f"[Config] Tab defaults loaded ({'first run — full' if first_run else 'empty fields only'})")
         except Exception as e:
             print(f"[Config] Failed to load defaults: {e}")
         try:
@@ -1139,7 +1150,9 @@ class GeneratorMainUI(
             prefs = load_ui_prefs(prefs_path)
             if prefs and hasattr(self, 'vue_bridge'):
                 self.vue_bridge.uiPrefsLoaded.emit(json.dumps(prefs))
-                print(f"[Config] UI prefs loaded")
+                # FIX: 시작 시점에 LOGIC 토글을 prompt_cleaner에 적용
+                self._apply_ui_prefs_to_cleaner(prefs)
+                print(f"[Config] UI prefs loaded + LOGIC toggles applied")
         except Exception as e:
             print(f"[Config] Failed to load UI prefs: {e}")
 
@@ -1594,6 +1607,79 @@ class GeneratorMainUI(
             lambda: self.vue_bridge.showNotification.emit('success', f'SAM3 배치 완료 ({len(paths)}장)'))
         self._sam3_batch_worker.start()
         self.vue_bridge.showNotification.emit('info', f'SAM3 배치 시작 ({len(paths)}장)')
+
+    # ── DEFAULTS 탭 (Vue) → 위젯 적용 ──────────────────────
+    def _apply_tab_defaults_to_empty_widgets(self, defaults: dict, first_run: bool = False) -> None:
+        """tab_defaults.json의 값을 적절한 위젯에 적용.
+
+        :param first_run: True면 모든 필드 적용 (덮어쓰기 포함).
+                          False면 위젯이 비어있거나 "기본 placeholder"일 때만.
+        """
+        # (widget_id, defaults_key, type_converter) 매핑
+        FIELD_MAP = [
+            ("steps_input", "steps", str),
+            ("cfg_input", "cfg", str),
+            ("width_input", "width", str),
+            ("height_input", "height", str),
+            ("seed_input", "seed", str),
+            ("sampler_combo", "sampler", str),
+            ("scheduler_combo", "scheduler", str),
+        ]
+        for widget_id, key, conv in FIELD_MAP:
+            if key not in defaults:
+                continue
+            widget = getattr(self, widget_id, None)
+            if widget is None:
+                continue
+            new_val = conv(defaults[key])
+            if not new_val or new_val == "":
+                continue
+            try:
+                if first_run:
+                    if hasattr(widget, "setText"):
+                        widget.setText(new_val)
+                    elif hasattr(widget, "setCurrentText"):
+                        widget.setCurrentText(new_val)
+                else:
+                    # 위젯이 비었거나 placeholder 같으면 채움
+                    current = ""
+                    if hasattr(widget, "currentText"):
+                        current = widget.currentText() or ""
+                    elif hasattr(widget, "text"):
+                        current = widget.text() or ""
+                    if not current.strip():
+                        if hasattr(widget, "setText"):
+                            widget.setText(new_val)
+                        elif hasattr(widget, "setCurrentText"):
+                            widget.setCurrentText(new_val)
+            except Exception as e:
+                print(f"[Warning] DEFAULTS {key} 적용 실패: {e}")
+
+    # ── LOGIC 탭 (Vue) → prompt_cleaner 연결 ──────────────
+    def _apply_ui_prefs_to_cleaner(self, prefs: dict) -> None:
+        """Vue Settings → LOGIC 토글 값을 prompt_cleaner에 반영.
+
+        Vue 키 → cleaner 속성:
+        - cleanDuplicates → remove_duplicates
+        - cleanSpaces     → auto_space
+        - cleanUnderscore → underscore_to_space
+
+        호출 시점:
+        - 앱 시작 시 (저장된 ui_prefs.json 적용)
+        - save_ui_prefs 액션 받을 때마다 (변경 즉시 반영)
+        """
+        cleaner = getattr(self, "prompt_cleaner", None)
+        if cleaner is None:
+            return
+        try:
+            if "cleanDuplicates" in prefs:
+                cleaner.remove_duplicates = bool(prefs["cleanDuplicates"])
+            if "cleanSpaces" in prefs:
+                cleaner.auto_space = bool(prefs["cleanSpaces"])
+            if "cleanUnderscore" in prefs:
+                cleaner.underscore_to_space = bool(prefs["cleanUnderscore"])
+        except Exception as e:
+            print(f"[Warning] LOGIC 토글 적용 실패: {e}")
 
     # ── 워크플로우 프로파일 ────────────────────────────────
     def _send_workflow_profiles_list(self):
