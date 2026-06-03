@@ -1256,13 +1256,17 @@ class VueBridge(QObject):
 
     @pyqtSlot(str, result=str)
     def getTagSuggestions(self, prefix: str) -> str:
-        """태그 자동완성 후보 반환"""
+        """태그 자동완성 후보 반환."""
         try:
             from utils.tag_completer import get_tag_completer
             completer = get_tag_completer()
-            suggestions = completer.get_suggestions(prefix, max_results=10)
+            # 주의: TagCompleter.get_suggestions의 키워드는 max_count
+            suggestions = completer.get_suggestions(prefix, max_count=10)
             return json.dumps(suggestions)
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(f"[getTagSuggestions] 오류: {e}")
+            traceback.print_exc()
             return json.dumps([])
 
     @pyqtSlot(str, result=str)

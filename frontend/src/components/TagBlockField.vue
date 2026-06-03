@@ -22,14 +22,24 @@
       <!-- 끝에 드롭 -->
       <div class="tbf-drop-marker" v-if="dropIdx === blocks.length"></div>
       <!-- 추가 입력 -->
-      <input class="tbf-add" v-model="newTag" :placeholder="placeholder"
-        @keydown.enter="addBlock" />
+      <div class="tbf-add-wrap">
+        <input class="tbf-add" v-model="newTag" :placeholder="placeholder"
+          @input="onAddInput"
+          @keydown="onAddKey"
+          @blur="acItems = []" />
+        <div class="ac-popup-block" v-if="acItems.length > 0">
+          <div v-for="(tag, i) in acItems" :key="tag" class="ac-item"
+            :class="{ selected: acIdx === i }"
+            @mousedown.prevent="acceptSuggestion(tag)">{{ tag.replace(/_/g, ' ') }}</div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, nextTick, watch } from 'vue'
+import { getBackend } from '../bridge.js'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -100,6 +110,52 @@ function finishEdit(idx) {
   else blocks.value.splice(idx, 1)
   editIdx.value = -1
   syncToModel()
+}
+
+// 자동완성 (블록 모드)
+const acItems = ref([])
+const acIdx = ref(0)
+let acTimer = null
+
+function onAddInput() {
+  const prefix = newTag.value.trim()
+  if (prefix.length < 2) { acItems.value = []; return }
+  clearTimeout(acTimer)
+  acTimer = setTimeout(async () => {
+    try {
+      const backend = await getBackend()
+      if (backend.getTagSuggestions) {
+        backend.getTagSuggestions(prefix, (json) => {
+          try {
+            const arr = JSON.parse(json)
+            acItems.value = Array.isArray(arr) ? arr.slice(0, 10) : []
+            acIdx.value = 0
+          } catch { acItems.value = [] }
+        })
+      }
+    } catch { acItems.value = [] }
+  }, 250)
+}
+
+function onAddKey(e) {
+  // 자동완성 활성일 때 키 처리
+  if (acItems.value.length > 0) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); acIdx.value = Math.min(acIdx.value + 1, acItems.value.length - 1); return }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); acIdx.value = Math.max(0, acIdx.value - 1); return }
+    if (e.key === 'Tab')       { e.preventDefault(); acceptSuggestion(acItems.value[acIdx.value]); return }
+    if (e.key === 'Escape')    { acItems.value = []; return }
+    // Enter는 자동완성 항목 선택 (위쪽으로 이동 안 했어도 첫 번째 선택)
+    if (e.key === 'Enter')     { e.preventDefault(); acceptSuggestion(acItems.value[acIdx.value]); return }
+  }
+  // 자동완성 없으면 기존 addBlock 동작
+  if (e.key === 'Enter') addBlock()
+}
+
+function acceptSuggestion(tag) {
+  if (!tag) return
+  newTag.value = tag.replace(/_/g, ' ')  // 표시는 공백으로
+  acItems.value = []
+  addBlock()
 }
 
 // 드래그 — 다중 행(wrap) 인식 + 행 내 X 기준 위치 판정
@@ -218,8 +274,23 @@ function isWc(text) { return /__.+__/.test(text) }
 /* 편집 */
 .tbf-edit { padding: 3px 8px; font-size: 11px; background: var(--bg-card); border: 1px solid var(--accent); border-radius: 4px; color: var(--text-primary); width: 120px; }
 /* 추가 */
+.tbf-add-wrap { position: relative; display: inline-block; }
 .tbf-add { padding: 3px 8px; font-size: 10px; background: transparent; border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); width: 80px; min-width: 60px; }
 .tbf-add:focus { border-color: var(--accent); color: var(--text-primary); width: 140px; }
+.ac-popup-block {
+  position: absolute; top: 100%; left: 0; z-index: 100;
+  margin-top: 2px; min-width: 180px; max-height: 200px; overflow-y: auto;
+  background: var(--bg-secondary); border: 1px solid var(--accent);
+  border-radius: 6px; padding: 2px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.ac-popup-block .ac-item {
+  padding: 5px 10px; font-size: 11px; color: var(--text-primary);
+  cursor: pointer; border-radius: 4px;
+}
+.ac-popup-block .ac-item:hover, .ac-popup-block .ac-item.selected {
+  background: rgba(96,165,250,0.2); color: #93c5fd;
+}
 /* neg */
 .neg .tbf-block { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
 </style>
