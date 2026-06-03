@@ -28,6 +28,7 @@ def get_backend() -> AbstractBackend:
 def set_backend(backend_type: BackendType, api_url: str):
     """백엔드 전환"""
     global _current_backend, _current_type
+    prev_type = _current_type
     _current_type = backend_type
     api_url = api_url.strip()
 
@@ -41,6 +42,19 @@ def set_backend(backend_type: BackendType, api_url: str):
         _current_backend = ComfyUIBackend(api_url)
         import config
         config.COMFYUI_API_URL = api_url
+
+    # AppContext 이벤트 발행 — ModeAwareMixin 등 구독자에게 알림.
+    # 실패해도 백엔드 전환 자체는 영향 없도록 격리.
+    try:
+        from core.app_context import get_context, Events
+        ctx = get_context()
+        # 타입 변경 시 BACKEND_CHANGED, URL은 항상 별도 알림 (URL만 바뀌는 경우 포함)
+        if prev_type != backend_type:
+            ctx.publish(Events.BACKEND_CHANGED, backend_type)
+        ctx.publish(Events.BACKEND_URL_CHANGED, api_url)
+    except Exception:
+        # AppContext 임포트 실패는 무시 — 백엔드 전환은 정상 동작 유지
+        pass
 
 
 def get_backend_type() -> BackendType:
