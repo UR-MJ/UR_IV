@@ -60,7 +60,13 @@ def _match_single_tag(pattern: str, tag_text: str) -> bool:
 def parse_query(query: str) -> list:
     """쿼리 문자열을 파싱하여 조건 리스트로 변환
 
-    Returns: [ {'type': 'and'|'or'|'single', 'terms': [str, ...]} ]
+    Returns: [ {'type': 'and'|'or'|'single', 'terms': [str, ...], 'has_wildcard'?: bool} ]
+
+    특수 케이스: OR 그룹 안에 빈 토큰이 있으면 (`[A|B|]` 처럼 trailing |)
+      → has_wildcard=True 로 표시 → '이 필드 조건은 매칭 안 되어도 통과'
+      → 즉 이 OR 그룹이 항상 True를 반환하므로 AND 모드에서도 해당 필드 면제 효과
+      예) AND 모드, copyright=`[tears of themis|alchemy stars|]`
+          → '작품이 TOT 또는 AS 또는 작품 무관' (copyright 조건 사실상 면제)
     """
     if not query or not query.strip():
         return []
@@ -79,9 +85,17 @@ def parse_query(query: str) -> list:
         if m:
             inner = m.group(1)
             if '|' in inner:
-                terms = [t.strip() for t in inner.split('|') if t.strip()]
-                conditions.append({'type': 'or', 'terms': terms})
+                raw = [t.strip() for t in inner.split('|')]
+                # 빈 토큰이 하나라도 있으면 → 이 OR 그룹은 와일드카드(필드 면제)
+                has_wildcard = any(not t for t in raw)
+                terms = [t for t in raw if t]
+                conditions.append({
+                    'type': 'or',
+                    'terms': terms,
+                    'has_wildcard': has_wildcard,
+                })
             elif ',' in inner:
+                # AND 그룹 — 빈 토큰은 그냥 무시 (AND에서 True&X=X 이므로 영향 없음)
                 terms = [t.strip() for t in inner.split(',') if t.strip()]
                 conditions.append({'type': 'and', 'terms': terms})
             else:
@@ -107,6 +121,9 @@ def match_query(query: str, tag_text: str) -> bool:
 
     for cond in conditions:
         if cond['type'] == 'or':
+            # has_wildcard=True 면 이 OR 그룹은 통과
+            if cond.get('has_wildcard'):
+                continue
             # OR: 하나 이상 매칭
             if not any(_match_single_tag(t, normalized) for t in cond['terms']):
                 return False
@@ -127,6 +144,9 @@ def _eval_condition(col_lower: pd.Series, cond: dict, index) -> pd.Series:
     cond['type']: 'or' | 'and' | 'single'
     """
     if cond['type'] == 'or':
+        # has_wildcard=True 면 [A|B|] 같은 빈 토큰 포함 그룹 → 무조건 통과
+        if cond.get('has_wildcard'):
+            return pd.Series(True, index=index)
         # [A|B] — 명시적 OR
         cm = pd.Series(False, index=index)
         for term in cond['terms']:

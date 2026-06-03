@@ -127,6 +127,7 @@
         <span>쉼표(,) = {{ combineMode === 'or' ? 'OR (모드 따라)' : 'AND (모드 따라)' }}</span>
         <span>[A|B] = OR (명시)</span>
         <span>[A,B] = AND (명시)</span>
+        <span :title="'AND 모드에서 copyright=[X|Y|] → X 또는 Y 또는 무관\n→ 이 필드 조건 사실상 면제'">[A|B|<i>빈칸</i>] = 필드 와일드카드</span>
         <span>Exclude로 제외 조건 설정</span>
         <span class="hint-mode" :class="combineMode">
           현재: <strong>{{ combineMode === 'and' ? 'AND' : 'OR' }}</strong> · <strong>{{ datasetYear }}</strong>

@@ -147,6 +147,7 @@ Hugging Face에서 다운로드 가능: `wd-tagger` 또는 Danbooru 덤프 프�
 | `word_` | 접두 | `hair_` → `hair ornament`, `hair ribbon` |
 | `_word_` | 명시적 포함 | `word`와 동일 |
 | `[A\|B\|C]` | OR 그룹 (모드 무관) | `[blue_hair\|red_hair]` |
+| `[A\|B\|]` | **필드 와일드카드** (trailing 빈 토큰) | `copyright: [tots\|alc\|]` → tots 또는 alc 또는 **무관** |
 | `[A,B,C]` | AND 그룹 (모드 무관) | `[1girl,blue_hair]` |
 | `,` | AND 또는 OR (모드 따라) | AND 모드: `a,b`=`a∩b` / OR 모드: `a,b`=`a∪b` |
 
