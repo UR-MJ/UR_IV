@@ -273,8 +273,8 @@ const exifData = ref(null)
 const largeView = ref(null)
 const isLoading = ref(false)
 const showMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
-// Settings에서 변경 시 실시간 반영
-setInterval(() => {
+// Settings에서 변경 시 실시간 반영 — interval ID 보관 후 unmount 시 정리
+const _showMetaTimer = setInterval(() => {
   const v = window.localStorage.getItem('galleryShowMetadata') !== 'false'
   if (v !== showMetadata.value) showMetadata.value = v
 }, 500)
@@ -421,9 +421,15 @@ onMounted(async () => {
   } else {
     loadImages()
   }
-  onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
+  _galleryFolderUnsub = onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
 })
-onUnmounted(() => document.removeEventListener('click', hideMenu))
+// onBackendEvent disconnect 핸들 — unmount 시 정리
+let _galleryFolderUnsub = null
+onUnmounted(() => {
+  document.removeEventListener('click', hideMenu)
+  if (_showMetaTimer) clearInterval(_showMetaTimer)
+  if (_galleryFolderUnsub) _galleryFolderUnsub()
+})
 </script>
 
 <style scoped>

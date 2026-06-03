@@ -20,6 +20,19 @@
     <CustomSelect :modelValue="get('model_combo')" @update:modelValue="v => set('model_combo', v)"
       :options="getItems('model_combo')" placeholder="모델 선택..." />
 
+    <!-- VAE (ANIMA 등 외부 VAE) -->
+    <label class="s-label">VAE</label>
+    <CustomSelect :modelValue="get('vae_main_combo')" @update:modelValue="v => set('vae_main_combo', v)"
+      :options="getItems('vae_main_combo')" placeholder="(체크포인트 기본 사용)" />
+
+    <!-- Text Encoder (Forge forge_additional_modules) -->
+    <label class="s-label">Text Encoder</label>
+    <input class="input-field"
+      :value="get('te_main_input') || ''"
+      @input="set('te_main_input', $event.target.value)"
+      placeholder="예: clip_l.safetensors, t5xxl_fp16.safetensors"
+    />
+
     <!-- 샘플러 -->
     <label class="s-label">샘플러</label>
     <CustomSelect :modelValue="get('sampler_combo')" @update:modelValue="v => set('sampler_combo', v)"
@@ -173,53 +186,53 @@ function getItems(id) { return state.properties[id]?.items ?? [] }
 
 .s-select {
   width: 100%;
-  background: #131313;
+  background: var(--bg-input);
   border: none;
   border-radius: 6px;
   padding: 8px 12px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 13px;
   outline: none;
   appearance: auto;
 }
-.s-select:focus { background: #1A1A1A; }
+.s-select:focus { background: var(--bg-input-focus, #1A1A1A); }
 
 .s-btn {
   width: 100%;
   padding: 8px;
-  background: #181818;
+  background: var(--bg-button);
   border: none;
   border-radius: 6px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
 }
-.s-btn:hover { background: #222; }
+.s-btn:hover { background: var(--bg-button-hover, #222); }
 
 .s-btn-sm {
   padding: 6px 10px;
-  background: #181818;
+  background: var(--bg-button);
   border: none;
   border-radius: 6px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   cursor: pointer;
   flex-shrink: 0;
 }
-.s-btn-sm:hover { background: #222; }
+.s-btn-sm:hover { background: var(--bg-button-hover, #222); }
 
 .input-field {
   width: 100%;
-  background: #131313;
+  background: var(--bg-input);
   border: none;
   border-radius: 6px;
   padding: 8px 12px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 13px;
   outline: none;
 }
-.input-field:focus { background: #1A1A1A; }
+.input-field:focus { background: var(--bg-input-focus, #1A1A1A); }
 
 .slider-row {
   display: flex;
@@ -228,12 +241,12 @@ function getItems(id) { return state.properties[id]?.items ?? [] }
 }
 .slider-row input[type="range"] {
   flex: 1;
-  accent-color: #E2B340;
+  accent-color: var(--accent);
   height: 4px;
 }
 .slider-val {
   font-size: 12px;
-  color: #787878;
+  color: var(--text-muted);
   min-width: 40px;
   text-align: right;
 }
@@ -250,7 +263,7 @@ function getItems(id) { return state.properties[id]?.items ?? [] }
 }
 .res-input { text-align: center; }
 .res-x {
-  color: #484848;
+  color: var(--text-disabled, #484848);
   font-size: 14px;
   flex-shrink: 0;
 }
@@ -263,30 +276,30 @@ function getItems(id) { return state.properties[id]?.items ?? [] }
 .preset-btn {
   width: 100%;
   padding: 6px;
-  background: #181818;
+  background: var(--bg-button);
   border: none;
   border-radius: 6px;
-  color: #787878;
+  color: var(--text-muted);
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 .preset-btn:hover {
-  background: #222;
-  color: #E8E8E8;
+  background: var(--bg-button-hover, #222);
+  color: var(--text-primary);
 }
 
 .chk-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 12px;
   padding: 4px 0;
   cursor: pointer;
 }
 .chk-row input[type="checkbox"] {
-  accent-color: #E2B340;
+  accent-color: var(--accent);
 }
 
 .remove-grid {

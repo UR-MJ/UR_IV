@@ -470,7 +470,23 @@ function resetDeepSearch() {
 }
 
 // 태그 색상 분류 — Python TagClassifier (tags_db 기반)
+// LRU 캐시: 최대 5000개 — 무한 증가 방지. 가장 오래된 항목부터 제거
+const TAG_CACHE_MAX = 5000
 const tagCategoryCache = ref({})  // tag → category
+const _tagCacheKeys = []  // 삽입 순서 추적
+function _setTagCache(key, value) {
+  if (key in tagCategoryCache.value) {
+    // 기존 항목 갱신 — 키 순서만 뒤로 이동
+    const idx = _tagCacheKeys.indexOf(key)
+    if (idx >= 0) _tagCacheKeys.splice(idx, 1)
+  } else if (_tagCacheKeys.length >= TAG_CACHE_MAX) {
+    // 가장 오래된 항목 evict
+    const evict = _tagCacheKeys.shift()
+    if (evict !== undefined) delete tagCategoryCache.value[evict]
+  }
+  _tagCacheKeys.push(key)
+  tagCategoryCache.value[key] = value
+}
 
 // 카테고리 → CSS 클래스 매핑 (세분화)
 const catToColor = {
@@ -507,7 +523,10 @@ async function classifyCurrentTags() {
       try {
         const result = JSON.parse(json)
         if (!result.error) {
-          tagCategoryCache.value = { ...tagCategoryCache.value, ...result }
+          // LRU 캐시로 추가 — 무한 증가 방지
+          for (const [k, v] of Object.entries(result)) {
+            _setTagCache(k, v)
+          }
         }
       } catch {}
     })

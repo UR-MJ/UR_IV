@@ -4,6 +4,7 @@
 """
 import os
 import json
+import logging
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -16,6 +17,14 @@ from widgets.queue_item import QueueItemCard
 from utils.theme_manager import get_color
 
 PRESET_DIR = "queue_presets"
+
+logger = logging.getLogger(__name__)
+
+# 앱 크래시 후에도 대기열 복구에 쓰는 영속 파일
+_QUEUE_STATE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "config", "queue_state.json",
+)
 
 
 class QueueItemEditDialog(QDialog):
@@ -219,6 +228,49 @@ class QueuePanel(QWidget):
         self._completed_for_progress = 0
 
         self._setup_ui()
+        self._restore_from_disk()
+
+    # ── 영속화 ──
+
+    def _persist_to_disk(self) -> None:
+        """현재 대기열을 JSON으로 저장 (atomic replace)."""
+        try:
+            os.makedirs(os.path.dirname(_QUEUE_STATE_PATH), exist_ok=True)
+            tmp = _QUEUE_STATE_PATH + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"items": self.queue_items}, f, ensure_ascii=False)
+            os.replace(tmp, _QUEUE_STATE_PATH)
+        except OSError as e:
+            logger.warning("queue persist failed: %s", e)
+
+    def _restore_from_disk(self) -> None:
+        """앱 시작 시 미완료 대기열을 로드 — 복구 여부는 사용자 선택."""
+        if not os.path.exists(_QUEUE_STATE_PATH):
+            return
+        try:
+            with open(_QUEUE_STATE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning("queue restore read failed: %s", e)
+            return
+        items = data.get("items") if isinstance(data, dict) else None
+        if not items:
+            return
+        reply = QMessageBox.question(
+            self, "대기열 복구",
+            f"이전 세션의 미완료 대기열 {len(items)}개 항목을 복구할까요?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.queue_items = list(items)
+            self._refresh_display()
+            self.queue_changed.emit(len(self.queue_items))
+        else:
+            # 거부 시 파일 제거
+            try:
+                os.remove(_QUEUE_STATE_PATH)
+            except OSError:
+                pass
 
     def _setup_ui(self):
         """UI 구성"""
@@ -392,6 +444,7 @@ class QueuePanel(QWidget):
         self.queue_items.append(item)
         self._refresh_display()
         self.queue_changed.emit(len(self.queue_items))
+        self._persist_to_disk()
         return item_id
 
     def add_items_as_group(self, items_data: list, repeat_count: int = 1):
@@ -414,12 +467,66 @@ class QueuePanel(QWidget):
         self.queue_items = [item for item in self.queue_items if item['id'] != item_id]
         self._refresh_display()
         self.queue_changed.emit(len(self.queue_items))
+        self._persist_to_disk()
+
+    def remove_items_by_ids(self, item_ids: list) -> int:
+        """여러 item_id를 한 번에 삭제. 처리 중 항목은 제외하고 안전하게 정리."""
+        if not item_ids:
+            return 0
+        targets = set(item_ids)
+        before = len(self.queue_items)
+        # 현재 실행 중인 아이템은 보호
+        running_id = getattr(self, '_processing_item_id', None)
+        if running_id:
+            targets.discard(running_id)
+        self.queue_items = [item for item in self.queue_items if item.get('id') not in targets]
+        removed = before - len(self.queue_items)
+        if removed > 0:
+            self._refresh_display()
+            self.queue_changed.emit(len(self.queue_items))
+            self._persist_to_disk()
+        return removed
+
+    def move_item_up(self, item_id: str) -> bool:
+        """item_id 항목을 한 칸 앞으로. 첫 번째거나 처리 중이면 False."""
+        if self.is_processing:
+            # 처리 중에는 인덱스 0이 실행 중이므로 0번 위치로 옮기는 건 금지
+            min_idx = 1
+        else:
+            min_idx = 0
+        for i, item in enumerate(self.queue_items):
+            if item.get('id') == item_id:
+                if i <= min_idx:
+                    return False
+                self.queue_items[i - 1], self.queue_items[i] = self.queue_items[i], self.queue_items[i - 1]
+                self._refresh_display()
+                self.queue_changed.emit(len(self.queue_items))
+                self._persist_to_disk()
+                return True
+        return False
+
+    def move_item_down(self, item_id: str) -> bool:
+        """item_id 항목을 한 칸 뒤로. 마지막이면 False."""
+        for i, item in enumerate(self.queue_items):
+            if item.get('id') == item_id:
+                if i >= len(self.queue_items) - 1:
+                    return False
+                # 처리 중인 0번 위치와는 교환 금지
+                if self.is_processing and i == 0:
+                    return False
+                self.queue_items[i], self.queue_items[i + 1] = self.queue_items[i + 1], self.queue_items[i]
+                self._refresh_display()
+                self.queue_changed.emit(len(self.queue_items))
+                self._persist_to_disk()
+                return True
+        return False
 
     def remove_first_item(self):
         if self.queue_items:
             removed = self.queue_items.pop(0)
             self._refresh_display()
             self.queue_changed.emit(len(self.queue_items))
+            self._persist_to_disk()
             return removed
         return None
 
@@ -444,6 +551,7 @@ class QueuePanel(QWidget):
             self.queue_items.clear()
             self._refresh_display()
             self.queue_changed.emit(0)
+            self._persist_to_disk()
 
     def count(self):
         return len(self.queue_items)
@@ -546,6 +654,7 @@ class QueuePanel(QWidget):
         drop_index = max(0, min(drop_index, len(self.queue_items)))
         self.queue_items.insert(drop_index, item)
         self._refresh_display()
+        self._persist_to_disk()
 
     # ========== 처리 상태 ==========
 

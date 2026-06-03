@@ -1091,11 +1091,52 @@ class GeneratorMainUI(
                 if hasattr(self, 'queue_manager'):
                     self.queue_manager.start()
                     self.show_status("Queue started.")
+                    self._sync_queue_to_vue()
 
             elif action == 'stop_queue':
                 if hasattr(self, 'queue_manager'):
                     self.queue_manager.stop()
                     self.show_status("Queue stopped.")
+                    self._sync_queue_to_vue()
+
+            elif action == 'pause_queue':
+                if hasattr(self, 'queue_manager'):
+                    self.queue_manager.pause()
+                    self.show_status("Queue paused.")
+                    self._sync_queue_to_vue()
+
+            elif action == 'resume_queue':
+                if hasattr(self, 'queue_manager'):
+                    self.queue_manager.resume()
+                    self.show_status("Queue resumed.")
+                    self._sync_queue_to_vue()
+
+            elif action == 'remove_queue_items':
+                # payload: { item_ids: [str, ...] }  — 여러 항목 일괄 삭제
+                if hasattr(self, 'queue_panel'):
+                    ids = payload.get('item_ids', []) or []
+                    n = self.queue_panel.remove_items_by_ids(ids)
+                    self.show_status(f"{n}개 항목 삭제")
+                    self._sync_queue_to_vue()
+
+            elif action == 'move_queue_item':
+                # payload: { item_id: str, direction: 'up' | 'down' }
+                if hasattr(self, 'queue_panel'):
+                    iid = payload.get('item_id', '')
+                    direction = payload.get('direction', 'up')
+                    moved = (self.queue_panel.move_item_up(iid) if direction == 'up'
+                             else self.queue_panel.move_item_down(iid))
+                    if moved:
+                        self._sync_queue_to_vue()
+
+            elif action == 'clear_queue':
+                # 전체 삭제 — 확인 다이얼로그 우회 (Vue 측에서 이미 확인 받음)
+                if hasattr(self, 'queue_panel') and self.queue_panel.queue_items:
+                    self.queue_panel.queue_items.clear()
+                    self.queue_panel._refresh_display()
+                    self.queue_panel.queue_changed.emit(0)
+                    self.queue_panel._persist_to_disk()
+                    self._sync_queue_to_vue()
 
             # ═══════ Toast 표시 ═══════
             elif action == 'show_toast':
@@ -1374,7 +1415,12 @@ class GeneratorMainUI(
         self.queue_manager = QueueManager(self.queue_panel)
         self.queue_manager.generation_requested.connect(self._on_generation_requested)
         self.queue_manager.queue_completed.connect(self._on_queue_completed)
-        # 대기열 상태를 Vue로 실시간 동기화
+        # 일시정지 상태 변경 시 Vue 동기화 (▶/⏸ 토글)
+        if hasattr(self.queue_manager, 'paused_changed'):
+            self.queue_manager.paused_changed.connect(lambda _p: self._sync_queue_to_vue())
+        # 대기열 변경 (추가/삭제/순서변경) 시 Vue 동기화
+        if hasattr(self.queue_panel, 'queue_changed'):
+            self.queue_panel.queue_changed.connect(lambda _n: self._sync_queue_to_vue())
         if hasattr(self.queue_panel, 'item_added'):
             self.queue_panel.item_added.connect(self._sync_queue_to_vue)
         # add_single_item 래핑으로 Vue 동기화
@@ -1391,22 +1437,36 @@ class GeneratorMainUI(
             self.vue_bridge.queueItemAdded.emit(json.dumps(safe))
 
     def _sync_queue_to_vue(self):
-        """전체 대기열 상태를 Vue로 전달"""
-        if hasattr(self, 'vue_bridge') and hasattr(self, 'queue_panel'):
+        """전체 대기열 상태를 Vue로 전달. queue_items(list)를 그대로 직렬화."""
+        if not (hasattr(self, 'vue_bridge') and hasattr(self, 'queue_panel')):
+            return
+        try:
+            # 안전 직렬화 — 원시 타입만 통과시키되, prompt는 200자로 제한
+            def _safe(d):
+                out = {}
+                for k, v in d.items():
+                    if isinstance(v, str):
+                        out[k] = v[:200] if k == 'prompt' or k == 'negative_prompt' else v[:500]
+                    elif isinstance(v, (int, float, bool)):
+                        out[k] = v
+                return out
+            items = [_safe(it) for it in self.queue_panel.queue_items]
+            qm = getattr(self, 'queue_manager', None)
+            running = bool(qm and getattr(qm, 'is_running', False))
+            paused = bool(qm and getattr(qm, 'is_paused', False))
+            # 현재 실행 중 인덱스 — 0번이 실행 중인 항목 (queue_manager는 첫 항목을 꺼내며 처리)
+            current_index = 0 if (running and items) else -1
+            state = {
+                'items': items,
+                'running': running,
+                'paused': paused,
+                'current_index': current_index,
+                'completed': getattr(self, '_queue_completed_count', 0),
+            }
+            self.vue_bridge.queueUpdated.emit(json.dumps(state))
+        except Exception as e:
             try:
-                items = []
-                for i in range(self.queue_panel.list_widget.count()):
-                    item_w = self.queue_panel.list_widget.item(i)
-                    if item_w:
-                        data = item_w.data(0x0100)  # Qt.UserRole
-                        if data:
-                            items.append({k: str(v)[:200] for k, v in data.items() if isinstance(v, (str, int, float, bool))})
-                state = {
-                    'items': items,
-                    'running': hasattr(self, 'queue_manager') and self.queue_manager._running if hasattr(self.queue_manager, '_running') else False,
-                    'completed': getattr(self, '_queue_completed_count', 0),
-                }
-                self.vue_bridge.queueUpdated.emit(json.dumps(state))
+                self.show_status(f"queue sync error: {e}")
             except Exception:
                 pass
 

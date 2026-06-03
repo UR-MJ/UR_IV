@@ -240,6 +240,12 @@ onMounted(() => {
 onUnmounted(() => {
   if (_blockModeTimer) clearInterval(_blockModeTimer)
   window.removeEventListener('keydown', onKeyDownGlobal)
+  if (debounceTimer) clearTimeout(debounceTimer)
+  // UNDO watch들 일괄 해제
+  for (const stop of _undoWatchStops) {
+    try { stop() } catch {}
+  }
+  _undoWatchStops.length = 0
 })
 
 const artistLocked = computed({
@@ -365,12 +371,14 @@ function performRedo() {
 }
 
 // 디바운스 watch — 빠른 타이핑이 끝나면 스냅샷 (500ms)
+// 메모리 누수 방지: stop 함수를 모아 onUnmounted에서 일괄 해제
+const _undoWatchStops = []
 for (const k of UNDO_KEYS) {
-  watch(() => widgets[k], () => {
+  _undoWatchStops.push(watch(() => widgets[k], () => {
     if (applying) return
     clearTimeout(debounceTimer)
     debounceTimer = setTimeout(pushUndoSnapshot, 500)
-  })
+  }))
 }
 
 // 키보드 단축키 (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)

@@ -123,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import CompareSlider from '../components/CompareSlider.vue'
@@ -258,10 +258,12 @@ async function exportGif() {
   }
 }
 
+// 이벤트 disconnect 핸들 — keep-alive로 재마운트되어도 누적 등록 방지
+const _eventUnsubs = []
 onMounted(() => {
-  onBackendEvent('inpaintImageLoaded', (path) => loadImage(path))
+  _eventUnsubs.push(onBackendEvent('inpaintImageLoaded', (path) => loadImage(path)))
   // 비교 이미지 수신 (우클릭 메뉴 "비교로 보내기" 또는 파일 다이얼로그)
-  onBackendEvent('compareImageLoaded', (json) => {
+  _eventUnsubs.push(onBackendEvent('compareImageLoaded', (json) => {
     try {
       const d = JSON.parse(json)
       if (d.slot === 'before') {
@@ -273,7 +275,11 @@ onMounted(() => {
       }
       subTab.value = 'compare'
     } catch {}
-  })
+  }))
+})
+onUnmounted(() => {
+  for (const off of _eventUnsubs) { try { off() } catch {} }
+  _eventUnsubs.length = 0
 })
 </script>
 

@@ -14,10 +14,14 @@ class QueueManager(QObject):
     generation_requested = pyqtSignal(dict)
     queue_completed = pyqtSignal(int)
 
+    # 일시정지 상태 변경 시그널 — UI 동기화용
+    paused_changed = pyqtSignal(bool)
+
     def __init__(self, queue_panel, parent=None):
         super().__init__(parent)
         self.queue_panel = queue_panel
         self.is_running = False
+        self.is_paused = False  # ⏸ 일시정지 — 큐는 유지되고 _process_next만 멈춤
         self.generated_count = 0
         self.total_count = 0
         self.delay_seconds = 1.0
@@ -54,13 +58,33 @@ class QueueManager(QObject):
     def stop(self):
         """자동화 중지"""
         self.is_running = False
+        self.is_paused = False
+        self.paused_changed.emit(False)
         self.queue_panel.set_processing(False)
         self.queue_panel.reset_progress()
         self.queue_completed.emit(self.generated_count)
 
+    def pause(self):
+        """일시정지 — 큐는 유지하고 다음 아이템 처리만 막음."""
+        if not self.is_running or self.is_paused:
+            return
+        self.is_paused = True
+        self.paused_changed.emit(True)
+
+    def resume(self):
+        """일시정지 해제 — 멈춰있던 _process_next 재개."""
+        if not self.is_running or not self.is_paused:
+            return
+        self.is_paused = False
+        self.paused_changed.emit(False)
+        self._process_next()
+
     def _process_next(self):
         """다음 아이템 처리"""
         if not self.is_running:
+            return
+        if self.is_paused:
+            # 일시정지 중 — 큐 그대로 두고 대기. resume()이 다시 호출
             return
 
         item = self.queue_panel.get_first_item()

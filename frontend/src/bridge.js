@@ -71,11 +71,22 @@ export async function getBackend() {
 
 /**
  * Python → JS 이벤트 수신
+ * @returns {Function} disconnect 함수 — onUnmounted에서 호출하여 리스너 해제
  */
 export function onBackendEvent(eventName, callback) {
+  let _signal = null
+  let _connected = false
   _ready.then(backend => {
     if (backend && backend[eventName]) {
-      backend[eventName].connect(callback)
+      _signal = backend[eventName]
+      _signal.connect(callback)
+      _connected = true
     }
   })
+  return () => {
+    if (_connected && _signal) {
+      try { _signal.disconnect(callback) } catch {}
+      _connected = false
+    }
+  }
 }

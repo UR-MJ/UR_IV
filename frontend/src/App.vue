@@ -88,12 +88,16 @@
         <span>{{ showExtendPanel ? '◀' : '▶' }}</span>
       </div>
 
+      <!-- Extended Panel backdrop (외부 클릭 시 닫기) -->
+      <div class="extend-backdrop" v-if="showExtendPanel && showLeftPanel"
+        @click="showExtendPanel = false"></div>
+
       <!-- Extended Panel — 뷰어 위에 오버레이 -->
       <transition name="slide">
-        <aside class="extend-overlay" v-if="showExtendPanel && showLeftPanel">
+        <aside class="extend-overlay" v-if="showExtendPanel && showLeftPanel" @click.stop>
           <div class="extend-header">
             <h3>ADVANCED SETTINGS</h3>
-            <button class="close-btn" @click="showExtendPanel = false">✕</button>
+            <button class="close-btn" @click="showExtendPanel = false" title="닫기 (ESC)">✕</button>
           </div>
           <div class="extend-scroll">
             <!-- Parameters (기본) -->
@@ -1464,6 +1468,19 @@ onMounted(async () => {
     if (e.ctrlKey && e.key === 'g') { e.preventDefault(); doGenerate() }
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); action('save_settings') }
     if (e.key === 'F5') { e.preventDefault(); loadHistory() }
+    // ESC — 열려있는 오버레이/모달을 최상위 우선순위로 닫기
+    if (e.key === 'Escape') {
+      // 1) 최상위 모달이 있으면 그것부터 (z-index 2000)
+      if (showPresetManager.value)    { showPresetManager.value = false; return }
+      if (showWeightManager.value)    { showWeightManager.value = false; return }
+      if (showWcManager.value)        { showWcManager.value = false; return }
+      if (showOrderManager.value)     { showOrderManager.value = false; return }
+      if (showProfileManager.value)   { showProfileManager.value = false; return }
+      if (showInstantWcManager.value) { showInstantWcManager.value = false; return }
+      if (showStatsModal.value)       { showStatsModal.value = false; return }
+      // 2) 확장 패널 오버레이 (z-index 50)
+      if (showExtendPanel.value)      { showExtendPanel.value = false; return }
+    }
   })
 
   // 초기 rating 필터 전달
@@ -1660,6 +1677,11 @@ onMounted(async () => {
 .half-moon:hover { background: var(--bg-card); color: var(--accent); width: 24px; }
 .half-moon.open { background: var(--accent-dim); color: var(--accent); left: 680px; }
 
+/* Extended Panel Backdrop — 외부 클릭으로 닫기 */
+.extend-backdrop {
+  position: absolute; inset: 0; background: transparent;
+  z-index: 45; cursor: pointer;
+}
 /* Extended Panel Overlay */
 .extend-overlay {
   position: absolute; left: 360px; top: 0; bottom: 0; width: 320px;
