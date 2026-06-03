@@ -9,11 +9,6 @@
         <span class="selected-badge" v-if="selectedIds.size > 0">{{ selectedIds.size }} 선택됨</span>
       </span>
       <div class="queue-actions" @click.stop>
-        <label class="auto-resume" :class="{ on: autoResumeOnStart }"
-          title="앱 재시작 시 복구된 대기열을 자동으로 시작&#10;OFF면 ▶ 시작 버튼 직접 클릭 필요">
-          <input type="checkbox" v-model="autoResumeOnStart" />
-          <span>🔄 자동 재시작</span>
-        </label>
         <button class="btn" @click="startQueue" v-if="items.length && !isRunning">▶ 시작</button>
         <button class="btn" @click="pauseQueue" v-if="isRunning && !isPaused" title="일시정지">⏸ 일시정지</button>
         <button class="btn primary" @click="resumeQueue" v-if="isPaused" title="재개">▶ 재개</button>
@@ -171,12 +166,15 @@ function resumeQueue() { requestAction('resume_queue') }
 // 이벤트 disconnect 핸들 — onUnmounted에서 정리 (메모리 누수 방지)
 const _unsubs = []
 
-// 자동화 자동 재시작 옵션 — 시작 시 복구된 큐가 있으면 자동 start
+// 자동화 자동 재시작 옵션 — Settings에서 토글, 여기선 읽기만
 // 기본값 ON — 사용자가 명시적으로 'false' 저장한 경우만 OFF
 const autoResumeOnStart = ref(localStorage.getItem('queue.autoResumeOnStart') !== 'false')
-watch(autoResumeOnStart, (v) => {
-  try { localStorage.setItem('queue.autoResumeOnStart', v ? 'true' : 'false') } catch {}
-})
+// Settings에서 변경 시 즉시 반영 (storage 이벤트는 다른 탭, 같은 탭은 작동 안 해서 unused지만 안전망)
+function _onStorageEvent(e) {
+  if (e.key === 'queue.autoResumeOnStart') {
+    autoResumeOnStart.value = e.newValue !== 'false'
+  }
+}
 let _autoResumeTried = false  // 1회만 시도 (재실행 방지)
 
 onMounted(() => {
@@ -242,9 +240,12 @@ onMounted(() => {
   }))
 })
 
+// Settings에서 autoResumeOnStart 변경 시 즉시 반영 (다른 창/탭 — 같은 창은 거의 불필요)
+onMounted(() => { window.addEventListener('storage', _onStorageEvent) })
 onUnmounted(() => {
   for (const off of _unsubs) { try { off() } catch {} }
   _unsubs.length = 0
+  window.removeEventListener('storage', _onStorageEvent)
 })
 
 defineExpose({ items })
@@ -275,16 +276,7 @@ defineExpose({ items })
 .btn.primary { background: var(--accent); color: #000; }
 .btn.primary:hover { background: #fff176; }
 
-/* 자동 재시작 토글 — 작은 체크박스+라벨 */
-.auto-resume {
-  display: flex; align-items: center; gap: 4px;
-  font-size: 10px; color: var(--text-muted); cursor: pointer;
-  user-select: none; padding: 0 6px;
-  margin-right: 4px;
-}
-.auto-resume input { width: 11px; height: 11px; margin: 0; cursor: pointer; }
-.auto-resume:hover { color: var(--text-secondary); }
-.auto-resume.on { color: var(--accent); font-weight: 700; }
+/* (auto-resume 토글은 Settings로 이전됨) */
 
 .queue-list { flex: 1; overflow-y: auto; padding: 2px 8px; }
 .queue-item {

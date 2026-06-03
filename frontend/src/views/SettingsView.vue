@@ -160,8 +160,21 @@
 
         <!-- 6. 기본값 설정 (탭별) -->
         <div v-show="currentTab === 'defaults'" class="section-fade">
-          <!-- UI 크기 조절 -->
+          <!-- 자동화 / 세션 -->
           <div class="glass-card">
+            <label>자동화 · 세션 복구</label>
+            <label class="toggle-row">
+              <input type="checkbox" v-model="autoResumeOnStart" @change="onAutoResumeChange" />
+              <span>🔄 앱 재시작 시 자동화 자동 재시작 (기본 ON)</span>
+            </label>
+            <p class="def-hint">
+              자동화 도중 앱을 끄면 큐가 자동 저장되고, 다시 켜면 1.5초 후 자동으로 ▶ 시작합니다.<br>
+              끄면 큐는 복구되지만 시작 버튼을 직접 눌러야 합니다.
+            </p>
+          </div>
+
+          <!-- UI 크기 조절 -->
+          <div class="glass-card mt-16">
             <label>UI 크기 (전역 zoom)</label>
             <div class="def-field-wide">
               <span>{{ Math.round(uiScale * 100) }}% — 폰트·아이콘·패딩 비례 확대</span>
@@ -470,6 +483,15 @@ function onUiScaleChange() {
   try { window.localStorage.setItem('ui.scale', String(v)) } catch {}
   // 같은 창에서 즉시 반영
   try { window.dispatchEvent(new CustomEvent('uiScaleChanged', { detail: { value: v } })) } catch {}
+}
+
+// 자동화 자동 재시작 — QueuePanel에서 이쪽으로 이전
+const autoResumeOnStart = ref(window.localStorage.getItem('queue.autoResumeOnStart') !== 'false')
+function onAutoResumeChange() {
+  try {
+    window.localStorage.setItem('queue.autoResumeOnStart',
+      autoResumeOnStart.value ? 'true' : 'false')
+  } catch {}
 }
 function onSidePanelWidthChange() {
   window.localStorage.setItem('editorSidePanelWidth', String(editorSidePanelWidth.value))
