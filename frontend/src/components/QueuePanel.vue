@@ -9,6 +9,11 @@
         <span class="selected-badge" v-if="selectedIds.size > 0">{{ selectedIds.size }} 선택됨</span>
       </span>
       <div class="queue-actions" @click.stop>
+        <label class="auto-resume" :class="{ on: autoResumeOnStart }"
+          title="앱 재시작 시 복구된 대기열을 자동으로 시작&#10;OFF면 ▶ 시작 버튼 직접 클릭 필요">
+          <input type="checkbox" v-model="autoResumeOnStart" />
+          <span>🔄 자동 재시작</span>
+        </label>
         <button class="btn" @click="startQueue" v-if="items.length && !isRunning">▶ 시작</button>
         <button class="btn" @click="pauseQueue" v-if="isRunning && !isPaused" title="일시정지">⏸ 일시정지</button>
         <button class="btn primary" @click="resumeQueue" v-if="isPaused" title="재개">▶ 재개</button>
@@ -52,7 +57,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
@@ -166,6 +171,13 @@ function resumeQueue() { requestAction('resume_queue') }
 // 이벤트 disconnect 핸들 — onUnmounted에서 정리 (메모리 누수 방지)
 const _unsubs = []
 
+// 자동화 자동 재시작 옵션 — 시작 시 복구된 큐가 있고 사용자가 켜뒀으면 자동 start
+const autoResumeOnStart = ref(localStorage.getItem('queue.autoResumeOnStart') === 'true')
+watch(autoResumeOnStart, (v) => {
+  try { localStorage.setItem('queue.autoResumeOnStart', v ? 'true' : 'false') } catch {}
+})
+let _autoResumeTried = false  // 1회만 시도 (재실행 방지)
+
 onMounted(() => {
   // Python → Vue: 대기열 상태 실시간 동기화
   _unsubs.push(onBackendEvent('queueUpdated', (json) => {
@@ -187,6 +199,19 @@ onMounted(() => {
       if (typeof data.completed === 'number') completedCount.value = data.completed
       // 자동 확장
       if (data.items?.length > 0) isExpanded.value = true
+      // 시작 시 복구된 큐가 있으면 사용자 옵션에 따라 자동 재시작
+      if (!_autoResumeTried && autoResumeOnStart.value
+          && items.value.length > 0 && !isRunning.value) {
+        _autoResumeTried = true
+        // 살짝 늦춰서 — backend도 준비될 시간 + 사용자가 토스트 보고 인지 가능
+        setTimeout(() => {
+          if (items.value.length > 0 && !isRunning.value) {
+            requestAction('show_toast', { type: 'info',
+              msg: `이전 세션의 대기열 ${items.value.length}개 자동 재시작 중...` })
+            startQueue()
+          }
+        }, 1500)
+      }
     } catch {}
   }))
 
@@ -248,6 +273,17 @@ defineExpose({ items })
 .btn.danger { color: #f87171; }
 .btn.primary { background: var(--accent); color: #000; }
 .btn.primary:hover { background: #fff176; }
+
+/* 자동 재시작 토글 — 작은 체크박스+라벨 */
+.auto-resume {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; color: var(--text-muted); cursor: pointer;
+  user-select: none; padding: 0 6px;
+  margin-right: 4px;
+}
+.auto-resume input { width: 11px; height: 11px; margin: 0; cursor: pointer; }
+.auto-resume:hover { color: var(--text-secondary); }
+.auto-resume.on { color: var(--accent); font-weight: 700; }
 
 .queue-list { flex: 1; overflow-y: auto; padding: 2px 8px; }
 .queue-item {

@@ -244,7 +244,11 @@ class QueuePanel(QWidget):
             logger.warning("queue persist failed: %s", e)
 
     def _restore_from_disk(self) -> None:
-        """앱 시작 시 미완료 대기열을 로드 — 복구 여부는 사용자 선택."""
+        """앱 시작 시 미완료 대기열을 자동 복구.
+        Settings의 'queue.autoRestore' (localStorage, 기본 true)에 따라:
+          - true : 다이얼로그 없이 자동 복구
+          - false: 다이얼로그로 확인
+        """
         if not os.path.exists(_QUEUE_STATE_PATH):
             return
         try:
@@ -256,6 +260,31 @@ class QueuePanel(QWidget):
         items = data.get("items") if isinstance(data, dict) else None
         if not items:
             return
+
+        # 자동 복구 설정 — 사용자가 ui_prefs.json에서 명시적으로 끌 수 있음
+        auto_restore = True
+        try:
+            ui_prefs_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "config", "ui_prefs.json",
+            )
+            if os.path.exists(ui_prefs_path):
+                with open(ui_prefs_path, "r", encoding="utf-8") as f:
+                    prefs = json.load(f)
+                if isinstance(prefs, dict):
+                    auto_restore = bool(prefs.get("queue_auto_restore", True))
+        except Exception:
+            pass
+
+        if auto_restore:
+            # 다이얼로그 없이 자동 복구
+            self.queue_items = list(items)
+            self._refresh_display()
+            self.queue_changed.emit(len(self.queue_items))
+            logger.info(f"대기열 자동 복구: {len(items)}개 항목")
+            return
+
+        # 사용자가 명시적으로 끈 경우 — 기존처럼 다이얼로그
         reply = QMessageBox.question(
             self, "대기열 복구",
             f"이전 세션의 미완료 대기열 {len(items)}개 항목을 복구할까요?",
@@ -266,7 +295,6 @@ class QueuePanel(QWidget):
             self._refresh_display()
             self.queue_changed.emit(len(self.queue_items))
         else:
-            # 거부 시 파일 제거
             try:
                 os.remove(_QUEUE_STATE_PATH)
             except OSError:

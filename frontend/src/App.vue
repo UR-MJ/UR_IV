@@ -1528,10 +1528,19 @@ async function loadHistory() {
   const backend = await getBackend()
   if (backend.getGalleryImages) {
     backend.getGalleryImages('', (json) => {
-      try { historyImages.value = JSON.parse(json).slice(0, 100) } catch {}
+      try {
+        const arr = JSON.parse(json).slice(0, 100)
+        historyImages.value = arr
+        // localStorage 캐시 갱신 (다음 시작 시 즉시 표시용)
+        try { localStorage.setItem('historyImagesCache', JSON.stringify(arr.slice(0, 50))) } catch {}
+      } catch {}
     })
   }
 }
+// 생성된 이미지 추가될 때마다 캐시 동기화
+watch(historyImages, (arr) => {
+  try { localStorage.setItem('historyImagesCache', JSON.stringify(arr.slice(0, 50))) } catch {}
+}, { deep: false })
 
 import { useRouter } from 'vue-router'
 const router = useRouter()
@@ -1553,7 +1562,16 @@ onMounted(async () => {
   })
   // 같은 창에서의 변경 (Settings 슬라이더)도 즉시 — 커스텀 이벤트
   window.addEventListener('uiScaleChanged', (e) => _applyUiScale(e.detail?.value))
-  // History는 앱 시작 시 비어있음 — 생성된 이미지만 추가됨
+  // localStorage 캐시로 즉시 표시 (응답 빠르게), 그 후 backend에서 최신 가져옴
+  try {
+    const cached = localStorage.getItem('historyImagesCache')
+    if (cached) {
+      const arr = JSON.parse(cached)
+      if (Array.isArray(arr) && arr.length > 0) historyImages.value = arr
+    }
+  } catch {}
+  // 시작 시 히스토리 자동 로드 — 사용자가 F5 안 눌러도 이전 이미지들 보이게
+  loadHistory()
   document.addEventListener('click', hideCtxMenu)
   document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault() }, { passive: false })
   // 브라우저 기본 우클릭 메뉴 전역 차단
