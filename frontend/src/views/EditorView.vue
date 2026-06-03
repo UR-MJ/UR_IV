@@ -21,6 +21,9 @@
             <span v-if="isDirty" class="dirty-mark">●</span>{{ baseName }}
           </span>
           <span class="bar-info">{{ imgWidth }}×{{ imgHeight }}{{ fileInfoExtra }}</span>
+          <span v-if="autoSaveAgoText" class="bar-info autosave" :title="`마지막 자동저장: ${new Date(lastAutoSaveAt).toLocaleTimeString()}`">
+            💾 {{ autoSaveAgoText }}
+          </span>
         </div>
         <div class="bar-group">
           <button class="bar-btn danger" @click="confirmClose">✕ 닫기</button>
@@ -344,19 +347,32 @@ function onToolChanged(data) {
   if (typeof data === 'object' && data.size) brushSize.value = data.size
 }
 
+// Edge map 캐시 — 같은 이미지에서 magnetic 토글 반복 시 재계산 회피
+// 큰 이미지(4K+)에서 Canny가 200~500ms 걸려 누적되면 체감
+let _edgeMapCache = { path: '', b64: '' }
 async function onMagneticChanged(enabled) {
   magneticLasso.value = enabled
   if (enabled && imagePath.value) {
-    // Canny edge map을 Python에서 생성하여 로드
+    const cleanPath = imagePath.value.replace('file:///', '')
+    // 캐시 히트
+    if (_edgeMapCache.path === cleanPath && _edgeMapCache.b64) {
+      canvasRef.value?.loadEdgeMap(_edgeMapCache.b64)
+      return
+    }
+    // 캐시 미스 — Python에서 생성
     const backend = await getBackend()
     if (backend.getEdgeMap) {
-      const cleanPath = imagePath.value.replace('file:///', '')
       backend.getEdgeMap(cleanPath, 50, 150, (b64) => {
-        if (b64) canvasRef.value?.loadEdgeMap(b64)
+        if (b64) {
+          _edgeMapCache = { path: cleanPath, b64 }
+          canvasRef.value?.loadEdgeMap(b64)
+        }
       })
     }
   }
 }
+// 이미지가 바뀌면 edge cache 무효화
+watch(imagePath, () => { _edgeMapCache = { path: '', b64: '' } })
 
 function onParamsChanged(params) {
   if (params.toolSize) brushSize.value = params.toolSize
@@ -471,6 +487,8 @@ function saveAsImage() {
 }
 
 // 클립보드에서 이미지 붙여넣기 — navigator.clipboard.read() → base64 → Python에 저장 요청
+// 화이트리스트: cv2.imread가 처리 가능한 포맷만 (HEIC/AVIF 등은 거부)
+const _CLIPBOARD_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/bmp', 'image/webp']
 async function pasteFromClipboard() {
   try {
     if (!navigator.clipboard || !navigator.clipboard.read) {
@@ -479,8 +497,21 @@ async function pasteFromClipboard() {
     }
     const items = await navigator.clipboard.read()
     for (const item of items) {
-      const imageType = item.types.find(t => t.startsWith('image/'))
-      if (imageType) {
+      // 화이트리스트에 있는 타입만 — image/heic, image/avif 등 cv2 미지원 거부
+      const imageType = item.types.find(t => _CLIPBOARD_ALLOWED_TYPES.includes(t.toLowerCase()))
+      if (!imageType) {
+        // 이미지가 있지만 지원 안 하는 포맷
+        const anyImage = item.types.find(t => t.startsWith('image/'))
+        if (anyImage) {
+          requestAction('show_toast', {
+            type: 'warning',
+            msg: `지원 안 하는 이미지 포맷: ${anyImage} (PNG/JPG/BMP/WEBP만 가능)`,
+          })
+          return
+        }
+        continue
+      }
+      {
         const blob = await item.getType(imageType)
         const buf = await blob.arrayBuffer()
         const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
@@ -561,14 +592,19 @@ function onEditorKeyDown(e) {
   if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveAsImage(); return }
   if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveImage(); return }
   // Undo / Redo (마스크 우선, 그 다음 작업)
+  // stopImmediatePropagation으로 다른 핸들러(PromptPanel 등)가 같은 키를 가로채지 못하게
+  // — Editor 탭에서는 Editor undo가 우선권을 가짐 (사용자 명시 요구사항)
   if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z') {
-    e.preventDefault(); canvasRef.value?.redoMask() || doRedo(); return
+    e.preventDefault(); e.stopImmediatePropagation()
+    canvasRef.value?.redoMask() || doRedo(); return
   }
   if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-    e.preventDefault(); canvasRef.value?.undoMask() || doUndo(); return
+    e.preventDefault(); e.stopImmediatePropagation()
+    canvasRef.value?.undoMask() || doUndo(); return
   }
   if (e.ctrlKey && e.key.toLowerCase() === 'y') {
-    e.preventDefault(); canvasRef.value?.redoMask() || doRedo(); return
+    e.preventDefault(); e.stopImmediatePropagation()
+    canvasRef.value?.redoMask() || doRedo(); return
   }
   if (e.key === 'Escape') canvasRef.value?.clearSelection()
 }
@@ -576,6 +612,20 @@ function onEditorKeyDown(e) {
 // 자동 저장 — 5분마다 변경 있으면 임시본 기록
 let _autoSaveTimer = null
 const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000
+// 마지막 자동저장 시각 — 상태바에 "마지막 저장: N분 전" 표시
+const lastAutoSaveAt = ref(0)
+const _nowTick = ref(0)  // 1분마다 증가 — autoSaveAgoText 재계산 트리거
+const autoSaveAgoText = computed(() => {
+  // 의존성: lastAutoSaveAt + _nowTick
+  void _nowTick.value
+  if (!lastAutoSaveAt.value) return ''
+  const sec = Math.floor((Date.now() - lastAutoSaveAt.value) / 1000)
+  if (sec < 60) return `${sec}초 전`
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`
+  return `${Math.floor(sec / 3600)}시간 전`
+})
+// 표시 부드럽게 갱신 — 매 분
+let _autoSaveTickTimer = null
 async function _tryAutoSave() {
   if (!isDirty.value || !imagePath.value) return
   try {
@@ -584,7 +634,10 @@ async function _tryAutoSave() {
       backend.editorAutoSave(imagePath.value.replace('file:///', ''), (json) => {
         try {
           const r = JSON.parse(json)
-          if (r.path) console.log('[Editor] auto-saved →', r.path)
+          if (r.path) {
+            console.log('[Editor] auto-saved →', r.path)
+            lastAutoSaveAt.value = Date.now()
+          }
         } catch {}
       })
     }
@@ -626,12 +679,15 @@ onMounted(() => {
   document.addEventListener('keydown', onEditorKeyDown)
   // 5분마다 자동 저장 시도
   _autoSaveTimer = setInterval(_tryAutoSave, AUTO_SAVE_INTERVAL_MS)
+  // 60초마다 "N분 전" 표시 갱신 (computed 의존성 _nowTick)
+  _autoSaveTickTimer = setInterval(() => { _nowTick.value++ }, 60_000)
   // 사이드 패널 폭이 Settings에서 변경되면 동기화
   window.addEventListener('storage', _syncSidePanelWidthFromStorage)
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onEditorKeyDown)
   if (_autoSaveTimer) clearInterval(_autoSaveTimer)
+  if (_autoSaveTickTimer) clearInterval(_autoSaveTickTimer)
   window.removeEventListener('storage', _syncSidePanelWidthFromStorage)
 })
 </script>
@@ -659,6 +715,8 @@ onUnmounted(() => {
 .bar-btn.danger { color: #f87171; border-color: rgba(248,113,113,0.2); }
 .bar-sep { color: #333; margin: 0 4px; }
 .bar-info { color: #585858; font-size: 11px; font-family: 'Consolas', monospace; }
+.bar-info.autosave { color: #4ade80; opacity: 0.75; }
+.bar-info.autosave:hover { opacity: 1; cursor: help; }
 .bar-filename {
   color: #c8c8c8; font-size: 12px; font-weight: 600;
   max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

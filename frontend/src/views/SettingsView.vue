@@ -107,15 +107,18 @@
 
         <!-- 5. Shortcuts -->
         <div v-show="currentTab === 'shortcuts'" class="section-fade">
+          <div class="hint-banner">
+            ℹ️ 같은 단축키도 <strong>현재 활성 탭</strong>에 따라 동작이 달라집니다.
+            예: <kbd>Ctrl+Z</kbd>는 Editor 탭에서는 편집 Undo, T2I/I2I/Inpaint에서는 프롬프트 Undo.
+            전역 키는 모든 탭에서 동일.
+          </div>
           <div class="glass-card">
             <label>전역 단축키</label>
             <div class="shortcut-grid">
-              <div class="s-row"><span>실행 취소</span><kbd>Ctrl + Z</kbd></div>
-              <div class="s-row"><span>다시 실행</span><kbd>Ctrl + Y</kbd></div>
               <div class="s-row"><span>설정 저장</span><kbd>Ctrl + S</kbd></div>
               <div class="s-row"><span>이미지 생성</span><kbd>Ctrl + G</kbd></div>
-              <div class="s-row"><span>모달 닫기</span><kbd>Esc</kbd></div>
-              <div class="s-row"><span>새로고침</span><kbd>F5</kbd></div>
+              <div class="s-row"><span>모달/패널 닫기</span><kbd>Esc</kbd></div>
+              <div class="s-row"><span>히스토리 새로고침</span><kbd>F5</kbd></div>
             </div>
           </div>
           <div class="glass-card mt-16">
@@ -355,6 +358,8 @@ function persistTabOrder() {
   window.localStorage.setItem('tabOrder', JSON.stringify(tabOrder.value))
   requestAction('save_ui_prefs', { tabOrder: tabOrder.value })
   requestAction('set_tab_order', { order: tabOrder.value })
+  // TabBar에게 즉시 알림 — storage event는 같은 창 변경엔 발생 안 하므로 커스텀 이벤트 사용
+  try { window.dispatchEvent(new CustomEvent('tabOrderChanged')) } catch {}
 }
 function dragDrop(i) {
   if (dragIdx < 0) return
@@ -532,6 +537,13 @@ function loadOllamaModels() { testOllama() }
 .s-row { display: flex; justify-content: space-between; align-items: center; }
 .s-row span { font-size: 13px; color: var(--text-secondary); }
 kbd { background: var(--bg-button); color: var(--accent); padding: 4px 10px; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 11px; border: 1px solid var(--border); }
+.hint-banner {
+  background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;
+  font-size: 12px; line-height: 1.6; color: var(--text-secondary);
+}
+.hint-banner kbd { font-size: 10px; padding: 2px 6px; }
+.hint-banner strong { color: var(--accent); }
 
 /* Defaults */
 .defaults-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

@@ -122,7 +122,8 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
                           sam_model_path: str = None, sam_type: str = None,
                           text_prompt: str = None,
                           yolo_model_paths: list = None,
-                          exclude_prompt: str = None) -> np.ndarray:
+                          exclude_prompt: str = None,
+                          notify=None) -> np.ndarray:
     """
     YOLO bbox 목록을 SAM으로 정밀 마스킹
 
@@ -136,6 +137,8 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
         yolo_model_paths: SAM3 텍스트 프롬프트 자동 생성에 사용
         exclude_prompt: SAM3 전용. 마스크에서 제외할 영역을 텍스트로 지정
             예: 'face' → 얼굴 영역을 검출해서 최종 마스크에서 빼기
+        notify: 사용자 알림 콜백 — notify(level: 'info'|'warning'|'error', message: str)
+            SAM3 exclude 안전장치 발동 등 사용자가 알아야 할 상황 전달
 
     Returns:
         combined_mask: uint8 마스크 (0 or 255)
@@ -172,6 +175,7 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
                 image, boxes, sam_model_path, combined_mask,
                 text_prompt=(text_prompt or _build_sam3_prompt(yolo_model_paths or [])),
                 exclude_prompt=exclude_prompt,
+                notify=notify,
             )
         if sam_type == 'fast_sam':
             return _refine_with_fastsam(image, boxes, sam_model_path, combined_mask)
@@ -335,7 +339,7 @@ def _find_sam3_bpe_vocab() -> str:
 
 def _refine_with_sam3(image: np.ndarray, boxes: list, model_path: str,
                       mask: np.ndarray, text_prompt: str = 'person',
-                      exclude_prompt: str = None) -> np.ndarray:
+                      exclude_prompt: str = None, notify=None) -> np.ndarray:
     """SAM3로 정밀 마스킹.
     SAM3는 text-prompted (bbox 입력 불가). YOLO bbox는 출력 마스크 필터링에만 사용.
     exclude_prompt가 주어지면 해당 영역(예: 'face')을 SAM3로 찾아서 최종 마스크에서 뺀다.
@@ -537,9 +541,15 @@ def _refine_with_sam3(image: np.ndarray, boxes: list, model_path: str,
                 kill_ratio = overlap_px / before_px
                 # 80% 이상 지워버리면 의도와 다를 가능성 — 적용 취소
                 if kill_ratio > 0.8:
+                    msg = (f"제외 프롬프트 '{excl_text}'이(가) 마스크의 "
+                           f"{kill_ratio*100:.0f}% 를 제거 — 너무 과해서 적용 취소됨. "
+                           f"더 구체적인 단어로 시도해보세요 (예: 'face' → 'eyes')")
                     print(f"[SAM3] exclude '{excl_text}' would remove "
                           f"{overlap_px}/{before_px} px ({kill_ratio*100:.1f}%) "
                           f"— main mask 거의 전체 — 적용 취소 (의도와 다를 가능성 높음)")
+                    if notify:
+                        try: notify('warning', msg)
+                        except Exception: pass
                 else:
                     mask[excl_bool] = 0
                     after_px = int((mask > 0).sum())

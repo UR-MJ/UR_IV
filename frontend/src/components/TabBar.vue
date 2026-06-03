@@ -17,7 +17,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { routes } from '../router.js'
 import { requestAction } from '../stores/widgetStore.js'
@@ -48,15 +48,28 @@ function sortTabs() {
   } catch {}
   return [...allTabs]
 }
-// 순서 변경 감시
-setInterval(() => {
+// 순서 변경 감시 — storage 이벤트로 즉시 반영 (2초 폴링 대체)
+// localStorage는 다른 탭/창의 변경만 'storage' 이벤트 발생시키므로,
+// 같은 창에서의 변경도 감지하려면 SettingsView가 'tabOrderChanged' 커스텀 이벤트를 dispatch해야 함.
+function _onTabOrderChange() {
   try {
     const saved = JSON.parse(window.localStorage.getItem('tabOrder') || '[]')
     if (saved.length > 0 && JSON.stringify(saved) !== JSON.stringify(tabs.value.map(t => t.title))) {
       tabs.value = sortTabs()
     }
   } catch {}
-}, 2000)
+}
+function _onStorageEvent(e) {
+  if (e.key === 'tabOrder' || e.key === null /* clear */) _onTabOrderChange()
+}
+onMounted(() => {
+  window.addEventListener('storage', _onStorageEvent)
+  window.addEventListener('tabOrderChanged', _onTabOrderChange)
+})
+onUnmounted(() => {
+  window.removeEventListener('storage', _onStorageEvent)
+  window.removeEventListener('tabOrderChanged', _onTabOrderChange)
+})
 
 const nativeTabs = [
   { id: 'web', title: 'Web' },

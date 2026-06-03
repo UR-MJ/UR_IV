@@ -344,8 +344,22 @@ class VueBridge(QObject):
 
                     if not loaded_names:
                         # 등록된 모든 모델이 실패한 경우 명확한 에러
-                        msg = '; '.join(f'{n}: {e}' for n, e in failed) or '모든 YOLO 모델 로드 실패'
+                        msg = '; '.join(f'{os.path.basename(n)}: {e}' for n, e in failed) or '모든 YOLO 모델 로드 실패'
+                        try:
+                            self.showNotification.emit('error', f'YOLO 모델 로드 실패 — {msg[:200]}')
+                        except Exception:
+                            pass
                         return json.dumps({'error': f'YOLO 모델 로드 실패 — {msg}'})
+
+                    # 일부만 실패한 경우 경고
+                    if failed:
+                        fail_msg = ', '.join(os.path.basename(n) for n, _e in failed[:3])
+                        if len(failed) > 3:
+                            fail_msg += f' 외 {len(failed) - 3}개'
+                        try:
+                            self.showNotification.emit('warning', f'YOLO 일부 모델 실패: {fail_msg}')
+                        except Exception:
+                            pass
 
                     print(f"[YOLO] Loaded {loaded_names} → {detect_count} regions, {len(yolo_boxes)} boxes, seg_mask={has_seg_mask}")
 
@@ -369,11 +383,18 @@ class VueBridge(QObject):
                                 excl_prompt = str(excl_prompt).strip() if excl_prompt else None
                                 if excl_prompt and sam_type == 'sam3':
                                     print(f"[SAM3] exclude prompt requested: '{excl_prompt}'")
+                                # 사용자 알림 콜백 — SAM3 exclude 안전장치 발동 시 토스트로 전달
+                                def _sam_notify(level, message):
+                                    try:
+                                        self.showNotification.emit(level, message)
+                                    except Exception:
+                                        pass
                                 sam_mask = refine_boxes_with_sam(
                                     img, yolo_boxes, models_dir,
                                     sam_model_path=sam_path, sam_type=sam_type,
                                     yolo_model_paths=model_paths,
                                     exclude_prompt=excl_prompt,
+                                    notify=_sam_notify,
                                 )
                                 if sam_mask.any():
                                     combined_mask = sam_mask
@@ -388,10 +409,18 @@ class VueBridge(QObject):
                                     print(f"[SAM] No SAM model in {models_dir}, using YOLO bbox")
                         except ImportError as ie:
                             print(f"[SAM] Import error: {ie}")
+                            try:
+                                self.showNotification.emit('warning', f'SAM 라이브러리 미설치 — bbox 마스크 사용 ({type(ie).__name__})')
+                            except Exception:
+                                pass
                         except Exception as sam_e:
                             import traceback
                             print(f"[SAM] Error: {sam_e}")
                             traceback.print_exc()
+                            try:
+                                self.showNotification.emit('error', f'SAM 정밀화 실패: {sam_e}')
+                            except Exception:
+                                pass
 
                     if operation == 'auto_detect':
                         # MASK ONLY: 마스크를 base64로 반환 (적용 안함)

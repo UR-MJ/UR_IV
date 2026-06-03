@@ -1,8 +1,8 @@
 <template>
   <div class="canvas-container" ref="containerRef"
     @wheel.prevent="onWheel"
-    @mousedown="onMouseDown" @mousemove="onMouseMoveWrap" @mouseup="onMouseUp"
-    @mouseleave="onMouseUp" @contextmenu.prevent
+    @pointerdown="onMouseDown" @pointermove="onMouseMoveWrap" @pointerup="onMouseUp"
+    @pointerleave="onMouseUp" @pointercancel="onMouseUp" @contextmenu.prevent
     @dblclick="onDblClick"
   >
     <canvas ref="canvasEl" :style="canvasStyle" />
@@ -248,21 +248,30 @@ function onMouseDown(e) {
   lastBrushX = pos.x; lastBrushY = pos.y
   stampAccum = 0
 
+  // 압력 감응 — 펜 입력일 때만 적용 (마우스는 항상 0.5로 고정되어 의미 없음)
+  // 펜 압력 0~1 → 0.3~1.2 배율로 매핑 (최소 30% 보장, 최대 120%)
+  const sizeFor = (base) => {
+    if (e.pointerType === 'pen' && typeof e.pressure === 'number' && e.pressure > 0) {
+      return Math.max(2, base * (0.3 + 0.9 * Math.min(1, e.pressure)))
+    }
+    return base
+  }
+  const brushR = sizeFor(props.brushSize)
+
   if (props.tool === 'lasso') {
     const sp = props.magneticLasso ? snapToEdge(pos.x, pos.y) : pos
     lassoPoints = [{ x: sp.x, y: sp.y }]
   } else if (props.tool === 'brush') {
-    paintMaskCircle(pos.x, pos.y, props.brushSize)
+    paintMaskCircle(pos.x, pos.y, brushR)
     renderMaskOverlay()
   } else if (props.tool === 'stamp') {
     paintStamp(pos.x, pos.y)
     renderMaskOverlay()
   } else if (props.tool === 'eraser') {
     if (props.eraserRestore) {
-      // 모자이크 지우개: 원본에서 해당 영역 복원
-      restoreCircle(pos.x, pos.y, props.brushSize)
+      restoreCircle(pos.x, pos.y, brushR)
     } else if (props.eraserMode === 'brush') {
-      eraseMaskCircle(pos.x, pos.y, props.brushSize)
+      eraseMaskCircle(pos.x, pos.y, brushR)
       renderMaskOverlay()
     } else {
       lassoPoints = props.eraserMode === 'lasso' ? [{ x: pos.x, y: pos.y }] : []
@@ -329,7 +338,12 @@ function onMouseMove(e) {
       maskCtx.fill()
     }
   } else if (props.tool === 'brush') {
-    paintMaskLine(lastBrushX, lastBrushY, pos.x, pos.y, props.brushSize)
+    // 펜 압력에 따라 브러시 반경 동적 조정 (마우스는 props.brushSize 그대로)
+    let brushR = props.brushSize
+    if (e.pointerType === 'pen' && typeof e.pressure === 'number' && e.pressure > 0) {
+      brushR = Math.max(2, props.brushSize * (0.3 + 0.9 * Math.min(1, e.pressure)))
+    }
+    paintMaskLine(lastBrushX, lastBrushY, pos.x, pos.y, brushR)
     lastBrushX = pos.x; lastBrushY = pos.y
     renderMaskOverlay()
   } else if (props.tool === 'stamp') {

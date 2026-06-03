@@ -155,21 +155,47 @@
 
       <!-- List View -->
       <div v-else class="list-view">
+        <!-- Sort + Pagination Toolbar -->
+        <div class="list-toolbar">
+          <div class="list-sort">
+            <span class="sort-label">정렬:</span>
+            <select v-model="sortBy" class="sort-select">
+              <option value="default">기본순</option>
+              <option value="character">캐릭터</option>
+              <option value="artist">작가</option>
+              <option value="copyright">작품</option>
+              <option value="rating">레이팅</option>
+              <option value="random">랜덤</option>
+            </select>
+            <button class="sort-dir-btn" v-if="sortBy !== 'default' && sortBy !== 'random'"
+              @click="sortDir = sortDir === 'asc' ? 'desc' : 'asc'"
+              :title="sortDir === 'asc' ? '오름차순 → 클릭 시 내림차순' : '내림차순 → 클릭 시 오름차순'">
+              {{ sortDir === 'asc' ? '↑' : '↓' }}
+            </button>
+          </div>
+          <div class="list-pager" v-if="totalPages > 1">
+            <button class="page-btn" @click="gotoPage(0)" :disabled="currentPage === 0">≪</button>
+            <button class="page-btn" @click="gotoPage(currentPage - 1)" :disabled="currentPage === 0">◀</button>
+            <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }} ({{ sortedResults.length }})</span>
+            <button class="page-btn" @click="gotoPage(currentPage + 1)" :disabled="currentPage >= totalPages - 1">▶</button>
+            <button class="page-btn" @click="gotoPage(totalPages - 1)" :disabled="currentPage >= totalPages - 1">≫</button>
+          </div>
+        </div>
         <div class="list-header">
           <span class="lh idx">#</span><span class="lh char">Character</span>
           <span class="lh copy">Copyright</span><span class="lh artist">Artist</span>
           <span class="lh tags">Tags</span><span class="lh act"></span>
         </div>
         <div class="list-scroll">
-          <div v-for="(r, i) in filteredResults" :key="i" class="list-row"
-            :class="{ active: previewIdx === i }"
-            @click="previewIdx = i; viewMode = 'single'">
-            <span class="lr idx">{{ i + 1 }}</span>
+          <div v-for="(r, i) in pagedResults" :key="(currentPage * PAGE_SIZE) + i" class="list-row"
+            :class="{ active: r === currentResult }"
+            @click="onListRowClick(r)">
+            <span class="lr idx">{{ (currentPage * PAGE_SIZE) + i + 1 }}</span>
             <span class="lr char">{{ r.character || '-' }}</span>
             <span class="lr copy">{{ r.copyright || '-' }}</span>
             <span class="lr artist">{{ r.artist || '-' }}</span>
             <span class="lr tags">{{ (r.general || '').substring(0, 80) }}</span>
-            <span class="lr act"><button class="use-btn" @click.stop="previewIdx = i; applyResult()">USE</button></span>
+            <span class="lr act"><button class="use-btn" @click.stop="onListRowUse(r)">USE</button></span>
           </div>
         </div>
       </div>
@@ -310,6 +336,64 @@ const deepExclude = ref('')
 const isFiltered = ref(false)
 const filterHistory = ref([])
 
+// 정렬 + 페이지네이션
+const sortBy = ref(localStorage.getItem('search.sortBy') || 'default')  // default | character | artist | copyright | random
+const sortDir = ref(localStorage.getItem('search.sortDir') || 'asc')    // asc | desc
+watch(sortBy, (v) => { try { localStorage.setItem('search.sortBy', v) } catch {} })
+watch(sortDir, (v) => { try { localStorage.setItem('search.sortDir', v) } catch {} })
+const PAGE_SIZE = 50
+const currentPage = ref(0)
+// 결과/필터/정렬이 바뀌면 1페이지로
+watch(() => filteredResults.value.length, () => { currentPage.value = 0 })
+watch(sortBy, () => { currentPage.value = 0 })
+
+const sortedResults = computed(() => {
+  const arr = filteredResults.value
+  if (sortBy.value === 'default') return arr
+  if (sortBy.value === 'random') {
+    // 시드 기반 셔플 — 결과 안정성 위해 서비스 호출마다 새로 생성 (단순 Fisher-Yates)
+    const copy = [...arr]
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]]
+    }
+    return copy
+  }
+  const k = sortBy.value
+  const dir = sortDir.value === 'desc' ? -1 : 1
+  return [...arr].sort((a, b) => {
+    const av = (a[k] || '').toString().toLowerCase()
+    const bv = (b[k] || '').toString().toLowerCase()
+    if (av < bv) return -1 * dir
+    if (av > bv) return 1 * dir
+    return 0
+  })
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(sortedResults.value.length / PAGE_SIZE)))
+const pagedResults = computed(() => {
+  const start = currentPage.value * PAGE_SIZE
+  return sortedResults.value.slice(start, start + PAGE_SIZE)
+})
+function gotoPage(p) {
+  currentPage.value = Math.max(0, Math.min(totalPages.value - 1, p))
+}
+function onListRowClick(r) {
+  // 정렬된 화면에서 클릭 → filteredResults 내의 인덱스로 변환 (previewIdx는 filteredResults 기준)
+  const idx = filteredResults.value.indexOf(r)
+  if (idx >= 0) {
+    previewIdx.value = idx
+    viewMode.value = 'single'
+  }
+}
+function onListRowUse(r) {
+  const idx = filteredResults.value.indexOf(r)
+  if (idx >= 0) {
+    previewIdx.value = idx
+    applyResult()
+  }
+}
+
 // 조건부 프롬프트
 const condPositive = reactive([])
 const condNegative = reactive([])
@@ -396,8 +480,18 @@ onMounted(() => {
         // 자동 저장 (재시작 시 복원용)
         try { window.localStorage.setItem('lastSearchResults', JSON.stringify(data.slice(0, 500))) } catch {}
         persistSearchFields()
-      } else statusText.value = 'FAILED'
-    } catch { statusText.value = 'PARSE ERROR' }
+      } else if (data && typeof data === 'object' && data.error) {
+        // 백엔드가 명시적 에러 객체를 보낸 경우 — 사용자에게 토스트
+        statusText.value = '검색 실패'
+        requestAction('show_toast', { type: 'error', msg: `검색 실패: ${data.error}` })
+      } else {
+        statusText.value = '검색 결과 형식 오류 (배열 예상)'
+        requestAction('show_toast', { type: 'error', msg: '검색 결과 형식 오류 — 배열이 아닙니다' })
+      }
+    } catch (e) {
+      statusText.value = `JSON 파싱 실패: ${e?.message || 'unknown'}`
+      requestAction('show_toast', { type: 'error', msg: `검색 결과 JSON 파싱 실패: ${e?.message || e}` })
+    }
     searching.value = false; searchProgress.value = 100
     if (progressTimer) { clearInterval(progressTimer); progressTimer = null }
   })
@@ -828,6 +922,37 @@ function importResults() { requestAction('import_search_results') }
 
 /* ═══ List View ═══ */
 .list-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.list-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 16px; background: var(--bg-primary); border-bottom: 1px solid var(--border);
+  gap: 16px; flex-wrap: wrap;
+}
+.list-sort { display: flex; align-items: center; gap: 6px; }
+.sort-label { font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; }
+.sort-select {
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 10px; color: var(--text-primary); font-size: 11px; font-weight: 700;
+  cursor: pointer; outline: none;
+}
+.sort-select:hover { border-color: var(--accent); }
+.sort-dir-btn {
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 10px; color: var(--accent); font-size: 12px; font-weight: 900;
+  cursor: pointer; min-width: 28px;
+}
+.sort-dir-btn:hover { background: var(--bg-button); }
+.list-pager { display: flex; align-items: center; gap: 4px; }
+.page-btn {
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px;
+  padding: 4px 10px; color: var(--text-secondary); font-size: 11px; font-weight: 700;
+  cursor: pointer; min-width: 32px;
+}
+.page-btn:hover:not(:disabled) { background: var(--bg-button); color: var(--accent); }
+.page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.page-info {
+  font-size: 11px; font-weight: 700; color: var(--text-secondary);
+  padding: 0 10px; min-width: 100px; text-align: center;
+}
 .list-header { display: flex; padding: 6px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; }
 .lh.idx { width: 40px; } .lh.char { width: 160px; } .lh.copy { width: 120px; } .lh.artist { width: 100px; } .lh.tags { flex: 1; } .lh.act { width: 44px; }
 .list-scroll { flex: 1; overflow-y: auto; }
