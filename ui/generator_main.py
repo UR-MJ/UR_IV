@@ -678,6 +678,22 @@ class GeneratorMainUI(
                 if self.is_automating:
                     self._stop_automation("사용자가 자동화를 중지했습니다.")
 
+            # ═══════ 프롬프트 섹션 순서 (사용자 지정) ═══════
+            elif action == 'prompt_order_list':
+                self._send_prompt_order()
+            elif action == 'prompt_order_save':
+                new_order = payload.get('order', [])
+                if isinstance(new_order, list):
+                    from core.prompt_order import save_order
+                    save_order([str(k) for k in new_order])
+                    self._send_prompt_order()
+                    self.update_total_prompt_display()  # 즉시 반영
+            elif action == 'prompt_order_reset':
+                from core.prompt_order import reset_to_default
+                reset_to_default()
+                self._send_prompt_order()
+                self.update_total_prompt_display()
+
             # ═══════ PR 8: Instant Wildcards (JSON 인라인) ═══════
             elif action == 'instant_wildcards_list':
                 self._send_instant_wildcards_list()
@@ -1523,6 +1539,18 @@ class GeneratorMainUI(
             lambda: self.vue_bridge.showNotification.emit('success', f'SAM3 배치 완료 ({len(paths)}장)'))
         self._sam3_batch_worker.start()
         self.vue_bridge.showNotification.emit('info', f'SAM3 배치 시작 ({len(paths)}장)')
+
+    # ── 프롬프트 섹션 순서 (사용자 지정) ──────────────────
+    def _send_prompt_order(self):
+        """현재 prompt_order.json 내용 + 라벨을 Vue로 전송."""
+        import json as _json
+        try:
+            from core.prompt_order import order_with_labels
+            self.vue_bridge.promptOrderLoaded.emit(
+                _json.dumps(order_with_labels())
+            )
+        except Exception:
+            pass
 
     # ── PR 2: Queue v2 이벤트 브리지 ───────────────────────
     def _setup_queue_v2_bridge(self) -> None:

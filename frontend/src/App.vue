@@ -18,6 +18,7 @@
               <button class="tool-btn" @click="showWeightManager = true">WEIGHT</button>
               <button class="tool-btn" @click="showWcManager = true">WILDCARD</button>
               <button class="tool-btn" @click="showInstantWcManager = true; loadInstantWcList()" title="JSON 기반 인라인 와일드카드 ($$name$$)">INSTANT WC</button>
+              <button class="tool-btn" @click="showOrderManager = true; loadPromptOrder()" title="최종 프롬프트의 섹션 순서를 직접 지정">ORDER</button>
               <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
               <button class="tool-btn" @click="showStatsModal = true; loadGenStats()">STATS</button>
             </div>
@@ -560,6 +561,39 @@
       </div>
     </transition>
 
+    <!-- 프롬프트 섹션 순서 매니저 모달 -->
+    <transition name="fade">
+      <div v-if="showOrderManager" class="wc-overlay" @click.self="showOrderManager = false">
+        <div class="wc-modal" style="max-width: 540px;">
+          <div class="wc-modal-header">
+            <h3>프롬프트 섹션 순서</h3>
+            <span class="wc-path">생성 시 합쳐지는 순서를 ↑/↓로 조정. 저장 시 즉시 반영</span>
+            <button class="close-btn" @click="showOrderManager = false">✕</button>
+          </div>
+          <div class="order-modal-body">
+            <div class="order-list">
+              <div v-for="(sec, i) in promptOrderList" :key="sec.key" class="order-item">
+                <span class="order-num">{{ i + 1 }}</span>
+                <span class="order-label">{{ sec.label }}</span>
+                <button class="order-btn" :disabled="i === 0" @click="moveOrderUp(i)" title="위로">↑</button>
+                <button class="order-btn" :disabled="i === promptOrderList.length - 1" @click="moveOrderDown(i)" title="아래로">↓</button>
+              </div>
+            </div>
+            <div class="order-preview">
+              <span class="order-preview-label">미리보기:</span>
+              <code class="order-preview-text">{{ promptOrderList.map(s => s.label).join(' → ') }}</code>
+            </div>
+            <div class="order-actions">
+              <button class="order-reset" @click="resetPromptOrder">↺ 기본값 복원</button>
+              <div style="flex: 1;"></div>
+              <button class="order-cancel" @click="showOrderManager = false">취소</button>
+              <button class="order-save" @click="saveOrderAndClose">💾 저장 & 적용</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- PR 8: INSTANT WILDCARD Manager Modal -->
     <transition name="fade">
       <div v-if="showInstantWcManager" class="wc-overlay" @click.self="showInstantWcManager = false">
@@ -1025,6 +1059,37 @@ const selectedWcData = computed(() => wildcards.value.find(w => w.name === selec
 const wcEditLines = ref([])
 const wcInsertTarget = ref('main')
 
+// 프롬프트 섹션 순서 매니저
+const showOrderManager = ref(false)
+const promptOrderList = ref([])  // [{key, label}, ...]
+
+function loadPromptOrder() {
+  action('prompt_order_list', {})
+}
+function moveOrderUp(i) {
+  if (i <= 0) return
+  const arr = [...promptOrderList.value]
+  ;[arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]
+  promptOrderList.value = arr
+}
+function moveOrderDown(i) {
+  if (i >= promptOrderList.value.length - 1) return
+  const arr = [...promptOrderList.value]
+  ;[arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]
+  promptOrderList.value = arr
+}
+function saveOrderAndClose() {
+  const order = promptOrderList.value.map(s => s.key)
+  action('prompt_order_save', { order })
+  showOrderManager.value = false
+  addToast('success', '프롬프트 순서 저장됨')
+}
+function resetPromptOrder() {
+  if (!window.confirm('기본 순서(인물수 → 캐릭터 → 작품 → 작가 → 선행 → 메인 → 후행)로 복원할까요?')) return
+  action('prompt_order_reset', {})
+  addToast('info', '기본 순서로 복원')
+}
+
 // PR 8: Instant Wildcards 상태
 const showInstantWcManager = ref(false)
 const instantWildcards = ref([])  // [{name, lines}]
@@ -1332,6 +1397,13 @@ onMounted(async () => {
       autoGenCount.value = d.count || 0
       autoWaiting.value = d.waiting || false
       if (!d.running) { isGenerating.value = false }
+    } catch {}
+  })
+  // 프롬프트 섹션 순서 수신
+  onBackendEvent('promptOrderLoaded', (json) => {
+    try {
+      const arr = JSON.parse(json)
+      if (Array.isArray(arr)) promptOrderList.value = arr
     } catch {}
   })
   // PR 8: 인스턴트 와일드카드 목록 수신
@@ -1689,6 +1761,40 @@ onMounted(async () => {
 .auto-input { width: 50px; padding: 4px 6px; font-size: 11px; text-align: center; }
 .auto-unlimited-mark { display: inline-block; width: 50px; padding: 4px 6px; font-size: 14px;
   color: var(--accent); text-align: center; font-weight: bold; }
+
+/* 프롬프트 순서 모달 */
+.order-modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.order-list { display: flex; flex-direction: column; gap: 4px;
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px; padding: 8px; }
+.order-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: rgba(255,255,255,0.04); border-radius: 4px;
+  transition: background 0.15s; }
+.order-item:hover { background: rgba(96,165,250,0.08); }
+.order-num { width: 22px; height: 22px; display: inline-flex; align-items: center;
+  justify-content: center; background: rgba(96,165,250,0.2); color: #93c5fd;
+  border-radius: 50%; font-size: 11px; font-weight: bold; }
+.order-label { flex: 1; font-size: 13px; color: var(--text-primary); }
+.order-btn { width: 28px; height: 28px; font-size: 13px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px; color: var(--text-primary); }
+.order-btn:hover:not(:disabled) { background: rgba(96,165,250,0.15);
+  border-color: #60a5fa; color: #93c5fd; }
+.order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.order-preview { padding: 8px 10px; background: rgba(255,255,255,0.03);
+  border-left: 2px solid #60a5fa; border-radius: 0 4px 4px 0; }
+.order-preview-label { font-size: 10px; color: var(--text-muted); margin-right: 6px; }
+.order-preview-text { font-size: 11px; color: #93c5fd; font-family: Consolas, monospace; }
+.order-actions { display: flex; gap: 8px; align-items: center; padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.08); }
+.order-reset, .order-cancel, .order-save { padding: 6px 14px; border-radius: 4px;
+  font-size: 12px; cursor: pointer; font-weight: 600; }
+.order-reset { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-muted); }
+.order-cancel { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-primary); }
+.order-save { background: #2563eb; border: 1px solid #3b82f6; color: white; }
+.order-save:hover { background: #3b82f6; }
 .auto-select { min-width: 90px; padding: 4px; font-size: 10px; }
 
 /* 자동화 상태 */
