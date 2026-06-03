@@ -50,17 +50,18 @@
             <button v-for="r in ratings" :key="r.key" class="rating-chip"
               :class="{ active: r.checked }" @click="r.checked = !r.checked">{{ r.label }}</button>
           </div>
-          <!-- 필드 간 결합 모드: AND (교집합) / OR (합집합) -->
+          <!-- 검색 결합 모드: AND (교집합) / OR (합집합) -->
+          <!-- 모드는 필드 간 결합 + 필드 내 콤마 토큰 + 제외 검색에 모두 적용됨 -->
           <div class="combine-row">
-            <span class="combine-label">필드 결합:</span>
+            <span class="combine-label">검색 결합:</span>
             <button class="combine-chip" :class="{ active: combineMode === 'and' }"
               @click="combineMode = 'and'"
-              title="AND (교집합) — 모든 필드 조건 동시 만족&#10;&#10;예) character=raiden_shogun + copyright=genshin&#10;→ 라이덴 쇼군만 (두 조건 모두 충족하는 캐릭터)">
+              title="AND 모드 — 모든 조건 동시 만족 (교집합)&#10;&#10;콤마(,) = AND&#10;필드 간 = AND&#10;예) char=raiden_shogun + copy=genshin → 라이덴 쇼군만&#10;예) char=1girl, blue_hair → 1girl 이면서 blue_hair인 행">
               ∩ AND
             </button>
             <button class="combine-chip" :class="{ active: combineMode === 'or' }"
               @click="combineMode = 'or'"
-              title="OR (합집합) — 하나라도 만족하면 통과&#10;&#10;예) character=ike + copyright=arknights&#10;→ Fire Emblem의 Ike + Arknights 작품 모든 캐릭터&#10;&#10;💡 정확 매칭이 필요하면 *ike 처럼 별표를 붙이세요">
+              title="OR 모드 — 하나라도 만족하면 통과 (합집합)&#10;&#10;콤마(,) = OR (모드 따라 자동 전환)&#10;필드 간 = OR&#10;예) char=ike + copy=arknights → Ike 또는 Arknights 작품 전체&#10;예) char=char1, char2 → char1 또는 char2 일러스트&#10;&#10;💡 명시적 [A,B] 그룹은 모드 무관 항상 AND&#10;💡 정확 매칭은 *ike 처럼 별표 사용">
               ∪ OR
             </button>
           </div>
@@ -72,9 +73,12 @@
       </div>
 
       <div class="hints">
-        <span>쉼표(,) = AND</span><span>[A|B] = OR</span><span>Exclude로 제외 조건 설정</span>
+        <span>쉼표(,) = {{ combineMode === 'or' ? 'OR (모드 따라)' : 'AND (모드 따라)' }}</span>
+        <span>[A|B] = OR (명시)</span>
+        <span>[A,B] = AND (명시)</span>
+        <span>Exclude로 제외 조건 설정</span>
         <span class="hint-mode" :class="combineMode">
-          현재 모드: <strong>{{ combineMode === 'and' ? '모든 필드 매칭 (AND)' : '하나라도 매칭 (OR)' }}</strong>
+          현재: <strong>{{ combineMode === 'and' ? '모든 조건 매칭 (AND)' : '하나라도 매칭 (OR)' }}</strong>
         </span>
       </div>
 

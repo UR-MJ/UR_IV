@@ -122,34 +122,56 @@ def match_query(query: str, tag_text: str) -> bool:
     return True
 
 
-def filter_dataframe(df: pd.DataFrame, col: str, query: str) -> pd.Series:
+def filter_dataframe(df: pd.DataFrame, col: str, query: str,
+                     default_combine: str = 'and') -> pd.Series:
     """DataFrame에 쿼리를 적용하여 Boolean mask 반환
 
-    df: DataFrame
-    col: 태그 문자열이 있는 컬럼명
-    query: 사용자 입력 쿼리
-    Returns: pd.Series[bool]
+    :param df: DataFrame
+    :param col: 태그 문자열이 있는 컬럼명
+    :param query: 사용자 입력 쿼리
+    :param default_combine: 'and' (콤마=AND, 기본) | 'or' (콤마=OR)
+        - 명시적 대괄호 그룹은 모드 무관:
+          [A|B] → 항상 OR, [A,B] → 항상 AND
+        - bare 콤마(대괄호 밖) 토큰 결합 방식만 모드에 따라 변경
     """
     conditions = parse_query(query)
     if not conditions:
         return pd.Series(True, index=df.index)
 
-    mask = pd.Series(True, index=df.index)
     col_lower = df[col].fillna('').str.lower()
+    use_or = (str(default_combine).lower() == 'or')
 
+    # 각 condition을 개별 마스크로 평가 → 마지막에 모드대로 결합
+    cond_masks = []
     for cond in conditions:
         if cond['type'] == 'or':
-            or_mask = pd.Series(False, index=df.index)
+            # [A|B] — 명시적 OR (모드 무관)
+            cm = pd.Series(False, index=df.index)
             for term in cond['terms']:
-                or_mask |= _apply_pattern(col_lower, term)
-            mask &= or_mask
+                cm |= _apply_pattern(col_lower, term)
+            cond_masks.append(cm)
         elif cond['type'] == 'and':
+            # [A,B] — 명시적 AND 그룹 (모드 무관, 그룹 내부는 항상 AND)
+            cm = pd.Series(True, index=df.index)
             for term in cond['terms']:
-                mask &= _apply_pattern(col_lower, term)
+                cm &= _apply_pattern(col_lower, term)
+            cond_masks.append(cm)
         else:
-            mask &= _apply_pattern(col_lower, cond['terms'][0])
+            # single — bare 콤마 토큰, 결합 방식은 default_combine에 따라
+            cond_masks.append(_apply_pattern(col_lower, cond['terms'][0]))
 
-    return mask
+    if use_or:
+        # OR 모드: 콤마/그룹들을 모두 OR로 결합
+        result = pd.Series(False, index=df.index)
+        for cm in cond_masks:
+            result |= cm
+        return result
+    else:
+        # AND 모드 (기존): 콤마/그룹들을 모두 AND로 결합
+        result = pd.Series(True, index=df.index)
+        for cm in cond_masks:
+            result &= cm
+        return result
 
 
 def _apply_pattern(col_series: pd.Series, pattern: str) -> pd.Series:

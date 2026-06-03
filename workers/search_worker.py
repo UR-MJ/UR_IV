@@ -97,11 +97,15 @@ class PandasSearchWorker(QThread):
             self.status_update.emit(f"❌ 오류 발생: {str(e)}")
             self.results_ready.emit([], 0)
 
-    @staticmethod
-    def _parse_condition(df, col, query_text):
-        """통합 태그 매칭 엔진 — 와일드카드 + 그룹 + OR/AND 지원"""
+    def _parse_condition(self, df, col, query_text):
+        """통합 태그 매칭 엔진 — 와일드카드 + 그룹 + OR/AND 지원
+        combine_mode를 tag_matcher에 전달:
+        - 'and': 콤마=AND (기존)
+        - 'or':  콤마=OR (필드 내 콤마도 OR로 결합)
+        명시적 [A|B], [A,B] 그룹은 모드와 무관하게 항상 OR/AND.
+        """
         from core.tag_matcher import filter_dataframe
-        return filter_dataframe(df, col, query_text)
+        return filter_dataframe(df, col, query_text, default_combine=self.combine_mode)
 
     def _load_data(self):
         """선택된 등급의 Parquet 파일 로드"""
