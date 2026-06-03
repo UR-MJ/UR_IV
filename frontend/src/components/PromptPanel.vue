@@ -37,7 +37,7 @@
       </div>
       <div class="input-group autocomplete-wrap">
         <div class="row label-row">
-          <label>Character</label>
+          <label>Character <span v-if="sectionTokens.character" class="tk-badge" :class="tokenBadgeClass(sectionTokens.character)">{{ sectionTokens.character }}t</span></label>
           <button class="small-btn" @click="requestAction('open_character_preset'); loadCharTags()">PRESET</button>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.character_input" :color-fn="() => 'bc-count'" placeholder="캐릭터..." @open-wildcard="(n) => emit('open-wildcard', n)" />
@@ -57,7 +57,7 @@
         </div>
       </div>
       <div class="input-group autocomplete-wrap">
-        <label>Copyright</label>
+        <label>Copyright <span v-if="sectionTokens.copyright" class="tk-badge" :class="tokenBadgeClass(sectionTokens.copyright)">{{ sectionTokens.copyright }}t</span></label>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.copyright_input" :color-fn="() => ''" placeholder="작품..." />
         <input v-else type="text" v-model="widgets.copyright_input" placeholder="Copyright / Series..."
           @input="onFieldInput($event, 'copyright_input')" @keydown="onFieldKey($event, 'copyright_input')" />
@@ -67,7 +67,7 @@
       </div>
       <div class="input-group">
         <div class="row label-row">
-          <label>Artist</label>
+          <label>Artist <span v-if="sectionTokens.artist" class="tk-badge" :class="tokenBadgeClass(sectionTokens.artist)">{{ sectionTokens.artist }}t</span></label>
           <button class="lock-btn" :class="{ locked: artistLocked }" @click="toggleArtistLock">{{ artistLocked ? '🔒' : '🔓' }}</button>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.artist_input" :color-fn="() => ''" placeholder="작가..." />
@@ -77,14 +77,36 @@
         <label>Checkpoint</label>
         <CustomSelect v-model="widgets.model_combo" :options="modelItems" placeholder="Select model..." />
       </div>
+      <div class="input-group">
+        <label>VAE <span class="hint">(ANIMA 등 외부 VAE)</span></label>
+        <CustomSelect v-model="widgets.vae_main_combo" :options="vaeItems" placeholder="(체크포인트 기본 사용)" />
+      </div>
+      <div class="input-group">
+        <label>Text Encoder <span class="hint">(드롭다운에서 추가 · 칩 클릭으로 제거)</span></label>
+        <CustomSelect :modelValue="''" @update:modelValue="addTeFile"
+          :options="teUnselectedItems"
+          :placeholder="teItems.length === 0 ? '(text_encoder 폴더 비어있음)' : '+ TE 파일 추가...'" />
+        <div v-if="teSelectedList.length > 0" class="te-chips">
+          <button v-for="f in teSelectedList" :key="f" type="button"
+            class="te-chip active" @click="removeTeFile(f)">
+            {{ f }} <span class="te-chip-x">×</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- 3. PROMPT BLOCKS -->
     <details class="glass-card" open>
-      <summary class="card-header">PROMPT BLOCKS</summary>
+      <summary class="card-header">
+        <span>PROMPT BLOCKS</span>
+        <span class="undo-btns" @click.stop>
+          <button class="undo-btn" :disabled="undoStack.length < 2" @click="performUndo" title="실행 취소 (Ctrl+Z)">↶</button>
+          <button class="undo-btn" :disabled="redoStack.length === 0" @click="performRedo" title="다시 실행 (Ctrl+Y)">↷</button>
+        </span>
+      </summary>
       <div class="input-group autocomplete-wrap">
         <div class="row label-row">
-          <label>Main Tags</label>
+          <label>Main Tags <span v-if="sectionTokens.main" class="tk-badge" :class="tokenBadgeClass(sectionTokens.main)">{{ sectionTokens.main }}t</span></label>
           <div class="ai-btns">
             <button class="ai-btn" @click="ollamaMode = 'expand'; runOllama()" :disabled="ollamaLoading" title="태그 확장">✨</button>
             <button class="ai-btn" @click="showNlInput = !showNlInput" title="자연어→태그">💬</button>
@@ -104,12 +126,12 @@
         </div>
       </div>
       <div class="input-group">
-        <label>Prefix</label>
+        <label>Prefix <span v-if="sectionTokens.prefix" class="tk-badge" :class="tokenBadgeClass(sectionTokens.prefix)">{{ sectionTokens.prefix }}t</span></label>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.prefix_prompt_text" :color-fn="blockColorClass" placeholder="선행 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="prefixRef" v-model="widgets.prefix_prompt_text" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <div class="input-group">
-        <label>Suffix</label>
+        <label>Suffix <span v-if="sectionTokens.suffix" class="tk-badge" :class="tokenBadgeClass(sectionTokens.suffix)">{{ sectionTokens.suffix }}t</span></label>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.suffix_prompt_text" :color-fn="blockColorClass" placeholder="후행 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
       </div>
@@ -210,8 +232,15 @@ onMounted(() => {
       console.log('[PromptPanel] Block mode synced:', stored)
     }
   }, 300)
+  // Undo/Redo 키보드 단축키 + 초기 스냅 (현재 상태)
+  window.addEventListener('keydown', onKeyDownGlobal)
+  // 초기 스냅은 약간 지연 (widgets 초기 로드 후)
+  setTimeout(pushUndoSnapshot, 800)
 })
-onUnmounted(() => { if (_blockModeTimer) clearInterval(_blockModeTimer) })
+onUnmounted(() => {
+  if (_blockModeTimer) clearInterval(_blockModeTimer)
+  window.removeEventListener('keydown', onKeyDownGlobal)
+})
 
 const artistLocked = computed({
   get: () => widgets.btn_lock_artist === 'true',
@@ -227,7 +256,137 @@ const mainRef = ref(null)
 const suffixRef = ref(null)
 
 const modelItems = computed(() => store.getProperty('model_combo', 'items') || [])
-const tokenCount = computed(() => { const t = widgets.total_prompt_display; return t ? t.split(',').filter(s => s.trim()).length : 0 })
+const vaeItems = computed(() => store.getProperty('vae_main_combo', 'items') || [])
+const teItems = computed(() => store.getProperty('te_main_input', 'items') || [])
+const teSelectedList = computed(() => {
+  const raw = widgets.te_main_input || ''
+  return raw.split(',').map(s => s.trim()).filter(Boolean)
+})
+const teUnselectedItems = computed(() => {
+  const selected = new Set(teSelectedList.value)
+  return teItems.value.filter(f => !selected.has(f))
+})
+function _serializeTe(list) {
+  widgets.te_main_input = list.join(', ')
+}
+function addTeFile(name) {
+  if (!name) return
+  const cur = teSelectedList.value
+  if (cur.includes(name)) return
+  // teItems 정렬 순서 유지
+  const next = teItems.value.filter(f => cur.includes(f) || f === name)
+  _serializeTe(next)
+}
+function removeTeFile(name) {
+  _serializeTe(teSelectedList.value.filter(f => f !== name))
+}
+// 토큰 카운트 헬퍼 — SD/CLIP 근사 (실제 토크나이저보다 약간 보수적)
+// 규칙: 각 태그(쉼표 구분) → 단어 수 합산 + 쉼표 수
+function approxTokens(text) {
+  if (!text || !String(text).trim()) return 0
+  const chunks = String(text).split(',').map(s => s.trim()).filter(Boolean)
+  let total = 0
+  for (const c of chunks) {
+    const words = c.split(/\s+/).filter(Boolean)
+    total += words.length
+  }
+  return total + Math.max(0, chunks.length - 1) // 쉼표
+}
+const tokenCount = computed(() => approxTokens(widgets.total_prompt_display))
+
+// 섹션별 토큰 — 블록모드에서도 동작 (widgets 값은 join된 문자열)
+const sectionTokens = computed(() => ({
+  character: approxTokens(widgets.character_input),
+  copyright: approxTokens(widgets.copyright_input),
+  artist:    approxTokens(widgets.artist_input),
+  main:      approxTokens(widgets.main_prompt_text),
+  prefix:    approxTokens(widgets.prefix_prompt_text),
+  suffix:    approxTokens(widgets.suffix_prompt_text),
+}))
+// 75 = CLIP 1청크 한계, 150 = 2청크(BREAK), 225 = 3청크
+// 0=숨김, <75=녹색, <150=노랑, ≥150=빨강
+function tokenBadgeClass(n) {
+  if (!n) return ''
+  if (n < 75) return 'tk-ok'
+  if (n < 150) return 'tk-warn'
+  return 'tk-over'
+}
+
+// ── Undo/Redo ──
+// 추적 필드: 6개 프롬프트 입력 + 캐릭터/저작권/작가
+const UNDO_KEYS = [
+  'character_input', 'copyright_input', 'artist_input',
+  'main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text',
+  'neg_prompt_text',
+  'exclude_prompt_local_input',
+]
+const undoStack = ref([])    // 과거 스냅샷
+const redoStack = ref([])    // 미래 (Ctrl+Y용)
+const MAX_UNDO = 50
+let applying = false         // undo 적용 중에는 watch 다시 push 안 함
+let debounceTimer = null     // 빠른 타이핑 묶기
+
+function _snap() {
+  const s = {}
+  for (const k of UNDO_KEYS) s[k] = widgets[k] || ''
+  return s
+}
+function _eq(a, b) {
+  for (const k of UNDO_KEYS) if ((a[k] || '') !== (b[k] || '')) return false
+  return true
+}
+function pushUndoSnapshot() {
+  const cur = _snap()
+  const last = undoStack.value[undoStack.value.length - 1]
+  if (last && _eq(last, cur)) return
+  undoStack.value.push(cur)
+  if (undoStack.value.length > MAX_UNDO) undoStack.value.shift()
+  redoStack.value = []  // 새 변경 시 redo 초기화
+}
+function applySnapshot(snap) {
+  applying = true
+  for (const k of UNDO_KEYS) {
+    if (widgets[k] !== snap[k]) widgets[k] = snap[k]
+  }
+  nextTick(() => { applying = false })
+}
+function performUndo() {
+  if (undoStack.value.length < 2) return  // 첫 스냅(현재) 외에 없으면 안 함
+  const cur = undoStack.value.pop()       // 현재 상태
+  redoStack.value.push(cur)
+  const prev = undoStack.value[undoStack.value.length - 1]
+  applySnapshot(prev)
+}
+function performRedo() {
+  if (redoStack.value.length === 0) return
+  const next = redoStack.value.pop()
+  undoStack.value.push(next)
+  applySnapshot(next)
+}
+
+// 디바운스 watch — 빠른 타이핑이 끝나면 스냅샷 (500ms)
+for (const k of UNDO_KEYS) {
+  watch(() => widgets[k], () => {
+    if (applying) return
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(pushUndoSnapshot, 500)
+  })
+}
+
+// 키보드 단축키 (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
+function onKeyDownGlobal(e) {
+  if (!(e.ctrlKey || e.metaKey)) return
+  // 입력 요소 안에서도 동작 — input 자체 undo는 우회됨 (덜 자주 쓰임)
+  // 단, contenteditable이나 textarea의 native undo는 그대로 (이건 우리가 못 막음)
+  const key = e.key.toLowerCase()
+  if (key === 'z' && !e.shiftKey) {
+    e.preventDefault()
+    performUndo()
+  } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+    e.preventDefault()
+    performRedo()
+  }
+}
 
 // 블록 색상 분류
 const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
@@ -518,12 +677,6 @@ onMounted(() => {
         window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode))
         tagBlockMode.value = prefs.tagBlockMode
       }
-      // Hires/ADetailer/NegPiP 복원
-      if (typeof prefs.hires_enabled === 'boolean') widgets.hires_options_group = prefs.hires_enabled ? 'true' : 'false'
-      if (typeof prefs.ad_enabled === 'boolean') widgets.adetailer_group = prefs.ad_enabled ? 'true' : 'false'
-      if (typeof prefs.ad_s1_enabled === 'boolean') widgets.ad_slot1_group = prefs.ad_s1_enabled ? 'true' : 'false'
-      if (typeof prefs.ad_s2_enabled === 'boolean') widgets.ad_slot2_group = prefs.ad_s2_enabled ? 'true' : 'false'
-      if (typeof prefs.negpip_enabled === 'boolean') widgets.negpip_group = prefs.negpip_enabled ? 'true' : 'false'
       if (typeof prefs.galleryShowMetadata === 'boolean') window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata))
     } catch {}
   })
@@ -656,4 +809,43 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 /* neg block field */
 .neg :deep(.tbf) { border-color: rgba(248,113,113,0.15); }
 .neg :deep(.tbf-block) { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
+.hint { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: normal; margin-left: 4px; }
+.tk-badge {
+  display: inline-block; padding: 1px 6px; margin-left: 6px; font-size: 9px;
+  font-weight: bold; border-radius: 8px; vertical-align: middle;
+  border: 1px solid transparent;
+}
+.tk-badge.tk-ok    { background: rgba(74,222,128,0.12); color: #4ade80; border-color: rgba(74,222,128,0.3); }
+.tk-badge.tk-warn  { background: rgba(251,191,36,0.12); color: #fbbf24; border-color: rgba(251,191,36,0.4); }
+.tk-badge.tk-over  { background: rgba(248,113,113,0.18); color: #f87171; border-color: rgba(248,113,113,0.5); }
+
+/* Undo/Redo 버튼 */
+.undo-btns { float: right; display: inline-flex; gap: 4px; margin-left: auto; }
+.undo-btn {
+  width: 24px; height: 22px; padding: 0; font-size: 13px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px; color: var(--text-primary);
+}
+.undo-btn:hover:not(:disabled) { background: rgba(96,165,250,0.18); color: #93c5fd; border-color: #60a5fa; }
+.undo-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+summary.card-header { display: flex; align-items: center; }
+.te-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.te-chip {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.te-chip:hover { border-color: rgba(96,165,250,0.5); color: #fff; }
+.te-chip.active {
+  background: rgba(96,165,250,0.2);
+  border-color: #60a5fa;
+  color: #93c5fd;
+}
+.te-chip-x { margin-left: 4px; opacity: 0.6; }
+.te-chip:hover .te-chip-x { opacity: 1; color: #f87171; }
 </style>

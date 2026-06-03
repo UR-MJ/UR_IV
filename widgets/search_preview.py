@@ -235,26 +235,67 @@ class SearchPreviewCard(QWidget):
         
         layout.addLayout(btn_layout)
         
-        # 빈 상태 라벨
-        self.empty_label = QLabel("검색 후 결과를 미리볼 수 있습니다.")
+        # 빈 상태 라벨 (HTML 지원)
+        self.empty_label = QLabel()
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_label.setWordWrap(True)
+        self.empty_label.setTextFormat(Qt.TextFormat.RichText)
         self.empty_label.setStyleSheet(f"""
             color: {get_color('text_muted')};
-            padding: 30px;
-            font-size: 11px;
+            padding: 24px 30px;
+            font-size: 12px;
+            line-height: 1.5;
         """)
         layout.addWidget(self.empty_label)
-        
+
         # 초기 상태: 카드 숨김
-        self._show_empty_state()
+        self._show_empty_state('initial')
     
-    def _show_empty_state(self):
-        """빈 상태 표시"""
+    def _show_empty_state(self, reason: str = 'initial', criteria: dict = None):
+        """빈 상태 표시.
+
+        :param reason: 'initial' (앱 시작/검색 안 함) / 'no_results' (검색했지만 0건)
+        :param criteria: 검색 조건 dict (no_results일 때 안내에 활용)
+        """
         self.card_frame.hide()
         self.btn_next.hide()
         self.btn_apply.hide()
         self.btn_add_queue.hide()
+        self.empty_label.setText(self._build_empty_html(reason, criteria))
         self.empty_label.show()
+
+    def _build_empty_html(self, reason: str, criteria: dict = None) -> str:
+        """빈 상태 HTML 메시지 빌더 — 친절한 안내 + 검색 팁."""
+        if reason == 'no_results':
+            crit_html = ""
+            if criteria:
+                pieces = []
+                for label, val in criteria.items():
+                    if val:
+                        pieces.append(f"<b>{label}</b>: <code>{val}</code>")
+                if pieces:
+                    crit_html = "<br/>".join(pieces[:6])
+            return (
+                "<div style='font-size: 14px; margin-bottom: 12px;'>🔎 <b>일치하는 결과가 없습니다</b></div>"
+                + (f"<div style='font-size: 11px; opacity: 0.7; margin-bottom: 16px;'>{crit_html}</div>" if crit_html else "")
+                + "<div style='font-size: 11px; line-height: 1.8; text-align: left; max-width: 480px; margin: 0 auto;'>"
+                + "<b>💡 다시 시도하기 전에:</b><br/>"
+                + "• 조건을 <b>줄여서</b> 다시 검색해보세요 (각 칸에 1~2개 태그만)<br/>"
+                + "• <code>*완전일치</code> 대신 <code>일반 포함</code>으로 바꿔보세요<br/>"
+                + "• <code>[A|B]</code> OR 그룹으로 후보 늘리기<br/>"
+                + "• <b>등급(Rating)</b>이 g/s/q/e 중 선택돼있는지 확인<br/>"
+                + "• 제외 조건이 너무 광범위하지 않은지 확인<br/>"
+                + "<br/>"
+                + "<b>📖 검색 문법:</b> 위쪽 <b>ℹ️ 검색 문법</b> 박스 클릭으로 펼치기"
+                + "</div>"
+            )
+        # initial
+        return (
+            "<div style='font-size: 13px;'>검색 후 결과를 미리볼 수 있습니다.</div>"
+            "<div style='font-size: 10px; opacity: 0.6; margin-top: 8px;'>"
+            "💡 위 <b>ℹ️ 검색 문법</b> 박스로 연산자 확인"
+            "</div>"
+        )
     
     def _show_card_state(self):
         """카드 상태 표시"""

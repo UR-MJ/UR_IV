@@ -434,6 +434,8 @@ class UISetupMixin:
         self.btn_char_preset = ButtonProxy(b, 'btn_char_preset')
 
         self.model_combo = ComboBoxProxy(b, 'model_combo')
+        self.vae_main_combo = ComboBoxProxy(b, 'vae_main_combo')
+        self.te_main_input = LineEditProxy(b, 'te_main_input')
         self.sampler_combo = ComboBoxProxy(b, 'sampler_combo')
         self.scheduler_combo = ComboBoxProxy(b, 'scheduler_combo')
 
@@ -441,6 +443,8 @@ class UISetupMixin:
         self.steps_input.setText('25')
         self.cfg_input = SliderProxy(b, 'cfg_input', multiplier=2)
         self.cfg_input.setText('7')
+        self.shift_input = SliderProxy(b, 'shift_input', multiplier=2)
+        self.shift_input.setText('0')
 
         self.seed_input = LineEditProxy(b, 'seed_input')
         self.seed_input.setText('-1')
@@ -554,6 +558,55 @@ class UISetupMixin:
         self.s2_widgets = _ad_slot('_ad_s2')
         self.s2_widgets['model'].setText('hand_yolov8n.pt')
 
+        self.sam3_group = GroupBoxProxy(b, 'sam3_group')
+        self.sam3_toggle_button = ButtonProxy(b, 'sam3_toggle_button')
+        self.sam3_settings_container = type('WProxy', (), {
+            'hide': lambda s: None, 'show': lambda s: None, 'setVisible': lambda s, v: None,
+        })()
+        self.sam3_widgets = {
+            'detect_prompt': TextEditProxy(b, '_sam3_detect_prompt'),
+            'inpaint_prompt': TextEditProxy(b, '_sam3_inpaint_prompt'),
+            'neg_prompt': TextEditProxy(b, '_sam3_neg_prompt'),
+            'mode': ComboBoxProxy(b, '_sam3_mode'),
+            'mask_mode': ComboBoxProxy(b, '_sam3_mask_mode'),
+            'threshold': SliderProxy(b, '_sam3_threshold', multiplier=100),
+            'mask_blur': SliderProxy(b, '_sam3_mask_blur'),
+            'denoise': SliderProxy(b, '_sam3_denoise', multiplier=100),
+            'padding': SliderProxy(b, '_sam3_padding'),
+            'checkpoint': ComboBoxProxy(b, '_sam3_checkpoint'),
+            'preview_overlay': CheckBoxProxy(b, '_sam3_preview_overlay'),
+            'save_artifacts': CheckBoxProxy(b, '_sam3_save_artifacts'),
+            'use_inpaint_size_check': CheckBoxProxy(b, '_sam3_use_inp_size'),
+            'inpaint_size_container': type('WProxy', (), {
+                'setVisible': lambda s, v: None, 'hide': lambda s: None, 'show': lambda s: None,
+                'isVisible': lambda s: False,
+            })(),
+            'inpaint_width': LineEditProxy(b, '_sam3_inp_w'),
+            'inpaint_height': LineEditProxy(b, '_sam3_inp_h'),
+            'use_steps_check': CheckBoxProxy(b, '_sam3_use_steps'),
+            'steps': SliderProxy(b, '_sam3_steps'),
+            'use_cfg_check': CheckBoxProxy(b, '_sam3_use_cfg'),
+            'cfg': SliderProxy(b, '_sam3_cfg', multiplier=10),
+            'use_sampler_check': CheckBoxProxy(b, '_sam3_use_sampler'),
+            'sampler': ComboBoxProxy(b, '_sam3_sampler'),
+            'scheduler': ComboBoxProxy(b, '_sam3_scheduler'),
+            'use_noise_multiplier_check': CheckBoxProxy(b, '_sam3_use_noise_mul'),
+            'noise_multiplier': SliderProxy(b, '_sam3_noise_mul', multiplier=100),
+            'restore_face': CheckBoxProxy(b, '_sam3_restore_face'),
+            'sampler_container': type('WProxy', (), {
+                'setVisible': lambda s, v: None, 'hide': lambda s: None, 'show': lambda s: None,
+            })(),
+        }
+        self.sam3_widgets['threshold'].setText('0.40')
+        self.sam3_widgets['mask_blur'].setText('4')
+        self.sam3_widgets['denoise'].setText('0.40')
+        self.sam3_widgets['padding'].setText('32')
+        self.sam3_widgets['checkpoint'].setText('sam3.pt')
+        self.sam3_widgets['steps'].setText('28')
+        self.sam3_widgets['cfg'].setText('7.0')
+        self.sam3_widgets['noise_multiplier'].setText('1.0')
+        self.sam3_widgets['save_artifacts'].setChecked(True)
+
         # 제거 옵션
         self.chk_remove_artist = CheckBoxProxy(b, 'chk_remove_artist')
         self.chk_remove_copyright = CheckBoxProxy(b, 'chk_remove_copyright')
@@ -595,13 +648,15 @@ class UISetupMixin:
             'repeat': 1,
             'delay': 1.0,
             'allowDupes': False,
+            'maxRetries': 2,
         }
 
         def _get_vue_automation_settings():
             raw = getattr(self, '_vue_automation_settings', {}) or {}
 
+            # PR 3: 'unlimited' 모드 추가 — 횟수/시간 제한 없이 사용자가 중지할 때까지
             mode = str(raw.get('mode', 'count'))
-            if mode not in ('count', 'timer'):
+            if mode not in ('count', 'timer', 'unlimited'):
                 mode = 'count'
 
             try:
@@ -619,11 +674,20 @@ class UISetupMixin:
             except (TypeError, ValueError):
                 delay = 1.0
 
+            try:
+                max_retries = int(raw.get('maxRetries', 2))
+            except (TypeError, ValueError):
+                max_retries = 2
+
             limit = max(1.0, limit)
             repeat = max(1, repeat)
             delay = max(0.0, delay)
+            max_retries = max(0, min(max_retries, 10))
 
-            termination_limit = int(limit) if mode == 'count' else limit * 60
+            if mode == 'unlimited':
+                termination_limit = 0  # 무시됨
+            else:
+                termination_limit = int(limit) if mode == 'count' else limit * 60
 
             return {
                 'termination_mode': mode,
@@ -631,6 +695,7 @@ class UISetupMixin:
                 'repeat_per_prompt': repeat,
                 'delay': delay,
                 'allow_duplicates': bool(raw.get('allowDupes', False)),
+                'max_retries': max_retries,
             }
 
         # 자동화 위젯 (더미)
@@ -820,6 +885,17 @@ class UISetupMixin:
         self.model_combo = NoScrollComboBox()
         sl.addWidget(self.model_combo)
 
+        # VAE (ANIMA 등 외부 VAE 필요한 모델용)
+        sl.addWidget(self._prompt_label("VAE"))
+        self.vae_main_combo = NoScrollComboBox()
+        sl.addWidget(self.vae_main_combo)
+
+        # Text Encoder (Forge forge_additional_modules — 쉼표 구분)
+        sl.addWidget(self._prompt_label("Text Encoder"))
+        self.te_main_input = QLineEdit()
+        self.te_main_input.setPlaceholderText("예: clip_l.safetensors, t5xxl_fp16.safetensors")
+        sl.addWidget(self.te_main_input)
+
         # 샘플러
         sl.addWidget(self._prompt_label("샘플러"))
         self.sampler_combo = NoScrollComboBox()
@@ -830,9 +906,10 @@ class UISetupMixin:
         self.scheduler_combo = NoScrollComboBox()
         sl.addWidget(self.scheduler_combo)
 
-        # Steps / CFG
+        # Steps / CFG / Shift
         self.steps_input, _ = self._create_param_slider(sl, "Steps", 1, 100, 25, 1)
         self.cfg_input, _ = self._create_param_slider(sl, "CFG", 1, 20, 7, 0.5)
+        self.shift_input, _ = self._create_param_slider(sl, "Shift", 0, 24, 0, 0.5)
 
         # Seed
         seed_row = QHBoxLayout()
@@ -975,6 +1052,21 @@ class UISetupMixin:
         ad_sets.addWidget(self.ad_slot2_group)
         ad_l.addWidget(self.ad_settings_container)
         sl.addWidget(self.adetailer_group)
+
+        self.sam3_group = QGroupBox("SAM3")
+        self.sam3_group.setCheckable(True)
+        self.sam3_group.setChecked(False)
+        sam3_l = QVBoxLayout(self.sam3_group)
+        self.sam3_toggle_button = QPushButton("설정 보기")
+        self.sam3_toggle_button.setCheckable(True)
+        sam3_l.addWidget(self.sam3_toggle_button)
+        self.sam3_settings_container = QWidget()
+        self.sam3_settings_container.hide()
+        sam3_sets = QVBoxLayout(self.sam3_settings_container)
+        self.sam3_widgets = self._create_sam3_ui()
+        sam3_sets.addWidget(self.sam3_widgets['group'])
+        sam3_l.addWidget(self.sam3_settings_container)
+        sl.addWidget(self.sam3_group)
 
         # 제거 옵션
         remove_group = QGroupBox("태그 제거 옵션")
@@ -1231,6 +1323,107 @@ class UISetupMixin:
         slot_layout.addWidget(widgets['sampler_container'])
         
         return slot_group, widgets
+
+    def _create_sam3_ui(self):
+        """SAM3 UI 생성"""
+        group = QGroupBox("SAM3 Inpaint")
+        layout = QVBoxLayout(group)
+        widgets = {'group': group}
+
+        layout.addWidget(QLabel("Detect Prompt"))
+        widgets['detect_prompt'] = QTextEdit()
+        widgets['detect_prompt'].setFixedHeight(44)
+        widgets['detect_prompt'].setPlainText("face")
+        layout.addWidget(widgets['detect_prompt'])
+
+        layout.addWidget(QLabel("Inpaint Prompt"))
+        widgets['inpaint_prompt'] = QTextEdit()
+        widgets['inpaint_prompt'].setFixedHeight(52)
+        widgets['inpaint_prompt'].setPlaceholderText("비워두면 메인 프롬프트 사용")
+        layout.addWidget(widgets['inpaint_prompt'])
+
+        layout.addWidget(QLabel("Negative Prompt"))
+        widgets['neg_prompt'] = QTextEdit()
+        widgets['neg_prompt'].setFixedHeight(44)
+        widgets['neg_prompt'].setPlaceholderText("비워두면 메인 네거티브 사용")
+        layout.addWidget(widgets['neg_prompt'])
+
+        mode_row = QHBoxLayout()
+        widgets['mode'] = NoScrollComboBox()
+        widgets['mode'].addItems(["Inpaint", "Mask only"])
+        widgets['mask_mode'] = NoScrollComboBox()
+        widgets['mask_mode'].addItems(["Individual", "Combined"])
+        mode_row.addWidget(QLabel("Mode"))
+        mode_row.addWidget(widgets['mode'])
+        mode_row.addWidget(QLabel("Mask"))
+        mode_row.addWidget(widgets['mask_mode'])
+        layout.addLayout(mode_row)
+
+        row1 = QHBoxLayout()
+        widgets['threshold'], threshold_widget = self._create_param_slider(
+            None, "Threshold", 0.0, 1.0, 0.4, 0.01
+        )
+        widgets['mask_blur'], blur_widget = self._create_param_slider(
+            None, "인페인트 마스크 블러", 0, 64, 8, 1
+        )
+        row1.addWidget(threshold_widget)
+        row1.addWidget(blur_widget)
+        layout.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        widgets['denoise'], denoise_widget = self._create_param_slider(
+            None, "디노이징 강도", 0.0, 1.0, 0.3, 0.01
+        )
+        widgets['padding'], padding_widget = self._create_param_slider(
+            None, "Inpaint Padding (px)", 0, 256, 32, 1
+        )
+        row2.addWidget(denoise_widget)
+        row2.addWidget(padding_widget)
+        layout.addLayout(row2)
+
+        checkpoint_row = QHBoxLayout()
+        checkpoint_row.addWidget(QLabel("Checkpoint"))
+        widgets['checkpoint'] = QLineEdit("sam3.pt")
+        checkpoint_row.addWidget(widgets['checkpoint'])
+        layout.addLayout(checkpoint_row)
+
+        options_row = QHBoxLayout()
+        widgets['preview_overlay'] = QCheckBox("Overlay Preview")
+        widgets['save_artifacts'] = QCheckBox("Artifacts 저장")
+        widgets['save_artifacts'].setChecked(True)
+        options_row.addWidget(widgets['preview_overlay'])
+        options_row.addWidget(widgets['save_artifacts'])
+        options_row.addStretch()
+        layout.addLayout(options_row)
+
+        widgets['use_inpaint_size_check'] = QCheckBox("별도의 너비/높이 사용")
+        layout.addWidget(widgets['use_inpaint_size_check'])
+
+        widgets['inpaint_size_container'] = QWidget()
+        size_layout = QHBoxLayout(widgets['inpaint_size_container'])
+        size_layout.setContentsMargins(20, 0, 0, 0)
+        widgets['inpaint_width'] = QLineEdit("1024")
+        widgets['inpaint_height'] = QLineEdit("1024")
+        size_layout.addWidget(QLabel("ㄴ 너비:"))
+        size_layout.addWidget(widgets['inpaint_width'])
+        size_layout.addWidget(QLabel("높이:"))
+        size_layout.addWidget(widgets['inpaint_height'])
+        widgets['inpaint_size_container'].hide()
+        layout.addWidget(widgets['inpaint_size_container'])
+
+        widgets['use_steps_check'] = QCheckBox("별도의 단계 사용")
+        layout.addWidget(widgets['use_steps_check'])
+        widgets['steps'] = QLineEdit("28")
+        widgets['steps'].hide()
+        layout.addWidget(widgets['steps'])
+
+        widgets['use_cfg_check'] = QCheckBox("별도의 CFG 스케일 사용")
+        layout.addWidget(widgets['use_cfg_check'])
+        widgets['cfg'] = QLineEdit("7.0")
+        widgets['cfg'].hide()
+        layout.addWidget(widgets['cfg'])
+
+        return widgets
     
     def _create_viewer_panel(self):
         """뷰어 패널 생성 — QWebEngineView(Vue SPA) 전체 화면"""

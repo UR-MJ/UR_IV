@@ -1,97 +1,124 @@
 # utils/tag_completer.py
 """
 태그 자동완성 시스템
-TagData(parquet) 기반 + CSV 별칭 폴백
+
+TagData(parquet) 4개 카테고리(general / character / copyright / artist) 모두
+활용. 결과는 카테고리 우선순위 + 접두사 일치 우선으로 정렬.
+
+기본 우선순위: general → character → copyright → artist
+(사용자가 쓰는 빈도 기준)
 """
 import bisect
 import csv
 from pathlib import Path
-from typing import List, Optional
+from typing import List
+
+
+# 카테고리 우선순위 — 작을수록 먼저 노출
+CATEGORY_PRIORITY = {
+    "general":   0,
+    "character": 1,
+    "copyright": 2,
+    "artist":    3,
+}
 
 
 class TagCompleter:
-    """태그 자동완성"""
+    """태그 자동완성 — 카테고리별 분리 인덱스로 우선순위 보장."""
 
     def __init__(self, tags_db_path: str = None):
         self.tags_db_path = Path(tags_db_path) if tags_db_path else self._find_tags_db_path()
-        self.all_tags: List[str] = []
-        self.tags_set: set = set()
-        self.alias_map: dict = {}  # alias → tag_name
-        self._sorted_lower_tags: List[tuple] = []  # (lowercase_tag, original_tag)
-        self._lower_keys: List[str] = []  # lowercase keys only (for bisect)
+        # 카테고리별 정렬된 (lower_key, original_tag) 리스트
+        self._cat_indices: dict[str, list[tuple[str, str]]] = {
+            k: [] for k in CATEGORY_PRIORITY
+        }
+        # 카테고리별 lower_keys (bisect용)
+        self._cat_lower_keys: dict[str, list[str]] = {
+            k: [] for k in CATEGORY_PRIORITY
+        }
+        # 별칭 → 태그
+        self.alias_map: dict[str, str] = {}
+        # is_valid_tag()용
+        self.tags_set: set[str] = set()
 
         self._load_tags()
-        self._build_sorted_index()
+        self._build_indices()
 
     def _find_tags_db_path(self) -> Path:
-        """tags_db 경로 찾기"""
         candidates = [
             Path(__file__).parent.parent / "tags_db",
             Path("tags_db"),
             Path("../tags_db"),
         ]
-
         for path in candidates:
             if path.exists():
                 return path
-
         return Path("tags_db")
 
+    # ────────────────────────────────────────
+    # 로드
+    # ────────────────────────────────────────
+
     def _load_tags(self):
-        """TagData에서 general 태그 로드, 별칭은 CSV에서 보충"""
-        # 1. TagData에서 general 태그 가져오기
+        """TagData에서 4개 카테고리 모두 로드. 실패 시 CSV 폴백."""
         try:
             from utils.tag_data import get_tag_data
             td = get_tag_data()
-            if td.is_loaded and td.general_tags:
-                self.all_tags = td.general_tags.copy()
-                self.tags_set = {t.lower() for t in self.all_tags}
-                print(f"✅ TagCompleter: TagData에서 {len(self.all_tags):,}개 general 태그 로드")
-                # 별칭은 CSV에서 보충
-                self._load_aliases_from_csv()
-                return
+            if td.is_loaded:
+                counts: dict[str, int] = {}
+                for cat in CATEGORY_PRIORITY:
+                    tags = getattr(td, f"{cat}_tags", None) or []
+                    for t in tags:
+                        if not t:
+                            continue
+                        self._cat_indices[cat].append(
+                            (t.lower().replace(" ", "_"), t)
+                        )
+                        self.tags_set.add(t.lower())
+                    counts[cat] = len(tags)
+                if any(counts.values()):
+                    parts = ", ".join(f"{k}={v:,}" for k, v in counts.items())
+                    print(f"✅ TagCompleter: TagData 4-카테고리 로드 ({parts})")
+                    self._load_aliases_from_csv()
+                    return
         except Exception as e:
             print(f"⚠️ TagData 로드 실패, CSV 폴백: {e}")
 
-        # 2. 폴백: auto_tags.csv
-        self._load_from_csv()
+        # 폴백: auto_tags.csv (general 단일 카테고리로)
+        self._load_from_csv_fallback()
 
     def _load_aliases_from_csv(self):
-        """CSV에서 별칭만 로드"""
         csv_file = self.tags_db_path / "auto_tags.csv"
         if not csv_file.exists():
             csv_file = self.tags_db_path / "auto tags.csv"
         if not csv_file.exists():
             return
-
         try:
-            with open(csv_file, 'r', encoding='utf-8') as f:
+            with open(csv_file, "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
                 for row in reader:
                     if not row:
                         continue
                     if len(row) >= 4 and row[3].strip():
                         tag_name = row[0].strip()
-                        aliases = [a.strip() for a in row[3].split(',') if a.strip()]
+                        aliases = [a.strip() for a in row[3].split(",") if a.strip()]
                         for alias in aliases:
                             self.alias_map[alias.lower()] = tag_name
             if self.alias_map:
-                print(f"✅ TagCompleter: {len(self.alias_map)}개 별칭 로드 (CSV)")
+                print(f"✅ TagCompleter: {len(self.alias_map):,}개 별칭 로드")
         except Exception:
             pass
 
-    def _load_from_csv(self):
-        """폴백: auto_tags.csv에서 전체 로드"""
+    def _load_from_csv_fallback(self):
+        """auto_tags.csv 폴백 — general에만 채움."""
         csv_file = self.tags_db_path / "auto_tags.csv"
         if not csv_file.exists():
             csv_file = self.tags_db_path / "auto tags.csv"
-
         if not csv_file.exists():
             print(f"⚠️ auto_tags.csv not found: {csv_file}")
             return
-
         try:
-            with open(csv_file, 'r', encoding='utf-8') as f:
+            with open(csv_file, "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
                 for row in reader:
                     if not row:
@@ -99,89 +126,125 @@ class TagCompleter:
                     tag_name = row[0].strip()
                     if not tag_name:
                         continue
-
-                    self.all_tags.append(tag_name)
+                    self._cat_indices["general"].append(
+                        (tag_name.lower().replace(" ", "_"), tag_name)
+                    )
                     self.tags_set.add(tag_name.lower())
-
                     if len(row) >= 4 and row[3].strip():
-                        aliases = [a.strip() for a in row[3].split(',') if a.strip()]
+                        aliases = [a.strip() for a in row[3].split(",") if a.strip()]
                         for alias in aliases:
                             self.alias_map[alias.lower()] = tag_name
-
-            print(f"✅ TagCompleter(CSV 폴백): {len(self.all_tags)}개 태그, {len(self.alias_map)}개 별칭")
+            print(f"✅ TagCompleter(CSV): {len(self._cat_indices['general']):,}개 태그")
         except Exception as e:
             print(f"❌ auto_tags.csv 로드 실패: {e}")
 
-    def _build_sorted_index(self):
-        """이진 검색용 정렬된 인덱스 생성"""
-        pairs = [(tag.lower().replace(' ', '_'), tag) for tag in self.all_tags]
-        pairs.sort(key=lambda x: x[0])
-        self._sorted_lower_tags = pairs
-        self._lower_keys = [p[0] for p in pairs]
+    def _build_indices(self):
+        """카테고리별로 정렬 + lower_keys 분리 (bisect용)."""
+        for cat in CATEGORY_PRIORITY:
+            self._cat_indices[cat].sort(key=lambda x: x[0])
+            self._cat_lower_keys[cat] = [p[0] for p in self._cat_indices[cat]]
+
+    # ────────────────────────────────────────
+    # 검색
+    # ────────────────────────────────────────
 
     def get_suggestions(self, prefix: str, max_count: int = 10) -> List[str]:
-        """입력 접두사로 태그 추천 (별칭 포함)"""
-        if not prefix or not self.all_tags:
-            return []
+        """접두사로 태그 추천.
 
-        prefix_lower = prefix.lower().strip().replace(' ', '_')
+        결과 순서: general → character → copyright → artist
+        각 카테고리 내에서는 접두사 일치 우선, 그 다음 별칭 일치, 그 다음 포함 일치.
+        """
+        if not prefix:
+            return []
+        prefix_lower = prefix.lower().strip().replace(" ", "_")
         if not prefix_lower:
             return []
 
-        seen = set()
-        suggestions = []
+        seen: set[str] = set()
+        results: list[str] = []
 
-        # 1. 접두사로 시작하는 태그 (이진 검색, O(log n + k))
-        start = bisect.bisect_left(self._lower_keys, prefix_lower)
-        for i in range(start, len(self._lower_keys)):
-            lower_tag = self._lower_keys[i]
-            if not lower_tag.startswith(prefix_lower):
+        # 1. 카테고리별 접두사 매칭 (general → character → copyright → artist)
+        for cat in sorted(CATEGORY_PRIORITY, key=lambda c: CATEGORY_PRIORITY[c]):
+            if len(results) >= max_count:
+                return results
+            results += self._prefix_match(cat, prefix_lower, max_count - len(results), seen)
+
+        # 2. 별칭 매칭 (모든 카테고리 통합)
+        if len(results) < max_count:
+            for alias, tag_name in self.alias_map.items():
+                if alias.startswith(prefix_lower):
+                    tl = tag_name.lower()
+                    if tl not in seen:
+                        seen.add(tl)
+                        results.append(tag_name)
+                        if len(results) >= max_count:
+                            return results
+
+        # 3. 포함 매칭 (general에서만 — 너무 많아지지 않게)
+        if len(results) < max_count:
+            for tag in (p[1] for p in self._cat_indices["general"]):
+                tag_lower = tag.lower().replace(" ", "_")
+                if prefix_lower in tag_lower and tag.lower() not in seen:
+                    seen.add(tag.lower())
+                    results.append(tag)
+                    if len(results) >= max_count:
+                        return results
+
+        return results
+
+    def _prefix_match(self, cat: str, prefix_lower: str,
+                      remaining: int, seen: set) -> list[str]:
+        """카테고리 내 접두사 매칭 — bisect로 O(log n + k)."""
+        if remaining <= 0:
+            return []
+        keys = self._cat_lower_keys[cat]
+        if not keys:
+            return []
+        start = bisect.bisect_left(keys, prefix_lower)
+        out: list[str] = []
+        for i in range(start, len(keys)):
+            k = keys[i]
+            if not k.startswith(prefix_lower):
                 break
-            orig_tag = self._sorted_lower_tags[i][1]
-            tag_key = orig_tag.lower()
-            if tag_key not in seen:
-                seen.add(tag_key)
-                suggestions.append(orig_tag)
-                if len(suggestions) >= max_count:
-                    return suggestions
+            orig = self._cat_indices[cat][i][1]
+            tl = orig.lower()
+            if tl in seen:
+                continue
+            seen.add(tl)
+            out.append(orig)
+            if len(out) >= remaining:
+                break
+        return out
 
-        # 2. 별칭으로 시작하는 태그
-        for alias, tag_name in self.alias_map.items():
-            if alias.startswith(prefix_lower) and tag_name.lower() not in seen:
-                seen.add(tag_name.lower())
-                suggestions.append(tag_name)
-                if len(suggestions) >= max_count:
-                    return suggestions
-
-        # 3. 접두사를 포함하는 태그 (차선)
-        for tag in self.all_tags:
-            tag_lower = tag.lower().replace(' ', '_')
-            if prefix_lower in tag_lower and tag.lower() not in seen:
-                seen.add(tag.lower())
-                suggestions.append(tag)
-                if len(suggestions) >= max_count:
-                    return suggestions
-
-        return suggestions
+    # ────────────────────────────────────────
+    # 유틸
+    # ────────────────────────────────────────
 
     def is_valid_tag(self, tag: str) -> bool:
-        """태그가 유효한지 확인"""
         return tag.lower().strip() in self.tags_set
 
     def get_all_tags(self) -> List[str]:
-        """전체 태그 목록 반환"""
-        return self.all_tags.copy()
+        out: list[str] = []
+        for cat in CATEGORY_PRIORITY:
+            out.extend(p[1] for p in self._cat_indices[cat])
+        return out
 
     def count(self) -> int:
-        """태그 개수"""
-        return len(self.all_tags)
+        return sum(len(self._cat_indices[c]) for c in CATEGORY_PRIORITY)
 
 
 # 싱글톤
 _completer_instance = None
+
 
 def get_tag_completer() -> TagCompleter:
     global _completer_instance
     if _completer_instance is None:
         _completer_instance = TagCompleter()
     return _completer_instance
+
+
+def reset_tag_completer() -> None:
+    """싱글톤 캐시 비우기 — 데이터 갱신 후 강제 재로드용."""
+    global _completer_instance
+    _completer_instance = None

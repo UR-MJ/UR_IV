@@ -19,6 +19,37 @@ from utils.app_logger import get_logger
 from utils.theme_manager import get_theme_manager
 
 
+def _widget_text(w, fallback: str = '') -> str:
+    """위젯에서 텍스트 값을 얻는다. proxy/LineEdit/ComboBox/PlainTextEdit 모두 대응.
+
+    우선순위: .text() → _fallback_text → .toPlainText() → .currentText()
+    """
+    v = w.text() if hasattr(w, 'text') else ''
+    if not v and hasattr(w, '_fallback_text'):
+        v = w._fallback_text
+    if not v and hasattr(w, 'toPlainText'):
+        v = w.toPlainText()
+    if not v and hasattr(w, 'currentText'):
+        v = w.currentText()
+    return v or fallback
+
+
+def _widget_float(w, fallback: float) -> float:
+    try:
+        v = _widget_text(w)
+        return float(v) if v else fallback
+    except (ValueError, TypeError):
+        return fallback
+
+
+def _widget_int(w, fallback: int) -> int:
+    try:
+        v = _widget_text(w)
+        return int(float(v)) if v else fallback
+    except (ValueError, TypeError):
+        return fallback
+
+
 def _gen_btn_default_color() -> str:
     """생성 버튼 기본 색상"""
     return '#4A90E2'
@@ -87,6 +118,16 @@ class GenerationMixin:
             combined_neg_prompt = resolve_file_wildcards(combined_neg_prompt)
             combined_neg_prompt = process_wildcards(combined_neg_prompt)
 
+        # PR 1: PromptPipeline 컨버전스 — 등록된 모든 훅을 final_prompt에 적용
+        # 기존 처리 *뒤*에 호출되므로 비파괴적. instant_wildcards($$name$$),
+        # standard_dedupe, 사용자 추가 훅 등이 여기서 동작.
+        try:
+            from core.standard_hooks import run_pipeline_on_text
+            final_prompt = run_pipeline_on_text(final_prompt)
+            combined_neg_prompt = run_pipeline_on_text(combined_neg_prompt)
+        except Exception as e:
+            _logger.warning(f"pipeline 실행 실패 (원본 유지): {e}")
+
         # LoRA 합침 (Vue LoRA Stack 우선, 없으면 Python panel)
         lora_text = getattr(self, '_vue_lora_text', '')
         if not lora_text and hasattr(self, 'lora_active_panel'):
@@ -98,30 +139,50 @@ class GenerationMixin:
         payload = {
             "prompt": final_prompt,
             "negative_prompt": combined_neg_prompt,
-            "sampler_name": self.sampler_combo.currentText(), 
+            "sampler_name": self.sampler_combo.currentText(),
             "scheduler": self.scheduler_combo.currentText(),
             "steps": int(self.steps_input.text() or '28'),
             "cfg_scale": float(self.cfg_input.text() or '7'),
-            "seed": int(self.seed_input.text() or '-1'), 
-            "width": width, 
+            "seed": int(self.seed_input.text() or '-1'),
+            "width": width,
             "height": height,
             "send_images": True,
             "save_images": True,
             "alwayson_scripts": {}
         }
 
+        # 메인 VAE / TE → Forge Neo의 forge_additional_modules로 통합 전달
+        # (override_settings.sd_vae와 병행 시 Forge processing._vae_override 충돌)
+        extra_modules = self._build_vae_te_override()
+        if extra_modules:
+            payload["forge_additional_modules"] = extra_modules
+
+        # Shift (Distilled CFG Scale)
+        shift_val = float(self.shift_input.text() or '0')
+        if shift_val > 0:
+            payload["distilled_cfg_scale"] = shift_val
+
         # Hires.fix
         if self.hires_options_group.isChecked():
             hr_scale = float(self.hires_scale_input.text() or '2.0')
             if hr_scale <= 0:
                 hr_scale = 2.0
+            # Hires 패스에서 모듈 처리:
+            # - 베이스에 forge_additional_modules가 있으면 "Use same choices"로 reload 회피
+            #   (실제 리스트를 넘기면 Forge processing.py:1404 modules_change가 True를
+            #    반환해 forge_model_reload() 호출 → BufferError 발생)
+            # - 없으면 빈 리스트 (Built-in)
+            if payload.get("forge_additional_modules"):
+                hr_modules = ["Use same choices"]
+            else:
+                hr_modules = []
             hr_payload = {
                 "enable_hr": True,
                 "hr_upscaler": self.upscaler_combo.currentText(),
                 "hr_second_pass_steps": int(self.hires_steps_input.text() or '0'),
                 "denoising_strength": float(self.hires_denoising_input.text() or '0.5'),
                 "hr_scale": hr_scale,
-                "hr_additional_modules": [],
+                "hr_additional_modules": hr_modules,
             }
             hr_cfg = float(self.hires_cfg_input.text() or '0')
             if hr_cfg > 0:
@@ -156,23 +217,24 @@ class GenerationMixin:
         if hasattr(self, 'negpip_group') and self.negpip_group.isChecked():
             payload["alwayson_scripts"]["NegPiP"] = {"args": [True]}
 
-        # ADetailer (REST API: https://github.com/Bing-su/adetailer/wiki/REST-API)
-        if self.adetailer_group.isChecked():
-            adetailer_args = [True, False]
+        self._apply_postprocess_chain(payload)
 
-            if self.ad_slot1_group.isChecked():
-                adetailer_args.append(self._build_adetailer_slot(self.s1_widgets))
-
-            if self.ad_slot2_group.isChecked():
-                adetailer_args.append(self._build_adetailer_slot(self.s2_widgets))
-
-            payload["alwayson_scripts"]["ADetailer"] = {"args": adetailer_args}
-            
-            _logger.info("ADetailer 적용됨")
+        # payload 사전 검증 — 잘못된 값은 API 호출 전에 사용자에게 안내
+        from core.payload_validator import PayloadValidator
+        vr = PayloadValidator.validate(payload)
+        for w in vr.warnings:
+            _logger.warning("payload warning: %s", w)
+        if not vr.ok:
+            msg = " / ".join(vr.errors)
+            _logger.error("payload invalid: %s", msg)
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.showNotification.emit('error', f'설정 오류: {msg}')
+            self.show_status(f"설정 오류: {msg}")
+            return
 
         _logger.info("Sending Payload to WebUI API")
         _logger.debug(f"프롬프트: {payload['prompt'][:100]}...")
-        
+
         selected_model = self.model_combo.currentText()
         self._cleanup_gen_worker()
         self.gen_worker = GenerationFlowWorker(selected_model, payload)
@@ -187,18 +249,59 @@ class GenerationMixin:
 
         self.gen_worker.start()
 
+    def _build_vae_te_override(self) -> list:
+        """메인 VAE + TE 파일들을 Forge Neo의 ``forge_additional_modules``
+        포맷(파일명 리스트)으로 합쳐서 반환.
+
+        VAE와 TE 모두 비어있으면 빈 리스트 반환.
+
+        주의: ``override_settings.sd_vae``를 같이 보내면 Forge processing.py에서
+        ``_vae_override`` 튜플 언팩 에러가 발생하므로, VAE도 이 리스트로만 전달한다.
+        Forge가 파일명을 ``models/VAE/`` 또는 ``models/text_encoder/``에서 자동 매칭.
+        """
+        modules: list[str] = []
+
+        vae = ''
+        try:
+            vae = (self.vae_main_combo.currentText() or '').strip()
+        except Exception:
+            pass
+        if vae and vae not in ("Use checkpoint default", "Use same VAE", ""):
+            modules.append(vae)
+
+        te_raw = ''
+        try:
+            te_raw = (self.te_main_input.text() or '').strip()
+        except Exception:
+            pass
+        if te_raw:
+            modules.extend(t.strip() for t in te_raw.split(',') if t.strip())
+
+        return modules
+
     def _cleanup_gen_worker(self):
-        """이전 생성 워커가 실행 중이면 정리"""
-        if hasattr(self, 'gen_worker') and self.gen_worker is not None:
+        """이전 생성 워커 정리 — 시그널을 시그널별로 분리 해제하여 부분 실패 시에도 누수 방지."""
+        worker = getattr(self, 'gen_worker', None)
+        if worker is None:
+            return
+        for sig_name in ('finished', 'progress'):
             try:
-                if self.gen_worker.isRunning():
-                    self.gen_worker.disconnect()
-                    self.gen_worker.quit()
-                    self.gen_worker.wait(2000)
-                    _logger.info("이전 생성 워커 정리 완료")
-            except Exception:
+                sig = getattr(worker, sig_name, None)
+                if sig is not None:
+                    sig.disconnect()
+            except (TypeError, RuntimeError):
+                # 이미 연결 해제됐거나 C++ 객체가 삭제된 경우
                 pass
-            self.gen_worker = None
+        try:
+            if worker.isRunning():
+                worker.quit()
+                if not worker.wait(2000):
+                    _logger.warning("gen_worker wait timeout — terminate 호출")
+                    worker.terminate()
+                    worker.wait(500)
+        except RuntimeError:
+            pass
+        self.gen_worker = None
 
     def _on_generation_progress(self, step: int, total: int, preview):
         """생성 진행률 업데이트"""
@@ -207,15 +310,32 @@ class GenerationMixin:
 
         self.gen_progress_bar.setRange(0, total)
         self.gen_progress_bar.setValue(step)
-        self.gen_progress_bar.setFormat(f"{step} / {total} steps")
+
+        # ETA 계산 — worker._start_time 기준 경과시간으로 남은 시간 추정
+        eta_str = ""
+        try:
+            import time
+            start_time = getattr(self.gen_worker, '_start_time', None)
+            if start_time and step > 0:
+                elapsed = time.monotonic() - start_time
+                per_step = elapsed / step
+                remaining = max(0.0, per_step * (total - step))
+                if remaining >= 60:
+                    eta_str = f" · ETA {int(remaining // 60)}m{int(remaining % 60):02d}s"
+                else:
+                    eta_str = f" · ETA {remaining:.0f}s"
+        except Exception:
+            eta_str = ""
+
+        self.gen_progress_bar.setFormat(f"{step} / {total} steps{eta_str}")
 
         pct = int(step / total * 100)
-        self.setWindowTitle(f"AI Studio - Pro [{step}/{total} steps · {pct}%]")
+        self.setWindowTitle(f"AI Studio - Pro [{step}/{total} steps · {pct}%{eta_str}]")
         self.viewer_label.setText(
             f"🎨 이미지 생성 중...\n\n"
-            f"{step} / {total} steps ({pct}%)"
+            f"{step} / {total} steps ({pct}%){eta_str}"
         )
-        self.show_status(f"🎨 생성 중... {step}/{total} steps ({pct}%)")
+        self.show_status(f"🎨 생성 중... {step}/{total} steps ({pct}%){eta_str}")
 
         # Vue에 진행률 전달
         if hasattr(self, 'vue_bridge'):
@@ -396,18 +516,8 @@ class GenerationMixin:
         # NegPiP 적용
         if hasattr(self, 'negpip_group') and self.negpip_group.isChecked():
             payload["alwayson_scripts"]["NegPiP"] = {"args": [True]}
-        
-        # ADetailer (REST API 스펙 준수)
-        if self.adetailer_group.isChecked():
-            adetailer_args = [True, False]
 
-            if self.ad_slot1_group.isChecked():
-                adetailer_args.append(self._build_adetailer_slot(self.s1_widgets))
-
-            if self.ad_slot2_group.isChecked():
-                adetailer_args.append(self._build_adetailer_slot(self.s2_widgets))
-
-            payload["alwayson_scripts"]["ADetailer"] = {"args": adetailer_args}
+        self._apply_postprocess_chain(payload)
         
         selected_model = self.model_combo.currentText()
         
@@ -428,35 +538,49 @@ class GenerationMixin:
 
         self.gen_worker.start()
 
+    def _build_adetailer_args(self):
+        """활성화된 ADetailer 슬롯 args 생성"""
+        args = [True, False]
+
+        if self.ad_slot1_group.isChecked():
+            args.append(self._build_adetailer_slot(self.s1_widgets))
+
+        if self.ad_slot2_group.isChecked():
+            args.append(self._build_adetailer_slot(self.s2_widgets))
+
+        return args if len(args) > 2 else None
+
+    def _apply_postprocess_chain(self, payload):
+        """Forge Neo와 동일: ADetailer + SAM3 모두 alwayson_scripts로 적용"""
+        payload.setdefault("alwayson_scripts", {})
+
+        # ADetailer: Forge Neo와 동일하게 alwayson_scripts로 직접 적용
+        if self.adetailer_group.isChecked():
+            adetailer_args = self._build_adetailer_args()
+            if adetailer_args:
+                payload["alwayson_scripts"]["ADetailer"] = {"args": adetailer_args}
+                _logger.info("ADetailer alwayson_scripts 적용됨 (Forge Neo 방식)")
+
+        # SAM3: Forge Neo와 동일하게 alwayson_scripts로 직접 적용
+        sam3_group = getattr(self, "sam3_group", None)
+        if sam3_group is not None and sam3_group.isChecked() and hasattr(self, "_build_sam3_settings"):
+            sam3_settings = self._build_sam3_settings(payload)
+            if sam3_settings:
+                sam3_state = {
+                    "sam3_enable": True,
+                    "enabled": True,
+                }
+                sam3_state.update({k: v for k, v in sam3_settings.items() if k.startswith("sam3_")})
+                payload["alwayson_scripts"]["SAM3 Mask"] = {"args": [sam3_state]}
+                _logger.info("SAM3 alwayson_scripts 적용됨 (Forge Neo 방식)")
+
     def _build_adetailer_slot(self, widgets):
         """ADetailer 슬롯 딕셔너리 생성 (공식 REST API 스펙 준수)
 
         widgets dict에서 proxy를 통해 읽되,
         proxy 값이 비어있으면 bridge._proxies에서 직접 읽기를 시도한다.
         """
-        # --- 값 읽기 헬퍼 ---
-        def _txt(w, fallback=''):
-            """proxy.text() + fallback_text + 최종 fallback"""
-            v = w.text() if hasattr(w, 'text') else ''
-            if not v and hasattr(w, '_fallback_text'):
-                v = w._fallback_text
-            if not v and hasattr(w, 'currentText'):
-                v = w.currentText()
-            return v or fallback
-
-        def _float(w, fallback):
-            try:
-                v = _txt(w)
-                return float(v) if v else fallback
-            except (ValueError, TypeError):
-                return fallback
-
-        def _int(w, fallback):
-            try:
-                v = _txt(w)
-                return int(float(v)) if v else fallback
-            except (ValueError, TypeError):
-                return fallback
+        _txt, _float, _int = _widget_text, _widget_float, _widget_int
 
         model_name = _txt(widgets['model'], 'face_yolov8n.pt')
         if model_name == 'None' or not model_name.strip():
@@ -601,4 +725,43 @@ class GenerationMixin:
             "ad_x_offset": 0,
             "ad_y_offset": 0,
             "is_api": []
+        }
+
+    def _build_sam3_settings(self, payload):
+        """SAM3 설정 딕셔너리 생성"""
+        widgets = getattr(self, 'sam3_widgets', None)
+        if not widgets:
+            return None
+
+        _txt, _float, _int = _widget_text, _widget_float, _widget_int
+
+        detect_prompt = _txt(widgets['detect_prompt'], 'face').strip() or 'face'
+        return {
+            "sam3_mode": _txt(widgets['mode'], 'Inpaint'),
+            "sam3_mask_mode": _txt(widgets['mask_mode'], 'Individual'),
+            "sam3_prompt": detect_prompt,
+            "sam3_inpaint_prompt": widgets['inpaint_prompt'].toPlainText() if hasattr(widgets['inpaint_prompt'], 'toPlainText') else '',
+            "sam3_negative_prompt": widgets['neg_prompt'].toPlainText() if hasattr(widgets['neg_prompt'], 'toPlainText') else '',
+            "sam3_threshold": _float(widgets['threshold'], 0.4),
+            "sam3_checkpoint": _txt(widgets['checkpoint'], 'sam3.pt'),
+            "sam3_device": "auto",
+            "sam3_mask_blur": _int(widgets['mask_blur'], 4),
+            "sam3_denoising_strength": _float(widgets['denoise'], 0.4),
+            "sam3_inpaint_only_masked": True,
+            "sam3_inpaint_only_masked_padding": _int(widgets['padding'], 32),
+            "sam3_use_inpaint_width_height": widgets['use_inpaint_size_check'].isChecked(),
+            "sam3_inpaint_width": _int(widgets['inpaint_width'], 1024),
+            "sam3_inpaint_height": _int(widgets['inpaint_height'], 1024),
+            "sam3_use_steps": widgets['use_steps_check'].isChecked(),
+            "sam3_steps": _int(widgets['steps'], 28),
+            "sam3_use_cfg_scale": widgets['use_cfg_check'].isChecked(),
+            "sam3_cfg_scale": _float(widgets['cfg'], 7.0),
+            "sam3_use_sampler": widgets['use_sampler_check'].isChecked(),
+            "sam3_sampler": _txt(widgets['sampler'], 'Use same sampler'),
+            "sam3_scheduler": _txt(widgets['scheduler'], 'Use same scheduler'),
+            "sam3_use_noise_multiplier": widgets['use_noise_multiplier_check'].isChecked(),
+            "sam3_noise_multiplier": _float(widgets['noise_multiplier'], 1.0),
+            "sam3_restore_face": widgets['restore_face'].isChecked(),
+            "sam3_preview_overlay": widgets['preview_overlay'].isChecked(),
+            "sam3_save_artifacts": widgets['save_artifacts'].isChecked(),
         }

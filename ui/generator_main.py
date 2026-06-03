@@ -66,6 +66,14 @@ class GeneratorMainUI(
             self.generation_data = {}
             self.filtered_results = []
 
+            # 1-A. UI 상태 영속화 매니저 — 창 크기/위치 자동 저장/복원
+            from pathlib import Path
+            from core.ui_state_manager import UIStateManager
+            _save_dir = Path(__file__).resolve().parent.parent / "save"
+            _save_dir.mkdir(exist_ok=True)
+            self.ui_state = UIStateManager(_save_dir / "ui_state.json")
+            self._register_ui_state_handlers()
+
             # 2. 아이콘 설정
             from PyQt6.QtGui import QIcon
             icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icons', 'app_icon.svg')
@@ -110,6 +118,31 @@ class GeneratorMainUI(
 
             # 9. 조건식 + 기본값 로드
             QTimer.singleShot(1000, self._load_saved_configs)
+
+            # 10. UI 상태 복원 (150ms 지연 — 위젯 레이아웃 자리 잡은 후)
+            #     showMaximized() 등 다른 main의 호출과 충돌 회피 위해 약간 더 늦춤
+            QTimer.singleShot(200, lambda: self.ui_state.restore_all_delayed(150))
+
+            # 11. PR 9 — 모드별 자동화 설정 영속 (webui/comfyui 분리)
+            #     백엔드 전환 시 자동 저장/복원, Vue로 자동 전파
+            from core.mode_aware_automation import ModeAwareAutomationSettings
+            self.automation_persistence = ModeAwareAutomationSettings(self)
+            # vue_bridge가 준비되고 Vue가 시그널 받을 준비 끝난 후 (1.5초 후) 적용
+            QTimer.singleShot(1500, self.automation_persistence.initialize)
+
+            # 12. PR 2 — GenerationQueueV2 이벤트 브리지
+            #     기존 queue_panel은 그대로, V2는 AppContext 서비스로 노출
+            #     queue_panel.queue_changed → V2.publish → 다른 모듈 구독 가능
+            self._setup_queue_v2_bridge()
+
+            # 13. PR 1 — PromptPipeline 표준 훅 등록
+            #     기존 처리 뒤에 호출되어 비파괴적 — 회귀 위험 없음
+            try:
+                from core.standard_hooks import register_standard_hooks
+                register_standard_hooks()
+            except Exception as e:
+                print(f"[Warning] 표준 훅 등록 실패: {e}")
+
             print("[System] Engine Ready.")
 
         except Exception as e:
@@ -146,10 +179,29 @@ class GeneratorMainUI(
                 if hasattr(self, '_main_stack'): self._main_stack.setCurrentIndex(idx)
                 self.show_status(f"Workspace Switched: {tab_id}")
 
+            elif action == 'vue_tab_switch':
+                # Vue SPA 내부 탭(T2I/I2I/Inpaint/Search 등) 전환 알림.
+                # 라우팅 자체는 Vue Router가 처리하므로 Python은 스택을 SPA(0)로
+                # 맞추고 tabChanged 시그널만 전달한다.
+                tab_id = payload.get('tab', 't2i')
+                if hasattr(self, '_main_stack'):
+                    self._main_stack.setCurrentIndex(0)
+                if hasattr(self, 'vue_bridge'):
+                    self.vue_bridge.tabChanged.emit(tab_id)
+                self.show_status(f"Tab: {tab_id}")
+
             # 2. 이미지 생성 엔진
             elif action == 'generate':
                 # Vue 데이터가 Store를 통해 Proxy에 이미 동기화되어 있어야 함
                 self.on_generate_clicked()
+
+            elif action == 'cancel_generation':
+                worker = getattr(self, 'gen_worker', None)
+                if worker is not None and hasattr(worker, 'cancel') and worker.isRunning():
+                    worker.cancel()
+                    self.show_status("생성 취소 요청")
+                else:
+                    self.show_status("취소할 생성이 없습니다")
 
             # 3. 탭 간 데이터 전송 (이미지 & 프롬프트)
             elif action in ('send_to_i2i', 'send_to_inpaint', 'send_to_editor'):
@@ -325,6 +377,10 @@ class GeneratorMainUI(
                 self._run_adetailer_single(payload)
             elif action == 'run_adetailer_batch':
                 self._run_adetailer_batch(payload)
+            elif action == 'run_sam3_single':
+                self._run_sam3_single(payload)
+            elif action == 'run_sam3_batch':
+                self._run_sam3_batch(payload)
             elif action == 'open_ad_files':
                 paths, _ = QFileDialog.getOpenFileNames(self, "ADetailer 이미지 선택", "",
                     "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)")
@@ -605,7 +661,12 @@ class GeneratorMainUI(
                     'repeat': payload.get('repeat', 1),
                     'delay': payload.get('delay', 1.0),
                     'allowDupes': bool(payload.get('allowDupes', False)),
+                    # PR 3: 재시도 설정 (기본 2회)
+                    'maxRetries': int(payload.get('maxRetries', 2)),
                 }
+                # PR 9: 모드별로 자동 저장
+                if hasattr(self, 'automation_persistence'):
+                    self.automation_persistence.save_mode_settings()
 
             elif action == 'toggle_automation':
                 checked = payload.get('checked', False)
@@ -616,6 +677,96 @@ class GeneratorMainUI(
             elif action == 'stop_automation':
                 if self.is_automating:
                     self._stop_automation("사용자가 자동화를 중지했습니다.")
+
+            # ═══════ 워크플로우 프로파일 ═══════
+            elif action == 'workflow_profile_list':
+                self._send_workflow_profiles_list()
+            elif action == 'workflow_profile_save':
+                name = str(payload.get('name', '')).strip()
+                if name:
+                    from core.workflow_profiles import collect_from_host, save_profile
+                    snap = collect_from_host(self)
+                    ok = save_profile(name, snap['fields'], snap['lora_stack'])
+                    if ok:
+                        self._send_workflow_profiles_list()
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit(
+                                'success', f'프로파일 저장: {name}'
+                            )
+                    else:
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit(
+                                'error', f'프로파일 저장 실패: {name}'
+                            )
+            elif action == 'workflow_profile_load':
+                name = str(payload.get('name', '')).strip()
+                if name:
+                    from core.workflow_profiles import load_profile, apply_profile_to_host
+                    data = load_profile(name)
+                    if data:
+                        result = apply_profile_to_host(data, self)
+                        # 전체 프롬프트 다시 업데이트
+                        if hasattr(self, 'update_total_prompt_display'):
+                            self.update_total_prompt_display()
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit(
+                                'success',
+                                f'프로파일 적용: {name} '
+                                f'({len(result["applied"])}개)'
+                            )
+                    else:
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit(
+                                'error', f'프로파일을 찾을 수 없음: {name}'
+                            )
+            elif action == 'workflow_profile_delete':
+                name = str(payload.get('name', '')).strip()
+                if name:
+                    from core.workflow_profiles import delete_profile
+                    delete_profile(name)
+                    self._send_workflow_profiles_list()
+            elif action == 'workflow_profile_rename':
+                old = str(payload.get('old', '')).strip()
+                new = str(payload.get('new', '')).strip()
+                if old and new:
+                    from core.workflow_profiles import rename_profile
+                    if rename_profile(old, new):
+                        self._send_workflow_profiles_list()
+
+            # ═══════ 프롬프트 섹션 순서 (사용자 지정) ═══════
+            elif action == 'prompt_order_list':
+                self._send_prompt_order()
+            elif action == 'prompt_order_save':
+                new_order = payload.get('order', [])
+                if isinstance(new_order, list):
+                    from core.prompt_order import save_order
+                    save_order([str(k) for k in new_order])
+                    self._send_prompt_order()
+                    self.update_total_prompt_display()  # 즉시 반영
+            elif action == 'prompt_order_reset':
+                from core.prompt_order import reset_to_default
+                reset_to_default()
+                self._send_prompt_order()
+                self.update_total_prompt_display()
+
+            # ═══════ PR 8: Instant Wildcards (JSON 인라인) ═══════
+            elif action == 'instant_wildcards_list':
+                self._send_instant_wildcards_list()
+            elif action == 'instant_wildcards_save':
+                name = str(payload.get('name', '')).strip()
+                lines = payload.get('lines', [])
+                if name and isinstance(lines, list):
+                    iw = self._get_instant_wildcards()
+                    iw.set(name, [str(l) for l in lines])
+                    iw.save()
+                    self._send_instant_wildcards_list()
+            elif action == 'instant_wildcards_delete':
+                name = str(payload.get('name', '')).strip()
+                if name:
+                    iw = self._get_instant_wildcards()
+                    iw.delete(name)
+                    iw.save()
+                    self._send_instant_wildcards_list()
 
             # ═══════ 이벤트 생성 (EventGen) ═══════
             elif action == 'search_events':
@@ -844,17 +995,21 @@ class GeneratorMainUI(
             # ═══════ UI 설정 저장 ═══════
             elif action == 'save_ui_prefs':
                 try:
+                    from core.config_migration import load_ui_prefs, save_ui_prefs
                     prefs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ui_prefs.json')
-                    os.makedirs(os.path.dirname(prefs_path), exist_ok=True)
-                    prefs = {}
-                    if os.path.exists(prefs_path):
-                        with open(prefs_path, 'r', encoding='utf-8') as f:
-                            loaded = json.load(f)
-                            if isinstance(loaded, dict):
-                                prefs = loaded
+                    prefs = load_ui_prefs(prefs_path)
+                    for legacy_key in (
+                        'hires_enabled',
+                        'ad_enabled',
+                        'sam3_enabled',
+                        'ad_s1_enabled',
+                        'ad_s2_enabled',
+                        'negpip_enabled',
+                    ):
+                        prefs.pop(legacy_key, None)
+                        payload.pop(legacy_key, None)
                     prefs.update(payload)
-                    with open(prefs_path, 'w', encoding='utf-8') as f:
-                        json.dump(prefs, f, ensure_ascii=False, indent=2)
+                    save_ui_prefs(prefs_path, prefs)
                     # 재전송 하지 않음 — uiPrefsLoaded는 앱 시작 시에만 emit
                     # 재전송하면 watch → save → emit → watch 무한 루프 발생
                 except Exception as e:
@@ -951,15 +1106,20 @@ class GeneratorMainUI(
             if os.path.exists(defaults_path):
                 with open(defaults_path, 'r', encoding='utf-8') as f:
                     defaults = json.load(f)
-                # 확장 기본값을 proxy에 직접 적용
-                if defaults.get('hires_enabled'):
-                    self.hires_options_group.setChecked(True)
-                if defaults.get('ad_enabled'):
-                    self.adetailer_group.setChecked(True)
-                if defaults.get('ad_s1_enabled') and hasattr(self, 'ad_slot1_group'):
-                    self.ad_slot1_group.setChecked(True)
-                if defaults.get('negpip_enabled'):
-                    self.negpip_group.setChecked(True)
+                from config import PROMPT_SETTINGS_FILE
+                if not os.path.exists(PROMPT_SETTINGS_FILE):
+                    if 'hires_enabled' in defaults:
+                        self.hires_options_group.setChecked(bool(defaults.get('hires_enabled')))
+                    if 'ad_enabled' in defaults:
+                        self.adetailer_group.setChecked(bool(defaults.get('ad_enabled')))
+                    if 'sam3_enabled' in defaults and hasattr(self, 'sam3_group'):
+                        self.sam3_group.setChecked(bool(defaults.get('sam3_enabled')))
+                    if 'ad_s1_enabled' in defaults and hasattr(self, 'ad_slot1_group'):
+                        self.ad_slot1_group.setChecked(bool(defaults.get('ad_s1_enabled')))
+                    if 'ad_s2_enabled' in defaults and hasattr(self, 'ad_slot2_group'):
+                        self.ad_slot2_group.setChecked(bool(defaults.get('ad_s2_enabled')))
+                    if 'negpip_enabled' in defaults:
+                        self.negpip_group.setChecked(bool(defaults.get('negpip_enabled')))
                 print(f"[Config] Tab defaults loaded + extensions applied")
         except Exception as e:
             print(f"[Config] Failed to load defaults: {e}")
@@ -974,12 +1134,11 @@ class GeneratorMainUI(
         except Exception as e:
             print(f"[Config] Failed to load weights: {e}")
         try:
+            from core.config_migration import load_ui_prefs
             prefs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ui_prefs.json')
-            if os.path.exists(prefs_path):
-                with open(prefs_path, 'r', encoding='utf-8') as f:
-                    prefs = json.load(f)
-                if hasattr(self, 'vue_bridge'):
-                    self.vue_bridge.uiPrefsLoaded.emit(json.dumps(prefs))
+            prefs = load_ui_prefs(prefs_path)
+            if prefs and hasattr(self, 'vue_bridge'):
+                self.vue_bridge.uiPrefsLoaded.emit(json.dumps(prefs))
                 print(f"[Config] UI prefs loaded")
         except Exception as e:
             print(f"[Config] Failed to load UI prefs: {e}")
@@ -1405,9 +1564,211 @@ class GeneratorMainUI(
         self._ad_batch_worker.start()
         self.vue_bridge.showNotification.emit('info', f'ADetailer 배치 시작 ({len(paths)}장)')
 
+    def _run_sam3_single(self, payload):
+        """단일 이미지에 SAM3 적용"""
+        from workers.sam3_worker import Sam3SingleWorker
+        path = payload.get('path', '')
+        settings = payload.get('settings', {})
+        if not path:
+            self.vue_bridge.showNotification.emit('error', '이미지 경로가 없습니다')
+            return
+        self._sam3_worker = Sam3SingleWorker(path, settings, self)
+        self._sam3_worker.finished.connect(lambda r: self.vue_bridge.sam3Result.emit(r))
+        self._sam3_worker.start()
+        self.vue_bridge.showNotification.emit('info', 'SAM3 처리 중...')
+
+    def _run_sam3_batch(self, payload):
+        """배치 이미지에 SAM3 적용"""
+        from workers.sam3_worker import Sam3BatchWorker
+        paths = payload.get('paths', [])
+        settings = payload.get('settings', {})
+        if not paths:
+            self.vue_bridge.showNotification.emit('error', '이미지가 없습니다')
+            return
+        self._sam3_batch_worker = Sam3BatchWorker(paths, settings, self)
+        self._sam3_batch_worker.progress.connect(
+            lambda cur, tot: self.vue_bridge.sam3Progress.emit(cur, tot))
+        self._sam3_batch_worker.single_done.connect(
+            lambda r: self.vue_bridge.sam3Result.emit(r))
+        self._sam3_batch_worker.all_done.connect(
+            lambda: self.vue_bridge.showNotification.emit('success', f'SAM3 배치 완료 ({len(paths)}장)'))
+        self._sam3_batch_worker.start()
+        self.vue_bridge.showNotification.emit('info', f'SAM3 배치 시작 ({len(paths)}장)')
+
+    # ── 워크플로우 프로파일 ────────────────────────────────
+    def _send_workflow_profiles_list(self):
+        """현재 프로파일 목록을 Vue로 전송."""
+        import json as _json
+        try:
+            from core.workflow_profiles import list_profiles
+            self.vue_bridge.workflowProfilesList.emit(
+                _json.dumps(list_profiles())
+            )
+        except Exception:
+            pass
+
+    # ── 프롬프트 섹션 순서 (사용자 지정) ──────────────────
+    def _send_prompt_order(self):
+        """현재 prompt_order.json 내용 + 라벨을 Vue로 전송."""
+        import json as _json
+        try:
+            from core.prompt_order import order_with_labels
+            self.vue_bridge.promptOrderLoaded.emit(
+                _json.dumps(order_with_labels())
+            )
+        except Exception:
+            pass
+
+    # ── PR 2: Queue v2 이벤트 브리지 ───────────────────────
+    def _setup_queue_v2_bridge(self) -> None:
+        """기존 queue_panel과 GenerationQueueV2 사이의 이벤트 브리지.
+
+        설계:
+        - V2를 실제 작업 처리에 쓰지 않음 (기존 queue_panel + workers가 담당)
+        - V2는 AppContext "queue_v2" 서비스로 노출 — 다른 모듈이 queue 상태를
+          구조화된 형태로 조회 / 이벤트 구독 가능
+        - queue_panel.queue_changed 시그널 → V2를 미러링 + AppContext 이벤트 발행
+        """
+        try:
+            from core.generation_queue_v2 import GenerationQueueV2, QueueEvents
+            from core.app_context import get_context
+
+            # V2 인스턴스 — processor는 사용 안 함 (no-op), 워커도 시작 안 함
+            qv2 = GenerationQueueV2(
+                processor=lambda payload: None,
+                publish_events=True,
+            )
+            get_context().register_service("queue_v2", qv2)
+            self._queue_v2 = qv2
+
+            qp = getattr(self, "queue_panel", None)
+            if qp is None or not hasattr(qp, "queue_changed"):
+                return
+
+            def _sync_to_v2(count: int) -> None:
+                """queue_panel 상태를 V2에 미러링 + 이벤트 발행."""
+                try:
+                    # V2 비우기
+                    qv2.clear_pending()
+                    # queue_panel 아이템을 우선순위 순으로 enqueue (인덱스가 priority)
+                    items = getattr(qp, "queue_items", []) or []
+                    for idx, item in enumerate(items):
+                        qv2.enqueue(
+                            payload=dict(item),
+                            priority=idx,
+                            label=item.get("id", f"item-{idx}"),
+                        )
+                except Exception:
+                    pass
+
+            qp.queue_changed.connect(_sync_to_v2)
+            # 초기 1회 동기화
+            _sync_to_v2(len(getattr(qp, "queue_items", []) or []))
+        except Exception as e:
+            print(f"[Warning] queue v2 bridge setup 실패: {e}")
+
+    # ── PR 8: Instant Wildcards ────────────────────────────
+    def _get_instant_wildcards(self):
+        """싱글톤 InstantWildcards 인스턴스 — 게으른 초기화 + PromptPipeline 훅 등록."""
+        if not hasattr(self, '_instant_wildcards'):
+            from pathlib import Path
+            from core.instant_wildcards import InstantWildcards
+            store = Path(__file__).resolve().parent.parent / "save" / "instant_wildcards.json"
+            self._instant_wildcards = InstantWildcards(store_path=store)
+            # PromptPipeline에 자동 등록 — 와일드카드 확장 단계에 추가
+            try:
+                from core.prompt_pipeline import get_pipeline, HookPoint
+                get_pipeline().register(
+                    HookPoint.POST_PROCESSING,
+                    self._instant_wildcards.make_hook(),
+                    priority=80,
+                    name="instant_wildcards",
+                )
+            except Exception:
+                pass
+        return self._instant_wildcards
+
+    def _send_instant_wildcards_list(self):
+        """현재 인스턴트 와일드카드 목록을 Vue로 푸시."""
+        import json as _json
+        iw = self._get_instant_wildcards()
+        items = [{"name": n, "lines": iw.get(n)} for n in iw.names()]
+        try:
+            self.vue_bridge.instantWildcardsList.emit(_json.dumps(items))
+        except Exception:
+            pass
+
+    def _register_ui_state_handlers(self) -> None:
+        """UIStateManager에 메인 윈도우 기하/상태 등록.
+
+        다른 모듈(스플리터 등)이 자기 상태를 더 등록할 수 있음 — register는 멱등.
+        """
+        def _get_main_geometry() -> dict:
+            return {
+                "x": self.x(),
+                "y": self.y(),
+                "width": self.width(),
+                "height": self.height(),
+                "maximized": self.isMaximized(),
+                "full_screen": self.isFullScreen(),
+            }
+
+        def _set_main_geometry(state: dict) -> None:
+            """저장된 윈도우 기하 복원 — 타이틀바가 가려지지 않도록 보정."""
+            if not isinstance(state, dict):
+                return
+            try:
+                from PyQt6.QtGui import QGuiApplication
+
+                # 1) 최대화/풀스크린 상태면 setGeometry 건너뛰기
+                #    main.py가 이미 showMaximized 호출했으므로 중복 호출하면 깜빡임
+                if state.get("maximized"):
+                    if not self.isMaximized():
+                        self.showMaximized()
+                    return
+                if state.get("full_screen"):
+                    if not self.isFullScreen():
+                        self.showFullScreen()
+                    return
+
+                # 2) 일반 윈도우 — 현재 최대화돼있으면 먼저 normal로 풀기
+                if self.isMaximized() or self.isFullScreen():
+                    self.showNormal()
+
+                # 3) 기하 + 화면 영역 보정 (타이틀바 가림 방지)
+                w = max(int(state.get("width", 1280)), 600)
+                h = max(int(state.get("height", 720)), 400)
+                x = int(state.get("x", 100))
+                y = int(state.get("y", 100))
+
+                # 어느 모니터인지 — 중심점 기준
+                target_screen = QGuiApplication.primaryScreen()
+                for sc in QGuiApplication.screens():
+                    if sc.geometry().contains(x + w // 2, y + h // 2):
+                        target_screen = sc
+                        break
+
+                avail = target_screen.availableGeometry()
+                # x: 좌측 이상, 우측에서 폭 빼고 이하
+                # y: 상단 이상 — ★ 타이틀바 보임 보장
+                x = max(avail.left(), min(x, avail.right() - w))
+                y = max(avail.top(), min(y, avail.bottom() - h))
+
+                self.setGeometry(x, y, w, h)
+            except Exception as e:
+                print(f"[Warning] UI 상태 복원 실패: {e}")
+
+        self.ui_state.register("main_window", _get_main_geometry, _set_main_geometry)
+
     def _quit_app(self):
         try:
             self.save_settings()
         except Exception as e:
             print(f"[Warning] 종료 시 설정 저장 실패: {e}")
+        try:
+            # UI 상태 (창 크기/위치/스플리터 등) 저장
+            if hasattr(self, "ui_state"):
+                self.ui_state.save_all()
+        except Exception as e:
+            print(f"[Warning] UI 상태 저장 실패: {e}")
         os._exit(0)

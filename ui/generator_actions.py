@@ -73,6 +73,10 @@ class ActionsMixin:
         self.ad_toggle_button.toggled.connect(
             lambda checked: self.ad_settings_container.setVisible(checked)
         )
+        if hasattr(self, 'sam3_toggle_button'):
+            self.sam3_toggle_button.toggled.connect(
+                lambda checked: self.sam3_settings_container.setVisible(checked)
+            )
         
         # ADetailer 슬롯 체크박스
         for slot_widgets in [self.s1_widgets, self.s2_widgets]:
@@ -99,6 +103,22 @@ class ActionsMixin:
             slot_widgets['use_sampler_check'].toggled.connect(
                 lambda checked, w=slot_widgets: 
                     w['sampler_container'].setVisible(checked)
+            )
+        if hasattr(self, 'sam3_widgets'):
+            self.sam3_widgets['use_inpaint_size_check'].toggled.connect(
+                lambda checked: self.sam3_widgets['inpaint_size_container'].setVisible(checked)
+            )
+            self.sam3_widgets['use_steps_check'].toggled.connect(
+                lambda checked: self.sam3_widgets['steps'].setVisible(checked)
+            )
+            self.sam3_widgets['use_cfg_check'].toggled.connect(
+                lambda checked: self.sam3_widgets['cfg'].setVisible(checked)
+            )
+            self.sam3_widgets['use_sampler_check'].toggled.connect(
+                lambda checked: self.sam3_widgets['sampler_container'].setVisible(checked)
+            )
+            self.sam3_widgets['use_noise_multiplier_check'].toggled.connect(
+                lambda checked: self.sam3_widgets['noise_multiplier'].setVisible(checked)
             )
         
         # 랜덤 해상도
@@ -214,8 +234,10 @@ class ActionsMixin:
         """자동화 생성 완료"""
         if not hasattr(self, 'auto_gen_count'):
             self.auto_gen_count = 0
-        
+
         if isinstance(result, bytes):
+            # 성공 — 재시도 카운터 리셋
+            self._auto_retry_count = 0
             self.auto_gen_count += 1
             self._process_new_image(result, gen_info)
             self.show_status(
@@ -223,8 +245,28 @@ class ActionsMixin:
             )
             self._emit_auto_status()
         else:
-            self.show_status(f"⚠️ 생성 실패: {result}")
-        
+            # PR 3: 실패 시 재시도 로직
+            if not hasattr(self, '_auto_retry_count'):
+                self._auto_retry_count = 0
+            settings = getattr(self, 'auto_settings', {}) or {}
+            max_retries = int(settings.get('max_retries', 0))
+
+            if self._auto_retry_count < max_retries and self.is_automating:
+                self._auto_retry_count += 1
+                # 지수 백오프 (최대 30초)
+                backoff = min(2.0 ** self._auto_retry_count, 30.0)
+                self.show_status(
+                    f"⚠️ 생성 실패 — {backoff:.1f}초 후 재시도 "
+                    f"({self._auto_retry_count}/{max_retries}): {result}"
+                )
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(int(backoff * 1000), self._automation_generate)
+                return  # 다음 사이클 진행 안 함 — 재시도가 끝나면 자동 호출됨
+            else:
+                # 재시도 소진 또는 비활성
+                self._auto_retry_count = 0
+                self.show_status(f"⚠️ 생성 실패: {result}")
+
         # 다음 생성 계속
         if self.is_automating:
             self._continue_automation()
@@ -358,10 +400,23 @@ class ActionsMixin:
         self.btn_generate.setStyleSheet(_gen_btn_style('#e74c3c'))
         
         self.show_status("🔄 자동화 시작...")
-        
+
+        # PR 3: 시작 이벤트 발행
+        try:
+            from core.app_context import get_context
+            from core.automation_controller import AutomationEvents
+            get_context().publish(AutomationEvents.STARTED, {
+                'mode': settings.get('termination_mode', 'count'),
+                'limit': settings.get('termination_limit', 0),
+                'delay': settings.get('delay', 1.0),
+                'max_retries': settings.get('max_retries', 0),
+            })
+        except Exception:
+            pass
+
         # ★★★ 첫 번째 프롬프트 적용 (apply_random_prompt 사용!) ★★★
         self.apply_random_prompt()
-        
+
         # 첫 생성 시작
         from PyQt6.QtCore import QTimer
         delay_ms = int(settings['delay'] * 1000)
@@ -372,14 +427,17 @@ class ActionsMixin:
         """자동화 사이클"""
         if not self.is_automating:
             return
-        
+
         import time
         from PyQt6.QtCore import QTimer
-        
+
         settings = self.auto_settings
-        
-        # 종료 조건 확인
-        if settings['termination_mode'] == 'count':
+
+        # 종료 조건 확인 (PR 3: 'unlimited' 모드 추가 — 종료 조건 없음)
+        mode = settings.get('termination_mode', 'count')
+        if mode == 'unlimited':
+            pass  # 사용자가 중지할 때까지 계속
+        elif mode == 'count':
             if self.auto_gen_count >= settings['termination_limit']:
                 self._stop_automation(f"✅ 자동화 완료: {self.auto_gen_count}장 생성")
                 return
@@ -423,7 +481,7 @@ class ActionsMixin:
             
 
     def _emit_auto_status(self, waiting=False):
-        """Vue에 자동화 상태 전송"""
+        """Vue에 자동화 상태 전송 + AppContext 이벤트 발행."""
         if hasattr(self, 'vue_bridge'):
             import json
             self.vue_bridge.automationStatus.emit(json.dumps({
@@ -431,11 +489,34 @@ class ActionsMixin:
                 'count': getattr(self, 'auto_gen_count', 0),
                 'waiting': waiting,
             }))
+        # PR 3: AppContext에도 발행 (다른 모듈이 구독 가능 — 큐, 통계 등)
+        try:
+            from core.app_context import get_context
+            from core.automation_controller import AutomationEvents
+            get_context().publish(AutomationEvents.ITERATION_END, {
+                'iter': getattr(self, 'auto_gen_count', 0),
+                'waiting': waiting,
+                'running': self.is_automating,
+            })
+        except Exception:
+            pass
 
     def _stop_automation(self, message=None):
         """자동화 중지"""
+        was_running = self.is_automating
         self.is_automating = False
         self._emit_auto_status()
+        # PR 3: 중지 이벤트 발행
+        if was_running:
+            try:
+                from core.app_context import get_context
+                from core.automation_controller import AutomationEvents
+                get_context().publish(AutomationEvents.STOPPED, {
+                    'reason': message or 'user_stop',
+                    'completed': getattr(self, 'auto_gen_count', 0),
+                })
+            except Exception:
+                pass
         
         # 버튼 상태 복구 (자동화 모드는 유지)
         if self.btn_auto_toggle.isChecked():

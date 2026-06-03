@@ -10,6 +10,18 @@
         <div class="panel-scroll">
           <PromptPanel @toggle-extend="showExtendPanel = !showExtendPanel"
             @open-wildcard="openWildcardByName" />
+          <!-- 워크플로우 프로파일 -->
+          <div class="tool-card profile-card">
+            <div class="profile-row">
+              <label class="profile-label">프로파일</label>
+              <CustomSelect :modelValue="''" @update:modelValue="loadWorkflowProfile"
+                :options="profileNames"
+                :placeholder="profileNames.length === 0 ? '(저장된 프로파일 없음)' : '선택하여 적용...'" />
+              <button class="profile-mini-btn" @click="saveCurrentAsProfile" title="현재 세팅을 새 프로파일로 저장">+</button>
+              <button class="profile-mini-btn" @click="showProfileManager = true; loadWorkflowProfilesList()" title="프로파일 관리 (삭제/이름변경)">⚙</button>
+            </div>
+          </div>
+
           <div class="tool-card">
             <label>Studio Tools</label>
             <div class="tool-grid">
@@ -17,6 +29,8 @@
               <button class="tool-btn" @click="showPresetManager = true; loadPresetList()">PRESET</button>
               <button class="tool-btn" @click="showWeightManager = true">WEIGHT</button>
               <button class="tool-btn" @click="showWcManager = true">WILDCARD</button>
+              <button class="tool-btn" @click="showInstantWcManager = true; loadInstantWcList()" title="JSON 기반 인라인 와일드카드 ($$name$$)">INSTANT WC</button>
+              <button class="tool-btn" @click="showOrderManager = true; loadPromptOrder()" title="최종 프롬프트의 섹션 순서를 직접 지정">ORDER</button>
               <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
               <button class="tool-btn" @click="showStatsModal = true; loadGenStats()">STATS</button>
             </div>
@@ -33,15 +47,20 @@
           <!-- 자동화 설정 (AUTO ON일 때만) -->
           <div class="auto-settings" v-if="autoMode">
             <div class="auto-row">
-              <label>{{ autoSettings.mode === 'count' ? '횟수' : '시간(분)' }}</label>
-              <input type="number" v-model.number="autoSettings.limit" min="1" class="auto-input" />
-              <CustomSelect v-model="autoSettings.mode" :options="['count', 'timer']" placeholder="모드" class="auto-select" />
+              <label>{{ autoSettings.mode === 'unlimited' ? '무제한' : autoSettings.mode === 'count' ? '횟수' : '시간(분)' }}</label>
+              <input v-if="autoSettings.mode !== 'unlimited'" type="number" v-model.number="autoSettings.limit" min="1" class="auto-input" />
+              <span v-else class="auto-unlimited-mark">∞</span>
+              <CustomSelect v-model="autoSettings.mode" :options="['count', 'timer', 'unlimited']" placeholder="모드" class="auto-select" />
             </div>
             <div class="auto-row">
               <label>반복</label>
               <input type="number" v-model.number="autoSettings.repeat" min="1" max="100" class="auto-input" />
               <label>대기(초)</label>
               <input type="number" v-model.number="autoSettings.delay" min="0" step="0.5" class="auto-input" />
+            </div>
+            <div class="auto-row">
+              <label title="생성 실패 시 자동 재시도 횟수 (지수 백오프)">재시도</label>
+              <input type="number" v-model.number="autoSettings.maxRetries" min="0" max="10" class="auto-input" />
             </div>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
           </div>
@@ -57,7 +76,9 @@
             <button class="btn-generate" :class="{ automating: isAutomating }" @click="doGenerate" :disabled="isGenerating && !isAutomating">
               {{ isAutomating ? '⏹ STOP AUTOMATION' : isGenerating ? 'GENERATING...' : autoMode ? '▶ START AUTOMATION' : 'GENERATE IMAGE' }}
             </button>
+            <button v-if="isGenerating && !isAutomating" class="btn-cancel" @click="cancelGeneration" title="생성 취소">✕</button>
           </div>
+          <div class="gen-eta" v-if="isGenerating && genEta">{{ genEta }}</div>
         </div>
       </aside>
 
@@ -119,6 +140,7 @@
               <div class="ext-row">
                 <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets.steps_input" min="1" max="150" /></div>
                 <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets.cfg_input" step="0.5" /></div>
+                <div class="ext-field"><label>Shift</label><input type="number" v-model="storeWidgets.shift_input" step="0.5" min="0" max="24" title="0이면 미사용 (Distilled CFG Scale)" /></div>
                 <div class="ext-field"><label>Seed</label><input type="text" v-model="storeWidgets.seed_input" /></div>
               </div>
             </div>
@@ -255,6 +277,63 @@
               </details>
             </details>
 
+            <!-- SAM3 -->
+            <details class="ext-card">
+              <summary class="ext-title">SAM3</summary>
+              <label class="ext-check-row"><input type="checkbox" v-model="sam3_enabled" /><span>SAM3 활성화</span></label>
+              <div class="ext-field"><label>Detect Prompt</label>
+                <input type="text" v-model="storeWidgets._sam3_detect_prompt" placeholder="face" /></div>
+              <div class="ext-field"><label>Inpaint Prompt</label>
+                <input type="text" v-model="storeWidgets._sam3_inpaint_prompt" placeholder="비워두면 메인 프롬프트 사용" /></div>
+              <div class="ext-field"><label>Negative Prompt</label>
+                <input type="text" v-model="storeWidgets._sam3_neg_prompt" placeholder="비워두면 메인 네거티브 사용" /></div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Mode</label>
+                  <CustomSelect v-model="storeWidgets._sam3_mode" :options="['Inpaint', 'Mask only']" placeholder="Inpaint" /></div>
+                <div class="ext-field"><label>Mask Mode</label>
+                  <CustomSelect v-model="storeWidgets._sam3_mask_mode" :options="['Individual', 'Combined']" placeholder="Individual" /></div>
+              </div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Threshold</label><input type="number" v-model="storeWidgets._sam3_threshold" step="0.01" min="0" max="1" /></div>
+                <div class="ext-field"><label>Denoise</label><input type="number" v-model="storeWidgets._sam3_denoise" step="0.01" min="0" max="1" /></div>
+              </div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Mask Blur</label><input type="number" v-model="storeWidgets._sam3_mask_blur" min="0" /></div>
+                <div class="ext-field"><label>Padding</label><input type="number" v-model="storeWidgets._sam3_padding" min="0" /></div>
+              </div>
+              <div class="ext-field"><label>Checkpoint</label>
+                <CustomSelect v-model="storeWidgets._sam3_checkpoint"
+                  :options="sam3CheckpointItems"
+                  placeholder="sam3.pt" /></div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_preview_overlay" true-value="true" false-value="false" /><span>Overlay Preview</span></label>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_save_artifacts" true-value="true" false-value="false" /><span>Artifacts 저장</span></label>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_inp_size" true-value="true" false-value="false" /><span>별도 Inpaint 크기</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_inp_size === 'true'">
+                <div class="ext-field"><label>Width</label><input type="number" v-model="storeWidgets._sam3_inp_w" /></div>
+                <div class="ext-field"><label>Height</label><input type="number" v-model="storeWidgets._sam3_inp_h" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_steps" true-value="true" false-value="false" /><span>별도 Steps</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_steps === 'true'">
+                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets._sam3_steps" min="1" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_cfg" true-value="true" false-value="false" /><span>별도 CFG</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_cfg === 'true'">
+                <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets._sam3_cfg" step="0.5" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_sampler" true-value="true" false-value="false" /><span>별도 Sampler</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_sampler === 'true'">
+                <div class="ext-field"><label>Sampler</label>
+                  <CustomSelect v-model="storeWidgets._sam3_sampler" :options="['Use same sampler', ...samplerItems]" placeholder="Use same sampler" /></div>
+                <div class="ext-field"><label>Scheduler</label>
+                  <CustomSelect v-model="storeWidgets._sam3_scheduler" :options="['Use same scheduler', ...schedulerItems]" placeholder="Use same scheduler" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_noise_mul" true-value="true" false-value="false" /><span>Noise Multiplier</span></label>
+              <div class="ext-row" v-if="storeWidgets._sam3_use_noise_mul === 'true'">
+                <div class="ext-field"><label>Multiplier</label><input type="number" v-model="storeWidgets._sam3_noise_mul" step="0.01" min="0" max="2" /></div>
+              </div>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_restore_face" true-value="true" false-value="false" /><span>Restore Face</span></label>
+            </details>
+
             <!-- NegPiP -->
             <div class="ext-card">
               <label class="ext-check-row">
@@ -299,9 +378,10 @@
       <!-- Center: Viewport + EXIF Bar -->
       <section class="viewport-area">
         <div class="viewport-main">
-          <router-view v-slot="{ Component }">
+          <router-view v-slot="{ Component, route }">
             <keep-alive>
               <component :is="Component"
+                :key="route.name"
                 :image-url="currentImage"
                 :resolution="resolution"
                 :seed="seed"
@@ -345,7 +425,7 @@
             :class="{ selected: currentImage === img }"
             draggable="true" @dragstart="onDragStart($event, img)"
           >
-            <img :src="'file:///' + img" loading="lazy" />
+            <img :key="historyImageSrc(img)" :src="historyImageSrc(img)" loading="lazy" />
           </div>
         </div>
         <button class="hist-nav-btn" @click="histPage++" :disabled="(histPage + 1) * histPerPage >= historyImages.length">▼</button>
@@ -493,6 +573,129 @@
       </div>
     </transition>
 
+    <!-- 워크플로우 프로파일 관리 모달 -->
+    <transition name="fade">
+      <div v-if="showProfileManager" class="wc-overlay" @click.self="showProfileManager = false">
+        <div class="wc-modal" style="max-width: 520px;">
+          <div class="wc-modal-header">
+            <h3>워크플로우 프로파일</h3>
+            <span class="wc-path">config/profiles/*.json</span>
+            <button class="close-btn" @click="showProfileManager = false">✕</button>
+          </div>
+          <div class="order-modal-body">
+            <div v-if="workflowProfiles.length === 0" class="wc-empty" style="padding: 20px;">
+              저장된 프로파일이 없습니다.<br/>
+              <small style="color: var(--text-muted)">상단의 + 버튼으로 현재 세팅을 저장하세요.</small>
+            </div>
+            <div v-else class="order-list">
+              <div v-for="prof in workflowProfiles" :key="prof.name" class="profile-item">
+                <div class="profile-info">
+                  <div class="profile-name">{{ prof.name }}</div>
+                  <div class="profile-meta">{{ prof.model || '모델 미지정' }}{{ prof.vae ? ' · VAE: ' + prof.vae : '' }}</div>
+                </div>
+                <button class="order-btn" @click="loadWorkflowProfile(prof.name)" title="적용">▶</button>
+                <button class="order-btn" @click="renameWorkflowProfile(prof.name)" title="이름 변경">✏</button>
+                <button class="order-btn" @click="deleteWorkflowProfile(prof.name)" title="삭제" style="color: #f87171;">✕</button>
+              </div>
+            </div>
+            <div class="order-actions">
+              <button class="order-save" @click="saveCurrentAsProfile">+ 현재 세팅 저장</button>
+              <div style="flex: 1;"></div>
+              <button class="order-cancel" @click="showProfileManager = false">닫기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- 프롬프트 섹션 순서 매니저 모달 -->
+    <transition name="fade">
+      <div v-if="showOrderManager" class="wc-overlay" @click.self="showOrderManager = false">
+        <div class="wc-modal" style="max-width: 540px;">
+          <div class="wc-modal-header">
+            <h3>프롬프트 섹션 순서</h3>
+            <span class="wc-path">생성 시 합쳐지는 순서를 ↑/↓로 조정. 저장 시 즉시 반영</span>
+            <button class="close-btn" @click="showOrderManager = false">✕</button>
+          </div>
+          <div class="order-modal-body">
+            <div class="order-list">
+              <div v-for="(sec, i) in promptOrderList" :key="sec.key" class="order-item">
+                <span class="order-num">{{ i + 1 }}</span>
+                <span class="order-label">{{ sec.label }}</span>
+                <button class="order-btn" :disabled="i === 0" @click="moveOrderUp(i)" title="위로">↑</button>
+                <button class="order-btn" :disabled="i === promptOrderList.length - 1" @click="moveOrderDown(i)" title="아래로">↓</button>
+              </div>
+            </div>
+            <div class="order-preview">
+              <span class="order-preview-label">미리보기:</span>
+              <code class="order-preview-text">{{ promptOrderList.map(s => s.label).join(' → ') }}</code>
+            </div>
+            <div class="order-actions">
+              <button class="order-reset" @click="resetPromptOrder">↺ 기본값 복원</button>
+              <div style="flex: 1;"></div>
+              <button class="order-cancel" @click="showOrderManager = false">취소</button>
+              <button class="order-save" @click="saveOrderAndClose">💾 저장 & 적용</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- PR 8: INSTANT WILDCARD Manager Modal -->
+    <transition name="fade">
+      <div v-if="showInstantWcManager" class="wc-overlay" @click.self="showInstantWcManager = false">
+        <div class="wc-modal">
+          <div class="wc-modal-header">
+            <h3>INSTANT WILDCARD MANAGER</h3>
+            <span class="wc-path">save/instant_wildcards.json &nbsp;·&nbsp; 문법: <code>$$name$$</code></span>
+            <button class="wc-new-btn" @click="createNewInstantWc">+ NEW</button>
+            <button class="close-btn" @click="showInstantWcManager = false">✕</button>
+          </div>
+          <div class="wc-modal-body">
+            <!-- 이름 목록 -->
+            <div class="wc-sidebar">
+              <div v-for="iw in instantWildcards" :key="iw.name" class="wc-file-item"
+                :class="{ active: selectedInstantWc === iw.name }" @click="selectInstantWc(iw.name)">
+                <span class="wc-fname">{{ iw.name }}</span>
+                <span class="wc-file-count">{{ iw.lines.length }}</span>
+                <button class="wc-del" @click.stop="deleteInstantWc(iw.name)">✕</button>
+              </div>
+              <div v-if="instantWildcards.length === 0" class="wc-empty" style="padding: 12px; font-size: 11px;">
+                와일드카드가 없습니다. + NEW로 추가하세요.
+              </div>
+            </div>
+            <!-- 편집 영역 -->
+            <div class="wc-content">
+              <template v-if="selectedInstantWcData">
+                <div class="wc-content-header">
+                  <h4>{{ selectedInstantWc }}</h4>
+                  <span class="wc-syntax">사용: <code>{{'$$' + selectedInstantWc + '$$'}}</code> ·
+                    가중치: <code>{100}:tag</code></span>
+                </div>
+                <div class="wc-blocks">
+                  <div v-for="(line, li) in iwEditLines" :key="li" class="wc-block-row">
+                    <span class="wc-block-idx">{{ li + 1 }}</span>
+                    <input v-model="iwEditLines[li]" class="wc-block-input"
+                      :placeholder="li === 0 ? '예: happy 또는 {100}:happy (가중치)' : ''"
+                      @keydown.enter="iwEditLines.push('')" />
+                    <button class="wc-block-rm" @click="iwEditLines.splice(li, 1)">✕</button>
+                  </div>
+                  <button class="wc-add-line" @click="iwEditLines.push('')">+ 줄 추가</button>
+                </div>
+                <div class="wc-bottom-bar">
+                  <span style="font-size: 11px; color: var(--text-muted); margin-right: auto;">
+                    💡 <b>$$name$$</b>을 프롬프트에 넣으면 생성 시 라인 중 하나를 뽑아 치환합니다.
+                  </span>
+                  <button class="wc-save-btn" @click="saveCurrentInstantWc">💾 SAVE</button>
+                </div>
+              </template>
+              <div v-else class="wc-empty">좌측에서 선택하거나 NEW를 클릭하세요</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- Generation Stats Modal -->
     <transition name="fade">
       <div v-if="showStatsModal" class="stats-overlay" @click.self="showStatsModal = false">
@@ -574,12 +777,19 @@
     </transition>
 
     <!-- Global Toast Notifications -->
-    <transition-group name="toast" tag="div" class="toast-container">
-      <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type" @click="removeToast(t.id)">
-        <span class="toast-icon">{{ t.type === 'error' ? '⚠' : t.type === 'success' ? '✓' : 'ℹ' }}</span>
-        {{ t.msg }}
-      </div>
-    </transition-group>
+    <div class="toast-container" :class="{ 'toast-multi': toasts.length > 1 }">
+      <button v-if="toasts.length > 1" class="toast-clear-all" @click="clearAllToasts" title="모두 닫기">
+        모두 닫기 ({{ toasts.length }})
+      </button>
+      <transition-group name="toast" tag="div" class="toast-stack">
+        <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">
+          <span class="toast-icon">{{ t.type === 'error' ? '⚠' : t.type === 'success' ? '✓' : 'ℹ' }}</span>
+          <span class="toast-msg">{{ t.msg }}</span>
+          <span v-if="t.count > 1" class="toast-count">×{{ t.count }}</span>
+          <button class="toast-close" @click.stop="removeToast(t.id)" title="닫기">✕</button>
+        </div>
+      </transition-group>
+    </div>
   </div>
 </template>
 
@@ -593,6 +803,7 @@ const storeWidgets = wStore.widgets
 const samplerItems = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
 const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 const upscalerItems = computed(() => wStore.getProperty('upscaler_combo', 'items') || [])
+const sam3CheckpointItems = computed(() => wStore.getProperty('_sam3_checkpoint', 'items') || ['sam3.pt'])
 const adModelItems = ref([])
 
 // Hires/ADetailer 체크박스 (proxy 연동)
@@ -656,6 +867,7 @@ const removeCensorship = computed({ get: () => storeWidgets.chk_remove_censorshi
 const removeText = computed({ get: () => storeWidgets.chk_remove_text === 'true', set: v => { storeWidgets.chk_remove_text = v ? 'true' : 'false' } })
 const autoCharFeatures = computed({ get: () => storeWidgets.chk_auto_char_features === 'true', set: v => { storeWidgets.chk_auto_char_features = v ? 'true' : 'false' } })
 const ad_enabled = computed({ get: () => storeWidgets.adetailer_group === 'true', set: v => { storeWidgets.adetailer_group = v ? 'true' : 'false' } })
+const sam3_enabled = computed({ get: () => storeWidgets.sam3_group === 'true', set: v => { storeWidgets.sam3_group = v ? 'true' : 'false' } })
 const ad_s1_enabled = computed({ get: () => storeWidgets.ad_slot1_group === 'true', set: v => { storeWidgets.ad_slot1_group = v ? 'true' : 'false' } })
 const ad_s2_enabled = computed({ get: () => storeWidgets.ad_slot2_group === 'true', set: v => { storeWidgets.ad_slot2_group = v ? 'true' : 'false' } })
 import PromptPanel from './components/PromptPanel.vue'
@@ -664,11 +876,14 @@ import TabBar from './components/TabBar.vue'
 import QueuePanel from './components/QueuePanel.vue'
 
 const currentImage = ref('')
+const imageVersions = reactive({})
 const resolution = ref('')
 const seed = ref('')
 const status = ref('')
 const isGenerating = ref(false)
 const progressVal = ref(0)
+const genStartTime = ref(0)
+const genEta = ref('')
 const showLeftPanel = ref(true)
 const showExtendPanel = ref(false)
 const historyImages = ref([])
@@ -695,12 +910,13 @@ const autoGenCount = ref(0)
 const autoWaiting = ref(false)
 const vramInfo = ref({ used: 0, total: 0, pct: 0 })
 const vramClass = computed(() => vramInfo.value.pct > 90 ? 'critical' : vramInfo.value.pct > 70 ? 'warn' : 'ok')
-const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false })
+const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, maxRetries: 2 })
 
 function syncAutomationSettings() {
   const limit = Number(autoSettings.limit)
   const repeat = Number(autoSettings.repeat)
   const delay = Number(autoSettings.delay)
+  const maxRetries = Number(autoSettings.maxRetries)
 
   action('set_automation_settings', {
     mode: autoSettings.mode,
@@ -708,22 +924,53 @@ function syncAutomationSettings() {
     repeat: Number.isFinite(repeat) && repeat > 0 ? repeat : 1,
     delay: Number.isFinite(delay) && delay >= 0 ? delay : 1,
     allowDupes: !!autoSettings.allowDupes,
+    maxRetries: Number.isFinite(maxRetries) && maxRetries >= 0 ? maxRetries : 2,
   })
 }
 
+// PR 9: 서버 → Vue 푸시 중에는 watch가 다시 서버로 보내지 않도록 가드
+let _applyingAutoFromServer = false
+
 watch(autoSettings, () => {
+  if (_applyingAutoFromServer) return
   syncAutomationSettings()
 }, { deep: true })
 
 // Toast 알림 시스템
 const toasts = ref([])
 let toastId = 0
+const MAX_TOASTS = 5
+
 function addToast(type, msg) {
   const id = toastId++
-  toasts.value.push({ id, type, msg })
-  setTimeout(() => removeToast(id), 5000)
+  // 같은 메시지가 직전에 있으면 카운터만 증가 (스팸 방지)
+  const last = toasts.value[toasts.value.length - 1]
+  if (last && last.type === type && last.msg === msg) {
+    last.count = (last.count || 1) + 1
+    last._ts = Date.now()  // 타이머 리셋
+    // 기존 타이머 취소 + 새로 설정
+    if (last._timer) clearTimeout(last._timer)
+    last._timer = setTimeout(() => removeToast(last.id), 5000)
+    return
+  }
+  const toast = { id, type, msg, count: 1, _ts: Date.now() }
+  toasts.value.push(toast)
+  toast._timer = setTimeout(() => removeToast(id), 5000)
+  // 스택 초과분 — 가장 오래된 것부터 제거
+  while (toasts.value.length > MAX_TOASTS) {
+    const oldest = toasts.value.shift()
+    if (oldest._timer) clearTimeout(oldest._timer)
+  }
 }
-function removeToast(id) { toasts.value = toasts.value.filter(t => t.id !== id) }
+function removeToast(id) {
+  const t = toasts.value.find(x => x.id === id)
+  if (t && t._timer) clearTimeout(t._timer)
+  toasts.value = toasts.value.filter(t => t.id !== id)
+}
+function clearAllToasts() {
+  toasts.value.forEach(t => { if (t._timer) clearTimeout(t._timer) })
+  toasts.value = []
+}
 
 // Extended panel state (NegPiP/조건부만 로컬)
 const extWidgets = reactive({
@@ -892,6 +1139,120 @@ const selectedWcData = computed(() => wildcards.value.find(w => w.name === selec
 const wcEditLines = ref([])
 const wcInsertTarget = ref('main')
 
+// 워크플로우 프로파일
+const showProfileManager = ref(false)
+const workflowProfiles = ref([])  // [{name, created_at, model, vae}]
+const profileNames = computed(() => workflowProfiles.value.map(p => p.name))
+
+function loadWorkflowProfilesList() {
+  action('workflow_profile_list', {})
+}
+function loadWorkflowProfile(name) {
+  if (!name) return
+  action('workflow_profile_load', { name })
+}
+function saveCurrentAsProfile() {
+  const name = window.prompt('프로파일 이름 (예: ANIMA Pony, Flux 표준):', '')
+  if (!name || !name.trim()) return
+  // 이미 있으면 덮어쓰기 확인
+  const existing = workflowProfiles.value.find(p => p.name === name.trim())
+  if (existing && !window.confirm(`'${name}' 이미 존재합니다. 덮어쓸까요?`)) return
+  action('workflow_profile_save', { name: name.trim() })
+}
+function deleteWorkflowProfile(name) {
+  if (!window.confirm(`'${name}' 삭제할까요?`)) return
+  action('workflow_profile_delete', { name })
+  workflowProfiles.value = workflowProfiles.value.filter(p => p.name !== name)
+}
+function renameWorkflowProfile(oldName) {
+  const newName = window.prompt(`'${oldName}' → 새 이름:`, oldName)
+  if (!newName || !newName.trim() || newName.trim() === oldName) return
+  action('workflow_profile_rename', { old: oldName, new: newName.trim() })
+}
+
+// 프롬프트 섹션 순서 매니저
+const showOrderManager = ref(false)
+const promptOrderList = ref([])  // [{key, label}, ...]
+
+function loadPromptOrder() {
+  action('prompt_order_list', {})
+}
+function moveOrderUp(i) {
+  if (i <= 0) return
+  const arr = [...promptOrderList.value]
+  ;[arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]
+  promptOrderList.value = arr
+}
+function moveOrderDown(i) {
+  if (i >= promptOrderList.value.length - 1) return
+  const arr = [...promptOrderList.value]
+  ;[arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]
+  promptOrderList.value = arr
+}
+function saveOrderAndClose() {
+  const order = promptOrderList.value.map(s => s.key)
+  action('prompt_order_save', { order })
+  showOrderManager.value = false
+  addToast('success', '프롬프트 순서 저장됨')
+}
+function resetPromptOrder() {
+  if (!window.confirm('기본 순서(인물수 → 캐릭터 → 작품 → 작가 → 선행 → 메인 → 후행)로 복원할까요?')) return
+  action('prompt_order_reset', {})
+  addToast('info', '기본 순서로 복원')
+}
+
+// PR 8: Instant Wildcards 상태
+const showInstantWcManager = ref(false)
+const instantWildcards = ref([])  // [{name, lines}]
+const selectedInstantWc = ref('')
+const selectedInstantWcData = computed(() =>
+  instantWildcards.value.find(w => w.name === selectedInstantWc.value) || null
+)
+const iwEditLines = ref([])
+
+function selectInstantWc(name) {
+  selectedInstantWc.value = name
+  const iw = instantWildcards.value.find(w => w.name === name)
+  iwEditLines.value = iw ? [...iw.lines] : []
+}
+
+function loadInstantWcList() {
+  action('instant_wildcards_list', {})
+}
+
+function createNewInstantWc() {
+  const name = window.prompt('새 인스턴트 와일드카드 이름 (영숫자/_/.만):', '')
+  if (!name || !/^[\w./]+$/.test(name)) return
+  if (instantWildcards.value.find(w => w.name === name)) {
+    addToast('error', '이미 존재함')
+    return
+  }
+  instantWildcards.value.push({ name, lines: [''] })
+  selectedInstantWc.value = name
+  iwEditLines.value = ['']
+  action('instant_wildcards_save', { name, lines: [''] })
+}
+
+function saveCurrentInstantWc() {
+  if (!selectedInstantWc.value) return
+  const lines = iwEditLines.value.filter(l => l !== undefined)
+  action('instant_wildcards_save', { name: selectedInstantWc.value, lines })
+  // 로컬 미러
+  const iw = instantWildcards.value.find(w => w.name === selectedInstantWc.value)
+  if (iw) iw.lines = lines
+  addToast('success', `인스턴트 와일드카드 저장: $$${selectedInstantWc.value}$$`)
+}
+
+function deleteInstantWc(name) {
+  if (!window.confirm(`'${name}' 삭제할까요?`)) return
+  action('instant_wildcards_delete', { name })
+  instantWildcards.value = instantWildcards.value.filter(w => w.name !== name)
+  if (selectedInstantWc.value === name) {
+    selectedInstantWc.value = ''
+    iwEditLines.value = []
+  }
+}
+
 function selectWildcard(name) {
   selectedWc.value = name
   const wc = wildcards.value.find(w => w.name === name)
@@ -1014,7 +1375,13 @@ function doGenerate() {
     requestAction('set_lora_text', { lora_text: loraText })
   }
   syncAutomationSettings()
+  genStartTime.value = Date.now()
+  genEta.value = ''
   action('generate')
+}
+
+function cancelGeneration() {
+  action('cancel_generation')
 }
 
 function showHistoryMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
@@ -1040,10 +1407,11 @@ const ctxDelete = () => {
 }
 
 async function selectHistoryImage(path) {
+  imageVersions[path] = Date.now()
   currentImage.value = path
   const img = new Image()
   img.onload = () => { resolution.value = `${img.naturalWidth} × ${img.naturalHeight}` }
-  img.src = 'file:///' + path
+  img.src = historyImageSrc(path)
   // EXIF 로드
   const backend = await getBackend()
   if (backend.getImageExif) {
@@ -1054,6 +1422,11 @@ async function selectHistoryImage(path) {
       } catch {}
     })
   }
+}
+
+function historyImageSrc(path) {
+  if (!path) return ''
+  return `file:///${path}?t=${imageVersions[path] || 0}`
 }
 
 // 드래그 앤 드롭 지원
@@ -1096,6 +1469,9 @@ onMounted(async () => {
   // 초기 rating 필터 전달
   requestAction('set_rating_filter', { ratings: ratingFilters.filter(r => r.on).map(r => r.key) })
 
+  // 워크플로우 프로파일 목록 미리 로드 (드롭다운에 즉시 보이도록)
+  setTimeout(loadWorkflowProfilesList, 800)
+
   onBackendEvent('tabChanged', (tabId) => {
     const targetPath = tabId === 't2i' ? '/' : `/${tabId}`
     router.push(targetPath)
@@ -1104,10 +1480,12 @@ onMounted(async () => {
 
   onBackendEvent('imageGenerated', async (data) => {
     const parsed = JSON.parse(data)
+    if (parsed.path) imageVersions[parsed.path] = Date.now()
     currentImage.value = parsed.path
     resolution.value = `${parsed.width} × ${parsed.height}`
     seed.value = String(parsed.seed)
     isGenerating.value = false
+    genEta.value = ''
     status.value = ''
     if (parsed.path) {
       historyImages.value.unshift(parsed.path)
@@ -1125,7 +1503,7 @@ onMounted(async () => {
       }
     }
   })
-  onBackendEvent('generationStarted', () => { isGenerating.value = true; autoWaiting.value = false; progressVal.value = 0 })
+  onBackendEvent('generationStarted', () => { isGenerating.value = true; autoWaiting.value = false; progressVal.value = 0; genStartTime.value = Date.now(); genEta.value = '' })
   onBackendEvent('automationStatus', (json) => {
     try {
       const d = JSON.parse(json)
@@ -1135,11 +1513,55 @@ onMounted(async () => {
       if (!d.running) { isGenerating.value = false }
     } catch {}
   })
+  // 워크플로우 프로파일 목록 수신
+  onBackendEvent('workflowProfilesList', (json) => {
+    try {
+      const arr = JSON.parse(json)
+      if (Array.isArray(arr)) workflowProfiles.value = arr
+    } catch {}
+  })
+  // 프롬프트 섹션 순서 수신
+  onBackendEvent('promptOrderLoaded', (json) => {
+    try {
+      const arr = JSON.parse(json)
+      if (Array.isArray(arr)) promptOrderList.value = arr
+    } catch {}
+  })
+  // PR 8: 인스턴트 와일드카드 목록 수신
+  onBackendEvent('instantWildcardsList', (json) => {
+    try {
+      const arr = JSON.parse(json)
+      if (Array.isArray(arr)) instantWildcards.value = arr
+    } catch {}
+  })
+  // PR 9: 백엔드가 모드별 자동화 설정을 푸시 (시작 시 + 백엔드 모드 전환 시)
+  onBackendEvent('automationSettingsLoaded', (json) => {
+    try {
+      const d = JSON.parse(json)
+      _applyingAutoFromServer = true  // watch에서 다시 서버로 보내는 루프 방지
+      if (typeof d.mode === 'string') autoSettings.mode = d.mode
+      if (typeof d.limit === 'number') autoSettings.limit = d.limit
+      if (typeof d.repeat === 'number') autoSettings.repeat = d.repeat
+      if (typeof d.delay === 'number') autoSettings.delay = d.delay
+      if (typeof d.allowDupes === 'boolean') autoSettings.allowDupes = d.allowDupes
+      if (typeof d.maxRetries === 'number') autoSettings.maxRetries = d.maxRetries
+      // watch 콜백이 큐잉 처리되도록 microtask 끝난 후 가드 해제
+      Promise.resolve().then(() => { _applyingAutoFromServer = false })
+    } catch {}
+  })
   onBackendEvent('generationProgress', (step, total) => {
     progressVal.value = Math.round(step / total * 100)
     status.value = `Generating... ${step}/${total}`
+    // 간단 ETA: 시작 시각 기준
+    if (step > 0 && genStartTime.value) {
+      const elapsed = (Date.now() - genStartTime.value) / 1000
+      const remaining = Math.max(0, elapsed / step * (total - step))
+      genEta.value = remaining >= 60
+        ? `ETA ${Math.floor(remaining / 60)}m${String(Math.floor(remaining % 60)).padStart(2, '0')}s`
+        : `ETA ${remaining.toFixed(0)}s`
+    }
   })
-  onBackendEvent('generationError', (msg) => { isGenerating.value = false; status.value = `Error: ${msg}` })
+  onBackendEvent('generationError', (msg) => { isGenerating.value = false; genEta.value = ''; status.value = `Error: ${msg}` })
 
   // 글로벌 가중치 로드
   onBackendEvent('globalWeightsLoaded', (json) => {
@@ -1458,6 +1880,63 @@ onMounted(async () => {
 .auto-row { display: flex; align-items: center; gap: 4px; }
 .auto-row label { font-size: 9px; color: var(--text-muted); font-weight: 700; min-width: 32px; }
 .auto-input { width: 50px; padding: 4px 6px; font-size: 11px; text-align: center; }
+.auto-unlimited-mark { display: inline-block; width: 50px; padding: 4px 6px; font-size: 14px;
+  color: var(--accent); text-align: center; font-weight: bold; }
+
+/* 워크플로우 프로파일 */
+.profile-card { background: rgba(96,165,250,0.04); border: 1px solid rgba(96,165,250,0.15);
+  border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+.profile-row { display: flex; align-items: center; gap: 6px; }
+.profile-label { font-size: 10px; color: #60a5fa; font-weight: 700; flex-shrink: 0;
+  letter-spacing: 0.5px; }
+.profile-row :deep(.csel) { flex: 1; }
+.profile-mini-btn { width: 24px; height: 24px; flex-shrink: 0; cursor: pointer;
+  background: rgba(96,165,250,0.15); color: #93c5fd;
+  border: 1px solid rgba(96,165,250,0.3); border-radius: 4px; font-weight: bold; }
+.profile-mini-btn:hover { background: rgba(96,165,250,0.3); border-color: #60a5fa; color: #fff; }
+.profile-item { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+  background: rgba(255,255,255,0.04); border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08); }
+.profile-item:hover { background: rgba(96,165,250,0.08); }
+.profile-info { flex: 1; min-width: 0; }
+.profile-name { font-size: 13px; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.profile-meta { font-size: 10px; color: var(--text-muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 프롬프트 순서 모달 */
+.order-modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.order-list { display: flex; flex-direction: column; gap: 4px;
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px; padding: 8px; }
+.order-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: rgba(255,255,255,0.04); border-radius: 4px;
+  transition: background 0.15s; }
+.order-item:hover { background: rgba(96,165,250,0.08); }
+.order-num { width: 22px; height: 22px; display: inline-flex; align-items: center;
+  justify-content: center; background: rgba(96,165,250,0.2); color: #93c5fd;
+  border-radius: 50%; font-size: 11px; font-weight: bold; }
+.order-label { flex: 1; font-size: 13px; color: var(--text-primary); }
+.order-btn { width: 28px; height: 28px; font-size: 13px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px; color: var(--text-primary); }
+.order-btn:hover:not(:disabled) { background: rgba(96,165,250,0.15);
+  border-color: #60a5fa; color: #93c5fd; }
+.order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.order-preview { padding: 8px 10px; background: rgba(255,255,255,0.03);
+  border-left: 2px solid #60a5fa; border-radius: 0 4px 4px 0; }
+.order-preview-label { font-size: 10px; color: var(--text-muted); margin-right: 6px; }
+.order-preview-text { font-size: 11px; color: #93c5fd; font-family: Consolas, monospace; }
+.order-actions { display: flex; gap: 8px; align-items: center; padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.08); }
+.order-reset, .order-cancel, .order-save { padding: 6px 14px; border-radius: 4px;
+  font-size: 12px; cursor: pointer; font-weight: 600; }
+.order-reset { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-muted); }
+.order-cancel { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-primary); }
+.order-save { background: #2563eb; border: 1px solid #3b82f6; color: white; }
+.order-save:hover { background: #3b82f6; }
 .auto-select { min-width: 90px; padding: 4px; font-size: 10px; }
 
 /* 자동화 상태 */
@@ -1466,7 +1945,10 @@ onMounted(async () => {
 .auto-status-sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
 .auto-pulse { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-.generate-row { display: flex; gap: 6px; }
+.generate-row { display: flex; gap: 6px; align-items: stretch; }
+.btn-cancel { width: 50px; height: 50px; background: transparent; border: 2px solid #f87171; border-radius: var(--radius-pill); color: #f87171; font-size: 18px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.btn-cancel:hover { background: #f87171; color: #fff; }
+.gen-eta { margin-top: 6px; font-size: 11px; color: var(--muted); text-align: center; letter-spacing: 0.5px; }
 .auto-check { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer; }
 .auto-check input { accent-color: #4ade80; }
 .btn-generate { width: 100%; height: 50px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 800; font-size: 14px; letter-spacing: 1px; cursor: pointer; transition: var(--transition); }
@@ -1534,18 +2016,46 @@ onMounted(async () => {
 .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }
 
 /* Toast Notifications */
-.toast-container { position: fixed; top: 70px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-.toast {
-  padding: 10px 20px; border-radius: 8px; font-size: 12px; font-weight: 600;
-  color: #FFF; pointer-events: auto; cursor: pointer; min-width: 200px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+.toast-container {
+  position: fixed; top: 70px; right: 20px; z-index: 2000;
+  display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+  max-width: 340px;
 }
-.toast.success { background: rgba(74, 222, 128, 0.9); color: #000; }
-.toast.error { background: rgba(248, 113, 113, 0.9); color: #FFF; }
-.toast.info { background: rgba(96, 165, 250, 0.9); color: #FFF; }
-.toast-icon { margin-right: 8px; }
-.toast-enter-active { animation: slideIn 0.3s ease; }
-.toast-leave-active { animation: slideOut 0.3s ease; }
+.toast-stack { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto;
+  scrollbar-width: thin; pointer-events: auto; }
+.toast-stack::-webkit-scrollbar { width: 4px; }
+.toast-stack::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+.toast-clear-all {
+  align-self: flex-end; padding: 3px 10px; font-size: 10px; font-weight: 600;
+  background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px; cursor: pointer; pointer-events: auto; backdrop-filter: blur(8px);
+}
+.toast-clear-all:hover { background: rgba(248,113,113,0.5); border-color: #f87171; }
+.toast {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  color: #FFF; pointer-events: auto; min-width: 200px; max-width: 340px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4); backdrop-filter: blur(8px);
+  word-break: break-word;
+}
+.toast.success { background: rgba(74, 222, 128, 0.92); color: #000; }
+.toast.error { background: rgba(248, 113, 113, 0.92); color: #FFF; }
+.toast.info { background: rgba(96, 165, 250, 0.92); color: #FFF; }
+.toast.warning { background: rgba(251, 191, 36, 0.92); color: #000; }
+.toast-icon { font-size: 14px; flex-shrink: 0; }
+.toast-msg { flex: 1; }
+.toast-count {
+  background: rgba(0,0,0,0.25); padding: 1px 6px; border-radius: 8px;
+  font-size: 10px; flex-shrink: 0;
+}
+.toast-close {
+  width: 18px; height: 18px; padding: 0; flex-shrink: 0;
+  background: rgba(0,0,0,0.2); border: none; border-radius: 50%;
+  color: inherit; font-size: 10px; cursor: pointer; opacity: 0.7;
+}
+.toast-close:hover { opacity: 1; background: rgba(0,0,0,0.4); }
+.toast-enter-active { animation: slideIn 0.25s ease; }
+.toast-leave-active { animation: slideOut 0.25s ease; }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-@keyframes slideOut { from { opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+@keyframes slideOut { from { opacity: 1; max-height: 60px; } to { transform: translateX(100%); opacity: 0; max-height: 0; padding: 0; margin: 0; } }
 </style>

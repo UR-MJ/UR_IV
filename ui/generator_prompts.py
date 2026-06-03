@@ -18,39 +18,35 @@ class PromptHandlingMixin:
         return self.tag_classifier.classify_tag(tag) == 'character_trait'
     
     def update_total_prompt_display(self):
-        """최종 프롬프트 디스플레이 업데이트"""
-        parts = []
-        
-        # 1. 인물 수
-        if self.char_count_input.text().strip(): 
-            parts.append(self.char_count_input.text().strip())
-            
-        # 2. 캐릭터
-        if self.character_input.text().strip():
-            parts.append(self.character_input.text().strip())
+        """최종 프롬프트 디스플레이 업데이트.
 
-        # 3. 작품 (Copyright)
-        if self.copyright_input.text().strip():
-            parts.append(self.copyright_input.text().strip())
+        섹션 순서는 ``config/prompt_order.json``에서 로드 — 사용자가
+        Studio Tools의 ORDER 매니저로 변경 가능. 기본 순서는 기존과 동일:
+        char_count → character → copyright → artist → prefix → main → suffix
+        """
+        # 7개 섹션의 현재 텍스트 수집
+        section_texts = {
+            "char_count": self.char_count_input.text(),
+            "character":  self.character_input.text(),
+            "copyright":  self.copyright_input.text(),
+            "artist":     self.artist_input.toPlainText(),
+            "prefix":     self.prefix_prompt_text.toPlainText(),
+            "main":       self.main_prompt_text.toPlainText(),
+            "suffix":     self.suffix_prompt_text.toPlainText(),
+        }
+        try:
+            from core.prompt_order import compose_prompt
+            final = compose_prompt(section_texts)
+        except Exception:
+            # 보수적 폴백 — config 로드 실패 시 기본 순서로
+            final = ", ".join(s.strip() for s in [
+                section_texts["char_count"], section_texts["character"],
+                section_texts["copyright"], section_texts["artist"],
+                section_texts["prefix"], section_texts["main"],
+                section_texts["suffix"],
+            ] if s.strip())
 
-        # 4. 작가 (Artist) - 작가 필드 내용 추가!
-        if self.artist_input.toPlainText().strip():
-            parts.append(self.artist_input.toPlainText().strip())
-
-        # 5. 선행 (Prefix) - 접기와 무관하게 항상 포함
-        if self.prefix_prompt_text.toPlainText().strip():
-            parts.append(self.prefix_prompt_text.toPlainText().strip())
-
-        # 6. 메인
-        if self.main_prompt_text.toPlainText().strip():
-            parts.append(self.main_prompt_text.toPlainText().strip())
-
-        # 7. 후행 (Suffix) - 접기와 무관하게 항상 포함
-        if self.suffix_prompt_text.toPlainText().strip():
-            parts.append(self.suffix_prompt_text.toPlainText().strip())
-
-        # 최종 반영
-        self.total_prompt_display.setPlainText(", ".join(parts))
+        self.total_prompt_display.setPlainText(final)
     
     def apply_prompt_from_data(self, bundle):
         """검색 결과 데이터를 프롬프트 입력창에 적용"""

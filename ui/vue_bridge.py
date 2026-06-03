@@ -45,6 +45,10 @@ class VueBridge(QObject):
     sam3Progress = pyqtSignal(int, int)     # (current, total)
     eventSearchProgress = pyqtSignal(int, int) # (current, total)
     automationStatus = pyqtSignal(str)        # JSON {running, count, waiting}
+    automationSettingsLoaded = pyqtSignal(str)  # JSON {mode, limit, repeat, delay, allowDupes, maxRetries} — PR 9 mode-aware
+    instantWildcardsList = pyqtSignal(str)      # JSON [{name, lines: [...]}] — PR 8
+    promptOrderLoaded = pyqtSignal(str)         # JSON [{key, label}] — 사용자 지정 섹션 순서
+    workflowProfilesList = pyqtSignal(str)      # JSON [{name, created_at, model, vae}]
     eventImportResults = pyqtSignal(str)      # JSON event list
 
     # 위젯 값/속성 동기화 (Python → Vue)
@@ -1252,13 +1256,17 @@ class VueBridge(QObject):
 
     @pyqtSlot(str, result=str)
     def getTagSuggestions(self, prefix: str) -> str:
-        """태그 자동완성 후보 반환"""
+        """태그 자동완성 후보 반환."""
         try:
             from utils.tag_completer import get_tag_completer
             completer = get_tag_completer()
-            suggestions = completer.get_suggestions(prefix, max_results=10)
+            # 주의: TagCompleter.get_suggestions의 키워드는 max_count
+            suggestions = completer.get_suggestions(prefix, max_count=10)
             return json.dumps(suggestions)
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(f"[getTagSuggestions] 오류: {e}")
+            traceback.print_exc()
             return json.dumps([])
 
     @pyqtSlot(str, result=str)

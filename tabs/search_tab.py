@@ -93,7 +93,7 @@ class SearchTab(QWidget):
         self.input_artist.setPlaceholderText("Artist (작가명)")
         self.input_general = QLineEdit()
         self.input_general.setPlaceholderText(
-            "General (예: 1boy, [blue_hair|red_hair])"
+            "General (예: 1boy, [blue_hair|red_hair]) — 'ℹ️ 검색 문법' 참조"
         )
         
         row2.addWidget(QLabel("작가명:"))
@@ -128,7 +128,7 @@ class SearchTab(QWidget):
         self.exclude_artist.setPlaceholderText("제외할 Artist")
         self.exclude_general = QLineEdit()
         self.exclude_general.setPlaceholderText(
-            "제외할 General (예: comic, [monochrome|greyscale])"
+            "제외할 General (예: comic, [monochrome|greyscale]) — 'ℹ️ 검색 문법' 참조"
         )
         
         row2_ex.addWidget(QLabel("작가명:"))
@@ -137,7 +137,69 @@ class SearchTab(QWidget):
         row2_ex.addWidget(self.exclude_general)
         grid_ex.addLayout(row2_ex)
         layout.addWidget(exclude_group)
-        
+
+        # PR 6: 검색 문법 치트시트 (접이식)
+        # core/tag_matcher.py가 실제 사용하는 7개 연산자 — 각각 예시 + 설명
+        self.cheatsheet_group = QGroupBox("ℹ️  검색 문법 — 클릭으로 펼치기/접기")
+        self.cheatsheet_group.setCheckable(True)
+        self.cheatsheet_group.setChecked(False)  # 기본 접힘
+        self.cheatsheet_group.setStyleSheet(
+            "QGroupBox { border: 1px solid #3b82f6; border-radius: 4px; margin-top: 8px; "
+            "padding-top: 14px; background-color: rgba(59, 130, 246, 0.05); } "
+            "QGroupBox::title { color: #60a5fa; left: 8px; font-weight: bold; }"
+        )
+        cheat_layout = QVBoxLayout(self.cheatsheet_group)
+        cheat_layout.setSpacing(4)
+
+        cheat_html = """
+<table cellpadding='4' style='font-family: Consolas, monospace; font-size: 11px;'>
+  <tr style='background: rgba(96,165,250,0.15);'>
+    <th align='left' width='130'>문법</th>
+    <th align='left' width='180'>설명</th>
+    <th align='left'>예시 (입력 → 매치되는 태그)</th>
+  </tr>
+  <tr><td><code style='color: #facc15;'>word</code></td>
+      <td>포함 매칭 (substring)</td>
+      <td><code>hair</code> → blue hair, long hair, ...</td></tr>
+  <tr><td><code style='color: #facc15;'>*word</code></td>
+      <td>완전 일치만</td>
+      <td><code>*blue hair</code> → "blue hair"만 (long blue hair 제외)</td></tr>
+  <tr><td><code style='color: #facc15;'>_word</code></td>
+      <td>접미 매칭 (word로 끝남)</td>
+      <td><code>_hair</code> → short hair, long hair</td></tr>
+  <tr><td><code style='color: #facc15;'>word_</code></td>
+      <td>접두 매칭 (word로 시작)</td>
+      <td><code>hair_</code> → hair ornament, hairband</td></tr>
+  <tr><td><code style='color: #facc15;'>_word_</code></td>
+      <td>포함 (명시적, word와 동일)</td>
+      <td><code>_hair_</code> → blue hair, hair ornament 등</td></tr>
+  <tr><td><code style='color: #34d399;'>[A, B]</code></td>
+      <td>AND 그룹</td>
+      <td><code>[long hair, blue eyes]</code> → 둘 다 있어야 매치</td></tr>
+  <tr><td><code style='color: #34d399;'>[A|B]</code></td>
+      <td>OR 그룹 (A 또는 B)</td>
+      <td><code>[blue hair|long hair]</code> → 하나만 있어도 매치</td></tr>
+  <tr><td><code style='color: #f87171;'>, (쉼표)</code></td>
+      <td>AND (top-level, 대괄호 밖)</td>
+      <td><code>1girl, blue hair</code> → 둘 다 있어야</td></tr>
+  <tr style='background: rgba(248,113,113,0.1);'>
+    <td colspan='3'>💡 <b>제외 입력란</b>의 조건이 매치되면 <b>그 결과는 빠집니다</b>.
+        같은 문법 사용 가능.</td></tr>
+</table>
+"""
+        cheat_label = QLabel(cheat_html)
+        cheat_label.setWordWrap(True)
+        cheat_label.setTextFormat(Qt.TextFormat.RichText)
+        cheat_layout.addWidget(cheat_label)
+
+        # 펼침/접힘 시 내부 위젯 가시성 토글
+        def _toggle_cheatsheet(checked):
+            cheat_label.setVisible(checked)
+        self.cheatsheet_group.toggled.connect(_toggle_cheatsheet)
+        cheat_label.setVisible(False)  # 초기 접힘 상태와 일치
+
+        layout.addWidget(self.cheatsheet_group)
+
         # 엔터키 연결
         inputs = [
             self.input_copyright, self.input_character, 
@@ -430,23 +492,39 @@ class SearchTab(QWidget):
     def on_search_finished(self, results, total_count):
         """검색 완료 처리"""
         self.btn_search.setEnabled(True)
-        self.original_results = results 
-        self.preview_results = results  
+        self.original_results = results
+        self.preview_results = results
         self.current_preview_index = 0
-        
+
         # 부모 UI에 결과 전달
         self._update_parent_results(results)
-            
+
         if results:
             self.update_preview_display()
             self.btn_export.setEnabled(True)
             self._set_nav_buttons_enabled(True)
             self.lbl_status.setText(f"✅ 검색 완료: {total_count:,} 건")
         else:
-            self.search_preview_card.clear()
+            # 빈 결과 — 친절한 안내 + 검색 조건 표시
+            criteria = {
+                "Copyright": self.input_copyright.text().strip(),
+                "Character": self.input_character.text().strip(),
+                "Artist": self.input_artist.text().strip(),
+                "General": self.input_general.text().strip(),
+            }
+            # 제외 조건도 포함
+            ex = {
+                "제외 Copyright": self.exclude_copyright.text().strip(),
+                "제외 Character": self.exclude_character.text().strip(),
+                "제외 Artist": self.exclude_artist.text().strip(),
+                "제외 General": self.exclude_general.text().strip(),
+            }
+            criteria.update({k: v for k, v in ex.items() if v})
+            self.search_preview_card._show_empty_state('no_results', criteria=criteria)
             self.lbl_preview_index.setText("[ 0 / 0 ]")
             self.btn_export.setEnabled(False)
             self._set_nav_buttons_enabled(False)
+            self.lbl_status.setText("🔎 일치 결과 없음 — 조건을 조정해보세요")
             
     def _set_nav_buttons_enabled(self, enabled):
         """네비게이션 버튼 활성화/비활성화"""
