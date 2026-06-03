@@ -176,6 +176,11 @@
               <div class="def-field"><span>YOLO Confidence</span><input type="number" v-model.number="defaults.yoloConf" step="0.05" /></div>
               <div class="def-field"><span>Snap Radius</span><input type="number" v-model.number="defaults.snapRadius" /></div>
             </div>
+            <div class="def-field-wide mt-12">
+              <span>사이드 패널 너비 ({{ editorSidePanelWidth }}px)</span>
+              <input type="range" min="200" max="500" step="10" v-model.number="editorSidePanelWidth"
+                @input="onSidePanelWidthChange" class="w-slider" />
+            </div>
           </div>
 
           <div class="glass-card mt-16">
@@ -402,6 +407,13 @@ watch(defaults, () => {
 }, { deep: true })
 function resetDefaults() { Object.assign(defaults, FACTORY_DEFAULTS) }
 
+// 사이드 패널 너비 — localStorage 직접 (EditorView가 호출하는 같은 키)
+const editorSidePanelWidth = ref(parseInt(window.localStorage.getItem('editorSidePanelWidth') || '280'))
+function onSidePanelWidthChange() {
+  window.localStorage.setItem('editorSidePanelWidth', String(editorSidePanelWidth.value))
+  // EditorView가 storage 이벤트 듣고 즉시 반영
+}
+
 const t2iSynced = ref(false)
 async function syncFromT2I() {
   const { useWidgetStore } = await import('../stores/widgetStore.js')
@@ -524,6 +536,9 @@ kbd { background: var(--bg-button); color: var(--accent); padding: 4px 10px; bor
 /* Defaults */
 .defaults-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .def-field { display: flex; flex-direction: column; gap: 3px; }
+.def-field-wide { display: flex; flex-direction: column; gap: 6px; }
+.def-field-wide span { font-size: 11px; color: var(--text-secondary); font-weight: 700; }
+.w-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
 .def-field span { font-size: 10px; font-weight: 700; color: var(--text-muted); }
 .sync-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 4px; font-size: 8px; font-weight: 900; margin-left: 8px; }
 .def-field input, .def-field select { padding: 8px 10px; font-size: 12px; }

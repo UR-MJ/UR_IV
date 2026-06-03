@@ -28,8 +28,8 @@
       </div>
 
       <div class="editor-body">
-        <!-- 좌측: 서브탭 패널 -->
-        <div class="side-panel">
+        <!-- 좌측: 서브탭 패널 — 너비는 localStorage 영속 -->
+        <div class="side-panel" :style="{ width: sidePanelWidth + 'px' }">
           <div class="tab-buttons">
             <button v-for="(tab, i) in tabs" :key="i"
               class="tab-btn" :class="{ active: activeTab === i }"
@@ -103,7 +103,24 @@
         <div class="drop-icon">🎨</div>
         <h2>Image Editor</h2>
         <p>이미지를 드래그앤드롭하거나 파일을 선택하세요</p>
-        <button class="open-btn" @click="openFile">파일 선택</button>
+        <div class="drop-actions">
+          <button class="open-btn" @click="openFile">📂 파일 선택</button>
+          <button class="open-btn secondary" @click="pasteFromClipboard">📋 클립보드</button>
+        </div>
+        <div class="drop-shortcuts">
+          <kbd>Ctrl+O</kbd> 열기 &nbsp; <kbd>Ctrl+V</kbd> 붙여넣기
+        </div>
+        <!-- 최근 파일 -->
+        <div v-if="recentFiles.length > 0" class="recent-files">
+          <div class="recent-label">최근 편집</div>
+          <div class="recent-list">
+            <button v-for="path in recentFiles" :key="path"
+              class="recent-item" :title="path"
+              @click="loadImage(path)">
+              <span class="recent-name">{{ path.replace(/\\/g, '/').split('/').pop() }}</span>
+            </button>
+          </div>
+        </div>
         <div class="feature-list">
           <span>모자이크/블러</span><span>색감 조절</span><span>고급 색감</span>
           <span>워터마크</span><span>그리기</span><span>이동/변환</span>
@@ -139,6 +156,17 @@ const fileFormat = ref('')
 // 미저장 변경 추적
 const isDirty = ref(false)
 const initialImagePath = ref('')
+// 사이드 패널 너비 (localStorage 영속, 200~500px)
+const sidePanelWidth = ref(parseInt(window.localStorage.getItem('editorSidePanelWidth') || '280'))
+watch(sidePanelWidth, (v) => {
+  window.localStorage.setItem('editorSidePanelWidth', String(v))
+})
+
+// editorSidePanelWidth가 Settings에서 바뀐 경우 동기화
+function _syncSidePanelWidthFromStorage() {
+  const v = parseInt(window.localStorage.getItem('editorSidePanelWidth') || '280')
+  if (v !== sidePanelWidth.value) sidePanelWidth.value = v
+}
 const currentTool = ref('box')
 const brushSize = ref(20)
 const eraserMode = ref('brush')
@@ -534,16 +562,66 @@ function onEditorKeyDown(e) {
   if (e.key === 'Escape') canvasRef.value?.clearSelection()
 }
 
+// 자동 저장 — 5분마다 변경 있으면 임시본 기록
+let _autoSaveTimer = null
+const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000
+async function _tryAutoSave() {
+  if (!isDirty.value || !imagePath.value) return
+  try {
+    const backend = await getBackend()
+    if (backend.editorAutoSave) {
+      backend.editorAutoSave(imagePath.value.replace('file:///', ''), (json) => {
+        try {
+          const r = JSON.parse(json)
+          if (r.path) console.log('[Editor] auto-saved →', r.path)
+        } catch {}
+      })
+    }
+  } catch {}
+}
+
+async function _checkAutoSaveRecovery() {
+  try {
+    const backend = await getBackend()
+    if (backend.editorCheckAutoSave) {
+      backend.editorCheckAutoSave((json) => {
+        try {
+          const r = JSON.parse(json)
+          if (r.path && r.exists) {
+            if (window.confirm(
+              `이전 세션에 저장되지 않은 작업이 있습니다.\n` +
+              `(${r.basename || ''}, ${r.age_minutes || '?'}분 전)\n\n` +
+              `복구할까요?`
+            )) {
+              loadImage(r.path)
+              requestAction('show_toast', { type: 'success', msg: '이전 작업 복구됨' })
+            } else if (backend.editorClearAutoSave) {
+              backend.editorClearAutoSave(() => {})
+            }
+          }
+        } catch {}
+      })
+    }
+  } catch {}
+}
+
 onMounted(() => {
   onBackendEvent('editorImageLoaded', (path) => loadImage(path))
   onBackendEvent('yoloModelUpdated', (label) => { modelLabel.value = label })
-  // 앱 시작 시 YOLO 모델 자동 감지 + 최근 파일 로드
+  // 앱 시작 시 YOLO 모델 자동 감지 + 최근 파일 로드 + 크래시 복구 확인
   refreshYoloLabel()
   _loadRecentFiles()
+  _checkAutoSaveRecovery()
   document.addEventListener('keydown', onEditorKeyDown)
+  // 5분마다 자동 저장 시도
+  _autoSaveTimer = setInterval(_tryAutoSave, AUTO_SAVE_INTERVAL_MS)
+  // 사이드 패널 폭이 Settings에서 변경되면 동기화
+  window.addEventListener('storage', _syncSidePanelWidthFromStorage)
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onEditorKeyDown)
+  if (_autoSaveTimer) clearInterval(_autoSaveTimer)
+  window.removeEventListener('storage', _syncSidePanelWidthFromStorage)
 })
 </script>
 
@@ -601,10 +679,28 @@ onUnmounted(() => {
 .drop-icon { font-size: 48px; opacity: 0.3; }
 .drop-area h2 { color: #787878; font-size: 20px; }
 .drop-area p { color: #484848; font-size: 13px; }
+.drop-actions { display: flex; gap: 8px; }
 .open-btn {
   padding: 10px 24px; background: #E2B340; border: none; border-radius: 8px;
   color: #000; font-weight: 700; font-size: 14px; cursor: pointer;
 }
+.open-btn.secondary { background: #2A2A2A; color: #E2B340; border: 1px solid #E2B340; }
+.drop-shortcuts { color: #585858; font-size: 11px; margin-top: 4px; }
+.drop-shortcuts kbd {
+  background: #1A1A1A; color: #E2B340; padding: 1px 6px; border-radius: 3px;
+  font-family: Consolas, monospace; font-size: 10px; margin: 0 2px;
+}
+.recent-files { width: 100%; max-width: 540px; margin-top: 14px; }
+.recent-label { color: #787878; font-size: 10px; letter-spacing: 1px;
+  font-weight: 800; padding: 0 4px 6px; }
+.recent-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.recent-item {
+  padding: 6px 12px; background: #1A1A1A; border: 1px solid #2A2A2A;
+  border-radius: 6px; color: #c8c8c8; font-size: 11px; cursor: pointer;
+  max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.recent-item:hover { background: #222; border-color: #E2B340; color: #E2B340; }
+.recent-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .feature-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; justify-content: center; }
 .feature-list span { padding: 5px 12px; background: #131313; border-radius: 6px; color: #585858; font-size: 11px; }
 </style>

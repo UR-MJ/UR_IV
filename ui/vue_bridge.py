@@ -763,6 +763,87 @@ class VueBridge(QObject):
             return json.dumps({"error": str(e)})
 
     @pyqtSlot(str, result=str)
+    def editorAutoSave(self, path: str) -> str:
+        """현재 편집 중인 파일을 임시 위치에 복사 → 크래시 복구용."""
+        try:
+            import shutil
+            import time
+            from pathlib import Path
+            import tempfile
+            src = Path(path.replace('file:///', ''))
+            if not src.is_file():
+                return json.dumps({})
+            tmp_dir = Path(tempfile.gettempdir()) / "AIStudioPro_editor"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            # 단일 복구 파일 (덮어쓰기)
+            dst = tmp_dir / "_autosave_session.png"
+            shutil.copy2(src, dst)
+            # 원본 경로 메타 같이 저장
+            meta = tmp_dir / "_autosave_session.meta.json"
+            meta.write_text(
+                json.dumps({"original": str(src), "saved_at": int(time.time())}),
+                encoding="utf-8",
+            )
+            return json.dumps({"path": str(dst).replace('\\', '/')})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(result=str)
+    def editorCheckAutoSave(self) -> str:
+        """앱 시작 시 호출 — 미저장 복구본 있는지 확인."""
+        try:
+            import time
+            from pathlib import Path
+            import tempfile
+            tmp_dir = Path(tempfile.gettempdir()) / "AIStudioPro_editor"
+            dst = tmp_dir / "_autosave_session.png"
+            meta = tmp_dir / "_autosave_session.meta.json"
+            if not dst.is_file():
+                return json.dumps({"exists": False})
+            saved_at = 0
+            original = ""
+            if meta.is_file():
+                try:
+                    m = json.loads(meta.read_text(encoding="utf-8"))
+                    saved_at = int(m.get("saved_at", 0))
+                    original = m.get("original", "")
+                except Exception:
+                    pass
+            age_min = max(1, int((time.time() - saved_at) // 60)) if saved_at else 0
+            # 24시간 초과면 무시 (오래된 복구본은 자동 정리 권장)
+            if saved_at and (time.time() - saved_at) > 86400:
+                try:
+                    dst.unlink()
+                    if meta.exists():
+                        meta.unlink()
+                except OSError:
+                    pass
+                return json.dumps({"exists": False})
+            return json.dumps({
+                "exists": True,
+                "path": str(dst).replace('\\', '/'),
+                "basename": Path(original).name if original else dst.name,
+                "age_minutes": age_min,
+            })
+        except Exception:
+            return json.dumps({"exists": False})
+
+    @pyqtSlot(result=str)
+    def editorClearAutoSave(self) -> str:
+        """복구본 폐기."""
+        try:
+            from pathlib import Path
+            import tempfile
+            tmp_dir = Path(tempfile.gettempdir()) / "AIStudioPro_editor"
+            for fn in ("_autosave_session.png", "_autosave_session.meta.json"):
+                p = tmp_dir / fn
+                if p.exists():
+                    p.unlink()
+            return json.dumps({"cleared": True})
+        except Exception:
+            return json.dumps({"cleared": False})
+
+    @pyqtSlot(str, result=str)
     def getFileInfo(self, path: str) -> str:
         """파일 기본 정보 반환 (포맷/용량)."""
         try:
