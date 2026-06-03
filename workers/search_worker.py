@@ -15,12 +15,22 @@ class PandasSearchWorker(QThread):
     cached_df = None
     loaded_ratings = set()
 
-    def __init__(self, parquet_dir, selected_ratings, queries, exclude_queries=None):
+    def __init__(self, parquet_dir, selected_ratings, queries, exclude_queries=None,
+                 combine_mode: str = 'and'):
+        """
+        :param queries: { col: 'pattern' } 포함 검색 — 필드 간 결합은 combine_mode로 제어
+        :param exclude_queries: { col: 'pattern' } 제외 검색 — 모드와 무관하게
+            언제나 AND-NOT (제외는 "이건 절대 안 됨"의 의미라 OR 모드여도 항상 제외 적용)
+        :param combine_mode: 'and' (교집합) | 'or' (합집합) — 필드 간 결합 방식
+        """
         super().__init__()
         self.parquet_dir = parquet_dir
         self.selected_ratings = set(selected_ratings)
-        self.queries = queries 
+        self.queries = queries
         self.exclude_queries = exclude_queries or {}
+        self.combine_mode = (combine_mode or 'and').lower()
+        if self.combine_mode not in ('and', 'or'):
+            self.combine_mode = 'and'
         self.is_running = True
 
     def run(self):
@@ -33,38 +43,55 @@ class PandasSearchWorker(QThread):
                 self.results_ready.emit([], 0)
                 return
 
-            self.status_update.emit("🔍 데이터 검색 중 (Advanced Logic)...")
-            
-            df = self.cached_df
-            total_mask = pd.Series(True, index=df.index)
-            
-            # 포함 검색
-            for col, search_text in self.queries.items():
-                if not search_text: 
-                    continue
-                if col not in df.columns: 
-                    continue
-                col_mask = self._parse_condition(df, col, search_text)
-                total_mask &= col_mask
+            self.status_update.emit(
+                f"🔍 데이터 검색 중 (모드: {self.combine_mode.upper()})..."
+            )
 
-            # 제외 검색
+            df = self.cached_df
+
+            # ── 포함 검색 — 필드 간 결합은 combine_mode에 따라 ──
+            # AND: 모든 필드 조건을 만족해야 함 (교집합)
+            # OR : 하나라도 만족하면 됨 (합집합) — 단, 비어있는 필드는 제외
+            non_empty_fields = [
+                (col, txt) for col, txt in self.queries.items()
+                if txt and col in df.columns
+            ]
+
+            if not non_empty_fields:
+                # 검색어 자체가 없으면 모든 행 매칭
+                total_mask = pd.Series(True, index=df.index)
+            elif self.combine_mode == 'or':
+                # OR: 빈 마스크에서 시작해 |= 누적
+                total_mask = pd.Series(False, index=df.index)
+                for col, search_text in non_empty_fields:
+                    total_mask |= self._parse_condition(df, col, search_text)
+            else:
+                # AND: True에서 시작해 &= 누적 (기존 동작)
+                total_mask = pd.Series(True, index=df.index)
+                for col, search_text in non_empty_fields:
+                    total_mask &= self._parse_condition(df, col, search_text)
+
+            # ── 제외 검색 — 모드와 무관하게 항상 AND-NOT ──
+            # 제외 조건은 "이건 절대 안 됨"의 의미라, OR 모드에서도 모두 적용해 빼야 함.
             for col, search_text in self.exclude_queries.items():
-                if not search_text: 
+                if not search_text:
                     continue
-                if col not in df.columns: 
+                if col not in df.columns:
                     continue
                 exclude_mask = self._parse_condition(df, col, search_text)
                 total_mask &= ~exclude_mask
-            
+
             # 결과 필터링
             filtered_df = df[total_mask]
             total_count = len(filtered_df)
-            
+
             final_df = filtered_df.fillna("")
             results = final_df.to_dict('records')
-            
+
             self.results_ready.emit(results, total_count)
-            self.status_update.emit(f"✅ 검색 완료: {total_count:,}건 전체 로드됨")
+            self.status_update.emit(
+                f"✅ {self.combine_mode.upper()} 검색 완료: {total_count:,}건"
+            )
 
         except Exception as e:
             self.status_update.emit(f"❌ 오류 발생: {str(e)}")

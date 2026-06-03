@@ -613,7 +613,13 @@ class VueBridge(QObject):
 
     @pyqtSlot(str)
     def searchDanbooru(self, query_json: str):
-        """Danbooru parquet 검색"""
+        """Danbooru parquet 검색
+        query JSON 구조:
+          ratings: ['g', 's', ...]
+          queries: { character: '...', copyright: '...', ... }    # 포함 조건
+          excludes: { character: '...', ... }                     # 제외 조건
+          combine_mode: 'and' | 'or'  (필드 간 결합 — 기본 'and')
+        """
         try:
             if isinstance(query_json, str):
                 q = json.loads(query_json)
@@ -622,14 +628,20 @@ class VueBridge(QObject):
             ratings = q.get('ratings', ['g'])
             queries = q.get('queries', {})
             excludes = q.get('excludes', {})
+            combine_mode = str(q.get('combine_mode', 'and')).lower()
+            if combine_mode not in ('and', 'or'):
+                combine_mode = 'and'
 
             from workers.search_worker import PandasSearchWorker
             from config import PARQUET_DIR
 
-            self._search_worker = PandasSearchWorker(PARQUET_DIR, ratings, queries, excludes)
+            self._search_worker = PandasSearchWorker(
+                PARQUET_DIR, ratings, queries, excludes,
+                combine_mode=combine_mode,
+            )
             self._search_worker.results_ready.connect(self._on_search_results)
             self._search_worker.start()
-            self.searchStatus.emit('검색 중...')
+            self.searchStatus.emit(f"검색 중... (모드: {combine_mode.upper()})")
         except Exception as e:
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
 

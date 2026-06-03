@@ -44,11 +44,23 @@
           </div>
         </details>
 
-        <!-- Rating + Go -->
+        <!-- Rating + 필드 결합 모드 + Go -->
         <div class="form-footer">
           <div class="rating-row">
             <button v-for="r in ratings" :key="r.key" class="rating-chip"
               :class="{ active: r.checked }" @click="r.checked = !r.checked">{{ r.label }}</button>
+          </div>
+          <!-- 필드 간 결합 모드: AND (교집합) / OR (합집합) -->
+          <div class="combine-row" :title="combineMode === 'and'
+              ? '필드들이 AND로 결합 — 모두 만족하는 결과만 (예: Character + Copyright + Tags 전부 매칭)'
+              : '필드들이 OR로 결합 — 하나라도 만족하면 통과 (예: 캐릭터 X 또는 작품 Y 또는 태그 Z 중 하나라도)'">
+            <span class="combine-label">필드 결합:</span>
+            <button class="combine-chip" :class="{ active: combineMode === 'and' }" @click="combineMode = 'and'">
+              ∩ AND
+            </button>
+            <button class="combine-chip" :class="{ active: combineMode === 'or' }" @click="combineMode = 'or'">
+              ∪ OR
+            </button>
           </div>
           <div class="io-row">
             <button class="io-btn" @click="importResults">📤 IMPORT .parquet</button>
@@ -59,6 +71,9 @@
 
       <div class="hints">
         <span>쉼표(,) = AND</span><span>[A|B] = OR</span><span>Exclude로 제외 조건 설정</span>
+        <span class="hint-mode" :class="combineMode">
+          현재 모드: <strong>{{ combineMode === 'and' ? '모든 필드 매칭 (AND)' : '하나라도 매칭 (OR)' }}</strong>
+        </span>
       </div>
 
       <!-- 이전 검색 결과 있으면 바로 보기/랜덤 뽑기 -->
@@ -341,6 +356,13 @@ const sortBy = ref(localStorage.getItem('search.sortBy') || 'default')  // defau
 const sortDir = ref(localStorage.getItem('search.sortDir') || 'asc')    // asc | desc
 watch(sortBy, (v) => { try { localStorage.setItem('search.sortBy', v) } catch {} })
 watch(sortDir, (v) => { try { localStorage.setItem('search.sortDir', v) } catch {} })
+
+// 필드 결합 모드 — AND (모두 매칭) / OR (하나라도 매칭)
+// 예: copyright='genshin', character='raiden_shogun'
+//   AND → 라이덴 쇼군만
+//   OR  → 라이덴 쇼군이거나 원신 캐릭터 누구든
+const combineMode = ref(localStorage.getItem('search.combineMode') || 'and')
+watch(combineMode, (v) => { try { localStorage.setItem('search.combineMode', v) } catch {} })
 const PAGE_SIZE = 50
 const currentPage = ref(0)
 // 결과/필터/정렬이 바뀌면 1페이지로
@@ -422,6 +444,7 @@ async function search() {
     ratings: ratings.filter(r => r.checked).map(r => r.key),
     queries: Object.fromEntries(fields.map(f => [f.key, f.include])),
     excludes: Object.fromEntries(fields.map(f => [f.key, f.exclude])),
+    combine_mode: combineMode.value,  // 'and' | 'or' — 필드 간 결합 방식
   }
   if (backend.searchDanbooru) backend.searchDanbooru(JSON.stringify(query))
 }
@@ -791,6 +814,38 @@ function importResults() { requestAction('import_search_results') }
 .rating-row { display: flex; gap: 4px; }
 .rating-chip { padding: 7px 18px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-muted); font-size: 11px; font-weight: 800; cursor: pointer; }
 .rating-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* 필드 결합 모드 토글 */
+.combine-row {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 10px;
+}
+.combine-label {
+  font-size: 10px; font-weight: 800; color: var(--text-muted);
+  letter-spacing: 1px; margin-right: 4px;
+}
+.combine-chip {
+  padding: 5px 14px; background: var(--bg-button);
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+  color: var(--text-muted); font-size: 11px; font-weight: 800;
+  cursor: pointer; transition: all 0.15s;
+  font-family: 'Consolas', monospace;
+}
+.combine-chip:hover { color: var(--text-secondary); border-color: var(--text-muted); }
+.combine-chip.active {
+  border-color: var(--accent); color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+.hint-mode {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px !important;
+}
+.hint-mode.and { background: rgba(96, 165, 250, 0.08); color: #93c5fd; }
+.hint-mode.or  { background: rgba(250, 204, 21, 0.08); color: var(--accent); }
+.hint-mode strong { font-weight: 900; }
 .go-btn { padding: 12px 40px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 900; font-size: 14px; cursor: pointer; letter-spacing: 1px; }
 .go-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250,204,21,0.3); }
 .io-row { display: flex; gap: 4px; }
