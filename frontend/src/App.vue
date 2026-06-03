@@ -59,7 +59,7 @@
               <input type="number" v-model.number="autoSettings.delay" min="0" step="0.5" class="auto-input" />
             </div>
             <div class="auto-row">
-              <label title="생성 실패 시 자동 재시도 횟수 (지수 백오프)">재시도</label>
+              <label title="한 생성이 실패(서버 에러/타임아웃/OOM 등)했을 때 자동으로 다시 시도할 횟수.&#10;반복과 별개 — 반복은 같은 프롬프트로 N장 생성, 재시도는 실패 1회당 N번까지 다시 시도.&#10;지수 백오프(2s → 4s → 8s, 최대 30s)로 대기 후 재시도.&#10;&#10;예) 반복=3, 재시도=2:&#10;  · 2번째 시도가 실패하면 2초 대기 → 재시도 → 4초 → 재시도&#10;  · 두 재시도도 모두 실패 시 포기, 3번째 반복으로 진행">재시도</label>
               <input type="number" v-model.number="autoSettings.maxRetries" min="0" max="10" class="auto-input" />
             </div>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
