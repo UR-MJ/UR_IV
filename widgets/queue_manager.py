@@ -134,9 +134,12 @@ class QueueManager(QObject):
                     import logging
                     logging.getLogger(__name__).info(
                         f"queue_manager: 정기 cleanup (매 {self.cleanup_every_n}회, "
-                        f"현재 {self.generated_count}회 생성)"
+                        f"현재 {self.generated_count}회 생성) — full_reload"
                     )
-                    backend.cleanup_models(full_reload=False)
+                    # cleanup_every_n=1 케이스에선 강력한 full_reload 사용
+                    # (NegPiP + LoRA 4종 같은 무거운 워크플로우 보호)
+                    use_full = (self.cleanup_every_n == 1)
+                    backend.cleanup_models(full_reload=use_full)
             except Exception:
                 pass
 
