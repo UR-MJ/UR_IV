@@ -355,28 +355,10 @@ class WebUIBackend(AbstractBackend):
         try:
             self._switch_model_if_needed(model_name)
 
-            # SAM3/ADetailer 같은 alwayson_scripts가 있고 LoRA가 있을 때,
-            # 같은 API call 내에서 T2I → 후처리로 이어지는데 메모리 cleanup이
-            # 안 되어 OOM 발생함. generation 시작 전 free memory 확보 신호 보냄.
-            try:
-                has_aaos = bool(payload.get('alwayson_scripts'))
-                has_lora_prompt = '<lora:' in str(payload.get('prompt', ''))
-                # SAM3 활성 + LoRA 사용 케이스에 한해 사전 cleanup
-                if has_aaos and has_lora_prompt:
-                    aaos = payload.get('alwayson_scripts') or {}
-                    # SAM3 활성 체크
-                    sam3_args = (aaos.get('SAM3 Mask') or {}).get('args') or []
-                    sam3_active = bool(sam3_args and isinstance(sam3_args[0], dict)
-                                       and sam3_args[0].get('sam3_enable'))
-                    if sam3_active:
-                        logger.debug("pre-generation cleanup (SAM3 + LoRA 감지)")
-                        requests.post(
-                            url=f'{self.api_url}/sdapi/v1/unload-checkpoint',
-                            headers=_HEADERS, timeout=15
-                        )
-                        # 모델 재로딩은 다음 generation에서 자동으로 일어남
-            except requests.exceptions.RequestException:
-                pass  # 엔드포인트 없는 forge 버전 — 무시
+            # NOTE: 이전에 SAM3+LoRA 감지 시 사전 unload-checkpoint 호출 했었음.
+            # 그러나 sam3_unload_after=True 추가로 sam-extra가 검출 후 알아서
+            # 정리하므로 사전 unload는 불필요 + 메모리 단편화로 가용 VRAM
+            # 4GB 정도 손실시킴 (사용자 로그 비교로 확인). 제거.
 
             # 진행률 폴링 시작
             stop_event = threading.Event()
