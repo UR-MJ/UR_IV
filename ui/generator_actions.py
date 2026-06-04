@@ -517,19 +517,56 @@ class ActionsMixin:
             
             self.apply_random_prompt()
         
-        # 대기 후 생성
+        # 대기 후 생성 — 대기 동안 카운트다운 타이머로 남은 시간 표시 (Search % 느낌)
+        import time
         delay_ms = int(settings['delay'] * 1000)
-        self._emit_auto_status(waiting=(delay_ms > 0))
-        QTimer.singleShot(delay_ms, self._automation_generate)
+        if delay_ms > 0:
+            self._wait_total_ms = delay_ms
+            self._wait_end_time = time.time() + (delay_ms / 1000.0)
+            self._ensure_wait_timer()
+            self._wait_timer.start(100)  # 100ms마다 남은 시간 갱신
+            self._emit_auto_status(waiting=True)
+        else:
+            self._wait_total_ms = 0
+            self._wait_end_time = 0
+            self._emit_auto_status(waiting=False)
+            QTimer.singleShot(0, self._automation_generate)
 
 
     def _automation_generate(self):
         """자동화 이미지 생성"""
         if not self.is_automating:
             return
-        
+
+        # 대기 타이머 정지 (생성 들어가면 카운트다운 종료)
+        if getattr(self, '_wait_timer', None):
+            self._wait_timer.stop()
+        self._wait_end_time = 0
+
         self.auto_current_repeat += 1
         self.start_generation()
+
+    def _ensure_wait_timer(self):
+        """자동화 대기 카운트다운 타이머 보장 (100ms 간격)."""
+        if getattr(self, '_wait_timer', None) is None:
+            from PyQt6.QtCore import QTimer
+            self._wait_timer = QTimer(self)
+            self._wait_timer.setInterval(100)
+            self._wait_timer.timeout.connect(self._on_wait_tick)
+
+    def _on_wait_tick(self):
+        """대기 중 남은 시간 갱신 → 0이 되면 생성 시작."""
+        import time
+        if not self.is_automating:
+            if getattr(self, '_wait_timer', None):
+                self._wait_timer.stop()
+            return
+        remaining = getattr(self, '_wait_end_time', 0) - time.time()
+        if remaining <= 0:
+            # _automation_generate가 타이머 정지 처리
+            self._automation_generate()
+            return
+        self._emit_auto_status(waiting=True)
 
 
     def _continue_automation(self):
@@ -549,10 +586,18 @@ class ActionsMixin:
             _remaining = len(_deck)
             _total = len(_pool)
             _used = max(0, _total - _remaining)
+            # 대기 카운트다운 (다음 생성까지 남은 시간) — Search % 바 느낌
+            import time as _t
+            _wait_total = int(getattr(self, '_wait_total_ms', 0) or 0)
+            _wait_remaining = 0
+            if waiting:
+                _wait_remaining = max(0, int((getattr(self, '_wait_end_time', 0) - _t.time()) * 1000))
             self.vue_bridge.automationStatus.emit(json.dumps({
                 'running': self.is_automating,
                 'count': getattr(self, 'auto_gen_count', 0),
                 'waiting': waiting,
+                'wait_remaining_ms': _wait_remaining,
+                'wait_total_ms': _wait_total,
                 'deck_remaining': _remaining,
                 'deck_total': _total,
                 'deck_used': _used,
@@ -574,6 +619,11 @@ class ActionsMixin:
         """자동화 중지"""
         was_running = self.is_automating
         self.is_automating = False
+        # 대기 카운트다운 정지
+        if getattr(self, '_wait_timer', None):
+            self._wait_timer.stop()
+        self._wait_end_time = 0
+        self._wait_total_ms = 0
         self._emit_auto_status()
         # PR 3: 중지 이벤트 발행
         if was_running:

@@ -108,6 +108,12 @@ class GenerationMixin:
         # 고해상도 모드 — Vue의 'set_high_res_factor' 액션이 self._high_res_factor 설정
         # 입력 해상도는 그대로 두고 생성 시점에만 곱함 → UI에 base 값 유지
         hr_factor = getattr(self, '_high_res_factor', 1.0) or 1.0
+        _auto_res = bool(getattr(self, 'auto_res_check', None)
+                         and self.auto_res_check.isChecked())
+        # ANIMA 계열은 '2048 이상'(2048 포함)에서 해상도가 붕괴함 → 자동 해상도
+        # 모드에서는 최종 해상도를 항상 2048 '미만'으로 강제한다.
+        _ANIMA_MAX = 2048
+
         if hr_factor > 1.0:
             base_w, base_h = width, height
             # SD 호환을 위해 8 배수로 내림 정렬
@@ -115,23 +121,28 @@ class GenerationMixin:
             cand_h = max(8, (int(base_h * hr_factor) // 8) * 8)
 
             # ── 히든 가드: 자동(PARQUET) 해상도 모드에서만 동작 ──────────────
-            # ANIMA 계열은 2048↑에서 해상도가 붕괴함. 자동 해상도는 parquet 치수가
-            # 매번 달라(긴 변이 1365px 등) 고해상도 배율을 곱하면 2048을 넘길 수 있다.
-            # 이번 생성의 최종 해상도(긴 변)가 2048 이상이면 '이번 생성만' 고해상도를
-            # 스킵하고 base 해상도로 생성한다. 매 생성마다 새로 평가되므로 다음
-            # 생성에서 해상도가 작아지면 고해상도가 자동으로 다시 적용된다(상태 없음).
-            # 수동 해상도 모드는 사용자가 명시적으로 정한 값이므로 가드 미적용.
-            _ANIMA_HIRES_MAX = 2048
-            _auto_res = bool(getattr(self, 'auto_res_check', None)
-                             and self.auto_res_check.isChecked())
-            if _auto_res and (cand_w >= _ANIMA_HIRES_MAX or cand_h >= _ANIMA_HIRES_MAX):
-                print(f"[HighRes] 자동해상도+고해상도 결과 {cand_w}x{cand_h} ≥ "
-                      f"{_ANIMA_HIRES_MAX} → 이번 생성 고해상도 스킵 (base "
-                      f"{base_w}x{base_h} 사용, 다음 생성부터 재평가)")
-                # width/height는 base 그대로 유지 (고해상도 미적용)
+            # 고해상도 결과(긴 변)가 2048 이상이면 '이번 생성만' 고해상도를 스킵하고
+            # base로 생성. 매 생성마다 새로 평가(상태 없음) → 다음 생성에서 작아지면
+            # 자동 재적용. 수동 해상도 모드는 사용자 의도 존중 → 미적용.
+            if _auto_res and (cand_w >= _ANIMA_MAX or cand_h >= _ANIMA_MAX):
+                width, height = base_w, base_h
+                print(f"[HighRes] 자동+고해상도 {cand_w}x{cand_h} ≥ {_ANIMA_MAX} → "
+                      f"고해상도 스킵 (base {base_w}x{base_h})")
             else:
                 width, height = cand_w, cand_h
                 print(f"[HighRes] {hr_factor}x → {base_w}x{base_h} → {width}x{height}")
+
+        # ANIMA 안전 캡: 자동 해상도 모드에서 최종 해상도가 2048 '이상'(2048 포함)
+        # 이면 비율 유지하며 2048 미만(8배수=2040)으로 축소. auto-res가 긴 변을
+        # 정확히 2048로 clamp하면 고해상도 미적용이어도 ANIMA가 깨지므로 여기서 막음.
+        if _auto_res and (width >= _ANIMA_MAX or height >= _ANIMA_MAX):
+            _m = max(width, height)
+            _target = ((_ANIMA_MAX - 1) // 8) * 8  # 2040
+            _scale = _target / _m
+            _nw = max(8, (int(width * _scale) // 8) * 8)
+            _nh = max(8, (int(height * _scale) // 8) * 8)
+            print(f"[HighRes] ANIMA 안전캡: {width}x{height} ≥ {_ANIMA_MAX} → {_nw}x{_nh}")
+            width, height = _nw, _nh
         
         combined_neg_prompt = self.neg_prompt_text.toPlainText().strip()
 

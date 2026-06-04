@@ -79,7 +79,11 @@
               <template v-if="deckAllowDup">{{ deckTotal }}개 (중복 허용 · 무한)</template>
               <template v-else><strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용</template>
             </div>
-            <div class="auto-status-sub" v-if="autoWaiting">대기 중... ({{ autoSettings.delay }}초)</div>
+            <div class="auto-status-sub auto-wait" v-if="autoWaiting && waitTotalMs > 0">
+              <div class="wait-row"><span>⏳ 다음 생성까지 {{ waitSec }}s</span><span class="wait-pct">{{ Math.round(waitPct) }}%</span></div>
+              <div class="wait-bar"><div class="wait-fill" :style="{ width: waitPct + '%' }"></div></div>
+            </div>
+            <div class="auto-status-sub" v-else-if="autoWaiting">대기 중...</div>
           </div>
           <div class="generate-row">
             <button class="btn-generate" :class="{ automating: isAutomating }" @click="doGenerate" :disabled="isGenerating && !isAutomating">
@@ -1041,6 +1045,15 @@ const deckRemaining = ref(0)
 const deckTotal = ref(0)
 const deckUsed = ref(0)
 const deckAllowDup = ref(false)
+// 자동화 대기 카운트다운 (다음 생성까지) — Search % 바 느낌
+const waitRemainingMs = ref(0)
+const waitTotalMs = ref(0)
+const waitSec = computed(() => (waitRemainingMs.value / 1000).toFixed(1))
+const waitPct = computed(() => {
+  if (waitTotalMs.value <= 0) return 0
+  const elapsed = waitTotalMs.value - waitRemainingMs.value
+  return Math.max(0, Math.min(100, (elapsed / waitTotalMs.value) * 100))
+})
 const vramInfo = ref({ used: 0, total: 0, pct: 0 })
 const vramClass = computed(() => vramInfo.value.pct > 90 ? 'critical' : vramInfo.value.pct > 70 ? 'warn' : 'ok')
 const vramTooltip = computed(() => {
@@ -1747,6 +1760,8 @@ onMounted(async () => {
       deckTotal.value = d.deck_total || 0
       deckUsed.value = d.deck_used || 0
       deckAllowDup.value = d.allow_duplicates || false
+      waitRemainingMs.value = d.wait_remaining_ms || 0
+      waitTotalMs.value = d.wait_total_ms || 0
       if (!d.running) { isGenerating.value = false }
     } catch {}
   })
@@ -2221,6 +2236,10 @@ onMounted(async () => {
 .auto-status { padding: 8px 12px; background: rgba(250, 204, 21, 0.05); border: 1px solid var(--accent-dim); border-radius: 8px; margin-bottom: 8px; }
 .auto-status-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--accent); font-weight: 700; }
 .auto-status-sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.auto-wait .wait-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+.auto-wait .wait-pct { color: var(--accent); font-weight: 700; }
+.auto-wait .wait-bar { height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
+.auto-wait .wait-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.12s linear; }
 .auto-pulse { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .generate-row { display: flex; gap: 6px; align-items: stretch; }
