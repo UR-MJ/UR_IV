@@ -93,6 +93,17 @@ class GeneratorMainUI(
             self.connect_signals()
             self.load_settings()
 
+            # 4-A. 검색 결과 덱 디스크 복원 — 자동화가 Search 탭 방문 없이도 즉시 사용 가능.
+            #   기존엔 Vue SearchView onMounted에서만 loadLastSearchResults가 호출돼,
+            #   앱이 다른 탭(T2I 등)에서 시작하면 shuffled_prompt_deck이 빈 채로 남아
+            #   '자동화 종료 후 재시작 시 검색 import 안 됨 → 자동화 불가' 발생.
+            #   여기서 동기 복원하면 어느 탭에서 시작하든 덱이 준비됨.
+            try:
+                if hasattr(self, 'vue_bridge') and hasattr(self.vue_bridge, 'loadLastSearchResults'):
+                    self.vue_bridge.loadLastSearchResults()
+            except Exception as e:
+                print(f"[Search] 시작 시 덱 복원 실패: {e}")
+
             # 5. 백엔드 브릿지 가동
             self._startup_backend_check()
             self._apply_backend_startup_result()
