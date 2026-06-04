@@ -675,6 +675,17 @@ class VueBridge(QObject):
                     v = row.get(alt, '')
                 return str(v) if v is not None else ''
 
+            def _dim(row, key):
+                """image_width/height → int 또는 None (없으면 자동 해상도 폴백)"""
+                v = row.get(key)
+                try:
+                    if v is None or v == '':
+                        return None
+                    iv = int(float(v))
+                    return iv if iv > 0 else None
+                except (ValueError, TypeError):
+                    return None
+
             if isinstance(results, list):
                 # 새 형식 (현재): list of dicts
                 for row in results:
@@ -684,6 +695,8 @@ class VueBridge(QObject):
                         'artist':    _pick(row, 'tag_string_artist',    'artist'),
                         'general':   _pick(row, 'tag_string_general',   'general'),
                         'rating':    str(row.get('rating') or ''),
+                        'image_width':  _dim(row, 'image_width'),
+                        'image_height': _dim(row, 'image_height'),
                     })
             elif hasattr(results, 'iterrows'):
                 # 옛 형식 fallback: DataFrame
@@ -694,6 +707,8 @@ class VueBridge(QObject):
                         'artist':    _pick(row, 'tag_string_artist',    'artist'),
                         'general':   _pick(row, 'tag_string_general',   'general'),
                         'rating':    str(row.get('rating') or ''),
+                        'image_width':  _dim(row, 'image_width'),
+                        'image_height': _dim(row, 'image_height'),
                     })
             else:
                 print(f"[Search] _on_search_results: unknown type {type(results)}")

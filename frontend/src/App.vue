@@ -1197,12 +1197,14 @@ const visibleHistory = computed(() => {
 // Context menu (화면 밖 방지)
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
 const ctxMenuStyle = computed(() => {
-  const menuW = 210, menuH = 250
+  // menuH는 실제 메뉴 높이(항목 13행 ≈ 400px) 이상으로 잡아야 하단 flip이
+  // 충분히 동작. 250이면 항목 추가 후 실제 높이보다 작아 하단 잘림 발생했음.
+  const menuW = 210, menuH = 420
   let x = ctxMenu.value.x, y = ctxMenu.value.y
   if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 10
   if (y + menuH > window.innerHeight) y = window.innerHeight - menuH - 10
   if (x < 0) x = 10
-  if (y < 0) y = 10
+  if (y < 8) y = 8
   return { top: y + 'px', left: x + 'px' }
 })
 
@@ -1584,6 +1586,18 @@ function historyImageSrc(path) {
   return `file:///${path}?t=${imageVersions[path] || 0}`
 }
 
+// History 키보드 상하 네비게이션 — 전역 ↑/↓로 이전/다음 이미지 선택.
+// 선택이 없으면 첫 이미지부터. 페이지 경계를 넘으면 histPage도 따라 이동.
+function navigateHistory(dir) {
+  const list = historyImages.value
+  if (!list.length) return
+  let idx = list.indexOf(currentImage.value)
+  if (idx < 0) idx = 0
+  else idx = Math.min(list.length - 1, Math.max(0, idx + dir))
+  histPage.value = Math.floor(idx / histPerPage)
+  selectHistoryImage(list[idx])
+}
+
 // 드래그 앤 드롭 지원
 function onDragStart(e, path) {
   e.dataTransfer.setData('text/plain', path)
@@ -1669,6 +1683,19 @@ onMounted(async () => {
       if (showStatsModal.value)       { showStatsModal.value = false; return }
       // 2) 확장 패널 오버레이 (z-index 50)
       if (showExtendPanel.value)      { showExtendPanel.value = false; return }
+    }
+    // History ↑/↓ 네비게이션 — 입력 필드/모달 포커스 중이 아닐 때만
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const ae = document.activeElement
+      const tag = (ae?.tagName || '').toLowerCase()
+      const editable = tag === 'input' || tag === 'textarea' || tag === 'select' || ae?.isContentEditable
+      const anyModal = showExtendPanel.value || showPresetManager.value || showWeightManager.value
+        || showWcManager.value || showOrderManager.value || showProfileManager.value
+        || showInstantWcManager.value || showStatsModal.value
+      if (!editable && !anyModal && historyImages.value.length) {
+        e.preventDefault()
+        navigateHistory(e.key === 'ArrowDown' ? 1 : -1)
+      }
     }
   })
 
@@ -1872,7 +1899,11 @@ onMounted(async () => {
 
 /* Extended Panel Backdrop — 외부 클릭으로 닫기 */
 .extend-backdrop {
-  position: absolute; inset: 0; background: transparent;
+  /* 왼쪽 패널(360px)은 덮지 않음 — inset:0이면 왼쪽 checkpoint/프롬프트 영역까지
+     가려 wheel을 가로채 스크롤이 동결됐음. left:360부터 덮어 왼쪽 패널은 ADVANCED가
+     열린 상태에서도 스크롤/조작 가능. 오버레이(360~680)는 위(z-index 50)라 클릭이
+     오버레이로 가고, 그 바깥(680~)을 클릭하면 닫힘. */
+  position: absolute; left: 360px; right: 0; top: 0; bottom: 0; background: transparent;
   z-index: 45; cursor: pointer;
 }
 /* Extended Panel Overlay */
@@ -2226,14 +2257,17 @@ onMounted(async () => {
 .hist-nav-btn { width: 100%; padding: 4px; background: #131313; border: none; color: #484848; font-size: 12px; cursor: pointer; flex-shrink: 0; }
 .hist-nav-btn:hover { background: #1A1A1A; color: #E8E8E8; }
 .hist-nav-btn:disabled { opacity: 0.3; cursor: default; }
-.hist-scroll { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
-.hist-card { position: relative; border-radius: var(--radius-card); overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: border-color 0.15s; }
+.hist-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+/* flex:1 1 0 — 5개 카드가 컬럼 높이를 균등 분배 → 모든 간격(8px)이 일정.
+   기존 aspect-ratio:1(정사각)은 5개가 컬럼을 못 채워 하단에 큰 빈 공간이 남아
+   간격이 불균일해 보였음. */
+.hist-card { position: relative; flex: 1 1 0; min-height: 0; border-radius: var(--radius-card); overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: border-color 0.15s; }
 .hist-card:hover { border-color: #333; }
 .hist-card.selected { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-dim); }
-.hist-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.hist-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 /* Context Menu */
-.modern-ctx-menu { position: fixed; background: #181818; border: 1px solid #222; border-radius: 10px; padding: 6px; z-index: 1000; min-width: 200px; box-shadow: 0 12px 32px rgba(0,0,0,0.8); }
+.modern-ctx-menu { position: fixed; background: #181818; border: 1px solid #222; border-radius: 10px; padding: 6px; z-index: 1000; min-width: 200px; box-shadow: 0 12px 32px rgba(0,0,0,0.8); max-height: calc(100vh - 16px); overflow-y: auto; }
 .ctx-item { padding: 10px 14px; font-size: 11px; font-weight: 600; color: #909090; cursor: pointer; border-radius: 6px; transition: var(--transition); }
 .ctx-item:hover { background: #252525; color: #FFF; }
 .ctx-item.delete { color: #f87171; }

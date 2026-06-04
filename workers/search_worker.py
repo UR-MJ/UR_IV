@@ -10,7 +10,10 @@ class PandasSearchWorker(QThread):
     status_update = pyqtSignal(str)
 
     # 검색에 필요한 컬럼만 로드 (메모리 절약)
-    REQUIRED_COLUMNS = ['copyright', 'character', 'artist', 'general', 'meta']
+    # image_width/height 추가 — 자동(PARQUET) 해상도 + Search 결과 해상도 표기용.
+    # 파일에 컬럼 없으면 read_parquet(columns=) 가 실패하고 전체 로드로 폴백되므로 안전.
+    REQUIRED_COLUMNS = ['copyright', 'character', 'artist', 'general', 'meta',
+                        'image_width', 'image_height']
 
     cached_df = None
     cached_col_lower = {}  # {col_name: lowercase Series} — rating/year 변경 시 무효화

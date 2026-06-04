@@ -209,6 +209,7 @@
             <div class="meta-pill artist"><span class="ml">ARTIST</span>{{ currentResult.artist || 'UNKNOWN' }}</div>
             <div class="meta-pill character"><span class="ml">CHAR</span>{{ currentResult.character || 'GENERIC' }}</div>
             <div class="meta-pill mini"><span class="ml">RATING</span>{{ currentResult.rating || '?' }}</div>
+            <div class="meta-pill mini" v-if="currentResult.image_width && currentResult.image_height"><span class="ml">RES</span>{{ currentResult.image_width }}×{{ currentResult.image_height }}</div>
             <div class="meta-pill mini"><span class="ml">TAGS</span>{{ currentTags.length }}</div>
           </div>
           <div class="tag-section">
