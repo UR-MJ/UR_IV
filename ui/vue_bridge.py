@@ -785,6 +785,24 @@ class VueBridge(QObject):
             print(f"[Search] loadLastSearchResults failed: {e}")
         return '[]'
 
+    @pyqtSlot(result=str)
+    def getUiPrefs(self) -> str:
+        """ui_prefs.json 전체를 JSON 문자열로 반환 — Vue가 mount 시 능동 복원용.
+
+        uiPrefsLoaded 이벤트는 앱 startup에 1회만 emit되므로, 라우터+keep-alive로
+        늦게 mount되는 SearchView가 그 이벤트를 놓칠 수 있음. 또 QWebEngine 저장소
+        경로가 PID 기반이라 재시작 시 localStorage가 비워지는데, ui_prefs.json은
+        파일이라 재시작 후에도 남음 → 이 getter로 능동 복원하면 검색 입력이 보존됨.
+        """
+        try:
+            import os
+            from core.config_migration import load_ui_prefs
+            prefs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ui_prefs.json')
+            return json.dumps(load_ui_prefs(prefs_path), ensure_ascii=False)
+        except Exception as e:
+            print(f"[UIPrefs] getUiPrefs failed: {e}")
+            return '{}'
+
     @pyqtSlot(str, result=str)
     def loadImageBase64(self, filepath: str) -> str:
         """이미지를 base64로 반환"""

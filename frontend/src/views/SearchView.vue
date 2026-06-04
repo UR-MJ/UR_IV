@@ -557,6 +557,26 @@ function persistSearchFields() {
   }, 600)
 }
 
+// 저장된 검색 상태 적용 — uiPrefsLoaded 이벤트 + mount 시 능동 fetch 양쪽에서 재사용.
+// fields/ratings/combineMode/datasetYear/resultCapMode 전부 복원.
+function applySearchState(state) {
+  if (!state) return false
+  let touched = false
+  if (Array.isArray(state.fields)) {
+    state.fields.forEach((f, i) => {
+      if (fields[i]) { fields[i].include = f.include || ''; fields[i].exclude = f.exclude || '' }
+    })
+    touched = true
+  }
+  if (Array.isArray(state.ratings)) {
+    state.ratings.forEach(r => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = !!r.checked })
+  }
+  if (state.combineMode === 'and' || state.combineMode === 'or') combineMode.value = state.combineMode
+  if (state.datasetYear && AVAILABLE_YEARS.includes(state.datasetYear)) datasetYear.value = state.datasetYear
+  if (state.resultCapMode && ['capped', 'unlimited'].includes(state.resultCapMode)) resultCapMode.value = state.resultCapMode
+  return touched
+}
+
 async function search() {
   searching.value = true; statusText.value = 'EXPLORING...'
   searchProgress.value = 0
@@ -632,6 +652,22 @@ onMounted(() => {
       _restoredFromLocalStorage = true
     }
   } catch {}
+  // 재시작 후 localStorage가 비어 복원 실패한 경우 — ui_prefs.json(파일)에서 능동 복원.
+  // QWebEngine 저장소가 PID 경로라 재시작 시 localStorage가 비워지고, uiPrefsLoaded
+  // 이벤트는 startup 1회뿐이라 늦게 mount되면 놓치므로, getter로 직접 가져옴.
+  if (!_restoredFromLocalStorage) {
+    ;(async () => {
+      try {
+        const backend = await getBackend()
+        if (backend.getUiPrefs) {
+          const json = await new Promise(resolve => backend.getUiPrefs(s => resolve(s)))
+          if (applySearchState(JSON.parse(json).searchState)) {
+            _restoredFromLocalStorage = true  // 이후 uiPrefsLoaded 이벤트 중복 적용 방지
+          }
+        }
+      } catch (e) { console.warn('[Search] ui_prefs 능동 복원 실패:', e) }
+    })()
+  }
   // 이전 검색 결과 복원 — backend 파일 우선, fallback으로 localStorage
   // backend는 무제한 (파일), localStorage는 5MB cap → 큰 결과는 backend에서만 보존됨
   ;(async () => {
@@ -689,28 +725,9 @@ onMounted(() => {
   })
   onBackendEvent('searchStatus', (msg) => { statusText.value = msg.toUpperCase() })
   onBackendEvent('uiPrefsLoaded', (json) => {
-    // localStorage에서 이미 복원했으면 ui_prefs는 무시 — localStorage가 더 최신/신뢰
-    // (백엔드 ui_prefs.json 쓰기는 디바운스라 사용자가 빨리 닫으면 옛 값일 수 있음)
+    // localStorage/능동 fetch로 이미 복원했으면 무시 (중복 적용 방지)
     if (_restoredFromLocalStorage) return
-    try {
-      const prefs = JSON.parse(json)
-      const state = prefs.searchState
-      if (!state) return
-      if (Array.isArray(state.fields)) {
-        state.fields.forEach((f, i) => {
-          if (fields[i]) {
-            fields[i].include = f.include || ''
-            fields[i].exclude = f.exclude || ''
-          }
-        })
-      }
-      if (Array.isArray(state.ratings)) {
-        state.ratings.forEach(r => {
-          const found = ratings.find(rt => rt.key === r.key)
-          if (found) found.checked = !!r.checked
-        })
-      }
-    } catch {}
+    try { if (applySearchState(JSON.parse(json).searchState)) _restoredFromLocalStorage = true } catch {}
   })
 
   // 조건부 프롬프트 로드 — localStorage 즉시 + backend 비동기로 보강
