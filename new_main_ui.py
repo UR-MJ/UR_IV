@@ -58,13 +58,32 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # 예외 핸들러 — 크래시 원인 로깅
-    import traceback
+    # 예외 핸들러 — 크래시 원인 로깅 (콘솔 + 파일).
+    # Python 예외와 네이티브 크래시(SIGSEGV/abort/0x80000003)를 모두
+    # config/last_crash.log 에 기록해, 콘솔 창이 닫혀도 사후 확인 가능.
+    import traceback, faulthandler
+    _crash_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'last_crash.log')
+    _crash_fp = None
+    try:
+        os.makedirs(os.path.dirname(_crash_log), exist_ok=True)
+        _crash_fp = open(_crash_log, 'w', encoding='utf-8', buffering=1)
+        # 네이티브 크래시 시 전체 스레드 스택 자동 덤프
+        faulthandler.enable(_crash_fp)
+    except Exception:
+        _crash_fp = None
+
     def _excepthook(exc_type, exc_value, exc_tb):
         print("=" * 60)
         print("UNHANDLED EXCEPTION:")
         traceback.print_exception(exc_type, exc_value, exc_tb)
         print("=" * 60)
+        if _crash_fp is not None:
+            try:
+                _crash_fp.write("\n=== UNHANDLED PYTHON EXCEPTION ===\n")
+                traceback.print_exception(exc_type, exc_value, exc_tb, file=_crash_fp)
+                _crash_fp.flush()
+            except Exception:
+                pass
     sys.excepthook = _excepthook
 
     window = GeneratorMainUI()

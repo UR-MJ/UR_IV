@@ -48,6 +48,7 @@ config/tab_defaults.json
 config/prompt_order.json
 config/profiles/
 config/gallery_last_folder.txt
+config/last_crash.log
 Editor_models/yolo_config.json
 
 # User outputs
