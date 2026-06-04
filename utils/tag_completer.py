@@ -40,6 +40,8 @@ class TagCompleter:
         self.alias_map: dict[str, str] = {}
         # is_valid_tag()용
         self.tags_set: set[str] = set()
+        # 태그 인기도 (lower+underscore 키 → count) — 접두사 매칭 결과 정렬용
+        self._counts: dict[str, int] = {}
 
         self._load_tags()
         self._build_indices()
@@ -65,6 +67,7 @@ class TagCompleter:
             from utils.tag_data import get_tag_data
             td = get_tag_data()
             if td.is_loaded:
+                self._counts = getattr(td, 'tag_counts', {}) or {}
                 counts: dict[str, int] = {}
                 for cat in CATEGORY_PRIORITY:
                     tags = getattr(td, f"{cat}_tags", None) or []
@@ -192,28 +195,43 @@ class TagCompleter:
 
         return results
 
+    # 접두사 매칭 후보 최대 스캔 수 — 인기도 정렬을 위해 후보를 모은 뒤 count로 정렬.
+    # 너무 크면 1글자 접두사에서 느려지고, 너무 작으면 인기 태그를 놓침. 3000이면
+    # 대부분의 접두사를 커버하면서 정렬 비용도 무시할 만함.
+    _PREFIX_SCAN_CAP = 3000
+
     def _prefix_match(self, cat: str, prefix_lower: str,
                       remaining: int, seen: set) -> list[str]:
-        """카테고리 내 접두사 매칭 — bisect로 O(log n + k)."""
+        """카테고리 내 접두사 매칭 — bisect로 후보 수집 후 인기도(count) 내림차순 정렬.
+
+        기존엔 알파벳순이라 '1g' → '1girl'이 위로 안 왔음. count 정렬로 자주 쓰는
+        태그가 먼저 노출됨.
+        """
         if remaining <= 0:
             return []
         keys = self._cat_lower_keys[cat]
         if not keys:
             return []
         start = bisect.bisect_left(keys, prefix_lower)
-        out: list[str] = []
-        for i in range(start, len(keys)):
-            k = keys[i]
-            if not k.startswith(prefix_lower):
+        # 1) 접두사 일치 후보 수집 (최대 _PREFIX_SCAN_CAP)
+        matched: list[str] = []
+        for i in range(start, min(len(keys), start + self._PREFIX_SCAN_CAP)):
+            if not keys[i].startswith(prefix_lower):
                 break
             orig = self._cat_indices[cat][i][1]
-            tl = orig.lower()
-            if tl in seen:
+            if orig.lower() in seen:
                 continue
-            seen.add(tl)
+            matched.append(orig)
+        if not matched:
+            return []
+        # 2) 인기도(count) 내림차순 정렬 — count 동률이면 짧은 태그 우선(더 일반적)
+        c = self._counts
+        matched.sort(key=lambda t: (-c.get(t.lower().replace(" ", "_"), 0), len(t)))
+        # 3) 상위 remaining개 반환 + seen 갱신
+        out: list[str] = []
+        for orig in matched[:remaining]:
+            seen.add(orig.lower())
             out.append(orig)
-            if len(out) >= remaining:
-                break
         return out
 
     # ────────────────────────────────────────

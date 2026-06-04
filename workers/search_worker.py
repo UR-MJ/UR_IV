@@ -1,7 +1,6 @@
 # workers/search_worker.py
 import os
 import re
-import glob
 import pandas as pd
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -21,9 +20,12 @@ class PandasSearchWorker(QThread):
     loaded_ratings = set()
     loaded_year = ''       # 현재 캐시에 로드된 년도 ('2025' | '2026' | '')
 
-    # 사용 가능한 년도 — danbooru_optimized/ 에서 자동 감지 가능하지만 단순화 위해 고정
-    AVAILABLE_YEARS = ('2026', '2025')
-    DEFAULT_YEAR = '2026'
+    # 사용 가능한 데이터셋 — dataset_year가 파일 prefix가 됨:
+    #   '2025'    → danbooru_2025_{rating}.parquet
+    #   '2026'    → danbooru_2026_{rating}.parquet      (기존 풀 데이터)
+    #   '2026_06' → danbooru_2026_06_{rating}.parquet   (슬림: rating/해상도/태그/score)
+    AVAILABLE_YEARS = ('2026_06', '2026', '2025')
+    DEFAULT_YEAR = '2026_06'
 
     def __init__(self, parquet_dir, selected_ratings, queries, exclude_queries=None,
                  combine_mode: str = 'and', dataset_year: str = None):
@@ -171,16 +173,9 @@ class PandasSearchWorker(QThread):
         dfs = []
 
         for rating in self.selected_ratings:
-            # 날짜 버전(danbooru_2026_06_s.parquet 등)이 있으면 사전순 최신 것 우선,
-            # 없으면 기존 danbooru_2026_s.parquet 사용.
-            # glob 패턴 danbooru_2026_*_s.parquet 는 _가 하나 더 있는 날짜 버전만 매칭
-            # (danbooru_2026_s.parquet 는 매칭 안 됨).
-            dated = sorted(glob.glob(os.path.join(
-                self.parquet_dir, f"danbooru_{self.dataset_year}_*_{rating}.parquet")))
-            if dated:
-                path = dated[-1]  # 06 < 07 < ... 사전순 최신
-            else:
-                path = os.path.join(self.parquet_dir, f"danbooru_{self.dataset_year}_{rating}.parquet")
+            # dataset_year가 그대로 prefix — '2026_06'이면 danbooru_2026_06_{rating}.parquet
+            file_name = f"danbooru_{self.dataset_year}_{rating}.parquet"
+            path = os.path.join(self.parquet_dir, file_name)
 
             if os.path.exists(path):
                 self.status_update.emit(f"📂 '{rating}' 등급 데이터 로딩 중...")

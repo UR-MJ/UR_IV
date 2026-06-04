@@ -73,14 +73,14 @@
             <button v-for="r in ratings" :key="r.key" class="rating-chip"
               :class="{ active: r.checked }" @click="r.checked = !r.checked">{{ r.label }}</button>
           </div>
-          <!-- 데이터셋 년도 — 단일 선택 (2026은 2025 포함) -->
-          <div class="combine-row" title="데이터셋 년도 — 단일 선택&#10;2026은 2025를 포함하는 확장판이라 둘 다 선택할 필요 없음">
+          <!-- 데이터셋 — 단일 선택 (2025 / 2026 / 2026.06 슬림) -->
+          <div class="combine-row" title="검색 데이터셋 선택&#10;2026.06 = 해상도/score 포함 슬림 데이터">
             <span class="combine-label">데이터셋:</span>
             <button v-for="y in AVAILABLE_YEARS" :key="y"
               class="combine-chip year-chip"
               :class="{ active: datasetYear === y }"
               @click="datasetYear = y">
-              {{ y }}
+              {{ yearLabel(y) }}
             </button>
           </div>
 
@@ -130,7 +130,7 @@
         <span :title="'마지막 | 다음을 비워두면 → 이 필드 조건은 매칭 안 되어도 통과\n예: copyright=[tots|alc|] → TOT/ALC 매치 또는 무관\n\n⚠ 중간 ||(이중 파이프)는 wildcard 아님 — 그냥 빈 토큰 무시\n예: character=[A||B] → A 또는 B만 (필드 조건 면제 안 됨)'">[A|B|<b>↵</b>] = 끝에 비우면 필드 면제</span>
         <span>Exclude로 제외 조건 설정</span>
         <span class="hint-mode" :class="combineMode">
-          현재: <strong>{{ combineMode === 'and' ? 'AND' : 'OR' }}</strong> · <strong>{{ datasetYear }}</strong>
+          현재: <strong>{{ combineMode === 'and' ? 'AND' : 'OR' }}</strong> · <strong>{{ yearLabel(datasetYear) }}</strong>
           · <strong>{{ resultCapMode === 'capped' ? 'cap 50만' : 'cap OFF ⚠' }}</strong>
         </span>
       </div>
@@ -463,12 +463,13 @@ const hasSearched = ref(false)
 // 마지막 쿼리 요약 (사용자가 무엇을 검색했는지 보여주기 위함)
 const lastQuerySummary = ref('')
 
-// 데이터셋 년도 — 2025 / 2026 단일 선택
-// 2026은 2025를 포함하는 확장판이라 둘 다 선택할 필요 없음 (중복)
-const AVAILABLE_YEARS = ['2026', '2025']
-const datasetYear = ref(localStorage.getItem('search.datasetYear') || '2026')
-if (!AVAILABLE_YEARS.includes(datasetYear.value)) datasetYear.value = '2026'
+// 데이터셋 — 단일 선택. 값이 곧 parquet prefix (danbooru_{값}_{rating}.parquet)
+//   2025 / 2026(기존 풀) / 2026_06(슬림: 해상도·score 포함)
+const AVAILABLE_YEARS = ['2026_06', '2026', '2025']
+const datasetYear = ref(localStorage.getItem('search.datasetYear') || '2026_06')
+if (!AVAILABLE_YEARS.includes(datasetYear.value)) datasetYear.value = '2026_06'
 watch(datasetYear, (v) => { try { localStorage.setItem('search.datasetYear', v) } catch {} })
+function yearLabel(y) { return y === '2026_06' ? '2026.06' : y }
 
 // 결과 cap — 기본 50만 (UI 부하 방지), 'unlimited' 선택 시 전체 결과 받음
 // 무제한이면 JSON 직렬화 + Vue 메모리가 무거워질 수 있음 (수 GB 가능)

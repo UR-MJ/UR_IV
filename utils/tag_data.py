@@ -13,9 +13,14 @@ class TagData:
 
     def __init__(self, parquet_path: str = None):
         if parquet_path is None:
-            parquet_path = str(
-                Path(__file__).parent.parent / "danbooru2025-alltime-tag-counts.parquet"
-            )
+            base = Path(__file__).parent.parent
+            # 우선순위: 신규 tags_dictionary.parquet (tag/category/color/count, 2026)
+            #          → 구버전 danbooru2025-alltime-tag-counts.parquet (tag_string/tag_type/tag_count)
+            candidates = [
+                base / "danbooru_optimized" / "tags_dictionary.parquet",
+                base / "danbooru2025-alltime-tag-counts.parquet",
+            ]
+            parquet_path = str(next((c for c in candidates if c.exists()), candidates[-1]))
         self._parquet_path = parquet_path
 
         # tag_type별 리스트 (count 내림차순, 자동완성용)
@@ -32,6 +37,9 @@ class TagData:
         self.artist_set: Set[str] = set()
         self.meta_set: Set[str] = set()
 
+        # 태그 인기도 — lower+underscore 키 → count (자동완성 인기순 정렬용)
+        self.tag_counts: dict[str, int] = {}
+
         self._loaded = False
         self._load()
 
@@ -43,16 +51,20 @@ class TagData:
 
         try:
             import pandas as pd
-            df = pd.read_parquet(
-                self._parquet_path,
-                columns=["tag_string", "tag_type", "tag_count"]
-            )
+            import pyarrow.parquet as pq
+            # 두 스키마 호환: 신규(tag/category/count) vs 구(tag_string/tag_type/tag_count)
+            names = pq.read_schema(self._parquet_path).names
+            c_tag = "tag" if "tag" in names else "tag_string"
+            c_type = "category" if "category" in names else "tag_type"
+            c_cnt = "count" if "count" in names else "tag_count"
+            df = pd.read_parquet(self._parquet_path, columns=[c_tag, c_type, c_cnt])
+            df = df.rename(columns={c_tag: "tag", c_type: "type", c_cnt: "count"})
 
-            # count 내림차순 정렬
-            df = df.sort_values("tag_count", ascending=False)
+            # count 내림차순 정렬 (자동완성 인기순)
+            df = df.sort_values("count", ascending=False)
 
             # underscore → space 변환
-            df["tag_display"] = df["tag_string"].str.replace("_", " ", regex=False)
+            df["tag_display"] = df["tag"].astype(str).str.replace("_", " ", regex=False)
 
             type_map = {
                 "general": (self.general_tags, self.general_set),
@@ -63,10 +75,18 @@ class TagData:
             }
 
             for tag_type, (tag_list, tag_set) in type_map.items():
-                subset = df[df["tag_type"] == tag_type]
+                subset = df[df["type"] == tag_type]
                 tags = subset["tag_display"].dropna().tolist()
                 tag_list.extend(tags)
                 tag_set.update(t.lower() for t in tags)
+
+            # 인기도 맵 (lower+underscore 키) — TagCompleter 인기순 정렬용
+            for tag, cnt in zip(df["tag"].astype(str), df["count"]):
+                if tag:
+                    try:
+                        self.tag_counts[tag.lower().replace(" ", "_")] = int(cnt)
+                    except (ValueError, TypeError):
+                        pass
 
             self._loaded = True
             total = sum(len(v[0]) for v in type_map.values())
