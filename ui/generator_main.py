@@ -828,6 +828,37 @@ class GeneratorMainUI(
                 if raw:
                     self._handle_immediate_generation_from_raw(raw)
 
+            # ═══════ History 우클릭 — 프롬프트 당겨오기 ═══════
+            elif action == 'pull_prompt_from_image':
+                path = _clean_path(payload.get('path', ''))
+                if path and os.path.exists(path):
+                    try:
+                        info = json.loads(self.vue_bridge.getImageExif(path))
+                        prompt = info.get('prompt', '')
+                        negative = info.get('negative', '')
+                        if prompt or negative:
+                            self.handle_prompt_only_transfer(prompt, negative)
+                            self.vue_bridge.showNotification.emit('success', '프롬프트를 당겨왔습니다')
+                        else:
+                            self.vue_bridge.showNotification.emit('warning', '이 이미지에 프롬프트 정보가 없습니다')
+                    except Exception as e:
+                        self.vue_bridge.showNotification.emit('error', f'프롬프트 로드 실패: {e}')
+
+            # ═══════ History 우클릭 — 다음 큐에 추가 ═══════
+            elif action == 'add_image_to_queue':
+                path = _clean_path(payload.get('path', ''))
+                if path and os.path.exists(path):
+                    try:
+                        info = json.loads(self.vue_bridge.getImageExif(path))
+                        qp = self._build_queue_payload_from_exif(info)
+                        if qp and hasattr(self, 'queue_panel'):
+                            self.queue_panel.add_single_item(qp)
+                            self.vue_bridge.showNotification.emit('success', '다음 큐에 추가되었습니다')
+                        else:
+                            self.vue_bridge.showNotification.emit('warning', '이 이미지에 생성 정보가 없습니다')
+                    except Exception as e:
+                        self.vue_bridge.showNotification.emit('error', f'큐 추가 실패: {e}')
+
             # ═══════ XYZ Plot 실행 ═══════
             elif action == 'start_xyz_plot':
                 axes = payload.get('axes', [])
@@ -1353,6 +1384,52 @@ class GeneratorMainUI(
             self.start_generation()
         except Exception as e:
             print(f"[Error] Immediate generation from raw: {e}")
+
+    def _build_queue_payload_from_exif(self, info: dict):
+        """getImageExif 결과(dict)에서 큐 아이템 payload 구성.
+
+        이미지의 프롬프트/샘플러/steps/cfg/해상도는 EXIF에서 그대로 가져오고,
+        seed는 -1(새 변형)로 둔다 — 동일 시드 재생성은 같은 이미지라 무의미하므로
+        '비슷한 걸 더 생성'이 자연스러운 기본값. 프롬프트 없으면 None 반환.
+        """
+        raw = info.get('raw', '') or ''
+        prompt = info.get('prompt', '') or (raw.split('\nNegative prompt:')[0].strip() if raw else '')
+        negative = info.get('negative', '') or ''
+        if not prompt:
+            return None
+        # raw의 'Steps: ...' 파라미터 라인을 key→value로 파싱
+        params = {}
+        if 'Steps:' in raw:
+            tail = raw.split('Steps:', 1)[1]
+            for kv in ('Steps:' + tail).split(', '):
+                if ':' in kv:
+                    k, v = kv.split(':', 1)
+                    params[k.strip().lower().replace(' ', '_')] = v.strip()
+
+        def _to_int(v, d):
+            try: return int(float(v))
+            except (TypeError, ValueError): return d
+        def _to_float(v, d):
+            try: return float(v)
+            except (TypeError, ValueError): return d
+
+        qp = {
+            'prompt': prompt,
+            'negative_prompt': negative,
+            'sampler_name': params.get('sampler') or self.sampler_combo.currentText(),
+            'scheduler': params.get('schedule_type') or self.scheduler_combo.currentText(),
+            'steps': _to_int(params.get('steps'), int(self.steps_input.text() or 20)),
+            'cfg_scale': _to_float(params.get('cfg_scale'), float(self.cfg_input.text() or 7)),
+            'seed': -1,  # 새 변형 (동일 시드 재생성은 무의미)
+            'width': int(self.width_input.text() or 1024),
+            'height': int(self.height_input.text() or 1024),
+        }
+        if 'size' in params:
+            wh = params['size'].split('x')
+            if len(wh) == 2:
+                qp['width'] = _to_int(wh[0], qp['width'])
+                qp['height'] = _to_int(wh[1], qp['height'])
+        return qp
 
     def _build_xyz_payload(self, combo: dict) -> dict:
         """XYZ 조합에서 생성 payload 구성"""

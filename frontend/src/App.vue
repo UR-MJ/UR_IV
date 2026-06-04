@@ -74,6 +74,11 @@
               <span class="auto-pulse"></span>
               <span>자동화 진행 중 — {{ autoGenCount }}장 완료</span>
             </div>
+            <div class="auto-status-sub deck-status" v-if="deckTotal > 0">
+              🎴 덱
+              <template v-if="deckAllowDup">{{ deckTotal }}개 (중복 허용 · 무한)</template>
+              <template v-else><strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용</template>
+            </div>
             <div class="auto-status-sub" v-if="autoWaiting">대기 중... ({{ autoSettings.delay }}초)</div>
           </div>
           <div class="generate-row">
@@ -518,6 +523,9 @@
             <div class="ctx-item" @click="ctxCompare('before')">🔍 COMPARE (BEFORE)</div>
             <div class="ctx-item" @click="ctxCompare('after')">🔍 COMPARE (AFTER)</div>
             <div class="ctx-item" @click="ctxRunAdetailer">🎯 ADETAILER</div>
+            <div class="ctx-separator"></div>
+            <div class="ctx-item" @click="ctxPullPrompt">📥 프롬프트 당겨오기</div>
+            <div class="ctx-item" @click="ctxAddToQueue">➕ 다음 큐에 추가</div>
             <div class="ctx-separator"></div>
             <div class="ctx-item" @click="ctxCopyPath">📋 COPY PATH</div>
             <div class="ctx-item delete" @click="ctxDelete">🗑️ DELETE</div>
@@ -1029,6 +1037,10 @@ const autoMode = ref(false)
 const isAutomating = ref(false)
 const autoGenCount = ref(0)
 const autoWaiting = ref(false)
+const deckRemaining = ref(0)
+const deckTotal = ref(0)
+const deckUsed = ref(0)
+const deckAllowDup = ref(false)
 const vramInfo = ref({ used: 0, total: 0, pct: 0 })
 const vramClass = computed(() => vramInfo.value.pct > 90 ? 'critical' : vramInfo.value.pct > 70 ? 'warn' : 'ok')
 const vramTooltip = computed(() => {
@@ -1534,6 +1546,8 @@ const ctxSendEditor = () => { action('send_to_editor', { path: ctxMenu.value.pat
 const ctxCompare = (slot) => { action('send_to_compare', { path: ctxMenu.value.path, slot }); hideCtxMenu() }
 const ctxRunAdetailer = () => { action('run_adetailer_single', { path: ctxMenu.value.path, settings: { ad_model: 'face_yolov8n.pt', ad_confidence: 0.3, ad_denoise: 0.4 } }); hideCtxMenu() }
 const ctxCopyPath = () => { navigator.clipboard?.writeText(ctxMenu.value.path); hideCtxMenu() }
+const ctxPullPrompt = () => { action('pull_prompt_from_image', { path: ctxMenu.value.path }); hideCtxMenu() }
+const ctxAddToQueue = () => { action('add_image_to_queue', { path: ctxMenu.value.path }); hideCtxMenu() }
 const ctxDelete = () => {
   const path = ctxMenu.value.path
   action('delete_image', { path })
@@ -1702,6 +1716,10 @@ onMounted(async () => {
       isAutomating.value = d.running || false
       autoGenCount.value = d.count || 0
       autoWaiting.value = d.waiting || false
+      deckRemaining.value = d.deck_remaining || 0
+      deckTotal.value = d.deck_total || 0
+      deckUsed.value = d.deck_used || 0
+      deckAllowDup.value = d.allow_duplicates || false
       if (!d.running) { isGenerating.value = false }
     } catch {}
   })

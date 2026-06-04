@@ -484,10 +484,21 @@ class ActionsMixin:
         """Vue에 자동화 상태 전송 + AppContext 이벤트 발행."""
         if hasattr(self, 'vue_bridge'):
             import json
+            # 덱 현황 — 남은/전체/사용. 중복 허용 모드는 덱을 소모 안 하므로
+            # remaining==total로 유지됨(무한). UI에서 그 경우 구분 표시 가능.
+            _deck = getattr(self, 'shuffled_prompt_deck', None) or []
+            _pool = getattr(self, 'filtered_results', None) or []
+            _remaining = len(_deck)
+            _total = len(_pool)
+            _used = max(0, _total - _remaining)
             self.vue_bridge.automationStatus.emit(json.dumps({
                 'running': self.is_automating,
                 'count': getattr(self, 'auto_gen_count', 0),
                 'waiting': waiting,
+                'deck_remaining': _remaining,
+                'deck_total': _total,
+                'deck_used': _used,
+                'allow_duplicates': bool(getattr(self, 'auto_settings', {}).get('allow_duplicates', False)),
             }))
         # PR 3: AppContext에도 발행 (다른 모듈이 구독 가능 — 큐, 통계 등)
         try:
