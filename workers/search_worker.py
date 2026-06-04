@@ -1,6 +1,7 @@
 # workers/search_worker.py
 import os
 import re
+import glob
 import pandas as pd
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -170,9 +171,17 @@ class PandasSearchWorker(QThread):
         dfs = []
 
         for rating in self.selected_ratings:
-            file_name = f"danbooru_{self.dataset_year}_{rating}.parquet"
-            path = os.path.join(self.parquet_dir, file_name)
-            
+            # 날짜 버전(danbooru_2026_06_s.parquet 등)이 있으면 사전순 최신 것 우선,
+            # 없으면 기존 danbooru_2026_s.parquet 사용.
+            # glob 패턴 danbooru_2026_*_s.parquet 는 _가 하나 더 있는 날짜 버전만 매칭
+            # (danbooru_2026_s.parquet 는 매칭 안 됨).
+            dated = sorted(glob.glob(os.path.join(
+                self.parquet_dir, f"danbooru_{self.dataset_year}_*_{rating}.parquet")))
+            if dated:
+                path = dated[-1]  # 06 < 07 < ... 사전순 최신
+            else:
+                path = os.path.join(self.parquet_dir, f"danbooru_{self.dataset_year}_{rating}.parquet")
+
             if os.path.exists(path):
                 self.status_update.emit(f"📂 '{rating}' 등급 데이터 로딩 중...")
                 try:
