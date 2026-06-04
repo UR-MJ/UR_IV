@@ -110,9 +110,10 @@ class GenerationMixin:
         hr_factor = getattr(self, '_high_res_factor', 1.0) or 1.0
         _auto_res = bool(getattr(self, 'auto_res_check', None)
                          and self.auto_res_check.isChecked())
-        # ANIMA 계열은 '2048 이상'(2048 포함)에서 해상도가 붕괴함 → 자동 해상도
-        # 모드에서는 최종 해상도를 항상 2048 '미만'으로 강제한다.
-        _ANIMA_MAX = 2048
+        # ANIMA 가드: 자동 해상도 모드에서 '총 픽셀 수(면적)'를 1536×1536 이하로 제한.
+        # 한 변 제한이 아니라 면적 제한 → 1248×1824(2,276,352px)처럼 한 변이 1536을
+        # 넘어도 면적이 한도(2,359,296px) 이내면 허용. 넘으면 비율 유지하며 축소.
+        _ANIMA_MAX_AREA = 1536 * 1536  # = 2,359,296 px
 
         if hr_factor > 1.0:
             base_w, base_h = width, height
@@ -121,27 +122,27 @@ class GenerationMixin:
             cand_h = max(8, (int(base_h * hr_factor) // 8) * 8)
 
             # ── 히든 가드: 자동(PARQUET) 해상도 모드에서만 동작 ──────────────
-            # 고해상도 결과(긴 변)가 2048 이상이면 '이번 생성만' 고해상도를 스킵하고
-            # base로 생성. 매 생성마다 새로 평가(상태 없음) → 다음 생성에서 작아지면
-            # 자동 재적용. 수동 해상도 모드는 사용자 의도 존중 → 미적용.
-            if _auto_res and (cand_w >= _ANIMA_MAX or cand_h >= _ANIMA_MAX):
+            # 고해상도 결과의 '면적'이 한도를 넘으면 '이번 생성만' 고해상도를 스킵하고
+            # base로 생성. 매 생성 새로 평가(상태 없음) → 다음 생성에서 작아지면 자동
+            # 재적용. 수동 해상도 모드는 사용자 의도 존중 → 미적용.
+            if _auto_res and (cand_w * cand_h > _ANIMA_MAX_AREA):
                 width, height = base_w, base_h
-                print(f"[HighRes] 자동+고해상도 {cand_w}x{cand_h} ≥ {_ANIMA_MAX} → "
+                print(f"[HighRes] 자동+고해상도 {cand_w}x{cand_h}"
+                      f"({cand_w * cand_h:,}px) > {_ANIMA_MAX_AREA:,} → "
                       f"고해상도 스킵 (base {base_w}x{base_h})")
             else:
                 width, height = cand_w, cand_h
                 print(f"[HighRes] {hr_factor}x → {base_w}x{base_h} → {width}x{height}")
 
-        # ANIMA 안전 캡: 자동 해상도 모드에서 최종 해상도가 2048 '이상'(2048 포함)
-        # 이면 비율 유지하며 2048 미만(8배수=2040)으로 축소. auto-res가 긴 변을
-        # 정확히 2048로 clamp하면 고해상도 미적용이어도 ANIMA가 깨지므로 여기서 막음.
-        if _auto_res and (width >= _ANIMA_MAX or height >= _ANIMA_MAX):
-            _m = max(width, height)
-            _target = ((_ANIMA_MAX - 1) // 8) * 8  # 2040
-            _scale = _target / _m
+        # ANIMA 면적 안전캡: 자동 해상도 모드에서 최종 면적이 1536²를 넘으면 비율
+        # 유지하며 면적이 한도 이하가 되도록 축소(8배수). base 자체가 큰 경우
+        # (고해상도 미적용)도 처리. floor 정렬이라 결과 면적은 항상 한도 이하.
+        if _auto_res and (width * height > _ANIMA_MAX_AREA):
+            _scale = (_ANIMA_MAX_AREA / float(width * height)) ** 0.5
             _nw = max(8, (int(width * _scale) // 8) * 8)
             _nh = max(8, (int(height * _scale) // 8) * 8)
-            print(f"[HighRes] ANIMA 안전캡: {width}x{height} ≥ {_ANIMA_MAX} → {_nw}x{_nh}")
+            print(f"[HighRes] ANIMA 면적캡: {width}x{height}({width * height:,}px) "
+                  f"> {_ANIMA_MAX_AREA:,} → {_nw}x{_nh}({_nw * _nh:,}px)")
             width, height = _nw, _nh
         
         combined_neg_prompt = self.neg_prompt_text.toPlainText().strip()
