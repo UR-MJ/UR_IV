@@ -565,17 +565,25 @@ class UISetupMixin:
         })()
         self.sam3_widgets = {
             'detect_prompt': TextEditProxy(b, '_sam3_detect_prompt'),
+            'exclude_prompt': TextEditProxy(b, '_sam3_exclude_prompt'),
             'inpaint_prompt': TextEditProxy(b, '_sam3_inpaint_prompt'),
             'neg_prompt': TextEditProxy(b, '_sam3_neg_prompt'),
             'mode': ComboBoxProxy(b, '_sam3_mode'),
             'mask_mode': ComboBoxProxy(b, '_sam3_mask_mode'),
             'threshold': SliderProxy(b, '_sam3_threshold', multiplier=100),
+            'mask_dilation': LineEditProxy(b, '_sam3_mask_dilation'),
+            'mask_hull': CheckBoxProxy(b, '_sam3_mask_hull'),
+            'mask_outline_px': LineEditProxy(b, '_sam3_mask_outline_px'),
             'mask_blur': SliderProxy(b, '_sam3_mask_blur'),
             'denoise': SliderProxy(b, '_sam3_denoise', multiplier=100),
             'padding': SliderProxy(b, '_sam3_padding'),
             'checkpoint': ComboBoxProxy(b, '_sam3_checkpoint'),
+            'device': ComboBoxProxy(b, '_sam3_device'),
+            'inpainting_fill': ComboBoxProxy(b, '_sam3_inpainting_fill'),
+            'inpaint_only_masked': CheckBoxProxy(b, '_sam3_inpaint_only_masked'),
             'preview_overlay': CheckBoxProxy(b, '_sam3_preview_overlay'),
             'save_artifacts': CheckBoxProxy(b, '_sam3_save_artifacts'),
+            'unload_after': CheckBoxProxy(b, '_sam3_unload_after'),
             'use_inpaint_size_check': CheckBoxProxy(b, '_sam3_use_inp_size'),
             'inpaint_size_container': type('WProxy', (), {
                 'setVisible': lambda s, v: None, 'hide': lambda s: None, 'show': lambda s: None,
@@ -589,7 +597,10 @@ class UISetupMixin:
             'cfg': SliderProxy(b, '_sam3_cfg', multiplier=10),
             'use_sampler_check': CheckBoxProxy(b, '_sam3_use_sampler'),
             'sampler': ComboBoxProxy(b, '_sam3_sampler'),
+            'use_scheduler_check': CheckBoxProxy(b, '_sam3_use_scheduler'),
             'scheduler': ComboBoxProxy(b, '_sam3_scheduler'),
+            'use_seed_check': CheckBoxProxy(b, '_sam3_use_seed'),
+            'seed': LineEditProxy(b, '_sam3_seed'),
             'use_noise_multiplier_check': CheckBoxProxy(b, '_sam3_use_noise_mul'),
             'noise_multiplier': SliderProxy(b, '_sam3_noise_mul', multiplier=100),
             'restore_face': CheckBoxProxy(b, '_sam3_restore_face'),
@@ -598,14 +609,22 @@ class UISetupMixin:
             })(),
         }
         self.sam3_widgets['threshold'].setText('0.40')
+        self.sam3_widgets['mask_dilation'].setText('0')
+        self.sam3_widgets['mask_outline_px'].setText('0')
         self.sam3_widgets['mask_blur'].setText('4')
         self.sam3_widgets['denoise'].setText('0.40')
         self.sam3_widgets['padding'].setText('32')
         self.sam3_widgets['checkpoint'].setText('sam3.pt')
+        self.sam3_widgets['device'].setText('auto')
+        self.sam3_widgets['inpainting_fill'].setText('original')
+        self.sam3_widgets['seed'].setText('-1')
         self.sam3_widgets['steps'].setText('28')
         self.sam3_widgets['cfg'].setText('7.0')
         self.sam3_widgets['noise_multiplier'].setText('1.0')
         self.sam3_widgets['save_artifacts'].setChecked(True)
+        # 16GB GPU 권장 기본값 (Forge 확장 v0.6.1+ 디폴트와 동일)
+        self.sam3_widgets['inpaint_only_masked'].setChecked(True)
+        self.sam3_widgets['unload_after'].setChecked(True)
 
         # 제거 옵션
         self.chk_remove_artist = CheckBoxProxy(b, 'chk_remove_artist')

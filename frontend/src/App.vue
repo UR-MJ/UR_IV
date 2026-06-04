@@ -307,67 +307,89 @@
               </details>
             </details>
 
-            <!-- SAM3 -->
+            <!-- SAM3 Mask — Forge Neo SAM3 확장과 1:1 -->
             <details class="ext-card">
-              <summary class="ext-title">SAM3</summary>
-              <label class="ext-check-row"><input type="checkbox" v-model="sam3_enabled" /><span>SAM3 활성화</span></label>
-              <div class="ext-field"><label>Detect Prompt</label>
+              <summary class="ext-title">SAM3 Mask</summary>
+              <label class="ext-check-row"><input type="checkbox" v-model="sam3_enabled" /><span>Enable SAM3</span></label>
+
+              <div class="ext-field"><label>SAM3 Detect Prompt</label>
                 <input type="text" v-model="storeWidgets._sam3_detect_prompt" placeholder="face" /></div>
-              <div class="ext-field"><label>Inpaint Prompt</label>
+              <div class="ext-field"><label>SAM3 Exclude Prompt</label>
+                <input type="text" v-model="storeWidgets._sam3_exclude_prompt" placeholder="메인 마스크에서 검출+제외. 예: 'face, eyes' 보호" /></div>
+              <div class="ext-field"><label>SAM3 Inpaint Prompt</label>
                 <input type="text" v-model="storeWidgets._sam3_inpaint_prompt" placeholder="비워두면 메인 프롬프트 사용" /></div>
-              <div class="ext-field"><label>Negative Prompt</label>
+              <div class="ext-field"><label>SAM3 Negative Prompt</label>
                 <input type="text" v-model="storeWidgets._sam3_neg_prompt" placeholder="비워두면 메인 네거티브 사용" /></div>
+
               <div class="ext-row">
-                <div class="ext-field"><label>Mode</label>
+                <div class="ext-field"><label>SAM3 Mode</label>
                   <CustomSelect v-model="storeWidgets._sam3_mode" :options="['Inpaint', 'Mask only']" placeholder="Inpaint" /></div>
-                <div class="ext-field"><label>Mask Mode</label>
+                <div class="ext-field"><label>Mask Processing</label>
                   <CustomSelect v-model="storeWidgets._sam3_mask_mode" :options="['Individual', 'Combined']" placeholder="Individual" /></div>
               </div>
               <div class="ext-row">
-                <div class="ext-field"><label>Threshold</label><input type="number" v-model="storeWidgets._sam3_threshold" step="0.01" min="0" max="1" /></div>
-                <div class="ext-field"><label>Denoise</label><input type="number" v-model="storeWidgets._sam3_denoise" step="0.01" min="0" max="1" /></div>
+                <div class="ext-field"><label>SAM3 Threshold</label><input type="number" v-model="storeWidgets._sam3_threshold" step="0.01" min="0" max="1" /></div>
+                <div class="ext-field"><label>Mask Dilation (px)</label><input type="number" v-model="storeWidgets._sam3_mask_dilation" min="0" /></div>
               </div>
               <div class="ext-row">
-                <div class="ext-field"><label>Mask Blur</label><input type="number" v-model="storeWidgets._sam3_mask_blur" min="0" /></div>
-                <div class="ext-field"><label>Padding</label><input type="number" v-model="storeWidgets._sam3_padding" min="0" /></div>
+                <label class="ext-check-row" style="flex:1" title="머리카락 가닥 등을 감싸 마스크를 채움"><input type="checkbox" v-model="storeWidgets._sam3_mask_hull" true-value="true" false-value="false" /><span>Convex Hull (wrap strands)</span></label>
+                <div class="ext-field"><label>Outline expand (edge-aware, px)</label><input type="number" v-model="storeWidgets._sam3_mask_outline_px" min="0" /></div>
               </div>
-              <div class="ext-field"><label>Checkpoint</label>
-                <CustomSelect v-model="storeWidgets._sam3_checkpoint"
-                  :options="sam3CheckpointItems"
-                  placeholder="sam3.pt" /></div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_preview_overlay" true-value="true" false-value="false" /><span>Overlay Preview</span></label>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_save_artifacts" true-value="true" false-value="false" /><span>Artifacts 저장</span></label>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_inp_size" true-value="true" false-value="false" /><span>별도 Inpaint 크기</span></label>
-              <div class="ext-row" v-if="storeWidgets._sam3_use_inp_size === 'true'">
-                <div class="ext-field"><label>Width</label><input type="number" v-model="storeWidgets._sam3_inp_w" /></div>
-                <div class="ext-field"><label>Height</label><input type="number" v-model="storeWidgets._sam3_inp_h" /></div>
+              <div class="ext-row">
+                <div class="ext-field"><label>SAM3 Checkpoint</label>
+                  <CustomSelect v-model="storeWidgets._sam3_checkpoint" :options="sam3CheckpointItems" placeholder="sam3.pt" /></div>
+                <div class="ext-field"><label>SAM3 Device</label>
+                  <CustomSelect v-model="storeWidgets._sam3_device" :options="sam3DeviceItems" placeholder="auto" /></div>
               </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_steps" true-value="true" false-value="false" /><span>별도 Steps</span></label>
-              <div class="ext-row" v-if="storeWidgets._sam3_use_steps === 'true'">
-                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets._sam3_steps" min="1" /></div>
-              </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_cfg" true-value="true" false-value="false" /><span>별도 CFG</span></label>
-              <div class="ext-row" v-if="storeWidgets._sam3_use_cfg === 'true'">
-                <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets._sam3_cfg" step="0.5" /></div>
-              </div>
-              <label class="ext-check-row" title="OFF면 base 생성과 동일한 sampler/scheduler 사용&#10;ON이고 콤보가 'Use same ...' 이외 값이면 SAM3 단계에서 override">
-                <input type="checkbox" v-model="storeWidgets._sam3_use_sampler" true-value="true" false-value="false" />
-                <span>별도 Sampler/Scheduler</span>
-              </label>
-              <div class="ext-row" v-if="storeWidgets._sam3_use_sampler === 'true'">
-                <div class="ext-field"><label>Sampler</label>
-                  <CustomSelect v-model="storeWidgets._sam3_sampler" :options="['Use same sampler', ...samplerItems]" placeholder="Use same sampler" /></div>
-                <div class="ext-field"><label>Scheduler</label>
-                  <CustomSelect v-model="storeWidgets._sam3_scheduler" :options="['Use same scheduler', ...schedulerItems]" placeholder="Use same scheduler" /></div>
-                <div class="ext-note" v-if="storeWidgets._sam3_sampler === 'Use same sampler' || !storeWidgets._sam3_sampler">
-                  💡 'Use same sampler' 선택 시 base의 sampler·scheduler 유지됨
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_preview_overlay" true-value="true" false-value="false" /><span>Replace output with overlay preview</span></label>
+              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_save_artifacts" true-value="true" false-value="false" /><span>Save mask/overlay artifacts</span></label>
+              <label class="ext-check-row" title="검출 직후 SAM3(~3.5GB) VRAM 회수 — 16GB GPU 권장"><input type="checkbox" v-model="storeWidgets._sam3_unload_after" true-value="true" false-value="false" /><span>Unload SAM3 from VRAM after detection (~3.5GB)</span></label>
+
+              <!-- 인페인트 하위 섹션 -->
+              <details class="ext-card" open style="margin-top:8px">
+                <summary class="ext-title">인페인트</summary>
+                <div class="ext-row">
+                  <div class="ext-field"><label>Denoising Strength</label><input type="number" v-model="storeWidgets._sam3_denoise" step="0.01" min="0" max="1" /></div>
+                  <div class="ext-field"><label>Mask Blur</label><input type="number" v-model="storeWidgets._sam3_mask_blur" min="0" /></div>
                 </div>
-              </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_noise_mul" true-value="true" false-value="false" /><span>Noise Multiplier</span></label>
-              <div class="ext-row" v-if="storeWidgets._sam3_use_noise_mul === 'true'">
-                <div class="ext-field"><label>Multiplier</label><input type="number" v-model="storeWidgets._sam3_noise_mul" step="0.01" min="0" max="2" /></div>
-              </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_restore_face" true-value="true" false-value="false" /><span>Restore Face</span></label>
+                <div class="ext-row">
+                  <div class="ext-field"><label>Masked content (init for masked area)</label>
+                    <CustomSelect v-model="storeWidgets._sam3_inpainting_fill" :options="sam3FillItems" placeholder="original" /></div>
+                  <div class="ext-field"><label>Inpaint padding</label><input type="number" v-model="storeWidgets._sam3_padding" min="0" /></div>
+                </div>
+                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_inpaint_only_masked" true-value="true" false-value="false" /><span>마스크된 영역만</span></label>
+
+                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_inp_size" true-value="true" false-value="false" /><span>Use separate inpaint width/height</span></label>
+                <div class="ext-row" v-if="storeWidgets._sam3_use_inp_size === 'true'">
+                  <div class="ext-field"><label>Inpaint Width</label><input type="number" v-model="storeWidgets._sam3_inp_w" /></div>
+                  <div class="ext-field"><label>Inpaint Height</label><input type="number" v-model="storeWidgets._sam3_inp_h" /></div>
+                </div>
+
+                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_steps" true-value="true" false-value="false" /><span>별도의 단계 사용</span></label>
+                <div class="ext-row" v-if="storeWidgets._sam3_use_steps === 'true'">
+                  <div class="ext-field"><label>단계</label><input type="number" v-model="storeWidgets._sam3_steps" min="1" /></div>
+                </div>
+                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_cfg" true-value="true" false-value="false" /><span>별도의 CFG 스케일 사용</span></label>
+                <div class="ext-row" v-if="storeWidgets._sam3_use_cfg === 'true'">
+                  <div class="ext-field"><label>CFG 스케일</label><input type="number" v-model="storeWidgets._sam3_cfg" step="0.5" /></div>
+                </div>
+                <label class="ext-check-row" title="OFF면 base 생성의 sampler 상속&#10;ON이고 'Use same sampler' 이외면 SAM3 단계에서 override"><input type="checkbox" v-model="storeWidgets._sam3_use_sampler" true-value="true" false-value="false" /><span>별도의 샘플러 사용</span></label>
+                <div class="ext-field" v-if="storeWidgets._sam3_use_sampler === 'true'"><label>샘플러</label>
+                  <CustomSelect v-model="storeWidgets._sam3_sampler" :options="['Use same sampler', ...samplerItems]" placeholder="Use same sampler" /></div>
+                <label class="ext-check-row" title="OFF면 base 생성의 scheduler 상속"><input type="checkbox" v-model="storeWidgets._sam3_use_scheduler" true-value="true" false-value="false" /><span>Use separate scheduler</span></label>
+                <div class="ext-field" v-if="storeWidgets._sam3_use_scheduler === 'true'"><label>Scheduler</label>
+                  <CustomSelect v-model="storeWidgets._sam3_scheduler" :options="['Use same scheduler', ...schedulerItems]" placeholder="Use same scheduler" /></div>
+
+                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_seed" true-value="true" false-value="false" /><span>Use specified seed (instead of parent's)</span></label>
+                <div class="ext-field" v-if="storeWidgets._sam3_use_seed === 'true'"><label>Seed (-1 = random)</label>
+                  <input type="number" v-model="storeWidgets._sam3_seed" /></div>
+
+                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_noise_mul" true-value="true" false-value="false" /><span>Use noise multiplier</span></label>
+                <div class="ext-row" v-if="storeWidgets._sam3_use_noise_mul === 'true'">
+                  <div class="ext-field"><label>Noise Multiplier</label><input type="number" v-model="storeWidgets._sam3_noise_mul" step="0.01" min="0" max="2" /></div>
+                </div>
+                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_restore_face" true-value="true" false-value="false" /><span>Restore face</span></label>
+              </details>
             </details>
 
             <!-- NegPiP -->
@@ -844,6 +866,8 @@ const samplerItems = computed(() => wStore.getProperty('sampler_combo', 'items')
 const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 const upscalerItems = computed(() => wStore.getProperty('upscaler_combo', 'items') || [])
 const sam3CheckpointItems = computed(() => wStore.getProperty('_sam3_checkpoint', 'items') || ['sam3.pt'])
+const sam3DeviceItems = ['auto', 'cuda', 'cpu']
+const sam3FillItems = ['fill', 'original', 'latent noise', 'latent nothing']
 const adModelItems = ref([])
 
 // Hires/ADetailer 체크박스 (proxy 연동)

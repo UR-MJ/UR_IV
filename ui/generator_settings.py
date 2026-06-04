@@ -523,20 +523,28 @@ class SettingsMixin:
         }
 
     def _get_sam3_settings(self, widgets):
-        """SAM3 설정 가져오기"""
+        """SAM3 설정 가져오기 — Forge 확장 args.py와 1:1"""
         return {
             "detect_prompt": widgets['detect_prompt'].toPlainText(),
+            "exclude_prompt": widgets['exclude_prompt'].toPlainText(),
             "inpaint_prompt": widgets['inpaint_prompt'].toPlainText(),
             "neg_prompt": widgets['neg_prompt'].toPlainText(),
             "mode": widgets['mode'].currentText(),
             "mask_mode": widgets['mask_mode'].currentText(),
             "threshold": widgets['threshold'].text(),
+            "mask_dilation": widgets['mask_dilation'].text(),
+            "mask_hull": widgets['mask_hull'].isChecked(),
+            "mask_outline_px": widgets['mask_outline_px'].text(),
             "mask_blur": widgets['mask_blur'].text(),
             "denoise": widgets['denoise'].text(),
             "padding": widgets['padding'].text(),
             "checkpoint": widgets['checkpoint'].text(),
+            "device": widgets['device'].currentText(),
+            "inpainting_fill": widgets['inpainting_fill'].currentText(),
+            "inpaint_only_masked": widgets['inpaint_only_masked'].isChecked(),
             "preview_overlay": widgets['preview_overlay'].isChecked(),
             "save_artifacts": widgets['save_artifacts'].isChecked(),
+            "unload_after": widgets['unload_after'].isChecked(),
             "use_inpaint_size": widgets['use_inpaint_size_check'].isChecked(),
             "inpaint_width": widgets['inpaint_width'].text(),
             "inpaint_height": widgets['inpaint_height'].text(),
@@ -546,7 +554,10 @@ class SettingsMixin:
             "cfg": widgets['cfg'].text(),
             "use_sampler": widgets['use_sampler_check'].isChecked(),
             "sampler": widgets['sampler'].currentText(),
+            "use_scheduler": widgets['use_scheduler_check'].isChecked(),
             "scheduler": widgets['scheduler'].currentText(),
+            "use_seed": widgets['use_seed_check'].isChecked(),
+            "seed": widgets['seed'].text(),
             "use_noise_multiplier": widgets['use_noise_multiplier_check'].isChecked(),
             "noise_multiplier": widgets['noise_multiplier'].text(),
             "restore_face": widgets['restore_face'].isChecked(),
@@ -595,28 +606,29 @@ class SettingsMixin:
             widgets['scheduler_combo'].setCurrentIndex(idx)
 
     def _set_sam3_settings(self, widgets, settings):
-        """SAM3 설정 적용"""
+        """SAM3 설정 적용 — 콤보는 setText() 사용 (items 미로드 시에도 fallback 복원)"""
         widgets['detect_prompt'].setPlainText(settings.get("detect_prompt", "face"))
+        widgets['exclude_prompt'].setPlainText(settings.get("exclude_prompt", ""))
         widgets['inpaint_prompt'].setPlainText(settings.get("inpaint_prompt", ""))
         widgets['neg_prompt'].setPlainText(settings.get("neg_prompt", ""))
 
-        mode_text = settings.get("mode", "Inpaint")
-        idx = widgets['mode'].findText(mode_text)
-        if idx >= 0:
-            widgets['mode'].setCurrentIndex(idx)
-
-        mask_mode_text = settings.get("mask_mode", "Individual")
-        idx = widgets['mask_mode'].findText(mask_mode_text)
-        if idx >= 0:
-            widgets['mask_mode'].setCurrentIndex(idx)
+        widgets['mode'].setText(settings.get("mode", "Inpaint"))
+        widgets['mask_mode'].setText(settings.get("mask_mode", "Individual"))
 
         widgets['threshold'].setText(settings.get("threshold", "0.40"))
+        widgets['mask_dilation'].setText(settings.get("mask_dilation", "0"))
+        widgets['mask_hull'].setChecked(settings.get("mask_hull", False))
+        widgets['mask_outline_px'].setText(settings.get("mask_outline_px", "0"))
         widgets['mask_blur'].setText(settings.get("mask_blur", "4"))
         widgets['denoise'].setText(settings.get("denoise", "0.40"))
         widgets['padding'].setText(settings.get("padding", "32"))
         widgets['checkpoint'].setText(settings.get("checkpoint", "sam3.pt"))
+        widgets['device'].setText(settings.get("device", "auto"))
+        widgets['inpainting_fill'].setText(settings.get("inpainting_fill", "original"))
+        widgets['inpaint_only_masked'].setChecked(settings.get("inpaint_only_masked", True))
         widgets['preview_overlay'].setChecked(settings.get("preview_overlay", False))
         widgets['save_artifacts'].setChecked(settings.get("save_artifacts", True))
+        widgets['unload_after'].setChecked(settings.get("unload_after", True))
         widgets['use_inpaint_size_check'].setChecked(settings.get("use_inpaint_size", False))
         widgets['inpaint_width'].setText(settings.get("inpaint_width", "1024"))
         widgets['inpaint_height'].setText(settings.get("inpaint_height", "1024"))
@@ -625,14 +637,11 @@ class SettingsMixin:
         widgets['use_cfg_check'].setChecked(settings.get("use_cfg", False))
         widgets['cfg'].setText(settings.get("cfg", "7.0"))
         widgets['use_sampler_check'].setChecked(settings.get("use_sampler", False))
-        sampler_text = settings.get("sampler", "Use same sampler")
-        idx = widgets['sampler'].findText(sampler_text)
-        if idx >= 0:
-            widgets['sampler'].setCurrentIndex(idx)
-        scheduler_text = settings.get("scheduler", "Use same scheduler")
-        idx = widgets['scheduler'].findText(scheduler_text)
-        if idx >= 0:
-            widgets['scheduler'].setCurrentIndex(idx)
+        widgets['sampler'].setText(settings.get("sampler", "Use same sampler"))
+        widgets['use_scheduler_check'].setChecked(settings.get("use_scheduler", False))
+        widgets['scheduler'].setText(settings.get("scheduler", "Use same scheduler"))
+        widgets['use_seed_check'].setChecked(settings.get("use_seed", False))
+        widgets['seed'].setText(settings.get("seed", "-1"))
         widgets['use_noise_multiplier_check'].setChecked(settings.get("use_noise_multiplier", False))
         widgets['noise_multiplier'].setText(settings.get("noise_multiplier", "1.0"))
         widgets['restore_face'].setChecked(settings.get("restore_face", False))

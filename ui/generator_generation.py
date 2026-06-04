@@ -744,28 +744,39 @@ class GenerationMixin:
             return None
 
         # SAM3 sampler/scheduler 결정 — 사용자 기대대로:
-        # '별도 Sampler' 체크박스가 켜져있어도 콤보가 'Use same X'면
-        # use_sampler=False로 강제하여 base의 ER SDE/Beta57 등이 유지되게.
+        # '별도 Sampler/Scheduler' 체크박스가 켜져있어도 콤보가 'Use same X'면
+        # use_X=False로 강제하여 base의 ER SDE/Beta57 등이 상속되게.
+        # Forge 확장 v0.6.0+는 sampler/scheduler 토글이 분리됨.
         _sampler_v = _widget_text(widgets['sampler'], 'Use same sampler')
         _scheduler_v = _widget_text(widgets['scheduler'], 'Use same scheduler')
-        _use_ss = (widgets['use_sampler_check'].isChecked()
-                   and _sampler_v != 'Use same sampler')
+        _use_sampler = (widgets['use_sampler_check'].isChecked()
+                        and _sampler_v not in ('', 'Use same sampler'))
+        _use_scheduler = (widgets['use_scheduler_check'].isChecked()
+                          and _scheduler_v not in ('', 'Use same scheduler'))
 
         _txt, _float, _int = _widget_text, _widget_float, _widget_int
+
+        def _plain(w):
+            return w.toPlainText() if hasattr(w, 'toPlainText') else _txt(w, '')
 
         detect_prompt = _txt(widgets['detect_prompt'], 'face').strip() or 'face'
         return {
             "sam3_mode": _txt(widgets['mode'], 'Inpaint'),
             "sam3_mask_mode": _txt(widgets['mask_mode'], 'Individual'),
             "sam3_prompt": detect_prompt,
-            "sam3_inpaint_prompt": widgets['inpaint_prompt'].toPlainText() if hasattr(widgets['inpaint_prompt'], 'toPlainText') else '',
-            "sam3_negative_prompt": widgets['neg_prompt'].toPlainText() if hasattr(widgets['neg_prompt'], 'toPlainText') else '',
+            "sam3_exclude_prompt": _plain(widgets['exclude_prompt']),
+            "sam3_inpaint_prompt": _plain(widgets['inpaint_prompt']),
+            "sam3_negative_prompt": _plain(widgets['neg_prompt']),
             "sam3_threshold": _float(widgets['threshold'], 0.4),
+            "sam3_mask_dilation": _int(widgets['mask_dilation'], 0),
+            "sam3_mask_hull": widgets['mask_hull'].isChecked(),
+            "sam3_mask_outline_px": _int(widgets['mask_outline_px'], 0),
             "sam3_checkpoint": _txt(widgets['checkpoint'], 'sam3.pt'),
-            "sam3_device": "auto",
+            "sam3_device": _txt(widgets['device'], 'auto') or 'auto',
             "sam3_mask_blur": _int(widgets['mask_blur'], 4),
             "sam3_denoising_strength": _float(widgets['denoise'], 0.4),
-            "sam3_inpaint_only_masked": True,
+            "sam3_inpainting_fill": _txt(widgets['inpainting_fill'], 'original') or 'original',
+            "sam3_inpaint_only_masked": widgets['inpaint_only_masked'].isChecked(),
             "sam3_inpaint_only_masked_padding": _int(widgets['padding'], 32),
             "sam3_use_inpaint_width_height": widgets['use_inpaint_size_check'].isChecked(),
             "sam3_inpaint_width": _int(widgets['inpaint_width'], 1024),
@@ -774,17 +785,19 @@ class GenerationMixin:
             "sam3_steps": _int(widgets['steps'], 28),
             "sam3_use_cfg_scale": widgets['use_cfg_check'].isChecked(),
             "sam3_cfg_scale": _float(widgets['cfg'], 7.0),
-            # 위에서 미리 계산한 _use_ss / _sampler_v / _scheduler_v 사용
-            "sam3_use_sampler": _use_ss,
-            "sam3_sampler": _sampler_v if _use_ss else 'Use same sampler',
-            "sam3_scheduler": _scheduler_v if _use_ss else 'Use same scheduler',
+            # sampler/scheduler 분리 — 위에서 계산한 _use_sampler / _use_scheduler
+            "sam3_use_sampler": _use_sampler,
+            "sam3_sampler": _sampler_v if _use_sampler else 'Use same sampler',
+            "sam3_use_scheduler": _use_scheduler,
+            "sam3_scheduler": _scheduler_v if _use_scheduler else 'Use same scheduler',
+            "sam3_use_seed": widgets['use_seed_check'].isChecked(),
+            "sam3_seed": _int(widgets['seed'], -1),
             "sam3_use_noise_multiplier": widgets['use_noise_multiplier_check'].isChecked(),
             "sam3_noise_multiplier": _float(widgets['noise_multiplier'], 1.0),
             "sam3_restore_face": widgets['restore_face'].isChecked(),
             "sam3_preview_overlay": widgets['preview_overlay'].isChecked(),
             "sam3_save_artifacts": widgets['save_artifacts'].isChecked(),
-            # ★ SAM3가 검출 직후 VRAM에서 내려가게 — 인페인트 단계 OOM 방지
-            #   sam-extra API 디폴트는 False (UI 디폴트 True와 다름)
-            #   현재는 항상 True. settings/UI 토글 필요 시 'sam3_unload_after'로 노출
-            "sam3_unload_after": True,
+            # 검출 직후 SAM3(~3.5GB) VRAM 회수 — 16GB GPU 인페인트 OOM 방지.
+            # UI 토글로 노출 (기본 ON). 끄면 인페인트 내내 상주 → 빠르지만 VRAM↑
+            "sam3_unload_after": widgets['unload_after'].isChecked(),
         }
