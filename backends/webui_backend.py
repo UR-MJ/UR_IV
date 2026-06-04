@@ -86,7 +86,7 @@ class WebUIBackend(AbstractBackend):
             "sam3_mask_hull": bool(settings.get('sam3_mask_hull', False)),
             "sam3_mask_outline_px": int(settings.get('sam3_mask_outline_px', 0)),
             "sam3_checkpoint": settings.get('sam3_checkpoint', 'sam3.pt'),
-            "sam3_device": settings.get('sam3_device', 'auto'),
+            "sam3_device": settings.get('sam3_device', 'cuda'),
             "sam3_mask_blur": int(settings.get('sam3_mask_blur', 4)),
             "sam3_denoising_strength": float(settings.get('sam3_denoising_strength', settings.get('denoising_strength', 0.4))),
             "sam3_inpainting_fill": settings.get('sam3_inpainting_fill', 'original'),

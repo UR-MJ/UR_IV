@@ -886,7 +886,7 @@ const samplerItems = computed(() => wStore.getProperty('sampler_combo', 'items')
 const schedulerItems = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 const upscalerItems = computed(() => wStore.getProperty('upscaler_combo', 'items') || [])
 const sam3CheckpointItems = computed(() => wStore.getProperty('_sam3_checkpoint', 'items') || ['sam3.pt'])
-const sam3DeviceItems = ['auto', 'cuda', 'cpu']
+const sam3DeviceItems = ['cuda', 'auto', 'cpu']
 const sam3FillItems = ['fill', 'original', 'latent noise', 'latent nothing']
 const adModelItems = ref([])
 // ADetailer 슬롯 별도 Checkpoint/VAE 목록 (s1/s2 동일하게 Python이 채움)

@@ -772,7 +772,7 @@ class GenerationMixin:
             "sam3_mask_hull": widgets['mask_hull'].isChecked(),
             "sam3_mask_outline_px": _int(widgets['mask_outline_px'], 0),
             "sam3_checkpoint": _txt(widgets['checkpoint'], 'sam3.pt'),
-            "sam3_device": _txt(widgets['device'], 'auto') or 'auto',
+            "sam3_device": _txt(widgets['device'], 'cuda') or 'cuda',
             "sam3_mask_blur": _int(widgets['mask_blur'], 4),
             "sam3_denoising_strength": _float(widgets['denoise'], 0.4),
             "sam3_inpainting_fill": _txt(widgets['inpainting_fill'], 'original') or 'original',

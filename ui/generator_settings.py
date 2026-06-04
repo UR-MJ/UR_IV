@@ -623,7 +623,7 @@ class SettingsMixin:
         widgets['denoise'].setText(settings.get("denoise", "0.40"))
         widgets['padding'].setText(settings.get("padding", "32"))
         widgets['checkpoint'].setText(settings.get("checkpoint", "sam3.pt"))
-        widgets['device'].setText(settings.get("device", "auto"))
+        widgets['device'].setText(settings.get("device", "cuda"))
         widgets['inpainting_fill'].setText(settings.get("inpainting_fill", "original"))
         widgets['inpaint_only_masked'].setChecked(settings.get("inpaint_only_masked", True))
         widgets['preview_overlay'].setChecked(settings.get("preview_overlay", False))

@@ -612,7 +612,7 @@ class UISetupMixin:
         self.sam3_widgets['denoise'].setText('0.40')
         self.sam3_widgets['padding'].setText('32')
         self.sam3_widgets['checkpoint'].setText('sam3.pt')
-        self.sam3_widgets['device'].setText('auto')
+        self.sam3_widgets['device'].setText('cuda')  # auto는 CPU로 떨어질 수 있어 검출 느려짐
         self.sam3_widgets['inpainting_fill'].setText('original')
         self.sam3_widgets['seed'].setText('-1')
         self.sam3_widgets['steps'].setText('28')
