@@ -737,6 +737,9 @@ class VueBridge(QObject):
                 main_win.filtered_results = out
                 main_win.shuffled_prompt_deck = out.copy()
                 _rnd.shuffle(main_win.shuffled_prompt_deck)
+                # 새 검색 → 덱 진행도 초기화 저장 (옛 진행도 덮어쓰기)
+                if hasattr(main_win, '_save_deck_state'):
+                    main_win._save_deck_state()
 
             # ── 디스크 백업: 재시작 시 자동 복원 → 자동화 즉시 사용 가능 ──
             # localStorage 5MB cap을 우회 — 파일은 무제한
@@ -775,8 +778,12 @@ class VueBridge(QObject):
                         if main_win and hasattr(main_win, 'filtered_results'):
                             import random as _rnd
                             main_win.filtered_results = parsed
-                            main_win.shuffled_prompt_deck = parsed.copy()
-                            _rnd.shuffle(main_win.shuffled_prompt_deck)
+                            # 저장된 덱 진행도 복원 ('얼마나 뽑았는지' 유지).
+                            # 실패(파일 없음/풀 크기 변경)면 전체 셔플로 폴백.
+                            if not (hasattr(main_win, '_restore_deck_state')
+                                    and main_win._restore_deck_state()):
+                                main_win.shuffled_prompt_deck = parsed.copy()
+                                _rnd.shuffle(main_win.shuffled_prompt_deck)
                             print(f"[Search] restored {len(parsed):,} rows from disk → filtered_results")
                 except Exception:
                     pass

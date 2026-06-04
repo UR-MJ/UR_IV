@@ -349,10 +349,11 @@ class ActionsMixin:
                 self.shuffled_prompt_deck = self.filtered_results.copy()
                 random.shuffle(self.shuffled_prompt_deck)
                 self.show_status("🔄 덱을 다시 섞었습니다.")
+                self._save_deck_state()
             else:
                 # 중복 불허: 종료
                 return False
-        
+
         # 덱에서 프롬프트 가져오기
         if settings.get('allow_duplicates', False):
             # 중복 허용: 랜덤 선택 (덱에서 제거 안 함)
@@ -362,12 +363,66 @@ class ActionsMixin:
             bundle = self.shuffled_prompt_deck.pop()
             remaining = len(self.shuffled_prompt_deck)
             self.btn_random_prompt.setText(f"🎲 랜덤 프롬프트 ({remaining})")
+            self._save_deck_state()  # 진행도 저장 (재시작 시 복원)
         
         # ★★★ 핵심: apply_prompt_from_data 호출 ★★★
         # 이게 UI 업데이트 + 토글 적용 + 필터링 전부 처리함
         self.apply_prompt_from_data(bundle)
-        
+
         return True
+
+    # ── 덱 진행도 영속 (재시작 시 '얼마나 뽑았는지' 복원) ────────────────
+    def _deck_state_path(self):
+        import os
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base, 'config', 'last_deck.json')
+
+    def _save_deck_state(self):
+        """남은 덱을 filtered_results 인덱스 리스트로 저장.
+        풀(filtered_results)은 last_search_results.json으로 따로 복원되므로,
+        덱은 인덱스만 저장하면 충분(대용량에도 컴팩트). 소비/리필 때마다 호출."""
+        try:
+            import os, json
+            fr = getattr(self, 'filtered_results', None) or []
+            deck = getattr(self, 'shuffled_prompt_deck', None)
+            if not fr or deck is None:
+                return
+            # id→index 맵 캐시 (filtered_results 객체가 교체되면 재생성)
+            if getattr(self, '_deck_idmap_for', None) is not id(fr):
+                self._deck_idmap = {id(b): i for i, b in enumerate(fr)}
+                self._deck_idmap_for = id(fr)
+            idmap = self._deck_idmap
+            idx = [idmap[id(b)] for b in deck if id(b) in idmap]
+            path = self._deck_state_path()
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump({'pool_size': len(fr), 'remaining': idx}, f)
+        except Exception as e:
+            print(f"[Deck] save 실패: {e}")
+
+    def _restore_deck_state(self) -> bool:
+        """저장된 인덱스로 남은 덱을 재구성. 성공 시 True(호출자는 새 셔플 생략).
+        풀 크기가 다르면(새 검색 등) False → 호출자가 새로 셔플."""
+        try:
+            import os, json
+            fr = getattr(self, 'filtered_results', None) or []
+            if not fr:
+                return False
+            path = self._deck_state_path()
+            if not os.path.exists(path):
+                return False
+            with open(path, encoding='utf-8') as f:
+                st = json.load(f)
+            if st.get('pool_size') != len(fr):
+                return False  # 풀이 바뀜 → 복원 불가
+            n = len(fr)
+            self.shuffled_prompt_deck = [fr[i] for i in st.get('remaining', [])
+                                         if isinstance(i, int) and 0 <= i < n]
+            print(f"[Deck] 복원: 남은 {len(self.shuffled_prompt_deck):,} / 전체 {n:,}")
+            return True
+        except Exception as e:
+            print(f"[Deck] restore 실패: {e}")
+            return False
 
     def _start_automation(self):
         """자동화 시작"""
@@ -390,9 +445,12 @@ class ActionsMixin:
         if settings['termination_mode'] == 'timer':
             self.auto_start_time = time.time()
         
-        # 덱 초기화
-        self.shuffled_prompt_deck = self.filtered_results.copy()
-        random.shuffle(self.shuffled_prompt_deck)
+        # 덱 초기화 — 이미 남은 덱이 있으면(부분 소비 포함) 유지하여 진행도 보존.
+        # 비었을 때만(검색 직후/소진 후) 새로 셔플 → 자동화 멈췄다 재시작해도 이어서 진행.
+        if not self.shuffled_prompt_deck:
+            self.shuffled_prompt_deck = self.filtered_results.copy()
+            random.shuffle(self.shuffled_prompt_deck)
+            self._save_deck_state()
         self.btn_random_prompt.setText(f"🎲 랜덤 프롬프트 ({len(self.shuffled_prompt_deck)})")
         
         # 버튼 상태 변경

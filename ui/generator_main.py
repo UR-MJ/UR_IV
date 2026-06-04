@@ -653,6 +653,8 @@ class GeneratorMainUI(
                         self.filtered_results = out
                         self.shuffled_prompt_deck = out.copy()
                         _rnd.shuffle(self.shuffled_prompt_deck)
+                        if hasattr(self, '_save_deck_state'):
+                            self._save_deck_state()
                         # Vue로 결과 전달
                         self.vue_bridge.searchResultsReady.emit(json.dumps(out))
                         self.show_status(f"Imported {len(out)} results")
