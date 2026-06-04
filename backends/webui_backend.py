@@ -102,6 +102,12 @@ class WebUIBackend(AbstractBackend):
             "sam3_restore_face": bool(settings.get('sam3_restore_face', False)),
             "sam3_preview_overlay": bool(settings.get('sam3_preview_overlay', False)),
             "sam3_save_artifacts": bool(settings.get('sam3_save_artifacts', True)),
+            # ★ 핵심: 검출 직후 SAM3(~3.5GB)를 VRAM에서 내림.
+            # sam-extra UI 기본값은 True지만 API 경로 _xyz_or("sam3_unload_after", False)
+            # 라서 우리가 명시 안 보내면 False로 처리 → 인페인트 내내 SAM3 상주 →
+            # ANIMA(~8GB)+SAM3(3.5GB)+Forge(~3GB) > 16GB → OOM/lowvram.
+            # 한 사이클 내 재로딩 0회, 다음 검출 때만 ~3-5s 추가.
+            "sam3_unload_after": bool(settings.get('sam3_unload_after', True)),
         }
 
     def _run_img2img_postprocess(self, image_b64: str, payload: Dict) -> str:

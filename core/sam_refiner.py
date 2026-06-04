@@ -171,12 +171,17 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
 
     try:
         if sam_type == 'sam3':
-            return _refine_with_sam3(
-                image, boxes, sam_model_path, combined_mask,
-                text_prompt=(text_prompt or _build_sam3_prompt(yolo_model_paths or [])),
-                exclude_prompt=exclude_prompt,
-                notify=notify,
-            )
+            # SAM3 분기는 try/finally로 감싸 모든 return 경로에서 VRAM 회수
+            # (앱 프로세스에서 SAM3 번들 ~3.5GB 상주 방지)
+            try:
+                return _refine_with_sam3(
+                    image, boxes, sam_model_path, combined_mask,
+                    text_prompt=(text_prompt or _build_sam3_prompt(yolo_model_paths or [])),
+                    exclude_prompt=exclude_prompt,
+                    notify=notify,
+                )
+            finally:
+                _unload_sam3_bundle()
         if sam_type == 'fast_sam':
             return _refine_with_fastsam(image, boxes, sam_model_path, combined_mask)
         return _refine_with_sam(image, boxes, sam_model_path, sam_type, combined_mask)
@@ -297,6 +302,26 @@ def _refine_with_fastsam(image: np.ndarray, boxes: list,
 
 _SAM3_BUNDLE_CACHE = {}  # checkpoint_path → (model, processor, device)
 _SAM3_BPE_PATH = None
+
+
+def _unload_sam3_bundle():
+    """앱 프로세스에서 SAM3 번들(~3.5GB)을 내리고 VRAM 반납.
+    refine_boxes_with_sam의 try/finally에서 호출되어
+    모든 return 경로에서 메모리 회수를 보장.
+    """
+    import gc
+    _SAM3_BUNDLE_CACHE.clear()
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            try:
+                torch.cuda.ipc_collect()
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 def _find_sam3_bpe_vocab() -> str:
@@ -485,15 +510,24 @@ def _refine_with_sam3(image: np.ndarray, boxes: list, model_path: str,
         excl_union = np.zeros((h, w), dtype=bool)
         total_n = 0
 
+        # 최적화: set_image (ViT 인코딩) 는 토큰 무관하게 동일하므로 루프 밖 1회.
+        # 토큰마다 set_text_prompt만 호출 — backbone_out['text']만 갱신되어
+        # 결과는 매번 해당 토큰의 마스크만 반환됨 (누적 없음).
+        # 고해상도(1536+)에서 토큰 N개 × ViT 인코딩 비용 회피 → 속도 N배 가까이 절감.
+        if device == 'cuda':
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                _excl_base_state = processor.set_image(pil)
+        else:
+            _excl_base_state = processor.set_image(pil)
+
         for tok in excl_tokens:
             try:
+                # base_state 공유 — set_text_prompt가 text_outputs만 in-place 갱신
                 if device == 'cuda':
                     with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-                        excl_state = processor.set_image(pil)
-                        excl_state = processor.set_text_prompt(prompt=tok, state=excl_state)
+                        excl_state = processor.set_text_prompt(prompt=tok, state=_excl_base_state)
                 else:
-                    excl_state = processor.set_image(pil)
-                    excl_state = processor.set_text_prompt(prompt=tok, state=excl_state)
+                    excl_state = processor.set_text_prompt(prompt=tok, state=_excl_base_state)
 
                 excl_arr = excl_state.get('masks', None) if isinstance(excl_state, dict) else None
                 if excl_arr is None:

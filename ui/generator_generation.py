@@ -783,4 +783,8 @@ class GenerationMixin:
             "sam3_restore_face": widgets['restore_face'].isChecked(),
             "sam3_preview_overlay": widgets['preview_overlay'].isChecked(),
             "sam3_save_artifacts": widgets['save_artifacts'].isChecked(),
+            # ★ SAM3가 검출 직후 VRAM에서 내려가게 — 인페인트 단계 OOM 방지
+            #   sam-extra API 디폴트는 False (UI 디폴트 True와 다름)
+            #   현재는 항상 True. settings/UI 토글 필요 시 'sam3_unload_after'로 노출
+            "sam3_unload_after": True,
         }
