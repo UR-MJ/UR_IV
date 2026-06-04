@@ -584,6 +584,53 @@ class GenerationMixin:
                 payload["alwayson_scripts"]["SAM3 Mask"] = {"args": [sam3_state]}
                 _logger.info("SAM3 alwayson_scripts 적용됨 (Forge Neo 방식)")
 
+                # ★ ScriptSampler override 검사 — (steps/sampler/scheduler)를
+                #   base와 다르게 바꾸면 sam-extra가 *별도 sampler 객체*를 새로
+                #   인스턴스화. sigma cache + intermediate latent buffer를 추가
+                #   할당해 1536 해상도에선 ~4GB까지 잡힘 → KModel reload 시 가용
+                #   VRAM 부족 → attention 청크 분할 → step 40배 저하 / OOM.
+                #   로그 증거: "(32,'ER SDE','Beta57') → (32,'Euler a','Automatic')
+                #              (use_steps=True, use_sampler=True, use_scheduler=True)"
+                #   일반 WebUI/Forge Neo는 이 3개가 OFF 디폴트라 sampler 1개 재사용.
+                #   주의: sam3_use_inpaint_width_height(별도 Inpaint 크기)는 여기
+                #   포함 안 함 — 오히려 인페인트를 작은 고정 해상도로 묶어 메모리를
+                #   '줄이므로' 고해상도 OOM 방지엔 ON이 유리.
+                _override_keys = {
+                    'sam3_use_steps':   '별도 Steps',
+                    'sam3_use_sampler': '별도 Sampler/Scheduler',
+                }
+                _minor_keys = {
+                    'sam3_use_cfg_scale':        '별도 CFG',
+                    'sam3_use_noise_multiplier': 'Noise Multiplier',
+                }
+                _on_override = [label for key, label in _override_keys.items()
+                                if sam3_state.get(key)]
+                _on_minor = [label for key, label in _minor_keys.items()
+                             if sam3_state.get(key)]
+                if _on_override:
+                    _msg = (f"SAM3 ScriptSampler override 발동 — "
+                            f"켜진 옵션: {', '.join(_on_override)}. "
+                            f"별도 sampler 객체가 1536 해상도에서 ~4GB VRAM을 더 "
+                            f"점유해 속도 40배 저하/OOM을 유발합니다. 이 옵션들을 "
+                            f"끄면 base sampler를 그대로 재사용해 일반 WebUI와 동일 "
+                            f"속도가 됩니다.")
+                    _logger.warning(_msg)
+                    # 세션 첫 번째 발견 시에만 토스트 (자동화 N회 반복 시 침묵)
+                    if not getattr(self, '_sam3_override_warned', False):
+                        try:
+                            self.vue_bridge.showNotification.emit('warning', _msg)
+                        except Exception:
+                            pass
+                        self._sam3_override_warned = True
+                else:
+                    # 다 OFF면 다음 세션에 다시 알릴 수 있게 플래그 해제
+                    self._sam3_override_warned = False
+                if _on_minor:
+                    _logger.info(
+                        f"SAM3: 별도 옵션 ON (override 무관, 결과만 달라짐): "
+                        f"{', '.join(_on_minor)}"
+                    )
+
     def _build_adetailer_slot(self, widgets):
         """ADetailer 슬롯 딕셔너리 생성 (공식 REST API 스펙 준수)
 
