@@ -166,18 +166,32 @@ class UIStateManager:
         return sum(1 for n in names if self._apply_one(n))
 
     def restore_all_delayed(self, delay_ms: int = 150) -> None:
-        """``delay_ms`` 후 복원. 이미 예약돼 있으면 취소 후 재예약.
+        """``delay_ms`` 후 복원 — 반드시 GUI(메인) 스레드 이벤트 루프에 예약.
 
         Qt 시작 시 위젯 레이아웃이 자리 잡기 전에 setGeometry 호출하면
-        레이아웃 매니저가 덮어쓸 수 있음 — 150ms 지연으로 회피.
+        레이아웃 매니저가 덮어쓸 수 있음 — 지연으로 회피.
+
+        ★★ 반드시 메인 스레드에서 실행해야 함: 등록된 setter들이
+        ``QWidget.setGeometry`` 등 Qt GUI를 직접 호출하므로, 백그라운드
+        스레드(``threading.Timer``)에서 돌리면 즉시 native 크래시
+        (Qt: GUI 조작은 메인 스레드 전용, abort 0x80000003)가 난다.
+        따라서 ``QTimer.singleShot``으로 메인 스레드 이벤트 루프에 예약한다.
+        (호출자는 GUI 스레드에서 호출해야 한다 — QTimer가 그 스레드의
+        이벤트 루프에 콜백을 붙이기 때문.)
         """
-        with self._lock:
-            if self._delayed_restore_timer is not None:
-                self._delayed_restore_timer.cancel()
-            t = threading.Timer(delay_ms / 1000.0, self.restore_all)
-            t.daemon = True
-            self._delayed_restore_timer = t
-            t.start()
+        try:
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(max(0, int(delay_ms)), self.restore_all)
+        except Exception:
+            # Qt 비가용 환경(헤드리스 테스트 등): GUI setter 자체가 없어
+            # 스레드 타이머로 폴백해도 안전.
+            with self._lock:
+                if self._delayed_restore_timer is not None:
+                    self._delayed_restore_timer.cancel()
+                t = threading.Timer(delay_ms / 1000.0, self.restore_all)
+                t.daemon = True
+                self._delayed_restore_timer = t
+                t.start()
 
     def get_cached(self, name: str, default: Any = None) -> Any:
         """등록 없이 캐시된 상태 조회 (예: 마이그레이션용)."""
