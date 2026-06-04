@@ -3,7 +3,7 @@
 import os
 import json
 
-_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "character_presets.json")
+_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_data", "character_presets.json")
 
 # 모듈 레벨 캐시
 _cache: dict | None = None

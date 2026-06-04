@@ -1339,7 +1339,9 @@ class SettingsTab(QWidget):
         try:
             with zipfile.ZipFile(save_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 for fname in targets:
-                    fpath = os.path.join(base, fname)
+                    # 사용자 상태 JSON은 user_data/, shortcuts.json은 루트에 있음
+                    fpath = (os.path.join(base, fname) if fname == 'shortcuts.json'
+                             else os.path.join(base, 'user_data', fname))
                     if os.path.exists(fpath):
                         zf.write(fpath, fname)
                 # queue_presets 폴더
@@ -1378,7 +1380,12 @@ class SettingsTab(QWidget):
                 for info in zf.infolist():
                     if info.is_dir():
                         continue
-                    target = os.path.join(base, info.filename)
+                    # 사용자 상태 JSON은 user_data/로, queue_presets/·shortcuts.json은 루트로
+                    _fn = info.filename
+                    if '/' in _fn or _fn == 'shortcuts.json':
+                        target = os.path.join(base, _fn)
+                    else:
+                        target = os.path.join(base, 'user_data', _fn)
                     os.makedirs(os.path.dirname(target), exist_ok=True)
                     with zf.open(info) as src, open(target, 'wb') as dst:
                         dst.write(src.read())
@@ -1396,7 +1403,7 @@ class SettingsTab(QWidget):
         import json
         import os
         base = os.path.dirname(os.path.dirname(__file__))
-        src = os.path.join(base, 'character_presets.json')
+        src = os.path.join(base, 'user_data', 'character_presets.json')
         if not os.path.exists(src):
             QMessageBox.warning(self, "알림", "캐릭터 프리셋 파일이 없습니다.")
             return
@@ -1423,7 +1430,7 @@ class SettingsTab(QWidget):
                 return
 
             base = os.path.dirname(os.path.dirname(__file__))
-            target = os.path.join(base, 'character_presets.json')
+            target = os.path.join(base, 'user_data', 'character_presets.json')
 
             # 기존 파일이 있으면 병합 옵션 제공
             if os.path.exists(target):
@@ -1455,7 +1462,7 @@ class SettingsTab(QWidget):
         import json
         import os
         base = os.path.dirname(os.path.dirname(__file__))
-        src = os.path.join(base, 'prompt_presets.json')
+        src = os.path.join(base, 'user_data', 'prompt_presets.json')
         if not os.path.exists(src):
             QMessageBox.warning(self, "알림", "프롬프트 프리셋 파일이 없습니다.")
             return
@@ -1482,7 +1489,7 @@ class SettingsTab(QWidget):
                 return
 
             base = os.path.dirname(os.path.dirname(__file__))
-            target = os.path.join(base, 'prompt_presets.json')
+            target = os.path.join(base, 'user_data', 'prompt_presets.json')
 
             # 기존 파일이 있으면 병합 옵션 제공
             if os.path.exists(target):

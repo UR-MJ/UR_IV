@@ -3,7 +3,7 @@
 import os
 import json
 
-_HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompt_history.json')
+_HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user_data', 'prompt_history.json')
 _MAX_HISTORY = 50
 
 

@@ -1108,7 +1108,7 @@ class EventGenTab(QWidget):
     #  설정 저장/불러오기
     # ──────────────────────────────────────────────────────
 
-    _SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'event_gen_settings.json')
+    _SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user_data', 'event_gen_settings.json')
 
     def _save_settings(self):
         """현재 검색 설정을 파일에 저장"""

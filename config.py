@@ -28,12 +28,41 @@ _logger.info(f"초기 설정된 API 주소: {WEBUI_API_URL}")
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(CURRENT_DIR, 'generated_images')
-PROMPT_SETTINGS_FILE = os.path.join(CURRENT_DIR, 'prompt_settings.json')
+
+# ── 사용자 상태 JSON 통합 폴더 ──
+# 루트에 흩어져 있던 사용자 상태 파일(history/presets/favorites/settings 등)을
+# user_data/ 하나로 모음. import 시 1회 자동 마이그레이션 — 기존 루트 파일을
+# user_data/로 이동해 데이터 보존. config.py는 거의 최초로 import되므로 다른
+# 모듈이 파일을 읽기 전에 이전이 끝남.
+USER_DATA_DIR = os.path.join(CURRENT_DIR, 'user_data')
+os.makedirs(USER_DATA_DIR, exist_ok=True)
+_USER_DATA_FILES = (
+    'character_presets.json', 'event_gen_settings.json', 'favorite_tags.json',
+    'favorites.json', 'prompt_history.json', 'prompt_presets.json',
+    'prompt_settings.json', 'search_tab_settings.json',
+)
+for _n in _USER_DATA_FILES:
+    _old = os.path.join(CURRENT_DIR, _n)
+    _new = os.path.join(USER_DATA_DIR, _n)
+    if os.path.exists(_old) and not os.path.exists(_new):
+        try:
+            import shutil as _shutil
+            _shutil.move(_old, _new)
+        except Exception:
+            pass
+
+
+def user_data_path(name: str) -> str:
+    """user_data/ 내 파일 경로 반환 (사용자 상태 JSON 통합용)."""
+    return os.path.join(USER_DATA_DIR, name)
+
+
+PROMPT_SETTINGS_FILE = user_data_path('prompt_settings.json')
 CACHE_DIR = os.path.join(CURRENT_DIR, 'image_cache')
 THUMB_DIR = os.path.join(CACHE_DIR, 'thumbs')
 os.makedirs(THUMB_DIR, exist_ok=True)
 DB_FILE = os.path.join(CURRENT_DIR, 'photodata.sqlite')
-FAVORITES_FILE = os.path.join(os.path.dirname(__file__), "favorites.json")
+FAVORITES_FILE = user_data_path('favorites.json')
 # ★★★ 검색 탭용 Parquet (기존) ★★★
 PARQUET_DIR = os.path.join(CURRENT_DIR, 'danbooru_optimized')
 

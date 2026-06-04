@@ -24,6 +24,11 @@ web_cache/
 backend_ui_cache/
 
 # User-specific config (절대 경로, 개인 설정 포함)
+# 이제 user_data/ 폴더로 통합 (config.py가 import 시 루트→user_data 자동 마이그레이션)
+user_data/
+# QWebEngine 저장소/캐시 — 고정 경로(localStorage 영속용). 커밋 금지
+web_profile/
+# 하위 호환: 옛 위치에 남아있을 수 있는 루트 파일들도 계속 무시
 prompt_settings.json
 prompt_presets.json
 character_presets.json

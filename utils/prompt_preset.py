@@ -3,7 +3,7 @@
 import os
 import json
 
-_PRESET_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompt_presets.json')
+_PRESET_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user_data', 'prompt_presets.json')
 
 
 def _load_all() -> dict[str, dict]:

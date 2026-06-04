@@ -45,10 +45,13 @@ class UISetupMixin:
 
         from PyQt6.QtWebEngineCore import QWebEngineProfile
         
-        # 캐시 및 데이터 경로 설정 (프로세스 간 충돌 방지 및 액세스 거부 방지)
-        # 고정된 경로가 아닌 앱 전용 독립 경로 사용
-        import tempfile
-        base_cache_path = os.path.join(tempfile.gettempdir(), f'AIStudioPro_{os.getpid()}')
+        # 캐시 및 데이터 경로 — 고정 경로(PID 미포함)로 localStorage 영속화.
+        # 이전엔 tempdir/AIStudioPro_{pid} 라 재시작마다 새 빈 폴더 → localStorage
+        # (UI 크기/탭 순서/갤러리/Ollama/고해상도/에디터 설정 등)가 매번 초기화되고
+        # temp에 옛 PID 폴더가 누적됐음. 단일 인스턴스 전제로 repo/web_profile 고정 →
+        # 모든 UI 설정이 재시작 후에도 유지. (2개 동시 실행 시에만 프로파일 락 위험)
+        base_cache_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'web_profile')
         os.makedirs(base_cache_path, exist_ok=True)
         
         # 독립적인 프로필 생성 (defaultProfile 대신 사용)

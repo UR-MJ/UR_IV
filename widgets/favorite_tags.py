@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from utils.theme_manager import get_color
 
-_FAV_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "favorite_tags.json")
+_FAV_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_data", "favorite_tags.json")
 
 
 def _load_favs() -> list[dict]:
