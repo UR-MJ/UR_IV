@@ -11,7 +11,6 @@ from .sliders import NumericSlider
 
 # workers/__init__.py
 from .search_worker import PandasSearchWorker
-from .automation_worker import AutomationWorker
 from .generation_worker import WebUIInfoWorker, GenerationFlowWorker
 
 # tabs/__init__.py

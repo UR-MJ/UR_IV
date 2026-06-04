@@ -42,6 +42,7 @@ prompt_history.json
 # Runtime / user state (런타임에 자동 생성·갱신)
 config/gen_stats.json
 config/queue_state.json
+config/cond_rules.json
 config/ui_prefs.json
 config/tab_defaults.json
 config/prompt_order.json
