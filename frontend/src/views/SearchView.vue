@@ -1273,7 +1273,7 @@ function importResults() { requestAction('import_search_results') }
 .single-view { flex: 1; overflow-y: auto; padding: 24px; display: flex; justify-content: center; }
 .detail-card { max-width: 720px; width: 100%; display: flex; flex-direction: column; gap: 20px; }
 .detail-meta { display: flex; gap: 10px; flex-wrap: wrap; }
-.meta-pill { padding: 12px 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: 800; color: var(--text-primary); display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+.meta-pill { padding: 12px 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: 800; color: var(--text-primary); display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; overflow-wrap: anywhere; word-break: break-word; }
 .meta-pill.artist { color: var(--accent); }
 .meta-pill.character { color: #4ade80; }
 .meta-pill.mini { min-width: 60px; flex: 0; }
@@ -1282,7 +1282,7 @@ function importResults() { requestAction('import_search_results') }
 .tag-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
 .tag-section label { font-size: 10px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 10px; display: block; }
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 5px; max-height: 300px; overflow-y: auto; }
-.tag { padding: 4px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: #787878; font-size: 10px; }
+.tag { padding: 4px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: #787878; font-size: 10px; overflow-wrap: anywhere; max-width: 100%; }
 .tag.count { color: #60a5fa; border-color: rgba(96,165,250,0.3); background: rgba(96,165,250,0.05); }
 .tag.clothing { color: #a78bfa; border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.05); }
 .tag.body { color: #fb923c; border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.05); }

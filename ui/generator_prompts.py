@@ -61,11 +61,19 @@ class PromptHandlingMixin:
         if character_str == 'nan': character_str = ''
         if general_str == 'nan': general_str = ''
         
-        def to_list(text): 
-            return [t.strip() for t in text.split(',') if t.strip()]
-        
+        def to_list(text):
+            # 포맷 인식: 콤마 있으면 콤마 구분(2025/2026 검색·EXIF 프롬프트 — 태그
+            # 내부 공백 유지), 없으면 공백 구분 + 언더스코어→공백(2026_06 검색 —
+            # 'black_hair'가 'black','hair'로 안 쪼개지고 프롬프트엔 'black hair'로 들어감).
+            text = (text or '').strip()
+            if not text:
+                return []
+            if ',' in text:
+                return [t.strip() for t in text.split(',') if t.strip()]
+            return [t.strip().replace('_', ' ') for t in text.split() if t.strip()]
+
         # 2. 기본 리스트 생성
-        artist_list = [artist_str.replace('artist:', '').strip()] if artist_str else []
+        artist_list = to_list(artist_str.replace('artist:', '')) if artist_str else []
         copyright_list = to_list(copyright_str)
         character_list = to_list(character_str)
         general_list = to_list(general_str)
@@ -251,18 +259,20 @@ class PromptHandlingMixin:
 
         # 5. 인물 수 분류
         count_tags = {
-            "1boy", "2boys", "3boys", "4boys", "5boys", "6+boys", 
+            "1boy", "2boys", "3boys", "4boys", "5boys", "6+boys",
             "1girl", "2girls", "3girls", "4girls", "5girls", "6+girls",
-            "1other", "2others", "3others", "4others", "5others", "6+others"
+            "1other", "2others", "3others", "4others", "5others", "6+others",
+            "multiple boys", "multiple girls", "multiple others",
         }
-        
+
         final_count = []
         final_general = []
-        
+
         for t in general_list:
-            if t.lower() in count_tags: 
+            # 언더스코어/공백 차이 무시하고 매칭 (multiple_boys ↔ multiple boys)
+            if t.lower().replace('_', ' ') in count_tags:
                 final_count.append(t)
-            else: 
+            else:
                 final_general.append(t)
         
         _logger.debug(f"최종 general: {len(final_general)}개")
@@ -280,7 +290,12 @@ class PromptHandlingMixin:
                     fixed_tags.add(nt)
 
         if fixed_tags:
+            # 선행/후행 고정 프롬프트에 이미 있는 태그는 당겨오지 않음 —
+            # general뿐 아니라 인물수/캐릭터/작품에도 적용 (중복 방지).
             final_general = [t for t in final_general if _norm(t) not in fixed_tags]
+            final_count = [t for t in final_count if _norm(t) not in fixed_tags]
+            character_list = [t for t in character_list if _norm(t) not in fixed_tags]
+            copyright_list = [t for t in copyright_list if _norm(t) not in fixed_tags]
             _logger.debug(f"고정프롬프트 중복 제거 후 general: {len(final_general)}개")
 
         # 6.5. general 내부 중복 제거

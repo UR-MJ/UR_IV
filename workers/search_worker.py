@@ -12,7 +12,10 @@ class PandasSearchWorker(QThread):
     # 검색에 필요한 컬럼만 로드 (메모리 절약)
     # image_width/height 추가 — 자동(PARQUET) 해상도 + Search 결과 해상도 표기용.
     # 파일에 컬럼 없으면 read_parquet(columns=) 가 실패하고 전체 로드로 폴백되므로 안전.
-    REQUIRED_COLUMNS = ['copyright', 'character', 'artist', 'general', 'meta',
+    # 'rating'을 반드시 포함 — 빠지면 2026_06처럼 모든 컬럼이 존재하는 슬림
+    # 데이터셋에서 columns= subset이 성공하면서 rating을 안 실어 RATING이 '?'가 됨.
+    # (2025/2026은 meta/해상도 컬럼이 없어 columns=가 실패→전체 로드→rating 우연히 보존.)
+    REQUIRED_COLUMNS = ['rating', 'copyright', 'character', 'artist', 'general', 'meta',
                         'image_width', 'image_height']
 
     cached_df = None

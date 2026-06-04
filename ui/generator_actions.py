@@ -592,7 +592,10 @@ class ActionsMixin:
         """PNG Info/Gallery에서 프롬프트만 전송"""
         classified = self.tag_classifier.classify_tags_for_event([t.strip() for t in prompt.split(',') if t.strip()])
         bundle = {
-            'general': ', '.join(classified["costume"] + classified["appearance"] + classified["expression"] + classified["action"] + classified["background"] + classified["composition"] + classified["effect"] + classified["objects"] + classified["general"]),
+            # count(인물수)를 general 앞에 포함 → apply_prompt_from_data가 인물수
+            # 섹션(char_count_input)으로 분리. (과거엔 count를 빼서 1girl/2boys 등이
+            # 당겨오기 시 통째로 누락됐음.)
+            'general': ', '.join(classified.get("count", []) + classified["costume"] + classified["appearance"] + classified["expression"] + classified["action"] + classified["background"] + classified["composition"] + classified["effect"] + classified["objects"] + classified["general"]),
             'character': ', '.join(classified["character"]),
             'copyright': ', '.join(classified["copyright"]),
             'artist': ''
