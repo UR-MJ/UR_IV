@@ -355,11 +355,12 @@
                 <label class="ext-check-row" style="flex:1" title="머리카락 가닥 등을 감싸 마스크를 채움"><input type="checkbox" v-model="storeWidgets._sam3_mask_hull" true-value="true" false-value="false" /><span>Convex Hull (wrap strands)</span></label>
                 <div class="ext-field"><label>Outline expand (edge-aware, px)</label><input type="number" v-model="storeWidgets._sam3_mask_outline_px" min="0" /></div>
               </div>
-              <div class="ext-row">
-                <div class="ext-field"><label>SAM3 Checkpoint</label>
-                  <CustomSelect v-model="storeWidgets._sam3_checkpoint" :options="sam3CheckpointItems" placeholder="sam3.pt" /></div>
-                <div class="ext-field"><label>SAM3 Device</label>
-                  <CustomSelect v-model="storeWidgets._sam3_device" :options="sam3DeviceItems" placeholder="auto" /></div>
+              <div class="ext-field"><label>SAM3 Checkpoint</label>
+                <CustomSelect v-model="storeWidgets._sam3_checkpoint" :options="sam3CheckpointItems" placeholder="sam3.pt" /></div>
+              <div class="ext-field">
+                <label>SAM3 Device (검출 연산 장치)</label>
+                <CustomSelect v-model="storeWidgets._sam3_device" :options="sam3DeviceItems" placeholder="cuda" />
+                <div class="ext-note">cuda 권장 — auto는 CPU로 떨어져 검출이 느려질 수 있음</div>
               </div>
               <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_preview_overlay" true-value="true" false-value="false" /><span>Replace output with overlay preview</span></label>
               <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_save_artifacts" true-value="true" false-value="false" /><span>Save mask/overlay artifacts</span></label>
