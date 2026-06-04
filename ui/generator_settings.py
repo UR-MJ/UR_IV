@@ -206,15 +206,19 @@ class SettingsMixin:
                 # LineEditProxy — Vue로 즉시 push (chips 자동 렌더링)
                 self.te_main_input.setText(settings.get("te_main", ""))
 
+            # ★ setText() 사용 (findText+setCurrentIndex 금지).
+            #   설정 로드가 API 샘플러 목록 fetch보다 먼저 실행되는 race 존재.
+            #   findText는 items 비어있으면 -1 → 적용 실패 → addItems가
+            #   첫 항목(DPM++ 2M/Automatic)으로 떨어뜨려 사용자의 ER SDE/Beta57
+            #   같은 커스텀 샘플러가 유실됨. setText는 items 없으면 _fallback_text에
+            #   저장 → addItems 시 자동 복원 (VAE 콤보와 동일 방식).
             sampler_text = settings.get("sampler", "")
-            idx = self.sampler_combo.findText(sampler_text)
-            if idx >= 0: 
-                self.sampler_combo.setCurrentIndex(idx)
-            
+            if sampler_text:
+                self.sampler_combo.setText(sampler_text)
+
             scheduler_text = settings.get("scheduler", "")
-            idx = self.scheduler_combo.findText(scheduler_text)
-            if idx >= 0: 
-                self.scheduler_combo.setCurrentIndex(idx)
+            if scheduler_text:
+                self.scheduler_combo.setText(scheduler_text)
             
             self.steps_input.setText(settings.get("steps", "25"))
             self.cfg_input.setText(settings.get("cfg", "7.0"))
