@@ -412,6 +412,13 @@ class GeneratorMainUI(
                 self._run_adetailer_single(payload)
             elif action == 'run_adetailer_batch':
                 self._run_adetailer_batch(payload)
+            elif action == 'stop_adetailer_batch':
+                # BatchView '중지' 버튼 — 워커는 stop()/_stop_event 지원하나
+                # 액션 핸들러가 없어 무동작이었음. 연결.
+                _w = getattr(self, '_ad_batch_worker', None)
+                if _w is not None and _w.isRunning():
+                    _w.stop()
+                    self.vue_bridge.showNotification.emit('info', 'ADetailer 배치 중지 요청됨')
             elif action == 'run_sam3_single':
                 self._run_sam3_single(payload)
             elif action == 'run_sam3_batch':

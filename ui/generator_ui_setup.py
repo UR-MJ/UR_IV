@@ -511,8 +511,6 @@ class UISetupMixin:
             # SliderProxy 생성 후 기본값 설정 (Vue에도 push)
             confidence = SliderProxy(b, f'{prefix}_confidence')
             confidence.setText('0.3')
-            strength = SliderProxy(b, f'{prefix}_str')
-            strength.setText('0.4')
             mask_blur = SliderProxy(b, f'{prefix}_mask_blur')
             mask_blur.setText('4')
             denoise = SliderProxy(b, f'{prefix}_denoise')
@@ -530,7 +528,6 @@ class UISetupMixin:
                 'neg_prompt': TextEditProxy(b, f'{prefix}_neg'),
                 'model': ComboBoxProxy(b, f'{prefix}_model'),
                 'confidence': confidence,
-                'strength': strength,
                 'mask_blur': mask_blur,
                 'denoise': denoise,
                 'padding': padding,
