@@ -191,6 +191,18 @@
                 <div class="ext-field"><label>Scale</label><input type="number" v-model="storeWidgets.hires_scale_input" step="0.1" min="1" /></div>
                 <div class="ext-field"><label>CFG (0=off)</label><input type="number" v-model="storeWidgets.hires_cfg_input" step="0.5" /></div>
               </div>
+              <div class="ext-field"><label>Checkpoint</label>
+                <CustomSelect v-model="storeWidgets.hires_checkpoint_combo" :options="hiresCheckpointItems" placeholder="Use same checkpoint" /></div>
+              <div class="ext-row">
+                <div class="ext-field"><label>Sampler</label>
+                  <CustomSelect v-model="storeWidgets.hires_sampler_combo" :options="hiresSamplerItems" placeholder="Use same sampler" /></div>
+                <div class="ext-field"><label>Scheduler</label>
+                  <CustomSelect v-model="storeWidgets.hires_scheduler_combo" :options="hiresSchedulerItems" placeholder="Use same scheduler" /></div>
+              </div>
+              <div class="ext-field"><label>Hires Prompt (비우면 메인 사용)</label>
+                <input type="text" v-model="storeWidgets.hires_prompt_text" placeholder="비워두면 메인 프롬프트 사용" /></div>
+              <div class="ext-field"><label>Hires Negative Prompt</label>
+                <input type="text" v-model="storeWidgets.hires_neg_prompt_text" placeholder="비워두면 메인 네거티브 사용" /></div>
             </details>
 
             <details class="ext-card" open>
@@ -259,7 +271,11 @@
                   <CustomSelect v-model="storeWidgets._ad_s1_scheduler" :options="schedulerItems" placeholder="Scheduler" /></div>
               </div>
               <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s1_use_ckpt" true-value="true" false-value="false" /><span>별도 Checkpoint</span></label>
+              <div class="ext-field" v-if="storeWidgets._ad_s1_use_ckpt === 'true'"><label>Checkpoint</label>
+                <CustomSelect v-model="storeWidgets._ad_s1_ckpt" :options="adCheckpointItems" placeholder="Use same checkpoint" /></div>
               <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s1_use_vae" true-value="true" false-value="false" /><span>별도 VAE</span></label>
+              <div class="ext-field" v-if="storeWidgets._ad_s1_use_vae === 'true'"><label>VAE</label>
+                <CustomSelect v-model="storeWidgets._ad_s1_vae" :options="adVaeItems" placeholder="Use same VAE" /></div>
 
               <!-- Slot 2 -->
               <details class="ext-sub">
@@ -303,7 +319,11 @@
                     <CustomSelect v-model="storeWidgets._ad_s2_scheduler" :options="schedulerItems" placeholder="Scheduler" /></div>
                 </div>
                 <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s2_use_ckpt" true-value="true" false-value="false" /><span>별도 Checkpoint</span></label>
+                <div class="ext-field" v-if="storeWidgets._ad_s2_use_ckpt === 'true'"><label>Checkpoint</label>
+                  <CustomSelect v-model="storeWidgets._ad_s2_ckpt" :options="adCheckpointItems" placeholder="Use same checkpoint" /></div>
                 <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s2_use_vae" true-value="true" false-value="false" /><span>별도 VAE</span></label>
+                <div class="ext-field" v-if="storeWidgets._ad_s2_use_vae === 'true'"><label>VAE</label>
+                  <CustomSelect v-model="storeWidgets._ad_s2_vae" :options="adVaeItems" placeholder="Use same VAE" /></div>
               </details>
             </details>
 
@@ -869,6 +889,13 @@ const sam3CheckpointItems = computed(() => wStore.getProperty('_sam3_checkpoint'
 const sam3DeviceItems = ['auto', 'cuda', 'cpu']
 const sam3FillItems = ['fill', 'original', 'latent noise', 'latent nothing']
 const adModelItems = ref([])
+// ADetailer 슬롯 별도 Checkpoint/VAE 목록 (s1/s2 동일하게 Python이 채움)
+const adCheckpointItems = computed(() => wStore.getProperty('_ad_s1_ckpt', 'items') || ['Use same checkpoint'])
+const adVaeItems = computed(() => wStore.getProperty('_ad_s1_vae', 'items') || ['Use same VAE'])
+// Hires 전용 Checkpoint/Sampler/Scheduler (Python이 'Use same ...' 접두 포함해 채움)
+const hiresCheckpointItems = computed(() => wStore.getProperty('hires_checkpoint_combo', 'items') || ['Use same checkpoint'])
+const hiresSamplerItems = computed(() => wStore.getProperty('hires_sampler_combo', 'items') || ['Use same sampler'])
+const hiresSchedulerItems = computed(() => wStore.getProperty('hires_scheduler_combo', 'items') || ['Use same scheduler'])
 
 // Hires/ADetailer 체크박스 (proxy 연동)
 const randomResEnabled = computed({ get: () => storeWidgets.random_res_check === 'true', set: v => { storeWidgets.random_res_check = v ? 'true' : 'false'; if (v) loadRandomResList() } })

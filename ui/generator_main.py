@@ -172,7 +172,7 @@ class GeneratorMainUI(
         
         try:
             # 1. 워크스페이스 제어
-            if action in ('switch_tab', 'native_tab_switch'):
+            if action == 'native_tab_switch':
                 tab_id = payload.get('tab', 't2i')
                 tab_map = {'web': 1, 'backend': 2}
                 idx = tab_map.get(tab_id, 0)
@@ -283,19 +283,6 @@ class GeneratorMainUI(
                         self.vue_bridge.showNotification.emit('success', f'저장됨: {os.path.basename(dst)}')
                         self.show_status(f"Exported to: {os.path.basename(dst)}")
 
-            elif action == 'editor_change_tool':
-                tool = payload.get('tool', 'box')
-                if hasattr(self, 'mosaic_editor') and self.mosaic_editor.mosaic_panel:
-                    panel = self.mosaic_editor.mosaic_panel
-                    tool_map = {'box': 0, 'lasso': 1, 'brush': 2, 'eraser': 3}
-                    btn_id = tool_map.get(tool, 0)
-                    btn = panel.tool_group.button(btn_id)
-                    if btn: btn.setChecked(True); panel.on_tool_group_clicked(btn)
-
-            elif action == 'editor_apply_effect':
-                if hasattr(self, 'mosaic_editor'): self.mosaic_editor._on_apply_effect()
-            elif action == 'editor_apply_auto_censor':
-                if hasattr(self, 'mosaic_editor'): self.mosaic_editor._on_auto_censor()
             elif action == 'editor_add_yolo_model':
                 from PyQt6.QtWidgets import QFileDialog as _QFD
                 from tabs.editor.mosaic_panel import get_editor_models_dir
@@ -325,39 +312,6 @@ class GeneratorMainUI(
                     label = ", ".join(names) if names else "No Model"
                     self.vue_bridge.yoloModelUpdated.emit(label)
                     self.show_status(f"YOLO Model loaded: {label}")
-
-            # 5. 하이엔드 우클릭 메뉴
-            elif action == 'context_menu':
-                path = payload.get('path', '')
-                if not path: return
-                clean_path = _clean_path(path)
-                if not os.path.exists(clean_path): return
-                
-                menu = QMenu(self)
-                menu.setStyleSheet(f"QMenu {{ background: #121212; color: white; border: 1px solid #333; padding: 4px; }} QMenu::item:selected {{ background: {get_color('accent')}; color: black; }}")
-                
-                act_i2i = menu.addAction("🖼️ SEND TO I2I")
-                act_inpaint = menu.addAction("🎨 SEND TO INPAINT")
-                act_editor = menu.addAction("🎨 SEND TO EDITOR")
-                menu.addSeparator()
-                act_folder = menu.addAction("📁 SHOW IN EXPLORER")
-                act_copy = menu.addAction("📋 COPY TO CLIPBOARD")
-                act_del = menu.addAction("🗑️ DELETE TO TRASH")
-                
-                from PyQt6.QtGui import QCursor
-                chosen = menu.exec(QCursor.pos())
-                if chosen == act_i2i: self._handle_vue_action('send_to_i2i', {'path': clean_path})
-                elif chosen == act_inpaint: self._handle_vue_action('send_to_inpaint', {'path': clean_path})
-                elif chosen == act_editor: self._handle_vue_action('send_to_editor', {'path': clean_path})
-                elif chosen == act_folder:
-                    subprocess.run(['explorer', '/select,', clean_path])
-                elif chosen == act_copy:
-                    from PyQt6.QtGui import QPixmap
-                    pix = QPixmap(clean_path)
-                    if not pix.isNull(): QApplication.clipboard().setPixmap(pix); self.show_status("Copied.")
-                elif chosen == act_del:
-                    from core.image_utils import move_to_trash
-                    move_to_trash(clean_path); self.show_status("Moved to Trash.")
 
             # 6. 기타 스튜디오 도구
             elif action == 'show_prompt_history': self._show_prompt_history()
@@ -440,7 +394,6 @@ class GeneratorMainUI(
                         self.vue_bridge.batchFilesSelected.emit(
                             json.dumps([p.replace('\\', '/') for p in sorted(imgs)]))
                         self.vue_bridge.showNotification.emit('info', f'{len(imgs)}개 이미지 발견')
-            elif action == 'shuffle': self._shuffle_main_prompt()
             elif action == 'ab_test': self._open_ab_test()
             elif action == 'random_prompt': self.apply_random_prompt()
 
@@ -910,18 +863,6 @@ class GeneratorMainUI(
                             self.show_status("Character preset applied.")
                 except Exception as e:
                     print(f"[Error] Character preset: {e}")
-
-            # ═══════ 태그 가중치 편집기 ═══════
-            elif action == 'open_tag_weight_editor':
-                try:
-                    from widgets.tag_weight_editor import TagWeightEditorDialog
-                    text = self.main_prompt_text.toPlainText()
-                    dlg = TagWeightEditorDialog(text, parent=self)
-                    if dlg.exec():
-                        self.main_prompt_text.setPlainText(dlg.get_result())
-                        self.show_status("Tag weights updated.")
-                except Exception as e:
-                    print(f"[Error] Tag weight editor: {e}")
 
             # ═══════ YOLO 모델 초기화 ═══════
             elif action == 'editor_clear_yolo_models':
