@@ -49,6 +49,7 @@ config/prompt_order.json
 config/profiles/
 config/gallery_last_folder.txt
 config/last_crash.log
+config/last_search_results.json
 Editor_models/yolo_config.json
 
 # User outputs
