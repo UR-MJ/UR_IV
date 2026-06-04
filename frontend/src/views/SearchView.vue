@@ -535,12 +535,20 @@ const condNegative = reactive([])
 let progressTimer = null
 
 const currentResult = computed(() => filteredResults.value[previewIdx.value] || null)
-// general 태그는 parquet에서 '공백' 구분 + 언더스코어 보존
-//   (예: '1girl blue_eyes blue_hair cape ...').
-// 콤마로 split하면 통째로 1개 태그가 돼 카운트=1 + 거대 칩 오버플로우 발생했음.
-// 공백/콤마 모두로 split하되, '원본(언더스코어 유지)'을 쪼갠 뒤 칩 표시용으로만
-// _→공백 치환 → 'blue_hair'가 'blue','hair'로 잘못 쪼개지지 않음 (사전 불필요).
-const currentTags = computed(() => (currentResult.value?.general || '').split(/[\s,]+/).map(t => t.trim()).filter(Boolean).map(t => t.replace(/_/g, ' ')))
+// 데이터셋별 general 포맷이 다름 — 포맷 인식 분리:
+//  - 2025/2026 : 콤마 구분 + 태그 내부 공백 ('aqua gloves, black hair', 언더스코어 없음)
+//  - 2026_06   : 공백 구분 + 언더스코어 보존 ('aqua_gloves black_hair')
+// 콤마가 있으면 콤마로만 쪼개 'aqua gloves'를 통째로 유지하고,
+// 없으면 공백으로 쪼갠 뒤 표시용으로만 _→공백 치환 → 'black_hair'가 안 쪼개짐.
+// (콤마 split에 공백을 섞으면 2025/2026의 'aqua gloves'가 잘못 쪼개지므로 분기 필수.)
+const currentTags = computed(() => {
+  const raw = currentResult.value?.general || ''
+  if (!raw.trim()) return []
+  if (raw.includes(',')) {
+    return raw.split(',').map(t => t.trim()).filter(Boolean)
+  }
+  return raw.split(/\s+/).map(t => t.trim()).filter(Boolean).map(t => t.replace(/_/g, ' '))
+})
 
 // 검색 입력 영속 — localStorage는 sync (앱 빨리 닫혀도 안 잃어버림)
 // 백엔드 ui_prefs.json 쓰기는 디바운스 (키스트로크마다 파일 쓰지 않게)
