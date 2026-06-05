@@ -13,7 +13,7 @@
     <CustomSelect :modelValue="featureModeLabel" @update:modelValue="v => set('combo_char_feature_mode', v === '핵심+의상' ? '1' : '0')"
       :options="['핵심만', '핵심+의상']" placeholder="모드" />
 
-    <button class="s-btn" @click="action('open_character_preset')">특징 프리셋</button>
+    <button class="s-btn" @click="openCharPresetModal()">특징 프리셋</button>
 
     <!-- 모델 -->
     <label class="s-label">모델</label>
@@ -142,6 +142,7 @@
 <script setup>
 import { computed } from 'vue'
 import { state, getValue, setValue, requestAction, getProperty } from '../stores/widgetStore.js'
+import { openCharPresetModal } from '../composables/uiModals.js'
 import CustomSelect from './CustomSelect.vue'
 
 const resPresets = [

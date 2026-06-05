@@ -306,9 +306,14 @@ class UISetupMixin:
 
         b = self.vue_bridge
         self.chk_auto_char_features = CheckBoxProxy(b, 'chk_auto_char_features')
+        # 자동화 시 특징 자동추가의 'auto remove'(충돌 자동 처리) 토글
+        self.chk_auto_remove_char_features = CheckBoxProxy(b, 'chk_auto_remove_char_features')
         self.combo_char_feature_mode = ComboBoxProxy(b, 'combo_char_feature_mode')
         self.combo_char_feature_mode.addItems(["핵심만", "핵심+의상"])
         self.btn_char_preset = ButtonProxy(b, 'btn_char_preset')
+        # auto remove 시 override(머리길이/눈색 강제 교체) 설정
+        if not hasattr(self, '_char_feature_override'):
+            self._char_feature_override = {'hair_length': False, 'eye_color': False}
 
         self.model_combo = ComboBoxProxy(b, 'model_combo')
         self.vae_main_combo = ComboBoxProxy(b, 'vae_main_combo')
@@ -1012,9 +1017,14 @@ class UISetupMixin:
         result = dlg.get_result()
         if not result:
             return
+        self._apply_character_features_result(
+            result.get("character_name", ""), result.get("tags", [])
+        )
 
+    def _apply_character_features_result(self, char_name: str, tags: list):
+        """캐릭터 이름 + 특징 태그를 프롬프트 위젯에 삽입 (Vue 모달 / 레거시 다이얼로그 공용)."""
+        char_name = (char_name or "").strip()
         # 캐릭터 이름 설정
-        char_name = result.get("character_name", "")
         if char_name:
             cur = self.character_input.text().strip()
             if cur:
@@ -1022,18 +1032,15 @@ class UISetupMixin:
                 for c in cur.split(","):
                     n = c.strip().lower().replace("_", " ")
                     existing_chars.add(n)
-                    existing_chars.add(
-                        n.replace(r"\(", "(").replace(r"\)", ")")
-                    )
+                    existing_chars.add(n.replace(r"\(", "(").replace(r"\)", ")"))
                 if char_name.lower().replace("_", " ") not in existing_chars:
                     self.character_input.setText(f"{cur}, {char_name}")
             else:
                 self.character_input.setText(char_name)
 
         # 특징 태그 삽입 (중복 제거)
-        tags = result.get("tags", [])
+        tags = tags or []
         if tags:
-            # 삽입 시점의 전체 태그 재수집
             all_existing: set[str] = set()
             for src in (self.main_prompt_text.toPlainText(),
                         self.prefix_prompt_text.toPlainText(),
@@ -1043,23 +1050,22 @@ class UISetupMixin:
                     n = t.strip().lower().replace("_", " ")
                     if n:
                         all_existing.add(n)
-                        all_existing.add(
-                            n.replace(r"\(", "(").replace(r"\)", ")")
-                        )
+                        all_existing.add(n.replace(r"\(", "(").replace(r"\)", ")"))
 
             new_tags = [
                 t for t in tags
-                if t.strip().lower().replace("_", " ") not in all_existing
+                if t.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")") not in all_existing
             ]
             if new_tags:
                 insert_str = ", ".join(new_tags)
                 current = self.main_prompt_text.toPlainText().strip()
                 if current:
-                    self.main_prompt_text.setPlainText(
-                        f"{insert_str}, {current}"
-                    )
+                    self.main_prompt_text.setPlainText(f"{insert_str}, {current}")
                 else:
                     self.main_prompt_text.setPlainText(insert_str)
+
+        if hasattr(self, 'update_total_prompt_display'):
+            self.update_total_prompt_display()
 
     def _create_favorites_tab(self):
         """즐겨찾기 탭 생성"""

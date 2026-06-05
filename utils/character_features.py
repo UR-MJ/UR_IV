@@ -88,6 +88,55 @@ def _is_costume_tag(tag: str) -> bool:
     return bool(words & _COSTUME_WORDS)
 
 
+# ── 눈/머리 충돌 판정 (자동화 특징 자동추가 시 'auto remove' / override 용) ──
+def _norm_tag(tag: str) -> str:
+    return (tag or "").strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
+
+
+# 눈 색을 가리는 상태 태그 — 이게 프롬프트에 있으면 캐릭터 눈색 특징을 추가하지 않음
+# (정책: 완전히 감은 'closed eyes'만 차단; 'one eye closed'/'half-closed eyes'는 색이 보일 수 있어 허용)
+_EYE_COLOR_HIDING: set[str] = {
+    "closed eyes",
+}
+# 눈 색 단어 (색 + eyes 조합이면 눈색 특징으로 간주)
+_EYE_COLOR_WORDS: set[str] = {
+    "aqua", "black", "blue", "brown", "green", "grey", "gray", "orange",
+    "pink", "purple", "red", "white", "yellow", "violet", "amber",
+    "gold", "golden", "silver", "light", "dark", "pale",
+}
+# 색 자체가 의미인 눈 관련 특징 (eyes 단어 없이도)
+_EYE_COLOR_SPECIAL: set[str] = {
+    "heterochromia", "multicolored eyes",
+}
+# 머리 길이 카테고리 (서로 배타적 — 하나만 가능)
+_HAIR_LENGTH_TAGS: set[str] = {
+    "very short hair", "short hair", "medium hair", "long hair",
+    "very long hair", "absurdly long hair", "bald",
+}
+
+
+def is_eye_color_tag(tag: str) -> bool:
+    """'blue eyes' 같은 눈 색 지정 특징인지. 'closed eyes' 등 상태 태그는 False."""
+    n = _norm_tag(tag)
+    if not n or n in _EYE_COLOR_HIDING:
+        return False
+    if n in _EYE_COLOR_SPECIAL:
+        return True
+    if not n.endswith(" eyes") and n != "eyes":
+        return False
+    return bool(set(n.split()) & _EYE_COLOR_WORDS)
+
+
+def is_eye_color_hider(tag: str) -> bool:
+    """이 태그가 눈 색을 가리는 상태 태그인지 (closed eyes 등)."""
+    return _norm_tag(tag) in _EYE_COLOR_HIDING
+
+
+def is_hair_length_tag(tag: str) -> bool:
+    """머리 길이 카테고리 태그인지 (short/long hair 등)."""
+    return _norm_tag(tag) in _HAIR_LENGTH_TAGS
+
+
 class CharacterFeatureLookup:
     """캐릭터 이름 → 핵심/의상 특징 분리 조회 (lazy loading, singleton)"""
 

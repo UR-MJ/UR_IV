@@ -118,7 +118,9 @@ class SettingsMixin:
             "remove_text": self.chk_remove_text.isChecked(),
 
             "auto_char_features": self.chk_auto_char_features.isChecked() if hasattr(self, 'chk_auto_char_features') else False,
+            "auto_remove_char_features": self.chk_auto_remove_char_features.isChecked() if hasattr(self, 'chk_auto_remove_char_features') else False,
             "char_feature_mode": self.combo_char_feature_mode.currentIndex() if hasattr(self, 'combo_char_feature_mode') else 0,
+            "char_feature_override": getattr(self, '_char_feature_override', {'hair_length': False, 'eye_color': False}),
 
             "cond_prompt_enabled": self.cond_prompt_check.isChecked(),
             "cond_rules_json": self._get_combined_cond_rules_json(),
@@ -324,8 +326,15 @@ class SettingsMixin:
             # 캐릭터 특징 자동 추가
             if hasattr(self, 'chk_auto_char_features'):
                 self.chk_auto_char_features.setChecked(settings.get("auto_char_features", False))
+            if hasattr(self, 'chk_auto_remove_char_features'):
+                self.chk_auto_remove_char_features.setChecked(settings.get("auto_remove_char_features", False))
             if hasattr(self, 'combo_char_feature_mode'):
                 self.combo_char_feature_mode.setCurrentIndex(settings.get("char_feature_mode", 0))
+            _ov = settings.get("char_feature_override") or {}
+            self._char_feature_override = {
+                'hair_length': bool(_ov.get('hair_length', False)),
+                'eye_color': bool(_ov.get('eye_color', False)),
+            }
 
             # 조건부 프롬프트
             self.cond_prompt_check.setChecked(settings.get("cond_prompt_enabled", False))

@@ -38,7 +38,7 @@
       <div class="input-group autocomplete-wrap">
         <div class="row label-row">
           <label>Character <span v-if="sectionTokens.character" class="tk-badge" :class="tokenBadgeClass(sectionTokens.character)">{{ sectionTokens.character }}t</span></label>
-          <button class="small-btn" @click="requestAction('open_character_preset'); loadCharTags()">PRESET</button>
+          <button class="small-btn" @click="openCharPresetModal(); loadCharTags()">PRESET</button>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.character_input" :color-fn="() => 'bc-count'" placeholder="캐릭터..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <input v-else type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku"
@@ -210,6 +210,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
+import { openCharPresetModal } from '../composables/uiModals.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from './CustomSelect.vue'
 import TagBlockField from './TagBlockField.vue'

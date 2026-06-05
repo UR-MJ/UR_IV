@@ -424,6 +424,49 @@ class PromptHandlingMixin:
         new_tags: list[str] = []
         char_cond_all_rules = []
 
+        # ── 'auto remove' (충돌 자동 처리) + override 설정 ──
+        # 자동화 시 캐릭터 특징을 추가할 때, 덱 프롬프트와 충돌하는 특징을 다룬다.
+        #  · closed eyes 가 이미 있으면 캐릭터 눈색('blue eyes' 등) 추가 안 함
+        #  · 머리 길이(short hair 등)가 이미 있으면 다른 머리 길이 특징 추가 안 함
+        #  · override(눈색/머리길이)가 켜진 카테고리는 충돌 태그를 제거하고 특징으로 교체
+        auto_remove = (hasattr(self, 'chk_auto_remove_char_features') and
+                       self.chk_auto_remove_char_features.isChecked())
+        ov = getattr(self, '_char_feature_override', None) or {}
+        override_hair = bool(ov.get('hair_length'))
+        override_eye = bool(ov.get('eye_color'))
+        removals: set[str] = set()   # main에서 제거할 정규화 태그 (override 교체 시)
+        if auto_remove:
+            from utils.character_features import (
+                is_eye_color_tag, is_eye_color_hider, is_hair_length_tag, _norm_tag,
+            )
+            # _norm_tag로 정규화해 저장 → 아래 main 제거 비교(_norm_tag 동등)와 형태 일치
+            existing_eye_hiders = {_norm_tag(n) for n in all_existing if is_eye_color_hider(n)}
+            existing_hair_lengths = {_norm_tag(n) for n in all_existing if is_hair_length_tag(n)}
+        else:
+            existing_eye_hiders = set()
+            existing_hair_lengths = set()
+
+        def _accept_feature(tag: str, norm: str) -> bool:
+            """auto_remove 모드에서 충돌하는 특징을 거를지 결정.
+            override가 켜진 카테고리는 충돌 태그를 제거(removals 누적)하고 추가 허용."""
+            if not auto_remove:
+                return True
+            # 눈 색 특징 vs 'closed eyes'
+            if existing_eye_hiders and is_eye_color_tag(tag):
+                if override_eye:
+                    removals.update(existing_eye_hiders)
+                    return True
+                return False
+            # 머리 길이 특징 vs 기존의 다른 머리 길이
+            if is_hair_length_tag(tag):
+                others = {h for h in existing_hair_lengths if h != norm}
+                if others:
+                    if override_hair:
+                        removals.update(others)
+                        return True
+                    return False
+            return True
+
         for char_raw in character_list:
             char_name = char_raw.strip().replace(r"\(", "(").replace(r"\)", ")")
             char_norm = char_name.lower().replace("_", " ").replace("(", "").replace(")", "").strip()
@@ -437,8 +480,9 @@ class PromptHandlingMixin:
                         tag = t.strip()
                         norm = tag.lower().replace("_", " ")
                         if norm and norm not in all_existing and norm != char_norm:
-                            new_tags.append(tag)
-                            all_existing.add(norm)
+                            if _accept_feature(tag, norm):
+                                new_tags.append(tag)
+                                all_existing.add(norm)
 
                 # 조건부 규칙 수집 (새 JSON 포맷 우선)
                 cond_json = preset.get("cond_rules_json", "")
@@ -467,8 +511,24 @@ class PromptHandlingMixin:
                     tag = tag.strip()
                     norm = tag.lower().replace("_", " ")
                     if norm and norm not in all_existing and norm != char_norm:
-                        new_tags.append(tag)
-                        all_existing.add(norm)
+                        if _accept_feature(tag, norm):
+                            new_tags.append(tag)
+                            all_existing.add(norm)
+
+        # 2.5 override 교체: 충돌하던 기존 태그를 main에서 제거 (제거 후 아래에서 특징 추가)
+        if removals:
+            self.is_programmatic_change = True
+            kept = []
+            for t in self.main_prompt_text.toPlainText().split(","):
+                ts = t.strip()
+                if not ts:
+                    continue
+                tnorm = ts.lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
+                if tnorm in removals:
+                    continue
+                kept.append(ts)
+            self.main_prompt_text.setPlainText(", ".join(kept))
+            self.is_programmatic_change = False
 
         if new_tags:
             self.is_programmatic_change = True

@@ -31,7 +31,7 @@
               <button class="tool-btn" @click="showWcManager = true">WILDCARD</button>
               <button class="tool-btn" @click="showInstantWcManager = true; loadInstantWcList()" title="JSON 기반 인라인 와일드카드 ($$name$$)">INSTANT WC</button>
               <button class="tool-btn" @click="showOrderManager = true; loadPromptOrder()" title="최종 프롬프트의 섹션 순서를 직접 지정">ORDER</button>
-              <button class="tool-btn" @click="action('ab_test')">A/B TEST</button>
+              <button class="tool-btn" @click="openAbTestModal()">A/B TEST</button>
               <button class="tool-btn" @click="showStatsModal = true; loadGenStats()">STATS</button>
             </div>
           </div>
@@ -234,6 +234,10 @@
                 <label class="ext-check-row"><input type="checkbox" v-model="removeCensorship" /><span>검열 제거</span></label>
                 <label class="ext-check-row"><input type="checkbox" v-model="removeText" /><span>텍스트 제거</span></label>
                 <label class="ext-check-row"><input type="checkbox" v-model="autoCharFeatures" /><span>특징 자동 추가</span></label>
+                <label class="ext-check-row"><input type="checkbox" v-model="autoRemoveCharFeatures" /><span title="closed eyes 있으면 눈색 특징 생략, 머리 길이 충돌 시 생략">특징 auto remove</span></label>
+              </div>
+              <div v-if="autoRemoveCharFeatures" class="char-ovr-row">
+                <button class="char-ovr-btn" @click="openCharOverrideModal()">⚙ override 설정 (머리길이 / 눈색)</button>
               </div>
             </details>
 
@@ -592,6 +596,11 @@
         </div>
       </div>
     </transition>
+
+    <!-- 캐릭터 특징 프리셋 / A/B 테스트 / override 모달 (Vue) -->
+    <CharacterPresetModal v-if="uiModals.charPreset" @close="closeCharPresetModal" />
+    <ABTestModal v-if="uiModals.abTest" @close="closeAbTestModal" />
+    <CharFeatureOverrideModal v-if="uiModals.charOverride" @close="closeCharOverrideModal" />
 
     <!-- Weight Manager Modal -->
     <transition name="fade">
@@ -1002,6 +1011,7 @@ const removeMeta = computed({ get: () => storeWidgets.chk_remove_meta === 'true'
 const removeCensorship = computed({ get: () => storeWidgets.chk_remove_censorship === 'true', set: v => { storeWidgets.chk_remove_censorship = v ? 'true' : 'false' } })
 const removeText = computed({ get: () => storeWidgets.chk_remove_text === 'true', set: v => { storeWidgets.chk_remove_text = v ? 'true' : 'false' } })
 const autoCharFeatures = computed({ get: () => storeWidgets.chk_auto_char_features === 'true', set: v => { storeWidgets.chk_auto_char_features = v ? 'true' : 'false' } })
+const autoRemoveCharFeatures = computed({ get: () => storeWidgets.chk_auto_remove_char_features === 'true', set: v => { storeWidgets.chk_auto_remove_char_features = v ? 'true' : 'false' } })
 const ad_enabled = computed({ get: () => storeWidgets.adetailer_group === 'true', set: v => { storeWidgets.adetailer_group = v ? 'true' : 'false' } })
 const sam3_enabled = computed({ get: () => storeWidgets.sam3_group === 'true', set: v => { storeWidgets.sam3_group = v ? 'true' : 'false' } })
 const ad_s1_enabled = computed({ get: () => storeWidgets.ad_slot1_group === 'true', set: v => { storeWidgets.ad_slot1_group = v ? 'true' : 'false' } })
@@ -1010,6 +1020,11 @@ import PromptPanel from './components/PromptPanel.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import TabBar from './components/TabBar.vue'
 import QueuePanel from './components/QueuePanel.vue'
+import CharacterPresetModal from './components/CharacterPresetModal.vue'
+import ABTestModal from './components/ABTestModal.vue'
+import CharFeatureOverrideModal from './components/CharFeatureOverrideModal.vue'
+import { uiModals, closeCharPresetModal, openAbTestModal, closeAbTestModal,
+         openCharOverrideModal, closeCharOverrideModal } from './composables/uiModals.js'
 
 const currentImage = ref('')
 const imageVersions = reactive({})
@@ -1976,6 +1991,9 @@ onMounted(async () => {
 }
 .rating-toggle.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 .ext-toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.char-ovr-row { margin-top: 6px; }
+.char-ovr-btn { width: 100%; padding: 6px 10px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: var(--radius-base); color: var(--accent); font-size: 10px; font-weight: 700; cursor: pointer; }
+.char-ovr-btn:hover { background: rgba(250,204,21,0.18); }
 .ext-sub { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .ext-sub summary { font-size: 10px; color: var(--text-secondary); cursor: pointer; }
 .ext-sub-title { font-size: 10px; font-weight: 800; color: var(--accent); letter-spacing: 1px; margin: 8px 0 4px; }

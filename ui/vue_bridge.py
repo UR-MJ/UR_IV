@@ -1156,6 +1156,249 @@ class VueBridge(QObject):
             logger.warning("getPreset failed (%s): %s", name, e)
         return '{}'
 
+    # ══════════ 캐릭터 특징 프리셋 (Vue 모달) ══════════
+
+    def _current_prompt_norm_tags(self) -> set:
+        """현재 프롬프트(main/prefix/suffix/character)의 정규화 태그 집합 (중복 표시용)."""
+        gen = self.parent()
+        out: set = set()
+        if not gen:
+            return out
+        for attr in ('main_prompt_text', 'prefix_prompt_text',
+                     'suffix_prompt_text', 'character_input'):
+            w = getattr(gen, attr, None)
+            if w is None:
+                continue
+            if hasattr(w, 'toPlainText'):
+                src = w.toPlainText()
+            elif hasattr(w, 'text'):
+                src = w.text()
+            else:
+                continue
+            for t in src.split(","):
+                n = t.strip().lower().replace("_", " ")
+                if n:
+                    out.add(n)
+                    out.add(n.replace(r"\(", "(").replace(r"\)", ")"))
+        return out
+
+    @pyqtSlot(str, result=str)
+    def searchCharacters(self, query: str) -> str:
+        """캐릭터 이름 검색 → JSON [{key, count, hasPreset}] (2글자 미만은 빈 배열)."""
+        try:
+            q = (query or "").strip()
+            if len(q) < 2:
+                return json.dumps([])
+            from utils.character_features import get_character_features
+            from utils.character_presets import list_character_presets
+            lookup = get_character_features()
+            results = lookup.search(q, limit=80)
+            saved = list_character_presets()
+            out = []
+            for orig_key, _features, count in results:
+                norm = orig_key.strip().lower().replace("_", " ")
+                out.append({
+                    "key": orig_key,
+                    "count": int(count or 0),
+                    "hasPreset": norm in saved,
+                })
+            return json.dumps(out, ensure_ascii=False)
+        except Exception as e:
+            print(f"[CharPreset] searchCharacters 실패: {e}")
+            return json.dumps([])
+
+    @pyqtSlot(str, result=str)
+    def getCharacterFeatures(self, name: str) -> str:
+        """캐릭터 → 핵심/의상 특징 분리 + 저장된 커스텀/조건부 규칙.
+        Returns JSON {name, count, core:[{tag,existing,costume}], costume:[...],
+                      custom:[str], hasPreset, condRulesJson}
+        """
+        try:
+            from utils.character_features import get_character_features
+            from utils.character_presets import get_character_preset_full
+            lookup = get_character_features()
+            core = lookup.lookup_core(name)
+            costume = lookup.lookup_costume(name)
+            full = lookup.lookup(name)
+            count = (core[1] if core else 0) or (full[1] if full else 0)
+
+            existing = self._current_prompt_norm_tags()
+            char_norm = name.strip().lower().replace("_", " ")
+
+            def _split(s):
+                return [t.strip() for t in s.split(",") if t.strip()] if s else []
+
+            core_tags = _split(core[0]) if core else []
+            costume_tags = _split(costume[0]) if costume else []
+            if not core_tags and not costume_tags and full:
+                core_tags = _split(full[0])
+
+            def _mk(tags, is_costume):
+                items = []
+                for t in tags:
+                    norm = t.strip().lower().replace("_", " ")
+                    if norm == char_norm:
+                        continue
+                    esc = norm.replace("(", r"\(").replace(")", r"\)")
+                    items.append({
+                        "tag": t,
+                        "existing": (norm in existing or esc in existing),
+                        "costume": is_costume,
+                    })
+                return items
+
+            custom = []
+            cond_json = ""
+            has_preset = False
+            preset = get_character_preset_full(name)
+            if preset:
+                has_preset = True
+                cond_json = preset.get("cond_rules_json", "") or ""
+                feature_norms = {
+                    t.strip().lower().replace("_", " ")
+                    for t in (core_tags + costume_tags)
+                }
+                for t in (preset.get("extra_prompt", "") or "").split(","):
+                    tag = t.strip()
+                    n = tag.lower().replace("_", " ")
+                    if n and n not in feature_norms:
+                        custom.append(tag)
+
+            return json.dumps({
+                "name": name,
+                "count": int(count or 0),
+                "core": _mk(core_tags, False),
+                "costume": _mk(costume_tags, True),
+                "custom": custom,
+                "hasPreset": has_preset,
+                "condRulesJson": cond_json,
+            }, ensure_ascii=False)
+        except Exception as e:
+            print(f"[CharPreset] getCharacterFeatures 실패: {e}")
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, str, str, result=str)
+    def saveCharacterPreset(self, name: str, tags_json: str, cond_rules_json: str) -> str:
+        """캐릭터 프리셋 저장 (선택된 태그 + 조건부 규칙 JSON)."""
+        try:
+            from utils.character_presets import save_character_preset
+            tags = json.loads(tags_json) if tags_json else []
+            combined = ", ".join(str(t).strip() for t in tags if str(t).strip())
+            save_character_preset(name, combined, cond_rules_json or "")
+            return json.dumps({"ok": True})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def deleteCharacterPreset(self, name: str) -> str:
+        """캐릭터 프리셋 삭제."""
+        try:
+            from utils.character_presets import delete_character_preset, has_preset
+            if not has_preset(name):
+                return json.dumps({"ok": False, "reason": "프리셋 없음"})
+            delete_character_preset(name)
+            return json.dumps({"ok": True})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def applyCharacterPreset(self, payload_json: str) -> str:
+        """Vue 모달의 적용 결과를 프롬프트 위젯에 반영.
+        payload: {character: str|'', tags: [str]}
+        """
+        try:
+            gen = self.parent()
+            if not gen or not hasattr(gen, '_apply_character_features_result'):
+                return json.dumps({"error": "메인 윈도우 없음"})
+            payload = json.loads(payload_json) if payload_json else {}
+            gen._apply_character_features_result(
+                (payload.get("character") or "").strip(),
+                payload.get("tags", []) or [],
+            )
+            return json.dumps({"ok": True})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(result=str)
+    def getDeckCharacters(self) -> str:
+        """현재 자동화 덱(또는 filtered_results)에 등장하는 캐릭터 정규화 집합 → JSON [str]."""
+        try:
+            gen = self.parent()
+            deck = (getattr(gen, 'shuffled_prompt_deck', None)
+                    or getattr(gen, 'filtered_results', None) or [])
+            chars: set = set()
+            for b in deck:
+                if not isinstance(b, dict):
+                    continue
+                cval = b.get('character', '') or ''
+                if not cval:
+                    continue
+                parts = cval.split(',') if ',' in cval else cval.split()
+                for p in parts:
+                    n = p.strip().lower().replace('_', ' ')
+                    if n:
+                        chars.add(n)
+            return json.dumps(sorted(chars), ensure_ascii=False)
+        except Exception as e:
+            print(f"[CharPreset] getDeckCharacters 실패: {e}")
+            return json.dumps([])
+
+    @pyqtSlot(str, result=str)
+    def submitABTest(self, payload_json: str) -> str:
+        """A/B 테스트: prompt_a, prompt_b 를 같은 시드로 큐에 추가.
+        payload: {prompt_a, prompt_b, negative, seed}
+        """
+        try:
+            gen = self.parent()
+            p = json.loads(payload_json) if payload_json else {}
+            try:
+                seed = int(p.get("seed", -1))
+            except (ValueError, TypeError):
+                seed = -1
+            if seed <= 0:
+                import random
+                seed = random.randint(1, 2147483647)
+            neg = p.get("negative", "") or ""
+            added = 0
+            for key in ("prompt_a", "prompt_b"):
+                prm = (p.get(key) or "").strip()
+                if not prm:
+                    continue
+                item = {"prompt": prm, "negative_prompt": neg, "seed": seed}
+                if gen and hasattr(gen, "queue_panel"):
+                    gen.queue_panel.add_single_item(item)
+                    added += 1
+            return json.dumps({"ok": True, "seed": seed, "added": added})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(result=str)
+    def getCharFeatureOverride(self) -> str:
+        """auto-remove override 설정 조회 → JSON {hair_length, eye_color}."""
+        gen = self.parent()
+        ov = getattr(gen, '_char_feature_override', None) or {}
+        return json.dumps({
+            "hair_length": bool(ov.get("hair_length")),
+            "eye_color": bool(ov.get("eye_color")),
+        })
+
+    @pyqtSlot(str, result=str)
+    def setCharFeatureOverride(self, payload_json: str) -> str:
+        """auto-remove override 설정 저장."""
+        try:
+            gen = self.parent()
+            p = json.loads(payload_json) if payload_json else {}
+            if gen is not None:
+                gen._char_feature_override = {
+                    "hair_length": bool(p.get("hair_length")),
+                    "eye_color": bool(p.get("eye_color")),
+                }
+            return json.dumps({"ok": True})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     @pyqtSlot(str, str, result=str)
     def saveWildcard(self, filename: str, content: str) -> str:
         """와일드카드 파일 저장/수정"""

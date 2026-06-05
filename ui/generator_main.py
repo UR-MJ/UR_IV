@@ -912,18 +912,13 @@ class GeneratorMainUI(
                         QApplication.clipboard().setPixmap(pix)
                         self.show_status("Copied to clipboard.")
 
-            # ═══════ 캐릭터 프리셋 ═══════
+            # ═══════ 캐릭터 프리셋 (레거시 폴백 — 기본은 Vue 모달) ═══════
             elif action == 'open_character_preset':
+                # 버그수정: 과거엔 존재하지 않는 dlg.get_selected_preset()를 호출해
+                # 조용히 실패했음. 동작하는 PyQt 폴백 핸들러로 라우팅.
+                # (정상 경로는 Vue CharacterPresetModal — bridge 슬롯 사용)
                 try:
-                    from widgets.character_preset_dialog import CharacterPresetDialog
-                    dlg = CharacterPresetDialog(parent=self)
-                    if dlg.exec():
-                        preset = dlg.get_selected_preset()
-                        if preset:
-                            self.character_input.setText(preset.get('character', ''))
-                            if preset.get('copyright'):
-                                self.copyright_input.setText(preset['copyright'])
-                            self.show_status("Character preset applied.")
+                    self._open_character_preset()
                 except Exception as e:
                     print(f"[Error] Character preset: {e}")
 
