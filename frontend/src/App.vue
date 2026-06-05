@@ -884,6 +884,28 @@
     </transition>
 
     <!-- Global Toast Notifications -->
+    <!-- 알림 벨 + 히스토리 패널 -->
+    <button class="notif-bell" @click.stop="toggleNotifPanel" title="알림 기록">
+      🔔<span v-if="unread > 0" class="notif-badge">{{ unread > 9 ? '9+' : unread }}</span>
+    </button>
+    <div v-if="showNotifPanel" class="notif-overlay" @click="showNotifPanel = false"></div>
+    <transition name="fade">
+      <div v-if="showNotifPanel" class="notif-panel" @click.stop>
+        <div class="notif-head">
+          <span>알림 기록</span>
+          <button v-if="toastHistory.length" class="notif-clear" @click="clearNotifHistory">모두 지우기</button>
+        </div>
+        <div class="notif-list">
+          <div v-for="n in toastHistory" :key="n.id" class="notif-item" :class="n.type">
+            <span class="notif-ico">{{ n.type === 'error' ? '⚠' : n.type === 'success' ? '✓' : n.type === 'warning' ? '⚠' : 'ℹ' }}</span>
+            <span class="notif-msg">{{ n.msg }}</span>
+            <span class="notif-time">{{ relTime(n.ts) }}</span>
+          </div>
+          <div v-if="toastHistory.length === 0" class="notif-empty">알림 없음</div>
+        </div>
+      </div>
+    </transition>
+
     <div class="toast-container" :class="{ 'toast-multi': toasts.length > 1 }">
       <button v-if="toasts.length > 1" class="toast-clear-all" @click="clearAllToasts" title="모두 닫기">
         모두 닫기 ({{ toasts.length }})
@@ -1125,6 +1147,21 @@ const toasts = ref([])
 let toastId = 0
 const MAX_TOASTS = 5
 
+// 알림(토스트) 히스토리 — 🔔 버튼으로 사라진 토스트 다시 보기
+const toastHistory = ref([])
+const showNotifPanel = ref(false)
+const unread = ref(0)
+const MAX_HISTORY = 40
+function toggleNotifPanel() { showNotifPanel.value = !showNotifPanel.value; if (showNotifPanel.value) unread.value = 0 }
+function clearNotifHistory() { toastHistory.value = [] }
+function relTime(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000)
+  if (s < 60) return `${s}초 전`
+  const m = Math.floor(s / 60); if (m < 60) return `${m}분 전`
+  const h = Math.floor(m / 60); if (h < 24) return `${h}시간 전`
+  return `${Math.floor(h / 24)}일 전`
+}
+
 function addToast(type, msg) {
   const id = toastId++
   // 같은 메시지가 직전에 있으면 카운터만 증가 (스팸 방지)
@@ -1140,11 +1177,15 @@ function addToast(type, msg) {
   const toast = { id, type, msg, count: 1, _ts: Date.now() }
   toasts.value.push(toast)
   toast._timer = setTimeout(() => removeToast(id), 5000)
-  // 스택 초과분 — 가장 오래된 것부터 제거
+  // 스택 초과분 — 가장 오래된 것부터 제거 (화면엔 최대 5개)
   while (toasts.value.length > MAX_TOASTS) {
     const oldest = toasts.value.shift()
     if (oldest._timer) clearTimeout(oldest._timer)
   }
+  // 알림 기록에 누적 (사라진 토스트도 🔔에서 다시 볼 수 있게)
+  toastHistory.value.unshift({ id, type, msg, ts: Date.now() })
+  if (toastHistory.value.length > MAX_HISTORY) toastHistory.value.length = MAX_HISTORY
+  if (!showNotifPanel.value) unread.value++
 }
 function removeToast(id) {
   const t = toasts.value.find(x => x.id === id)
@@ -2374,7 +2415,7 @@ onMounted(async () => {
 .toast-container {
   position: fixed; top: 70px; right: 20px; z-index: 2000;
   display: flex; flex-direction: column; gap: 6px; pointer-events: none;
-  max-width: 340px;
+  max-width: 400px;
 }
 .toast-stack { display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
 .toast-clear-all {
@@ -2384,17 +2425,37 @@ onMounted(async () => {
 }
 .toast-clear-all:hover { background: rgba(248,113,113,0.5); border-color: #f87171; }
 .toast {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 10px 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
-  color: #FFF; pointer-events: auto; min-width: 200px; max-width: 340px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 13px 11px 15px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  color: #FFF; pointer-events: auto; min-width: 240px; max-width: 400px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4); backdrop-filter: blur(8px);
-  word-break: break-word;
+  word-break: break-word; line-height: 1.45;
 }
 .toast.success { background: rgba(74, 222, 128, 0.92); color: #000; }
 .toast.error { background: rgba(248, 113, 113, 0.92); color: #FFF; }
 .toast.info { background: rgba(96, 165, 250, 0.92); color: #FFF; }
 .toast.warning { background: rgba(251, 191, 36, 0.92); color: #000; }
-.toast-icon { font-size: 14px; flex-shrink: 0; }
+.toast-icon { font-size: 16px; flex-shrink: 0; }
+
+/* 알림 벨 + 히스토리 패널 */
+.notif-bell { position: fixed; top: 14px; right: 18px; z-index: 2003; width: 34px; height: 34px; border-radius: 50%; background: var(--bg-button); border: 1px solid var(--border); color: var(--text-secondary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.notif-bell:hover { border-color: var(--accent); color: var(--accent); }
+.notif-badge { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #f87171; color: #fff; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.notif-overlay { position: fixed; inset: 0; z-index: 2002; }
+.notif-panel { position: fixed; top: 54px; right: 18px; z-index: 2003; width: 330px; max-height: 60vh; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; }
+.notif-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 800; color: var(--text-secondary); letter-spacing: 1px; }
+.notif-clear { background: none; border: none; color: #f87171; font-size: 10px; font-weight: 700; cursor: pointer; }
+.notif-list { overflow-y: auto; padding: 6px; }
+.notif-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: 6px; font-size: 12px; color: var(--text-primary); }
+.notif-item:hover { background: var(--bg-button); }
+.notif-ico { flex-shrink: 0; }
+.notif-item.error .notif-ico { color: #f87171; }
+.notif-item.success .notif-ico { color: #4ade80; }
+.notif-item.info .notif-ico { color: #60a5fa; }
+.notif-item.warning .notif-ico { color: #fbbf24; }
+.notif-msg { flex: 1; word-break: break-word; line-height: 1.4; }
+.notif-time { flex-shrink: 0; font-size: 9px; color: var(--text-muted); white-space: nowrap; }
+.notif-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px; }
 .toast-msg { flex: 1; }
 .toast-count {
   background: rgba(0,0,0,0.25); padding: 1px 6px; border-radius: 8px;
