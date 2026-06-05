@@ -692,6 +692,10 @@ class GeneratorMainUI(
                     self.btn_auto_toggle.setChecked(bool(checked))
                 else:
                     self.toggle_automation_ui(bool(checked))
+                # 자동화 모드 ON 시 덱 현황 즉시 전송 → '시작' 전에도 남은/사용 개수 표시
+                # (자동화 종료 후·UI 재시작 후 복원된 덱 진행도를 바로 확인 가능)
+                if checked and hasattr(self, '_emit_auto_status'):
+                    self._emit_auto_status()
             elif action == 'stop_automation':
                 if self.is_automating:
                     self._stop_automation("사용자가 자동화를 중지했습니다.")

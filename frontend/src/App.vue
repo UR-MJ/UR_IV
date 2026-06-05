@@ -67,6 +67,9 @@
               <input type="number" v-model.number="autoSettings.cleanupEveryN" min="0" max="100" class="auto-input" />
             </div>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
+            <div class="auto-deck-pre" v-if="deckTotal > 0 && !isAutomating">
+              🎴 덱 <strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용<template v-if="deckAllowDup"> (중복·무한)</template>
+            </div>
           </div>
           <!-- 자동화 상태 표시 -->
           <div class="auto-status" v-if="isAutomating">
@@ -2260,6 +2263,8 @@ onMounted(async () => {
 
 /* 자동화 상태 */
 .auto-status { padding: 8px 12px; background: rgba(250, 204, 21, 0.05); border: 1px solid var(--accent-dim); border-radius: 8px; margin-bottom: 8px; }
+.auto-deck-pre { margin-top: 8px; font-size: 11px; color: var(--text-muted); padding: 6px 10px; background: rgba(250,204,21,0.05); border: 1px solid var(--accent-dim); border-radius: 6px; }
+.auto-deck-pre strong { color: var(--accent); font-weight: 900; }
 .auto-status-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--accent); font-weight: 700; }
 .auto-status-sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
 .auto-wait .wait-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
