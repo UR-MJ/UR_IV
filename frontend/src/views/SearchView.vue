@@ -688,27 +688,33 @@ onMounted(() => {
   ;(async () => {
     try {
       const backend = await getBackend()
+      // active = 필터된(활성) 셋 → 표시 + 자동화 덱; full = 전체 셋 → '필터 해제' 베이스
+      let active = null, full = null
       if (backend.loadLastSearchResults) {
-        const json = await new Promise(resolve => {
-          backend.loadLastSearchResults((s) => resolve(s))
-        })
-        const data = JSON.parse(json)
-        if (Array.isArray(data) && data.length > 0) {
-          results.value = data; filteredResults.value = data; lastResults.value = data
-          statusText.value = `${data.length.toLocaleString()} MATCHES (디스크 복원)`
-          return  // 성공하면 localStorage 불필요
-        }
+        try { active = JSON.parse(await new Promise(r => backend.loadLastSearchResults(s => r(s)))) } catch {}
+      }
+      if (backend.loadFullResults) {
+        try { full = JSON.parse(await new Promise(r => backend.loadFullResults(s => r(s)))) } catch {}
+      }
+      if (Array.isArray(active) && active.length > 0) {
+        const base = (Array.isArray(full) && full.length) ? full : active
+        results.value = base; lastResults.value = base   // 전체(필터 해제 베이스)
+        filteredResults.value = active                    // 표시 = 필터된 셋
+        statusText.value = `${active.length.toLocaleString()} MATCHES (디스크 복원)`
+        return
       }
     } catch (e) { console.warn('[Search] backend restore failed:', e) }
-    // fallback: localStorage (옛 데이터, 또는 backend slot 없을 때)
+    // fallback: localStorage
     try {
-      const saved = window.localStorage.getItem('lastSearchResults')
-      if (saved) {
-        const data = JSON.parse(saved)
-        if (Array.isArray(data) && data.length > 0) {
-          results.value = data; filteredResults.value = data; lastResults.value = data
-          statusText.value = `${data.length.toLocaleString()} MATCHES (localStorage 복원)`
-        }
+      const savedActive = window.localStorage.getItem('lastSearchResults')
+      const savedFull = window.localStorage.getItem('lastFullResults')
+      const active = savedActive ? JSON.parse(savedActive) : null
+      const full = savedFull ? JSON.parse(savedFull) : null
+      if (Array.isArray(active) && active.length > 0) {
+        const base = (Array.isArray(full) && full.length) ? full : active
+        results.value = base; lastResults.value = base
+        filteredResults.value = active
+        statusText.value = `${active.length.toLocaleString()} MATCHES (localStorage 복원)`
       }
     } catch {}
   })()
@@ -724,8 +730,12 @@ onMounted(() => {
         activeFilters.ratings.clear(); activeFilters.characters.clear()
         activeFilters.copyrights.clear(); activeFilters.artists.clear()
         try { window.localStorage.removeItem('searchActiveFilters') } catch {}
-        // 자동 저장 (재시작 시 복원용)
-        try { window.localStorage.setItem('lastSearchResults', JSON.stringify(data.slice(0, 500))) } catch {}
+        // 자동 저장 (재시작 시 복원용) — 새 검색이라 active=full 동일
+        try {
+          const _slim = JSON.stringify(data.slice(0, 500))
+          window.localStorage.setItem('lastSearchResults', _slim)
+          window.localStorage.setItem('lastFullResults', _slim)
+        } catch {}
         persistSearchFields()
       } else if (data && typeof data === 'object' && data.error) {
         // 백엔드가 명시적 에러 객체를 보낸 경우 — 사용자에게 토스트

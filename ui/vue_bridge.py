@@ -751,6 +751,11 @@ class VueBridge(QObject):
                 path = os.path.join(cache_dir, 'last_search_results.json')
                 with open(path, 'w', encoding='utf-8') as f:
                     json.dump(out, f, ensure_ascii=False)
+                # 전체(필터 전) 셋도 별도 저장 — 재시작 후 '필터 해제' 시 전체 복구용.
+                # 필터 적용(update_prompt_deck)은 last_search_results.json만 덮어쓰므로
+                # 여긴 항상 전체가 유지됨.
+                with open(os.path.join(cache_dir, 'last_full_results.json'), 'w', encoding='utf-8') as f:
+                    json.dump(out, f, ensure_ascii=False)
                 print(f"[Search] saved {len(out):,} rows to {path}")
             except Exception as e:
                 print(f"[Search] disk backup failed: {e}")
@@ -790,6 +795,24 @@ class VueBridge(QObject):
                 return data
         except Exception as e:
             print(f"[Search] loadLastSearchResults failed: {e}")
+        return '[]'
+
+    @pyqtSlot(result=str)
+    def loadFullResults(self) -> str:
+        """필터 적용 '전' 전체 검색 셋을 디스크에서 로드 (Vue가 '필터 해제' 베이스로 사용).
+        last_full_results.json 우선, 없으면 last_search_results.json 폴백.
+        (loadLastSearchResults와 달리 Python 덱/filtered_results는 건드리지 않음 —
+        순수 조회.)"""
+        try:
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            for name in ('last_full_results.json', 'last_search_results.json'):
+                path = os.path.join(base_dir, 'config', name)
+                if os.path.exists(path):
+                    with open(path, 'r', encoding='utf-8') as f:
+                        return f.read()
+        except Exception as e:
+            print(f"[Search] loadFullResults failed: {e}")
         return '[]'
 
     @pyqtSlot(result=str)

@@ -50,6 +50,7 @@ config/profiles/
 config/gallery_last_folder.txt
 config/last_crash.log
 config/last_search_results.json
+config/last_full_results.json
 config/last_deck.json
 Editor_models/yolo_config.json
 
