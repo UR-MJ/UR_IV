@@ -588,15 +588,24 @@ class PromptHandlingMixin:
                     if r.get('rating', 'g') in rating_filter
                 ]
                 random.shuffle(self.shuffled_prompt_deck)
+                if hasattr(self, '_save_deck_state'):
+                    self._save_deck_state()
             else:
                 QMessageBox.warning(
-                    self, "Error", 
+                    self, "Error",
                     "No prompts available. Run a search first."
                 )
                 return
 
         random_bundle = self.shuffled_prompt_deck.pop()
         remaining_count = len(self.shuffled_prompt_deck)
+        # 현재 자동화 프롬프트 보존 — 큐 우선 처리(자동화 중 큐 항목)가 UI 프롬프트를
+        # 바꿔도 큐 처리 후 이 번들로 복원해 '남은 반복'을 이어가기 위함.
+        self._current_auto_bundle = random_bundle
+        # 덱 소비 진행도 저장 — 자동화도 이 경로(apply_random_prompt)로 뽑으므로
+        # 여기서 저장해야 재시작 시 '얼마나 뽑았는지'가 복원됨.
+        if hasattr(self, '_save_deck_state'):
+            self._save_deck_state()
         self.show_status(
             f"Prompt selected. Remaining: {remaining_count}"
         )

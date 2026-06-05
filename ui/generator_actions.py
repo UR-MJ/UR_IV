@@ -570,9 +570,64 @@ class ActionsMixin:
 
 
     def _continue_automation(self):
-        """자동화 계속 (on_generation_finished에서 호출)"""
-        if self.is_automating:
-            self._run_automation_cycle()
+        """자동화 계속 (on_generation_finished에서 호출).
+
+        큐 우선: 자동화 중 큐에 대기 항목이 있으면 자동화 덱보다 '먼저' 생성한다.
+        - 큐 항목은 _automation_generate를 거치지 않으므로 반복 카운터(auto_current_repeat)
+          가 보존됨 → 큐 처리 후 남은 반복을 그대로 이어감.
+        - 큐 항목은 자동화 종료 횟수(auto_gen_count)에 미포함 (on_generation_finished가
+          올린 +1을 여기서 되돌림).
+        - 큐 항목이 UI 프롬프트를 바꾸므로, 큐가 비면 현재 자동화 프롬프트로 복원.
+        """
+        if not self.is_automating:
+            return
+        qp = getattr(self, 'queue_panel', None)
+
+        # 1) 직전 생성이 '큐 우선' 항목이었으면 정리: 자동화 카운트 제외 + 큐에서 제거
+        if getattr(self, '_auto_processing_queue', False):
+            self._auto_processing_queue = False
+            self.auto_gen_count = max(0, getattr(self, 'auto_gen_count', 0) - 1)
+            if qp is not None:
+                try:
+                    qp.remove_first_item()
+                except Exception:
+                    pass
+
+        # 2) 큐 우선 처리: 대기 항목이 있으면 다음 큐 항목 생성 (반복 상태 건드리지 않음)
+        if qp is not None:
+            try:
+                item = qp.get_first_item()
+            except Exception:
+                item = None
+            if item:
+                self._auto_processing_queue = True
+                self._queue_dirtied_prompt = True
+                try:
+                    qp.set_processing(True, item.get('id'))
+                except Exception:
+                    pass
+                self.is_programmatic_change = True
+                try:
+                    self._apply_payload_to_ui(item)
+                finally:
+                    self.is_programmatic_change = False
+                self.show_status("📋 큐 우선 처리 중...")
+                self.start_generation()
+                return
+
+        # 3) 큐 비었음 → 자동화 덱 계속. 큐가 UI 프롬프트를 바꿨으면 현재 자동화 프롬프트 복원.
+        if getattr(self, '_queue_dirtied_prompt', False):
+            self._queue_dirtied_prompt = False
+            b = getattr(self, '_current_auto_bundle', None)
+            if b is not None:
+                self.is_programmatic_change = True
+                try:
+                    self.apply_prompt_from_data(b)
+                    self.update_total_prompt_display()
+                finally:
+                    self.is_programmatic_change = False
+
+        self._run_automation_cycle()
             
 
     def _emit_auto_status(self, waiting=False):

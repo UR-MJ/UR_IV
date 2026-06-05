@@ -1571,6 +1571,41 @@ class GeneratorMainUI(
             except Exception:
                 pass
 
+    def _apply_payload_to_ui(self, item: dict):
+        """큐 아이템(payload dict)을 생성 UI에 적용 — 생성 직전 호출.
+
+        큐 아이템의 'prompt'는 이미 완성된 '전체' 프롬프트이므로 total_prompt_display에
+        직접 넣는다(start_generation이 total_prompt_display를 그대로 사용, 재계산 안 함).
+        ★ 이 메서드가 이전 리팩터에서 누락돼 _on_generation_requested가 미정의 메서드를
+        호출 → 큐 항목이 '직전 UI(선행 고정만)'로 생성되던 버그(⑦)의 원인이었음.
+        """
+        if not isinstance(item, dict):
+            return
+        self.is_programmatic_change = True
+        try:
+            if item.get('prompt') is not None:
+                self.total_prompt_display.setPlainText(str(item.get('prompt') or ''))
+            if item.get('negative_prompt') is not None:
+                self.neg_prompt_text.setPlainText(str(item.get('negative_prompt') or ''))
+            if item.get('sampler_name'):
+                self.sampler_combo.setText(str(item['sampler_name']))
+            if item.get('scheduler'):
+                self.scheduler_combo.setText(str(item['scheduler']))
+            if item.get('steps') is not None:
+                self.steps_input.setText(str(item.get('steps')))
+            if item.get('cfg_scale') is not None:
+                self.cfg_input.setText(str(item.get('cfg_scale')))
+            if item.get('seed') is not None:
+                self.seed_input.setText(str(item.get('seed')))
+            if item.get('width'):
+                self.width_input.setText(str(item.get('width')))
+            if item.get('height'):
+                self.height_input.setText(str(item.get('height')))
+        except Exception as e:
+            print(f"[Queue] _apply_payload_to_ui 실패: {e}")
+        finally:
+            self.is_programmatic_change = False
+
     def _on_generation_requested(self, item: dict):
         self._apply_payload_to_ui(item)
         self.start_generation()

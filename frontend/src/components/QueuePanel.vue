@@ -168,7 +168,9 @@ const _unsubs = []
 
 // 자동화 자동 재시작 옵션 — Settings에서 토글, 여기선 읽기만
 // 기본값 ON — 사용자가 명시적으로 'false' 저장한 경우만 OFF
-const autoResumeOnStart = ref(localStorage.getItem('queue.autoResumeOnStart') !== 'false')
+// 기본 OFF — 큐를 열어 보기만 해도 이전 세션 큐가 자동 재시작되던 문제 방지.
+// 자동 재시작을 원하면 설정에서 켜면 됨(localStorage 'queue.autoResumeOnStart'='true').
+const autoResumeOnStart = ref(localStorage.getItem('queue.autoResumeOnStart') === 'true')
 // Settings에서 변경 시 즉시 반영 (storage 이벤트는 다른 탭, 같은 탭은 작동 안 해서 unused지만 안전망)
 function _onStorageEvent(e) {
   if (e.key === 'queue.autoResumeOnStart') {
