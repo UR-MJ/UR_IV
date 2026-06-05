@@ -345,7 +345,8 @@
 
       <!-- 조건부 프롬프트 (항상 표시) -->
       <div class="cond-section" v-if="results.length > 0 || condPositive.length > 0 || condNegative.length > 0">
-        <details class="cond-card">
+        <div class="cond-grid">
+        <details class="cond-card" open>
           <summary class="cond-title positive">CONDITIONAL POSITIVE</summary>
           <p class="cond-desc">태그가 존재하면 자동으로 다른 태그를 추가/제거합니다</p>
           <div v-for="(rule, ri) in condPositive" :key="'p'+ri" class="cond-rule-block">
@@ -372,7 +373,7 @@
           <button class="cond-add" @click="condPositive.push({enabled:true,condition:'',exists:true,target:'',action:'add',location:'main'})">+ 규칙 추가</button>
         </details>
 
-        <details class="cond-card neg">
+        <details class="cond-card neg" open>
           <summary class="cond-title negative">CONDITIONAL NEGATIVE</summary>
           <p class="cond-desc">태그가 존재하면 네거티브 프롬프트에 자동 추가/제거합니다</p>
           <div v-for="(rule, ri) in condNegative" :key="'n'+ri" class="cond-rule-block">
@@ -398,6 +399,7 @@
           </div>
           <button class="cond-add" @click="condNegative.push({enabled:true,condition:'',exists:true,target:'',action:'add',location:'main'})">+ 규칙 추가</button>
         </details>
+        </div>
         <div class="cond-save-row">
           <span class="cond-autosave">💾 자동 저장됨</span>
           <button class="cond-save-btn" @click="saveCondRules">💾 즉시 저장</button>
@@ -1372,9 +1374,10 @@ label.danger { color: #f87171; }
 
 /* 조건부 프롬프트 */
 .cond-section { padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
-.cond-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.cond-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.cond-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
 .cond-card.neg { border-color: rgba(248,113,113,0.15); }
-.cond-title { font-size: 10px; font-weight: 900; letter-spacing: 1px; cursor: pointer; list-style: none; }
+.cond-title { font-size: 12px; font-weight: 900; letter-spacing: 1px; cursor: pointer; list-style: none; }
 .cond-title::-webkit-details-marker { display: none; }
 .cond-title.positive { color: #4ade80; }
 .cond-title.negative { color: #f87171; }
@@ -1385,7 +1388,7 @@ label.danger { color: #f87171; }
 .cond-row2 { margin-top: 3px; }
 .cond-check input { accent-color: var(--accent); }
 .cond-kw { font-size: 9px; font-weight: 900; color: var(--accent); }
-.cond-input { flex: 1; min-width: 80px; padding: 4px 8px; font-size: 11px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); }
+.cond-input { flex: 1; min-width: 80px; padding: 6px 10px; font-size: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); }
 .cond-input.neg { border-color: rgba(248,113,113,0.2); }
 .cond-sel { padding: 3px 4px; font-size: 9px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); }
 .cond-sel.sm { width: 55px; }

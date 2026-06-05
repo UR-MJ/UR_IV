@@ -1628,7 +1628,7 @@ async function loadHistory() {
   if (backend.getGalleryImages) {
     backend.getGalleryImages('', (json) => {
       try {
-        const arr = JSON.parse(json).slice(0, 100)
+        const arr = JSON.parse(json)  // 무제한 — 생성/저장한 만큼 전부 표시
         historyImages.value = arr
         // localStorage 캐시 갱신 (다음 시작 시 즉시 표시용)
         try { localStorage.setItem('historyImagesCache', JSON.stringify(arr.slice(0, 50))) } catch {}
