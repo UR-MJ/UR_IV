@@ -12,7 +12,22 @@
         class="total-prompt auto-grow" placeholder="최종 프롬프트" @input="autoGrow($event.target)"></textarea>
       <div class="prompt-actions">
         <button class="optimize-btn" @click="optimizePrompt">🧹 OPTIMIZE</button>
+        <button class="optimize-btn" @click="toggleSeparate" title="표정/배경/포즈/사물/메타 태그를 분류해서 제거하거나 추출">🏷 분류</button>
         <span class="opt-result" v-if="optResult">{{ optResult }}</span>
+      </div>
+      <!-- ⑤ 카테고리 분리 토글 -->
+      <div class="separate-panel" v-if="showSeparate">
+        <div class="sep-chips">
+          <button v-for="c in SEP_CATS" :key="c.key" class="sep-chip" :class="{ on: sepCats[c.key] }"
+            @click="sepCats[c.key] = !sepCats[c.key]">
+            {{ c.label }}<span class="sep-n" v-if="sepCounts[c.key]">{{ sepCounts[c.key] }}</span>
+          </button>
+        </div>
+        <div class="sep-actions">
+          <button class="sep-act remove" @click="applySeparate('remove')">🗑 선택 제거</button>
+          <button class="sep-act extract" @click="applySeparate('extract')">✂ 선택만 남기기</button>
+          <span class="sep-hint" v-if="sepResult">{{ sepResult }}</span>
+        </div>
       </div>
       <div class="conflicts" v-if="promptConflicts.length > 0">
         <div v-for="c in promptConflicts" :key="c.group" class="conflict-item">⚠ {{ c.group }}: {{ c.tags.join(', ') }}</div>
@@ -582,6 +597,55 @@ async function optimizePrompt() {
   })
 }
 
+// ⑤ 카테고리 분리 토글
+const SEP_CATS = [
+  { key: 'expression', label: '표정' },
+  { key: 'location', label: '배경·장소' },
+  { key: 'pose', label: '포즈·동작' },
+  { key: 'object', label: '사물' },
+  { key: 'meta', label: '메타' },
+]
+const showSeparate = ref(false)
+const sepCats = reactive({ expression: false, location: false, pose: false, object: false, meta: false })
+const sepCounts = ref({})
+const sepResult = ref('')
+async function refreshSepCounts() {
+  const backend = await getBackend()
+  if (!backend || !backend.separateTags) return
+  const allKeys = SEP_CATS.map(c => c.key)
+  backend.separateTags(widgets.main_prompt_text || '', JSON.stringify(allKeys), (json) => {
+    try { const d = JSON.parse(json); if (!d.error) sepCounts.value = d.counts || {} } catch {}
+  })
+}
+function toggleSeparate() {
+  showSeparate.value = !showSeparate.value
+  if (showSeparate.value) refreshSepCounts()
+}
+async function applySeparate(mode) {
+  const selected = SEP_CATS.map(c => c.key).filter(k => sepCats[k])
+  if (!selected.length) { requestAction('show_toast', { type: 'info', msg: '분류할 카테고리를 선택하세요' }); return }
+  const backend = await getBackend()
+  if (!backend || !backend.separateTags) return
+  backend.separateTags(widgets.main_prompt_text || '', JSON.stringify(selected), (json) => {
+    try {
+      const d = JSON.parse(json)
+      if (d.error) { requestAction('show_toast', { type: 'error', msg: '분류 실패: ' + d.error }); return }
+      const groups = d.groups || {}
+      const picked = selected.flatMap(k => groups[k] || [])
+      if (mode === 'remove') {
+        widgets.main_prompt_text = d.rest || ''
+        sepResult.value = `${picked.length}개 제거`
+      } else {
+        widgets.main_prompt_text = picked.join(', ')
+        sepResult.value = `${picked.length}개만 남김`
+      }
+      refreshSepCounts()
+      nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
+      setTimeout(() => { sepResult.value = '' }, 4000)
+    } catch {}
+  })
+}
+
 // 캐릭터 인사이트
 const charInsight = ref({ tags: [], raw: '' })
 async function loadCharTags() {
@@ -810,6 +874,19 @@ summary::-webkit-details-marker { display: none; }
 .optimize-btn { padding: 3px 10px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 9px; font-weight: 700; cursor: pointer; }
 .optimize-btn:hover { border-color: var(--accent); color: var(--accent); }
 .opt-result { font-size: 9px; color: #4ade80; }
+
+/* ⑤ 카테고리 분리 패널 */
+.separate-panel { margin-top: 6px; padding: 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; }
+.sep-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.sep-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 12px; color: var(--text-secondary); font-size: 10px; font-weight: 700; padding: 3px 11px; cursor: pointer; }
+.sep-chip:hover { color: var(--text-primary); }
+.sep-chip.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.sep-n { font-size: 8px; font-weight: 700; padding: 0 5px; border-radius: 7px; background: rgba(0,0,0,0.3); }
+.sep-actions { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
+.sep-act { border: none; border-radius: 5px; font-size: 9px; font-weight: 700; padding: 4px 10px; cursor: pointer; }
+.sep-act.remove { background: rgba(248,113,113,0.14); border: 1px solid #f87171; color: #f87171; }
+.sep-act.extract { background: rgba(96,165,250,0.14); border: 1px solid #60a5fa; color: #60a5fa; }
+.sep-hint { font-size: 9px; color: #4ade80; }
 .conflicts { margin-top: 4px; }
 .conflict-item { font-size: 9px; color: #fbbf24; padding: 2px 0; }
 .char-insight { margin-top: 6px; background: rgba(45,212,191,0.03); border: 1px solid rgba(45,212,191,0.1); border-radius: 6px; padding: 8px; }

@@ -1473,6 +1473,25 @@ class VueBridge(QObject):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+    @pyqtSlot(str, str, result=str)
+    def separateTags(self, prompt: str, categories_json: str) -> str:
+        """⑤ 프롬프트를 카테고리별로 분리. categories=대상 카테고리 리스트.
+        Returns {rest:'...', groups:{cat:[...]}, counts:{cat:n}}.
+        (rest = 어떤 대상 카테고리에도 속하지 않은 태그 = 카테고리 제거 결과)"""
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            cats = json.loads(categories_json) if categories_json else []
+            tags = [t.strip() for t in (prompt or "").split(",") if t.strip()]
+            res = get_tag_intelligence().split_by_categories(tags, cats)
+            counts = {c: len(v) for c, v in res["groups"].items()}
+            return json.dumps({
+                "rest": ", ".join(res["rest"]),
+                "groups": res["groups"],
+                "counts": counts,
+            }, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     @pyqtSlot(str, result=str)
     def getClothingRegions(self, tags_json: str) -> str:
         """④ 의류 태그를 부위(region)별로 그룹화 → [{region, label, tags:[...]}]."""
