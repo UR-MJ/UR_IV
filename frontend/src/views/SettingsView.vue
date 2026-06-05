@@ -130,6 +130,20 @@
             </div>
           </div>
           <div class="glass-card mt-16">
+            <label>HISTORY 네비게이션</label>
+            <div class="shortcut-grid">
+              <div class="s-row"><span>이전 / 다음 이미지</span><kbd>↑ ↓</kbd></div>
+              <div class="s-row">
+                <span>최상단 / 최하단으로 점프 (보조키 + ↑↓)</span>
+                <select v-model="historyJumpModifier" @change="window.localStorage.setItem('historyJumpModifier', historyJumpModifier)" class="hjm-select">
+                  <option value="shiftKey">Shift</option>
+                  <option value="ctrlKey">Ctrl</option>
+                  <option value="altKey">Alt</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="glass-card mt-16">
             <label>EDITOR 탭 단축키</label>
             <div class="shortcut-grid">
               <div class="s-row"><span>파일 열기</span><kbd>Ctrl + O</kbd></div>
@@ -363,6 +377,7 @@ const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
 const defaultBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
 const galleryMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
+const historyJumpModifier = ref(window.localStorage.getItem('historyJumpModifier') || 'shiftKey')
 
 // API에서 sampler/scheduler 목록 가져오기
 const wStore = useWidgetStore()
@@ -635,6 +650,7 @@ function loadOllamaModels() { testOllama() }
 }
 .s-row:hover { background: rgba(255, 255, 255, 0.025); }
 .s-row span { font-size: 13px; color: var(--text-secondary); }
+.hjm-select { background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 12px; font-weight: 700; padding: 4px 10px; cursor: pointer; }
 /* kbd 단축키 표시 — style.css의 .keycap 스타일 토큰을 그대로 사용
    (전역 일관성 위해 클래스 없이도 키캡 모양이 나오도록) */
 kbd {

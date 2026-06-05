@@ -1611,6 +1611,15 @@ function navigateHistory(dir) {
   selectHistoryImage(list[idx])
 }
 
+// 최상단(top=최신)/최하단(bottom=가장 오래됨)으로 바로 이동 (Shift+화살표 등)
+function navigateHistoryEdge(edge) {
+  const list = historyImages.value
+  if (!list.length) return
+  const idx = edge === 'top' ? 0 : list.length - 1
+  histPage.value = Math.floor(idx / histPerPage)
+  selectHistoryImage(list[idx])
+}
+
 // 드래그 앤 드롭 지원
 function onDragStart(e, path) {
   e.dataTransfer.setData('text/plain', path)
@@ -1707,7 +1716,13 @@ onMounted(async () => {
         || showInstantWcManager.value || showStatsModal.value
       if (!editable && !anyModal && historyImages.value.length) {
         e.preventDefault()
-        navigateHistory(e.key === 'ArrowDown' ? 1 : -1)
+        // 설정된 보조키(기본 Shift) + 화살표 → 최상단/최하단으로 바로 점프
+        const mod = localStorage.getItem('historyJumpModifier') || 'shiftKey'
+        if (e[mod]) {
+          navigateHistoryEdge(e.key === 'ArrowDown' ? 'bottom' : 'top')
+        } else {
+          navigateHistory(e.key === 'ArrowDown' ? 1 : -1)
+        }
       }
     }
   })
@@ -1727,17 +1742,28 @@ onMounted(async () => {
   onBackendEvent('imageGenerated', async (data) => {
     const parsed = JSON.parse(data)
     if (parsed.path) imageVersions[parsed.path] = Date.now()
-    currentImage.value = parsed.path
-    resolution.value = `${parsed.width} × ${parsed.height}`
-    seed.value = String(parsed.seed)
     isGenerating.value = false
     genEta.value = ''
     status.value = ''
+    // History에서 옛 이미지를 보던 중(브라우징)이면 뷰를 뺏지 않음 — '최신'(또는
+    // 미선택)을 보고 있을 때만 새 이미지로 따라간다. 새 이미지는 History 맨 앞에
+    // 추가되어 t2i 결과 목록에 표시됨. (선택 중이던 이미지/위치는 그대로 유지)
+    const wasViewingLatest = !currentImage.value || currentImage.value === historyImages.value[0]
     if (parsed.path) {
-      historyImages.value.unshift(parsed.path)
-      if (historyImages.value.length > 100) historyImages.value.pop()
-      histPage.value = 0
-      // 생성 직후 EXIF 자동 로드
+      historyImages.value.unshift(parsed.path)  // 무제한 — 갯수 캡 제거
+      if (wasViewingLatest) {
+        histPage.value = 0
+      } else {
+        // 보던 옛 이미지를 계속 보여주도록 그 이미지가 있는 페이지로 유지
+        const ci = historyImages.value.indexOf(currentImage.value)
+        if (ci >= 0) histPage.value = Math.floor(ci / histPerPage)
+      }
+    }
+    if (wasViewingLatest && parsed.path) {
+      currentImage.value = parsed.path
+      resolution.value = `${parsed.width} × ${parsed.height}`
+      seed.value = String(parsed.seed)
+      // 생성 직후 EXIF 자동 로드 (추종 중일 때만 현재 EXIF 갱신)
       const bk = await getBackend()
       if (bk.getImageExif) {
         bk.getImageExif(parsed.path, (json) => {
