@@ -1493,6 +1493,23 @@ class VueBridge(QObject):
             return json.dumps({"error": str(e)})
 
     @pyqtSlot(str, result=str)
+    def pairColors(self, prompt: str) -> str:
+        """② 분리된 단일 색상 단어를 바로 뒤 태그와 결합 (결합 결과가 실재 태그일 때만).
+        Returns {result:'...', before:n, after:m, merged:k}."""
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            tags = [t.strip() for t in (prompt or "").split(",") if t.strip()]
+            paired = get_tag_intelligence().pair_colors(tags)
+            return json.dumps({
+                "result": ", ".join(paired),
+                "before": len(tags),
+                "after": len(paired),
+                "merged": len(tags) - len(paired),
+            }, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
     def getClothingRegions(self, tags_json: str) -> str:
         """④ 의류 태그를 부위(region)별로 그룹화 → [{region, label, tags:[...]}]."""
         try:

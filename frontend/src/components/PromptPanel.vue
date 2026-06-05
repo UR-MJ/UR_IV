@@ -13,6 +13,7 @@
       <div class="prompt-actions">
         <button class="optimize-btn" @click="optimizePrompt">🧹 OPTIMIZE</button>
         <button class="optimize-btn" @click="toggleSeparate" title="표정/배경/포즈/사물/메타 태그를 분류해서 제거하거나 추출">🏷 분류</button>
+        <button class="optimize-btn" @click="pairColors" title="분리된 색상 단어를 뒤 태그와 결합 (예: blue, dress → blue dress)">🎨 색상결합</button>
         <span class="opt-result" v-if="optResult">{{ optResult }}</span>
       </div>
       <!-- ⑤ 카테고리 분리 토글 -->
@@ -642,6 +643,22 @@ async function applySeparate(mode) {
       refreshSepCounts()
       nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
       setTimeout(() => { sepResult.value = '' }, 4000)
+    } catch {}
+  })
+}
+
+// ② color 페어링 결합
+async function pairColors() {
+  const backend = await getBackend()
+  if (!backend || !backend.pairColors) return
+  backend.pairColors(widgets.main_prompt_text || '', (json) => {
+    try {
+      const d = JSON.parse(json)
+      if (d.error) { requestAction('show_toast', { type: 'error', msg: '색상결합 실패: ' + d.error }); return }
+      widgets.main_prompt_text = d.result || ''
+      optResult.value = d.merged > 0 ? `색상 ${d.merged}개 결합` : '결합할 색상 없음'
+      nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
+      setTimeout(() => { optResult.value = '' }, 4000)
     } catch {}
   })
 }
