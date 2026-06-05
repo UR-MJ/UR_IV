@@ -44,7 +44,33 @@ SYSTEM_PROMPTS = {
         "- Output 15-30 negative tags "
         "Output ONLY comma-separated tags. No explanations, no numbering, no markdown."
     ),
+    # ── 자연어(prose) 출력 모드 ──
+    'nl_caption': (
+        "You convert Danbooru/booru-style comma-separated tags into ONE flowing "
+        "natural-language image caption in English. Describe the scene as a vivid "
+        "prompt sentence (or two) suitable for natural-language text-to-image models "
+        "(Flux, SD3, NAI). Keep all important subjects, appearance, clothing, pose, "
+        "expression and setting. "
+        "Output ONLY the caption prose. No tag lists, no explanations, no markdown."
+    ),
+    'nl_scene': (
+        "You are a creative prompt writer for text-to-image generation. "
+        "The user gives a short idea or a few keywords. Expand it into a rich, vivid "
+        "English scene description (2-5 sentences) covering subject, appearance, action, "
+        "setting, lighting, mood and composition. Be concrete and visual. "
+        "Output ONLY the description prose. No tag lists, no explanations, no markdown."
+    ),
+    'translate': (
+        "You are a translator for image-generation prompts. "
+        "If the input is Korean, translate it into natural English. "
+        "If the input is English, translate it into natural Korean. "
+        "Keep proper nouns / character names sensible. "
+        "Output ONLY the translated text. No explanations, no notes, no markdown."
+    ),
 }
+
+# 자연어 출력 모드 — 응답을 콤마 태그로 쪼개면 안 됨 (prose 그대로 반환)
+NL_MODES = {'nl_caption', 'nl_scene', 'translate'}
 
 
 class OllamaClient:
@@ -62,12 +88,16 @@ class OllamaClient:
         if extra_prompt:
             user_msg = f"{extra_prompt}\n\nCurrent tags: {tags}" if tags else extra_prompt
 
+        is_nl = mode in NL_MODES
         payload = {
             "model": self.model,
             "system": system,
             "prompt": user_msg,
             "stream": False,
-            "options": {"temperature": 0.7, "num_predict": 500},
+            "options": {
+                "temperature": 0.8 if is_nl else 0.7,
+                "num_predict": 1024 if is_nl else 500,
+            },
         }
 
         try:
@@ -85,6 +115,12 @@ class OllamaClient:
             response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL).strip()
             # 코드블록 제거
             response = re.sub(r'```[^`]*```', '', response, flags=re.DOTALL).strip()
+            # 자연어 모드: 콤마-태그 정리 없이 prose 그대로 반환
+            if is_nl:
+                clean_nl = response.strip().strip('"').strip()
+                if not clean_nl:
+                    raise RuntimeError("AI가 빈 응답을 반환했습니다")
+                return clean_nl
             # 번호 매기기 제거 (1. tag, 2. tag)
             response = re.sub(r'^\d+[\.\)]\s*', '', response, flags=re.MULTILINE)
             # 줄바꿈 → 콤마
@@ -101,6 +137,18 @@ class OllamaClient:
             raise TimeoutError("Ollama 응답 시간 초과 (60초)")
         except Exception as e:
             raise RuntimeError(f"Ollama 오류: {e}")
+
+    def unload(self) -> bool:
+        """모델을 VRAM에서 즉시 언로드 (keep_alive=0). best-effort."""
+        try:
+            requests.post(
+                f"{self.base_url}/api/generate",
+                json={"model": self.model, "keep_alive": 0},
+                timeout=5,
+            )
+            return True
+        except Exception:
+            return False
 
     def list_models(self) -> list:
         """사용 가능한 모델 목록 반환"""

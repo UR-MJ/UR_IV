@@ -277,6 +277,10 @@
                 <CustomSelect v-if="ollamaModels.length" v-model="ollamaModel" :options="ollamaModels" placeholder="모델 선택..." @update:modelValue="saveOllamaSettings" />
                 <input v-else v-model="ollamaModel" @change="saveOllamaSettings" placeholder="llama3.1, gemma3 등" />
               </div>
+              <label class="ollama-unload-row mt-12">
+                <input type="checkbox" v-model="ollamaUnloadOnGen" @change="saveOllamaSettings" />
+                <span>이미지 생성 시 LLM 언로드 (VRAM 확보) — 12B 등 큰 모델 + SD 공유 시 권장</span>
+              </label>
             </div>
             <div class="btn-row-2 mt-16">
               <button class="btn-pill primary" @click="testOllama">TEST CONNECTION</button>
@@ -409,6 +413,7 @@ onMounted(async () => {
       // Ollama 설정 복원
       if (prefs.ollamaUrl) { ollamaUrl.value = prefs.ollamaUrl; window.localStorage.setItem('ollamaUrl', prefs.ollamaUrl) }
       if (prefs.ollamaModel) { ollamaModel.value = prefs.ollamaModel; window.localStorage.setItem('ollamaModel', prefs.ollamaModel) }
+      if (typeof prefs.ollamaUnloadOnGen === 'boolean') { ollamaUnloadOnGen.value = prefs.ollamaUnloadOnGen; window.localStorage.setItem('ollamaUnloadOnGen', String(prefs.ollamaUnloadOnGen)) }
     } catch {}
   })
 })
@@ -464,6 +469,7 @@ const act = (name) => {
       // Ollama
       ollamaUrl: ollamaUrl.value,
       ollamaModel: ollamaModel.value,
+      ollamaUnloadOnGen: ollamaUnloadOnGen.value,
     })
   }
   requestAction(name)
@@ -533,10 +539,18 @@ async function syncFromT2I() {
 const ollamaUrl = ref(window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434')
 const ollamaModel = ref(window.localStorage.getItem('ollamaModel') || 'gemma3:4b')
 const ollamaModels = ref([])
+const ollamaUnloadOnGen = ref(window.localStorage.getItem('ollamaUnloadOnGen') === 'true')
 
 function saveOllamaSettings() {
   window.localStorage.setItem('ollamaUrl', ollamaUrl.value)
   window.localStorage.setItem('ollamaModel', ollamaModel.value)
+  window.localStorage.setItem('ollamaUnloadOnGen', String(ollamaUnloadOnGen.value))
+  // ui_prefs.json에도 즉시 반영 → Python start_generation이 읽어 언로드 판단
+  requestAction('save_ui_prefs', {
+    ollamaUrl: ollamaUrl.value,
+    ollamaModel: ollamaModel.value,
+    ollamaUnloadOnGen: ollamaUnloadOnGen.value,
+  })
 }
 
 async function testOllama() {
@@ -702,6 +716,8 @@ kbd {
 .def-field span { font-size: 10px; font-weight: 700; color: var(--text-muted); }
 .sync-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 4px; font-size: 8px; font-weight: 900; margin-left: 8px; }
 .def-field input, .def-field select { padding: 8px 10px; font-size: 12px; }
+.ollama-unload-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer; line-height: 1.4; }
+.ollama-unload-row input { margin-top: 2px; accent-color: var(--accent); }
 
 /* Ollama */
 .model-select { width: 100%; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-primary); font-size: 13px; font-weight: 600; }

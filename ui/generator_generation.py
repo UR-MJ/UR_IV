@@ -69,8 +69,39 @@ _logger = get_logger('generation')
 class GenerationMixin:
     """이미지 생성 관련 로직을 담당하는 Mixin"""
     
+    def _maybe_unload_ollama(self):
+        """생성 직전 Ollama LLM 언로드 (ui_prefs.ollamaUnloadOnGen 켜진 경우) → VRAM 양보.
+        best-effort 비동기 — Ollama 미실행/미설정이면 조용히 무시. 자동화·수동 공통 경로."""
+        try:
+            import json as _json
+            import threading as _th
+            prefs_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                'config', 'ui_prefs.json')
+            if not os.path.exists(prefs_path):
+                return
+            with open(prefs_path, 'r', encoding='utf-8') as f:
+                prefs = _json.load(f)
+            if not prefs.get('ollamaUnloadOnGen'):
+                return
+            model = (prefs.get('ollamaModel') or '').strip()
+            if not model:
+                return
+            url = prefs.get('ollamaUrl') or 'http://localhost:11434'
+
+            def _do():
+                try:
+                    from core.ollama_client import OllamaClient
+                    OllamaClient(url, model).unload()
+                except Exception:
+                    pass
+            _th.Thread(target=_do, daemon=True).start()
+        except Exception:
+            pass
+
     def start_generation(self):
         """이미지 생성 시작"""
+        self._maybe_unload_ollama()
         self._gen_start_time = time.time()
         # 상태 표시 업데이트
         self.setWindowTitle("AI Studio - Pro [생성 중...]")        

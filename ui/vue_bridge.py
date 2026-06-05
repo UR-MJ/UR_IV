@@ -945,6 +945,27 @@ class VueBridge(QObject):
         except Exception as e:
             self.ollamaResult.emit(json.dumps({'error': str(e)}))
 
+    @pyqtSlot(str)
+    def unloadOllama(self, extra_json: str):
+        """Ollama 모델을 VRAM에서 언로드 (best-effort, 비동기). Vue에서 수동 호출용."""
+        try:
+            extra = json.loads(extra_json) if extra_json else {}
+            url = extra.get('url') or 'http://localhost:11434'
+            model = (extra.get('model') or '').strip()
+            if not model:
+                return
+            import threading
+
+            def _do():
+                try:
+                    from core.ollama_client import OllamaClient
+                    OllamaClient(url, model).unload()
+                except Exception:
+                    pass
+            threading.Thread(target=_do, daemon=True).start()
+        except Exception:
+            pass
+
     @pyqtSlot(str, str, result=str)
     def editorPasteImage(self, b64_data: str, mime_type: str) -> str:
         """클립보드 이미지를 임시 파일로 저장하고 경로 반환.

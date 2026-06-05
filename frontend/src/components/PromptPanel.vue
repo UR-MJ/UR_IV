@@ -109,15 +109,26 @@
           <label>Main Tags <span v-if="sectionTokens.main" class="tk-badge" :class="tokenBadgeClass(sectionTokens.main)">{{ sectionTokens.main }}t</span></label>
           <div class="ai-btns">
             <button class="ai-btn" @click="ollamaMode = 'expand'; runOllama()" :disabled="ollamaLoading" title="태그 확장">✨</button>
-            <button class="ai-btn" @click="showNlInput = !showNlInput" title="자연어→태그">💬</button>
+            <button class="ai-btn" @click="showNlInput = !showNlInput" title="자연어 입력 (→태그 / →장면)">💬</button>
             <button class="ai-btn" @click="ollamaMode = 'suggest'; runOllama()" :disabled="ollamaLoading" title="유사 태그">🔄</button>
+            <button class="ai-btn" @click="ollamaMode = 'nl_caption'; runOllama()" :disabled="ollamaLoading" title="태그 → 자연어 캡션">📝</button>
+            <button class="ai-btn" @click="ollamaMode = 'translate'; runOllama()" :disabled="ollamaLoading" title="한↔영 번역">🌐</button>
           </div>
         </div>
         <div class="nl-input-row" v-if="showNlInput">
-          <input v-model="nlPrompt" placeholder="이미지를 자연어로 설명하세요..." @keydown.enter="ollamaMode = 'nl2tags'; runOllama()" class="nl-input" />
-          <button class="ai-btn go" @click="ollamaMode = 'nl2tags'; runOllama()" :disabled="ollamaLoading">GO</button>
+          <input v-model="nlPrompt" placeholder="자연어 설명 또는 키워드..." @keydown.enter="ollamaMode = 'nl2tags'; runOllama()" class="nl-input" />
+          <button class="ai-btn go" @click="ollamaMode = 'nl2tags'; runOllama()" :disabled="ollamaLoading" title="자연어 → 태그">→태그</button>
+          <button class="ai-btn go" @click="ollamaMode = 'nl_scene'; runOllama()" :disabled="ollamaLoading" title="키워드 → 영문 장면묘사">→장면</button>
         </div>
         <div class="ai-loading" v-if="ollamaLoading">🤖 AI 처리 중...</div>
+        <div class="nl-result" v-if="nlResult">
+          <textarea :value="nlResult" readonly class="nl-result-text" rows="4"></textarea>
+          <div class="nl-result-btns">
+            <button class="ai-btn go" @click="copyNlResult" title="복사">복사</button>
+            <button class="ai-btn go" @click="useNlAsMain" title="메인 프롬프트에 넣기">메인에 넣기</button>
+            <button class="ai-btn" @click="nlResult = ''" title="닫기">✕</button>
+          </div>
+        </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.main_prompt_text" :color-fn="blockColorClass" placeholder="태그 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="mainRef" v-model="widgets.main_prompt_text" class="auto-grow" placeholder="메인 태그..."
           @input="onMainInput($event)" @keydown="onAutoKey($event)" rows="3"></textarea>
@@ -592,31 +603,36 @@ const ollamaLoading = ref(false)
 const ollamaMode = ref('expand')
 const showNlInput = ref(false)
 const nlPrompt = ref('')
+const nlResult = ref('')
 let ollamaTimer = null
 async function runOllama() {
-  const tags = widgets.main_prompt_text || ''
-  if (!tags.trim() && ollamaMode.value !== 'nl2tags') {
-    requestAction('show_toast', { type: 'info', msg: '프롬프트를 먼저 입력하세요' })
-    return
-  }
-  if (ollamaMode.value === 'nl2tags' && !nlPrompt.value.trim()) {
-    requestAction('show_toast', { type: 'info', msg: '자연어 설명을 입력하세요' })
-    return
+  const mode = ollamaMode.value
+  const main = widgets.main_prompt_text || ''
+  let contentArg = main
+  let extraPrompt = ''
+  if (mode === 'nl2tags') {
+    if (!nlPrompt.value.trim()) { requestAction('show_toast', { type: 'info', msg: '자연어 설명을 입력하세요' }); return }
+    extraPrompt = nlPrompt.value
+  } else if (mode === 'nl_scene') {
+    if (!nlPrompt.value.trim()) { requestAction('show_toast', { type: 'info', msg: '키워드를 입력하세요' }); return }
+    contentArg = nlPrompt.value
+  } else {
+    if (!main.trim()) { requestAction('show_toast', { type: 'info', msg: '프롬프트를 먼저 입력하세요' }); return }
   }
   ollamaLoading.value = true
-  // 60초 타임아웃 안전장치
+  // 타임아웃 안전장치
   clearTimeout(ollamaTimer)
   ollamaTimer = setTimeout(() => {
     if (ollamaLoading.value) {
       ollamaLoading.value = false
-      requestAction('show_toast', { type: 'error', msg: 'AI 응답 시간 초과 (60초) — Ollama 서버 상태를 확인하세요' })
+      requestAction('show_toast', { type: 'error', msg: 'AI 응답 시간 초과 — Ollama 서버 상태를 확인하세요' })
     }
   }, 65000)
   const backend = await getBackend()
   if (!backend.ollamaEnhance) { ollamaLoading.value = false; clearTimeout(ollamaTimer); return }
   const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
   const model = window.localStorage.getItem('ollamaModel') || 'gemma3:4b'
-  backend.ollamaEnhance(tags, ollamaMode.value, JSON.stringify({ prompt: nlPrompt.value, url, model }))
+  backend.ollamaEnhance(contentArg, mode, JSON.stringify({ prompt: extraPrompt, url, model }))
 }
 
 async function runSmartNegative() {
@@ -638,6 +654,17 @@ async function runSmartNegative() {
   const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
   const model = window.localStorage.getItem('ollamaModel') || 'gemma3:4b'
   backend.ollamaEnhance(positivePrompt, 'negative', JSON.stringify({ url, model }))
+}
+
+function copyNlResult() {
+  try { navigator.clipboard?.writeText(nlResult.value) } catch {}
+  requestAction('show_toast', { type: 'info', msg: '복사됨' })
+}
+function useNlAsMain() {
+  widgets.main_prompt_text = nlResult.value
+  nlResult.value = ''
+  nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
+  requestAction('show_toast', { type: 'success', msg: '메인 프롬프트에 넣음' })
 }
 
 // 자동완성
@@ -702,7 +729,12 @@ onMounted(() => {
         return
       }
       if (d.tags) {
-        if (d.mode === 'negative') {
+        const NL = ['nl_caption', 'nl_scene', 'translate']
+        if (NL.includes(d.mode)) {
+          nlResult.value = d.tags
+          const label = d.mode === 'translate' ? '번역' : d.mode === 'nl_caption' ? '캡션' : '장면묘사'
+          requestAction('show_toast', { type: 'success', msg: `AI ${label} 완료` })
+        } else if (d.mode === 'negative') {
           const existing = (widgets.neg_prompt_text || '').trim()
           widgets.neg_prompt_text = existing ? existing.replace(/,?\s*$/, '') + ', ' + d.tags : d.tags
           requestAction('show_toast', { type: 'success', msg: 'AI 네거티브 생성 완료' })
@@ -768,6 +800,9 @@ summary::-webkit-details-marker { display: none; }
 .nl-input-row { display: flex; gap: 4px; margin-bottom: 6px; }
 .nl-input { flex: 1; padding: 6px 10px; font-size: 11px; }
 .ai-loading { font-size: 10px; color: var(--accent); margin-bottom: 4px; animation: pulse 1.5s infinite; }
+.nl-result { margin: 4px 0; }
+.nl-result-text { width: 100%; background: var(--bg-input); border: 1px solid var(--accent); border-radius: 6px; padding: 7px 9px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.5; font-family: inherit; }
+.nl-result-btns { display: flex; gap: 4px; margin-top: 4px; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .autocomplete-wrap { position: relative; }
 .ac-popup { position: absolute; left: 0; right: 0; top: 100%; z-index: 100; background: #1A1A1A; border: 1px solid var(--border); border-radius: 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
