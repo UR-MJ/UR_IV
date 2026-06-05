@@ -606,6 +606,56 @@ class VueBridge(QObject):
                 return f.read()
         return json.dumps([])
 
+    thumbnailReady = pyqtSignal(str)   # JSON {path, thumb} — 썸네일 1건 생성/조회 완료 통지
+
+    @pyqtSlot(str, int)
+    def generateThumbnails(self, paths_json: str, width: int = 256):
+        """주어진 이미지 경로들의 썸네일을 백그라운드 스레드에서 생성/캐싱하고,
+        각 건마다 thumbnailReady 시그널로 통지 (GUI 스레드 블로킹 방지).
+        캐시: image_cache/thumbs/<sha1>.jpg"""
+        try:
+            paths = json.loads(paths_json) if paths_json else []
+        except Exception:
+            return
+        if not paths:
+            return
+        import threading
+
+        def _work():
+            import hashlib
+            base = os.path.dirname(os.path.dirname(__file__))
+            thumb_dir = os.path.join(base, 'image_cache', 'thumbs')
+            try:
+                os.makedirs(thumb_dir, exist_ok=True)
+            except Exception:
+                return
+            for p in paths:
+                thumb_url = ''
+                try:
+                    norm = os.path.normpath(p)
+                    h = hashlib.sha1(f"{norm}@{width}".encode('utf-8')).hexdigest()
+                    tp = os.path.join(thumb_dir, f"{h}.jpg")
+                    if not os.path.exists(tp):
+                        if os.path.exists(p):
+                            from PIL import Image, ImageOps
+                            im = Image.open(p)
+                            try:
+                                im = ImageOps.exif_transpose(im)
+                            except Exception:
+                                pass
+                            im = im.convert('RGB')
+                            im.thumbnail((width, width), Image.Resampling.LANCZOS)
+                            im.save(tp, 'JPEG', quality=80)
+                    if os.path.exists(tp):
+                        thumb_url = 'file:///' + tp.replace('\\', '/')
+                except Exception:
+                    thumb_url = ''
+                try:
+                    self.thumbnailReady.emit(json.dumps({'path': p, 'thumb': thumb_url}))
+                except Exception:
+                    pass
+        threading.Thread(target=_work, daemon=True).start()
+
     searchResultsReady = pyqtSignal(str)   # JSON results
     queueUpdated = pyqtSignal(str)         # JSON queue state
     eventSearchResults = pyqtSignal(str)   # JSON event results

@@ -113,14 +113,15 @@ class OllamaClient:
             import re
             # <think>...</think> 블록 제거 (qwen3 등 thinking 모드)
             response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL).strip()
+            # 자연어 모드: 콤마-태그 정리 없이 prose 그대로 (코드펜스는 마커만 제거, 내용 보존)
+            if is_nl:
+                clean_nl = re.sub(r'^```[a-zA-Z0-9]*\s*', '', response).strip()
+                clean_nl = re.sub(r'\s*```\s*$', '', clean_nl).strip().strip('"').strip()
+                if not clean_nl:
+                    raise RuntimeError("AI가 빈 응답을 반환했습니다 (모델 채팅 템플릿 확인 필요)")
+                return clean_nl
             # 코드블록 제거
             response = re.sub(r'```[^`]*```', '', response, flags=re.DOTALL).strip()
-            # 자연어 모드: 콤마-태그 정리 없이 prose 그대로 반환
-            if is_nl:
-                clean_nl = response.strip().strip('"').strip()
-                if not clean_nl:
-                    raise RuntimeError("AI가 빈 응답을 반환했습니다")
-                return clean_nl
             # 번호 매기기 제거 (1. tag, 2. tag)
             response = re.sub(r'^\d+[\.\)]\s*', '', response, flags=re.MULTILINE)
             # 줄바꿈 → 콤마

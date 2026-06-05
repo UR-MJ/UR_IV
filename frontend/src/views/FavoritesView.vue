@@ -8,14 +8,14 @@
         <button class="fav-search-clr" v-if="exifFiltered" @click="clearExifSearch">✕</button>
       </div>
       <button class="btn" @click="loadFavorites">🔄</button>
-      <span class="count">{{ exifFiltered ? displayFavs.length + '/' : '' }}{{ favorites.length }}장</span>
+      <span class="count">{{ exifFiltered ? fullFavs.length + '/' : '' }}{{ favorites.length }}장</span>
     </div>
-    <div class="fav-grid">
+    <div class="fav-grid" @scroll="onFavScroll">
       <div v-for="(img, i) in displayFavs" :key="img" class="fav-item"
         @click="openViewer(img)"
         @contextmenu.prevent="showMenu($event, img, i)"
       >
-        <img :src="'file:///' + img" loading="lazy" />
+        <img :src="thumbCache[img] || BLANK" loading="lazy" />
       </div>
       <div v-if="favorites.length === 0" class="empty">즐겨찾기가 없습니다</div>
     </div>
@@ -115,8 +115,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getBackend } from '../bridge.js'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
 const favorites = ref([])
@@ -130,7 +130,32 @@ const exifSearching = ref(false)
 const filteredFavs = ref([])
 const exifCache = ref({})
 
-const displayFavs = computed(() => exifFiltered.value ? filteredFavs.value : favorites.value)
+// 가상 스크롤 — 처음 N개만 DOM에 그리고 스크롤 시 늘림 (500개 동시 렌더 방지)
+const fullFavs = computed(() => exifFiltered.value ? filteredFavs.value : favorites.value)
+const visibleCount = ref(60)
+const displayFavs = computed(() => fullFavs.value.slice(0, visibleCount.value))
+watch(fullFavs, () => { visibleCount.value = 60 })  // 검색/새로고침 시 리셋
+function onFavScroll(e) {
+  const el = e.target
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 400 &&
+      visibleCount.value < fullFavs.value.length) {
+    visibleCount.value = Math.min(visibleCount.value + 40, fullFavs.value.length)
+  }
+}
+
+// ── 썸네일 캐싱 (백그라운드 생성 + thumbnailReady 시그널 수신) ──
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+const thumbCache = reactive({})
+const _thumbRequested = new Set()
+let _thumbOff = null
+async function requestThumbs(list) {
+  const need = list.filter(p => !_thumbRequested.has(p))
+  if (!need.length) return
+  need.forEach(p => _thumbRequested.add(p))
+  const backend = await getBackend()
+  if (backend.generateThumbnails) backend.generateThumbnails(JSON.stringify(need), 256)
+}
+watch(displayFavs, (list) => requestThumbs(list), { immediate: true })
 const viewerParams = computed(() => {
   if (!viewerData.value?.raw) return ''
   const m = viewerData.value.raw.match(/Steps:.*$/m)
@@ -228,8 +253,20 @@ async function copySection(text, label) {
 }
 
 function hideMenu() { ctxMenu.value.show = false }
-onMounted(() => { document.addEventListener('click', hideMenu); loadFavorites() })
-onUnmounted(() => document.removeEventListener('click', hideMenu))
+onMounted(() => {
+  document.addEventListener('click', hideMenu)
+  _thumbOff = onBackendEvent('thumbnailReady', (json) => {
+    try {
+      const d = JSON.parse(json)
+      thumbCache[d.path] = d.thumb || ('file:///' + d.path)
+    } catch {}
+  })
+  loadFavorites()
+})
+onUnmounted(() => {
+  document.removeEventListener('click', hideMenu)
+  if (_thumbOff) _thumbOff()
+})
 </script>
 
 <style scoped>
@@ -246,7 +283,7 @@ onUnmounted(() => document.removeEventListener('click', hideMenu))
 .btn { padding: 5px 12px; background: #181818; border: none; border-radius: 4px; color: #787878; font-size: 11px; cursor: pointer; }
 .btn:hover { background: #222; color: #E8E8E8; }
 .fav-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; padding: 8px; overflow-y: auto; align-content: start; }
-.fav-item { height: 150px; border-radius: 4px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: 0.15s; }
+.fav-item { height: 150px; border-radius: 4px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: 0.15s; background: #161616; }
 .fav-item:hover { border-color: #E2B340; }
 .fav-item img { width: 100%; height: 100%; object-fit: cover; }
 .empty { grid-column: 1 / -1; text-align: center; color: #484848; padding: 60px; }

@@ -763,7 +763,9 @@ class ActionsMixin:
             'copyright': ', '.join(classified["copyright"]),
             'artist': ''
         }
-        self.apply_prompt_from_data(bundle)
+        # preserve_locked=True → 선행/후행/작가 칸은 덮어쓰지 않고, 그 칸들과 겹치는
+        # 태그는 당겨오지 않음 (인물수/캐릭터/main은 그대로 override)
+        self.apply_prompt_from_data(bundle, preserve_locked=True)
         self.neg_prompt_text.setPlainText(negative)
         # Vue에서 T2I 탭으로 전환 유도
         if hasattr(self, 'vue_bridge'):

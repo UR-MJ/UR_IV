@@ -48,8 +48,10 @@ class PromptHandlingMixin:
 
         self.total_prompt_display.setPlainText(final)
     
-    def apply_prompt_from_data(self, bundle):
-        """검색 결과 데이터를 프롬프트 입력창에 적용"""
+    def apply_prompt_from_data(self, bundle, preserve_locked=False):
+        """검색 결과 데이터를 프롬프트 입력창에 적용.
+        preserve_locked=True (프롬프트 당겨오기): 선행/후행/작가 칸을 덮어쓰지 않고,
+        당겨오는 태그를 그 칸들과 중복되면 제거한다 (인물수/캐릭터/main은 그대로 override)."""
         # 1. 데이터 추출
         general_str = str(bundle.get('general', ''))
         artist_str = str(bundle.get('artist', ''))
@@ -180,7 +182,8 @@ class PromptHandlingMixin:
         
         # 작가 처리 (고정 vs 제거 vs 적용)
         keep_current_artist = False
-        if self.btn_lock_artist.isChecked():
+        if self.btn_lock_artist.isChecked() or preserve_locked:
+            # 작가 고정 또는 당겨오기 → 작가 칸을 덮어쓰지 않음 (override 방지)
             keep_current_artist = True
             artist_list = []
         elif self.chk_remove_artist.isChecked():
@@ -282,8 +285,12 @@ class PromptHandlingMixin:
             return tag.replace('_', ' ').strip().lower()
 
         fixed_tags = set()
-        for src in (self.prefix_prompt_text.toPlainText(),
-                    self.suffix_prompt_text.toPlainText()):
+        _fixed_srcs = [self.prefix_prompt_text.toPlainText(),
+                       self.suffix_prompt_text.toPlainText()]
+        if preserve_locked:
+            # 당겨오기: 작가 칸도 중복 제거 대상에 포함 (작가 칸과 겹치는 태그는 안 당겨옴)
+            _fixed_srcs.append(self.artist_input.toPlainText())
+        for src in _fixed_srcs:
             for t in src.split(','):
                 nt = _norm(t)
                 if nt:
