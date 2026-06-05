@@ -83,7 +83,17 @@ _COSTUME_WORDS: set[str] = {
 
 
 def _is_costume_tag(tag: str) -> bool:
-    """태그가 의상/액세서리/장비인지 판별 (word-level 매칭)"""
+    """태그가 의상/액세서리/장비인지 판별.
+    1순위: NAIA 의류 사전(11k) + KR 카테고리(정확), 폴백: word-level 휴리스틱."""
+    try:
+        from core.tag_intelligence import get_tag_intelligence
+        ti = get_tag_intelligence()
+        if ti.is_clothing(tag):
+            return True
+        if ti.is_appearance(tag):   # 눈/머리/신체 → 의상 아님(확정)
+            return False
+    except Exception:
+        pass
     words = set(tag.strip().lower().replace("_", " ").split())
     return bool(words & _COSTUME_WORDS)
 
