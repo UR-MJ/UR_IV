@@ -6,6 +6,7 @@ import sys
 import traceback
 import json
 import os
+import random
 import shutil
 import subprocess
 from urllib.parse import unquote
@@ -377,7 +378,10 @@ class GeneratorMainUI(
                     # (기존엔 마지막 '검색'(전체)만 last_search_results.json에 저장돼
                     #  재시작 시 필터가 풀렸음.) 덱 소비 진행도도 함께 저장.
                     try:
-                        import os, json as _json
+                        # NOTE: os는 모듈 레벨(line 8)에서 import됨. 여기서 'import os'를
+                        # 다시 하면 _handle_vue_action 전체에서 os가 지역변수로 묶여
+                        # 다른 분기(save_ui_prefs 등)에서 UnboundLocalError가 발생함.
+                        import json as _json
                         cache_dir = os.path.join(
                             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
                         os.makedirs(cache_dir, exist_ok=True)
@@ -981,7 +985,6 @@ class GeneratorMainUI(
             elif action == 'explore_seed':
                 base_seed = int(payload.get('seed', -1))
                 if base_seed < 0:
-                    import random
                     base_seed = random.randint(0, 2**32 - 1)
                 # subseed_strength 0.05 단위로 9개 변형
                 variations = []
