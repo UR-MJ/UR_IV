@@ -53,6 +53,8 @@ config/last_search_results.json
 config/last_full_results.json
 config/last_deck.json
 Editor_models/yolo_config.json
+tags_db/_refresh_progress.json
+tags_db/*.refresh_bak
 
 # User outputs
 save/
