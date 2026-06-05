@@ -965,8 +965,9 @@ class UISetupMixin:
         else:
             self.main_prompt_text.setPlainText(tags)
 
-    def _apply_character_features_result(self, char_name: str, tags: list):
-        """캐릭터 이름 + 특징 태그를 프롬프트 위젯에 삽입 (Vue 모달 / 레거시 다이얼로그 공용)."""
+    def _apply_character_features_result(self, char_name: str, tags: list, add_copyright=None):
+        """캐릭터 이름 + 특징 태그를 프롬프트 위젯에 삽입 (Vue 모달 / 레거시 다이얼로그 공용).
+        add_copyright: True/False 면 강제, None 이면 ui_prefs.autoAddCopyright(기본 on) 따름."""
         char_name = (char_name or "").strip()
         # 캐릭터 이름 설정
         if char_name:
@@ -981,6 +982,19 @@ class UISetupMixin:
                     self.character_input.setText(f"{cur}, {char_name}")
             else:
                 self.character_input.setText(char_name)
+
+        # ③ copyright(시리즈) 자동 추가 — 캐릭터→copyright (모달 override 우선, 없으면 pref)
+        if char_name:
+            do_copy = add_copyright if add_copyright is not None \
+                else bool(self._get_ui_pref('autoAddCopyright', True))
+            if do_copy:
+                try:
+                    from core.tag_intelligence import get_tag_intelligence
+                    cp = get_tag_intelligence().copyright_of(char_name)
+                    if cp:
+                        self._add_copyright_tag(cp)
+                except Exception:
+                    pass
 
         # 특징 태그 삽입 (중복 제거)
         tags = tags or []
@@ -1010,6 +1024,37 @@ class UISetupMixin:
 
         if hasattr(self, 'update_total_prompt_display'):
             self.update_total_prompt_display()
+
+    def _get_ui_pref(self, key, default=None):
+        """config/ui_prefs.json 에서 단일 설정 읽기 (best-effort). os 는 함수-로컬 import."""
+        try:
+            import os as _os
+            import json as _json
+            p = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                              'config', 'ui_prefs.json')
+            if _os.path.exists(p):
+                with open(p, 'r', encoding='utf-8') as f:
+                    return _json.load(f).get(key, default)
+        except Exception:
+            pass
+        return default
+
+    def _add_copyright_tag(self, cp: str):
+        """copyright_input 에 시리즈 태그 추가 (중복 방지 + 괄호 이스케이프)."""
+        cp = (cp or "").strip()
+        if not cp or not hasattr(self, 'copyright_input'):
+            return
+        target = cp.lower().replace("_", " ")
+        cur = self.copyright_input.text().strip()
+        existing = set()
+        for c in cur.split(","):
+            n = c.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
+            if n:
+                existing.add(n)
+        if target in existing:
+            return
+        cp_esc = cp.replace("(", r"\(").replace(")", r"\)")
+        self.copyright_input.setText(f"{cur}, {cp_esc}" if cur else cp_esc)
 
     def _create_favorites_tab(self):
         """즐겨찾기 탭 생성"""

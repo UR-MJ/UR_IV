@@ -1374,6 +1374,18 @@ class VueBridge(QObject):
                     if n and n not in feature_norms:
                         custom.append(tag)
 
+            # ③ copyright(시리즈) + 자동추가 설정
+            copyright_tag = ""
+            auto_copy = True
+            try:
+                from core.tag_intelligence import get_tag_intelligence
+                copyright_tag = get_tag_intelligence().copyright_of(name) or ""
+            except Exception:
+                pass
+            gen = self.parent()
+            if gen is not None and hasattr(gen, "_get_ui_pref"):
+                auto_copy = bool(gen._get_ui_pref("autoAddCopyright", True))
+
             return json.dumps({
                 "name": name,
                 "count": int(count or 0),
@@ -1382,9 +1394,22 @@ class VueBridge(QObject):
                 "custom": custom,
                 "hasPreset": has_preset,
                 "condRulesJson": cond_json,
+                "copyright": copyright_tag,
+                "autoAddCopyright": auto_copy,
             }, ensure_ascii=False)
         except Exception as e:
             print(f"[CharPreset] getCharacterFeatures 실패: {e}")
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def getCharacterCopyright(self, name: str) -> str:
+        """캐릭터 → copyright(시리즈) 태그. {copyright: str}."""
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            return json.dumps(
+                {"copyright": get_tag_intelligence().copyright_of(name) or ""},
+                ensure_ascii=False)
+        except Exception as e:
             return json.dumps({"error": str(e)})
 
     @pyqtSlot(str, result=str)
@@ -1494,6 +1519,7 @@ class VueBridge(QObject):
             gen._apply_character_features_result(
                 (payload.get("character") or "").strip(),
                 payload.get("tags", []) or [],
+                add_copyright=payload.get("addCopyright"),
             )
             return json.dumps({"ok": True})
         except Exception as e:

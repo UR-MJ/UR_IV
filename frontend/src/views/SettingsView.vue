@@ -81,6 +81,10 @@
                 <span>Gallery Metadata Panel</span>
                 <input type="checkbox" v-model="galleryMetadata" @change="window.localStorage.setItem('galleryShowMetadata', String(galleryMetadata))" />
               </label>
+              <label class="toggle-row">
+                <span>캐릭터 적용 시 copyright 자동 추가</span>
+                <input type="checkbox" v-model="autoAddCopyright" @change="saveCopyrightPref" />
+              </label>
             </div>
           </div>
           <div class="glass-card mt-16">
@@ -381,7 +385,13 @@ const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
 const defaultBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
 const galleryMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
+const autoAddCopyright = ref(window.localStorage.getItem('autoAddCopyright') !== 'false')   // ③ 기본 on
 const historyJumpModifier = ref(window.localStorage.getItem('historyJumpModifier') || 'shiftKey')
+
+function saveCopyrightPref() {
+  window.localStorage.setItem('autoAddCopyright', String(autoAddCopyright.value))
+  requestAction('save_ui_prefs', { autoAddCopyright: autoAddCopyright.value })
+}
 
 // API에서 sampler/scheduler 목록 가져오기
 const wStore = useWidgetStore()
@@ -406,6 +416,7 @@ onMounted(async () => {
       if (typeof prefs.cleanSpaces === 'boolean') cleanSpaces.value = prefs.cleanSpaces
       if (typeof prefs.cleanUnderscore === 'boolean') cleanUnderscore.value = prefs.cleanUnderscore
       if (typeof prefs.galleryShowMetadata === 'boolean') { galleryMetadata.value = prefs.galleryShowMetadata; window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata)) }
+      if (typeof prefs.autoAddCopyright === 'boolean') { autoAddCopyright.value = prefs.autoAddCopyright; window.localStorage.setItem('autoAddCopyright', String(prefs.autoAddCopyright)) }
       if (Array.isArray(prefs.tabOrder) && prefs.tabOrder.length > 0) {
         tabOrder.value = [...prefs.tabOrder]
         window.localStorage.setItem('tabOrder', JSON.stringify(prefs.tabOrder))
@@ -465,6 +476,7 @@ const act = (name) => {
       cleanSpaces: cleanSpaces.value,
       cleanUnderscore: cleanUnderscore.value,
       galleryShowMetadata: galleryMetadata.value,
+      autoAddCopyright: autoAddCopyright.value,
       tabOrder: tabOrder.value,
       // Ollama
       ollamaUrl: ollamaUrl.value,

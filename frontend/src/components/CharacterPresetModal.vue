@@ -43,6 +43,14 @@
               <span v-if="presetStatus" class="cpm-pstatus">{{ presetStatus }}</span>
             </div>
 
+            <!-- ③ copyright(시리즈) 자동 추가 토글 -->
+            <div v-if="copyright" class="cpm-copyrow">
+              <button class="cpm-copychip" :class="{ off: !addCopyright }" @click="addCopyright = !addCopyright"
+                title="캐릭터 적용 시 copyright(시리즈) 태그를 함께 추가합니다">
+                📚 {{ copyright }}<span class="cpm-copytag">{{ addCopyright ? '함께 추가' : '제외' }}</span>
+              </button>
+            </div>
+
             <!-- Select buttons -->
             <div class="cpm-selrow">
               <button class="cpm-sel" @click="selectAll">전체 선택</button>
@@ -151,6 +159,8 @@ const condRules = ref([])        // [{condition, exists, tags:[], location, acti
 const presetStatus = ref('')
 const newCustom = ref('')
 const status = ref('')
+const copyright = ref('')         // ③ 캐릭터→copyright(시리즈)
+const addCopyright = ref(true)    // copyright 함께 추가 여부
 const dbLoading = ref(false)
 const deckOnly = ref(false)
 const deckChars = ref(null)      // array of normalized names | null
@@ -225,9 +235,12 @@ async function selectChar(key) {
   costumeTags.value = []
   customTags.value = []
   condRules.value = []
+  copyright.value = ''
   const data = await callBk('getCharacterFeatures', key)
   if (!data || data.error) { status.value = '특징 조회 실패'; return }
   charCount.value = data.count || 0
+  copyright.value = data.copyright || ''
+  addCopyright.value = data.autoAddCopyright !== false
   coreTags.value = (data.core || []).map(t => ({ ...t, checked: !t.existing }))
   costumeTags.value = (data.costume || []).map(t => ({ ...t, checked: !t.existing }))
   customTags.value = (data.custom || []).map(tag => ({ tag, checked: true }))
@@ -354,6 +367,7 @@ async function apply(includeName) {
   const res = await callBk('applyCharacterPreset', JSON.stringify({
     character: includeName ? selectedChar.value : '',
     tags,
+    addCopyright: addCopyright.value,
   }))
   if (res && res.error) {
     requestAction('show_toast', { type: 'error', msg: '적용 실패: ' + res.error })
@@ -417,6 +431,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .cpm-charname { font-size: 15px; font-weight: 800; color: var(--accent); }
 .cpm-charcount { font-size: 11px; color: var(--text-muted); }
 .cpm-pstatus { font-size: 11px; color: var(--accent); }
+
+.cpm-copyrow { padding-bottom: 8px; }
+.cpm-copychip { background: rgba(139,92,246,0.16); border: 1px solid #8b5cf6; border-radius: 12px; color: #a78bfa; font-size: 11px; font-weight: 700; padding: 4px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.cpm-copychip:hover { background: rgba(139,92,246,0.28); }
+.cpm-copychip.off { background: var(--bg-button); border-color: var(--border); color: var(--text-muted); text-decoration: line-through; }
+.cpm-copytag { font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 8px; background: rgba(0,0,0,0.25); text-decoration: none; }
 
 .cpm-selrow { display: flex; gap: 6px; padding-bottom: 8px; flex-wrap: wrap; }
 .cpm-sel.db { color: #60a5fa; border-color: #60a5fa; }
