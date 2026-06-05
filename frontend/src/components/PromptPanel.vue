@@ -611,6 +611,7 @@ async function runOllama() {
   const main = widgets.main_prompt_text || ''
   let contentArg = main
   let extraPrompt = ''
+  let creativeChar = ''
   if (mode === 'nl2tags') {
     if (!nlPrompt.value.trim()) { requestAction('show_toast', { type: 'info', msg: '자연어 설명을 입력하세요' }); return }
     extraPrompt = nlPrompt.value
@@ -618,9 +619,9 @@ async function runOllama() {
     if (!nlPrompt.value.trim()) { requestAction('show_toast', { type: 'info', msg: '키워드를 입력하세요' }); return }
     contentArg = nlPrompt.value
   } else if (mode === 'creative') {
-    // 캐릭터 + (있으면) 메인 태그를 힌트로. 완전 비어도 생성 허용.
-    const ch = (widgets.character_input || '').trim()
-    contentArg = [ch, main.trim()].filter(Boolean).join(', ')
+    // 캐릭터는 별도 전달(외견 DB 조회용), 메인 태그는 추가 힌트로. 완전 비어도 생성 허용.
+    creativeChar = (widgets.character_input || '').trim()
+    contentArg = main.trim()
   } else {
     if (!main.trim()) { requestAction('show_toast', { type: 'info', msg: '프롬프트를 먼저 입력하세요' }); return }
   }
@@ -637,7 +638,7 @@ async function runOllama() {
   if (!backend.ollamaEnhance) { ollamaLoading.value = false; clearTimeout(ollamaTimer); return }
   const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
   const model = window.localStorage.getItem('ollamaModel') || 'gemma3:4b'
-  backend.ollamaEnhance(contentArg, mode, JSON.stringify({ prompt: extraPrompt, url, model }))
+  backend.ollamaEnhance(contentArg, mode, JSON.stringify({ prompt: extraPrompt, character: creativeChar, url, model }))
 }
 
 async function runSmartNegative() {

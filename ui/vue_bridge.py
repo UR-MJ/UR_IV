@@ -988,12 +988,42 @@ class VueBridge(QObject):
             url = extra.get('url', 'http://localhost:11434')
             model = extra.get('model', 'gemma3:4b')
             extra_prompt = extra.get('prompt', '')
+            if mode == 'creative':
+                # 창의 모드: 캐릭터의 실제 외견 태그를 DB에서 조회해 입력에 포함
+                tags, extra_prompt = self._build_creative_input(tags, extra.get('character', ''))
             self._ollama_worker = OllamaWorker(url, model, tags, mode, extra_prompt, self)
             self._ollama_worker.finished.connect(lambda r: self.ollamaResult.emit(r))
             self._ollama_worker.error.connect(lambda e: self.ollamaResult.emit(json.dumps({'error': e})))
             self._ollama_worker.start()
         except Exception as e:
             self.ollamaResult.emit(json.dumps({'error': str(e)}))
+
+    def _build_creative_input(self, hints: str, character: str):
+        """창의 모드 입력 구성 — 캐릭터의 실제 외견 핵심 태그(우리 DB)를 함께 전달.
+        태그 파일 전체를 LLM에 먹이는 대신, 해당 캐릭터의 검증된 외견 태그만 O(1) 조회해 주입."""
+        character = (character or '').strip()
+        hints = (hints or '').strip()
+        feat = ''
+        if character:
+            try:
+                from utils.character_features import get_character_features
+                lk = get_character_features()
+                first = character.split(',')[0].strip()
+                core = lk.lookup_core(first)
+                if core and core[0]:
+                    feat = core[0]
+            except Exception:
+                pass
+        parts = []
+        if character:
+            parts.append(f"Character: {character}")
+        if feat:
+            parts.append(f"Canonical appearance tags (keep these accurate): {feat}")
+        if hints:
+            parts.append(f"Extra theme / hints (highest priority): {hints}")
+        if not parts:
+            parts.append("No specific character given — invent a fresh original anime character.")
+        return "\n".join(parts), ''
 
     @pyqtSlot(str)
     def unloadOllama(self, extra_json: str):
