@@ -420,7 +420,6 @@ class GeneratorMainUI(
                         self.vue_bridge.batchFilesSelected.emit(
                             json.dumps([p.replace('\\', '/') for p in sorted(imgs)]))
                         self.vue_bridge.showNotification.emit('info', f'{len(imgs)}개 이미지 발견')
-            elif action == 'ab_test': self._open_ab_test()
             elif action == 'random_prompt': self.apply_random_prompt()
 
             # 7. 검색 결과 → 프롬프트 적용
@@ -911,16 +910,6 @@ class GeneratorMainUI(
                     if not pix.isNull():
                         QApplication.clipboard().setPixmap(pix)
                         self.show_status("Copied to clipboard.")
-
-            # ═══════ 캐릭터 프리셋 (레거시 폴백 — 기본은 Vue 모달) ═══════
-            elif action == 'open_character_preset':
-                # 버그수정: 과거엔 존재하지 않는 dlg.get_selected_preset()를 호출해
-                # 조용히 실패했음. 동작하는 PyQt 폴백 핸들러로 라우팅.
-                # (정상 경로는 Vue CharacterPresetModal — bridge 슬롯 사용)
-                try:
-                    self._open_character_preset()
-                except Exception as e:
-                    print(f"[Error] Character preset: {e}")
 
             # ═══════ YOLO 모델 초기화 ═══════
             elif action == 'editor_clear_yolo_models':

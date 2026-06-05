@@ -15,7 +15,6 @@ from widgets.common_widgets import (
 )
 from widgets.sliders import NumericSlider
 from widgets.favorite_tags import FavoriteTagsBar
-from widgets.character_preset_dialog import CharacterPresetDialog
 from widgets.common_widgets import NoScrollComboBox, AutomationWidget, ResolutionItemWidget
 from config import OUTPUT_DIR
 from widgets.tag_input import TagInputWidget
@@ -948,28 +947,6 @@ class UISetupMixin:
             if result is not None:
                 self.main_prompt_text.setPlainText(result)
 
-    def _open_ab_test(self):
-        """A/B 프롬프트 비교 테스트"""
-        from widgets.ab_test_dialog import ABTestDialog
-        prompt = self.main_prompt_text.toPlainText().strip()
-        negative = self.neg_prompt_text.toPlainText().strip()
-        dlg = ABTestDialog(prompt, negative, parent=self)
-        if dlg.exec() != dlg.DialogCode.Accepted:
-            return
-        result = dlg.get_result()
-        if not result:
-            return
-        # 프롬프트 A를 대기열에, 프롬프트 B를 대기열에 — 같은 시드
-        for label, key in [("A", "prompt_a"), ("B", "prompt_b")]:
-            payload = {
-                'prompt': result[key],
-                'negative_prompt': result['negative'],
-                'seed': result['seed'],
-            }
-            if hasattr(self, 'queue_panel'):
-                self.queue_panel.add_single_item(payload)
-        self.show_status(f"A/B 테스트 대기열 추가 (시드: {result['seed']})")
-
     def _shuffle_main_prompt(self):
         """메인 프롬프트 태그 순서 랜덤 셔플"""
         import random
@@ -987,39 +964,6 @@ class UISetupMixin:
             self.main_prompt_text.setPlainText(f"{current}, {tags}")
         else:
             self.main_prompt_text.setPlainText(tags)
-
-    def _open_character_preset(self):
-        """캐릭터 특징 프리셋 다이얼로그 열기"""
-        # 기존 태그 수집 (중복 표시용) — 이스케이프/비이스케이프 모두 등록
-        existing: set[str] = set()
-        for src in (self.main_prompt_text.toPlainText(),
-                    self.prefix_prompt_text.toPlainText(),
-                    self.suffix_prompt_text.toPlainText(),
-                    self.character_input.text()):
-            for t in src.split(","):
-                norm = t.strip().lower().replace("_", " ")
-                if norm:
-                    existing.add(norm)
-                    # 이스케이프 제거 버전도 등록
-                    unesc = norm.replace(r"\(", "(").replace(r"\)", ")")
-                    if unesc != norm:
-                        existing.add(unesc)
-
-        current_char = self.character_input.text().strip()
-        dlg = CharacterPresetDialog(
-            existing_tags=existing,
-            current_character=current_char,
-            parent=self
-        )
-        if dlg.exec() != dlg.DialogCode.Accepted:
-            return
-
-        result = dlg.get_result()
-        if not result:
-            return
-        self._apply_character_features_result(
-            result.get("character_name", ""), result.get("tags", [])
-        )
 
     def _apply_character_features_result(self, char_name: str, tags: list):
         """캐릭터 이름 + 특징 태그를 프롬프트 위젯에 삽입 (Vue 모달 / 레거시 다이얼로그 공용)."""
