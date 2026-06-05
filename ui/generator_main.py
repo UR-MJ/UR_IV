@@ -373,6 +373,21 @@ class GeneratorMainUI(
                         r for r in deck if r.get('rating', 'g') in rating_filter
                     ]
                     _rnd.shuffle(self.shuffled_prompt_deck)
+                    # 필터 적용 결과를 디스크에 저장 → 재시작 시 '필터링된' 덱이 복원됨.
+                    # (기존엔 마지막 '검색'(전체)만 last_search_results.json에 저장돼
+                    #  재시작 시 필터가 풀렸음.) 덱 소비 진행도도 함께 저장.
+                    try:
+                        import os, json as _json
+                        cache_dir = os.path.join(
+                            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
+                        os.makedirs(cache_dir, exist_ok=True)
+                        with open(os.path.join(cache_dir, 'last_search_results.json'),
+                                  'w', encoding='utf-8') as f:
+                            _json.dump(deck, f, ensure_ascii=False)
+                    except Exception as e:
+                        print(f"[Filter] 필터 덱 디스크 저장 실패: {e}")
+                    if hasattr(self, '_save_deck_state'):
+                        self._save_deck_state()
             elif action == 'run_adetailer_single':
                 self._run_adetailer_single(payload)
             elif action == 'run_adetailer_batch':

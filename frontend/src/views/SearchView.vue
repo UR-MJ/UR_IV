@@ -720,6 +720,10 @@ onMounted(() => {
         results.value = data; filteredResults.value = data; previewIdx.value = 0
         lastResults.value = data
         statusText.value = `${data.length} MATCHES`
+        // 새 검색 → 기존 필터 칩 초기화 (옛 필터가 stale하게 남지 않도록)
+        activeFilters.ratings.clear(); activeFilters.characters.clear()
+        activeFilters.copyrights.clear(); activeFilters.artists.clear()
+        try { window.localStorage.removeItem('searchActiveFilters') } catch {}
         // 자동 저장 (재시작 시 복원용)
         try { window.localStorage.setItem('lastSearchResults', JSON.stringify(data.slice(0, 500))) } catch {}
         persistSearchFields()
@@ -889,6 +893,18 @@ const activeFilters = reactive({
   artists: new Set(),
 })
 
+// 재시작 시 필터 칩 복원 (Set 재구성) — 표시 결과는 이미 필터된 셋이지만,
+// 어떤 필터가 적용됐는지 칩으로 보여주기 위해 복원.
+try {
+  const _af = JSON.parse(window.localStorage.getItem('searchActiveFilters') || 'null')
+  if (_af) {
+    (_af.ratings || []).forEach(v => activeFilters.ratings.add(v))
+    ;(_af.characters || []).forEach(v => activeFilters.characters.add(v))
+    ;(_af.copyrights || []).forEach(v => activeFilters.copyrights.add(v))
+    ;(_af.artists || []).forEach(v => activeFilters.artists.add(v))
+  }
+} catch {}
+
 function _splitDanbooruTags(raw) {
   const text = String(raw || '').trim()
   if (!text) return []
@@ -957,11 +973,26 @@ const filteredByManager = computed(() => {
   return next
 })
 
+// activeFilters(Set들)를 localStorage에 영속 → 재시작 시 필터 칩 복원
+function _persistActiveFilters() {
+  try {
+    window.localStorage.setItem('searchActiveFilters', JSON.stringify({
+      ratings: [...activeFilters.ratings],
+      characters: [...activeFilters.characters],
+      copyrights: [...activeFilters.copyrights],
+      artists: [...activeFilters.artists],
+    }))
+  } catch {}
+}
+
 function applyFilterManager() {
   filteredResults.value = [...filteredByManager.value]
   previewIdx.value = 0
   showFilterManager.value = false
   requestAction('update_prompt_deck', { results: filteredResults.value })
+  // 재시작 시 Vue 표시도 '필터된 셋'이 되도록 localStorage 갱신(Python 덱과 일치) + 칩 영속
+  try { window.localStorage.setItem('lastSearchResults', JSON.stringify(filteredResults.value.slice(0, 500))) } catch {}
+  _persistActiveFilters()
   requestAction('show_toast', { type: 'success', msg: `필터 적용: ${filteredResults.value.length}건` })
 }
 
@@ -973,6 +1004,8 @@ function clearAllFilters() {
   filteredResults.value = [...results.value]
   previewIdx.value = 0
   requestAction('update_prompt_deck', { results: results.value })
+  try { window.localStorage.setItem('lastSearchResults', JSON.stringify(results.value.slice(0, 500))) } catch {}
+  _persistActiveFilters()
   requestAction('show_toast', { type: 'info', msg: '필터 해제됨' })
 }
 
