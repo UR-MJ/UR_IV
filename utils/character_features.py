@@ -255,64 +255,52 @@ class CharacterFeatureLookup:
         orig = self._full_norm_to_key.get(key, "")
         return self._full_dict.get(orig, "") if orig else ""
 
-    def lookup_core(self, name: str) -> tuple[str, int] | None:
-        """핵심 특징 조회 (characterization.json core + danbooru 비의상 태그)"""
-        self._ensure_loaded()
-        key = self._resolve_key(name)
-        if key is None:
-            return None
-
-        # 1. characterization.json core_tags
-        core_tags = list(self._core_dict.get(key, []))
-        core_set = {t.strip().lower() for t in core_tags}
-
-        # 2. danbooru_character에서 core에 없는 비의상 태그 추가
+    def _all_feature_tags(self, key: str) -> list[str]:
+        """캐릭터의 전체 특징 태그 (characterization core_tags + danbooru full, 중복 제거).
+        danbooru_character.py가 없으면 characterization core_tags만 사용한다."""
+        tags: list[str] = []
+        seen: set[str] = set()
+        for t in self._core_dict.get(key, []):
+            ts = t.strip()
+            tn = ts.lower()
+            if ts and tn not in seen and tn != key:
+                tags.append(ts)
+                seen.add(tn)
         full_str = self._get_full_features_for(key)
         if full_str:
             for t in full_str.split(","):
-                t = t.strip()
-                t_norm = t.lower()
-                if not t or t_norm in core_set or t_norm == key:
-                    continue
-                if not _is_costume_tag(t):
-                    core_tags.append(t)
-                    core_set.add(t_norm)
+                ts = t.strip()
+                tn = ts.lower()
+                if ts and tn not in seen and tn != key:
+                    tags.append(ts)
+                    seen.add(tn)
+        return tags
 
-        if not core_tags:
-            return None
-        count = self._post_count.get(key, 0)
-        return (", ".join(core_tags), count)
+    def _count_for(self, key: str) -> int:
+        return self._post_count.get(key, 0) or self._count_index.get(key, 0)
 
-    def lookup_costume(self, name: str) -> tuple[str, int] | None:
-        """의상/액세서리 특징만 조회 (danbooru에서 의상 키워드 매칭되는 태그)"""
+    def lookup_core(self, name: str) -> tuple[str, int] | None:
+        """핵심(비의상) 특징 조회 — 전체 특징에서 _is_costume_tag 인 것을 제외.
+        (의상/머리장식 등은 lookup_costume으로 분리되어 모달의 '의상' 섹션에 표시됨)"""
         self._ensure_loaded()
         key = self._resolve_key(name)
         if key is None:
             return None
-
-        # core 태그 set (정규화)
-        core_tags = self._core_dict.get(key, [])
-        core_set = {t.strip().lower() for t in core_tags}
-
-        # full 태그 파싱
-        full_str = self._get_full_features_for(key)
-        if not full_str:
+        core_tags = [t for t in self._all_feature_tags(key) if not _is_costume_tag(t)]
+        if not core_tags:
             return None
+        return (", ".join(core_tags), self._count_for(key))
 
-        full_tags = [t.strip() for t in full_str.split(",") if t.strip()]
-        # full에서 core를 제외한 뒤, 의상 키워드 매칭만 남김
-        costume_tags = []
-        for t in full_tags:
-            t_norm = t.strip().lower()
-            if t_norm in core_set or t_norm == key:
-                continue
-            if _is_costume_tag(t):
-                costume_tags.append(t)
-
+    def lookup_costume(self, name: str) -> tuple[str, int] | None:
+        """의상/액세서리 특징만 조회 — 전체 특징에서 _is_costume_tag 인 것만."""
+        self._ensure_loaded()
+        key = self._resolve_key(name)
+        if key is None:
+            return None
+        costume_tags = [t for t in self._all_feature_tags(key) if _is_costume_tag(t)]
         if not costume_tags:
             return None
-        count = self._post_count.get(key, 0)
-        return (", ".join(costume_tags), count)
+        return (", ".join(costume_tags), self._count_for(key))
 
     def lookup(self, name: str) -> tuple[str, int] | None:
         """전체 특징 조회 (기존 호환). full 우선, 없으면 core."""
