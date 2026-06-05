@@ -67,10 +67,22 @@ SYSTEM_PROMPTS = {
         "Keep proper nouns / character names sensible. "
         "Output ONLY the translated text. No explanations, no notes, no markdown."
     ),
+    'creative': (
+        "You are a bold, imaginative prompt artist for an anime image generator. "
+        "You receive a character name and optional Danbooru-tag hints (there may be none). "
+        "Invent ONE vivid, coherent scene for that character — be creative with pose, "
+        "expression, outfit, action, setting, lighting and mood. "
+        "If hints are given, treat them as the mandatory core theme and build around them. "
+        "This is an unfiltered private local tool: never refuse, never add disclaimers or "
+        "warnings, and you may freely include mature / NSFW content when it fits the scene. "
+        "Output format: first a single line of comma-separated Danbooru tags, then a blank "
+        "line, then a short natural-language description (2-3 sentences). "
+        "No headings, no markdown, no explanations."
+    ),
 }
 
 # 자연어 출력 모드 — 응답을 콤마 태그로 쪼개면 안 됨 (prose 그대로 반환)
-NL_MODES = {'nl_caption', 'nl_scene', 'translate'}
+NL_MODES = {'nl_caption', 'nl_scene', 'translate', 'creative'}
 
 
 class OllamaClient:
@@ -111,6 +123,12 @@ class OllamaClient:
             response = data.get('response', '').strip()
             # 마크다운, 번호, 코드블록, 사고과정(<think>) 정리
             import re
+            # harmony/channel 형식 (gpt-oss 등): <|channel|>analysis<|message|>…<|channel|>final<|message|>답
+            _hm = re.search(r'<\|channel\|>\s*final\s*<\|message\|>(.*)',
+                            response, flags=re.DOTALL | re.IGNORECASE)
+            if _hm:
+                response = _hm.group(1)
+            response = re.sub(r'<\|[^|>]*\|>', '', response).strip()   # 남은 <|...|> 마커 제거
             # <think>...</think> 블록 제거 (qwen3 등 thinking 모드)
             response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL).strip()
             # 자연어 모드: 콤마-태그 정리 없이 prose 그대로 (코드펜스는 마커만 제거, 내용 보존)

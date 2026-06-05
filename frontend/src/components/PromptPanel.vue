@@ -113,6 +113,7 @@
             <button class="ai-btn" @click="ollamaMode = 'suggest'; runOllama()" :disabled="ollamaLoading" title="유사 태그">🔄</button>
             <button class="ai-btn" @click="ollamaMode = 'nl_caption'; runOllama()" :disabled="ollamaLoading" title="태그 → 자연어 캡션">📝</button>
             <button class="ai-btn" @click="ollamaMode = 'translate'; runOllama()" :disabled="ollamaLoading" title="한↔영 번역">🌐</button>
+            <button class="ai-btn" @click="ollamaMode = 'creative'; runOllama()" :disabled="ollamaLoading" title="캐릭터 기반 창의 생성 (태그+자연어, 비어도 OK)">💡</button>
           </div>
         </div>
         <div class="nl-input-row" v-if="showNlInput">
@@ -616,6 +617,10 @@ async function runOllama() {
   } else if (mode === 'nl_scene') {
     if (!nlPrompt.value.trim()) { requestAction('show_toast', { type: 'info', msg: '키워드를 입력하세요' }); return }
     contentArg = nlPrompt.value
+  } else if (mode === 'creative') {
+    // 캐릭터 + (있으면) 메인 태그를 힌트로. 완전 비어도 생성 허용.
+    const ch = (widgets.character_input || '').trim()
+    contentArg = [ch, main.trim()].filter(Boolean).join(', ')
   } else {
     if (!main.trim()) { requestAction('show_toast', { type: 'info', msg: '프롬프트를 먼저 입력하세요' }); return }
   }
@@ -661,10 +666,13 @@ function copyNlResult() {
   requestAction('show_toast', { type: 'info', msg: '복사됨' })
 }
 function useNlAsMain() {
-  widgets.main_prompt_text = nlResult.value
+  // 앞의 태그는 override하지 않고 맨 뒤에 추가
+  const cur = (widgets.main_prompt_text || '').trim()
+  const add = nlResult.value.trim()
+  widgets.main_prompt_text = cur ? (cur.replace(/,?\s*$/, '') + ', ' + add) : add
   nlResult.value = ''
   nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
-  requestAction('show_toast', { type: 'success', msg: '메인 프롬프트에 넣음' })
+  requestAction('show_toast', { type: 'success', msg: '메인 프롬프트 끝에 추가' })
 }
 
 // 자동완성
@@ -729,10 +737,11 @@ onMounted(() => {
         return
       }
       if (d.tags) {
-        const NL = ['nl_caption', 'nl_scene', 'translate']
+        const NL = ['nl_caption', 'nl_scene', 'translate', 'creative']
         if (NL.includes(d.mode)) {
           nlResult.value = d.tags
-          const label = d.mode === 'translate' ? '번역' : d.mode === 'nl_caption' ? '캡션' : '장면묘사'
+          const label = d.mode === 'translate' ? '번역' : d.mode === 'nl_caption' ? '캡션'
+                      : d.mode === 'creative' ? '창의 생성' : '장면묘사'
           requestAction('show_toast', { type: 'success', msg: `AI ${label} 완료` })
         } else if (d.mode === 'negative') {
           const existing = (widgets.neg_prompt_text || '').trim()

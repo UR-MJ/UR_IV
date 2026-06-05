@@ -224,9 +224,14 @@ class GeneratorMainUI(
                 worker = getattr(self, 'gen_worker', None)
                 if worker is not None and hasattr(worker, 'cancel') and worker.isRunning():
                     worker.cancel()
-                    self.show_status("생성 취소 요청")
+                    self.show_status("생성 취소됨")
+                    # worker가 finished를 안 쏠 수 있으므로 버튼/타이틀 즉시 복구
+                    if hasattr(self, '_restore_generate_button'):
+                        self._restore_generate_button()
                 else:
                     self.show_status("취소할 생성이 없습니다")
+                    if hasattr(self, '_restore_generate_button'):
+                        self._restore_generate_button()
 
             # 3. 탭 간 데이터 전송 (이미지 & 프롬프트)
             elif action in ('send_to_i2i', 'send_to_inpaint', 'send_to_editor'):

@@ -412,9 +412,8 @@ class GenerationMixin:
         if hasattr(self, 'vue_bridge'):
             self.vue_bridge.generationProgress.emit(step, total)
 
-    def on_generation_finished(self, result, gen_info):
-        """생성 완료 처리"""
-        # 버튼 복구 (자동화 모드에 따라 다르게)
+    def _restore_generate_button(self):
+        """생성 버튼/타이틀을 idle 상태로 복구 (완료/취소 공용)."""
         if self.btn_auto_toggle.isChecked():
             if self.is_automating:
                 self.btn_generate.setText("⏸️ 자동화 중지")
@@ -425,11 +424,13 @@ class GenerationMixin:
         else:
             self.btn_generate.setText("✨ 이미지 생성")
             self.btn_generate.setStyleSheet(_gen_btn_style(_gen_btn_default_color()))
-        
         self.btn_generate.setEnabled(True)
-
-        # 타이틀 복구
         self.setWindowTitle("AI Studio - Pro")
+
+    def on_generation_finished(self, result, gen_info):
+        """생성 완료 처리"""
+        # 버튼/타이틀 복구 (자동화 모드에 따라 다르게)
+        self._restore_generate_button()
 
         # 프로그레스 바 숨김
         self.gen_progress_bar.hide()

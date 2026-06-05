@@ -25,7 +25,7 @@
           <div class="tool-card">
             <label>Studio Tools</label>
             <div class="tool-grid">
-              <button class="tool-btn" @click="action('save_settings')">SAVE</button>
+              <button class="tool-btn" @click="syncLoraStack(); action('save_settings')">SAVE</button>
               <button class="tool-btn" @click="showPresetManager = true; loadPresetList()">PRESET</button>
               <button class="tool-btn" @click="showWeightManager = true">WEIGHT</button>
               <button class="tool-btn" @click="showWcManager = true">WILDCARD</button>
@@ -1568,6 +1568,9 @@ function doGenerate() {
 
 function cancelGeneration() {
   action('cancel_generation')
+  // 취소는 backend가 imageGenerated/error를 안 쏠 수 있으므로 즉시 상태 복구
+  isGenerating.value = false
+  genEta.value = ''
 }
 
 function showHistoryMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
