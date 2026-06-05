@@ -94,6 +94,25 @@ SYSTEM_PROMPTS = {
 NL_MODES = {'nl_caption', 'nl_scene', 'translate', 'creative'}
 
 
+def _clean_creative_tags(text: str) -> str:
+    """창의 모드 출력의 첫 태그 줄에서 존재하지 않는(가짜) 태그 제거 (NAIA 태그 DB 대조)."""
+    try:
+        import re as _re
+        from core.tag_intelligence import get_tag_intelligence
+        ti = get_tag_intelligence()
+        blocks = _re.split(r'\n\s*\n', text, maxsplit=1)
+        first = blocks[0].strip()
+        if ',' in first and '\n' not in first:   # 단일 콤마 태그 줄로 보일 때만
+            tags = [t.strip() for t in first.split(',') if t.strip()]
+            kept, dropped = ti.filter_noise(tags, drop_unknown=True)
+            if kept and dropped:
+                blocks[0] = ', '.join(kept)
+                return '\n\n'.join(blocks)
+    except Exception:
+        pass
+    return text
+
+
 class OllamaClient:
     """Ollama REST API 래퍼"""
 
@@ -146,6 +165,8 @@ class OllamaClient:
                 clean_nl = re.sub(r'\s*```\s*$', '', clean_nl).strip().strip('"').strip()
                 if not clean_nl:
                     raise RuntimeError("AI가 빈 응답을 반환했습니다 (모델 채팅 템플릿 확인 필요)")
+                if mode == 'creative':
+                    clean_nl = _clean_creative_tags(clean_nl)
                 return clean_nl
             # 코드블록 제거
             response = re.sub(r'```[^`]*```', '', response, flags=re.DOTALL).strip()

@@ -1430,6 +1430,33 @@ class VueBridge(QObject):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+    @pyqtSlot(str, result=str)
+    def filterNoiseTags(self, tags_json: str) -> str:
+        """가짜/존재하지 않는 태그 제거 (NAIA 태그 DB 대조) → {kept, dropped}."""
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            tags = json.loads(tags_json) if tags_json else []
+            kept, dropped = get_tag_intelligence().filter_noise(tags, drop_unknown=True)
+            return json.dumps({"kept": kept, "dropped": dropped}, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def getTagRatings(self, tags_json: str) -> str:
+        """태그별 NSFW 비율(questionable+explicit, 0~1) → {tag: ratio}. 데이터 없으면 생략."""
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            ti = get_tag_intelligence()
+            tags = json.loads(tags_json) if tags_json else []
+            out = {}
+            for t in tags:
+                r = ti.nsfw_ratio(t)
+                if r is not None:
+                    out[t] = round(r, 3)
+            return json.dumps(out, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     @pyqtSlot(str, str, str, result=str)
     def saveCharacterPreset(self, name: str, tags_json: str, cond_rules_json: str) -> str:
         """캐릭터 프리셋 저장 (선택된 태그 + 조건부 규칙 JSON)."""
