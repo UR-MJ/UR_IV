@@ -1005,15 +1005,24 @@ class VueBridge(QObject):
         hints = (hints or '').strip()
         feat = ''
         if character:
+            first = character.split(',')[0].strip()
+            # 1) 사용자가 저장한 프리셋(수정본) 우선 — danbooru로 고친 캐릭터 반영
             try:
-                from utils.character_features import get_character_features
-                lk = get_character_features()
-                first = character.split(',')[0].strip()
-                core = lk.lookup_core(first)
-                if core and core[0]:
-                    feat = core[0]
+                from utils.character_presets import get_character_preset_full
+                preset = get_character_preset_full(first)
+                if preset and (preset.get('extra_prompt') or '').strip():
+                    feat = preset['extra_prompt'].strip()
             except Exception:
                 pass
+            # 2) 없으면 로컬 DB 핵심 특징
+            if not feat:
+                try:
+                    from utils.character_features import get_character_features
+                    core = get_character_features().lookup_core(first)
+                    if core and core[0]:
+                        feat = core[0]
+                except Exception:
+                    pass
         parts = []
         if character:
             parts.append(f"Character: {character}")
@@ -1376,6 +1385,49 @@ class VueBridge(QObject):
             }, ensure_ascii=False)
         except Exception as e:
             print(f"[CharPreset] getCharacterFeatures 실패: {e}")
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def fetchCharacterTagsOnline(self, name: str) -> str:
+        """danbooru에서 캐릭터의 실제 공통 general 태그를 라이브 집계 (로컬 DB가 틀린/없는 캐릭터 보완).
+        posts.json 표본의 tag_string_general 빈도 집계 → 상위 태그."""
+        try:
+            import requests
+            from collections import Counter
+            tag = (name or '').strip().lower().replace(' ', '_')
+            if not tag:
+                return json.dumps({"error": "캐릭터 이름 없음"})
+            hdr = {"User-Agent": "UR_IV/1.0 (character tag lookup)"}
+            posts = []
+            for q in (f"{tag} solo", tag):
+                try:
+                    r = requests.get(
+                        "https://danbooru.donmai.us/posts.json",
+                        params={"tags": q, "limit": 100, "only": "tag_string_general"},
+                        timeout=12, headers=hdr,
+                    )
+                    r.raise_for_status()
+                    posts = r.json()
+                    if isinstance(posts, list) and posts:
+                        break
+                except Exception:
+                    continue
+            if not isinstance(posts, list) or not posts:
+                return json.dumps({"error": "danbooru 게시물 없음 (이름/철자 확인)"})
+            cnt = Counter()
+            n = 0
+            for p in posts:
+                g = p.get("tag_string_general") if isinstance(p, dict) else ""
+                if not g:
+                    continue
+                n += 1
+                for t in g.split():
+                    cnt[t] += 1
+            if not n:
+                return json.dumps({"error": "태그 없음"})
+            ranked = [t.replace("_", " ") for t, _c in cnt.most_common(60)]
+            return json.dumps({"tags": ranked[:40], "sampled": n}, ensure_ascii=False)
+        except Exception as e:
             return json.dumps({"error": str(e)})
 
     @pyqtSlot(str, str, str, result=str)

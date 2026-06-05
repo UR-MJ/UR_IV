@@ -48,6 +48,7 @@
               <button class="cpm-sel" @click="selectAll">전체 선택</button>
               <button class="cpm-sel" @click="deselectAll">전체 해제</button>
               <button class="cpm-sel warn" @click="excludeCostume" title="glasses/bow/eyewear 등 복장 태그 선택 해제">복장 제외</button>
+              <button class="cpm-sel db" @click="fetchDanbooru" :disabled="dbLoading" title="danbooru에서 실제 태그 가져오기 (로컬 DB가 틀리거나 없을 때)">{{ dbLoading ? '…' : '🌐 danbooru' }}</button>
             </div>
 
             <!-- Tag chips (scroll) -->
@@ -150,6 +151,7 @@ const condRules = ref([])        // [{condition, exists, tags:[], location, acti
 const presetStatus = ref('')
 const newCustom = ref('')
 const status = ref('')
+const dbLoading = ref(false)
 const deckOnly = ref(false)
 const deckChars = ref(null)      // array of normalized names | null
 const searchEl = ref(null)
@@ -260,6 +262,24 @@ function deselectAll() {
 function excludeCostume() {
   // 복장(의상 섹션) 태그를 전부 선택 해제 — 눈/머리 등 핵심은 유지
   for (const t of costumeTags.value) t.checked = false
+}
+
+async function fetchDanbooru() {
+  if (!selectedChar.value) return
+  dbLoading.value = true
+  const res = await callBk('fetchCharacterTagsOnline', selectedChar.value)
+  dbLoading.value = false
+  if (!res || res.error || !Array.isArray(res.tags) || !res.tags.length) {
+    requestAction('show_toast', { type: 'error', msg: 'danbooru 조회 실패: ' + ((res && res.error) || '결과 없음') })
+    return
+  }
+  // 기존(틀릴 수 있는) 핵심/의상 칩을 danbooru 실제 태그로 교체. 이미 프롬프트에 있는 태그는 제외.
+  const already = new Set([...coreTags.value, ...costumeTags.value].filter(t => t.existing).map(t => t.tag.toLowerCase()))
+  const fresh = res.tags.filter(t => !already.has(t.toLowerCase()))
+  coreTags.value = fresh.map(t => ({ tag: t, existing: false, costume: false, checked: true }))
+  costumeTags.value = []
+  presetStatus.value = `🌐 danbooru ${res.sampled}건 집계`
+  requestAction('show_toast', { type: 'success', msg: `danbooru ${fresh.length}개 태그 로드 — 검토 후 '프리셋 저장'` })
 }
 
 function addCustom() {
@@ -398,7 +418,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .cpm-charcount { font-size: 11px; color: var(--text-muted); }
 .cpm-pstatus { font-size: 11px; color: var(--accent); }
 
-.cpm-selrow { display: flex; gap: 6px; padding-bottom: 8px; }
+.cpm-selrow { display: flex; gap: 6px; padding-bottom: 8px; flex-wrap: wrap; }
+.cpm-sel.db { color: #60a5fa; border-color: #60a5fa; }
+.cpm-sel.db:hover { color: #93c5fd; }
+.cpm-sel:disabled { opacity: 0.5; cursor: wait; }
 .cpm-sel { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; padding: 5px 12px; cursor: pointer; }
 .cpm-sel:hover { color: var(--text-primary); }
 .cpm-sel.warn:hover { color: #f87171; border-color: #f87171; }
