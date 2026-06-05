@@ -127,7 +127,8 @@
           <div class="nl-result-btns">
             <button class="ai-btn go" @click="copyNlResult" title="복사">복사</button>
             <button class="ai-btn go" @click="useNlAsMain" title="메인 프롬프트에 넣기">메인에 넣기</button>
-            <button class="ai-btn" @click="nlResult = ''" title="닫기">✕</button>
+            <button v-if="nlRes" class="ai-btn go" @click="applyNlRes" :title="`추천 해상도 ${nlRes.w}×${nlRes.h} 적용`">📐 {{ nlRes.w }}×{{ nlRes.h }}</button>
+            <button class="ai-btn" @click="nlResult = ''; nlRes = null" title="닫기">✕</button>
           </div>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.main_prompt_text" :color-fn="blockColorClass" placeholder="태그 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
@@ -605,6 +606,7 @@ const ollamaMode = ref('expand')
 const showNlInput = ref(false)
 const nlPrompt = ref('')
 const nlResult = ref('')
+const nlRes = ref(null)   // 창의 모드 추천 해상도 {w, h}
 let ollamaTimer = null
 async function runOllama() {
   const mode = ollamaMode.value
@@ -667,13 +669,24 @@ function copyNlResult() {
   requestAction('show_toast', { type: 'info', msg: '복사됨' })
 }
 function useNlAsMain() {
+  let add = nlResult.value.trim()
+  add = add.replace(/^\s*Resolution:.*$/im, '').trim()   // 해상도 줄은 별도 버튼이라 제외
+  const firstBlock = add.split(/\n\s*\n/)[0].trim()        // 다중 블록(창의)이면 첫 블록(태그)만
+  if (firstBlock) add = firstBlock
   // 앞의 태그는 override하지 않고 맨 뒤에 추가
   const cur = (widgets.main_prompt_text || '').trim()
-  const add = nlResult.value.trim()
   widgets.main_prompt_text = cur ? (cur.replace(/,?\s*$/, '') + ', ' + add) : add
   nlResult.value = ''
+  nlRes.value = null
   nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
   requestAction('show_toast', { type: 'success', msg: '메인 프롬프트 끝에 추가' })
+}
+
+function applyNlRes() {
+  if (!nlRes.value) return
+  widgets.width_input = String(nlRes.value.w)
+  widgets.height_input = String(nlRes.value.h)
+  requestAction('show_toast', { type: 'success', msg: `해상도 ${nlRes.value.w}×${nlRes.value.h} 적용` })
 }
 
 // 자동완성
@@ -741,6 +754,10 @@ onMounted(() => {
         const NL = ['nl_caption', 'nl_scene', 'translate', 'creative']
         if (NL.includes(d.mode)) {
           nlResult.value = d.tags
+          // 추천 해상도 파싱 (창의 모드)
+          nlRes.value = null
+          const rm = d.tags.match(/Resolution:\s*(\d{3,4})\s*[x×]\s*(\d{3,4})/i)
+          if (rm) nlRes.value = { w: rm[1], h: rm[2] }
           const label = d.mode === 'translate' ? '번역' : d.mode === 'nl_caption' ? '캡션'
                       : d.mode === 'creative' ? '창의 생성' : '장면묘사'
           requestAction('show_toast', { type: 'success', msg: `AI ${label} 완료` })

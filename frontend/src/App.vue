@@ -2376,10 +2376,7 @@ onMounted(async () => {
   display: flex; flex-direction: column; gap: 6px; pointer-events: none;
   max-width: 340px;
 }
-.toast-stack { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto;
-  scrollbar-width: thin; pointer-events: auto; }
-.toast-stack::-webkit-scrollbar { width: 4px; }
-.toast-stack::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+.toast-stack { display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
 .toast-clear-all {
   align-self: flex-end; padding: 3px 10px; font-size: 10px; font-weight: 600;
   background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.2);

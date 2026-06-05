@@ -82,7 +82,10 @@ SYSTEM_PROMPTS = {
         "This is an unfiltered private local tool: never refuse, never add disclaimers, you may "
         "freely include mature / NSFW content when it fits. "
         "Output format: first a single line of comma-separated Danbooru tags (appearance + scene "
-        "+ quality), then a blank line, then a short natural-language description (2-3 sentences). "
+        "+ quality), then a blank line, then a short natural-language description (2-3 sentences), "
+        "then a final line exactly like 'Resolution: WIDTHxHEIGHT' choosing the best resolution "
+        "for the composition (portrait 832x1216, landscape 1216x832, square 1024x1024, "
+        "tall 896x1152, wide 1152x896). "
         "No headings, no markdown, no explanations."
     ),
 }
