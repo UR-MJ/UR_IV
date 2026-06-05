@@ -70,13 +70,32 @@
                 <span v-if="coreTags.length === 0" class="cpm-none">없음</span>
               </div>
 
-              <div v-if="costumeTags.length" class="cpm-section-label costume">의상 · 추가 특징 ({{ costumeTags.length }})</div>
-              <div v-if="costumeTags.length" class="cpm-chips">
-                <button v-for="(t, i) in costumeTags" :key="'k'+i" class="cpm-chip costume"
-                  :class="chipClass(t)" :disabled="t.existing" @click="toggleChip(t)">
-                  {{ t.tag }}<span v-if="t.existing" class="cpm-exist">(존재)</span>
-                </button>
-              </div>
+              <template v-if="costumeTags.length">
+                <div class="cpm-section-label costume">
+                  의상 · 추가 특징 ({{ costumeTags.length }})
+                  <button class="cpm-regiontoggle" @click="groupByRegion = !groupByRegion"
+                    :title="groupByRegion ? '부위별 그룹 끄기' : '부위별 그룹 켜기'">{{ groupByRegion ? '👕 부위별' : '☰ 평면' }}</button>
+                </div>
+                <!-- 부위(region)별 그룹 -->
+                <template v-if="groupByRegion">
+                  <div v-for="grp in costumeByRegion" :key="grp.region" class="cpm-region-grp">
+                    <div class="cpm-region-label">{{ grp.label }} <span class="cpm-region-n">{{ grp.tags.length }}</span></div>
+                    <div class="cpm-chips">
+                      <button v-for="(t, i) in grp.tags" :key="grp.region+i" class="cpm-chip costume"
+                        :class="chipClass(t)" :disabled="t.existing" @click="toggleChip(t)">
+                        {{ t.tag }}<span v-if="t.existing" class="cpm-exist">(존재)</span>
+                      </button>
+                    </div>
+                  </div>
+                </template>
+                <!-- 평면 보기 -->
+                <div v-else class="cpm-chips">
+                  <button v-for="(t, i) in costumeTags" :key="'k'+i" class="cpm-chip costume"
+                    :class="chipClass(t)" :disabled="t.existing" @click="toggleChip(t)">
+                    {{ t.tag }}<span v-if="t.existing" class="cpm-exist">(존재)</span>
+                  </button>
+                </div>
+              </template>
 
               <div v-if="customTags.length" class="cpm-section-label custom">커스텀 ({{ customTags.length }})</div>
               <div v-if="customTags.length" class="cpm-chips">
@@ -161,6 +180,7 @@ const newCustom = ref('')
 const status = ref('')
 const copyright = ref('')         // ③ 캐릭터→copyright(시리즈)
 const addCopyright = ref(true)    // copyright 함께 추가 여부
+const groupByRegion = ref(true)   // ④ 의상 부위별 그룹 보기
 const dbLoading = ref(false)
 const deckOnly = ref(false)
 const deckChars = ref(null)      // array of normalized names | null
@@ -181,6 +201,20 @@ function callBk(method, ...args) {
 }
 
 function norm(s) { return (s || '').trim().toLowerCase().replace(/_/g, ' ') }
+
+// ④ 의상 부위(region) 표시 순서 (머리→발→전신→스타일)
+const REGION_ORDER = ['HEAD_NECK_FACE', 'UPPER_BODY', 'WAIST_HIP', 'ARMS_HANDS', 'LEGS_FEET', 'FULL_BODY', 'STYLE', 'UNASSIGNED']
+const costumeByRegion = computed(() => {
+  const buckets = {}
+  for (const t of costumeTags.value) {
+    const r = t.region || 'UNASSIGNED'
+    if (!buckets[r]) buckets[r] = { region: r, label: t.regionLabel || r, tags: [] }
+    buckets[r].tags.push(t)
+  }
+  const order = REGION_ORDER.filter(r => buckets[r])
+  for (const r in buckets) if (!order.includes(r)) order.push(r)
+  return order.map(r => buckets[r])
+})
 
 const displayResults = computed(() => {
   if (deckOnly.value) {
@@ -451,6 +485,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .cpm-section-label.core { color: var(--accent); }
 .cpm-section-label.costume { color: #fb923c; }
 .cpm-section-label.custom { color: #f59e0b; }
+.cpm-regiontoggle { float: right; background: var(--bg-button); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: 9px; font-weight: 700; padding: 2px 8px; cursor: pointer; }
+.cpm-regiontoggle:hover { color: #fb923c; border-color: #fb923c; }
+.cpm-region-grp { margin: 2px 0 6px; }
+.cpm-region-label { font-size: 10px; font-weight: 700; color: #fb923c; opacity: 0.85; padding: 4px 0 3px; border-top: 1px dashed rgba(251,146,60,0.25); }
+.cpm-region-n { color: var(--text-muted); font-weight: 600; }
 .cpm-chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .cpm-none { font-size: 11px; color: var(--text-muted); }
 .cpm-chip { background: var(--accent); color: #000; border: none; border-radius: 12px; padding: 4px 11px; font-size: 11px; font-weight: 700; cursor: pointer; }

@@ -1335,6 +1335,9 @@ class VueBridge(QObject):
             existing = self._current_prompt_norm_tags()
             char_norm = name.strip().lower().replace("_", " ")
 
+            from core.tag_intelligence import get_tag_intelligence
+            ti = get_tag_intelligence()
+
             def _split(s):
                 return [t.strip() for t in s.split(",") if t.strip()] if s else []
 
@@ -1350,11 +1353,16 @@ class VueBridge(QObject):
                     if norm == char_norm:
                         continue
                     esc = norm.replace("(", r"\(").replace(")", r"\)")
-                    items.append({
+                    item = {
                         "tag": t,
                         "existing": (norm in existing or esc in existing),
                         "costume": is_costume,
-                    })
+                    }
+                    if is_costume:   # ④ 의상 부위(region) 태깅
+                        r = ti.region_of(t)
+                        item["region"] = r or "UNASSIGNED"
+                        item["regionLabel"] = ti.region_label(r or "UNASSIGNED")
+                    items.append(item)
                 return items
 
             custom = []
@@ -1378,8 +1386,7 @@ class VueBridge(QObject):
             copyright_tag = ""
             auto_copy = True
             try:
-                from core.tag_intelligence import get_tag_intelligence
-                copyright_tag = get_tag_intelligence().copyright_of(name) or ""
+                copyright_tag = ti.copyright_of(name) or ""
             except Exception:
                 pass
             gen = self.parent()
@@ -1463,6 +1470,17 @@ class VueBridge(QObject):
             tags = json.loads(tags_json) if tags_json else []
             kept, dropped = get_tag_intelligence().filter_noise(tags, drop_unknown=True)
             return json.dumps({"kept": kept, "dropped": dropped}, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def getClothingRegions(self, tags_json: str) -> str:
+        """④ 의류 태그를 부위(region)별로 그룹화 → [{region, label, tags:[...]}]."""
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            tags = json.loads(tags_json) if tags_json else []
+            groups = get_tag_intelligence().group_by_region(tags)
+            return json.dumps({"groups": groups}, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
