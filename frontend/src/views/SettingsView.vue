@@ -346,13 +346,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 
-const subTabs = [
+interface SubTab {
+  id: string
+  label: string
+  icon: string
+  keywords: string
+}
+
+// 템플릿 인라인 핸들러(82·146행)가 window.localStorage를 참조 — 셋업 스코프에 노출
+const window = globalThis.window
+
+const subTabs: SubTab[] = [
   // keywords: 사용자 검색 시 라벨 외에도 매칭할 한/영 키워드들
   { id: 'general',   label: 'GENERAL',   icon: '⚙️', keywords: 'general 일반 시스템 코어 버전' },
   { id: 'api',       label: 'NETWORK',   icon: '🌐', keywords: 'network api 네트워크 webui comfy url 백엔드 연결' },
@@ -364,7 +374,7 @@ const subTabs = [
 ]
 const currentTab = ref('general')
 const settingsSearch = ref('')
-const searchInputRef = ref(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const filteredSubTabs = computed(() => {
   const q = settingsSearch.value.trim().toLowerCase()
   if (!q) return subTabs
@@ -414,13 +424,13 @@ import { onBackendEvent, getBackend } from '../bridge.js'
 onMounted(async () => {
   autoLoadOllamaModels()   // AI Assistant 모델 목록 시작 시 자동 로드
   // defaults 로드
-  const bk = await getBackend()
+  const bk: any = await getBackend()
   if (bk.getTabDefaults) {
-    bk.getTabDefaults((json) => {
+    bk.getTabDefaults((json: string) => {
       try { const d = JSON.parse(json); Object.assign(defaults, d) } catch {}
     })
   }
-  onBackendEvent('uiPrefsLoaded', (json) => {
+  onBackendEvent('uiPrefsLoaded', (json: string) => {
     try {
       const prefs = JSON.parse(json)
       if (typeof prefs.tagBlockMode === 'boolean') { defaultBlockMode.value = prefs.tagBlockMode; window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode)) }
@@ -453,10 +463,10 @@ function _loadTabOrder() {
   } catch {}
   return [...defaultOrder]
 }
-const tabOrder = ref(_loadTabOrder())
+const tabOrder = ref<string[]>(_loadTabOrder())
 let dragIdx = -1
 
-function dragStart(i) { dragIdx = i }
+function dragStart(i: number) { dragIdx = i }
 function persistTabOrder() {
   window.localStorage.setItem('tabOrder', JSON.stringify(tabOrder.value))
   requestAction('save_ui_prefs', { tabOrder: tabOrder.value })
@@ -464,7 +474,7 @@ function persistTabOrder() {
   // TabBar에게 즉시 알림 — storage event는 같은 창 변경엔 발생 안 하므로 커스텀 이벤트 사용
   try { window.dispatchEvent(new CustomEvent('tabOrderChanged')) } catch {}
 }
-function dragDrop(i) {
+function dragDrop(i: number) {
   if (dragIdx < 0) return
   const item = tabOrder.value.splice(dragIdx, 1)[0]
   tabOrder.value.splice(i, 0, item)
@@ -479,7 +489,7 @@ const resetTabOrder = () => {
   tabOrder.value = [...defaultOrder]
   persistTabOrder()
 }
-const act = (name) => {
+const act = (name: string) => {
   // SAVE GLOBAL 시 localStorage 설정도 함께 저장
   if (name === 'save_settings') {
     requestAction('save_ui_prefs', {
@@ -508,9 +518,9 @@ function saveDefaults() {
 }
 
 // defaults 변경 감시 → 자동 저장 알림
-let defaultsTimer = null
+let defaultsTimer: ReturnType<typeof setTimeout> | null = null
 watch(defaults, () => {
-  clearTimeout(defaultsTimer)
+  clearTimeout(defaultsTimer as ReturnType<typeof setTimeout>)
   defaultsTimer = setTimeout(() => {
     requestAction('save_tab_defaults', { ...defaults })
   }, 1500)
@@ -547,7 +557,7 @@ const t2iSynced = ref(false)
 async function syncFromT2I() {
   const { useWidgetStore } = await import('../stores/widgetStore.js')
   const store = useWidgetStore()
-  const w = store.widgets
+  const w: any = store.widgets
   defaults.steps = parseInt(w.steps_input) || defaults.steps
   defaults.cfg = parseFloat(w.cfg_input) || defaults.cfg
   defaults.width = parseInt(w.width_input) || defaults.width
@@ -562,7 +572,7 @@ async function syncFromT2I() {
 // Ollama
 const ollamaUrl = ref(window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434')
 const ollamaModel = ref(window.localStorage.getItem('ollamaModel') || 'gemma3:4b')
-const ollamaModels = ref([])
+const ollamaModels = ref<string[]>([])
 const ollamaUnloadOnGen = ref(window.localStorage.getItem('ollamaUnloadOnGen') === 'true')
 
 function saveOllamaSettings() {
@@ -579,9 +589,9 @@ function saveOllamaSettings() {
 
 async function testOllama() {
   const { getBackend } = await import('../bridge.js')
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.ollamaListModels) {
-    backend.ollamaListModels(ollamaUrl.value, (json) => {
+    backend.ollamaListModels(ollamaUrl.value, (json: string) => {
       try {
         const models = JSON.parse(json)
         ollamaModels.value = models
@@ -605,18 +615,18 @@ function loadOllamaModels() { testOllama() }
 // 시작 시 조용히 모델 목록 자동 로드 (caption 탭과 동일). 실패하면 Ollama 연결부터 안내.
 async function autoLoadOllamaModels() {
   const { getBackend } = await import('../bridge.js')
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend.ollamaListModels) return
-  backend.ollamaListModels(ollamaUrl.value, (json) => {
+  backend.ollamaListModels(ollamaUrl.value, (json: string) => {
     try {
       const models = JSON.parse(json)
       if (Array.isArray(models) && models.length > 0) {
         ollamaModels.value = models
         // 태그 차이 허용: base 매칭이면 목록 이름으로 정규화, 전혀 없으면 첫 모델로
-        const base = (s) => (s || '').split(':')[0].toLowerCase()
+        const base = (s: string) => (s || '').split(':')[0].toLowerCase()
         const match = models.includes(ollamaModel.value)
           ? ollamaModel.value
-          : models.find((m) => ollamaModel.value && base(m) === base(ollamaModel.value))
+          : models.find((m: string) => ollamaModel.value && base(m) === base(ollamaModel.value))
         const next = match || models[0]
         if (next && next !== ollamaModel.value) {
           ollamaModel.value = next

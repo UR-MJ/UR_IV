@@ -187,12 +187,20 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { onBackendEvent } from '../bridge.js'
 
-const ratings = reactive([
+interface Rating { key: string; label: string; checked: boolean }
+interface EventStep { prompt?: string; displayPrompt?: string; type?: string; added?: string[]; removed?: string[]; [k: string]: any }
+interface EventItem {
+  character?: string; copyright?: string; similarity?: number;
+  children_count?: number; parent_tags?: string; general?: string;
+  steps?: EventStep[]; children?: EventStep[]; error?: string; [k: string]: any
+}
+
+const ratings = reactive<Rating[]>([
   { key: 'g', label: 'GEN', checked: true },
   { key: 's', label: 'SENS', checked: false },
   { key: 'q', label: 'QUES', checked: false },
@@ -214,10 +222,10 @@ const loadingMsg = ref('')
 const searchCur = ref(0)
 const searchTotal = ref(0)
 const searchPct = computed(() => searchTotal.value ? Math.round(searchCur.value / searchTotal.value * 100) : 0)
-const events = ref([])
-const steps = ref([])
+const events = ref<EventItem[]>([])
+const steps = ref<EventStep[]>([])
 const selectedIdx = ref(-1)
-const selectedSteps = reactive({})  // { index: true }
+const selectedSteps = reactive<Record<string, boolean>>({})  // { index: true }
 const selectedCount = computed(() => Object.values(selectedSteps).filter(Boolean).length)
 const carryAppearance = ref(true)
 const carryCostume = ref(true)
@@ -260,7 +268,7 @@ const APPEARANCE_KEYS = ['hair', 'eyes', 'skin', 'ears', 'horns', 'tail', 'wings
 const COSTUME_KEYS = ['dress', 'shirt', 'skirt', 'pants', 'uniform', 'armor', 'suit', 'coat', 'jacket', 'hat', 'ribbon', 'bow', 'gloves', 'boots', 'shoes', 'socks', 'stockings', 'thighhighs', 'pantyhose', 'bikini', 'swimsuit', 'cape', 'scarf', 'necktie', 'collar', 'headband', 'hairclip', 'earrings', 'necklace', 'bracelet', 'belt', 'glasses', 'mask', 'hood', 'apron', 'maid', 'school uniform', 'sailor', 'kimono', 'yukata']
 const BG_KEYS = ['background', 'outdoors', 'indoors', 'sky', 'cloud', 'tree', 'grass', 'water', 'ocean', 'beach', 'mountain', 'city', 'room', 'bed', 'floor', 'wall', 'window', 'night', 'day', 'sunset', 'sunrise', 'rain', 'snow', 'forest', 'garden', 'street', 'school', 'classroom', 'library', 'kitchen', 'bathroom', 'rooftop', 'bridge', 'castle', 'temple', 'church']
 
-function classifyTag(tag) {
+function classifyTag(tag: string) {
   const t = tag.toLowerCase()
   if (APPEARANCE_KEYS.some(k => t.includes(k))) return 'appearance'
   if (COSTUME_KEYS.some(k => t.includes(k))) return 'costume'
@@ -272,7 +280,7 @@ function classifyTag(tag) {
 const displaySteps = computed(() => {
   if (steps.value.length === 0) return []
   const parentTags = steps.value[0]?.prompt?.split(',').map(t => t.trim()).filter(Boolean) || []
-  const parentByType = {}
+  const parentByType: Record<string, string[]> = {}
   parentTags.forEach(t => {
     const cls = classifyTag(t)
     if (!parentByType[cls]) parentByType[cls] = []
@@ -298,7 +306,7 @@ const displaySteps = computed(() => {
   })
 })
 
-function selectEvent(i) {
+function selectEvent(i: number) {
   selectedIdx.value = i
   const ev = events.value[i]
   // 스텝 초기화
@@ -313,13 +321,13 @@ function selectEvent(i) {
   requestAction('select_event', { index: i })
 }
 
-function toggleStep(i) { selectedSteps[i] = !selectedSteps[i] }
+function toggleStep(i: number) { selectedSteps[i] = !selectedSteps[i] }
 function selectAllSteps() { steps.value.forEach((_, i) => { selectedSteps[i] = true }) }
 function clearAllSteps() { Object.keys(selectedSteps).forEach(k => { selectedSteps[k] = false }) }
 
 function _buildScenarios() {
   // 선택된 스텝만 시나리오로 변환
-  const scenarios = []
+  const scenarios: any[] = []
   const dSteps = displaySteps.value
   for (const [idx, checked] of Object.entries(selectedSteps)) {
     if (!checked) continue
@@ -346,7 +354,7 @@ function generateNow() {
   requestAction('event_generate_now', { scenarios })
 }
 
-function sendStepToT2I(step) {
+function sendStepToT2I(step: EventStep) {
   const prompt = step.prompt || ''
   if (!prompt) return
   requestAction('pnginfo_send_prompt', { prompt, negative: '' })
@@ -373,7 +381,7 @@ onMounted(() => {
       if (d.excludeTags) excludeTags.value = d.excludeTags
       if (d.minSteps) minSteps.value = d.minSteps
       if (d.maxSteps) maxSteps.value = d.maxSteps
-      if (d.ratings) d.ratings.forEach(r => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = r.checked })
+      if (d.ratings) d.ratings.forEach((r: any) => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = r.checked })
     }
   } catch {}
   // 이전 검색 결과 복원
@@ -384,15 +392,15 @@ onMounted(() => {
       if (Array.isArray(data) && data.length > 0) events.value = data
     }
   } catch {}
-  onBackendEvent('searchStatus', (msg) => {
+  onBackendEvent('searchStatus', (msg: string) => {
     loadingMsg.value = msg
   })
-  onBackendEvent('eventSearchProgress', (cur, total) => {
+  onBackendEvent('eventSearchProgress', (cur: number, total: number) => {
     searchCur.value = cur
     searchTotal.value = total
     loadingMsg.value = `유사도 검색 중... (${cur.toLocaleString()} / ${total.toLocaleString()})`
   })
-  onBackendEvent('eventSearchResults', (json) => {
+  onBackendEvent('eventSearchResults', (json: string) => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
@@ -409,7 +417,7 @@ onMounted(() => {
     loadingMsg.value = ''
   })
   // import 결과 수신
-  onBackendEvent('eventImportResults', (json) => {
+  onBackendEvent('eventImportResults', (json: string) => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {

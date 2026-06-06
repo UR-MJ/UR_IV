@@ -179,14 +179,44 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
 import { computed, nextTick } from 'vue'
 
-const images = ref([])
+interface ExifParams {
+  generation?: string
+  core?: string
+  model?: string
+  hires?: string
+  extensions?: string
+  other?: string
+  [k: string]: any
+}
+interface ExifData {
+  path: string
+  filename: string
+  size?: string
+  prompt?: string
+  negative?: string
+  raw?: string
+  params?: ExifParams
+  [k: string]: any
+}
+interface CtxMenu {
+  show: boolean
+  x: number
+  y: number
+  path: string
+}
+interface CacheEntry {
+  images: string[]
+  timestamp: number
+}
+
+const images = ref<string[]>([])
 const currentFolder = ref('')
 const visibleCount = ref(40)
 
@@ -214,8 +244,8 @@ const sidebarParams = computed(() => {
 const exifSearch = ref('')
 const exifFiltered = ref(false)
 const exifSearching = ref(false)
-const filteredImages = ref([])
-const exifCache = ref({})  // path → exif text
+const filteredImages = ref<string[]>([])
+const exifCache = ref<Record<string, string>>({})  // path → exif text
 
 const displayImages = computed(() => {
   const source = exifFiltered.value ? filteredImages.value : images.value
@@ -227,7 +257,7 @@ async function runExifSearch() {
   if (!query) { clearExifSearch(); return }
   exifSearching.value = true
 
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   const toCheck = images.value.filter(img => !(img in exifCache.value))
 
   // 캐시에 없는 이미지의 EXIF 로드
@@ -235,9 +265,9 @@ async function runExifSearch() {
   const batchSize = 20
   for (let i = 0; i < toCheck.length; i += batchSize) {
     const batch = toCheck.slice(i, i + batchSize)
-    await Promise.all(batch.map(img => new Promise(resolve => {
+    await Promise.all(batch.map((img: string) => new Promise<void>(resolve => {
       if (backend.getImageExif) {
-        backend.getImageExif(img, (json) => {
+        backend.getImageExif(img, (json: string) => {
           try {
             const d = JSON.parse(json)
             exifCache.value[img] = `${d.prompt || ''} ${d.negative || ''} ${d.raw || ''}`.toLowerCase()
@@ -265,12 +295,12 @@ function clearExifSearch() {
   filteredImages.value = []
   visibleCount.value = 40
 }
-const galleryContentRef = ref(null)
+const galleryContentRef = ref<HTMLElement | null>(null)
 const sortBy = ref('date')
 const sortOptions = [{label: 'DATE', val: 'date'}, {label: 'NAME', val: 'name'}]
-const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
-const exifData = ref(null)
-const largeView = ref(null)
+const ctxMenu = ref<CtxMenu>({ show: false, x: 0, y: 0, path: '' })
+const exifData = ref<ExifData | null>(null)
+const largeView = ref<ExifData | null>(null)
 const isLoading = ref(false)
 const showMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
 // Settings에서 변경 시 실시간 반영 — interval ID 보관 후 unmount 시 정리
@@ -280,31 +310,31 @@ const _showMetaTimer = setInterval(() => {
 }, 500)
 
 // ── 캐시 시스템 ──
-const _cache = new Map()  // folder → { images, timestamp }
+const _cache = new Map<string, CacheEntry>()  // folder → { images, timestamp }
 const CACHE_TTL = 5 * 60 * 1000  // 5분
 
 async function editFilename() {
   if (!largeView.value) return
   const newName = window.prompt('파일 이름 변경:', largeView.value.filename)
   if (newName && newName !== largeView.value.filename) {
-    const backend = await getBackend()
+    const backend: any = await getBackend()
     if (backend.renameFile) {
-      backend.renameFile(largeView.value.path, newName, (json) => {
+      backend.renameFile(largeView.value.path, newName, (json: string) => {
         try {
           const r = JSON.parse(json)
-          if (r.ok) { largeView.value.filename = newName; loadImages() }
+          if (r.ok) { largeView.value!.filename = newName; loadImages() }
           else alert(r.error || '이름 변경 실패')
         } catch {}
       })
     }
   }
 }
-function onExifEdit(e, field) {
-  if (largeView.value) largeView.value[field] = e.target.textContent
+function onExifEdit(e: FocusEvent, field: string) {
+  if (largeView.value) largeView.value[field] = (e.target as HTMLElement).textContent
 }
 async function saveExif() {
   if (!largeView.value) return
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend.saveImageExif) return
   // prompt + negative + raw 에서 A1111 형식으로 재구성
   const parts = []
@@ -314,7 +344,7 @@ async function saveExif() {
   const rawMatch = (largeView.value.raw || '').match(/Steps:.*$/m)
   if (rawMatch) parts.push(rawMatch[0])
   const newParams = parts.join('\n')
-  backend.saveImageExif(largeView.value.path, newParams, (json) => {
+  backend.saveImageExif(largeView.value.path, newParams, (json: string) => {
     try {
       const r = JSON.parse(json)
       if (r.ok) alert('EXIF 저장 완료')
@@ -328,7 +358,7 @@ async function loadImages(forceRefresh = false) {
 
   // 캐시 히트 (5분 이내 + 강제 새로고침 아닌 경우)
   if (!forceRefresh && _cache.has(cacheKey)) {
-    const cached = _cache.get(cacheKey)
+    const cached = _cache.get(cacheKey)!
     if (Date.now() - cached.timestamp < CACHE_TTL) {
       images.value = cached.images
       return
@@ -336,9 +366,9 @@ async function loadImages(forceRefresh = false) {
   }
 
   isLoading.value = true
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.getGalleryImages) {
-    backend.getGalleryImages(currentFolder.value, (json) => {
+    backend.getGalleryImages(currentFolder.value, (json: string) => {
       try {
         const list = JSON.parse(json)
         images.value = list
@@ -354,14 +384,14 @@ async function loadImages(forceRefresh = false) {
 
 function sortImages() {
   if (sortBy.value === 'name') {
-    images.value.sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()))
+    images.value.sort((a, b) => a.split('/').pop()!.localeCompare(b.split('/').pop()!))
   } else {
     loadImages(true)  // DATE 정렬은 서버에서 새로 가져옴
   }
 }
 
-function onGalleryScroll(e) {
-  const el = e.target
+function onGalleryScroll(e: Event) {
+  const el = e.target as HTMLElement
   const total = exifFiltered.value ? filteredImages.value.length : images.value.length
   if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
     if (visibleCount.value < total) {
@@ -377,9 +407,9 @@ function closeLargeView() {
 }
 
 const openFolder = () => requestAction('gallery_open_folder')
-const viewImage = async (path) => {
-  const backend = await getBackend()
-  if (backend.getImageExif) backend.getImageExif(path, (json) => {
+const viewImage = async (path: string) => {
+  const backend: any = await getBackend()
+  if (backend.getImageExif) backend.getImageExif(path, (json: string) => {
     try {
       const d = JSON.parse(json)
       largeView.value = d  // 확대 뷰
@@ -388,8 +418,8 @@ const viewImage = async (path) => {
   })
 }
 
-function showMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
-function ctx(actionName) {
+function showMenu(e: MouseEvent, path: string) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
+function ctx(actionName: string) {
   const path = ctxMenu.value.path
   requestAction(actionName, { path })
   if (actionName === 'gallery_load_exif') viewImage(path)
@@ -398,33 +428,33 @@ function ctx(actionName) {
     images.value = images.value.filter(img => img !== path)
     // 캐시도 업데이트
     const cacheKey = currentFolder.value || '__default__'
-    if (_cache.has(cacheKey)) _cache.get(cacheKey).images = images.value
+    if (_cache.has(cacheKey)) _cache.get(cacheKey)!.images = images.value
   }
   ctxMenu.value.show = false
 }
-const quickAction = (name, path) => requestAction(name, { path })
-const sendToCompare = (slot) => { requestAction('send_to_compare', { path: ctxMenu.value.path, slot }); ctxMenu.value.show = false }
+const quickAction = (name: string, path: string) => requestAction(name, { path })
+const sendToCompare = (slot: string) => { requestAction('send_to_compare', { path: ctxMenu.value.path, slot }); ctxMenu.value.show = false }
 const ctxAdetailer = () => { requestAction('run_adetailer_single', { path: ctxMenu.value.path, settings: { ad_model: 'face_yolov8n.pt', ad_confidence: 0.3, ad_denoise: 0.4 } }); ctxMenu.value.show = false }
 const sendExifToT2I = () => { if (exifData.value) requestAction('gallery_send_exif_to_t2i', { exif: exifData.value.raw || '', path: exifData.value.path }) }
-const action = (name, payload = {}) => requestAction(name, payload)
+const action = (name: string, payload: Record<string, any> = {}) => requestAction(name, payload)
 const hideMenu = () => ctxMenu.value.show = false
 
 onMounted(async () => {
   document.addEventListener('click', hideMenu)
   // 마지막 폴더 경로 로드 후 이미지 로드
-  const bk = await getBackend()
+  const bk: any = await getBackend()
   if (bk.getLastGalleryFolder) {
-    bk.getLastGalleryFolder((f) => {
+    bk.getLastGalleryFolder((f: string) => {
       if (f) currentFolder.value = f
       loadImages()  // 경로 설정 후 로드
     })
   } else {
     loadImages()
   }
-  _galleryFolderUnsub = onBackendEvent('galleryFolderLoaded', (f) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
+  _galleryFolderUnsub = onBackendEvent('galleryFolderLoaded', (f: string) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
 })
 // onBackendEvent disconnect 핸들 — unmount 시 정리
-let _galleryFolderUnsub = null
+let _galleryFolderUnsub: (() => void) | null = null
 onUnmounted(() => {
   document.removeEventListener('click', hideMenu)
   if (_showMetaTimer) clearInterval(_showMetaTimer)

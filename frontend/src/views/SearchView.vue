@@ -348,30 +348,36 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { condRulesPayload } from '../composables/condRules.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
 
-const ratings = reactive([
+interface RatingChip { key: string; label: string; checked: boolean }
+interface SearchField { key: string; label: string; placeholder: string; include: string; exclude: string }
+interface SearchRow { copyright?: string; character?: string; artist?: string; general?: string; rating?: string; image_width?: number; image_height?: number; [k: string]: any }
+interface FilterBranch { label: string; count: number; data: SearchRow[] }
+type FilterCategory = 'ratings' | 'characters' | 'copyrights' | 'artists'
+
+const ratings = reactive<RatingChip[]>([
   { key: 'g', label: 'GEN', checked: true },
   { key: 's', label: 'SENS', checked: false },
   { key: 'q', label: 'QUES', checked: false },
   { key: 'e', label: 'EXPL', checked: false },
 ])
-const fields = reactive([
+const fields = reactive<SearchField[]>([
   { key: 'copyright', label: 'PROJECT', placeholder: 'e.g. genshin_impact', include: '', exclude: '' },
   { key: 'character', label: 'CHAR', placeholder: 'e.g. raiden_shogun', include: '', exclude: '' },
   { key: 'artist', label: 'ARTIST', placeholder: 'Artist name...', include: '', exclude: '' },
   { key: 'general', label: 'TAGS', placeholder: '1girl, blue_hair...', include: '', exclude: '' },
 ])
 
-const results = ref([])
-const filteredResults = ref([])
-const deepBase = ref([])  // 심층검색 결과(매니저 필터 적용 전 베이스) — rating 등 매니저 필터와 합성
-const lastResults = ref([])  // 검색 폼으로 돌아가도 보존
+const results = ref<SearchRow[]>([])
+const filteredResults = ref<SearchRow[]>([])
+const deepBase = ref<SearchRow[]>([])  // 심층검색 결과(매니저 필터 적용 전 베이스) — rating 등 매니저 필터와 합성
+const lastResults = ref<SearchRow[]>([])  // 검색 폼으로 돌아가도 보존
 const previewIdx = ref(0)
 const searching = ref(false)
 const statusText = ref('READY')
@@ -386,7 +392,7 @@ const viewMode = ref('single')
 const deepInclude = ref('')
 const deepExclude = ref('')
 const isFiltered = ref(false)
-const filterHistory = ref([])
+const filterHistory = ref<FilterBranch[]>([])
 
 // 정렬 + 페이지네이션
 const sortBy = ref(localStorage.getItem('search.sortBy') || 'default')  // default | character | artist | copyright | random
@@ -412,7 +418,7 @@ const AVAILABLE_YEARS = ['2026_06', '2026', '2025']
 const datasetYear = ref(localStorage.getItem('search.datasetYear') || '2026_06')
 if (!AVAILABLE_YEARS.includes(datasetYear.value)) datasetYear.value = '2026_06'
 watch(datasetYear, (v) => { try { localStorage.setItem('search.datasetYear', v) } catch {} })
-function yearLabel(y) { return y === '2026_06' ? '2026.06' : y }
+function yearLabel(y: string) { return y === '2026_06' ? '2026.06' : y }
 
 // 결과 cap — 기본 50만 (UI 부하 방지), 'unlimited' 선택 시 전체 결과 받음
 // 무제한이면 JSON 직렬화 + Vue 메모리가 무거워질 수 있음 (수 GB 가능)
@@ -453,10 +459,10 @@ const pagedResults = computed(() => {
   const start = currentPage.value * PAGE_SIZE
   return sortedResults.value.slice(start, start + PAGE_SIZE)
 })
-function gotoPage(p) {
+function gotoPage(p: number) {
   currentPage.value = Math.max(0, Math.min(totalPages.value - 1, p))
 }
-function onListRowClick(r) {
+function onListRowClick(r: SearchRow) {
   // 정렬된 화면에서 클릭 → filteredResults 내의 인덱스로 변환 (previewIdx는 filteredResults 기준)
   const idx = filteredResults.value.indexOf(r)
   if (idx >= 0) {
@@ -464,7 +470,7 @@ function onListRowClick(r) {
     viewMode.value = 'single'
   }
 }
-function onListRowUse(r) {
+function onListRowUse(r: SearchRow) {
   const idx = filteredResults.value.indexOf(r)
   if (idx >= 0) {
     previewIdx.value = idx
@@ -473,9 +479,9 @@ function onListRowUse(r) {
 }
 
 // 조건부 프롬프트 — 상태/저장/로드는 composables/condRules.js + 조건부 모달이 담당
-let progressTimer = null
+let progressTimer: ReturnType<typeof setInterval> | null = null
 
-const currentResult = computed(() => filteredResults.value[previewIdx.value] || null)
+const currentResult = computed<SearchRow | null>(() => filteredResults.value[previewIdx.value] || null)
 // 데이터셋별 general 포맷이 다름 — 포맷 인식 분리:
 //  - 2025/2026 : 콤마 구분 + 태그 내부 공백 ('aqua gloves, black hair', 언더스코어 없음)
 //  - 2026_06   : 공백 구분 + 언더스코어 보존 ('aqua_gloves black_hair')
@@ -493,7 +499,7 @@ const currentTags = computed(() => {
 
 // 검색 입력 영속 — localStorage는 sync (앱 빨리 닫혀도 안 잃어버림)
 // 백엔드 ui_prefs.json 쓰기는 디바운스 (키스트로크마다 파일 쓰지 않게)
-let _persistBackendTimer = null
+let _persistBackendTimer: ReturnType<typeof setTimeout> | null = null
 function persistSearchFields() {
   const payload = {
     fields: fields.map(f => ({ include: f.include, exclude: f.exclude })),
@@ -513,17 +519,17 @@ function persistSearchFields() {
 
 // 저장된 검색 상태 적용 — uiPrefsLoaded 이벤트 + mount 시 능동 fetch 양쪽에서 재사용.
 // fields/ratings/combineMode/datasetYear/resultCapMode 전부 복원.
-function applySearchState(state) {
+function applySearchState(state: any) {
   if (!state) return false
   let touched = false
   if (Array.isArray(state.fields)) {
-    state.fields.forEach((f, i) => {
+    state.fields.forEach((f: any, i: number) => {
       if (fields[i]) { fields[i].include = f.include || ''; fields[i].exclude = f.exclude || '' }
     })
     touched = true
   }
   if (Array.isArray(state.ratings)) {
-    state.ratings.forEach(r => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = !!r.checked })
+    state.ratings.forEach((r: any) => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = !!r.checked })
   }
   if (state.combineMode === 'and' || state.combineMode === 'or') combineMode.value = state.combineMode
   if (state.datasetYear && AVAILABLE_YEARS.includes(state.datasetYear)) datasetYear.value = state.datasetYear
@@ -547,7 +553,7 @@ async function search() {
     const target = 99 * (1 - Math.exp(-elapsed / TAU))
     searchProgress.value = Math.min(99, target)
   }, 100)
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   const query = {
     ratings: ratings.filter(r => r.checked).map(r => r.key),
     queries: Object.fromEntries(fields.map(f => [f.key, f.include])),
@@ -605,8 +611,8 @@ onMounted(() => {
     const sf = window.localStorage.getItem('lastSearchFields')
     if (sf) {
       const d = JSON.parse(sf)
-      if (d.fields) d.fields.forEach((f, i) => { if (fields[i]) { fields[i].include = f.include || ''; fields[i].exclude = f.exclude || '' } })
-      if (d.ratings) d.ratings.forEach(r => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = r.checked })
+      if (d.fields) d.fields.forEach((f: any, i: number) => { if (fields[i]) { fields[i].include = f.include || ''; fields[i].exclude = f.exclude || '' } })
+      if (d.ratings) d.ratings.forEach((r: any) => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = r.checked })
       if (d.combineMode && (d.combineMode === 'and' || d.combineMode === 'or')) combineMode.value = d.combineMode
       if (d.datasetYear && AVAILABLE_YEARS.includes(d.datasetYear)) datasetYear.value = d.datasetYear
       if (d.resultCapMode && ['capped', 'unlimited'].includes(d.resultCapMode)) resultCapMode.value = d.resultCapMode
@@ -619,9 +625,9 @@ onMounted(() => {
   if (!_restoredFromLocalStorage) {
     ;(async () => {
       try {
-        const backend = await getBackend()
+        const backend: any = await getBackend()
         if (backend.getUiPrefs) {
-          const json = await new Promise(resolve => backend.getUiPrefs(s => resolve(s)))
+          const json = await new Promise<string>(resolve => backend.getUiPrefs((s: string) => resolve(s)))
           if (applySearchState(JSON.parse(json).searchState)) {
             _restoredFromLocalStorage = true  // 이후 uiPrefsLoaded 이벤트 중복 적용 방지
           }
@@ -633,14 +639,14 @@ onMounted(() => {
   // backend는 무제한 (파일), localStorage는 5MB cap → 큰 결과는 backend에서만 보존됨
   ;(async () => {
     try {
-      const backend = await getBackend()
+      const backend: any = await getBackend()
       // active = 필터된(활성) 셋 → 표시 + 자동화 덱; full = 전체 셋 → '필터 해제' 베이스
-      let active = null, full = null
+      let active: any = null, full: any = null
       if (backend.loadLastSearchResults) {
-        try { active = JSON.parse(await new Promise(r => backend.loadLastSearchResults(s => r(s)))) } catch {}
+        try { active = JSON.parse(await new Promise<string>(r => backend.loadLastSearchResults((s: string) => r(s)))) } catch {}
       }
       if (backend.loadFullResults) {
-        try { full = JSON.parse(await new Promise(r => backend.loadFullResults(s => r(s)))) } catch {}
+        try { full = JSON.parse(await new Promise<string>(r => backend.loadFullResults((s: string) => r(s)))) } catch {}
       }
       if (Array.isArray(active) && active.length > 0) {
         const base = (Array.isArray(full) && full.length) ? full : active
@@ -655,8 +661,8 @@ onMounted(() => {
     try {
       const savedActive = window.localStorage.getItem('lastSearchResults')
       const savedFull = window.localStorage.getItem('lastFullResults')
-      const active = savedActive ? JSON.parse(savedActive) : null
-      const full = savedFull ? JSON.parse(savedFull) : null
+      const active: any = savedActive ? JSON.parse(savedActive) : null
+      const full: any = savedFull ? JSON.parse(savedFull) : null
       if (Array.isArray(active) && active.length > 0) {
         const base = (Array.isArray(full) && full.length) ? full : active
         results.value = base; lastResults.value = base
@@ -667,7 +673,7 @@ onMounted(() => {
     } catch {}
   })()
 
-  onBackendEvent('searchResultsReady', (json) => {
+  onBackendEvent('searchResultsReady', (json: string) => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
@@ -693,14 +699,14 @@ onMounted(() => {
         statusText.value = '검색 결과 형식 오류 (배열 예상)'
         requestAction('show_toast', { type: 'error', msg: '검색 결과 형식 오류 — 배열이 아닙니다' })
       }
-    } catch (e) {
+    } catch (e: any) {
       statusText.value = `JSON 파싱 실패: ${e?.message || 'unknown'}`
       requestAction('show_toast', { type: 'error', msg: `검색 결과 JSON 파싱 실패: ${e?.message || e}` })
     }
     searching.value = false; searchProgress.value = 100
     if (progressTimer) { clearInterval(progressTimer); progressTimer = null }
   })
-  onBackendEvent('searchStatus', (msg) => {
+  onBackendEvent('searchStatus', (msg: string) => {
     statusText.value = msg.toUpperCase()
     // 데이터 없음/종료 상태에서 searchResultsReady가 안 와도 진행바 타이머 정리(누수 방지)
     if (/없|실패|완료|0/.test(msg)) {
@@ -708,7 +714,7 @@ onMounted(() => {
       searching.value = false
     }
   })
-  onBackendEvent('uiPrefsLoaded', (json) => {
+  onBackendEvent('uiPrefsLoaded', (json: string) => {
     // localStorage/능동 fetch로 이미 복원했으면 무시 (중복 적용 방지)
     if (_restoredFromLocalStorage) return
     try { if (applySearchState(JSON.parse(json).searchState)) _restoredFromLocalStorage = true } catch {}
@@ -744,7 +750,7 @@ function applyDeepSearch() {
   statusText.value = `DEEP: ${filteredResults.value.length} / ${results.value.length}`
   syncDeck()
 }
-function restoreBranch(idx) {
+function restoreBranch(idx: number) {
   deepBase.value = [...filterHistory.value[idx].data]
   filterHistory.value = filterHistory.value.slice(0, idx)
   filteredResults.value = _applyManagerFilters(deepBase.value)
@@ -765,9 +771,9 @@ function resetDeepSearch() {
 // 태그 색상 분류 — Python TagClassifier (tags_db 기반)
 // LRU 캐시: 최대 5000개 — 무한 증가 방지. 가장 오래된 항목부터 제거
 const TAG_CACHE_MAX = 5000
-const tagCategoryCache = ref({})  // tag → category
-const _tagCacheKeys = []  // 삽입 순서 추적
-function _setTagCache(key, value) {
+const tagCategoryCache = ref<Record<string, string>>({})  // tag → category
+const _tagCacheKeys: string[] = []  // 삽입 순서 추적
+function _setTagCache(key: string, value: string) {
   if (key in tagCategoryCache.value) {
     // 기존 항목 갱신 — 키 순서만 뒤로 이동
     const idx = _tagCacheKeys.indexOf(key)
@@ -782,7 +788,7 @@ function _setTagCache(key, value) {
 }
 
 // 카테고리 → CSS 클래스 매핑 (세분화)
-const catToColor = {
+const catToColor: Record<string, string> = {
   'sexual': 'nsfw', 'body_parts': 'body', 'clothing': 'clothing',
   'pose': 'action', 'expression': 'expression', 'background': 'bg',
   'composition': 'composition', 'effect': 'effect', 'objects': 'objects',
@@ -794,7 +800,7 @@ const catToColor = {
 // 인물수 태그는 프론트에서 직접 판단 (빠름)
 const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
 
-function tagColor(tag) {
+function tagColor(tag: string) {
   const t = tag.trim().toLowerCase().replace(/ /g, '_')
   if (countPattern.test(t)) return 'count'
   // 캐시 검색 (원본 + underscore 변환 둘 다)
@@ -810,14 +816,14 @@ async function classifyCurrentTags() {
   // 캐시에 없는 태그만 요청
   const uncached = tags.filter(t => !(t in tagCategoryCache.value))
   if (uncached.length === 0) return
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.classifyTags) {
-    backend.classifyTags(JSON.stringify(uncached), (json) => {
+    backend.classifyTags(JSON.stringify(uncached), (json: string) => {
       try {
-        const result = JSON.parse(json)
+        const result: any = JSON.parse(json)
         if (!result.error) {
           // LRU 캐시로 추가 — 무한 증가 방지
-          for (const [k, v] of Object.entries(result)) {
+          for (const [k, v] of Object.entries<any>(result)) {
             _setTagCache(k, v)
           }
         }
@@ -836,10 +842,10 @@ const fmCharSearch = ref('')
 const fmCopySearch = ref('')
 const fmArtistSearch = ref('')
 const activeFilters = reactive({
-  ratings: new Set(),
-  characters: new Set(),
-  copyrights: new Set(),
-  artists: new Set(),
+  ratings: new Set<string>(),
+  characters: new Set<string>(),
+  copyrights: new Set<string>(),
+  artists: new Set<string>(),
 })
 
 // 재시작 시 필터 칩 복원 (Set 재구성) — 표시 결과는 이미 필터된 셋이지만,
@@ -847,18 +853,18 @@ const activeFilters = reactive({
 try {
   const _af = JSON.parse(window.localStorage.getItem('searchActiveFilters') || 'null')
   if (_af) {
-    (_af.ratings || []).forEach(v => activeFilters.ratings.add(v))
-    ;(_af.characters || []).forEach(v => activeFilters.characters.add(v))
-    ;(_af.copyrights || []).forEach(v => activeFilters.copyrights.add(v))
-    ;(_af.artists || []).forEach(v => activeFilters.artists.add(v))
+    (_af.ratings || []).forEach((v: string) => activeFilters.ratings.add(v))
+    ;(_af.characters || []).forEach((v: string) => activeFilters.characters.add(v))
+    ;(_af.copyrights || []).forEach((v: string) => activeFilters.copyrights.add(v))
+    ;(_af.artists || []).forEach((v: string) => activeFilters.artists.add(v))
   }
 } catch {}
 
-function _splitDanbooruTags(raw) {
+function _splitDanbooruTags(raw: any): string[] {
   const text = String(raw || '').trim()
   if (!text) return []
   if (text.includes(',')) return text.split(',').map(v => v.trim().replace(/_/g, ' ')).filter(Boolean)
-  const tags = []; let current = ''; let depth = 0
+  const tags: string[] = []; let current = ''; let depth = 0
   for (const ch of text) {
     if (ch === '(') { depth++; current += ch }
     else if (ch === ')') { depth--; current += ch }
@@ -871,7 +877,7 @@ function _splitDanbooruTags(raw) {
 
 // 검색 결과에서 필터 옵션 추출
 const filterOptions = computed(() => {
-  const chars = new Set(), copys = new Set(), arts = new Set(), rats = new Set()
+  const chars = new Set<string>(), copys = new Set<string>(), arts = new Set<string>(), rats = new Set<string>()
   for (const row of results.value) {
     if (row.rating) rats.add(row.rating)
     for (const c of _splitDanbooruTags(row.character)) chars.add(c)
@@ -899,7 +905,7 @@ const filteredFmArtists = computed(() => {
   return q ? filterOptions.value.artists.filter(a => a.toLowerCase().includes(q)) : filterOptions.value.artists
 })
 
-function toggleFilter(category, value) {
+function toggleFilter(category: FilterCategory, value: string) {
   const s = activeFilters[category]
   if (s.has(value)) s.delete(value)
   else s.add(value)
@@ -913,9 +919,9 @@ const activeFilterCount = computed(() =>
 )
 
 // 매니저 필터 로직 (주어진 배열에 적용) — deepBase 위에서 합성하므로 심층검색 유지
-function _applyManagerFilters(arr) {
+function _applyManagerFilters(arr: SearchRow[]): SearchRow[] {
   let next = arr
-  if (activeFilters.ratings.size) next = next.filter(r => activeFilters.ratings.has(r.rating))
+  if (activeFilters.ratings.size) next = next.filter(r => activeFilters.ratings.has(r.rating as string))
   if (activeFilters.characters.size) next = next.filter(r => _splitDanbooruTags(r.character).some(c => activeFilters.characters.has(c)))
   if (activeFilters.copyrights.size) next = next.filter(r => _splitDanbooruTags(r.copyright).some(c => activeFilters.copyrights.has(c)))
   if (activeFilters.artists.size) next = next.filter(r => _splitDanbooruTags(r.artist).some(a => activeFilters.artists.has(a)))

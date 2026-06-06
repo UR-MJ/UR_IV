@@ -340,29 +340,36 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
 
+interface CaptionItem {
+  path: string
+  caption: string
+  status: string
+  [k: string]: any
+}
+
 const router = useRouter()
 const widgets = useWidgetStore()
 const subTab = ref('batch')
-const action = (name, payload = {}) => requestAction(name, payload)
-const basename = (p) => typeof p === 'string' ? p.split('/').pop().split('\\').pop() : p.name || p
+const action = (name: string, payload: any = {}) => requestAction(name, payload)
+const basename = (p: any) => typeof p === 'string' ? p.split('/').pop()!.split('\\').pop() : p.name || p
 
 // ── Batch ──
-const batchFiles = ref([])
+const batchFiles = ref<string[]>([])
 const batchOp = ref('resize')
 const resizeW = ref('1024')
 const resizeH = ref('1024')
 const formatType = ref('PNG')
 
-function onDropBatch(e) {
+function onDropBatch(e: DragEvent) {
   const files = Array.from(e.dataTransfer?.files || [])
-  batchFiles.value.push(...files.filter(f => f.type.startsWith('image/')).map(f => f.path))
+  batchFiles.value.push(...files.filter(f => f.type.startsWith('image/')).map(f => (f as any).path))
 }
 function startBatch() {
   action('start_batch', {
@@ -373,14 +380,14 @@ function startBatch() {
 }
 
 // ── Upscale ──
-const upscaleFiles = ref([])
+const upscaleFiles = ref<string[]>([])
 const upscaler = ref('')
-const upscalers = ref(['R-ESRGAN 4x+', 'R-ESRGAN 4x+ Anime6B'])
+const upscalers = ref<string[]>(['R-ESRGAN 4x+', 'R-ESRGAN 4x+ Anime6B'])
 const scaleFactor = ref(2)
 
-function onDropUpscale(e) {
+function onDropUpscale(e: DragEvent) {
   const files = Array.from(e.dataTransfer?.files || [])
-  upscaleFiles.value.push(...files.filter(f => f.type.startsWith('image/')).map(f => f.path))
+  upscaleFiles.value.push(...files.filter(f => f.type.startsWith('image/')).map(f => (f as any).path))
 }
 function startUpscale() {
   action('start_upscale', {
@@ -391,7 +398,7 @@ function startUpscale() {
 }
 
 // ── Caption (Ollama 비전 모델, taggui 방식 .txt 사이드카) ──
-const captionItems = ref([])   // [{path, caption, status}]
+const captionItems = ref<CaptionItem[]>([])   // [{path, caption, status}]
 const captionModel = ref(window.localStorage.getItem('ollamaCaptionModel')
   || window.localStorage.getItem('ollamaModel') || '')
 const captionPrompt = ref(window.localStorage.getItem('captionPrompt')
@@ -403,14 +410,14 @@ function clearCaptionOutDir() { captionOutDir.value = ''; window.localStorage.re
 const captionRunning = ref(false)
 const captionCur = ref(0)
 const captionTotal = ref(0)
-const ollamaModels = ref([])
+const ollamaModels = ref<string[]>([])
 
 const captionUrl = () => window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
 function saveCaptionModel() { window.localStorage.setItem('ollamaCaptionModel', captionModel.value) }
 async function loadCaptionModels() {
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend.ollamaListModels) return
-  backend.ollamaListModels(captionUrl(), (json) => {
+  backend.ollamaListModels(captionUrl(), (json: string) => {
     try {
       const models = JSON.parse(json)
       if (Array.isArray(models)) {
@@ -422,27 +429,27 @@ async function loadCaptionModels() {
 }
 function saveCaptionPrompt() { window.localStorage.setItem('captionPrompt', captionPrompt.value) }
 function clearCaption() { captionItems.value = [] }
-function statusLabel(s) {
-  return { pending: '⏳ 생성 중', done: '✓ 완료', error: '⚠ 실패', skip: '건너뜀' }[s] || ''
+function statusLabel(s: string) {
+  return ({ pending: '⏳ 생성 중', done: '✓ 완료', error: '⚠ 실패', skip: '건너뜀' } as Record<string, string>)[s] || ''
 }
 
-async function loadCaptionFor(item) {
-  const backend = await getBackend()
+async function loadCaptionFor(item: CaptionItem) {
+  const backend: any = await getBackend()
   if (!backend.loadCaption) return
-  backend.loadCaption(item.path, (json) => {
+  backend.loadCaption(item.path, (json: string) => {
     try { const d = JSON.parse(json); if (d.caption) item.caption = d.caption } catch {}
   })
 }
 
-async function captionSingle(item) {
+async function captionSingle(item: CaptionItem) {
   if (!captionModel.value.trim()) { requestAction('show_toast', { type: 'error', msg: '캡션 모델을 입력하세요' }); return }
   item.status = 'pending'
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend.captionImage) { item.status = ''; return }
   backend.captionImage(JSON.stringify({
     path: item.path, prompt: captionPrompt.value, model: captionModel.value,
     url: captionUrl(), save: captionSave.value, outDir: captionOutDir.value,
-  }), (json) => {
+  }), (json: string) => {
     try {
       const d = JSON.parse(json)
       if (d.error) { item.status = 'error'; requestAction('show_toast', { type: 'error', msg: '캡션 실패: ' + d.error }); return }
@@ -456,39 +463,39 @@ async function captionAll() {
   if (!captionModel.value.trim()) { requestAction('show_toast', { type: 'error', msg: '캡션 모델을 입력하세요' }); return }
   captionRunning.value = true; captionCur.value = 0; captionTotal.value = captionItems.value.length
   for (const it of captionItems.value) it.status = ''
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend.startCaptionBatch) { captionRunning.value = false; return }
   backend.startCaptionBatch(JSON.stringify({
     files: captionItems.value.map(i => i.path), prompt: captionPrompt.value,
     model: captionModel.value, url: captionUrl(), save: captionSave.value,
     overwrite: captionOverwrite.value, outDir: captionOutDir.value,
-  }), (json) => {
+  }), (json: string) => {
     try { const d = JSON.parse(json); if (d.error) { requestAction('show_toast', { type: 'error', msg: d.error }); captionRunning.value = false } } catch {}
   })
 }
 
-async function saveCaptionItem(item) {
-  const backend = await getBackend()
+async function saveCaptionItem(item: CaptionItem) {
+  const backend: any = await getBackend()
   if (!backend.saveCaption) return
-  backend.saveCaption(JSON.stringify({ path: item.path, caption: item.caption, outDir: captionOutDir.value }), (json) => {
+  backend.saveCaption(JSON.stringify({ path: item.path, caption: item.caption, outDir: captionOutDir.value }), (json: string) => {
     try { const d = JSON.parse(json); if (d.ok) requestAction('show_toast', { type: 'success', msg: '캡션 저장됨' }) } catch {}
   })
 }
 
 // 캡션을 T2I 메인 프롬프트에 추가하고 T2I 탭으로 이동
-function sendCaptionToT2I(item) {
+function sendCaptionToT2I(item: CaptionItem) {
   const cap = (item.caption || '').trim()
   if (!cap) { requestAction('show_toast', { type: 'warning', msg: '캡션이 비어있습니다' }); return }
-  const cur = (widgets.main_prompt_text || '').trim().replace(/[,\s]+$/, '')
-  widgets.main_prompt_text = cur ? (cur + ', ' + cap) : cap
+  const cur = ((widgets as any).main_prompt_text || '').trim().replace(/[,\s]+$/, '')
+  ;(widgets as any).main_prompt_text = cur ? (cur + ', ' + cap) : cap
   router.push('/')   // T2I 탭 (path '/')
   requestAction('show_toast', { type: 'success', msg: 'T2I 프롬프트에 추가했습니다' })
 }
 
 // ── ADetailer ──
-const adFiles = ref([])
+const adFiles = ref<string[]>([])
 const adModel = ref('face_yolov8n.pt')
-const adModelItems = ref([])
+const adModelItems = ref<string[]>([])
 const adConfidence = ref(0.3)
 const adDenoise = ref(0.4)
 const adPrompt = ref('')
@@ -497,7 +504,7 @@ const adCurrentIdx = ref(-1)
 const adPreview = ref('')
 const adBefore = ref('')
 const adAfter = ref('')
-const adResults = ref({})  // index → true
+const adResults = ref<Record<number, boolean>>({})  // index → true
 const adProcessing = ref(false)
 const adProgressCur = ref(0)
 const adProgressTotal = ref(0)
@@ -518,12 +525,12 @@ const adEtaText = computed(() => {
   return `${Math.floor(sec / 3600)}시 ${Math.floor((sec % 3600) / 60)}분`
 })
 
-function onDropAd(e) {
+function onDropAd(e: DragEvent) {
   const files = Array.from(e.dataTransfer?.files || [])
-  adFiles.value.push(...files.filter(f => f.type.startsWith('image/')).map(f => f.path))
+  adFiles.value.push(...files.filter(f => f.type.startsWith('image/')).map(f => (f as any).path))
 }
 
-function previewAdFile(i) {
+function previewAdFile(i: number) {
   adCurrentIdx.value = i
   adPreview.value = adFiles.value[i]
   adBefore.value = ''
@@ -561,7 +568,7 @@ function runAdBatch() {
 }
 
 // ── SAM3 ──
-const sam3Files = ref([])
+const sam3Files = ref<string[]>([])
 const sam3Prompt = ref('face')
 const sam3InpaintPrompt = ref('')
 const sam3NegativePrompt = ref('')
@@ -578,18 +585,18 @@ const sam3CurrentIdx = ref(-1)
 const sam3Preview = ref('')
 const sam3Before = ref('')
 const sam3After = ref('')
-const sam3Results = ref({})
+const sam3Results = ref<Record<number, boolean>>({})
 const sam3Processing = ref(false)
 const sam3ProgressCur = ref(0)
 const sam3ProgressTotal = ref(0)
 const sam3ProgressPct = computed(() => sam3ProgressTotal.value ? Math.round(sam3ProgressCur.value / sam3ProgressTotal.value * 100) : 0)
 
-function onDropSam3(e) {
+function onDropSam3(e: DragEvent) {
   const files = Array.from(e.dataTransfer?.files || [])
-  sam3Files.value.push(...files.filter(f => f.type.startsWith('image/')).map(f => f.path))
+  sam3Files.value.push(...files.filter(f => f.type.startsWith('image/')).map(f => (f as any).path))
 }
 
-function previewSam3File(i) {
+function previewSam3File(i: number) {
   sam3CurrentIdx.value = i
   sam3Preview.value = sam3Files.value[i]
   sam3Before.value = ''
@@ -638,20 +645,20 @@ function runSam3Batch() {
 }
 
 // 외부에서 이미지 수신 (History/Gallery 우클릭 → "ADetailer 적용")
-defineProps({ initialAdPath: { type: String, default: '' } })
+withDefaults(defineProps<{ initialAdPath?: string }>(), { initialAdPath: '' })
 
 // 캡션 탭을 열 때마다 모델 목록 새로고침
 watch(subTab, (v) => { if (v === 'caption') loadCaptionModels() })
 
 onMounted(async () => {
-  const backend = await getBackend()
+  const backend: any = await getBackend()
 
   // 캡션 모델 드롭다운 — UI 시작 시 자동 새로고침
   loadCaptionModels()
 
   // 업스케일러 로드
   if (backend.getUpscalers) {
-    backend.getUpscalers((json) => {
+    backend.getUpscalers((json: string) => {
       try {
         const list = JSON.parse(json)
         if (list.length) { upscalers.value = list; upscaler.value = list[0] }
@@ -661,7 +668,7 @@ onMounted(async () => {
 
   // AD 모델 로드
   if (backend.getADetailerModels) {
-    backend.getADetailerModels((json) => {
+    backend.getADetailerModels((json: string) => {
       try {
         const models = JSON.parse(json)
         if (models.length) { adModelItems.value = models; adModel.value = models[0] }
@@ -670,7 +677,7 @@ onMounted(async () => {
   }
 
   // 파일 선택 이벤트
-  onBackendEvent('batchFilesSelected', (json) => {
+  onBackendEvent('batchFilesSelected', (json: string) => {
     try {
       const paths = JSON.parse(json)
       if (subTab.value === 'adetailer') {
@@ -686,7 +693,7 @@ onMounted(async () => {
   })
 
   // ADetailer 결과 수신
-  onBackendEvent('adetailerResult', (json) => {
+  onBackendEvent('adetailerResult', (json: string) => {
     try {
       const d = JSON.parse(json)
       if (d.error) {
@@ -716,13 +723,13 @@ onMounted(async () => {
   })
 
   // 배치 진행률
-  onBackendEvent('adetailerProgress', (cur, total) => {
+  onBackendEvent('adetailerProgress', (cur: number, total: number) => {
     adProgressCur.value = cur
     adProgressTotal.value = total
     if (cur >= total) adProcessing.value = false
   })
 
-  onBackendEvent('sam3Result', (json) => {
+  onBackendEvent('sam3Result', (json: string) => {
     try {
       const d = JSON.parse(json)
       if (d.error) {
@@ -743,22 +750,22 @@ onMounted(async () => {
     } catch {}
   })
 
-  onBackendEvent('sam3Progress', (cur, total) => {
+  onBackendEvent('sam3Progress', (cur: number, total: number) => {
     sam3ProgressCur.value = cur
     sam3ProgressTotal.value = total
     if (cur >= total) sam3Processing.value = false
   })
 
   // 캡션 대상 선택 (파일/폴더)
-  onBackendEvent('captionFilesSelected', (json) => {
+  onBackendEvent('captionFilesSelected', (json: string) => {
     try {
       const paths = JSON.parse(json)
-      captionItems.value = paths.map(p => ({ path: p, caption: '', status: '' }))
+      captionItems.value = paths.map((p: string) => ({ path: p, caption: '', status: '' }))
       captionItems.value.forEach(loadCaptionFor)   // 기존 .txt 있으면 불러오기
     } catch {}
   })
   // 캡션 배치 진행
-  onBackendEvent('captionProgress', (json) => {
+  onBackendEvent('captionProgress', (json: string) => {
     try {
       const d = JSON.parse(json)
       captionCur.value = (typeof d.index === 'number' ? d.index : 0) + 1
@@ -770,11 +777,11 @@ onMounted(async () => {
       }
     } catch {}
   })
-  onBackendEvent('captionOutDirSelected', (p) => {
+  onBackendEvent('captionOutDirSelected', (p: string) => {
     captionOutDir.value = p
     window.localStorage.setItem('captionOutDir', p)
   })
-  onBackendEvent('captionDone', (json) => {
+  onBackendEvent('captionDone', (json: string) => {
     captionRunning.value = false
     try { const d = JSON.parse(json); requestAction('show_toast', { type: 'success', msg: `캡션 완료: ${d.ok}/${d.total}${d.failed ? ` (실패 ${d.failed})` : ''}` }) } catch {}
   })

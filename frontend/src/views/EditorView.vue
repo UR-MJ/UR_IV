@@ -134,7 +134,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
@@ -179,14 +179,14 @@ const stampSpacing = ref(30)
 const stampShape = ref('circle')
 const barWidth = ref(40)
 const barHeight = ref(15)
-const canvasRef = ref(null)
-const drawPanelRef = ref(null)
-const selection = ref(null)
+const canvasRef = ref<any>(null)
+const drawPanelRef = ref<any>(null)
+const selection = ref<any>(null)
 const modelLabel = ref('No Model Loaded')
 const detectStatus = ref('')
 
-const undoStack = ref([])
-const redoStack = ref([])
+const undoStack = ref<string[]>([])
+const redoStack = ref<string[]>([])
 
 const tabs = [
   { icon: '🔲', label: '모자이크' },
@@ -203,7 +203,7 @@ const baseName = computed(() => {
   const p = imagePath.value.replace(/\\/g, '/')
   return p.substring(p.lastIndexOf('/') + 1) || imagePath.value
 })
-function _formatSize(bytes) {
+function _formatSize(bytes: number) {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
@@ -222,14 +222,14 @@ watch(activeTab, (v) => {
 })
 
 // 최근 파일 관리 (드롭존용)
-const recentFiles = ref([])
+const recentFiles = ref<string[]>([])
 function _loadRecentFiles() {
   try {
     const saved = JSON.parse(window.localStorage.getItem('editorRecentFiles') || '[]')
     if (Array.isArray(saved)) recentFiles.value = saved.slice(0, 6)
   } catch {}
 }
-function _pushRecentFile(path) {
+function _pushRecentFile(path: string) {
   if (!path) return
   const arr = recentFiles.value.filter(p => p !== path)
   arr.unshift(path)
@@ -237,7 +237,7 @@ function _pushRecentFile(path) {
   window.localStorage.setItem('editorRecentFiles', JSON.stringify(recentFiles.value))
 }
 
-function loadImage(path) {
+function loadImage(path: string) {
   if (!path) return
   undoStack.value = [path]
   redoStack.value = []
@@ -253,13 +253,13 @@ function loadImage(path) {
   _loadFileInfo(path)
 }
 
-async function _loadFileInfo(path) {
+async function _loadFileInfo(path: string) {
   fileFormat.value = ''
   fileSize.value = 0
   try {
-    const backend = await getBackend()
+    const backend: any = await getBackend()
     if (backend.getFileInfo) {
-      backend.getFileInfo(path, (json) => {
+      backend.getFileInfo(path, (json: string) => {
         try {
           const d = JSON.parse(json)
           if (d.size) fileSize.value = d.size
@@ -276,7 +276,7 @@ async function _loadFileInfo(path) {
 
 const MAX_UNDO = 30
 
-function pushState(path, clearMask = true) {
+function pushState(path: string, clearMask = true) {
   undoStack.value.push(path)
   // undo 한도 (MAX_UNDO + 초기 상태 1개)
   while (undoStack.value.length > MAX_UNDO + 1) undoStack.value.shift()
@@ -293,24 +293,24 @@ function pushState(path, clearMask = true) {
 
 function doUndo() {
   if (undoStack.value.length <= 1) return
-  redoStack.value.push(undoStack.value.pop())
+  redoStack.value.push(undoStack.value.pop() as string)
   const path = undoStack.value[undoStack.value.length - 1]
   imagePath.value = path
   imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
 }
 function doRedo() {
   if (redoStack.value.length === 0) return
-  const path = redoStack.value.pop()
+  const path = redoStack.value.pop() as string
   undoStack.value.push(path)
   imagePath.value = path
   imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
 }
 
-async function doOp(operation, params = {}) {
+async function doOp(operation: string, params: any = {}) {
   if (!imagePath.value) return
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
-  backend.editorProcess(cleanPath, operation, JSON.stringify(params), (json) => {
+  backend.editorProcess(cleanPath, operation, JSON.stringify(params), (json: string) => {
     try {
       const result = JSON.parse(json)
       if (result.path) pushState(result.path)
@@ -320,7 +320,7 @@ async function doOp(operation, params = {}) {
 }
 
 // 마스크 기반 효과 적용 (base64 마스크 전송)
-async function doOpWithMask(operation, params = {}) {
+async function doOpWithMask(operation: string, params: any = {}) {
   if (!imagePath.value) return
   const maskB64 = canvasRef.value?.getMaskBase64()
   if (!maskB64) {
@@ -328,10 +328,10 @@ async function doOpWithMask(operation, params = {}) {
     doOp(operation, params)
     return
   }
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
   const fullParams = { ...params, mask_base64: maskB64 }
-  backend.editorProcess(cleanPath, operation, JSON.stringify(fullParams), (json) => {
+  backend.editorProcess(cleanPath, operation, JSON.stringify(fullParams), (json: string) => {
     try {
       const result = JSON.parse(json)
       if (result.path) pushState(result.path)
@@ -340,9 +340,9 @@ async function doOpWithMask(operation, params = {}) {
   })
 }
 
-function onToolChanged(data) {
+function onToolChanged(data: any) {
   const id = typeof data === 'object' ? data.tool : data
-  const toolMap = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser', 4: 'stamp' }
+  const toolMap: Record<string, string> = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser', 4: 'stamp' }
   currentTool.value = toolMap[id] ?? 'box'
   if (typeof data === 'object' && data.size) brushSize.value = data.size
 }
@@ -350,7 +350,7 @@ function onToolChanged(data) {
 // Edge map 캐시 — 같은 이미지에서 magnetic 토글 반복 시 재계산 회피
 // 큰 이미지(4K+)에서 Canny가 200~500ms 걸려 누적되면 체감
 let _edgeMapCache = { path: '', b64: '' }
-async function onMagneticChanged(enabled) {
+async function onMagneticChanged(enabled: boolean) {
   magneticLasso.value = enabled
   if (enabled && imagePath.value) {
     const cleanPath = imagePath.value.replace('file:///', '')
@@ -360,9 +360,9 @@ async function onMagneticChanged(enabled) {
       return
     }
     // 캐시 미스 — Python에서 생성
-    const backend = await getBackend()
+    const backend: any = await getBackend()
     if (backend.getEdgeMap) {
-      backend.getEdgeMap(cleanPath, 50, 150, (b64) => {
+      backend.getEdgeMap(cleanPath, 50, 150, (b64: string) => {
         if (b64) {
           _edgeMapCache = { path: cleanPath, b64 }
           canvasRef.value?.loadEdgeMap(b64)
@@ -374,7 +374,7 @@ async function onMagneticChanged(enabled) {
 // 이미지가 바뀌면 edge cache 무효화
 watch(imagePath, () => { _edgeMapCache = { path: '', b64: '' } })
 
-function onParamsChanged(params) {
+function onParamsChanged(params: any) {
   if (params.toolSize) brushSize.value = params.toolSize
   if (params.stampSpacing) stampSpacing.value = params.stampSpacing
   if (params.stampShape) stampShape.value = params.stampShape
@@ -382,9 +382,9 @@ function onParamsChanged(params) {
   if (params.barH) barHeight.value = params.barH
 }
 
-function applyEffect(effectData) {
+function applyEffect(effectData: any) {
   const sel = canvasRef.value?.getSelection()
-  const effectMap = { 0: 'mosaic', 1: 'censor_bar', 2: 'blur' }
+  const effectMap: Record<string, string> = { 0: 'mosaic', 1: 'censor_bar', 2: 'blur' }
   const op = effectMap[effectData.effect] ?? 'mosaic'
   if (sel) {
     // 마스크 기반 처리
@@ -394,22 +394,22 @@ function applyEffect(effectData) {
 
 async function openModelDialog() {
   // 먼저 자동 감지 새로고침
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.refreshYoloModels) {
-    backend.refreshYoloModels((label) => { if (label) modelLabel.value = label })
+    backend.refreshYoloModels((label: string) => { if (label) modelLabel.value = label })
   }
   // 새 모델 추가도 가능
   requestAction('editor_add_yolo_model')
 }
 function clearModels() { requestAction('editor_clear_yolo_models') }
 
-async function runAutoCensor(params) {
+async function runAutoCensor(params: any) {
   if (!imagePath.value) return
   detectStatus.value = '감지 중...'
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
   const samModel = params?.samModel || 'auto'
-  const payload = {
+  const payload: Record<string, any> = {
     confidence: (params?.confidence || 25) / 100,
     sam_model: samModel,
   }
@@ -417,7 +417,7 @@ async function runAutoCensor(params) {
   if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
     payload.exclude_prompt = String(params.excludePrompt).trim()
   }
-  backend.editorProcess(cleanPath, 'auto_censor', JSON.stringify(payload), (json) => {
+  backend.editorProcess(cleanPath, 'auto_censor', JSON.stringify(payload), (json: string) => {
     try {
       const result = JSON.parse(json)
       if (result.path) { pushState(result.path); detectStatus.value = '완료' }
@@ -426,20 +426,20 @@ async function runAutoCensor(params) {
   })
 }
 
-async function runAutoDetect(params) {
+async function runAutoDetect(params: any) {
   if (!imagePath.value) return
   detectStatus.value = '감지 중...'
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
   const samModel = params?.samModel || 'auto'
-  const payload = {
+  const payload: Record<string, any> = {
     confidence: (params?.confidence || 25) / 100,
     sam_model: samModel,
   }
   if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
     payload.exclude_prompt = String(params.excludePrompt).trim()
   }
-  backend.editorProcess(cleanPath, 'auto_detect', JSON.stringify(payload), (json) => {
+  backend.editorProcess(cleanPath, 'auto_detect', JSON.stringify(payload), (json: string) => {
     try {
       const result = JSON.parse(json)
       if (result.mask_base64) {
@@ -457,24 +457,24 @@ function doCrop() {
   const sel = canvasRef.value?.getSelection()
   if (sel) doOp('crop', { selection: sel })
 }
-function doResize(params) { doOp('resize', params) }
-function applyAdj(adj) { doOp('color_adjust', adj) }
+function doResize(params: any) { doOp('resize', params) }
+function applyAdj(adj: any) { doOp('color_adjust', adj) }
 // previewAdj / previewAdvAdj — 미구현 빈 함수였음. 실시간 프리뷰는 향후 구현 예정 (TODO).
 // resetAdj — ColorPanel 내부에서 자체 reset만 수행하면 됨 (백엔드 호출 불필요).
-function previewAdj(_adj) { /* TODO: 실시간 색감 프리뷰 (마스크 영역만 임시 렌더) */ }
+function previewAdj(_adj: any) { /* TODO: 실시간 색감 프리뷰 (마스크 영역만 임시 렌더) */ }
 function resetAdj() { /* ColorPanel이 자체적으로 처리 — 백엔드 액션 없음 */ }
-function previewAdvAdj(_adj) { /* TODO: Advanced 색감 실시간 프리뷰 */ }
-function applyFilter(filter) { doOp(filter.name || filter.type, filter) }
-function applyAdvAdj(adj) { doOp('adv_color', adj) }
-function applyTextWm(params) { doOp('text_watermark', params) }
-function applyImageWm(params) { doOp('image_watermark', params) }
+function previewAdvAdj(_adj: any) { /* TODO: Advanced 색감 실시간 프리뷰 */ }
+function applyFilter(filter: any) { doOp(filter.name || filter.type, filter) }
+function applyAdvAdj(adj: any) { doOp('adv_color', adj) }
+function applyTextWm(params: any) { doOp('text_watermark', params) }
+function applyImageWm(params: any) { doOp('image_watermark', params) }
 function loadWatermarkImage() { requestAction('editor_load_watermark_image') }
-function onSelectionChanged(sel) { selection.value = sel }
+function onSelectionChanged(sel: any) { selection.value = sel }
 
-function onDrop(e) {
+function onDrop(e: DragEvent) {
   isDragging.value = false
   const file = e.dataTransfer?.files?.[0]
-  if (file?.path) loadImage(file.path.replace(/\\/g, '/'))
+  if (file && (file as any).path) loadImage((file as any).path.replace(/\\/g, '/'))
 }
 
 function openFile() { requestAction('editor_open_file') }
@@ -517,9 +517,9 @@ async function pasteFromClipboard() {
         const blob = await item.getType(imageType)
         const buf = await blob.arrayBuffer()
         const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
-        const backend = await getBackend()
+        const backend: any = await getBackend()
         if (backend.editorPasteImage) {
-          backend.editorPasteImage(b64, imageType, (json) => {
+          backend.editorPasteImage(b64, imageType, (json: string) => {
             try {
               const r = JSON.parse(json)
               if (r.path) {
@@ -535,7 +535,7 @@ async function pasteFromClipboard() {
       }
     }
     requestAction('show_toast', { type: 'info', msg: '클립보드에 이미지가 없습니다' })
-  } catch (e) {
+  } catch (e: any) {
     requestAction('show_toast', { type: 'error', msg: `클립보드 접근 실패: ${e.message || e}` })
   }
 }
@@ -554,9 +554,9 @@ function resetEditor() {
 
 // 앱 시작 시 YOLO 라벨 로드
 async function refreshYoloLabel() {
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.getYoloModelLabel) {
-    backend.getYoloModelLabel((label) => { if (label) modelLabel.value = label })
+    backend.getYoloModelLabel((label: string) => { if (label) modelLabel.value = label })
   }
 }
 
@@ -564,7 +564,7 @@ async function refreshYoloLabel() {
 let _lastCtrlTime = 0
 const CTRL_DOUBLE_TAP_MS = 300
 
-function onEditorKeyDown(e) {
+function onEditorKeyDown(e: KeyboardEvent) {
   // ── Ctrl 단독 두 번 빠르게 → 변환 reset (모자이크/그리기는 유지)
   // (다른 Ctrl 조합은 _lastCtrlTime 갱신 안 함 — Ctrl+Z 등과 충돌 회피)
   if (e.key === 'Control' && !e.altKey && !e.shiftKey) {
@@ -612,7 +612,7 @@ function onEditorKeyDown(e) {
 }
 
 // 자동 저장 — 5분마다 변경 있으면 임시본 기록
-let _autoSaveTimer = null
+let _autoSaveTimer: ReturnType<typeof setInterval> | null = null
 const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000
 // 마지막 자동저장 시각 — 상태바에 "마지막 저장: N분 전" 표시
 const lastAutoSaveAt = ref(0)
@@ -627,13 +627,13 @@ const autoSaveAgoText = computed(() => {
   return `${Math.floor(sec / 3600)}시간 전`
 })
 // 표시 부드럽게 갱신 — 매 분
-let _autoSaveTickTimer = null
+let _autoSaveTickTimer: ReturnType<typeof setInterval> | null = null
 async function _tryAutoSave() {
   if (!isDirty.value || !imagePath.value) return
   try {
-    const backend = await getBackend()
+    const backend: any = await getBackend()
     if (backend.editorAutoSave) {
-      backend.editorAutoSave(imagePath.value.replace('file:///', ''), (json) => {
+      backend.editorAutoSave(imagePath.value.replace('file:///', ''), (json: string) => {
         try {
           const r = JSON.parse(json)
           if (r.path) {
@@ -648,9 +648,9 @@ async function _tryAutoSave() {
 
 async function _checkAutoSaveRecovery() {
   try {
-    const backend = await getBackend()
+    const backend: any = await getBackend()
     if (backend.editorCheckAutoSave) {
-      backend.editorCheckAutoSave((json) => {
+      backend.editorCheckAutoSave((json: string) => {
         try {
           const r = JSON.parse(json)
           if (r.path && r.exists) {
@@ -672,8 +672,8 @@ async function _checkAutoSaveRecovery() {
 }
 
 onMounted(() => {
-  onBackendEvent('editorImageLoaded', (path) => loadImage(path))
-  onBackendEvent('yoloModelUpdated', (label) => { modelLabel.value = label })
+  onBackendEvent('editorImageLoaded', (path: string) => loadImage(path))
+  onBackendEvent('yoloModelUpdated', (label: string) => { modelLabel.value = label })
   // 앱 시작 시 YOLO 모델 자동 감지 + 최근 파일 로드 + 크래시 복구 확인
   refreshYoloLabel()
   _loadRecentFiles()
