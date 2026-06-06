@@ -457,6 +457,17 @@
                 <button class="lora-remove" @click="loraStack.splice(i, 1)">✕</button>
               </div>
               <button class="ext-add-btn" @click="showLoraModal = true">+ ADD LoRA</button>
+              <!-- LoRA 세트 저장/불러오기 -->
+              <div class="lora-sets">
+                <input v-model="loraSetName" class="lora-set-input" placeholder="세트 이름" />
+                <button class="lora-tool-btn" @click="saveLoraSet" :disabled="!loraStack.length || !loraSetName.trim()" title="현재 스택을 세트로 저장">저장</button>
+                <select v-model="loraSetSel" class="lora-set-sel">
+                  <option value="">불러오기…</option>
+                  <option v-for="n in loraSetNames" :key="n" :value="n">{{ n }}</option>
+                </select>
+                <button class="lora-tool-btn" @click="loadLoraSet" :disabled="!loraSetSel" title="선택 세트를 스택에 적용">적용</button>
+                <button class="lora-tool-btn" @click="deleteLoraSet" :disabled="!loraSetSel" title="세트 삭제">✕</button>
+              </div>
             </div>
           </div>
         </aside>
@@ -1286,6 +1297,35 @@ function onLoraAdd(p) {
   addLoraToStack(p.name, typeof p.weight === 'number' ? p.weight : 1.0, p.triggerWords || [])
   addToast('success', `LoRA 추가: ${p.name}`)
 }
+// LoRA 세트 저장/불러오기 (localStorage 'loraSets')
+const loraSets = ref({})
+try { const s = JSON.parse(window.localStorage.getItem('loraSets') || '{}'); if (s && typeof s === 'object') loraSets.value = s } catch {}
+const loraSetName = ref('')
+const loraSetSel = ref('')
+const loraSetNames = computed(() => Object.keys(loraSets.value))
+function _persistLoraSets() { try { window.localStorage.setItem('loraSets', JSON.stringify(loraSets.value)) } catch {} }
+function saveLoraSet() {
+  const name = loraSetName.value.trim()
+  if (!name || !loraStack.length) return
+  loraSets.value = { ...loraSets.value, [name]: loraStack.map(l => ({ ...l })) }
+  _persistLoraSets()
+  loraSetSel.value = name; loraSetName.value = ''
+  addToast('success', `LoRA 세트 저장: ${name} (${loraStack.length}개)`)
+}
+function loadLoraSet() {
+  const set = loraSets.value[loraSetSel.value]
+  if (!Array.isArray(set)) return
+  loraStack.splice(0, loraStack.length, ...set.map(l => ({ ...l })))
+  _saveLoraStack(); syncLoraStack()
+  addToast('success', `세트 적용: ${loraSetSel.value} (${set.length}개)`)
+}
+function deleteLoraSet() {
+  const n = loraSetSel.value
+  if (!n) return
+  const cp = { ...loraSets.value }; delete cp[n]
+  loraSets.value = cp; _persistLoraSets(); loraSetSel.value = ''
+  addToast('info', `세트 삭제: ${n}`)
+}
 
 // History pagination
 const visibleHistory = computed(() => {
@@ -2090,7 +2130,11 @@ onMounted(async () => {
 .lora-remove { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
 .lora-tools { float: right; display: inline-flex; gap: 4px; }
 .lora-tool-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: 9px; font-weight: 700; padding: 2px 7px; cursor: pointer; }
-.lora-tool-btn:hover { color: var(--accent); border-color: var(--accent); }
+.lora-tool-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.lora-tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.lora-sets { display: flex; gap: 4px; margin-top: 6px; align-items: center; }
+.lora-set-input { width: 70px; flex-shrink: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 4px 6px; color: var(--text-primary); font-size: 10px; }
+.lora-set-sel { flex: 1; min-width: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 4px; color: var(--text-primary); font-size: 10px; }
 .ext-add-btn { width: 100%; padding: 8px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; margin-top: 4px; }
 .ext-res-row { display: flex; align-items: center; gap: 6px; }
 .ext-res-row input { text-align: center; flex: 1; }
