@@ -553,6 +553,50 @@ class UpscaleTab(QWidget):
             'output_folder': self.txt_output_folder.text(),
         }
 
+    def _vue_notify(self, kind, msg):
+        mw = getattr(self, 'main_window', None)
+        if mw and hasattr(mw, 'vue_bridge'):
+            try:
+                mw.vue_bridge.showNotification.emit(kind, msg)
+            except Exception:
+                pass
+
+    def start_from_payload(self, payload: dict):
+        """Vue BatchView 업스케일 페이로드로 처리 (files + upscaler + scale).
+        업스케일러/배율은 가능하면 네이티브 컨트롤에 반영, 출력 폴더는 미설정 시 OUTPUT_DIR."""
+        files = [p for p in (payload.get('files') or []) if p]
+        if not files:
+            self._vue_notify('error', '업스케일: 처리할 파일이 없습니다')
+            return
+        self.file_list.clear()
+        for p in files:
+            self._add_file(p)
+        # 업스케일러/배율을 네이티브 컨트롤에 best-effort 반영
+        try:
+            up = payload.get('upscaler')
+            if up and hasattr(self, 'combo_upscaler'):
+                idx = self.combo_upscaler.findText(up)
+                if idx >= 0:
+                    self.combo_upscaler.setCurrentIndex(idx)
+            sc = payload.get('scale')
+            if sc and hasattr(self, 'spin_scale'):
+                self.spin_scale.setValue(float(sc))
+        except Exception:
+            pass
+        # 출력 폴더 기본값
+        try:
+            if not self.txt_output_folder.text().strip():
+                import os as _os
+                from config import OUTPUT_DIR
+                _os.makedirs(OUTPUT_DIR, exist_ok=True)
+                self.txt_output_folder.setText(OUTPUT_DIR)
+        except Exception:
+            pass
+        self._start_processing()
+        if getattr(self, '_worker', None) is not None:
+            self._worker.all_finished.connect(lambda *a: self._vue_notify('success', '업스케일 완료'))
+        self._vue_notify('info', f'업스케일 시작: {len(files)}개')
+
     def _start_processing(self):
         """처리 시작"""
         if self.file_list.count() == 0:

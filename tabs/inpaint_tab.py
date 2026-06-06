@@ -552,12 +552,41 @@ class InpaintTab(QWidget):
         self.cfg_input.setText(str(payload.get('cfg_scale', 7.0)))
         self.seed_input.setText(str(payload.get('seed', -1)))
 
+    def generate_from_payload(self, payload: dict):
+        """Vue InpaintView 페이로드로 생성 (image + mask + 설정)."""
+        img = payload.get('image') or ''
+        if isinstance(img, str) and img.startswith('data:'):
+            img = img.split(',', 1)[-1]
+        if img:
+            self.current_base64 = img
+            if payload.get('image_path'):
+                self.current_image_path = payload['image_path']
+        elif payload.get('image_path') and os.path.exists(payload['image_path']):
+            self._load_image(payload['image_path'])
+        mask = payload.get('mask') or ''
+        if isinstance(mask, str) and mask.startswith('data:'):
+            mask = mask.split(',', 1)[-1]
+        self._vue_mask = mask or None
+        self.prompt_text.setPlainText(payload.get('prompt', '') or '')
+        if payload.get('negative_prompt') is not None:
+            self.neg_prompt_text.setPlainText(payload.get('negative_prompt', '') or '')
+        self.denoise_input.setText(str(payload.get('denoising', 0.75)))
+        if not self.current_base64:
+            if self.main_window and hasattr(self.main_window, 'vue_bridge'):
+                self.main_window.vue_bridge.showNotification.emit('error', 'Inpaint: 입력 이미지가 없습니다')
+            return
+        if not self._vue_mask:
+            if self.main_window and hasattr(self.main_window, 'vue_bridge'):
+                self.main_window.vue_bridge.showNotification.emit('error', 'Inpaint: 마스크를 그려주세요')
+            return
+        self._on_generate()
+
     def _on_generate(self):
         if not self.current_base64:
             QMessageBox.warning(self, "경고", "먼저 이미지를 로드하세요.")
             return
 
-        mask_b64 = self.canvas.get_mask_base64()
+        mask_b64 = getattr(self, '_vue_mask', None) or self.canvas.get_mask_base64()
         if not mask_b64:
             QMessageBox.warning(self, "경고", "마스크를 그려주세요.")
             return
@@ -642,6 +671,7 @@ class InpaintTab(QWidget):
     def _on_generation_finished(self, result, gen_info):
         self.btn_generate.setText("🎨 인페인트 생성")
         self.btn_generate.setEnabled(True)
+        self._vue_mask = None   # Vue 마스크 1회용 — 다음 생성에 재사용 방지
 
         if isinstance(result, bytes):
             pixmap = QPixmap()
@@ -667,6 +697,16 @@ class InpaintTab(QWidget):
 
             if self.main_window and hasattr(self.main_window, 'add_image_to_gallery'):
                 self.main_window.add_image_to_gallery(filepath)
+            if self.main_window and hasattr(self.main_window, 'vue_bridge'):
+                try:
+                    self.main_window.vue_bridge.send_image(
+                        filepath, int(gen_info.get('width', 0) or 0),
+                        int(gen_info.get('height', 0) or 0), gen_info.get('seed', -1))
+                    self.main_window.vue_bridge.showNotification.emit('success', '인페인트 생성 완료')
+                except Exception:
+                    pass
         else:
             self.result_label.setText(f"❌ 실패\n{result}")
             self.info_text.setPlainText(f"오류: {result}")
+            if self.main_window and hasattr(self.main_window, 'vue_bridge'):
+                self.main_window.vue_bridge.showNotification.emit('error', f'인페인트 실패: {result}')

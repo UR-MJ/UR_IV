@@ -230,47 +230,6 @@ class ActionsMixin:
             self.btn_auto_toggle.setStyleSheet("")  # 테마 기본 스타일 복원
             self.btn_generate.setText("이미지 생성")
             
-    def _on_automation_generation_finished(self, result, gen_info):
-        """자동화 생성 완료"""
-        if not hasattr(self, 'auto_gen_count'):
-            self.auto_gen_count = 0
-
-        if isinstance(result, bytes):
-            # 성공 — 재시도 카운터 리셋
-            self._auto_retry_count = 0
-            self.auto_gen_count += 1
-            self._process_new_image(result, gen_info)
-            self.show_status(
-                f"🔄 자동 생성 중... ({self.auto_gen_count}장 완료)"
-            )
-            self._emit_auto_status()
-        else:
-            # PR 3: 실패 시 재시도 로직
-            if not hasattr(self, '_auto_retry_count'):
-                self._auto_retry_count = 0
-            settings = getattr(self, 'auto_settings', {}) or {}
-            max_retries = int(settings.get('max_retries', 0))
-
-            if self._auto_retry_count < max_retries and self.is_automating:
-                self._auto_retry_count += 1
-                # 지수 백오프 (최대 30초)
-                backoff = min(2.0 ** self._auto_retry_count, 30.0)
-                self.show_status(
-                    f"⚠️ 생성 실패 — {backoff:.1f}초 후 재시도 "
-                    f"({self._auto_retry_count}/{max_retries}): {result}"
-                )
-                from PyQt6.QtCore import QTimer
-                QTimer.singleShot(int(backoff * 1000), self._automation_generate)
-                return  # 다음 사이클 진행 안 함 — 재시도가 끝나면 자동 호출됨
-            else:
-                # 재시도 소진 또는 비활성
-                self._auto_retry_count = 0
-                self.show_status(f"⚠️ 생성 실패: {result}")
-
-        # 다음 생성 계속
-        if self.is_automating:
-            self._continue_automation()
-            
     def toggle_random_resolution_editor(self, checked):
         """랜덤 해상도 편집기 토글"""
         if checked:

@@ -306,9 +306,44 @@ class Img2ImgTab(QWidget):
         self.width_input.setText(str(payload.get('width', 1024)))
         self.height_input.setText(str(payload.get('height', 1024)))
 
+    def generate_from_payload(self, payload: dict):
+        """Vue I2IView 페이로드로 생성 (image data-URL/base64/path + 설정 정규화 후 기존 워커 실행)."""
+        img = payload.get('image') or ''
+        if isinstance(img, str) and img.startswith('data:'):
+            img = img.split(',', 1)[-1]
+        if img:
+            self.current_base64 = img
+            if payload.get('image_path'):
+                self.current_image_path = payload['image_path']
+        elif payload.get('image_path') and os.path.exists(payload['image_path']):
+            self._load_image(payload['image_path'])
+        if not self.current_base64:
+            if self.main_window and hasattr(self.main_window, 'vue_bridge'):
+                self.main_window.vue_bridge.showNotification.emit('error', 'I2I: 입력 이미지가 없습니다')
+            return
+        self.prompt_text.setPlainText(payload.get('prompt', '') or '')
+        self.neg_prompt_text.setPlainText(payload.get('negative_prompt', '') or '')
+        self.denoise_input.setText(str(payload.get('denoising', 0.75)))
+        self.steps_input.setText(str(payload.get('steps', 20)))
+        self.cfg_input.setText(str(payload.get('cfg', 7.0)))
+        self.seed_input.setText(str(payload.get('seed', -1)))
+        if payload.get('width'):
+            self.width_input.setText(str(payload['width']))
+        if payload.get('height'):
+            self.height_input.setText(str(payload['height']))
+        try:
+            if 'resize_mode' in payload:
+                self.resize_combo.setCurrentIndex(int(payload['resize_mode']))
+        except Exception:
+            pass
+        self._on_generate()
+
     def _on_generate(self):
         """img2img 생성 시작"""
         if not self.current_base64:
+            if self.main_window and hasattr(self.main_window, 'vue_bridge'):
+                self.main_window.vue_bridge.showNotification.emit('error', 'I2I: 입력 이미지가 없습니다')
+                return
             QMessageBox.warning(self, "경고", "먼저 입력 이미지를 로드하세요.")
             return
 
@@ -413,6 +448,17 @@ class Img2ImgTab(QWidget):
             # 메인 윈도우 갤러리에도 추가
             if self.main_window and hasattr(self.main_window, 'add_image_to_gallery'):
                 self.main_window.add_image_to_gallery(filepath)
+            # Vue 히스토리/갤러리에 결과 전달
+            if self.main_window and hasattr(self.main_window, 'vue_bridge'):
+                try:
+                    self.main_window.vue_bridge.send_image(
+                        filepath, int(gen_info.get('width', 0) or 0),
+                        int(gen_info.get('height', 0) or 0), gen_info.get('seed', -1))
+                    self.main_window.vue_bridge.showNotification.emit('success', 'I2I 생성 완료')
+                except Exception:
+                    pass
         else:
             self.result_label.setText(f"❌ 생성 실패\n\n{result}")
             self.info_text.setPlainText(f"오류: {result}")
+            if self.main_window and hasattr(self.main_window, 'vue_bridge'):
+                self.main_window.vue_bridge.showNotification.emit('error', f'I2I 생성 실패: {result}')

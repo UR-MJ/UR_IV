@@ -431,6 +431,48 @@ class BatchTab(QWidget):
 
         return '', {}
 
+    def _vue_notify(self, kind, msg):
+        mw = getattr(self, 'main_window', None)
+        if mw and hasattr(mw, 'vue_bridge'):
+            try:
+                mw.vue_bridge.showNotification.emit(kind, msg)
+            except Exception:
+                pass
+
+    def start_from_payload(self, payload: dict):
+        """Vue BatchView 페이로드로 배치 실행 (files + operation + settings)."""
+        import os as _os
+        from config import OUTPUT_DIR
+        files = [p for p in (payload.get('files') or []) if p]
+        if not files:
+            self._vue_notify('error', '배치: 처리할 파일이 없습니다')
+            return
+        s = payload.get('settings') or {}
+        op = (payload.get('operation') or 'resize').lower()
+        if op == 'format':
+            fmt = str(s.get('format', 'png')).lower().lstrip('.')
+            operation, config = 'format', {'target_format': '.' + fmt, 'quality': 95}
+        else:
+            operation, config = 'resize', {
+                'mode': 'fixed', 'width': int(s.get('width', 1024)),
+                'height': int(s.get('height', 1024)), 'percent': 100, 'longest': 1024,
+            }
+        out_dir = self._output_dir or OUTPUT_DIR
+        try:
+            _os.makedirs(out_dir, exist_ok=True)
+        except Exception:
+            pass
+        from tabs.editor.batch_worker import BatchWorker
+        self._worker = BatchWorker(files, operation, config, out_dir)
+        self._worker.progress.connect(self._on_progress)
+        self._worker.file_done.connect(self._on_file_done)
+        self._worker.all_done.connect(self._on_all_done)
+        self._worker.error.connect(self._on_error)
+        self._worker.all_done.connect(lambda *a: self._vue_notify('success', f'배치 완료 → {out_dir}'))
+        self._worker.error.connect(lambda e: self._vue_notify('error', f'배치 오류: {e}'))
+        self._worker.start()
+        self._vue_notify('info', f'배치 시작: {len(files)}개')
+
     def _start_batch(self):
         files = self._get_file_list()
         if not files:

@@ -597,21 +597,25 @@ class GeneratorMainUI(
                 except Exception as e:
                     self.vue_bridge.showNotification.emit('error', f'프리셋 로드 실패: {e}')
 
-            # 11. I2I/Inpaint 생성
+            # 11. I2I/Inpaint 생성 (Vue payload를 탭에 주입 후 실행)
             elif action == 'generate_i2i':
                 if hasattr(self, 'i2i_tab'):
-                    self.i2i_tab.start_generation()
+                    self.i2i_tab.main_window = self
+                    self.i2i_tab.generate_from_payload(payload)
             elif action == 'generate_inpaint':
                 if hasattr(self, 'inpaint_tab'):
-                    self.inpaint_tab.start_generation()
+                    self.inpaint_tab.main_window = self
+                    self.inpaint_tab.generate_from_payload(payload)
 
             # 12. 배치/업스케일
             elif action == 'start_batch':
                 if hasattr(self, 'batch_tab'):
-                    self.batch_tab.start_batch()
+                    self.batch_tab.main_window = self
+                    self.batch_tab.start_from_payload(payload)
             elif action == 'start_upscale':
                 if hasattr(self, 'upscale_tab'):
-                    self.upscale_tab.start_upscale()
+                    self.upscale_tab.main_window = self
+                    self.upscale_tab.start_from_payload(payload)
 
             # PNG Info 파일 열기
             elif action == 'open_png_info_file':

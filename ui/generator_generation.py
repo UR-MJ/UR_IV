@@ -447,6 +447,7 @@ class GenerationMixin:
         """)
         
         if isinstance(result, bytes):
+            self._auto_retry_count = 0   # 성공 — 자동화 재시도 카운터 리셋
             self._process_new_image(result, gen_info)
             self.show_status("✅ 이미지 생성 완료!")
 
@@ -502,8 +503,26 @@ class GenerationMixin:
             self.show_status(error_msg, 5000)
             print(f"\n[E020] Generation Failed: {result}")
             if hasattr(self, 'vue_bridge'):
-                self.vue_bridge.showNotification.emit('error', error_msg)
-        
+                # generationError → App.vue가 에러 토스트 + isGenerating(스피너) 리셋
+                # (단일 생성 실패 시 스피너가 안 풀리던 버그 수정)
+                self.vue_bridge.generationError.emit(error_msg)
+            # 자동화 실패 재시도 (max_retries + 지수 백오프) — 라이브 경로에 접목
+            # (기존엔 dead 메서드에만 있어 max_retries가 실제로 동작 안 했음)
+            if self.is_automating:
+                if not hasattr(self, '_auto_retry_count'):
+                    self._auto_retry_count = 0
+                max_retries = int((getattr(self, 'auto_settings', {}) or {}).get('max_retries', 0))
+                if self._auto_retry_count < max_retries:
+                    self._auto_retry_count += 1
+                    backoff = min(2.0 ** self._auto_retry_count, 30.0)
+                    self.show_status(
+                        f"⚠️ 생성 실패 — {backoff:.1f}초 후 재시도 "
+                        f"({self._auto_retry_count}/{max_retries})")
+                    from PyQt6.QtCore import QTimer
+                    QTimer.singleShot(int(backoff * 1000), self._automation_generate)
+                    return   # 큐 진행/다음 사이클 스킵 — 재시도가 이어받음
+                self._auto_retry_count = 0   # 재시도 소진
+
         # 대기열 매니저에 생성 완료 알림
         if hasattr(self, 'queue_manager') and self.queue_manager.is_running:
             self.queue_manager.on_generation_completed(isinstance(result, bytes))

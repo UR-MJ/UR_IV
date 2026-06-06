@@ -489,45 +489,5 @@ class GalleryMixin:
         prompt = parts[0].strip()
         self._apply_filtered_prompt(prompt)
             
-    def _apply_removal_filters(self, tags: list) -> list:
-        """제거 토글에 따라 태그 필터링"""
-        filtered = []
-
-        for tag in tags:
-            tag_lower = tag.lower().strip()
-
-            if self.chk_remove_artist.isChecked():
-                if tag_lower.startswith('artist:') or tag_lower in self._get_known_artists():
-                    continue
-
-            if self.chk_remove_copyright.isChecked():
-                if self.tag_classifier.classify_tag(tag) == "copyright":
-                    continue
-
-            if hasattr(self, 'chk_remove_character') and self.chk_remove_character.isChecked():
-                if tag_lower in self.tag_classifier.characters:
-                    continue
-
-            if self.chk_remove_meta.isChecked():
-                if self.tag_classifier.is_meta_tag(tag):
-                    continue
-
-            if hasattr(self, 'chk_remove_censorship') and self.chk_remove_censorship.isChecked():
-                if self.tag_classifier.is_censorship_tag(tag):
-                    continue
-
-            if hasattr(self, 'chk_remove_text') and self.chk_remove_text.isChecked():
-                if self.tag_classifier.is_text_tag(tag):
-                    continue
-
-            filtered.append(tag)
-
-        return filtered
-
-    def _get_known_artists(self) -> set:
-        """알려진 작가 목록 반환"""
-        current_artist = self.artist_input.toPlainText().strip().lower()
-        artists = set()
-        if current_artist:
-            artists.add(current_artist)
-        return artists
+# (_apply_removal_filters / _get_known_artists 제거됨 — MRO상 GeneratorBase 버전에
+#  가려져 호출되지 않는 죽은 코드였음. 실제 필터링은 GeneratorBase._apply_removal_filters 사용.)
