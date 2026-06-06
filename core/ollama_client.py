@@ -259,6 +259,10 @@ def _is_meta_sentence(s: str) -> bool:
             r"\bcapital (?:start|letter)\b|starts? with a capital\b|"
             r"isn'?t exactly a name\b|not exactly a name\b|no specific character\b|"
             r"identif(?:y|ies|ied) the character\b|i'?ll treat\b|i will treat\b|"
+            # 캐릭터를 어떻게 지칭할지 설명하는 메타
+            r"no name (?:in|was|is)\b|there (?:is|are|'?s) no name\b|without a name\b|"
+            r"refer to (?:him|her|them|it|the (?:character|subject|man|woman|person)|this (?:character|man|woman|person)) as\b|"
+            r"i(?:'?ll| will) (?:refer to|call|name|treat|describe|use)\b|i(?:'?m| am) going to\b|"
             r"(?:^|\s)(?:no\s+)?(?:commas?|pronouns?|capital)\s*\?"
             r")"
         )
