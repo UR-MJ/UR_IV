@@ -906,6 +906,27 @@ class GeneratorMainUI(
                     self.vue_bridge.batchFilesSelected.emit(json.dumps(file_list))
                     self.show_status(f"{len(file_list)} files selected.")
 
+            # ═══════ 캡션 대상 선택 (다중 파일 + 폴더) ═══════
+            elif action == 'caption_pick_files':
+                paths, _ = QFileDialog.getOpenFileNames(self, "캡션할 이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)")
+                if paths:
+                    self.vue_bridge.captionFilesSelected.emit(
+                        json.dumps([p.replace('\\', '/') for p in paths]))
+            elif action == 'caption_pick_folder':
+                folder = QFileDialog.getExistingDirectory(self, "캡션할 폴더 선택")
+                if folder:
+                    import glob
+                    imgs = []
+                    for ext in ('*.png', '*.jpg', '*.jpeg', '*.webp', '*.bmp'):
+                        imgs.extend(glob.glob(os.path.join(folder, ext)))
+                        imgs.extend(glob.glob(os.path.join(folder, ext.upper())))
+                    imgs = sorted(set(p.replace('\\', '/') for p in imgs))
+                    if imgs:
+                        self.vue_bridge.captionFilesSelected.emit(json.dumps(imgs))
+                        self.vue_bridge.showNotification.emit('info', f'{len(imgs)}개 이미지 발견')
+                    else:
+                        self.vue_bridge.showNotification.emit('warning', '이미지가 없습니다')
+
             # ═══════ 클립보드 복사 ═══════
             elif action == 'copy_to_clipboard':
                 path = payload.get('path', '')

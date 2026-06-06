@@ -237,6 +237,33 @@ class OllamaClient:
         except Exception as e:
             raise RuntimeError(f"Ollama 오류: {e}")
 
+    def caption_image(self, image_path: str, prompt: str = '', timeout: int = 180) -> str:
+        """비전 모델(qwen2-vl 등)로 이미지 캡션 생성. self.model 이 비전 모델이어야 함."""
+        import base64
+        import re
+        with open(image_path, 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode('utf-8')
+        payload = {
+            "model": self.model,
+            "prompt": prompt or "Describe this image in detail.",
+            "images": [b64],
+            "stream": False,
+            "options": {"temperature": 0.2, "num_predict": 512},
+        }
+        try:
+            r = requests.post(f"{self.base_url}/api/generate", json=payload, timeout=timeout)
+            r.raise_for_status()
+            text = (r.json().get('response', '') or '').strip()
+            text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+            text = re.sub(r'<\|[^|>]*\|>', '', text).strip()
+            return text
+        except requests.ConnectionError:
+            raise ConnectionError("Ollama 서버에 연결할 수 없습니다.")
+        except requests.Timeout:
+            raise TimeoutError(f"캡션 응답 시간 초과 ({timeout}초)")
+        except Exception as e:
+            raise RuntimeError(f"캡션 오류: {e}")
+
     def unload(self) -> bool:
         """모델을 VRAM에서 즉시 언로드 (keep_alive=0). best-effort."""
         try:

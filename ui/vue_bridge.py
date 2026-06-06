@@ -22,6 +22,9 @@ class VueBridge(QObject):
     generationError = pyqtSignal(str)
 
     editorImageLoaded = pyqtSignal(str)   # file path
+    captionFilesSelected = pyqtSignal(str)  # JSON [path] — 캡션 대상 이미지
+    captionProgress = pyqtSignal(str)       # JSON {index,total,path,caption,error}
+    captionDone = pyqtSignal(str)           # JSON {total,ok,failed}
     i2iImageLoaded = pyqtSignal(str)     # file path
     galleryFolderLoaded = pyqtSignal(str)  # folder path
     inpaintImageLoaded = pyqtSignal(str)   # file path (PngInfo + InpaintView 공용)
@@ -2011,6 +2014,117 @@ class VueBridge(QObject):
             return json.dumps({'combinations': result, 'count': len(result)})
         except Exception as e:
             return json.dumps({'error': str(e)})
+
+    # ── 이미지 캡션 (Ollama 비전 모델, taggui 방식 .txt 사이드카) ──
+    @pyqtSlot(str, result=str)
+    def captionImage(self, payload_json: str) -> str:
+        """단일 이미지 캡션. payload {path, prompt, model, url, save}. → {caption, txtPath, saved}."""
+        try:
+            import os
+            from core.ollama_client import OllamaClient
+            p = json.loads(payload_json) if payload_json else {}
+            path = p.get('path', '')
+            if not path or not os.path.exists(path):
+                return json.dumps({"error": "이미지 경로 없음"})
+            model = (p.get('model') or '').strip()
+            if not model:
+                return json.dumps({"error": "캡션 모델을 지정하세요"})
+            url = p.get('url') or 'http://localhost:11434'
+            cap = OllamaClient(url, model).caption_image(path, p.get('prompt', ''))
+            txt = os.path.splitext(path)[0] + '.txt'
+            saved = False
+            if p.get('save', True):
+                with open(txt, 'w', encoding='utf-8') as f:
+                    f.write(cap)
+                saved = True
+            return json.dumps({"caption": cap, "txtPath": txt.replace('\\', '/'), "saved": saved},
+                              ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def startCaptionBatch(self, payload_json: str) -> str:
+        """여러 이미지 일괄 캡션 (백그라운드 스레드). payload {files,prompt,model,url,save,overwrite}.
+        진행 상황은 captionProgress 시그널, 완료는 captionDone 시그널로 통지."""
+        try:
+            import os
+            import threading
+            from core.ollama_client import OllamaClient
+            p = json.loads(payload_json) if payload_json else {}
+            files = [f for f in (p.get('files') or []) if f and os.path.exists(f)]
+            if not files:
+                return json.dumps({"error": "대상 이미지 없음"})
+            model = (p.get('model') or '').strip()
+            if not model:
+                return json.dumps({"error": "캡션 모델을 지정하세요"})
+            url = p.get('url') or 'http://localhost:11434'
+            prompt = p.get('prompt', '')
+            save = bool(p.get('save', True))
+            overwrite = bool(p.get('overwrite', False))
+
+            def _emit(d):
+                self.captionProgress.emit(json.dumps(d, ensure_ascii=False))
+
+            def _run():
+                client = OllamaClient(url, model)
+                total, ok, failed = len(files), 0, 0
+                for i, path in enumerate(files):
+                    txt = os.path.splitext(path)[0] + '.txt'
+                    pn = path.replace('\\', '/')
+                    if save and not overwrite and os.path.exists(txt):
+                        try:
+                            with open(txt, encoding='utf-8') as f:
+                                existing = f.read().strip()
+                        except Exception:
+                            existing = ''
+                        ok += 1
+                        _emit({"index": i, "total": total, "path": pn, "caption": existing, "skipped": True})
+                        continue
+                    try:
+                        cap = client.caption_image(path, prompt)
+                        if save:
+                            with open(txt, 'w', encoding='utf-8') as f:
+                                f.write(cap)
+                        ok += 1
+                        _emit({"index": i, "total": total, "path": pn, "caption": cap})
+                    except Exception as e:
+                        failed += 1
+                        _emit({"index": i, "total": total, "path": pn, "error": str(e)})
+                self.captionDone.emit(json.dumps({"total": total, "ok": ok, "failed": failed}))
+
+            threading.Thread(target=_run, daemon=True).start()
+            return json.dumps({"started": True, "total": len(files)})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def loadCaption(self, path: str) -> str:
+        """이미지 옆 .txt 사이드카 캡션 읽기 → {caption}."""
+        try:
+            import os
+            txt = os.path.splitext(path)[0] + '.txt'
+            if os.path.exists(txt):
+                with open(txt, encoding='utf-8') as f:
+                    return json.dumps({"caption": f.read().strip()}, ensure_ascii=False)
+            return json.dumps({"caption": ""})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
+    def saveCaption(self, payload_json: str) -> str:
+        """캡션을 .txt 사이드카로 저장. payload {path, caption}. → {ok, txtPath}."""
+        try:
+            import os
+            p = json.loads(payload_json) if payload_json else {}
+            path = p.get('path', '')
+            if not path:
+                return json.dumps({"error": "경로 없음"})
+            txt = os.path.splitext(path)[0] + '.txt'
+            with open(txt, 'w', encoding='utf-8') as f:
+                f.write(p.get('caption', '') or '')
+            return json.dumps({"ok": True, "txtPath": txt.replace('\\', '/')}, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
 
     @pyqtSlot(str, result=str)
     def getImageExif(self, filepath: str) -> str:

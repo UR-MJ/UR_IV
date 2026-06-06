@@ -6,6 +6,7 @@
       <button class="sub-tab" :class="{ active: subTab === 'upscale' }" @click="subTab = 'upscale'">UPSCALE</button>
       <button class="sub-tab" :class="{ active: subTab === 'adetailer' }" @click="subTab = 'adetailer'">ADETAILER</button>
       <button class="sub-tab" :class="{ active: subTab === 'sam3' }" @click="subTab = 'sam3'">SAM3</button>
+      <button class="sub-tab" :class="{ active: subTab === 'caption' }" @click="subTab = 'caption'">CAPTION</button>
     </div>
 
     <!-- Batch 탭 — 듀얼 패널 (좌측 설정 / 우측 썸네일 그리드) -->
@@ -277,6 +278,53 @@
         </div>
       </div>
     </div>
+
+    <!-- CAPTION 탭 — Ollama 비전 모델 캡션 (taggui 방식 .txt 사이드카) -->
+    <div v-if="subTab === 'caption'" class="tab-body ad-layout">
+      <div class="ad-settings">
+        <h3>IMAGE CAPTION</h3>
+        <label class="s-label">캡션 모델 (Ollama 비전)</label>
+        <input class="s-input" v-model="captionModel" @change="saveCaptionModel" placeholder="예: qwen2.5vl:7b" />
+        <label class="s-label">프롬프트</label>
+        <textarea class="s-textarea" v-model="captionPrompt" @change="saveCaptionPrompt" rows="4"></textarea>
+        <div class="cap-opts">
+          <label><input type="checkbox" v-model="captionSave" /> .txt 저장</label>
+          <label><input type="checkbox" v-model="captionOverwrite" /> 기존 덮어쓰기</label>
+        </div>
+        <div class="cap-pick">
+          <button class="link-btn" @click="action('caption_pick_files')">📄 파일 선택</button>
+          <button class="link-btn" @click="action('caption_pick_folder')">📁 폴더 선택</button>
+        </div>
+        <div class="file-count" v-if="captionItems.length">{{ captionItems.length }}개 이미지</div>
+        <button class="btn-start" @click="captionAll" :disabled="!captionItems.length || captionRunning">
+          {{ captionRunning ? `캡션 중... ${captionCur}/${captionTotal}` : `전체 캡션 (${captionItems.length})` }}
+        </button>
+        <button v-if="captionItems.length" class="link-btn cap-clear" @click="clearCaption">목록 비우기</button>
+      </div>
+      <div class="ad-compare">
+        <div v-if="!captionItems.length" class="grid-empty">
+          <div class="grid-empty-ico">🏷️</div>
+          <div class="grid-empty-title">파일 또는 폴더를 선택하세요</div>
+          <div class="grid-empty-sub">Ollama 비전 모델로 캡션을 만들고 이미지 옆에 .txt로 저장합니다</div>
+        </div>
+        <div v-else class="cap-list">
+          <div v-for="it in captionItems" :key="it.path" class="cap-item">
+            <img :src="'file:///' + it.path" loading="lazy" class="cap-thumb" />
+            <div class="cap-body">
+              <div class="cap-name" :title="it.path">
+                {{ basename(it.path) }}
+                <span class="cap-status" :class="it.status">{{ statusLabel(it.status) }}</span>
+              </div>
+              <textarea class="cap-text" v-model="it.caption" placeholder="캡션 (편집 가능)..." rows="3"></textarea>
+              <div class="cap-actions">
+                <button class="cap-btn" @click="captionSingle(it)" :disabled="captionRunning">🏷 캡션</button>
+                <button class="cap-btn" @click="saveCaptionItem(it)">💾 저장</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -324,6 +372,74 @@ function startUpscale() {
     files: upscaleFiles.value,
     upscaler: upscaler.value,
     scale: scaleFactor.value,
+  })
+}
+
+// ── Caption (Ollama 비전 모델, taggui 방식 .txt 사이드카) ──
+const captionItems = ref([])   // [{path, caption, status}]
+const captionModel = ref(window.localStorage.getItem('ollamaCaptionModel')
+  || window.localStorage.getItem('ollamaModel') || '')
+const captionPrompt = ref(window.localStorage.getItem('captionPrompt')
+  || 'Describe this image in detail, naming the main subject and listing appearance, clothing, pose, and background.')
+const captionSave = ref(true)
+const captionOverwrite = ref(false)
+const captionRunning = ref(false)
+const captionCur = ref(0)
+const captionTotal = ref(0)
+
+const captionUrl = () => window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
+function saveCaptionModel() { window.localStorage.setItem('ollamaCaptionModel', captionModel.value) }
+function saveCaptionPrompt() { window.localStorage.setItem('captionPrompt', captionPrompt.value) }
+function clearCaption() { captionItems.value = [] }
+function statusLabel(s) {
+  return { pending: '⏳ 생성 중', done: '✓ 완료', error: '⚠ 실패', skip: '건너뜀' }[s] || ''
+}
+
+async function loadCaptionFor(item) {
+  const backend = await getBackend()
+  if (!backend.loadCaption) return
+  backend.loadCaption(item.path, (json) => {
+    try { const d = JSON.parse(json); if (d.caption) item.caption = d.caption } catch {}
+  })
+}
+
+async function captionSingle(item) {
+  if (!captionModel.value.trim()) { requestAction('show_toast', { type: 'error', msg: '캡션 모델을 입력하세요' }); return }
+  item.status = 'pending'
+  const backend = await getBackend()
+  if (!backend.captionImage) { item.status = ''; return }
+  backend.captionImage(JSON.stringify({
+    path: item.path, prompt: captionPrompt.value, model: captionModel.value,
+    url: captionUrl(), save: captionSave.value,
+  }), (json) => {
+    try {
+      const d = JSON.parse(json)
+      if (d.error) { item.status = 'error'; requestAction('show_toast', { type: 'error', msg: '캡션 실패: ' + d.error }); return }
+      item.caption = d.caption; item.status = 'done'
+    } catch { item.status = 'error' }
+  })
+}
+
+async function captionAll() {
+  if (!captionItems.value.length) return
+  if (!captionModel.value.trim()) { requestAction('show_toast', { type: 'error', msg: '캡션 모델을 입력하세요' }); return }
+  captionRunning.value = true; captionCur.value = 0; captionTotal.value = captionItems.value.length
+  for (const it of captionItems.value) it.status = ''
+  const backend = await getBackend()
+  if (!backend.startCaptionBatch) { captionRunning.value = false; return }
+  backend.startCaptionBatch(JSON.stringify({
+    files: captionItems.value.map(i => i.path), prompt: captionPrompt.value,
+    model: captionModel.value, url: captionUrl(), save: captionSave.value, overwrite: captionOverwrite.value,
+  }), (json) => {
+    try { const d = JSON.parse(json); if (d.error) { requestAction('show_toast', { type: 'error', msg: d.error }); captionRunning.value = false } } catch {}
+  })
+}
+
+async function saveCaptionItem(item) {
+  const backend = await getBackend()
+  if (!backend.saveCaption) return
+  backend.saveCaption(JSON.stringify({ path: item.path, caption: item.caption }), (json) => {
+    try { const d = JSON.parse(json); if (d.ok) requestAction('show_toast', { type: 'success', msg: '캡션 저장됨' }) } catch {}
   })
 }
 
@@ -584,6 +700,32 @@ onMounted(async () => {
     sam3ProgressTotal.value = total
     if (cur >= total) sam3Processing.value = false
   })
+
+  // 캡션 대상 선택 (파일/폴더)
+  onBackendEvent('captionFilesSelected', (json) => {
+    try {
+      const paths = JSON.parse(json)
+      captionItems.value = paths.map(p => ({ path: p, caption: '', status: '' }))
+      captionItems.value.forEach(loadCaptionFor)   // 기존 .txt 있으면 불러오기
+    } catch {}
+  })
+  // 캡션 배치 진행
+  onBackendEvent('captionProgress', (json) => {
+    try {
+      const d = JSON.parse(json)
+      captionCur.value = (typeof d.index === 'number' ? d.index : 0) + 1
+      captionTotal.value = d.total || captionTotal.value
+      const it = captionItems.value.find(i => i.path === d.path)
+      if (it) {
+        if (d.error) it.status = 'error'
+        else { it.caption = d.caption || it.caption; it.status = d.skipped ? 'skip' : 'done' }
+      }
+    } catch {}
+  })
+  onBackendEvent('captionDone', (json) => {
+    captionRunning.value = false
+    try { const d = JSON.parse(json); requestAction('show_toast', { type: 'success', msg: `캡션 완료: ${d.ok}/${d.total}${d.failed ? ` (실패 ${d.failed})` : ''}` }) } catch {}
+  })
 })
 </script>
 
@@ -596,6 +738,30 @@ onMounted(async () => {
   letter-spacing: 1px;
 }
 .sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* CAPTION 탭 */
+.s-textarea { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.4; }
+.s-textarea:focus { outline: none; border-color: var(--accent); }
+.cap-opts { display: flex; gap: 14px; margin: 8px 0; }
+.cap-opts label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
+.cap-pick { display: flex; gap: 8px; margin-top: 6px; }
+.cap-clear { margin-top: 8px; align-self: flex-start; }
+.cap-list { display: flex; flex-direction: column; gap: 10px; padding: 4px; }
+.cap-item { display: flex; gap: 10px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.cap-thumb { width: 110px; height: 110px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: var(--bg-input); }
+.cap-body { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cap-name { font-size: 11px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-status { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 7px; flex-shrink: 0; }
+.cap-status.pending { background: rgba(251,191,36,0.18); color: #fbbf24; }
+.cap-status.done { background: rgba(74,222,128,0.18); color: #4ade80; }
+.cap-status.error { background: rgba(248,113,113,0.18); color: #f87171; }
+.cap-status.skip { background: var(--bg-button); color: var(--text-muted); }
+.cap-text { flex: 1; min-height: 56px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.45; }
+.cap-text:focus { outline: none; border-color: var(--accent); }
+.cap-actions { display: flex; gap: 6px; }
+.cap-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: 10px; font-weight: 700; padding: 4px 10px; cursor: pointer; }
+.cap-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.cap-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tab-body { flex: 1; overflow-y: auto; padding: 20px; }
 
 .panel { max-width: 500px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
