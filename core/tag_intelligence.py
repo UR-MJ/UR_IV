@@ -58,6 +58,7 @@ class TagIntelligence:
         self._regions: dict[str, str] = {}      # norm 의류태그 → REGION 키
         self._region_order: list[str] = []      # region 표시 순서
         self._copyright: dict[str, str] = {}    # norm 캐릭터/별칭 → 시리즈(copyright)
+        self._copyright_vals = None              # copyright 값 집합(지연 생성)
         self._expression: set[str] = set()
         self._location: set[str] = set()
         self._pose: set[str] = set()
@@ -320,6 +321,18 @@ class TagIntelligence:
         """캐릭터명/별칭 → 대표 copyright(시리즈) 태그. 없으면 ''."""
         self._ensure()
         return self._copyright.get(_norm(character), "")
+
+    def is_character(self, tag: str) -> bool:
+        """characterization.json(34k)에 등록된 캐릭터 태그인지 (wiki 분류기 보강용)."""
+        self._ensure()
+        return _norm(tag) in self._copyright
+
+    def is_copyright(self, tag: str) -> bool:
+        """알려진 copyright(시리즈) 태그인지."""
+        self._ensure()
+        if self._copyright_vals is None:
+            self._copyright_vals = set(self._copyright.values())
+        return _norm(tag) in self._copyright_vals
 
     # ── ⑤ 카테고리 판별 ──
     def is_expression(self, tag: str) -> bool:

@@ -726,6 +726,28 @@ class ActionsMixin:
         else:
             tokens = [t.strip().replace('_', ' ') for t in raw.split() if t.strip()]
         classified = self.tag_classifier.classify_tags_for_event(tokens)
+        # 분류 보강: wiki 분류기(265k)가 못 잡은 캐릭터/작품을 저장된 캐릭터 프리셋 +
+        # tag_intelligence(characterization.json 34k)로 재분류 → general(main) 누수 방지
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            from utils.character_presets import list_character_presets
+            ti = get_tag_intelligence()
+            saved = set(list_character_presets() or [])
+
+            def _n(t):
+                return t.strip().lower().replace("_", " ").replace(r"\(", "(").replace(r"\)", ")")
+            leftover = []
+            for t in classified.get("general", []):
+                n = _n(t)
+                if n in saved or ti.is_character(t):
+                    classified["character"].append(t)
+                elif ti.is_copyright(t):
+                    classified["copyright"].append(t)
+                else:
+                    leftover.append(t)
+            classified["general"] = leftover
+        except Exception:
+            pass
         bundle = {
             # count(인물수)를 general 앞에 포함 → apply_prompt_from_data가 인물수
             # 섹션(char_count_input)으로 분리. (과거엔 count를 빼서 1girl/2boys 등이

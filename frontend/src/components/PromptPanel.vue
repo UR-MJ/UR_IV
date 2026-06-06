@@ -526,8 +526,10 @@ function toggleException(tag) {
 // 최종 프롬프트 블록 변경 시 → 원본 필드에서 태그 제거
 function onTotalBlockChange(newVal) {
   const newTags = new Set(newVal.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))
-  // 각 필드에서 없어진 태그 제거
-  for (const key of ['main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text']) {
+  // 각 필드에서 없어진 태그 제거 (인물수/캐릭터/작품/작가 섹션도 포함 —
+  // FINAL에서 1boy 등을 지워도 인물수 칸에 남던 버그 수정)
+  for (const key of ['char_count_input', 'character_input', 'copyright_input', 'artist_input',
+                     'main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text']) {
     const cur = widgets[key] || ''
     const filtered = cur.split(',').map(t => t.trim()).filter(t => {
       return t && newTags.has(t.toLowerCase())
