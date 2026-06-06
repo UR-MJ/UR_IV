@@ -74,19 +74,32 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
+import { getBackend } from '../bridge.js'
+
+interface Axis {
+  name: string
+  type: string
+  values: string
+}
+
+interface ResultImage {
+  path: string
+  label: string
+  [k: string]: any
+}
 
 const axisOptions = ['Prompt S/R', 'Negative S/R', 'Steps', 'CFG Scale', 'Sampler', 'Scheduler', 'Seed', 'Width', 'Height', 'Denoising']
 
-const axes = reactive([
+const axes = reactive<Axis[]>([
   { name: 'X', type: '', values: '' },
   { name: 'Y', type: '', values: '' },
   { name: 'Z', type: '', values: '' },
 ])
-const resultImages = ref([])
+const resultImages = ref<ResultImage[]>([])
 
 const comboCount = computed(() => {
   let count = 1
@@ -99,11 +112,11 @@ const comboCount = computed(() => {
   return axes.some(a => a.type && a.values.trim()) ? count : 0
 })
 
-function parseValues(str) {
+function parseValues(str: string): string[] {
   const s = str.trim()
   const m = s.match(/^(\d+)-(\d+):(\d+)$/)
   if (m) {
-    const vals = []
+    const vals: string[] = []
     for (let v = parseInt(m[1]); v <= parseInt(m[2]); v += parseInt(m[3])) vals.push(String(v))
     return vals
   }
@@ -115,9 +128,9 @@ async function startPlot() {
     type: a.type, values: parseValues(a.values),
   }))
   // 조합 생성
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.generateXYZCombinations) {
-    backend.generateXYZCombinations(JSON.stringify(axisData), (json) => {
+    backend.generateXYZCombinations(JSON.stringify(axisData), (json: string) => {
       try {
         const data = JSON.parse(json)
         if (data.combinations) {
@@ -129,13 +142,11 @@ async function startPlot() {
   }
 }
 
-import { getBackend } from '../bridge.js'
-
 // CSV 내보내기 — 결과 이미지 + 축 메타데이터 (라벨에서 축값 파싱)
 function exportCSV() {
   if (!resultImages.value.length) return
   // CSV escape
-  const esc = (v) => {
+  const esc = (v: any) => {
     const s = String(v ?? '')
     if (s.includes(',') || s.includes('"') || s.includes('\n')) {
       return '"' + s.replace(/"/g, '""') + '"'
@@ -148,9 +159,9 @@ function exportCSV() {
   const lines = [headers.map(esc).join(',')]
   resultImages.value.forEach((img, i) => {
     // 라벨은 보통 "축타입=값, ..." 형식 — 파싱 시도
-    const axisValues = {}
+    const axisValues: Record<string, string> = {}
     if (img.label) {
-      img.label.split(/\s*[,;]\s*/).forEach(part => {
+      img.label.split(/\s*[,;]\s*/).forEach((part: string) => {
         const [k, ...vparts] = part.split('=')
         if (k && vparts.length) axisValues[k.trim()] = vparts.join('=').trim()
       })

@@ -149,12 +149,22 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
-const images = ref([])
+interface ViewerData {
+  filename?: string
+  path?: string
+  size?: string
+  prompt?: string
+  negative?: string
+  raw?: string
+  [k: string]: any
+}
+
+const images = ref<string[]>([])
 const visibleCount = ref(40)
 
 // 썸네일 크기 — localStorage 영속 (gallery와 공유)
@@ -164,14 +174,14 @@ watch(thumbSize, (v) => window.localStorage.setItem('gallery_thumb_size', String
 // ── 썸네일 캐싱 (백그라운드 생성 + thumbnailReady 시그널) ──
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
 const THUMB_W = 384
-const thumbCache = reactive({})
-const _thumbRequested = new Set()
-let _thumbOff = null
-async function requestThumbs(list) {
+const thumbCache = reactive<Record<string, string>>({})
+const _thumbRequested = new Set<string>()
+let _thumbOff: (() => void) | null = null
+async function requestThumbs(list: string[]) {
   const need = list.filter(p => !_thumbRequested.has(p))
   if (!need.length) return
   need.forEach(p => _thumbRequested.add(p))
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.generateThumbnails) backend.generateThumbnails(JSON.stringify(need), THUMB_W)
 }
 
@@ -179,8 +189,8 @@ async function requestThumbs(list) {
 const exifSearch = ref('')
 const exifFiltered = ref(false)
 const exifSearching = ref(false)
-const filteredImages = ref([])
-const exifCache = ref({})
+const filteredImages = ref<string[]>([])
+const exifCache = ref<Record<string, string>>({})
 
 const displayImages = computed(() => {
   const source = exifFiltered.value ? filteredImages.value : images.value
@@ -199,18 +209,18 @@ const sidebarParams = computed(() => {
   const m = exifData.value.raw.match(/Steps:.*$/m); return m ? m[0] : ''
 })
 // 이전 Favorites 방식: 중앙 모달 뷰어
-const viewerData = ref(null)
+const viewerData = ref<ViewerData | null>(null)
 const viewerParams = computed(() => {
   if (!viewerData.value?.raw) return ''
   const m = viewerData.value.raw.match(/Steps:.*$/m); return m ? m[0] : ''
 })
 
-const galleryContentRef = ref(null)
+const galleryContentRef = ref<HTMLElement | null>(null)
 const sortBy = ref('date')
 const sortOptions = [{ label: 'DATE', val: 'date' }, { label: 'NAME', val: 'name' }]
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
-const exifData = ref(null)
-const largeView = ref(null)
+const exifData = ref<any>(null)
+const largeView = ref<any>(null)
 const showMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
 const _showMetaTimer = setInterval(() => {
   const v = window.localStorage.getItem('galleryShowMetadata') !== 'false'
@@ -226,9 +236,9 @@ const ctxMenuStyle = computed(() => {
 })
 
 async function loadFavorites() {
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.getFavorites) {
-    backend.getFavorites((json) => {
+    backend.getFavorites((json: string) => {
       try {
         const list = JSON.parse(json)
         images.value = Array.isArray(list) ? list : []
@@ -240,14 +250,14 @@ async function loadFavorites() {
 
 function sortImages() {
   if (sortBy.value === 'name') {
-    images.value = [...images.value].sort((a, b) => a.split('/').pop().localeCompare(b.split('/').pop()))
+    images.value = [...images.value].sort((a, b) => (a.split('/').pop() || '').localeCompare(b.split('/').pop() || ''))
   } else {
     loadFavorites()
   }
 }
 
-function onGalleryScroll(e) {
-  const el = e.target
+function onGalleryScroll(e: Event) {
+  const el = e.target as HTMLElement
   const total = exifFiltered.value ? filteredImages.value.length : images.value.length
   if (el.scrollHeight - el.scrollTop - el.clientHeight < 200 && visibleCount.value < total) {
     visibleCount.value = Math.min(visibleCount.value + 30, total)
@@ -258,14 +268,14 @@ async function runExifSearch() {
   const query = exifSearch.value.trim().toLowerCase()
   if (!query) { clearExifSearch(); return }
   exifSearching.value = true
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   const toCheck = images.value.filter(img => !(img in exifCache.value))
   const batchSize = 20
   for (let i = 0; i < toCheck.length; i += batchSize) {
     const batch = toCheck.slice(i, i + batchSize)
-    await Promise.all(batch.map(img => new Promise(resolve => {
+    await Promise.all(batch.map(img => new Promise<void>(resolve => {
       if (backend.getImageExif) {
-        backend.getImageExif(img, (json) => {
+        backend.getImageExif(img, (json: string) => {
           try {
             const d = JSON.parse(json)
             exifCache.value[img] = `${d.prompt || ''} ${d.negative || ''} ${d.raw || ''}`.toLowerCase()
@@ -290,21 +300,21 @@ function closeLargeView() {
   if (!showMetadata.value) exifData.value = null
 }
 
-const viewImage = async (path) => {
-  const backend = await getBackend()
-  if (backend.getImageExif) backend.getImageExif(path, (json) => {
+const viewImage = async (path: string) => {
+  const backend: any = await getBackend()
+  if (backend.getImageExif) backend.getImageExif(path, (json: string) => {
     try { const d = JSON.parse(json); viewerData.value = d } catch {}
   })
 }
 
-function showMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
-function ctx(actionName) {
+function showMenu(e: MouseEvent, path: string) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
+function ctx(actionName: string) {
   const path = ctxMenu.value.path
   requestAction(actionName, { path })
   if (actionName === 'gallery_load_exif') viewImage(path)
   ctxMenu.value.show = false
 }
-function removeFav(path) {
+function removeFav(path: string) {
   requestAction('remove_favorite', { path })
   images.value = images.value.filter(i => i !== path)
   filteredImages.value = filteredImages.value.filter(i => i !== path)
@@ -312,13 +322,13 @@ function removeFav(path) {
 }
 function ctxRemoveFav() { removeFav(ctxMenu.value.path); ctxMenu.value.show = false }
 
-const quickAction = (name, path) => requestAction(name, { path })
-const sendToCompare = (slot) => { requestAction('send_to_compare', { path: ctxMenu.value.path, slot }); ctxMenu.value.show = false }
+const quickAction = (name: string, path: string) => requestAction(name, { path })
+const sendToCompare = (slot: string) => { requestAction('send_to_compare', { path: ctxMenu.value.path, slot }); ctxMenu.value.show = false }
 const sendExifToT2I = () => { if (exifData.value) requestAction('gallery_send_exif_to_t2i', { exif: exifData.value.raw || '', path: exifData.value.path }) }
-const action = (name, payload = {}) => requestAction(name, payload)
+const action = (name: string, payload: Record<string, any> = {}) => requestAction(name, payload)
 const hideMenu = () => ctxMenu.value.show = false
 
-async function copySection(text, label) {
+async function copySection(text: string, label: string) {
   if (!text) return
   try { await navigator.clipboard.writeText(text); requestAction('show_toast', { type: 'success', msg: `${label} 복사됨` }) }
   catch (e) { requestAction('show_toast', { type: 'error', msg: `복사 실패` }) }
@@ -326,7 +336,7 @@ async function copySection(text, label) {
 
 onMounted(() => {
   document.addEventListener('click', hideMenu)
-  _thumbOff = onBackendEvent('thumbnailReady', (json) => {
+  _thumbOff = onBackendEvent('thumbnailReady', (json: string) => {
     try { const d = JSON.parse(json); thumbCache[d.path] = d.thumb || ('file:///' + d.path) } catch {}
   })
   loadFavorites()

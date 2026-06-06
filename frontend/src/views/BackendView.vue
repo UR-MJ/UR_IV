@@ -18,13 +18,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 
 const backendUrl = ref('http://127.0.0.1:7860')
 
-function action(name) { requestAction(name) }
+function action(name: string) { requestAction(name) }
 function openInBrowser() {
   requestAction('open_url', { url: backendUrl.value })
 }

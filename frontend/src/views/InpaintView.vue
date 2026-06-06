@@ -103,19 +103,21 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from '../components/CustomSelect.vue'
 
+interface Point { x: number; y: number }
+
 // ── State ──
 const isDragging = ref(false)
 const imageSrc = ref('')
 const imagePath = ref('')
-const fileInput = ref(null)
-const imgRef = ref(null)
-const maskRef = ref(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+const imgRef = ref<HTMLCanvasElement | null>(null)
+const maskRef = ref<HTMLCanvasElement | null>(null)
 const brushSize = ref(40)
 const prompt = ref('')
 const denoising = ref(0.75)
@@ -124,16 +126,16 @@ const inpaintArea = ref(0)
 const currentTool = ref('brush')
 const eraserMode = ref('brush')
 const magneticLasso = ref(false)
-let edgeMapData = null, edgeMapW = 0, edgeMapH = 0
+let edgeMapData: Uint8Array | null = null, edgeMapW = 0, edgeMapH = 0
 const maskContents = ['FILL', 'ORIGINAL', 'LATENT NOISE', 'LATENT NOTHING']
 const inpaintAreas = ['WHOLE IMAGE', 'ONLY MASKED']
 const maskContentLabel = computed({
   get: () => maskContents[maskContent.value] || maskContents[0],
-  set: v => { maskContent.value = maskContents.indexOf(v) }
+  set: (v: string) => { maskContent.value = maskContents.indexOf(v) }
 })
 const inpaintAreaLabel = computed({
   get: () => inpaintAreas[inpaintArea.value] || inpaintAreas[0],
-  set: v => { inpaintArea.value = inpaintAreas.indexOf(v) }
+  set: (v: string) => { inpaintArea.value = inpaintAreas.indexOf(v) }
 })
 const tools = [
   { id: 'box', icon: '⬚', label: 'RECT' },
@@ -146,13 +148,13 @@ const imgW = ref(0), imgH = ref(0)
 const zoom = ref(1), panX = ref(0), panY = ref(0)
 const hasMask = ref(false)
 
-let iCtx = null, mCtx = null, srcImg = null
-let maskData = null
+let iCtx: CanvasRenderingContext2D | null = null, mCtx: CanvasRenderingContext2D | null = null, srcImg: HTMLImageElement | null = null
+let maskData: Uint8Array | null = null
 let drawing = false, panning = false
 let startX = 0, startY = 0, lastX = -1, lastY = -1
 let panSX = 0, panSY = 0
-let lassoPoints = []
-let undoStack = [], redoStack = []
+let lassoPoints: Point[] = []
+let undoStack: Uint8Array[] = [], redoStack: Uint8Array[] = []
 
 const cvStyle = computed(() => ({
   transform: `translate(${panX.value}px,${panY.value}px) scale(${zoom.value})`,
@@ -162,37 +164,37 @@ const cvStyle = computed(() => ({
 
 // ── 이미지 로드 ──
 function triggerFileInput() { fileInput.value?.click() }
-function handleFileSelect(e) { const f = e.target.files?.[0]; if (f) loadFile(f) }
-function handleDrop(e) {
+function handleFileSelect(e: Event) { const f = (e.target as HTMLInputElement).files?.[0]; if (f) loadFile(f) }
+function handleDrop(e: DragEvent) {
   isDragging.value = false
   const f = e.dataTransfer?.files?.[0]
-  if (f) { imagePath.value = f.path || ''; loadFile(f); return }
+  if (f) { imagePath.value = (f as any).path || ''; loadFile(f); return }
   const p = e.dataTransfer?.getData('text/plain')
   if (p && p.includes('/')) loadFromPath(p)
 }
-function loadFile(file) {
+function loadFile(file: File) {
   const r = new FileReader()
-  r.onload = (ev) => { imageSrc.value = ev.target.result; initCanvas(ev.target.result) }
+  r.onload = (ev) => { imageSrc.value = ev.target!.result as string; initCanvas(ev.target!.result as string) }
   r.readAsDataURL(file)
-  if (file.path) imagePath.value = file.path.replace(/\\/g, '/')
+  if ((file as any).path) imagePath.value = (file as any).path.replace(/\\/g, '/')
 }
-async function loadFromPath(path) {
+async function loadFromPath(path: string) {
   imagePath.value = path
-  const bk = await getBackend()
-  if (bk.loadImageBase64) bk.loadImageBase64(path, (b64) => { if (b64) { imageSrc.value = b64; initCanvas(b64) } })
+  const bk: any = await getBackend()
+  if (bk.loadImageBase64) bk.loadImageBase64(path, (b64: string) => { if (b64) { imageSrc.value = b64; initCanvas(b64) } })
 }
 
-function initCanvas(src) {
+function initCanvas(src: string) {
   const img = new Image()
   img.onload = () => {
     srcImg = img; imgW.value = img.naturalWidth; imgH.value = img.naturalHeight
     zoom.value = 1; panX.value = 0; panY.value = 0
     const ic = imgRef.value; if (!ic) return
     ic.width = img.naturalWidth; ic.height = img.naturalHeight
-    iCtx = ic.getContext('2d'); iCtx.drawImage(img, 0, 0)
+    iCtx = ic.getContext('2d'); iCtx!.drawImage(img, 0, 0)
     const mc = maskRef.value; if (!mc) return
     mc.width = img.naturalWidth; mc.height = img.naturalHeight
-    mCtx = mc.getContext('2d'); mCtx.clearRect(0, 0, mc.width, mc.height)
+    mCtx = mc.getContext('2d'); mCtx!.clearRect(0, 0, mc.width, mc.height)
     maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
     hasMask.value = false; undoStack = []; redoStack = []
   }
@@ -200,16 +202,16 @@ function initCanvas(src) {
 }
 
 // ── 좌표 ──
-function getPos(e) {
+function getPos(e: MouseEvent): Point {
   if (!maskRef.value) return { x: 0, y: 0 }
   const r = maskRef.value.getBoundingClientRect()
   return { x: (e.clientX - r.left) / r.width * maskRef.value.width, y: (e.clientY - r.top) / r.height * maskRef.value.height }
 }
 
 // ── 마우스 이벤트 ──
-function onDblClick(e) { if (e.altKey) { zoom.value = 1; panX.value = 0; panY.value = 0 } }
+function onDblClick(e: MouseEvent) { if (e.altKey) { zoom.value = 1; panX.value = 0; panY.value = 0 } }
 
-function onDown(e) {
+function onDown(e: MouseEvent) {
   if (e.altKey || e.button === 1) { panning = true; panSX = e.clientX - panX.value; panSY = e.clientY - panY.value; return }
   if (!maskData) return
   saveUndo(); drawing = true
@@ -223,7 +225,7 @@ function onDown(e) {
   }
 }
 
-function onMove(e) {
+function onMove(e: MouseEvent) {
   if (panning) { panX.value = e.clientX - panSX; panY.value = e.clientY - panSY; return }
   const p = getPos(e)
   // 커서 표시
@@ -257,7 +259,7 @@ function onMove(e) {
   }
 }
 
-function onUp(e) {
+function onUp(e: MouseEvent) {
   if (panning) { panning = false; return }
   if (!drawing) return
   // FIX: drawing=false 를 좌표/도구 완성 처리 후로 이동 — 그래야 box/lasso 완성 시점에
@@ -273,18 +275,18 @@ function onUp(e) {
   drawing = false  // 모든 처리 완료 후에만 false
 }
 
-function onWheel(e) { zoom.value = Math.max(0.2, Math.min(5, zoom.value * (e.deltaY > 0 ? 0.9 : 1.1))) }
+function onWheel(e: WheelEvent) { zoom.value = Math.max(0.2, Math.min(5, zoom.value * (e.deltaY > 0 ? 0.9 : 1.1))) }
 
 // ── 마스크 조작 ──
-function paintCircle(cx, cy) { if (!maskData || !srcImg) return; const w = srcImg.naturalWidth, h = srcImg.naturalHeight, r = brushSize.value; for (let y = Math.max(0,Math.floor(cy-r)); y < Math.min(h,Math.ceil(cy+r)); y++) for (let x = Math.max(0,Math.floor(cx-r)); x < Math.min(w,Math.ceil(cx+r)); x++) if ((x-cx)**2+(y-cy)**2<=r**2) maskData[y*w+x]=255 }
-function paintLine(x0,y0,x1,y1) { const d=Math.hypot(x1-x0,y1-y0),s=Math.max(1,Math.ceil(d/Math.max(1,brushSize.value*0.3))); for(let i=0;i<=s;i++){const t=i/s;paintCircle(x0+(x1-x0)*t,y0+(y1-y0)*t)} }
-function eraseCircle(cx,cy) { if(!maskData||!srcImg)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight,r=brushSize.value;for(let y=Math.max(0,Math.floor(cy-r));y<Math.min(h,Math.ceil(cy+r));y++)for(let x=Math.max(0,Math.floor(cx-r));x<Math.min(w,Math.ceil(cx+r));x++)if((x-cx)**2+(y-cy)**2<=r**2)maskData[y*w+x]=0 }
-function eraseLine(x0,y0,x1,y1) { const d=Math.hypot(x1-x0,y1-y0),s=Math.max(1,Math.ceil(d/Math.max(1,brushSize.value*0.3))); for(let i=0;i<=s;i++){const t=i/s;eraseCircle(x0+(x1-x0)*t,y0+(y1-y0)*t)} }
-function fillRect(x1,y1,x2,y2) { if(!maskData||!srcImg)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;for(let y=Math.max(0,Math.round(y1));y<Math.min(h,Math.round(y2));y++)for(let x=Math.max(0,Math.round(x1));x<Math.min(w,Math.round(x2));x++)maskData[y*w+x]=255 }
-function eraseRect(x1,y1,x2,y2) { if(!maskData||!srcImg)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;for(let y=Math.max(0,Math.round(y1));y<Math.min(h,Math.round(y2));y++)for(let x=Math.max(0,Math.round(x1));x<Math.min(w,Math.round(x2));x++)maskData[y*w+x]=0 }
-function fillPoly(pts) { if(!maskData||!srcImg||pts.length<3)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of pts){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)};for(let y=Math.max(0,Math.floor(minY));y<Math.min(h,Math.ceil(maxY));y++)for(let x=Math.max(0,Math.floor(minX));x<Math.min(w,Math.ceil(maxX));x++)if(pip(x,y,pts))maskData[y*w+x]=255 }
-function erasePoly(pts) { if(!maskData||!srcImg||pts.length<3)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of pts){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)};for(let y=Math.max(0,Math.floor(minY));y<Math.min(h,Math.ceil(maxY));y++)for(let x=Math.max(0,Math.floor(minX));x<Math.min(w,Math.ceil(maxX));x++)if(pip(x,y,pts))maskData[y*w+x]=0 }
-function pip(x,y,poly){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)inside=!inside};return inside}
+function paintCircle(cx: number, cy: number) { if (!maskData || !srcImg) return; const w = srcImg.naturalWidth, h = srcImg.naturalHeight, r = brushSize.value; for (let y = Math.max(0,Math.floor(cy-r)); y < Math.min(h,Math.ceil(cy+r)); y++) for (let x = Math.max(0,Math.floor(cx-r)); x < Math.min(w,Math.ceil(cx+r)); x++) if ((x-cx)**2+(y-cy)**2<=r**2) maskData[y*w+x]=255 }
+function paintLine(x0: number,y0: number,x1: number,y1: number) { const d=Math.hypot(x1-x0,y1-y0),s=Math.max(1,Math.ceil(d/Math.max(1,brushSize.value*0.3))); for(let i=0;i<=s;i++){const t=i/s;paintCircle(x0+(x1-x0)*t,y0+(y1-y0)*t)} }
+function eraseCircle(cx: number,cy: number) { if(!maskData||!srcImg)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight,r=brushSize.value;for(let y=Math.max(0,Math.floor(cy-r));y<Math.min(h,Math.ceil(cy+r));y++)for(let x=Math.max(0,Math.floor(cx-r));x<Math.min(w,Math.ceil(cx+r));x++)if((x-cx)**2+(y-cy)**2<=r**2)maskData[y*w+x]=0 }
+function eraseLine(x0: number,y0: number,x1: number,y1: number) { const d=Math.hypot(x1-x0,y1-y0),s=Math.max(1,Math.ceil(d/Math.max(1,brushSize.value*0.3))); for(let i=0;i<=s;i++){const t=i/s;eraseCircle(x0+(x1-x0)*t,y0+(y1-y0)*t)} }
+function fillRect(x1: number,y1: number,x2: number,y2: number) { if(!maskData||!srcImg)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;for(let y=Math.max(0,Math.round(y1));y<Math.min(h,Math.round(y2));y++)for(let x=Math.max(0,Math.round(x1));x<Math.min(w,Math.round(x2));x++)maskData[y*w+x]=255 }
+function eraseRect(x1: number,y1: number,x2: number,y2: number) { if(!maskData||!srcImg)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;for(let y=Math.max(0,Math.round(y1));y<Math.min(h,Math.round(y2));y++)for(let x=Math.max(0,Math.round(x1));x<Math.min(w,Math.round(x2));x++)maskData[y*w+x]=0 }
+function fillPoly(pts: Point[]) { if(!maskData||!srcImg||pts.length<3)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of pts){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)};for(let y=Math.max(0,Math.floor(minY));y<Math.min(h,Math.ceil(maxY));y++)for(let x=Math.max(0,Math.floor(minX));x<Math.min(w,Math.ceil(maxX));x++)if(pip(x,y,pts))maskData[y*w+x]=255 }
+function erasePoly(pts: Point[]) { if(!maskData||!srcImg||pts.length<3)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of pts){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)};for(let y=Math.max(0,Math.floor(minY));y<Math.min(h,Math.ceil(maxY));y++)for(let x=Math.max(0,Math.floor(minX));x<Math.min(w,Math.ceil(maxX));x++)if(pip(x,y,pts))maskData[y*w+x]=0 }
+function pip(x: number,y: number,poly: Point[]){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)inside=!inside};return inside}
 
 function render() {
   if (!mCtx || !maskData || !srcImg) return
@@ -299,14 +301,14 @@ function render() {
 async function enableMagnetic() {
   magneticLasso.value = true
   if (!imagePath.value) return
-  const bk = await getBackend()
+  const bk: any = await getBackend()
   if (bk.getEdgeMap) {
-    bk.getEdgeMap(imagePath.value, 50, 150, (b64) => {
+    bk.getEdgeMap(imagePath.value, 50, 150, (b64: string) => {
       if (!b64) return
       const img = new Image()
       img.onload = () => {
         const tc = document.createElement('canvas'); tc.width = img.naturalWidth; tc.height = img.naturalHeight
-        const tctx = tc.getContext('2d'); tctx.drawImage(img, 0, 0)
+        const tctx = tc.getContext('2d')!; tctx.drawImage(img, 0, 0)
         const id = tctx.getImageData(0, 0, tc.width, tc.height)
         edgeMapW = tc.width; edgeMapH = tc.height
         edgeMapData = new Uint8Array(edgeMapW * edgeMapH)
@@ -316,7 +318,7 @@ async function enableMagnetic() {
     })
   }
 }
-function snapToEdge(x, y) {
+function snapToEdge(x: number, y: number): Point {
   if (!edgeMapData || !magneticLasso.value) return { x, y }
   const r = 12; let best = Infinity, bx = x, by = y
   for (let py = Math.max(0, Math.floor(y-r)); py < Math.min(edgeMapH, Math.ceil(y+r)); py++)
@@ -328,14 +330,14 @@ function snapToEdge(x, y) {
 function updateHasMask() { hasMask.value = maskData ? maskData.some(v => v > 0) : false }
 function saveUndo() { if (maskData) { undoStack.push(new Uint8Array(maskData)); if (undoStack.length > 10) undoStack.shift(); redoStack = [] } }
 function clearMask() { if (maskData) { saveUndo(); maskData.fill(0) }; hasMask.value = false; render() }
-function undoMask() { if (!undoStack.length || !maskData) return; redoStack.push(new Uint8Array(maskData)); maskData.set(undoStack.pop()); updateHasMask(); render() }
-function redoMask() { if (!redoStack.length || !maskData) return; undoStack.push(new Uint8Array(maskData)); maskData.set(redoStack.pop()); updateHasMask(); render() }
+function undoMask() { if (!undoStack.length || !maskData) return; redoStack.push(new Uint8Array(maskData)); maskData.set(undoStack.pop()!); updateHasMask(); render() }
+function redoMask() { if (!redoStack.length || !maskData) return; undoStack.push(new Uint8Array(maskData)); maskData.set(redoStack.pop()!); updateHasMask(); render() }
 
 function getMaskBase64() {
   if (!maskData || !srcImg) return ''
   const w = srcImg.naturalWidth, h = srcImg.naturalHeight
   const tc = document.createElement('canvas'); tc.width = w; tc.height = h
-  const tctx = tc.getContext('2d'); const id = tctx.createImageData(w, h)
+  const tctx = tc.getContext('2d')!; const id = tctx.createImageData(w, h)
   for (let i = 0; i < maskData.length; i++) { id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=maskData[i]; id.data[i*4+3]=255 }
   tctx.putImageData(id, 0, 0); return tc.toDataURL('image/png')
 }
@@ -344,7 +346,7 @@ function generate() {
   requestAction('generate_inpaint', { image: imageSrc.value, image_path: imagePath.value, mask: getMaskBase64(), prompt: prompt.value, denoising: denoising.value, mask_content: maskContent.value, inpaint_area: inpaintArea.value })
 }
 
-onMounted(() => { onBackendEvent('inpaintImageLoaded', (path) => loadFromPath(path)) })
+onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFromPath(path)) })
 </script>
 
 <style scoped>

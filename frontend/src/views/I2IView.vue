@@ -99,7 +99,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
@@ -108,7 +108,7 @@ import CustomSelect from '../components/CustomSelect.vue'
 const isDragging = ref(false)
 const imageSrc = ref('')
 const imagePath = ref('')
-const fileInput = ref(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 const prompt = ref('')
 const negPrompt = ref('')
 const denoising = ref(0.75)
@@ -116,7 +116,7 @@ const resizeMode = ref('0')
 const resizeModeOptions = ['JUST RESIZE', 'CROP AND RESIZE', 'RESIZE AND FILL', 'LATENT RESIZE']
 const resizeModeLabel = computed({
   get: () => resizeModeOptions[parseInt(resizeMode.value)] || resizeModeOptions[0],
-  set: v => { resizeMode.value = String(resizeModeOptions.indexOf(v)) }
+  set: (v: string) => { resizeMode.value = String(resizeModeOptions.indexOf(v)) }
 })
 const width = ref('1024')
 const height = ref('1024')
@@ -125,29 +125,29 @@ const cfg = ref(7)
 const seed = ref('-1')
 
 function triggerFileInput() { fileInput.value?.click() }
-function handleFileSelect(e) { const f = e.target.files?.[0]; if (f) loadFile(f) }
-function handleDrop(e) {
+function handleFileSelect(e: Event) { const f = (e.target as HTMLInputElement).files?.[0]; if (f) loadFile(f) }
+function handleDrop(e: DragEvent) {
   isDragging.value = false
   // 파일 드롭
   const f = e.dataTransfer?.files?.[0]
-  if (f) { imagePath.value = f.path || ''; loadFile(f); return }
+  if (f) { imagePath.value = (f as any).path || ''; loadFile(f); return }
   // History에서 경로 텍스트 드롭
   const path = e.dataTransfer?.getData('text/plain')
   if (path && path.includes('/')) loadFromPath(path)
 }
-function loadFile(file) {
+function loadFile(file: File) {
   const reader = new FileReader()
-  reader.onload = (ev) => { imageSrc.value = ev.target.result }
+  reader.onload = (ev: ProgressEvent<FileReader>) => { imageSrc.value = ev.target?.result as string }
   reader.readAsDataURL(file)
-  if (file.path) imagePath.value = file.path.replace(/\\/g, '/')
+  if ((file as any).path) imagePath.value = (file as any).path.replace(/\\/g, '/')
 }
 
 // 경로로 직접 이미지 로드 (History/Gallery에서 전송 시)
-async function loadFromPath(path) {
+async function loadFromPath(path: string) {
   imagePath.value = path
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.loadImageBase64) {
-    backend.loadImageBase64(path, (b64) => {
+    backend.loadImageBase64(path, (b64: string) => {
       if (b64) imageSrc.value = b64
     })
   } else {
@@ -157,7 +157,7 @@ async function loadFromPath(path) {
 
 onMounted(() => {
   // History/Gallery에서 send_to_i2i 시 이미지 로드
-  onBackendEvent('i2iImageLoaded', (path) => loadFromPath(path))
+  onBackendEvent('i2iImageLoaded', (path: string) => loadFromPath(path))
 })
 
 function generate() {

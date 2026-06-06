@@ -170,31 +170,49 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import CompareSlider from '../components/CompareSlider.vue'
 import CustomSelect from '../components/CustomSelect.vue'
 
+interface ExifParams {
+  generation?: string
+  core?: string
+  model?: string
+  hires?: string
+  extensions?: string
+  other?: string
+  [k: string]: any
+}
+interface ExifData {
+  raw?: string
+  prompt?: string
+  negative?: string
+  params?: ExifParams
+  params_line?: string
+  [k: string]: any
+}
+
 const subTab = ref('info')
 const imagePath = ref('')
-const exif = ref({})
+const exif = ref<ExifData>({})
 
 // Compare
 const compareBefore = ref('')
 const compareAfter = ref('')
 const beforeName = ref('')
 const afterName = ref('')
-const beforeExif = ref({})
-const afterExif = ref({})
+const beforeExif = ref<ExifData>({})
+const afterExif = ref<ExifData>({})
 const showDiffOnly = ref(true)
 
 // 비교 이미지 로드 시 EXIF도 함께 로드
-async function loadCompareExif(path, target) {
-  const backend = await getBackend()
+async function loadCompareExif(path: string, target: string) {
+  const backend: any = await getBackend()
   if (backend.getImageExif) {
-    backend.getImageExif(path, (json) => {
+    backend.getImageExif(path, (json: string) => {
       try {
         const d = JSON.parse(json)
         if (target === 'before') beforeExif.value = d
@@ -205,9 +223,9 @@ async function loadCompareExif(path, target) {
 }
 
 // 파라미터 라인을 key:value 파싱
-function _parseParamsLine(raw) {
+function _parseParamsLine(raw: string): Record<string, string> {
   if (!raw) return {}
-  const params = {}
+  const params: Record<string, string> = {}
   // "Steps: 28, Sampler: Euler, ..." 형식
   const matches = raw.matchAll(/([A-Za-z][A-Za-z0-9_ ]*?):\s*([^,]+?)(?:,\s*|$)/g)
   for (const m of matches) params[m[1].trim()] = m[2].trim()
@@ -219,7 +237,7 @@ const paramDiffRows = computed(() => {
   const bParams = _parseParamsLine(beforeExif.value.params_line || '')
   const aParams = _parseParamsLine(afterExif.value.params_line || '')
   const allKeys = new Set([...Object.keys(bParams), ...Object.keys(aParams)])
-  const rows = []
+  const rows: { key: string; before: string; after: string; changed: boolean }[] = []
   for (const key of allKeys) {
     const bv = bParams[key] || ''
     const av = aParams[key] || ''
@@ -234,22 +252,22 @@ const paramDiffRows = computed(() => {
 const promptDiff = computed(() => {
   const bTags = new Set((beforeExif.value.prompt || '').split(',').map(t => t.trim()).filter(Boolean))
   const aTags = new Set((afterExif.value.prompt || '').split(',').map(t => t.trim()).filter(Boolean))
-  const same = [], added = [], removed = []
+  const same: string[] = [], added: string[] = [], removed: string[] = []
   for (const t of bTags) { if (aTags.has(t)) same.push(t); else removed.push(t) }
   for (const t of aTags) { if (!bTags.has(t)) added.push(t) }
   return { same, added, removed }
 })
 
-async function loadImage(path) {
+async function loadImage(path: string) {
   imagePath.value = path
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.getImageExif) {
-    backend.getImageExif(path, (json) => { try { exif.value = JSON.parse(json) } catch {} })
+    backend.getImageExif(path, (json: string) => { try { exif.value = JSON.parse(json) } catch {} })
   }
 }
 
-function onDrop(e) {
-  const file = e.dataTransfer?.files?.[0]
+function onDrop(e: DragEvent) {
+  const file: any = e.dataTransfer?.files?.[0]
   if (file?.path) loadImage(file.path.replace(/\\/g, '/'))
   else {
     const path = e.dataTransfer?.getData('text/plain')
@@ -263,42 +281,42 @@ function copyAll() {
   requestAction('show_toast', { type: 'success', msg: '전체 메타데이터 복사됨' })
 }
 // 항목별 복사 — 호버 시 노출되는 작은 버튼에서 호출
-async function copySection(text, label) {
+async function copySection(text: string, label: string) {
   if (!text) return
   try {
     await navigator.clipboard.writeText(text)
     requestAction('show_toast', { type: 'success', msg: `${label} 복사됨` })
-  } catch (e) {
+  } catch (e: any) {
     requestAction('show_toast', { type: 'error', msg: `복사 실패: ${e?.message || e}` })
   }
 }
 function sendPrompt() { requestAction('pnginfo_send_prompt', { prompt: exif.value.prompt || '', negative: exif.value.negative || '' }) }
 function sendGenerate() { requestAction('pnginfo_generate', exif.value) }
-function action(name, payload = {}) { requestAction(name, payload) }
+function action(name: string, payload: Record<string, any> = {}) { requestAction(name, payload) }
 
 function sendToCompare() {
   if (!compareBefore.value) {
     compareBefore.value = imagePath.value
-    beforeName.value = imagePath.value.split('/').pop()
+    beforeName.value = imagePath.value.split('/').pop() || ''
     loadCompareExif(imagePath.value, 'before')
   } else {
     compareAfter.value = imagePath.value
-    afterName.value = imagePath.value.split('/').pop()
+    afterName.value = imagePath.value.split('/').pop() || ''
     loadCompareExif(imagePath.value, 'after')
   }
   subTab.value = 'compare'
 }
 
-async function loadCompareImage(slot) {
+async function loadCompareImage(slot: string) {
   requestAction('open_compare_image', { slot })
 }
 
 // GIF 내보내기
 const gifDuration = ref(400)
-const gifSpeedMap = { 'Fast': 200, 'Normal': 400, 'Slow': 700 }
+const gifSpeedMap: Record<string, number> = { 'Fast': 200, 'Normal': 400, 'Slow': 700 }
 const gifDurationStr = computed({
   get: () => Object.entries(gifSpeedMap).find(([, v]) => v === gifDuration.value)?.[0] || 'Normal',
-  set: v => { gifDuration.value = gifSpeedMap[v] || 400 }
+  set: (v: string) => { gifDuration.value = gifSpeedMap[v] || 400 }
 })
 const gifExporting = ref(false)
 const gifResult = ref('')
@@ -306,9 +324,9 @@ const gifResult = ref('')
 async function exportGif() {
   if (!compareBefore.value || !compareAfter.value) return
   gifExporting.value = true; gifResult.value = ''
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.exportCompareGif) {
-    backend.exportCompareGif(compareBefore.value, compareAfter.value, gifDuration.value, 0, (json) => {
+    backend.exportCompareGif(compareBefore.value, compareAfter.value, gifDuration.value, 0, (json: string) => {
       try {
         const d = JSON.parse(json)
         if (d.path) { gifResult.value = d.path; requestAction('show_toast', { type: 'success', msg: `GIF 생성 완료 (${d.frames} frames)` }) }
@@ -320,11 +338,11 @@ async function exportGif() {
 }
 
 // 이벤트 disconnect 핸들 — keep-alive로 재마운트되어도 누적 등록 방지
-const _eventUnsubs = []
+const _eventUnsubs: Array<() => void> = []
 onMounted(() => {
-  _eventUnsubs.push(onBackendEvent('inpaintImageLoaded', (path) => loadImage(path)))
+  _eventUnsubs.push(onBackendEvent('inpaintImageLoaded', (path: string) => loadImage(path)))
   // 비교 이미지 수신 (우클릭 메뉴 "비교로 보내기" 또는 파일 다이얼로그)
-  _eventUnsubs.push(onBackendEvent('compareImageLoaded', (json) => {
+  _eventUnsubs.push(onBackendEvent('compareImageLoaded', (json: string) => {
     try {
       const d = JSON.parse(json)
       if (d.slot === 'before') {

@@ -17,7 +17,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 
@@ -25,7 +25,7 @@ const url = ref('https://danbooru.donmai.us/')
 
 function openUrl() { open(url.value) }
 function openDanbooru() { open('https://danbooru.donmai.us/') }
-function open(u) {
+function open(u: string) {
   let target = u.trim()
   if (target && !target.startsWith('http')) target = 'https://' + target
   requestAction('open_url', { url: target })
