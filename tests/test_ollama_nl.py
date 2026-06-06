@@ -35,6 +35,39 @@ class TestNLLeakRemoval(unittest.TestCase):
         out = _extract_final_nl(t)
         self.assertIn("No background is visible", out)
 
+    def test_full_scratchpad_leak_revised_draft(self):
+        # 모델이 Input tags/Task/Constraint 불릿 + 초안 + *Revised draft:* + *Checking* + 태그리스트를
+        # 통째로 뱉는 심한 누출 — *Revised draft:* 뒤 ~ 첫 '*'(Checking) 사이의 최종 캡션만 남겨야.
+        t = ("Input tags: 1girl solo blue hair smile. "
+             "* Task: Rewrite as a flowing English caption. "
+             "* Character/Series: No specific name provided. I will refer to her as \"a girl\". "
+             "* Constraint (a): Name character explicitly. * Constraint (c): NO commas. "
+             "A girl with blue hair smiles brightly. "
+             "* No commas? Checked. Wait the prompt asks to name the character. "
+             "*Revised draft:* A girl with blue hair stands in a bright room. "
+             "She smiles warmly at the viewer. "
+             "*Checking for commas:* \"A girl with blue hair stands in a bright room.\" (No comma) "
+             "*Wait let me double check the tags:* blue hair - included. smile - included.")
+        out = _extract_final_nl(t)
+        self.assertIn("A girl with blue hair stands in a bright room", out)
+        self.assertIn("She smiles warmly at the viewer", out)
+        self.assertNotIn("Task", out)
+        self.assertNotIn("Constraint", out)
+        self.assertNotIn("Revised", out)
+        self.assertNotIn("Checking", out)
+        self.assertNotIn("included", out)
+        self.assertNotIn("*", out)
+        self.assertNotIn("Input tags", out)
+
+    def test_bullet_label_meta_sentence_detection(self):
+        # 불릿/라벨 문장은 메타로 인식 (선두/후미 제거용)
+        self.assertTrue(_is_meta_sentence("* Task: Rewrite the caption."))
+        self.assertTrue(_is_meta_sentence("* Constraint (a): Name character."))
+        self.assertTrue(_is_meta_sentence("Input tags: blue hair smile."))
+        self.assertTrue(_is_meta_sentence("* Setting: a bright room."))
+        # 캡션 문장은 그대로
+        self.assertFalse(_is_meta_sentence("A girl with blue hair stands in a bright room."))
+
     def test_enforce_style_removes_commas_and_formats(self):
         out = _enforce_nl_style("a man, tall, holding a sword")
         self.assertNotIn(",", out)

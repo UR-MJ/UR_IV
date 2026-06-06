@@ -62,6 +62,10 @@ SYSTEM_PROMPTS = {
         "(d) NEVER begin a sentence with 'I', 'Let me', 'Since', 'First', 'Okay', 'Revised', "
         "'Here', or any remark about the task or the input. Never restate these rules. Never use "
         "quotes or markdown. "
+        "(e) Output the caption sentences ONLY, on a single line. Do NOT write 'Task', "
+        "'Constraint', 'Draft', 'Revised', 'Checking', 'Input tags', any label followed by a colon, "
+        "any '*' or bullet, any list, or any review/check of your own work. Do NOT show drafts — "
+        "give the final caption directly and stop. "
         "Example input: 1girl, hatsune miku, vocaloid, aqua twintails, detached sleeves, singing, microphone. "
         "Example output: Hatsune Miku from Vocaloid has long aqua twintails and wears detached "
         "sleeves. She sings into a microphone with her eyes closed."
@@ -242,7 +246,10 @@ def _is_meta_sentence(s: str) -> bool:
     if _META_OPENER is None:
         # 문장 '시작'이 추론/메타 오프너인 경우
         _META_OPENER = _re.compile(
-            r"(?i)^\s*(?:"
+            r"(?i)^\s*\**\s*(?:"
+            # 라벨/불릿(체크리스트·규칙복창) — 콜론 동반
+            r"task\s*:|constraints?\b|appearance\s*:|clothing\s*:|action\s*:|setting\s*:|"
+            r"shot\s*type\s*:|input\s+tags?\b|series\s*:|character\s*/\s*series\b|"
             r"let'?s\b|let me\b|wait\b|hmm+\b|actually\b|alright\b|well[, ]|"
             r"first[, ]|firstly\b|now[, ]|next[, ]|then[, ]|so[, ]|but wait\b|hold on\b|oh[, ]|"
             r"i'(?:ll|ve|d|m)\b|i\s+(?:should|think|will|need|must|guess|am|can|could|have to|"
@@ -288,40 +295,55 @@ def _strip_meta_sentences(t: str) -> str:
     return out or t
 
 
+def _cut_trailing_meta(s: str) -> str:
+    """캡션 뒤에 붙는 검증/재확인/태그체크 블록을 잘라낸다.
+    캡션 문장에는 '*'가 없으므로 첫 별표(후속 '*Checking...*' 등의 시작)에서 컷.
+    별표 없는 누출('Checking for commas', 'abs - included' 류)도 표지에서 컷."""
+    import re as _re
+    s = (s or '').strip()
+    i = s.find('*')
+    if i >= 25:
+        s = s[:i]
+    m = _re.search(
+        r"(?i)(?:^|[.\s])(?:checking\b|let me double|double-?check|re-?read|"
+        r"no commas?\s*\??|flowing english\b|character (?:name|consistency)|overall scene first|"
+        r"only from tags|no intro)",
+        s)
+    if m and m.start() >= 25:
+        s = s[:m.start()]
+    # "abs - included" / "bara - implied" 류 태그 점검 리스트 시작
+    m2 = _re.search(r"(?i)(?:^|[.\s])[\w'\-]{2,30}\s+-\s+(?:included|implied|mentioned|maybe|excluded|omitted|present)\b", s)
+    if m2 and m2.start() >= 25:
+        s = s[:m2.start()]
+    return s.strip().strip('"').strip()
+
+
 def _extract_final_nl(text: str) -> str:
     """추론형 모델이 사고과정/체크리스트/규칙복창/초안/자기수정을 함께 뱉을 때 최종 캡션만 추출.
-    1) 'Revised again:' / 'Final:' / 'Corrected:' 류 마커가 있으면 마지막 마커 뒤가 최종본
-    2) 추론이 많고 끝에 긴 인용 블록이 있으면 그 인용이 최종 답
-    3) 그 외엔 선두/후미 메타 문장 제거
-    깔끔한 응답은 메타 문장이 없어 그대로 통과."""
+    1) 'Revised draft:' / 'Final:' / 'caption:' 류 마커가 있으면 마지막 마커 뒤가 최종본 —
+       단 그 뒤에 붙는 메타(별표 블록·체크·태그리스트)는 _cut_trailing_meta로 잘라낸다.
+    2) 그 외엔 선두/후미 메타 문장 제거.
+    깔끔한 응답은 마커도 메타도 없어 그대로 통과."""
     import re as _re
     if not text:
         return text
     t = text.strip()
-    # 1) "Revised again:" / "Final caption:" / "Corrected:" 마커 → 마지막 마커 뒤
-    rev = list(_re.finditer(
-        r"(?im)\b(?:"
-        r"revised(?:\s+again|\s+version)?|"
-        r"final(?:\s+(?:version|caption|answer))?|"
-        r"corrected(?:\s+version)?|final\s+answer|"
+    # 1) 최종본 도입 마커 — revised/final/corrected 뒤 단어 1개 허용('Revised draft:'),
+    #    주변 '*' 허용('*Revised draft:*'), 콜론 필수. 마지막 마커 뒤를 최종본으로.
+    marker = _re.compile(
+        r"(?im)\**\s*\b(?:"
+        r"revised(?:\s+\w+)?|final(?:\s+\w+)?|corrected(?:\s+\w+)?|"
         r"here(?:'s| is)\s+(?:the\s+|your\s+|a\s+)?(?:final\s+|revised\s+|corrected\s+|new\s+|updated\s+)?caption|"
-        r"(?:the\s+)?caption|the\s+output"
-        r")\s*:\s*",
-        t))
-    if rev:
-        tail = t[rev[-1].end():].strip().strip('"').strip()
-        if len(tail) >= 25:
-            return _strip_meta_sentences(tail)
-    # 2) 추론형 + 끝에 긴 인용 블록 → 그 인용이 최종 답
-    reasoning_markers = ("Let's", "Let me", "Check", "Wait", "Revised", "pronoun",
-                         "No commas", "Capital", "I should", "I think", "I will treat",
-                         "Sentence 1", "Re-read")
-    if sum(1 for m in reasoning_markers if m in t) >= 2:
-        quotes = [q.strip() for q in _re.findall(r'"([^"]{40,})"', t)
-                  if '. ' in q and not _is_meta_sentence(q) and '*' not in q]
-        if quotes:
-            return _strip_meta_sentences(quotes[-1])
-    # 3) 선두/후미 메타 문장 제거
+        r"(?:the\s+)?caption|the\s+output|final\s+answer"
+        r")\b\s*\**\s*:\s*\**\s*")
+    revs = list(marker.finditer(t))
+    if revs:
+        tail = _cut_trailing_meta(t[revs[-1].end():])
+        cleaned = _strip_meta_sentences(tail)
+        if len(cleaned) >= 25:
+            return cleaned
+    # 2) 마커 없음/짧음 → 선두/후미 메타 문장 제거
+    #    (전체에 _cut_trailing_meta(첫 '*' 컷)는 위험 — 캡션이 맨 앞에 없을 수 있음)
     return _strip_meta_sentences(t)
 
 
