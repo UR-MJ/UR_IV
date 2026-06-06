@@ -155,12 +155,35 @@ def _strip_channels(text: str) -> str:
     return result
 
 
+_META_TAIL = None
+
+
 def _enforce_nl_style(prose: str) -> str:
-    """자연어 스타일 강제: 콤마 제거(→공백), 대문자 시작, 마침표 종료. (모델이 규칙을 어겨도 보정)"""
+    """자연어 스타일 강제: 선두 잡문자 제거, 끝의 추론/메타 문장 제거, 콤마 제거(→공백),
+    대문자 시작, 마침표 종료. (모델이 규칙을 어겨도 보정)"""
     import re as _re
+    global _META_TAIL
+    if _META_TAIL is None:
+        _META_TAIL = _re.compile(
+            r"^\s*(?:let'?s\b|let me\b|wait\b|hmm\b|actually\b|okay\b|ok\b|so\b|"
+            r"i\s+(?:should|think|will|'?ll|need|guess|am)\b|"
+            r"(?:re-?)?check(?:ing|ed)?\b|double-?check\b|re-?read\b|verify\b|"
+            r"looks good\b|that(?:'s| is) (?:it|all|good|correct)\b|all good\b|"
+            r"done\b|finally\b|final\b|here'?s\b|note\s*:|output\s*:|caption\s*:|"
+            r"one (?:more|small)\b|perfect\b|great\b)",
+            _re.IGNORECASE)
     s = (prose or '').strip().strip('"').strip()
     if not s:
         return s
+    # 선두 잡문자 제거 (앞에 붙는 '. ' ', ' '- ' 등) → 글자로 시작
+    s = _re.sub(r"^[\s.,;:!?\"'`\-–—•*]+", '', s)
+    # 끝에서부터 추론/메타 문장 제거 ("Let's check." "Wait..." "Check." 등)
+    parts = _re.split(r'(?<=[.!?])\s+', s)
+    while len(parts) > 1 and _META_TAIL.match(parts[-1].strip()):
+        parts.pop()
+    joined = ' '.join(p for p in parts if p.strip()).strip()
+    if joined:
+        s = joined
     s = s.replace(',', ' ')                       # 콤마 제거 (자연어는 공백/문장 구분)
     s = _re.sub(r'\s+([.!?])', r'\1', s)          # 구두점 앞 공백 제거
     s = _re.sub(r'\s{2,}', ' ', s).strip()        # 다중 공백 정리
