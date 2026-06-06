@@ -2084,7 +2084,7 @@ onMounted(async () => {
   color: var(--text-muted); font-size: 10px; transition: all 0.2s;
 }
 .half-moon:hover { background: var(--bg-card); color: var(--accent); width: 24px; }
-.half-moon.open { background: var(--accent-dim); color: var(--accent); left: 680px; }
+.half-moon.open { background: var(--accent-dim); color: var(--accent); left: 800px; z-index: 51; }
 
 /* Extended Panel Backdrop — 외부 클릭으로 닫기 */
 .extend-backdrop {

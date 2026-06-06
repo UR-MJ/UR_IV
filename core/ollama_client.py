@@ -109,6 +109,31 @@ SYSTEM_PROMPTS = {
 NL_MODES = {'nl_caption', 'nl_scene', 'translate', 'creative'}
 
 
+def _strip_channels(text: str) -> str:
+    """gpt-oss/harmony 채널 토큰 + 사고과정 제거.
+    <|channel|>final 이후만 취하고, 모든 파이프 변형(<|x|>, <|x>, <x|>)과
+    <think> 블록, 선두 채널 라벨을 제거한다. (예: <|channel>thought<channel|> 등)"""
+    import re as _re
+    if not text:
+        return text
+    t = text
+    # 1) <think>...</think>
+    t = _re.sub(r'<think>.*?</think>', '', t, flags=_re.DOTALL | _re.IGNORECASE)
+    # 2) final 채널이 있으면 그 이후만 (파이프 변형 모두 허용)
+    fm = list(_re.finditer(
+        r'<\|?\s*channel\s*\|?>\s*final\b[^\n<]*?(?:<\|?\s*message\s*\|?>|<\s*channel\s*\|?>)?',
+        t, flags=_re.IGNORECASE))
+    if fm:
+        t = t[fm[-1].end():]
+    # 3) 잔여 채널/메시지/시작/끝 토큰 제거 (모든 파이프 변형)
+    t = _re.sub(r'<\|[^<>]*?\|?>', '', t)   # <|channel|>, <|channel>, <|message>
+    t = _re.sub(r'<[^<>]*?\|>', '', t)       # <channel|>
+    t = _re.sub(r'<\|(?:start|end|return|message|channel|assistant|system|user)\b[^>]*>?', '', t, flags=_re.IGNORECASE)
+    # 4) 선두 채널 라벨 잔여물 (analysis/thought/commentary/final/assistantfinal)
+    t = _re.sub(r'^\s*(?:assistant)?\s*(?:analysis|thought|commentary|final)\b[\s:>-]*', '', t, flags=_re.IGNORECASE)
+    return t.strip()
+
+
 def _enforce_nl_style(prose: str) -> str:
     """자연어 스타일 강제: 콤마 제거(→공백), 대문자 시작, 마침표 종료. (모델이 규칙을 어겨도 보정)"""
     import re as _re
@@ -181,6 +206,7 @@ class OllamaClient:
             "system": system,
             "prompt": user_msg,
             "stream": False,
+            "think": False,   # thinking 모델(qwen3/gpt-oss)의 사고과정 출력 비활성화 (미지원 모델은 무시)
             "options": {
                 "temperature": 0.8 if is_nl else 0.7,
                 "num_predict": 1024 if is_nl else 500,
@@ -193,19 +219,21 @@ class OllamaClient:
                 json=payload,
                 timeout=self.timeout,
             )
+            # think 미지원 모델은 400을 반환 → think 빼고 1회 재시도
+            if r.status_code >= 400 and 'think' in payload:
+                payload.pop('think', None)
+                r = requests.post(
+                    f"{self.base_url}/api/generate",
+                    json=payload,
+                    timeout=self.timeout,
+                )
             r.raise_for_status()
             data = r.json()
             response = data.get('response', '').strip()
-            # 마크다운, 번호, 코드블록, 사고과정(<think>) 정리
+            # 마크다운, 번호, 코드블록, 사고과정 정리
             import re
-            # harmony/channel 형식 (gpt-oss 등): <|channel|>analysis<|message|>…<|channel|>final<|message|>답
-            _hm = re.search(r'<\|channel\|>\s*final\s*<\|message\|>(.*)',
-                            response, flags=re.DOTALL | re.IGNORECASE)
-            if _hm:
-                response = _hm.group(1)
-            response = re.sub(r'<\|[^|>]*\|>', '', response).strip()   # 남은 <|...|> 마커 제거
-            # <think>...</think> 블록 제거 (qwen3 등 thinking 모드)
-            response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL).strip()
+            # harmony/channel 토큰(gpt-oss 등) + <think> 제거 (모든 파이프 변형)
+            response = _strip_channels(response)
             # 자연어 모드: 콤마-태그 정리 없이 prose 그대로 (코드펜스는 마커만 제거, 내용 보존)
             if is_nl:
                 clean_nl = re.sub(r'^```[a-zA-Z0-9]*\s*', '', response).strip()
@@ -254,8 +282,7 @@ class OllamaClient:
             r = requests.post(f"{self.base_url}/api/generate", json=payload, timeout=timeout)
             r.raise_for_status()
             text = (r.json().get('response', '') or '').strip()
-            text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-            text = re.sub(r'<\|[^|>]*\|>', '', text).strip()
+            text = _strip_channels(text)
             return text
         except requests.ConnectionError:
             raise ConnectionError("Ollama 서버에 연결할 수 없습니다.")
