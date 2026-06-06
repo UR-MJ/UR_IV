@@ -78,15 +78,15 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { condPositive, condNegative, condEnabled, addCondRule, removeCondRule, saveCondRules, loadCondRules } from '../composables/condRules.js'
 import ToggleSwitch from './ToggleSwitch.vue'
 
-defineProps({ preventDupe: { type: Boolean, default: true } })
-const emit = defineEmits(['close', 'update:preventDupe'])
+withDefaults(defineProps<{ preventDupe?: boolean }>(), { preventDupe: true })
+const emit = defineEmits<{ close: []; 'update:preventDupe': [value: boolean] }>()
 function close() { emit('close') }
-function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
 onMounted(() => { loadCondRules(); window.addEventListener('keydown', onKey, true) })
 onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 </script>

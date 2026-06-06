@@ -32,15 +32,20 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 
-const props = defineProps({
-  imageUrl: { type: String, default: '' },
-  resolution: { type: String, default: '' },
-  seed: { type: String, default: '' },
-  status: { type: String, default: '' },
+const props = withDefaults(defineProps<{
+  imageUrl?: string
+  resolution?: string
+  seed?: string
+  status?: string
+}>(), {
+  imageUrl: '',
+  resolution: '',
+  seed: '',
+  status: '',
 })
 
 function exploreSeed() {

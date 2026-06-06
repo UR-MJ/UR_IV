@@ -4,7 +4,19 @@ import { reactive, ref, watch } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { onBackendEvent } from '../bridge.js'
 
+/**
+ * 조건부 프롬프트 규칙 1개. (lang="ts" 컴포넌트가 템플릿에서 rule.* 접근 시 타입 필요)
+ * @typedef {Object} CondRule
+ * @property {boolean} enabled
+ * @property {string} condition  조건 태그
+ * @property {boolean} exists    true=있으면, false=없으면
+ * @property {string} target     대상 태그
+ * @property {string} action     add | remove | replace
+ * @property {string} location   main | prefix | suffix
+ */
+/** @type {CondRule[]} */
 export const condPositive = reactive([])
+/** @type {CondRule[]} */
 export const condNegative = reactive([])
 export const condEnabled = ref(window.localStorage.getItem('condEnabled') !== 'false')  // 기본 ON
 
