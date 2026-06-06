@@ -947,6 +947,7 @@
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { initBridge, onBackendEvent, getBackend } from './bridge.js'
 import { requestAction, useWidgetStore } from './stores/widgetStore.js'
+import { useLoraStack } from './composables/useLoraStack.js'
 
 const wStore = useWidgetStore()
 const storeWidgets = wStore.widgets
@@ -1273,80 +1274,16 @@ const extWidgets = reactive({
   cond_pos_on: false, cond_neg_on: false,
   cond_pos_rules: '', cond_neg_rules: '',
 })
-const loraStack = reactive([])
-
-// LoRA localStorage 복원
-try {
-  const saved = JSON.parse(window.localStorage.getItem('loraStack') || '[]')
-  if (Array.isArray(saved)) saved.forEach(l => loraStack.push(l))
-} catch {}
-
-let _loraInitialized = false
-function _saveLoraStack() {
-  try { window.localStorage.setItem('loraStack', JSON.stringify(loraStack)) } catch {}
-  // 초기화 완료 전 빈 배열로 덮어쓰기 방지, 이후에는 빈 배열도 정상 저장
-  if (!_loraInitialized && loraStack.length === 0) return
-  _loraInitialized = true
-  saveUiPrefs({ loraStack: loraStack.map(l => ({ ...l })) })
-}
-
-function syncLoraStack() {
-  requestAction('set_lora_stack', {
-    entries: loraStack.map(l => ({
-      name: l.name || '',
-      weight: Number.isFinite(Number(l.weight)) ? Number(l.weight) / 100 : 0.8,
-      enabled: l.enabled !== false,
-      triggerWords: Array.isArray(l.triggerWords) ? l.triggerWords : [],
-    })),
-  })
-}
-
-// LoRA 추가 함수 (Python에서 호출)
-function addLoraToStack(name, weight, triggerWords = []) {
-  const existing = loraStack.find(l => l.name === name)
-  if (existing) {
-    existing.weight = Math.round(weight * 100); existing.enabled = true
-    if (triggerWords.length) existing.triggerWords = triggerWords
-  }
-  else loraStack.push({ name, weight: Math.round(weight * 100), enabled: true, triggerWords })
-  _saveLoraStack()
-}
-
-// LoRA 변경 감시 → 자동 저장 (복원 중에는 무시)
-let _loraRestoring = false
-watch(loraStack, () => {
-  if (_loraRestoring) return
-  _saveLoraStack()
-  syncLoraStack()
-}, { deep: true })
-function insertTriggerWord(tw) {
-  const cur = storeWidgets.main_prompt_text || ''
-  if (!cur.toLowerCase().includes(tw.toLowerCase())) {
-    storeWidgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tw + ', ' : tw + ', '
-    addToast('info', `트리거 워드 삽입: ${tw}`)
-  } else {
-    addToast('info', `이미 포함된 태그: ${tw}`)
-  }
-}
-
-// LoRA 빠른 컨트롤 — 전체 on/off + 트리거 일괄삽입
-const allLorasOn = computed(() => loraStack.length > 0 && loraStack.every(l => l.enabled))
-function toggleAllLoras(on) { loraStack.forEach(l => { l.enabled = on }) }
-function insertAllTriggers() {
-  const tws = []
-  for (const l of loraStack) {
-    if (l.enabled && Array.isArray(l.triggerWords)) {
-      for (const tw of l.triggerWords) if (tw && !tws.includes(tw)) tws.push(tw)
-    }
-  }
-  if (!tws.length) { addToast('info', '활성 LoRA의 트리거 워드가 없습니다'); return }
-  let cur = (storeWidgets.main_prompt_text || '').trim()
-  const lower = cur.toLowerCase()
-  const add = tws.filter(tw => !lower.includes(tw.toLowerCase()))
-  if (!add.length) { addToast('info', '트리거가 이미 모두 포함됨'); return }
-  storeWidgets.main_prompt_text = cur ? (cur.replace(/,?\s*$/, '') + ', ' + add.join(', ')) : add.join(', ')
-  addToast('success', `트리거 ${add.length}개 삽입`)
-}
+// ── LoRA 스택 — composables/useLoraStack.js로 추출 (App.vue 분할 ④) ──
+//    템플릿이 쓰는 이름 전부 destructure(누락 시 런타임 깨짐 → 목록 완전 일치 필수).
+const {
+  loraStack, syncLoraStack, addLoraToStack,
+  allLorasOn, toggleAllLoras, insertTriggerWord, insertAllTriggers,
+  showLoraModal, onLoraAdd,
+  loraSetName, loraSetSel, loraSetNames, saveLoraSet, loadLoraSet, deleteLoraSet,
+  loraDragIdx, loraDragStart, loraDrop,
+  restoreFromPrefs: restoreLoraFromPrefs, buildActiveLoraText,
+} = useLoraStack({ storeWidgets, addToast, saveUiPrefs })
 // 시작 시 Ollama 모델 검증 — 저장된 모델이 설치 목록에 없으면(또는 비어있으면)
 // 첫 번째 설치 모델로 자동 교체 + 영속. Settings를 열어 모델을 바꾸지 않아도
 // 프롬프트 강화/자연어가 바로 동작하게 한다. (실패해도 조용히 무시)
@@ -1374,53 +1311,7 @@ async function ensureOllamaModel() {
   } catch {}
 }
 
-// LoRA 매니저(Vue 모달)
-const showLoraModal = ref(false)
-const showCondModal = ref(false)   // 조건부 프롬프트 모달
-function onLoraAdd(p) {
-  addLoraToStack(p.name, typeof p.weight === 'number' ? p.weight : 1.0, p.triggerWords || [])
-  addToast('success', `LoRA 추가: ${p.name}`)
-}
-// LoRA 세트 저장/불러오기 (localStorage 'loraSets')
-const loraSets = ref({})
-try { const s = JSON.parse(window.localStorage.getItem('loraSets') || '{}'); if (s && typeof s === 'object') loraSets.value = s } catch {}
-const loraSetName = ref('')
-const loraSetSel = ref('')
-const loraSetNames = computed(() => Object.keys(loraSets.value))
-function _persistLoraSets() { try { window.localStorage.setItem('loraSets', JSON.stringify(loraSets.value)) } catch {} }
-function saveLoraSet() {
-  const name = loraSetName.value.trim()
-  if (!name || !loraStack.length) return
-  loraSets.value = { ...loraSets.value, [name]: loraStack.map(l => ({ ...l })) }
-  _persistLoraSets()
-  loraSetSel.value = name; loraSetName.value = ''
-  addToast('success', `LoRA 세트 저장: ${name} (${loraStack.length}개)`)
-}
-function loadLoraSet() {
-  const set = loraSets.value[loraSetSel.value]
-  if (!Array.isArray(set)) return
-  loraStack.splice(0, loraStack.length, ...set.map(l => ({ ...l })))
-  _saveLoraStack(); syncLoraStack()
-  addToast('success', `세트 적용: ${loraSetSel.value} (${set.length}개)`)
-}
-function deleteLoraSet() {
-  const n = loraSetSel.value
-  if (!n) return
-  const cp = { ...loraSets.value }; delete cp[n]
-  loraSets.value = cp; _persistLoraSets(); loraSetSel.value = ''
-  addToast('info', `세트 삭제: ${n}`)
-}
-// LoRA STACK 드래그 순서 변경
-const loraDragIdx = ref(-1)
-function loraDragStart(i) { loraDragIdx.value = i }
-function loraDrop(i) {
-  const from = loraDragIdx.value
-  loraDragIdx.value = -1
-  if (from < 0 || from === i) return
-  const moved = loraStack.splice(from, 1)[0]
-  loraStack.splice(i, 0, moved)
-  _saveLoraStack(); syncLoraStack()
-}
+const showCondModal = ref(false)   // 조건부 프롬프트 모달 (showLoraModal/onLoraAdd/세트/드래그는 useLoraStack)
 
 // History pagination
 const visibleHistory = computed(() => {
@@ -1799,12 +1690,9 @@ function _doGenerateNow() {
     const weighted = applyGlobalWeights(cur)
     if (weighted !== cur) storeWidgets.main_prompt_text = weighted
   }
-  // LoRA Stack
-  const activeLoras = loraStack.filter(l => l.enabled)
-  if (activeLoras.length > 0) {
-    const loraText = activeLoras.map(l => `<lora:${l.name}:${(l.weight/100).toFixed(2)}>`).join(', ')
-    requestAction('set_lora_text', { lora_text: loraText })
-  }
+  // LoRA Stack — 활성 LoRA를 <lora:name:weight> 텍스트로 (useLoraStack)
+  const loraText = buildActiveLoraText()
+  if (loraText) requestAction('set_lora_text', { lora_text: loraText })
   syncAutomationSettings()
   genStartTime.value = Date.now()
   genEta.value = ''
@@ -2197,12 +2085,7 @@ onMounted(async () => {
       // 고해상도: 단일 소스(ui_prefs)가 localStorage를 override (watch가 Python+localStorage 재동기)
       if (typeof prefs.highResFactor === 'number') highResFactor.value = prefs.highResFactor
       if (typeof prefs.highResEnabled === 'boolean') highResEnabled.value = prefs.highResEnabled
-      if (Array.isArray(prefs.loraStack)) {
-        _loraRestoring = true
-        loraStack.splice(0, loraStack.length, ...prefs.loraStack.map(l => ({ ...l })))
-        window.localStorage.setItem('loraStack', JSON.stringify(prefs.loraStack))
-        nextTick(() => { _loraRestoring = false; _loraInitialized = true })
-      }
+      restoreLoraFromPrefs(prefs)   // 단일 소스(ui_prefs.loraStack) 복원 (useLoraStack)
       // tabOrder 복원 (Settings 탭 미방문 시에도 적용)
       if (Array.isArray(prefs.tabOrder) && prefs.tabOrder.length > 0) {
         window.localStorage.setItem('tabOrder', JSON.stringify(prefs.tabOrder))
@@ -2237,23 +2120,7 @@ onMounted(async () => {
     } catch {}
   })
 
-  onBackendEvent('loraStackLoaded', (json) => {
-    try {
-      const entries = JSON.parse(json)
-      if (!Array.isArray(entries)) return
-      _loraRestoring = true
-      loraStack.splice(0, loraStack.length, ...entries.map(entry => ({
-        name: entry.name || '',
-        weight: Number.isFinite(Number(entry.weight)) ? Math.round(Number(entry.weight) * 100) : 80,
-        enabled: entry.enabled !== false,
-        triggerWords: Array.isArray(entry.triggerWords) ? entry.triggerWords : [],
-      })))
-      // localStorage만 업데이트, ui_prefs 재저장 안 함 (루프 방지)
-      try { window.localStorage.setItem('loraStack', JSON.stringify(loraStack)) } catch {}
-      nextTick(() => { _loraRestoring = false; _loraInitialized = true })
-    } catch {}
-  })
-
+  // loraStackLoaded 핸들러는 useLoraStack 내부에서 등록됨 (App.vue 분할 ④)
   syncLoraStack()
 })
 </script>
