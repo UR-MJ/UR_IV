@@ -223,41 +223,52 @@ class OllamaClient:
             "num_predict": 1024 if is_nl else 500,
         }
 
-        try:
-            # /api/chat — Ollama 앱과 동일 방식(모델의 채팅 템플릿 적용). HuggingFace에서
-            # 직접 받은 GGUF 모델은 /api/generate(system+prompt)에서 빈 응답을 내는 경우가
-            # 있어 chat 엔드포인트를 우선 사용.
-            chat_payload = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_msg},
-                ],
-                "stream": False,
-                "options": opts,
-            }
-            r = requests.post(
-                f"{self.base_url}/api/chat",
-                json=chat_payload,
-                timeout=self.timeout,
-            )
+        import json as _json
+        self._last_raw = ''
+
+        def _chat(messages):
+            r = requests.post(f"{self.base_url}/api/chat",
+                              json={"model": self.model, "messages": messages,
+                                    "stream": False, "options": opts},
+                              timeout=self.timeout)
             r.raise_for_status()
-            data = r.json()
-            response = ((data.get('message') or {}).get('content') or '').strip()
-            # 빈 응답이면 /api/generate로 폴백 (구버전/일부 모델 호환)
+            d = r.json()
+            self._last_raw = _json.dumps(d, ensure_ascii=False)[:300]
+            m = d.get('message') or {}
+            return ((m.get('content') or '') or (m.get('thinking') or '')).strip()
+
+        def _gen():
+            r = requests.post(f"{self.base_url}/api/generate",
+                              json={"model": self.model, "system": system, "prompt": user_msg,
+                                    "stream": False, "options": opts},
+                              timeout=self.timeout)
+            r.raise_for_status()
+            d = r.json()
+            self._last_raw = _json.dumps(d, ensure_ascii=False)[:300]
+            return (d.get('response') or '').strip()
+
+        def _attempt(fn):
+            try:
+                return fn()
+            except (requests.ConnectionError, requests.Timeout):
+                raise
+            except Exception:
+                return ''
+
+        try:
+            # 여러 방식 시도 — HF GGUF 등 채팅 템플릿 호환 편차 대응:
+            # 1) chat(system+user)  2) chat(system을 user에 합침, system role 미지원 대응)
+            # 3) generate(system+prompt).  message.content가 비면 thinking도 확인.
+            response = (
+                _attempt(lambda: _chat([{"role": "system", "content": system},
+                                        {"role": "user", "content": user_msg}]))
+                or _attempt(lambda: _chat([{"role": "user", "content": f"{system}\n\n{user_msg}"}]))
+                or _attempt(_gen)
+            )
             if not response:
-                gen_payload = {
-                    "model": self.model, "system": system, "prompt": user_msg,
-                    "stream": False, "options": opts,
-                }
-                r = requests.post(
-                    f"{self.base_url}/api/generate",
-                    json=gen_payload,
-                    timeout=self.timeout,
-                )
-                r.raise_for_status()
-                response = (r.json().get('response') or '').strip()
-            # 마크다운, 번호, 코드블록, 사고과정 정리
+                raise RuntimeError(
+                    f"AI가 빈 응답을 반환했습니다 — 모델 '{self.model}'의 응답 형식 문제일 수 있습니다. "
+                    f"(raw: {self._last_raw[:160]})")
             import re
             # harmony/channel 토큰(gpt-oss 등) + <think> 제거 (모든 파이프 변형)
             response = _strip_channels(response)
