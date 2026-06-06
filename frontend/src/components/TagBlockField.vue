@@ -44,28 +44,40 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { getBackend } from '../bridge.js'
 
-const props = defineProps({
-  modelValue: { type: String, default: '' },
-  colorFn: { type: Function, default: () => '' },
-  placeholder: { type: String, default: '추가...' },
+interface TagBlock {
+  text: string
+  off: boolean
+}
+
+const props = withDefaults(defineProps<{
+  modelValue?: string
+  colorFn?: (text: string) => string
+  placeholder?: string
+}>(), {
+  modelValue: '',
+  colorFn: () => '',
+  placeholder: '추가...',
 })
-const emit = defineEmits(['update:modelValue', 'open-wildcard'])
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+  'open-wildcard': [name: string | undefined]
+}>()
 
 // 블록 데이터
-const blocks = ref([])
+const blocks = ref<TagBlock[]>([])
 const newTag = ref('')
 const editIdx = ref(-1)
 const editText = ref('')
-const editInputRef = ref(null)
+const editInputRef = ref<HTMLInputElement[] | null>(null)
 const draggingFrom = ref(-1)
 const dropIdx = ref(-1)
 
 // 초기화 + 동기화
-function parseText(text) {
+function parseText(text: string): TagBlock[] {
   if (!text) return []
   let depth = 0; let p = ''
   for (const ch of text) {
@@ -81,14 +93,14 @@ function syncToModel() {
   emit('update:modelValue', blocks.value.filter(b => !b.off).map(b => b.text).join(', '))
 }
 
-watch(() => props.modelValue, (v) => {
+watch(() => props.modelValue, (v: string) => {
   const newBlocks = parseText(v)
   const offSet = new Set(blocks.value.filter(b => b.off).map(b => b.text))
   blocks.value = newBlocks.map(b => ({ ...b, off: offSet.has(b.text) }))
 }, { immediate: true })
 
 // 블록 조작
-function toggleBlock(idx) {
+function toggleBlock(idx: number) {
   blocks.value[idx].off = !blocks.value[idx].off
   syncToModel()
 }
@@ -102,7 +114,7 @@ function clearAllBlocks() {
   syncToModel()
 }
 
-function removeBlock(idx) {
+function removeBlock(idx: number) {
   blocks.value.splice(idx, 1)
   syncToModel()
 }
@@ -112,14 +124,14 @@ function addBlock() {
   if (tag) { blocks.value.push({ text: tag, off: false }); newTag.value = ''; syncToModel() }
 }
 
-function startEdit(idx) {
+function startEdit(idx: number) {
   if (isWc(blocks.value[idx].text)) { emit('open-wildcard', blocks.value[idx].text.match(/__(.+?)__/)?.[1]); return }
   editIdx.value = idx
   editText.value = blocks.value[idx].text
   nextTick(() => { if (editInputRef.value?.[0]) editInputRef.value[0].focus() })
 }
 
-function finishEdit(idx) {
+function finishEdit(idx: number) {
   if (editIdx.value !== idx) return
   const t = editText.value.trim()
   if (t) blocks.value[idx].text = t
@@ -129,19 +141,19 @@ function finishEdit(idx) {
 }
 
 // 자동완성 (블록 모드)
-const acItems = ref([])
+const acItems = ref<string[]>([])
 const acIdx = ref(0)
-let acTimer = null
+let acTimer: ReturnType<typeof setTimeout> | null = null
 
 function onAddInput() {
   const prefix = newTag.value.trim()
   if (prefix.length < 2) { acItems.value = []; return }
-  clearTimeout(acTimer)
+  if (acTimer) clearTimeout(acTimer)
   acTimer = setTimeout(async () => {
     try {
-      const backend = await getBackend()
+      const backend: any = await getBackend()
       if (backend.getTagSuggestions) {
-        backend.getTagSuggestions(prefix, (json) => {
+        backend.getTagSuggestions(prefix, (json: string) => {
           try {
             const arr = JSON.parse(json)
             acItems.value = Array.isArray(arr) ? arr.slice(0, 10) : []
@@ -153,7 +165,7 @@ function onAddInput() {
   }, 250)
 }
 
-function onAddKey(e) {
+function onAddKey(e: KeyboardEvent) {
   // 자동완성 활성일 때 키 처리
   if (acItems.value.length > 0) {
     if (e.key === 'ArrowDown') { e.preventDefault(); acIdx.value = Math.min(acIdx.value + 1, acItems.value.length - 1); return }
@@ -167,7 +179,7 @@ function onAddKey(e) {
   if (e.key === 'Enter') addBlock()
 }
 
-function acceptSuggestion(tag) {
+function acceptSuggestion(tag: string) {
   if (!tag) return
   newTag.value = tag.replace(/_/g, ' ')  // 표시는 공백으로
   acItems.value = []
@@ -175,9 +187,9 @@ function acceptSuggestion(tag) {
 }
 
 // 드래그 — 다중 행(wrap) 인식 + 행 내 X 기준 위치 판정
-function onDragStart(idx) { draggingFrom.value = idx }
-function onDragOver(e) {
-  const container = e.currentTarget
+function onDragStart(idx: number) { draggingFrom.value = idx }
+function onDragOver(e: DragEvent) {
+  const container = e.currentTarget as HTMLElement
   // 실제 블록만 추출 (드롭 마커/입력 칸 제외)
   const els = Array.from(container.querySelectorAll('.tbf-block, .tbf-edit'))
   if (els.length === 0) { dropIdx.value = 0; return }
@@ -246,8 +258,8 @@ function onDrop() {
   draggingFrom.value = -1; dropIdx.value = -1
 }
 
-function colorClass(text) { return props.colorFn(text) }
-function isWc(text) { return /__.+__/.test(text) }
+function colorClass(text: string) { return props.colorFn(text) }
+function isWc(text: string) { return /__.+__/.test(text) }
 </script>
 
 <style scoped>

@@ -90,7 +90,7 @@ export async function getBackend() {
  * Python → JS 이벤트 수신. (이름 정합성 강제는 tests/test_bridge_contract.py)
  * @param {import('./types/bridge').BackendEvent} eventName  백엔드 시그널 이름(에디터 자동완성)
  * @param {Function} callback
- * @returns {Function} disconnect 함수 — onUnmounted에서 호출하여 리스너 해제
+ * @returns {() => void} disconnect 함수 — onUnmounted에서 호출하여 리스너 해제
  */
 export function onBackendEvent(eventName, callback) {
   let _signal = null

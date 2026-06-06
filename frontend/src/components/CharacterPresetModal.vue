@@ -175,7 +175,7 @@
                     <option value="neg">네거</option>
                   </select>
                   <input :value="rule.tags.join(', ')" class="cpm-r-tags" placeholder="대상 태그 (쉼표)"
-                    @input="rule.tags = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)" />
+                    @input="rule.tags = ($event.target as HTMLInputElement).value.split(',').map((s: string) => s.trim()).filter(Boolean)" />
                   <button class="cpm-r-del" @click="condRules.splice(i, 1)">✕</button>
                 </div>
                 <button class="cpm-r-add" @click="addRule">+ 규칙 추가</button>
@@ -197,28 +197,35 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { getBackend } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
-const emit = defineEmits(['close'])
+interface SearchResult { key: string; count: number; hasPreset: boolean; [k: string]: any }
+interface TagItem { tag: string; existing?: boolean; costume?: boolean; checked?: boolean; region?: string; regionLabel?: string; [k: string]: any }
+interface CustomTagItem { tag: string; checked: boolean }
+interface CondRule { condition: string; exists: boolean; tags: string[]; location: string; action: string; enabled: boolean }
+interface CatItem { key: string; label: string }
+interface RegionGroup { region: string; label: string; tags: TagItem[] }
+
+const emit = defineEmits<{ close: [] }>()
 
 const query = ref('')
-const results = ref([])          // [{key, count, hasPreset}]
+const results = ref<SearchResult[]>([])          // [{key, count, hasPreset}]
 const selectedChar = ref('')
 const charCount = ref(0)
-const coreTags = ref([])         // [{tag, existing, costume, checked}]
-const costumeTags = ref([])
-const etcTags = ref([])          // 기타(포즈·표정·동작 등 목록 밖) — 기본 미선택
-const auxTags = ref([])          // 보조 특징(characteristic_list.txt) — 기본 선택
+const coreTags = ref<TagItem[]>([])         // [{tag, existing, costume, checked}]
+const costumeTags = ref<TagItem[]>([])
+const etcTags = ref<TagItem[]>([])          // 기타(포즈·표정·동작 등 목록 밖) — 기본 미선택
+const auxTags = ref<TagItem[]>([])          // 보조 특징(characteristic_list.txt) — 기본 선택
 // ── 전역(모든 캐릭터 공통) 설정 ──
-const CAT_LIST = [{ key: 'core', label: '핵심' }, { key: 'aux', label: '보조' }, { key: 'costume', label: '의상' }, { key: 'etc', label: '기타' }]
-const globalCatOn = reactive({ core: true, aux: true, costume: true, etc: false })
-const globalWordOff = ref([])    // 모든 캐릭터에서 항상 OFF인 단어(normalized)
+const CAT_LIST: CatItem[] = [{ key: 'core', label: '핵심' }, { key: 'aux', label: '보조' }, { key: 'costume', label: '의상' }, { key: 'etc', label: '기타' }]
+const globalCatOn = reactive<Record<string, boolean>>({ core: true, aux: true, costume: true, etc: false })
+const globalWordOff = ref<string[]>([])    // 모든 캐릭터에서 항상 OFF인 단어(normalized)
 const newGlobalWord = ref('')
-const customTags = ref([])       // [{tag, checked}]
-const condRules = ref([])        // [{condition, exists, tags:[], location, action, enabled}]
+const customTags = ref<CustomTagItem[]>([])       // [{tag, checked}]
+const condRules = ref<CondRule[]>([])        // [{condition, exists, tags:[], location, action, enabled}]
 const presetStatus = ref('')
 const newCustom = ref('')
 const status = ref('')
@@ -227,29 +234,29 @@ const addCopyright = ref(true)    // copyright 함께 추가 여부
 const groupByRegion = ref(true)   // ④ 의상 부위별 그룹 보기
 const dbLoading = ref(false)
 const deckOnly = ref(false)
-const deckChars = ref(null)      // array of normalized names | null
-const searchEl = ref(null)
+const deckChars = ref<string[] | null>(null)      // array of normalized names | null
+const searchEl = ref<HTMLInputElement | null>(null)
 
-let _searchTimer = null
+let _searchTimer: ReturnType<typeof setTimeout> | null = null
 
-function callBk(method, ...args) {
+function callBk(method: string, ...args: any[]): Promise<any> {
   return new Promise(async (resolve) => {
-    const bk = await getBackend()
+    const bk: any = await getBackend()
     if (!bk || !bk[method]) { resolve(null); return }
     try {
-      bk[method](...args, (json) => {
+      bk[method](...args, (json: string) => {
         try { resolve(JSON.parse(json)) } catch { resolve(null) }
       })
     } catch (e) { resolve(null) }
   })
 }
 
-function norm(s) { return (s || '').trim().toLowerCase().replace(/_/g, ' ') }
+function norm(s: string): string { return (s || '').trim().toLowerCase().replace(/_/g, ' ') }
 
 // ④ 의상 부위(region) 표시 순서 (머리→발→전신→스타일)
 const REGION_ORDER = ['HEAD_NECK_FACE', 'UPPER_BODY', 'WAIST_HIP', 'ARMS_HANDS', 'LEGS_FEET', 'FULL_BODY', 'STYLE', 'UNASSIGNED']
-const costumeByRegion = computed(() => {
-  const buckets = {}
+const costumeByRegion = computed<RegionGroup[]>(() => {
+  const buckets: Record<string, RegionGroup> = {}
   for (const t of costumeTags.value) {
     const r = t.region || 'UNASSIGNED'
     if (!buckets[r]) buckets[r] = { region: r, label: t.regionLabel || r, tags: [] }
@@ -263,9 +270,9 @@ const costumeByRegion = computed(() => {
 const displayResults = computed(() => {
   if (deckOnly.value) {
     const set = new Set(deckChars.value || [])
-    let base = (deckChars.value || []).map(n => ({ key: n, count: 0, hasPreset: false }))
+    let base: SearchResult[] = (deckChars.value || []).map(n => ({ key: n, count: 0, hasPreset: false }))
     // 검색 결과 중 덱에 있는 것은 count/hasPreset 정보로 보강
-    const byNorm = {}
+    const byNorm: Record<string, SearchResult> = {}
     for (const r of results.value) byNorm[norm(r.key)] = r
     base = base.map(b => byNorm[norm(b.key)] ? byNorm[norm(b.key)] : b)
     const q = norm(query.value)
@@ -303,7 +310,7 @@ async function toggleDeckOnly() {
   }
 }
 
-async function selectChar(key) {
+async function selectChar(key: string) {
   // 비동기 로드 전에 이전 캐릭터 상태를 먼저 비운다 (로드 실패 시 이전 태그 잔존 방지)
   selectedChar.value = key
   presetStatus.value = ''
@@ -321,17 +328,17 @@ async function selectChar(key) {
   charCount.value = data.count || 0
   copyright.value = data.copyright || ''
   addCopyright.value = data.autoAddCopyright !== false
-  coreTags.value = (data.core || []).map(t => ({ ...t, checked: _defChecked('core', t) }))
-  costumeTags.value = (data.costume || []).map(t => ({ ...t, checked: _defChecked('costume', t) }))
-  etcTags.value = (data.etc || []).map(t => ({ ...t, checked: _defChecked('etc', t) }))
-  auxTags.value = (data.aux || []).map(t => ({ ...t, checked: _defChecked('aux', t) }))
-  customTags.value = (data.custom || []).map(tag => ({ tag, checked: true }))
+  coreTags.value = (data.core || []).map((t: TagItem) => ({ ...t, checked: _defChecked('core', t) }))
+  costumeTags.value = (data.costume || []).map((t: TagItem) => ({ ...t, checked: _defChecked('costume', t) }))
+  etcTags.value = (data.etc || []).map((t: TagItem) => ({ ...t, checked: _defChecked('etc', t) }))
+  auxTags.value = (data.aux || []).map((t: TagItem) => ({ ...t, checked: _defChecked('aux', t) }))
+  customTags.value = (data.custom || []).map((tag: string) => ({ tag, checked: true }))
   // 조건부 규칙 파싱
   condRules.value = []
   if (data.condRulesJson) {
     try {
       const arr = JSON.parse(data.condRulesJson)
-      condRules.value = arr.map(r => ({
+      condRules.value = arr.map((r: any) => ({
         condition: r.condition || '', exists: r.exists !== false,
         tags: Array.isArray(r.tags) ? r.tags : [], location: r.location || 'main',
         action: r.action || 'add', enabled: r.enabled !== false,
@@ -341,8 +348,8 @@ async function selectChar(key) {
   if (data.hasPreset) presetStatus.value = '★ 저장된 프리셋'
 }
 
-function chipClass(t) { return { off: !t.checked, existing: t.existing } }
-function toggleChip(t) { if (!t.existing) t.checked = !t.checked }
+function chipClass(t: TagItem) { return { off: !t.checked, existing: t.existing } }
+function toggleChip(t: TagItem) { if (!t.existing) t.checked = !t.checked }
 
 // ── 전역(모든 캐릭터) 설정: 로드/저장/적용 ──
 async function loadGlobals() {
@@ -356,14 +363,14 @@ function saveGlobals() {
   const categoryOff = CAT_LIST.map(c => c.key).filter(k => !globalCatOn[k])
   callBk('saveCharGlobalPrefs', JSON.stringify({ categoryOff, wordOff: globalWordOff.value }))
 }
-function _defChecked(cat, t) {
+function _defChecked(cat: string, t: TagItem): boolean {
   if (t.existing) return false
   if (!globalCatOn[cat]) return false
   if (globalWordOff.value.includes(norm(t.tag))) return false
   return true
 }
-const _catArr = { core: coreTags, aux: auxTags, costume: costumeTags, etc: etcTags }
-function toggleGlobalCat(cat) {
+const _catArr: Record<string, typeof coreTags> = { core: coreTags, aux: auxTags, costume: costumeTags, etc: etcTags }
+function toggleGlobalCat(cat: string) {
   globalCatOn[cat] = !globalCatOn[cat]
   const arr = _catArr[cat]
   if (arr) for (const t of arr.value) if (!t.existing) t.checked = _defChecked(cat, t)
@@ -377,7 +384,7 @@ function addGlobalWord() {
     for (const t of _catArr[cat].value) if (norm(t.tag) === w && !t.existing) t.checked = false
   saveGlobals()
 }
-function removeGlobalWord(w) {
+function removeGlobalWord(w: string) {
   globalWordOff.value = globalWordOff.value.filter(x => x !== w)
   saveGlobals()
 }
@@ -412,8 +419,8 @@ async function fetchDanbooru() {
   }
   // 기존(틀릴 수 있는) 핵심/의상 칩을 danbooru 실제 태그로 교체. 이미 프롬프트에 있는 태그는 제외.
   const already = new Set([...coreTags.value, ...costumeTags.value].filter(t => t.existing).map(t => t.tag.toLowerCase()))
-  const fresh = res.tags.filter(t => !already.has(t.toLowerCase()))
-  coreTags.value = fresh.map(t => ({ tag: t, existing: false, costume: false, checked: true }))
+  const fresh = res.tags.filter((t: string) => !already.has(t.toLowerCase()))
+  coreTags.value = fresh.map((t: string) => ({ tag: t, existing: false, costume: false, checked: true }))
   costumeTags.value = []
   etcTags.value = []
   auxTags.value = []
@@ -435,8 +442,8 @@ function addCustom() {
   newCustom.value = ''
 }
 
-function checkedTags() {
-  const out = []
+function checkedTags(): string[] {
+  const out: string[] = []
   for (const t of coreTags.value) if (!t.existing && t.checked) out.push(t.tag)
   for (const t of auxTags.value) if (!t.existing && t.checked) out.push(t.tag)
   for (const t of costumeTags.value) if (!t.existing && t.checked) out.push(t.tag)
@@ -486,7 +493,7 @@ async function deletePreset() {
   }
 }
 
-async function apply(includeName) {
+async function apply(includeName: boolean) {
   const tags = checkedTags()
   if (!tags.length && !includeName) {
     requestAction('show_toast', { type: 'info', msg: '선택된 특징이 없습니다' })
@@ -507,15 +514,15 @@ async function apply(includeName) {
 
 function close() { emit('close') }
 
-function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
 
 onMounted(async () => {
   window.addEventListener('keydown', onKey, true)
   await loadGlobals()   // 전역(모든 캐릭터) 설정 로드 — 캐릭터 load 전에 적용되도록
   // 현재 프롬프트의 캐릭터로 검색 프리필
-  const bk = await getBackend()
+  const bk: any = await getBackend()
   if (bk && bk.getWidgetValue) {
-    bk.getWidgetValue('character_input', (val) => {
+    bk.getWidgetValue('character_input', (val: string) => {
       const first = (val || '').split(',')[0].trim().replace(/\\([()])/g, '$1')
       if (first) { query.value = first; doSearch() }
       if (searchEl.value) searchEl.value.focus()

@@ -72,26 +72,34 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
-const items = ref([])
+interface QueueItem {
+  id?: string
+  prompt?: string
+  negative_prompt?: string
+  _done?: boolean
+  [k: string]: any
+}
+
+const items = ref<QueueItem[]>([])
 const isExpanded = ref(false)
 const isRunning = ref(false)
 const isPaused = ref(false)
 const currentIdx = ref(-1)
 const completedCount = ref(0)
-const selectedIds = ref(new Set())  // 다중 선택 (Shift+클릭으로 범위 선택)
+const selectedIds = ref<Set<string>>(new Set())  // 다중 선택 (Shift+클릭으로 범위 선택)
 const _lastClickedIdx = ref(-1)
 
 // 큐 항목 편집 모달
-const editItem = ref(null)
+const editItem = ref<QueueItem | null>(null)
 const editIdx = ref(-1)
 const editPrompt = ref('')
 const editNeg = ref('')
-function openEdit(item, i) {
+function openEdit(item: QueueItem, i: number) {
   editItem.value = item
   editIdx.value = i
   editPrompt.value = (item.prompt || '').toString()
@@ -114,7 +122,7 @@ function deleteEdit() {
   }
   closeEdit()
 }
-function moveEdit(dir) {
+function moveEdit(dir: 'up' | 'down') {
   if (editItem.value && editItem.value.id) {
     requestAction('move_queue_item', { item_id: editItem.value.id, direction: dir })
   }
@@ -143,19 +151,19 @@ const etaText = computed(() => {
   return `${Math.floor(sec / 3600)}시 ${Math.floor((sec % 3600) / 60)}분`
 })
 
-function isItemRunning(i) {
+function isItemRunning(i: number) {
   return i === currentIdx.value && isRunning.value
 }
-function canMoveUp(i) {
+function canMoveUp(i: number) {
   if (isRunning.value && i <= 1) return false  // 0번은 처리 중
   return i > 0
 }
-function canMoveDown(i) {
+function canMoveDown(i: number) {
   if (isRunning.value && i === 0) return false  // 처리 중인 항목은 못 내림
   return i < items.value.length - 1
 }
 
-function onItemClick(e, item, i) {
+function onItemClick(e: MouseEvent, item: QueueItem, i: number) {
   if (!item.id) return  // id 없으면 선택 불가
   if (e.shiftKey && _lastClickedIdx.value >= 0) {
     // 범위 선택
@@ -180,12 +188,12 @@ function onItemClick(e, item, i) {
   }
 }
 
-function moveItem(item, direction) {
+function moveItem(item: QueueItem, direction: 'up' | 'down') {
   if (!item.id) return
   requestAction('move_queue_item', { item_id: item.id, direction })
 }
 
-function removeItem(item, i) {
+function removeItem(item: QueueItem, i: number) {
   if (item.id) {
     requestAction('remove_queue_items', { item_ids: [item.id] })
   } else {
@@ -220,7 +228,7 @@ function pauseQueue() { requestAction('pause_queue') }
 function resumeQueue() { requestAction('resume_queue') }
 
 // 이벤트 disconnect 핸들 — onUnmounted에서 정리 (메모리 누수 방지)
-const _unsubs = []
+const _unsubs: Array<() => void> = []
 
 // 자동화 자동 재시작 옵션 — Settings에서 토글, 여기선 읽기만
 // 기본값 ON — 사용자가 명시적으로 'false' 저장한 경우만 OFF
@@ -228,7 +236,7 @@ const _unsubs = []
 // 자동 재시작을 원하면 설정에서 켜면 됨(localStorage 'queue.autoResumeOnStart'='true').
 const autoResumeOnStart = ref(localStorage.getItem('queue.autoResumeOnStart') === 'true')
 // Settings에서 변경 시 즉시 반영 (storage 이벤트는 다른 탭, 같은 탭은 작동 안 해서 unused지만 안전망)
-function _onStorageEvent(e) {
+function _onStorageEvent(e: StorageEvent) {
   if (e.key === 'queue.autoResumeOnStart') {
     autoResumeOnStart.value = e.newValue !== 'false'
   }
@@ -237,15 +245,15 @@ let _autoResumeTried = false  // 1회만 시도 (재실행 방지)
 
 onMounted(() => {
   // Python → Vue: 대기열 상태 실시간 동기화
-  _unsubs.push(onBackendEvent('queueUpdated', (json) => {
+  _unsubs.push(onBackendEvent('queueUpdated', (json: string) => {
     try {
-      const data = JSON.parse(json)
+      const data: any = JSON.parse(json)
       if (Array.isArray(data.items)) {
         items.value = data.items
         // 삭제된 항목의 선택 정리
         if (selectedIds.value.size > 0) {
-          const validIds = new Set(data.items.map(it => it.id).filter(Boolean))
-          const next = new Set()
+          const validIds = new Set<string>(data.items.map((it: QueueItem) => it.id).filter(Boolean))
+          const next = new Set<string>()
           for (const id of selectedIds.value) if (validIds.has(id)) next.add(id)
           if (next.size !== selectedIds.value.size) selectedIds.value = next
         }
@@ -278,11 +286,11 @@ onMounted(() => {
   _unsubs.push(onBackendEvent('queueItemAdded', () => { isExpanded.value = true }))
 
   // 완료 이벤트
-  _unsubs.push(onBackendEvent('queueCompleted', (json) => {
+  _unsubs.push(onBackendEvent('queueCompleted', (json: string) => {
     isRunning.value = false
     isPaused.value = false
     try {
-      const data = JSON.parse(json)
+      const data: any = JSON.parse(json)
       completedCount.value = data.total || items.value.length
     } catch {}
     _startTime.value = 0
@@ -290,7 +298,7 @@ onMounted(() => {
 })
 
 // Settings에서 autoResumeOnStart 변경 시 즉시 반영 (다른 창/탭 — 같은 창은 거의 불필요)
-function _onEditKey(e) { if (e.key === 'Escape' && editItem.value) { e.stopPropagation(); closeEdit() } }
+function _onEditKey(e: KeyboardEvent) { if (e.key === 'Escape' && editItem.value) { e.stopPropagation(); closeEdit() } }
 onMounted(() => {
   window.addEventListener('storage', _onStorageEvent)
   window.addEventListener('keydown', _onEditKey, true)
