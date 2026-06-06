@@ -33,6 +33,7 @@
               <button class="tool-btn" @click="showOrderManager = true; loadPromptOrder()" title="최종 프롬프트의 섹션 순서를 직접 지정">ORDER</button>
               <button class="tool-btn" @click="openAbTestModal()">A/B TEST</button>
               <button class="tool-btn" @click="showStatsModal = true; loadGenStats()">STATS</button>
+              <button class="tool-btn" @click="showCondModal = true" title="태그 조건부 프롬프트 (IF→THEN) 관리">조건부</button>
             </div>
           </div>
 
@@ -600,6 +601,7 @@
     <ABTestModal v-if="uiModals.abTest" @close="closeAbTestModal" />
     <CharFeatureOverrideModal v-if="uiModals.charOverride" @close="closeCharOverrideModal" />
     <LoraManagerModal v-if="showLoraModal" @close="showLoraModal = false" @add="onLoraAdd" />
+    <CondPromptModal v-if="showCondModal" @close="showCondModal = false" />
 
     <!-- Weight Manager Modal -->
     <transition name="fade">
@@ -1047,6 +1049,8 @@ import CharacterPresetModal from './components/CharacterPresetModal.vue'
 import ABTestModal from './components/ABTestModal.vue'
 import CharFeatureOverrideModal from './components/CharFeatureOverrideModal.vue'
 import LoraManagerModal from './components/LoraManagerModal.vue'
+import CondPromptModal from './components/CondPromptModal.vue'
+import { loadCondRules } from './composables/condRules.js'
 import { uiModals, closeCharPresetModal, openAbTestModal, closeAbTestModal,
          openCharOverrideModal, closeCharOverrideModal } from './composables/uiModals.js'
 
@@ -1284,6 +1288,7 @@ function insertAllTriggers() {
 }
 // LoRA 매니저(Vue 모달)
 const showLoraModal = ref(false)
+const showCondModal = ref(false)   // 조건부 프롬프트 모달
 function onLoraAdd(p) {
   addLoraToStack(p.name, typeof p.weight === 'number' ? p.weight : 1.0, p.triggerWords || [])
   addToast('success', `LoRA 추가: ${p.name}`)
@@ -1757,6 +1762,7 @@ _applyUiScale(localStorage.getItem('ui.scale') || '1.0')
 onMounted(async () => {
   await initBridge()
   storeWidgets.negpip_group = 'true'   // NegPiP 상시 적용 (UI 토글 제거)
+  loadCondRules()                      // 조건부 프롬프트 규칙 로드 (모달/Search 공유)
   // Settings 등 다른 곳에서 ui.scale 변경 시 즉시 반영
   window.addEventListener('storage', (e) => {
     if (e.key === 'ui.scale') _applyUiScale(e.newValue)

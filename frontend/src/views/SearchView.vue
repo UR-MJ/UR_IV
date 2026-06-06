@@ -343,74 +343,14 @@
         </div>
       </transition>
 
-      <!-- 조건부 프롬프트 (항상 표시) -->
-      <div class="cond-section" v-if="results.length > 0 || condPositive.length > 0 || condNegative.length > 0">
-        <div class="cond-grid">
-        <details class="cond-card" open>
-          <summary class="cond-title positive">CONDITIONAL POSITIVE</summary>
-          <p class="cond-desc">태그가 존재하면 자동으로 다른 태그를 추가/제거합니다</p>
-          <div v-for="(rule, ri) in condPositive" :key="'p'+ri" class="cond-rule-block">
-            <div class="cond-row1">
-              <input type="checkbox" v-model="rule.enabled" />
-              <span class="cond-kw">IF</span>
-              <input v-model="rule.condition" placeholder="조건 태그" class="cond-input" />
-              <select v-model="rule.exists" class="cond-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
-              <button class="cond-rm" @click="condPositive.splice(ri, 1)">✕</button>
-            </div>
-            <div class="cond-row2">
-              <span class="cond-kw">→</span>
-              <input v-model="rule.target" placeholder="대상 태그" class="cond-input" />
-              <select v-model="rule.action" class="cond-sel">
-                <option value="add">추가</option><option value="remove">제거</option><option value="replace">대체</option>
-              </select>
-              <select v-model="rule.location" class="cond-sel" title="삽입 위치">
-                <option value="main">본문(main)</option>
-                <option value="prefix">선행 고정</option>
-                <option value="suffix">후행 고정</option>
-              </select>
-            </div>
-          </div>
-          <button class="cond-add" @click="condPositive.push({enabled:true,condition:'',exists:true,target:'',action:'add',location:'main'})">+ 규칙 추가</button>
-        </details>
-
-        <details class="cond-card neg" open>
-          <summary class="cond-title negative">CONDITIONAL NEGATIVE</summary>
-          <p class="cond-desc">태그가 존재하면 네거티브 프롬프트에 자동 추가/제거합니다</p>
-          <div v-for="(rule, ri) in condNegative" :key="'n'+ri" class="cond-rule-block">
-            <div class="cond-row1">
-              <input type="checkbox" v-model="rule.enabled" />
-              <span class="cond-kw">IF</span>
-              <input v-model="rule.condition" placeholder="조건 태그" class="cond-input" />
-              <select v-model="rule.exists" class="cond-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
-              <button class="cond-rm" @click="condNegative.splice(ri, 1)">✕</button>
-            </div>
-            <div class="cond-row2">
-              <span class="cond-kw">→</span>
-              <input v-model="rule.target" placeholder="네거티브 태그" class="cond-input neg" />
-              <select v-model="rule.action" class="cond-sel">
-                <option value="add">추가</option><option value="remove">제거</option>
-              </select>
-              <select v-model="rule.location" class="cond-sel" title="네거티브 내 삽입 위치">
-                <option value="main">본문(main)</option>
-                <option value="prefix">선행 고정</option>
-                <option value="suffix">후행 고정</option>
-              </select>
-            </div>
-          </div>
-          <button class="cond-add" @click="condNegative.push({enabled:true,condition:'',exists:true,target:'',action:'add',location:'main'})">+ 규칙 추가</button>
-        </details>
-        </div>
-        <div class="cond-save-row">
-          <span class="cond-autosave">💾 자동 저장됨</span>
-          <button class="cond-save-btn" @click="saveCondRules">💾 즉시 저장</button>
-        </div>
-      </div>
+      <!-- 조건부 프롬프트는 STUDIO TOOLS의 '조건부' 버튼(모달)에서 관리합니다 -->
     </template>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { condRulesPayload } from '../composables/condRules.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
@@ -531,9 +471,7 @@ function onListRowUse(r) {
   }
 }
 
-// 조건부 프롬프트
-const condPositive = reactive([])
-const condNegative = reactive([])
+// 조건부 프롬프트 — 상태/저장/로드는 composables/condRules.js + 조건부 모달이 담당
 let progressTimer = null
 
 const currentResult = computed(() => filteredResults.value[previewIdx.value] || null)
@@ -771,29 +709,7 @@ onMounted(() => {
     try { if (applySearchState(JSON.parse(json).searchState)) _restoredFromLocalStorage = true } catch {}
   })
 
-  // 조건부 프롬프트 로드 — localStorage 즉시 + backend 비동기로 보강
-  // 1) localStorage 우선 (sync, 가장 최신)
-  try {
-    const cr = window.localStorage.getItem('searchCondRules')
-    if (cr) {
-      const d = JSON.parse(cr)
-      if (Array.isArray(d.positive)) { condPositive.splice(0); d.positive.forEach(r => condPositive.push(r)) }
-      if (Array.isArray(d.negative)) { condNegative.splice(0); d.negative.forEach(r => condNegative.push(r)) }
-    }
-  } catch {}
-  // 2) backend에서 추가 로드 — localStorage가 비어있을 때만 덮어쓰기 (역방향 동기화)
-  onBackendEvent('condRulesLoaded', (json) => {
-    try {
-      const d = JSON.parse(json)
-      // localStorage에 이미 값 있으면 backend는 보조용 (덮어쓰지 않음)
-      if (condPositive.length === 0 && Array.isArray(d.positive) && d.positive.length > 0) {
-        d.positive.forEach(r => condPositive.push(r))
-      }
-      if (condNegative.length === 0 && Array.isArray(d.negative) && d.negative.length > 0) {
-        d.negative.forEach(r => condNegative.push(r))
-      }
-    } catch {}
-  })
+  // (조건부 프롬프트 로드는 App.vue가 composables/condRules.js의 loadCondRules로 처리)
 })
 
 watch(fields, persistSearchFields, { deep: true })
@@ -1041,8 +957,7 @@ function applyResult() {
   // 조건부 프롬프트 규칙도 함께 전달
   const payload = {
     ...currentResult.value,
-    cond_positive: condPositive.filter(r => r.enabled && r.condition && r.target),
-    cond_negative: condNegative.filter(r => r.enabled && r.condition && r.target),
+    ...condRulesPayload(),
   }
   requestAction('apply_search_result', payload)
 }
@@ -1050,33 +965,11 @@ function addToQueue() {
   if (!currentResult.value) return
   const payload = {
     ...currentResult.value,
-    cond_positive: condPositive.filter(r => r.enabled && r.condition && r.target),
-    cond_negative: condNegative.filter(r => r.enabled && r.condition && r.target),
+    ...condRulesPayload(),
   }
   requestAction('add_search_to_queue', payload)
 }
-function saveCondRules() {
-  requestAction('save_cond_rules', {
-    positive: condPositive.filter(r => r.condition || r.target),
-    negative: condNegative.filter(r => r.condition || r.target),
-  })
-}
-// 자동 저장 — condPositive/condNegative 변경 시 800ms 디바운스 후 backend로
-// localStorage에도 즉시 백업 (앱 빨리 닫혀도 안 잃어버림)
-let _condSaveTimer = null
-function _autoSaveCondRules() {
-  const payload = {
-    positive: condPositive.filter(r => r.condition || r.target),
-    negative: condNegative.filter(r => r.condition || r.target),
-  }
-  try { window.localStorage.setItem('searchCondRules', JSON.stringify(payload)) } catch {}
-  if (_condSaveTimer) clearTimeout(_condSaveTimer)
-  _condSaveTimer = setTimeout(() => {
-    requestAction('save_cond_rules', payload)
-  }, 800)
-}
-watch(condPositive, _autoSaveCondRules, { deep: true })
-watch(condNegative, _autoSaveCondRules, { deep: true })
+// (조건부 규칙 저장/자동저장은 composables/condRules.js가 담당)
 
 function exportResults() { requestAction('export_search_results', { count: filteredResults.value.length, data: filteredResults.value }) }
 function importResults() { requestAction('import_search_results') }
