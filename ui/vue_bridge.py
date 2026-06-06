@@ -1483,6 +1483,33 @@ class VueBridge(QObject):
             return json.dumps({"error": str(e)})
 
     @pyqtSlot(str, result=str)
+    def getLoras(self, mode: str = '') -> str:
+        """설치된 LoRA 목록 → [{name, triggerWords}]. mode='force'면 캐시 무시하고 재스캔.
+        (시작 시 프리로드된 LoraManagerDialog._lora_cache 사용 → 즉시 반환)"""
+        try:
+            from widgets.lora_manager import LoraManagerDialog
+            loras = LoraManagerDialog._lora_cache
+            if mode == 'force' or not loras:
+                from backends import get_backend
+                b = get_backend()
+                fresh = b.get_loras() if b else []
+                if fresh:
+                    loras = fresh
+                    LoraManagerDialog._lora_cache = fresh
+            out = []
+            for l in (loras or []):
+                if isinstance(l, dict):
+                    name = l.get('name') or l.get('alias') or ''
+                    tws = l.get('trigger_words') or l.get('triggerWords') or []
+                else:
+                    name, tws = str(l), []
+                if name:
+                    out.append({"name": name, "triggerWords": list(tws)[:12]})
+            return json.dumps(out, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
     def getClothingRegions(self, tags_json: str) -> str:
         """④ 의류 태그를 부위(region)별로 그룹화 → [{region, label, tags:[...]}]."""
         try:

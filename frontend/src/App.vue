@@ -447,9 +447,14 @@
 
             <!-- LoRA Stack -->
             <div class="ext-card">
-              <div class="ext-title">LoRA STACK</div>
+              <div class="ext-title">LoRA STACK
+                <span v-if="loraStack.length" class="lora-tools">
+                  <button class="lora-tool-btn" @click="toggleAllLoras(!allLorasOn)" :title="allLorasOn ? '전체 끄기' : '전체 켜기'">{{ allLorasOn ? '전체 OFF' : '전체 ON' }}</button>
+                  <button class="lora-tool-btn" @click="insertAllTriggers" title="활성 LoRA 트리거 워드를 메인 프롬프트에 일괄 삽입">트리거 삽입</button>
+                </span>
+              </div>
               <div class="lora-empty" v-if="loraStack.length === 0">
-                LoRA Manager에서 추가하세요
+                LoRA 매니저에서 추가하세요
               </div>
               <div v-for="(lora, i) in loraStack" :key="i" class="lora-block">
                 <label class="lora-check"><input type="checkbox" v-model="lora.enabled" /></label>
@@ -464,7 +469,7 @@
                 <span class="lora-weight">{{ (lora.weight / 100).toFixed(2) }}</span>
                 <button class="lora-remove" @click="loraStack.splice(i, 1)">✕</button>
               </div>
-              <button class="ext-add-btn" @click="action('open_lora_manager')">+ ADD LoRA</button>
+              <button class="ext-add-btn" @click="showLoraModal = true">+ ADD LoRA</button>
             </div>
           </div>
         </aside>
@@ -601,6 +606,7 @@
     <CharacterPresetModal v-if="uiModals.charPreset" @close="closeCharPresetModal" />
     <ABTestModal v-if="uiModals.abTest" @close="closeAbTestModal" />
     <CharFeatureOverrideModal v-if="uiModals.charOverride" @close="closeCharOverrideModal" />
+    <LoraManagerModal v-if="showLoraModal" @close="showLoraModal = false" @add="onLoraAdd" />
 
     <!-- Weight Manager Modal -->
     <transition name="fade">
@@ -1047,6 +1053,7 @@ import QueuePanel from './components/QueuePanel.vue'
 import CharacterPresetModal from './components/CharacterPresetModal.vue'
 import ABTestModal from './components/ABTestModal.vue'
 import CharFeatureOverrideModal from './components/CharFeatureOverrideModal.vue'
+import LoraManagerModal from './components/LoraManagerModal.vue'
 import { uiModals, closeCharPresetModal, openAbTestModal, closeAbTestModal,
          openCharOverrideModal, closeCharOverrideModal } from './composables/uiModals.js'
 
@@ -1262,6 +1269,31 @@ function insertTriggerWord(tw) {
   } else {
     addToast('info', `이미 포함된 태그: ${tw}`)
   }
+}
+
+// LoRA 빠른 컨트롤 — 전체 on/off + 트리거 일괄삽입
+const allLorasOn = computed(() => loraStack.length > 0 && loraStack.every(l => l.enabled))
+function toggleAllLoras(on) { loraStack.forEach(l => { l.enabled = on }) }
+function insertAllTriggers() {
+  const tws = []
+  for (const l of loraStack) {
+    if (l.enabled && Array.isArray(l.triggerWords)) {
+      for (const tw of l.triggerWords) if (tw && !tws.includes(tw)) tws.push(tw)
+    }
+  }
+  if (!tws.length) { addToast('info', '활성 LoRA의 트리거 워드가 없습니다'); return }
+  let cur = (storeWidgets.main_prompt_text || '').trim()
+  const lower = cur.toLowerCase()
+  const add = tws.filter(tw => !lower.includes(tw.toLowerCase()))
+  if (!add.length) { addToast('info', '트리거가 이미 모두 포함됨'); return }
+  storeWidgets.main_prompt_text = cur ? (cur.replace(/,?\s*$/, '') + ', ' + add.join(', ')) : add.join(', ')
+  addToast('success', `트리거 ${add.length}개 삽입`)
+}
+// LoRA 매니저(Vue 모달)
+const showLoraModal = ref(false)
+function onLoraAdd(p) {
+  addLoraToStack(p.name, typeof p.weight === 'number' ? p.weight : 1.0, p.triggerWords || [])
+  addToast('success', `LoRA 추가: ${p.name}`)
 }
 
 // History pagination
@@ -2063,6 +2095,9 @@ onMounted(async () => {
 .lora-slider { width: 60px; accent-color: var(--accent); }
 .lora-weight { font-size: 10px; color: var(--accent); min-width: 30px; text-align: right; font-family: monospace; }
 .lora-remove { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
+.lora-tools { float: right; display: inline-flex; gap: 4px; }
+.lora-tool-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: 9px; font-weight: 700; padding: 2px 7px; cursor: pointer; }
+.lora-tool-btn:hover { color: var(--accent); border-color: var(--accent); }
 .ext-add-btn { width: 100%; padding: 8px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; margin-top: 4px; }
 .ext-res-row { display: flex; align-items: center; gap: 6px; }
 .ext-res-row input { text-align: center; flex: 1; }
