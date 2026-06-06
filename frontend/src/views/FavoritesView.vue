@@ -63,84 +63,73 @@
       </div>
     </section>
 
-    <!-- 이미지 확대 뷰 (풀스크린 오버레이) -->
+    <!-- 별도 뷰어 창 (이미지 확대 + EXIF + 전송 버튼) — 이전 Favorites 방식 복원 -->
     <transition name="fade">
-      <div v-if="largeView" class="large-view-overlay" @click.self="closeLargeView">
-        <div class="large-view-panel">
-          <div class="large-view-header">
-            <span class="large-filename">{{ largeView.filename }}</span>
-            <div class="large-actions">
-              <button class="lv-btn" @click="action('send_to_i2i', { path: largeView.path })">I2I</button>
-              <button class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
-              <button class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
-              <button class="lv-btn unfav" @click="removeFav(largeView.path)">⭐ UNFAV</button>
-              <button class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
-              <button class="lv-close" @click="closeLargeView">✕</button>
-            </div>
+      <div v-if="viewerData" class="viewer-overlay" @click.self="viewerData = null">
+        <div class="viewer-panel">
+          <div class="viewer-header">
+            <span>{{ viewerData.filename }}</span>
+            <button class="viewer-close" @click="viewerData = null">✕</button>
           </div>
-          <div class="large-view-body">
-            <div class="large-img-area">
-              <img :src="'file:///' + largeView.path + '?t=' + Date.now()" />
+          <div class="viewer-body">
+            <div class="viewer-img">
+              <img :src="'file:///' + viewerData.path" />
             </div>
-            <div class="large-exif">
-              <div class="meta-row"><span>SIZE</span><p>{{ largeView.size }}</p></div>
-              <div v-if="largeView.prompt" class="meta-block">
-                <div class="meta-head"><label>PROMPT</label><button class="copy-btn" @click="copySection(largeView.prompt, 'Prompt')">📋</button></div>
-                <div class="code-box">{{ largeView.prompt }}</div>
+            <div class="viewer-info">
+              <div class="vi-size">{{ viewerData.size }}</div>
+              <div v-if="viewerData.prompt" class="vi-section">
+                <div class="vi-head">
+                  <label>PROMPT</label>
+                  <button class="copy-btn" @click="copySection(viewerData.prompt, 'Prompt')" title="Prompt 복사">📋</button>
+                </div>
+                <pre>{{ viewerData.prompt }}</pre>
               </div>
-              <div v-if="largeView.negative" class="meta-block mt-8">
-                <div class="meta-head"><label class="danger">NEGATIVE</label><button class="copy-btn" @click="copySection(largeView.negative, 'Negative')">📋</button></div>
-                <div class="code-box">{{ largeView.negative }}</div>
+              <div v-if="viewerData.negative" class="vi-section">
+                <div class="vi-head">
+                  <label class="neg">NEGATIVE</label>
+                  <button class="copy-btn" @click="copySection(viewerData.negative, 'Negative')" title="Negative 복사">📋</button>
+                </div>
+                <pre>{{ viewerData.negative }}</pre>
               </div>
-              <div v-if="largeView.raw && !largeView.prompt" class="meta-block">
-                <div class="meta-head"><label>RAW</label><button class="copy-btn" @click="copySection(largeView.raw, 'Raw')">📋</button></div>
-                <div class="code-box">{{ largeView.raw }}</div>
+              <div v-if="viewerData.raw && !viewerData.prompt" class="vi-section">
+                <div class="vi-head">
+                  <label>RAW</label>
+                  <button class="copy-btn" @click="copySection(viewerData.raw, 'Raw')" title="Raw 복사">📋</button>
+                </div>
+                <pre>{{ viewerData.raw }}</pre>
               </div>
-              <div v-if="largeViewParams" class="meta-block mt-8">
-                <label>PARAMETERS</label>
-                <div class="code-box params">{{ largeViewParams }}</div>
+              <div v-if="viewerParams" class="vi-section">
+                <div class="vi-head">
+                  <label>PARAMETERS</label>
+                  <button class="copy-btn" @click="copySection(viewerParams, 'Parameters')" title="Parameters 복사">📋</button>
+                </div>
+                <pre>{{ viewerParams }}</pre>
+              </div>
+              <div class="vi-actions-section">
+                <label class="vi-actions-label">SEND TO</label>
+                <div class="vi-send-grid">
+                  <button class="send-card primary" @click="action('gallery_send_exif_to_t2i', { exif: viewerData.raw, path: viewerData.path })" title="EXIF + 이미지를 T2I 탭에 전송">
+                    <span class="send-ico">📤</span>
+                    <span class="send-name">T2I</span>
+                  </button>
+                  <button class="send-card" @click="action('send_to_i2i', { path: viewerData.path })" title="I2I 탭으로">
+                    <span class="send-ico">🖼️</span>
+                    <span class="send-name">I2I</span>
+                  </button>
+                  <button class="send-card" @click="action('send_to_inpaint', { path: viewerData.path })" title="Inpaint 탭으로">
+                    <span class="send-ico">✂️</span>
+                    <span class="send-name">Inpaint</span>
+                  </button>
+                  <button class="send-card" @click="action('send_to_editor', { path: viewerData.path })" title="Editor 탭으로">
+                    <span class="send-ico">🎨</span>
+                    <span class="send-name">Editor</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </transition>
-
-    <!-- Slide-out EXIF Panel (사이드바) -->
-    <transition name="slide">
-      <aside v-if="exifData && !largeView && showMetadata" class="exif-sidebar">
-        <div class="exif-close" @click="exifData = null">➔</div>
-        <div class="exif-content">
-          <div class="exif-preview" @click="largeView = exifData">
-            <img :src="'file:///' + exifData.path" />
-            <div class="click-hint">클릭하여 확대</div>
-          </div>
-          <div class="exif-meta">
-            <h3>METADATA</h3>
-            <div class="meta-row"><span>FILE</span><p>{{ exifData.filename }}</p></div>
-            <div class="meta-row"><span>SIZE</span><p>{{ exifData.size }}</p></div>
-            <div v-if="exifData.prompt" class="meta-block">
-              <div class="meta-head"><label>PROMPT</label><button class="copy-btn" @click="copySection(exifData.prompt, 'Prompt')">📋</button></div>
-              <div class="code-box">{{ exifData.prompt }}</div>
-            </div>
-            <div v-if="exifData.negative" class="meta-block mt-12">
-              <div class="meta-head"><label class="danger">NEGATIVE</label><button class="copy-btn" @click="copySection(exifData.negative, 'Negative')">📋</button></div>
-              <div class="code-box">{{ exifData.negative }}</div>
-            </div>
-            <div v-if="sidebarParams" class="meta-block mt-12">
-              <label>PARAMETERS</label>
-              <div class="code-box params">{{ sidebarParams }}</div>
-            </div>
-          </div>
-          <div class="exif-footer">
-            <button class="main-apply-btn" @click="sendExifToT2I">USE PROMPT IN T2I</button>
-            <div class="grid-2 mt-8">
-              <button class="mini-action" @click="action('send_to_i2i', { path: exifData.path })">I2I</button>
-              <button class="mini-action" @click="action('send_to_inpaint', { path: exifData.path })">INPAINT</button>
-            </div>
-          </div>
-        </div>
-      </aside>
     </transition>
 
     <!-- Context Menu -->
@@ -207,6 +196,12 @@ const largeViewParams = computed(() => {
 const sidebarParams = computed(() => {
   if (!exifData.value?.raw) return ''
   const m = exifData.value.raw.match(/Steps:.*$/m); return m ? m[0] : ''
+})
+// 이전 Favorites 방식: 중앙 모달 뷰어
+const viewerData = ref(null)
+const viewerParams = computed(() => {
+  if (!viewerData.value?.raw) return ''
+  const m = viewerData.value.raw.match(/Steps:.*$/m); return m ? m[0] : ''
 })
 
 const galleryContentRef = ref(null)
@@ -297,7 +292,7 @@ function closeLargeView() {
 const viewImage = async (path) => {
   const backend = await getBackend()
   if (backend.getImageExif) backend.getImageExif(path, (json) => {
-    try { const d = JSON.parse(json); largeView.value = d; exifData.value = d } catch {}
+    try { const d = JSON.parse(json); viewerData.value = d } catch {}
   })
 }
 
@@ -312,7 +307,7 @@ function removeFav(path) {
   requestAction('remove_favorite', { path })
   images.value = images.value.filter(i => i !== path)
   filteredImages.value = filteredImages.value.filter(i => i !== path)
-  if (largeView.value?.path === path) closeLargeView()
+  if (viewerData.value?.path === path) viewerData.value = null
 }
 function ctxRemoveFav() { removeFav(ctxMenu.value.path); ctxMenu.value.show = false }
 
@@ -413,6 +408,33 @@ onUnmounted(() => {
 .copy-btn:hover { opacity: 1; background: var(--bg-button); border-color: var(--border); color: var(--accent); }
 .code-box { background: var(--bg-input); padding: 12px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 11px; line-height: 1.6; color: var(--text-secondary); word-break: break-all; max-height: 240px; overflow-y: auto; }
 .code-box.params { color: #94a3b8; font-size: 10px; }
+
+/* 이전 Favorites 중앙 모달 뷰어 복원 */
+.viewer-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.viewer-panel { width: 85%; height: 85%; background: #0D0D0D; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #222; }
+.viewer-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #1A1A1A; }
+.viewer-header span { font-size: 12px; color: #787878; }
+.viewer-close { background: none; border: none; color: #f87171; font-size: 18px; cursor: pointer; }
+.viewer-body { flex: 1; display: flex; overflow: hidden; }
+.viewer-img { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; padding: 16px; }
+.viewer-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewer-info { width: 320px; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; border-left: 1px solid #1A1A1A; }
+.vi-size { color: #585858; font-size: 11px; }
+.vi-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; min-height: 18px; }
+.vi-head label { color: var(--accent); font-size: 10px; font-weight: 700; margin: 0; }
+.vi-head label.neg { color: #f87171; }
+.vi-section:hover .copy-btn { opacity: 0.7; }
+.vi-section pre { color: #B0B0B0; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #111; padding: 8px; border-radius: 4px; margin: 0; max-height: 220px; overflow-y: auto; }
+.vi-actions-section { margin-top: auto; padding-top: 12px; }
+.vi-actions-label { display: block; font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 8px; }
+.vi-send-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.send-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+.send-card:hover { background: var(--bg-input); border-color: var(--text-muted); transform: translateY(-1px); }
+.send-card.primary { background: var(--accent-dim); border-color: rgba(250,204,21,0.4); }
+.send-card.primary:hover { background: rgba(250,204,21,0.15); border-color: var(--accent); box-shadow: 0 2px 8px rgba(250,204,21,0.2); }
+.send-ico { font-size: 18px; line-height: 1; }
+.send-name { font-size: 10px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.3px; }
+.send-card.primary .send-name { color: var(--accent); }
 .exif-footer { padding: 20px; background: var(--bg-card); border-top: 1px solid var(--border); }
 .main-apply-btn { width: 100%; height: 46px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 900; font-size: 12px; letter-spacing: 1px; cursor: pointer; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
