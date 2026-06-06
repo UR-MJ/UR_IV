@@ -1064,6 +1064,7 @@ import ABTestModal from './components/ABTestModal.vue'
 import CharFeatureOverrideModal from './components/CharFeatureOverrideModal.vue'
 import LoraManagerModal from './components/LoraManagerModal.vue'
 import CondPromptModal from './components/CondPromptModal.vue'
+import ToggleSwitch from './components/ToggleSwitch.vue'
 import { loadCondRules, condEnabled } from './composables/condRules.js'
 import { uiModals, closeCharPresetModal, openAbTestModal, closeAbTestModal,
          openCharOverrideModal, closeCharOverrideModal } from './composables/uiModals.js'
