@@ -156,7 +156,6 @@ class UISetupMixin:
         from ui.widget_proxies import ButtonProxy
         b = self.vue_bridge
         self.btn_add_favorite = ButtonProxy(b, 'btn_add_favorite')
-        self.btn_refresh_gallery = ButtonProxy(b, 'btn_refresh_gallery')
 
         # 기존 PyQt 탭 인스턴스 (Python 백엔드에서 참조)
         from tabs.settings_tab import SettingsTab
@@ -233,21 +232,6 @@ class UISetupMixin:
         titles = titles_minimal if use_minimal else titles_emoji
         return titles.get(key, key)
 
-    def _update_tab_titles(self):
-        """테마 변경 시 모든 탭 이름 업데이트"""
-        tab_keys = [
-            't2i', 'i2i', 'inpaint', 'event', 'search', 'web', 'editor',
-            'batch', 'gallery', 'xyz', 'png', 'fav', 'backend', 'settings'
-        ]
-        try:
-            count = self.center_tabs.count()
-            if count is None: return
-            for i, key in enumerate(tab_keys):
-                if i < count:
-                    self.center_tabs.setTabText(i, self._get_tab_title(key))
-        except (TypeError, AttributeError):
-            pass  # Vue 모드에서는 center_tabs가 더미
-
     # ──────────────────────────────────────
     #  프록시 위젯 초기화 (Vue SPA 연동)
     # ──────────────────────────────────────
@@ -309,7 +293,6 @@ class UISetupMixin:
         self.chk_auto_remove_char_features = CheckBoxProxy(b, 'chk_auto_remove_char_features')
         self.combo_char_feature_mode = ComboBoxProxy(b, 'combo_char_feature_mode')
         self.combo_char_feature_mode.addItems(["핵심만", "핵심+의상"])
-        self.btn_char_preset = ButtonProxy(b, 'btn_char_preset')
         # auto remove 시 override(머리길이/눈색 강제 교체) 설정
         if not hasattr(self, '_char_feature_override'):
             self._char_feature_override = {'hair_length': False, 'eye_color': False}
@@ -530,13 +513,6 @@ class UISetupMixin:
         self.btn_auto_toggle.toggled.connect(self.toggle_automation_ui)
 
         self.btn_save_settings = ButtonProxy(b, 'btn_save_settings')
-        self.btn_preset_save = ButtonProxy(b, 'btn_preset_save')
-        self.btn_preset_load = ButtonProxy(b, 'btn_preset_load')
-        self.btn_prompt_history = ButtonProxy(b, 'btn_prompt_history')
-        self.btn_lora_manager = ButtonProxy(b, 'btn_lora_manager')
-        self.btn_tag_weights = ButtonProxy(b, 'btn_tag_weights')
-        self.btn_shuffle = ButtonProxy(b, 'btn_shuffle')
-        self.btn_ab_test = ButtonProxy(b, 'btn_ab_test')
         self.btn_api_manager = None
 
         self._vue_automation_settings = {
@@ -615,77 +591,6 @@ class UISetupMixin:
             'parse_and_add_loras': lambda s, t: None,
         })()
 
-    def _on_refresh_gallery(self):
-        """갤러리 새로고침 (피드백 포함)"""
-        self.btn_refresh_gallery.setText("🔄 새로고침 중...")
-        self.btn_refresh_gallery.setEnabled(False)
-        
-        # 실제 새로고침 수행
-        if hasattr(self, 'refresh_gallery'):
-            self.refresh_gallery()
-        
-        # 버튼 복구 (0.5초 후)
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(500, lambda: (
-            self.btn_refresh_gallery.setText("🔄 목록 새로고침"),
-            self.btn_refresh_gallery.setEnabled(True)
-        ))
-        
-    def _save_prompt_preset(self):
-        """현재 프롬프트를 프리셋으로 저장"""
-        from PyQt6.QtWidgets import QInputDialog
-        from utils.prompt_preset import save_preset, list_presets
-
-        name, ok = QInputDialog.getText(self, "프리셋 저장", "프리셋 이름:")
-        if not ok or not name.strip():
-            return
-        name = name.strip()
-
-        data = {
-            "character": self.character_input.text(),
-            "copyright": self.copyright_input.text(),
-            "artist": self.artist_input.toPlainText(),
-            "main_prompt": self.main_prompt_text.toPlainText(),
-            "prefix": self.prefix_prompt_text.toPlainText(),
-            "suffix": self.suffix_prompt_text.toPlainText(),
-            "negative": self.neg_prompt_text.toPlainText(),
-        }
-        save_preset(name, data)
-        QMessageBox.information(self, "저장 완료", f"프리셋 '{name}'이 저장되었습니다.")
-
-    def _load_prompt_preset(self):
-        """저장된 프리셋 불러오기 (미리보기 다이얼로그)"""
-        from utils.prompt_preset import list_presets
-        from widgets.preset_preview_dialog import PresetPreviewDialog
-
-        names = list_presets()
-        if not names:
-            QMessageBox.information(self, "프리셋", "저장된 프리셋이 없습니다.")
-            return
-
-        dlg = PresetPreviewDialog(self)
-        if dlg.exec() != dlg.DialogCode.Accepted:
-            return
-
-        data = dlg.get_result()
-        if not data:
-            return
-
-        _field_map = {
-            "character":    lambda v: self.character_input.setText(v),
-            "copyright":    lambda v: self.copyright_input.setText(v),
-            "artist":       lambda v: self.artist_input.setPlainText(v),
-            "main_prompt":  lambda v: self.main_prompt_text.setPlainText(v),
-            "prefix":       lambda v: self.prefix_prompt_text.setPlainText(v),
-            "suffix":       lambda v: self.suffix_prompt_text.setPlainText(v),
-            "negative":     lambda v: self.neg_prompt_text.setPlainText(v),
-        }
-        for key, setter in _field_map.items():
-            if key in data:
-                setter(data[key])
-
-        self.show_status("프리셋 적용됨")
-
     def _show_prompt_history(self):
         """최근 프롬프트 히스토리 팝업"""
         from utils.prompt_history import get_history
@@ -719,139 +624,6 @@ class UISetupMixin:
             self.main_prompt_text.setPlainText(data.get("prompt", ""))
             self.neg_prompt_text.setPlainText(data.get("negative", ""))
 
-    def _adjust_total_prompt_height(self):
-        """최종 프롬프트 칸 내용에 맞춰 높이 자동 조절"""
-        doc = self.total_prompt_display.document()
-        doc_height = int(doc.size().height()) + 10  # 여백
-        new_h = max(60, min(doc_height, 600))
-        current_h = self.total_prompt_display.height()
-        # 높이 차이가 3px 이상일 때만 업데이트 (진동 방지)
-        if abs(current_h - new_h) > 3:
-            self.total_prompt_display.setFixedHeight(new_h)
-
-    def _adjust_artist_height(self):
-        """작가 입력칸 내용에 맞춰 높이 자동 조절"""
-        doc = self.artist_input.document()
-        doc_height = int(doc.size().height()) + 10
-        new_h = max(60, min(doc_height, 200))
-        current_h = self.artist_input.height()
-        if abs(current_h - new_h) > 3:
-            self.artist_input.setFixedHeight(new_h)
-
-    def _create_group(self, parent_layout, title, widget_or_layout):
-        """그룹 생성 헬퍼"""
-        parent_layout.addWidget(QLabel(title))
-        if isinstance(widget_or_layout, QWidget):
-            parent_layout.addWidget(widget_or_layout)
-            return widget_or_layout
-        elif isinstance(widget_or_layout, QHBoxLayout):
-            parent_layout.addLayout(widget_or_layout)
-            return widget_or_layout
-    
-    def _create_separator(self):
-        """구분선 생성"""
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        return separator
-    
-    def _on_prefix_toggle(self, checked):
-        """선행 프롬프트 토글"""
-        self.prefix_prompt_text.setVisible(checked)
-        self.prefix_toggle_button.setText(
-            "▼ 선행 고정 프롬프트" if checked else "▶ 선행 고정 프롬프트"
-        )
-    
-    def _on_suffix_toggle(self, checked):
-        """후행 프롬프트 토글"""
-        self.suffix_prompt_text.setVisible(checked)
-        self.suffix_toggle_button.setText(
-            "▼ 후행 고정 프롬프트" if checked else "▶ 후행 고정 프롬프트"
-        )
-    
-    def _on_neg_toggle(self, checked):
-        """네거티브 프롬프트 토글"""
-        self.neg_prompt_text.setVisible(checked)
-        self.neg_toggle_button.setText(
-            "▼ 부정 프롬프트 (Negative)" if checked else "▶ 부정 프롬프트 (Negative)"
-        )
-
-    def _on_exclude_toggle(self, checked):
-        """제외 프롬프트 토글"""
-        self.exclude_prompt_local_input.setVisible(checked)
-        self.exclude_toggle_button.setText(
-            "▼ 제외 프롬프트 (Local)" if checked else "▶ 제외 프롬프트 (Local)"
-        )
-        
-    def _on_res_preset_context(self, idx: int, btn):
-        """해상도 프리셋 우클릭 메뉴"""
-        from PyQt6.QtWidgets import QMenu, QDialog, QDialogButtonBox, QSpinBox
-        menu = QMenu(self)
-        menu.setStyleSheet(
-            f"QMenu {{ background-color: {get_color('bg_button')}; color: {get_color('text_primary')}; border: 1px solid {get_color('border')}; }}"
-            f"QMenu::item {{ padding: 6px 16px; }}"
-            f"QMenu::item:selected {{ background-color: {get_color('accent')}; }}"
-        )
-        act_edit = menu.addAction("✏️ 해상도 변경")
-        act_reset = menu.addAction("↩️ 기본값 복원")
-        chosen = menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
-        if not chosen:
-            return
-        if chosen == act_edit:
-            dlg = QDialog(self)
-            dlg.setWindowTitle("해상도 변경")
-            dlg.setFixedSize(280, 120)
-            dlg.setStyleSheet(f"background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')};")
-            dl = QVBoxLayout(dlg)
-            row = QHBoxLayout()
-            w_spin = QSpinBox()
-            w_spin.setRange(64, 4096)
-            w_spin.setSingleStep(64)
-            w_spin.setValue(self._res_presets[idx][1])
-            w_spin.setStyleSheet(f"background:{get_color('bg_button')}; color:{get_color('text_primary')}; border:1px solid {get_color('border')}; padding:4px;")
-            h_spin = QSpinBox()
-            h_spin.setRange(64, 4096)
-            h_spin.setSingleStep(64)
-            h_spin.setValue(self._res_presets[idx][2])
-            h_spin.setStyleSheet(f"background:{get_color('bg_button')}; color:{get_color('text_primary')}; border:1px solid {get_color('border')}; padding:4px;")
-            swap_btn = QPushButton("⇄")
-            swap_btn.setFixedSize(32, 32)
-            swap_btn.setToolTip("W ↔ H 교환")
-            swap_btn.setStyleSheet(
-                f"background:{get_color('accent')}; color:white; border:none; "
-                f"border-radius:4px; font-weight:bold; font-size:16px;"
-            )
-            swap_btn.clicked.connect(lambda: (
-                w_spin.setValue(h_spin.value()) or True) if (
-                    _tw := w_spin.value()) and (w_spin.setValue(h_spin.value()) or True) and h_spin.setValue(_tw) is None else None
-            )
-            # simpler swap
-            def _swap_wh():
-                _w, _h = w_spin.value(), h_spin.value()
-                w_spin.setValue(_h)
-                h_spin.setValue(_w)
-            swap_btn.clicked.disconnect()
-            swap_btn.clicked.connect(_swap_wh)
-            row.addWidget(QLabel("W:"))
-            row.addWidget(w_spin)
-            row.addWidget(swap_btn)
-            row.addWidget(QLabel("H:"))
-            row.addWidget(h_spin)
-            dl.addLayout(row)
-            bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-            bb.accepted.connect(dlg.accept)
-            bb.rejected.connect(dlg.reject)
-            dl.addWidget(bb)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
-                w, h = w_spin.value(), h_spin.value()
-                label = f"{w}x{h}" if w != h else f"{w}\u00b2"
-                self._res_presets[idx] = [label, w, h]
-                btn.setText(label)
-        elif chosen == act_reset:
-            if idx < len(self._DEFAULT_RES_PRESETS):
-                default = list(self._DEFAULT_RES_PRESETS[idx])
-                self._res_presets[idx] = default
-                btn.setText(default[0])
 
     def _swap_resolution(self):
         """W ↔ H 해상도 교환"""
@@ -904,66 +676,6 @@ class UISetupMixin:
             import json as _json
             for m in re.finditer(r'<lora:(.+?):([-\d.]+)>', text):
                 self.vue_bridge.loraInserted.emit(_json.dumps({'name': m.group(1), 'weight': float(m.group(2))}))
-
-    def _update_token_count(self):
-        """최종 프롬프트 토큰 수 추정 (CLIP 기준 근사)"""
-        import re
-        text = self.total_prompt_display.toPlainText().strip()
-
-        if not text:
-            self.token_count_label.setText("토큰: 0 / 75")
-            self.token_count_label.setStyleSheet(
-                f"color: {get_color('text_muted')}; font-size: 11px; font-weight: bold; padding: 0 4px;"
-            )
-            return
-
-        # CLIP 토큰 근사: 단어/서브워드 기준 (영어 ~0.75 토큰/단어, 태그 ~1 토큰/태그)
-        tags = [t.strip() for t in text.split(",") if t.strip()]
-        token_est = 0
-        for tag in tags:
-            words = re.findall(r'[a-zA-Z]+|[^ ,():\[\]]+', tag)
-            token_est += max(1, len(words))
-
-        if token_est <= 75:
-            color = "#4CAF50"
-        elif token_est <= 150:
-            color = "#FFA726"
-        else:
-            color = "#E74C3C"
-        self.token_count_label.setText(f"토큰: ~{token_est} / 75")
-        self.token_count_label.setStyleSheet(
-            f"color: {color}; font-size: 11px; font-weight: bold; padding: 0 4px;"
-        )
-
-    def _open_tag_weight_editor(self):
-        """태그 가중치 슬라이더 편집"""
-        from widgets.tag_weight_editor import TagWeightEditorDialog
-        text = self.main_prompt_text.toPlainText().strip()
-        if not text:
-            return
-        dlg = TagWeightEditorDialog(text, parent=self)
-        if dlg.exec() == dlg.DialogCode.Accepted:
-            result = dlg.get_result()
-            if result is not None:
-                self.main_prompt_text.setPlainText(result)
-
-    def _shuffle_main_prompt(self):
-        """메인 프롬프트 태그 순서 랜덤 셔플"""
-        import random
-        text = self.main_prompt_text.toPlainText().strip()
-        if not text:
-            return
-        tags = [t.strip() for t in text.split(",") if t.strip()]
-        random.shuffle(tags)
-        self.main_prompt_text.setPlainText(", ".join(tags))
-
-    def _insert_fav_tag(self, tags: str):
-        """즐겨찾기 태그를 메인 프롬프트에 삽입"""
-        current = self.main_prompt_text.toPlainText().strip()
-        if current:
-            self.main_prompt_text.setPlainText(f"{current}, {tags}")
-        else:
-            self.main_prompt_text.setPlainText(tags)
 
     def _apply_character_features_result(self, char_name: str, tags: list, add_copyright=None):
         """캐릭터 이름 + 특징 태그를 프롬프트 위젯에 삽입 (Vue 모달 / 레거시 다이얼로그 공용).
@@ -1055,56 +767,3 @@ class UISetupMixin:
             return
         cp_esc = cp.replace("(", r"\(").replace(")", r"\)")
         self.copyright_input.setText(f"{cur}, {cp_esc}" if cur else cp_esc)
-
-    def _create_favorites_tab(self):
-        """즐겨찾기 탭 생성"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
-        
-        # 헤더
-        header_layout = QHBoxLayout()
-        header_label = QLabel("⭐ 즐겨찾기 목록")
-        header_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {get_color('accent')};")
-        header_layout.addWidget(header_label)
-        header_layout.addStretch()
-        
-        self.btn_fav_refresh = QPushButton("🔄 새로고침")
-        self.btn_fav_refresh.clicked.connect(self.refresh_favorites)
-        self.btn_fav_refresh.setStyleSheet(
-            f"padding: 5px 10px; background-color: {get_color('bg_button')}; border-radius: 4px;"
-        )
-        header_layout.addWidget(self.btn_fav_refresh)
-        
-        self.btn_fav_clear = QPushButton("🗑️ 전체 삭제")
-        self.btn_fav_clear.clicked.connect(self.clear_all_favorites)
-        self.btn_fav_clear.setStyleSheet(
-            "padding: 5px 10px; background-color: #8B0000; color: white; border-radius: 4px;"
-        )
-        header_layout.addWidget(self.btn_fav_clear)
-        
-        layout.addLayout(header_layout)
-        
-        # 스크롤 영역 (썸네일 그리드)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(f"border: none; background: {get_color('bg_primary')};")
-        
-        scroll_content = QWidget()
-        scroll_content_layout = QVBoxLayout(scroll_content)
-        scroll_content_layout.setContentsMargins(10, 10, 10, 10)
-        scroll_content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        
-        # 플로우 레이아웃 (한 줄에 5개씩)
-        self.fav_flow_widget = QWidget()
-        self.fav_flow_layout = FlowLayout(self.fav_flow_widget)
-        self.fav_flow_layout.setSpacing(10)
-        
-        scroll_content_layout.addWidget(self.fav_flow_widget)
-        scroll_content_layout.addStretch()
-        
-        scroll.setWidget(scroll_content)
-        layout.addWidget(scroll)
-        
-        return tab

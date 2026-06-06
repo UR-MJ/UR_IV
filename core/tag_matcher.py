@@ -20,43 +20,6 @@ def _normalize(text: str) -> str:
     return text.strip().lower().replace('_', ' ')
 
 
-def _match_single_tag(pattern: str, tag_text: str) -> bool:
-    """단일 패턴을 태그 문자열에 대해 매칭
-    tag_text: 콤마 또는 공백으로 구분된 전체 태그 문자열 (소문자, 밑줄→공백 변환 완료)
-    """
-    pattern = pattern.strip()
-    if not pattern:
-        return True
-
-    # *word → 완전 일치
-    if pattern.startswith('*'):
-        target = _normalize(pattern[1:])
-        # 콤마로 분리 후 정확 비교 (태그 내 공백 보존)
-        tags = [t.strip() for t in tag_text.split(',') if t.strip()]
-        return target in tags
-
-    # _word_ → 포함 (명시적)
-    if pattern.startswith('_') and pattern.endswith('_') and len(pattern) > 2:
-        target = _normalize(pattern[1:-1])
-        return target in tag_text
-
-    # _word → 접미 (word로 끝나는 태그)
-    if pattern.startswith('_') and not pattern.endswith('_'):
-        target = _normalize(pattern[1:])
-        tags = [t.strip() for t in tag_text.split(',') if t.strip()]
-        return any(t.endswith(target) for t in tags)
-
-    # word_ → 접두 (word로 시작하는 태그)
-    if pattern.endswith('_') and not pattern.startswith('_'):
-        target = _normalize(pattern[:-1])
-        tags = [t.strip() for t in tag_text.split(',') if t.strip()]
-        return any(t.startswith(target) for t in tags)
-
-    # 기본: 포함 매칭
-    target = _normalize(pattern)
-    return target in tag_text
-
-
 def parse_query(query: str) -> list:
     """쿼리 문자열을 파싱하여 조건 리스트로 변환
 
@@ -110,39 +73,6 @@ def parse_query(query: str) -> list:
             conditions.append({'type': 'single', 'terms': [part]})
 
     return conditions
-
-
-def match_query(query: str, tag_text: str) -> bool:
-    """쿼리 전체를 태그 텍스트에 대해 매칭
-
-    query: 사용자 입력 (예: "[short hair|long hair], blue eyes")
-    tag_text: 태그 문자열 (예: "1girl, short hair, blue eyes, school uniform")
-    Returns: True if all conditions match
-    """
-    conditions = parse_query(query)
-    if not conditions:
-        return True
-
-    normalized = _normalize(tag_text)
-
-    for cond in conditions:
-        if cond['type'] == 'or':
-            # has_wildcard=True 면 이 OR 그룹은 통과
-            if cond.get('has_wildcard'):
-                continue
-            # OR: 하나 이상 매칭
-            if not any(_match_single_tag(t, normalized) for t in cond['terms']):
-                return False
-        elif cond['type'] == 'and':
-            # AND: 모두 매칭
-            if not all(_match_single_tag(t, normalized) for t in cond['terms']):
-                return False
-        else:
-            # single
-            if not _match_single_tag(cond['terms'][0], normalized):
-                return False
-
-    return True
 
 
 def _eval_condition(col_lower: pd.Series, cond: dict, index) -> pd.Series:

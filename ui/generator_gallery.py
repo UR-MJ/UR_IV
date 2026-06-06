@@ -172,18 +172,6 @@ class GalleryMixin:
             else:
                 item.set_selected(False)
 
-    def clear_gallery(self):
-        """갤러리 초기화"""
-        while self.gallery_layout.count():
-            item = self.gallery_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        self.current_image_path = None
-        
-        if hasattr(self, 'btn_add_favorite'):
-            self.btn_add_favorite.setEnabled(False)
-    
     def delete_image(self, filepath):
         """이미지 삭제"""
         reply = QMessageBox.question(
@@ -251,14 +239,6 @@ class GalleryMixin:
         
         self.show_status("📋 이미지가 클립보드에 복사되었습니다.", 2000)
     
-    def open_fullscreen_viewer(self):
-        """전체 화면 뷰어 열기"""
-        if not self.current_image_path:
-            return
-        
-        viewer = FullScreenImageViewer(self.current_image_path, self)
-        viewer.exec()
-
     # ==================== 즐겨찾기 ====================
     
     def _load_favorites_from_file(self):

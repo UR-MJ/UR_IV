@@ -146,11 +146,6 @@ class VueBridge(QObject):
         """onAction의 별칭 - Vue에서 더 직관적으로 호출 가능하도록"""
         self.onAction(action, payload_json)
 
-    @pyqtSlot(str)
-    def onTabSwitch(self, tab_id: str):
-        """Vue에서 탭 전환 요청"""
-        self.tabChanged.emit(tab_id)
-
     @pyqtSlot(str, result=str)
     def getWidgetValue(self, widget_id: str) -> str:
         """Vue에서 위젯 값 동기 요청"""
@@ -181,10 +176,6 @@ class VueBridge(QObject):
             elif hasattr(proxy, 'currentText'):
                 result[wid] = proxy.currentText()
         return json.dumps(result)
-
-    @pyqtSlot(result=str)
-    def getSettings(self) -> str:
-        return json.dumps({'status': 'ok'})
 
     # ── Editor ──
 
@@ -1028,27 +1019,6 @@ class VueBridge(QObject):
             parts.append("No specific character given — invent a fresh original anime character.")
         return "\n".join(parts), ''
 
-    @pyqtSlot(str)
-    def unloadOllama(self, extra_json: str):
-        """Ollama 모델을 VRAM에서 언로드 (best-effort, 비동기). Vue에서 수동 호출용."""
-        try:
-            extra = json.loads(extra_json) if extra_json else {}
-            url = extra.get('url') or 'http://localhost:11434'
-            model = (extra.get('model') or '').strip()
-            if not model:
-                return
-            import threading
-
-            def _do():
-                try:
-                    from core.ollama_client import OllamaClient
-                    OllamaClient(url, model).unload()
-                except Exception:
-                    pass
-            threading.Thread(target=_do, daemon=True).start()
-        except Exception:
-            pass
-
     @pyqtSlot(str, str, result=str)
     def editorPasteImage(self, b64_data: str, mime_type: str) -> str:
         """클립보드 이미지를 임시 파일로 저장하고 경로 반환.
@@ -1455,17 +1425,6 @@ class VueBridge(QObject):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-    @pyqtSlot(str, result=str)
-    def filterNoiseTags(self, tags_json: str) -> str:
-        """가짜/존재하지 않는 태그 제거 (NAIA 태그 DB 대조) → {kept, dropped}."""
-        try:
-            from core.tag_intelligence import get_tag_intelligence
-            tags = json.loads(tags_json) if tags_json else []
-            kept, dropped = get_tag_intelligence().filter_noise(tags, drop_unknown=True)
-            return json.dumps({"kept": kept, "dropped": dropped}, ensure_ascii=False)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
-
     @pyqtSlot(str, str, result=str)
     def separateTags(self, prompt: str, categories_json: str) -> str:
         """⑤ 프롬프트를 카테고리별로 분리. categories=대상 카테고리 리스트.
@@ -1510,22 +1469,6 @@ class VueBridge(QObject):
             tags = json.loads(tags_json) if tags_json else []
             groups = get_tag_intelligence().group_by_region(tags)
             return json.dumps({"groups": groups}, ensure_ascii=False)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
-
-    @pyqtSlot(str, result=str)
-    def getTagRatings(self, tags_json: str) -> str:
-        """태그별 NSFW 비율(questionable+explicit, 0~1) → {tag: ratio}. 데이터 없으면 생략."""
-        try:
-            from core.tag_intelligence import get_tag_intelligence
-            ti = get_tag_intelligence()
-            tags = json.loads(tags_json) if tags_json else []
-            out = {}
-            for t in tags:
-                r = ti.nsfw_ratio(t)
-                if r is not None:
-                    out[t] = round(r, 3)
-            return json.dumps(out, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1690,24 +1633,6 @@ class VueBridge(QObject):
             return json.dumps({'ok': True})
         except Exception as e:
             return json.dumps({'error': str(e)})
-
-    @pyqtSlot(result=str)
-    def getDefaultExcludes(self) -> str:
-        """기본 제외 프롬프트 로드"""
-        import os
-        fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'default_excludes.txt')
-        try:
-            if os.path.exists(fp):
-                with open(fp, 'r', encoding='utf-8') as f:
-                    lines = []
-                    for line in f:
-                        line = line.strip()
-                        if not line or line.startswith('#'): continue
-                        lines.append(line)
-                    return ', '.join(lines)
-        except Exception as e:
-            logger.warning("getDefaultExcludes failed: %s", e)
-        return ''
 
     @pyqtSlot(str, result=str)
     def getExcludeMatches(self, rule: str) -> str:
@@ -1878,50 +1803,6 @@ class VueBridge(QObject):
                 tags = [t.strip() for t in desc.split(',') if t.strip()]
                 return json.dumps({'character': character, 'tags': tags, 'raw': desc})
             return json.dumps({'tags': [], 'raw': ''})
-        except Exception as e:
-            return json.dumps({'error': str(e)})
-
-    @pyqtSlot(str, result=str)
-    def getCharacterTags(self, character: str) -> str:
-        """캐릭터 연관 태그 TOP N 반환 (JSONL 기반)"""
-        try:
-            import os
-            jsonl_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'danbooru_character_description_full.jsonl')
-            if not os.path.exists(jsonl_path):
-                return json.dumps([])
-            # 캐시
-            if not hasattr(self, '_char_tag_cache'):
-                self._char_tag_cache = {}
-                print("[CharTags] Loading JSONL...")
-                with open(jsonl_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        try:
-                            d = json.loads(line)
-                            name = d.get('character', d.get('name', '')).lower().strip()
-                            tags = d.get('tags', d.get('general_tags', []))
-                            if isinstance(tags, str):
-                                tags = [t.strip() for t in tags.split(',')]
-                            if name and tags:
-                                if name not in self._char_tag_cache:
-                                    self._char_tag_cache[name] = {}
-                                for t in tags:
-                                    t = t.strip()
-                                    if t:
-                                        self._char_tag_cache[name][t] = self._char_tag_cache[name].get(t, 0) + 1
-                        except Exception:
-                            continue
-                print(f"[CharTags] Loaded {len(self._char_tag_cache)} characters")
-            # 검색
-            char_lower = character.lower().strip().replace(' ', '_')
-            tag_counts = self._char_tag_cache.get(char_lower, {})
-            if not tag_counts:
-                # 부분 매치
-                for k, v in self._char_tag_cache.items():
-                    if char_lower in k:
-                        tag_counts = v
-                        break
-            top = sorted(tag_counts.items(), key=lambda x: -x[1])[:20]
-            return json.dumps([{'tag': t, 'count': c} for t, c in top])
         except Exception as e:
             return json.dumps({'error': str(e)})
 
@@ -2131,38 +2012,6 @@ class VueBridge(QObject):
         except Exception as e:
             return json.dumps({'error': str(e)})
 
-    @pyqtSlot(str, str, str, result=str)
-    def processBatchFile(self, filepath: str, operation: str, params_json: str) -> str:
-        """단일 파일 배치 처리"""
-        try:
-            import cv2
-            import numpy as np
-            import os
-            if isinstance(params_json, str):
-                params = json.loads(params_json) if params_json else {}
-            else:
-                params = params_json
-            img = cv2.imread(filepath)
-            if img is None:
-                return json.dumps({'error': f'파일 읽기 실패: {filepath}'})
-
-            if operation == 'resize':
-                w = int(params.get('width', img.shape[1]))
-                h = int(params.get('height', img.shape[0]))
-                img = cv2.resize(img, (w, h))
-            elif operation == 'grayscale':
-                img = cv2.cvtColor(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
-
-            out_dir = os.path.join(os.path.dirname(filepath), 'batch_output')
-            os.makedirs(out_dir, exist_ok=True)
-            fmt = params.get('format', 'PNG').lower()
-            ext = {'png': '.png', 'jpeg': '.jpg', 'webp': '.webp'}.get(fmt, '.png')
-            out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(filepath))[0] + ext)
-            cv2.imwrite(out_path, img)
-            return json.dumps({'path': out_path.replace('\\', '/')})
-        except Exception as e:
-            return json.dumps({'error': str(e)})
-
     @pyqtSlot(str, result=str)
     def getImageExif(self, filepath: str) -> str:
         """이미지의 EXIF 반환 (구조화된 파라미터 포함)"""
@@ -2242,15 +2091,3 @@ class VueBridge(QObject):
 
         return result
 
-    @pyqtSlot(str, result=str)
-    def getPngInfo(self, filepath: str) -> str:
-        """PNG 메타데이터 반환"""
-        try:
-            from PIL import Image
-            img = Image.open(filepath)
-            info = {}
-            if 'parameters' in img.info: info['parameters'] = img.info['parameters']
-            elif 'prompt' in img.info: info['prompt'] = img.info['prompt']
-            return json.dumps(info)
-        except Exception as e:
-            return json.dumps({'error': str(e)})

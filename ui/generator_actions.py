@@ -287,12 +287,6 @@ class ActionsMixin:
         else:
             self.random_res_label.setText("등록된 해상도가 없습니다.")
     
-    def on_favorite_item_clicked(self, item):
-        """즐겨찾기 아이템 클릭"""
-        path = item.data(Qt.ItemDataRole.UserRole)
-        if os.path.exists(path):
-            self.display_image(path)
-    
     def _apply_next_automation_prompt(self) -> bool:
         """자동화용 다음 프롬프트 적용 (apply_random_prompt와 동일한 로직 사용)"""
         import random
