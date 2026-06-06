@@ -140,18 +140,32 @@
         <div class="row label-row">
           <label>Main Tags <span v-if="sectionTokens.main" class="tk-badge" :class="tokenBadgeClass(sectionTokens.main)">{{ sectionTokens.main }}t</span></label>
           <div class="ai-btns">
-            <button class="ai-btn" @click="ollamaMode = 'expand'; runOllama()" :disabled="ollamaLoading" title="태그 확장">✨</button>
-            <button class="ai-btn" @click="showNlInput = !showNlInput" title="자연어 입력 (→태그 / →장면)">💬</button>
-            <button class="ai-btn" @click="ollamaMode = 'suggest'; runOllama()" :disabled="ollamaLoading" title="유사 태그">🔄</button>
-            <button class="ai-btn" @click="ollamaMode = 'nl_caption'; runOllama()" :disabled="ollamaLoading" title="태그 → 자연어 캡션">📝</button>
-            <button class="ai-btn" @click="ollamaMode = 'translate'; runOllama()" :disabled="ollamaLoading" title="한↔영 번역">🌐</button>
-            <button class="ai-btn" @click="ollamaMode = 'creative'; runOllama()" :disabled="ollamaLoading" title="캐릭터 기반 창의 생성 (태그+자연어, 비어도 OK)">💡</button>
+            <!-- 태그형 출력 AI -->
+            <div class="ai-menu-wrap">
+              <button class="ai-btn ai-menu-btn" @click.stop="toggleAiMenu('tag')" :disabled="ollamaLoading" title="태그를 만드는 AI">✨ 태그 AI ▾</button>
+              <div class="ai-menu" v-if="aiMenu === 'tag'">
+                <button @click="runAi('expand')">태그 확장 <em>연관 태그 추가</em></button>
+                <button @click="runAi('suggest')">유사 태그 <em>비슷한 태그 추천</em></button>
+                <button @click="openNlInput('nl2tags')">자연어 → 태그 <em>문장을 태그로</em></button>
+              </div>
+            </div>
+            <!-- 자연어형 출력 AI -->
+            <div class="ai-menu-wrap">
+              <button class="ai-btn ai-menu-btn" @click.stop="toggleAiMenu('nl')" :disabled="ollamaLoading" title="자연어/문장을 만드는 AI">💬 자연어 AI ▾</button>
+              <div class="ai-menu" v-if="aiMenu === 'nl'">
+                <button @click="runAi('nl_caption')">자연어 캡션 <em>태그 → 영어 문장</em></button>
+                <button @click="openNlInput('nl_scene')">영문 장면묘사 <em>키워드 → 장면</em></button>
+                <button @click="runAi('translate')">한↔영 번역</button>
+                <button @click="runAi('creative')">창의 생성 <em>캐릭터 기반 창작</em></button>
+              </div>
+            </div>
           </div>
         </div>
+        <div v-if="aiMenu" class="ai-menu-backdrop" @click="aiMenu = ''"></div>
         <div class="nl-input-row" v-if="showNlInput">
-          <input v-model="nlPrompt" placeholder="자연어 설명 또는 키워드..." @keydown.enter="ollamaMode = 'nl2tags'; runOllama()" class="nl-input" />
-          <button class="ai-btn go" @click="ollamaMode = 'nl2tags'; runOllama()" :disabled="ollamaLoading" title="자연어 → 태그">→태그</button>
-          <button class="ai-btn go" @click="ollamaMode = 'nl_scene'; runOllama()" :disabled="ollamaLoading" title="키워드 → 영문 장면묘사">→장면</button>
+          <input v-model="nlPrompt" ref="nlInputRef" :placeholder="pendingNlMode === 'nl2tags' ? '자연어 설명을 입력...' : '키워드를 입력...'" @keydown.enter="runPendingNl()" class="nl-input" />
+          <button class="ai-btn go" @click="runPendingNl()" :disabled="ollamaLoading">실행</button>
+          <button class="ai-btn" @click="showNlInput = false" title="닫기">✕</button>
         </div>
         <div class="ai-loading" v-if="ollamaLoading">🤖 AI 처리 중...</div>
         <div class="nl-result" v-if="nlResult">
@@ -731,6 +745,23 @@ const ollamaLoading = ref(false)
 const ollamaMode = ref('expand')
 const showNlInput = ref(false)
 const nlPrompt = ref('')
+// LLM 버튼 2개(태그 AI / 자연어 AI) 드롭다운
+const aiMenu = ref('')           // '' | 'tag' | 'nl'
+const pendingNlMode = ref('nl2tags')
+const nlInputRef = ref(null)
+function toggleAiMenu(which) { aiMenu.value = aiMenu.value === which ? '' : which }
+function runAi(mode) { aiMenu.value = ''; ollamaMode.value = mode; runOllama() }
+function openNlInput(mode) {
+  aiMenu.value = ''
+  pendingNlMode.value = mode
+  showNlInput.value = true
+  nextTick(() => { try { nlInputRef.value?.focus() } catch {} })
+}
+function runPendingNl() {
+  if (ollamaLoading.value) return
+  ollamaMode.value = pendingNlMode.value || 'nl2tags'
+  runOllama()
+}
 const nlResult = ref('')
 const nlRes = ref(null)   // 창의 모드 추천 해상도 {w, h}
 let ollamaTimer = null
@@ -977,6 +1008,14 @@ summary::-webkit-details-marker { display: none; }
 .ai-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ai-btn:disabled { opacity: 0.3; }
 .ai-btn.go { width: auto; padding: 0 8px; background: var(--accent); color: #000; border: none; font-weight: 700; font-size: 10px; }
+/* 2개 LLM 드롭다운 (태그 AI / 자연어 AI) */
+.ai-menu-wrap { position: relative; display: inline-block; }
+.ai-menu-btn { width: auto; padding: 0 9px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.ai-menu { position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 60; min-width: 180px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 1px; }
+.ai-menu button { width: 100%; height: auto; text-align: left; background: transparent; border: none; color: var(--text-secondary); font-size: 11px; font-weight: 600; padding: 7px 10px; border-radius: 5px; cursor: pointer; white-space: nowrap; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ai-menu button:hover { background: var(--bg-button); color: var(--accent); }
+.ai-menu button em { font-style: normal; font-weight: 400; font-size: 9px; color: var(--text-muted); }
+.ai-menu-backdrop { position: fixed; inset: 0; z-index: 55; }
 .nl-input-row { display: flex; gap: 4px; margin-bottom: 6px; }
 .nl-input { flex: 1; padding: 6px 10px; font-size: 11px; }
 .ai-loading { font-size: 10px; color: var(--accent); margin-bottom: 4px; animation: pulse 1.5s infinite; }
