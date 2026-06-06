@@ -23,9 +23,12 @@ PyQt6(백엔드) + Vue 3 SPA(프론트) 데스크탑 AI 이미지 생성기. (�
 - 상태 저장소: `frontend/src/stores/widgetStore.js`
 
 ## 브리지 계약 (불일치 = 버그 주원인)
-- 액션: Vue `requestAction(name, payload)` → `generator_main._handle_vue_action` if/elif
+- 액션: Vue `requestAction(name, payload)` / `action(name)` → `generator_main._handle_vue_action`
+  의 `action == 'name'` 또는 `action in ('a','b')`
 - 이벤트: Python `vue_bridge.<signal>.emit(json)` → Vue `onBackendEvent(name, cb)`
 - 페이로드 형태를 양쪽이 똑같이 맞춰야 함 (예전 버그: 조건식 `target`(문자열) vs `tags`(리스트))
+- **회귀 가드**: `tests/test_bridge_contract.py` — 프론트 액션/이벤트 이름이 Python
+  핸들러/시그널과 매칭되는지 정적 검증. 새 액션 추가 시 핸들러 빠지면 테스트가 잡음.
 
 ## 커밋 규칙
 - 한국어 conventional: feat/fix/refactor/test/chore/docs
