@@ -218,26 +218,45 @@ class OllamaClient:
             user_msg = f"{extra_prompt}\n\nCurrent tags: {tags}" if tags else extra_prompt
 
         is_nl = mode in NL_MODES
-        payload = {
-            "model": self.model,
-            "system": system,
-            "prompt": user_msg,
-            "stream": False,
-            "options": {
-                "temperature": 0.8 if is_nl else 0.7,
-                "num_predict": 1024 if is_nl else 500,
-            },
+        opts = {
+            "temperature": 0.8 if is_nl else 0.7,
+            "num_predict": 1024 if is_nl else 500,
         }
 
         try:
+            # /api/chat — Ollama 앱과 동일 방식(모델의 채팅 템플릿 적용). HuggingFace에서
+            # 직접 받은 GGUF 모델은 /api/generate(system+prompt)에서 빈 응답을 내는 경우가
+            # 있어 chat 엔드포인트를 우선 사용.
+            chat_payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_msg},
+                ],
+                "stream": False,
+                "options": opts,
+            }
             r = requests.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
+                f"{self.base_url}/api/chat",
+                json=chat_payload,
                 timeout=self.timeout,
             )
             r.raise_for_status()
             data = r.json()
-            response = data.get('response', '').strip()
+            response = ((data.get('message') or {}).get('content') or '').strip()
+            # 빈 응답이면 /api/generate로 폴백 (구버전/일부 모델 호환)
+            if not response:
+                gen_payload = {
+                    "model": self.model, "system": system, "prompt": user_msg,
+                    "stream": False, "options": opts,
+                }
+                r = requests.post(
+                    f"{self.base_url}/api/generate",
+                    json=gen_payload,
+                    timeout=self.timeout,
+                )
+                r.raise_for_status()
+                response = (r.json().get('response') or '').strip()
             # 마크다운, 번호, 코드블록, 사고과정 정리
             import re
             # harmony/channel 토큰(gpt-oss 등) + <think> 제거 (모든 파이프 변형)
