@@ -229,34 +229,93 @@ def _clean_creative_tags(text: str) -> str:
     return text
 
 
+_META_OPENER = None
+_META_PHRASE = None
+
+
+def _is_meta_sentence(s: str) -> bool:
+    """이 문장이 캡션이 아니라 모델의 추론/체크리스트/규칙복창/단답인지 판별.
+    (캡션 문장 'A man with...', 'The man wears...', 'No shoes are visible.'는 False)"""
+    import re as _re
+    global _META_OPENER, _META_PHRASE
+    if _META_OPENER is None:
+        # 문장 '시작'이 추론/메타 오프너인 경우
+        _META_OPENER = _re.compile(
+            r"(?i)^\s*(?:"
+            r"let'?s\b|let me\b|wait\b|hmm+\b|actually\b|alright\b|well[, ]|"
+            r"first[, ]|firstly\b|now[, ]|next[, ]|then[, ]|so[, ]|but wait\b|hold on\b|oh[, ]|"
+            r"i\s+(?:should|think|'?ll|will|need|must|guess|am|can|could|have to|'?ve)\b|i'?m\b|"
+            r"revised\b|corrected\b|re-?read\b|double-?check\b|checking\b|let'?s check\b|"
+            r"(?:the\s+)?(?:output|caption|note|final|answer|result|response|revision|draft)\s*:|"
+            r"yes[.!?]|no[.!?]|none[.!?]|nope[.!?]|yep[.!?]|sure[.!?]|correct[.!?]|right[.!?]|"
+            r"good[.!?]|okay[.!?]|ok[.!?]|perfect\b|great\b|done\b|looks good\b|all good\b|"
+            r"that'?s (?:it|all|good|correct|right)\b"
+            r")"
+        )
+        # 문장 '내부'에 체크리스트/규칙복창 문구가 있는 경우
+        _META_PHRASE = _re.compile(
+            r"(?i)(?:"
+            r"\bis a pronoun\b|\bare pronouns\b|\bno commas?\b|\bno pronouns?\b|without commas?\b|"
+            r"\bcapital (?:start|letter)\b|starts? with a capital\b|"
+            r"isn'?t exactly a name\b|not exactly a name\b|no specific character\b|"
+            r"identif(?:y|ies|ied) the character\b|i'?ll treat\b|i will treat\b|"
+            r"(?:^|\s)(?:no\s+)?(?:commas?|pronouns?|capital)\s*\?"
+            r")"
+        )
+    n = (s or '').strip()
+    if not n:
+        return True
+    return bool(_META_OPENER.match(n)) or bool(_META_PHRASE.search(n))
+
+
+def _strip_meta_sentences(t: str) -> str:
+    """선두/후미의 메타(추론/체크리스트) 문장을 제거하고 가운데 캡션만 남김."""
+    import re as _re
+    t = (t or '').strip().strip('"').strip()
+    sents = _re.split(r'(?<=[.!?])\s+', t)
+    while len(sents) > 1 and _is_meta_sentence(sents[0]):
+        sents.pop(0)
+    while len(sents) > 1 and _is_meta_sentence(sents[-1]):
+        sents.pop()
+    out = ' '.join(s for s in sents if s.strip()).strip()
+    return out or t
+
+
 def _extract_final_nl(text: str) -> str:
-    """추론형 모델이 사고과정/체크리스트/규칙복창/초안을 함께 뱉을 때 최종 캡션만 추출.
-    - 충분히 긴 인용 블록("...")이 있으면 마지막 것을 최종 답으로 사용
-    - 없으면 마지막 prose 문단을 사용
-    일반(깔끔한) 응답은 그대로 통과."""
+    """추론형 모델이 사고과정/체크리스트/규칙복창/초안/자기수정을 함께 뱉을 때 최종 캡션만 추출.
+    1) 'Revised again:' / 'Final:' / 'Corrected:' 류 마커가 있으면 마지막 마커 뒤가 최종본
+    2) 추론이 많고 끝에 긴 인용 블록이 있으면 그 인용이 최종 답
+    3) 그 외엔 선두/후미 메타 문장 제거
+    깔끔한 응답은 메타 문장이 없어 그대로 통과."""
     import re as _re
     if not text:
         return text
     t = text.strip()
-    markers = ('* ', 'Check.', 'Wait', 'Let me', 'I should', 'Sentence 1', 'Sentence 2',
-               'Output ONLY', 'Start with a capital', 'NO commas', 'No commas', 'one more time',
-               'Re-read', 'Input:', 'Tags/Keywords', 'Additional Description', 'Character:',
-               'Appearance:', 'Action/Pose', 'instead of')
-    looks_reasoning = sum(1 for m in markers if m in t) >= 2
-    if not looks_reasoning:
-        return t
-    # 1) 마지막의 충분히 긴 인용 블록 (최종 답은 보통 따옴표 안 + 맨 뒤)
-    quotes = [q.strip() for q in _re.findall(r'"([^"]{40,})"', t)
-              if '*' not in q and 'Check' not in q and '. ' in q]
-    if quotes:
-        return quotes[-1]
-    # 2) 인용 없으면 마지막 prose 문단 (불릿/헤더/라벨 제외)
-    paras = [p.strip() for p in _re.split(r'\n\s*\n', t) if p.strip()]
-    for p in reversed(paras):
-        if (not p.startswith(('*', '#', '-', '•')) and '. ' in p
-                and 'Check' not in p and '*' not in p and ':' not in p[:20]):
-            return p
-    return t
+    # 1) "Revised again:" / "Final caption:" / "Corrected:" 마커 → 마지막 마커 뒤
+    rev = list(_re.finditer(
+        r"(?im)\b(?:"
+        r"revised(?:\s+again|\s+version)?|"
+        r"final(?:\s+(?:version|caption|answer))?|"
+        r"corrected(?:\s+version)?|final\s+answer|"
+        r"here(?:'s| is)\s+(?:the\s+|your\s+|a\s+)?(?:final\s+|revised\s+|corrected\s+|new\s+|updated\s+)?caption|"
+        r"(?:the\s+)?caption|the\s+output"
+        r")\s*:\s*",
+        t))
+    if rev:
+        tail = t[rev[-1].end():].strip().strip('"').strip()
+        if len(tail) >= 25:
+            return _strip_meta_sentences(tail)
+    # 2) 추론형 + 끝에 긴 인용 블록 → 그 인용이 최종 답
+    reasoning_markers = ("Let's", "Let me", "Check", "Wait", "Revised", "pronoun",
+                         "No commas", "Capital", "I should", "I think", "I will treat",
+                         "Sentence 1", "Re-read")
+    if sum(1 for m in reasoning_markers if m in t) >= 2:
+        quotes = [q.strip() for q in _re.findall(r'"([^"]{40,})"', t)
+                  if '. ' in q and not _is_meta_sentence(q) and '*' not in q]
+        if quotes:
+            return _strip_meta_sentences(quotes[-1])
+    # 3) 선두/후미 메타 문장 제거
+    return _strip_meta_sentences(t)
 
 
 class OllamaClient:
@@ -379,6 +438,7 @@ class OllamaClient:
             r.raise_for_status()
             text = (r.json().get('response', '') or '').strip()
             text = _strip_channels(text)
+            text = _extract_final_nl(text)   # 추론/체크리스트/리비전 누출 제거 (콤마는 보존)
             return text
         except requests.ConnectionError:
             raise ConnectionError("Ollama 서버에 연결할 수 없습니다.")
