@@ -6,8 +6,6 @@ import os
 import time
 import random
 import json
-from PIL import Image
-from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
 

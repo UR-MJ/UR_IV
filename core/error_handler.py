@@ -78,10 +78,3 @@ def handle_error(code: str, context: str, exception: Exception, notify: bool = T
     return msg
 
 
-def safe_call(code: str, context: str, func, *args, notify: bool = True, default=None, **kwargs):
-    """안전한 함수 호출 래퍼"""
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        handle_error(code, context, e, notify)
-        return default

@@ -5,11 +5,9 @@ UI 액션 및 이벤트 처리 로직
 import os
 from PyQt6.QtWidgets import QListWidgetItem, QMessageBox
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap
 
 from config import OUTPUT_DIR
 from utils.theme_manager import get_color
-from core.image_utils import exif_for_display
 from utils.app_logger import get_logger
 from ui.generator_generation import _gen_btn_style, _gen_btn_default_color
 

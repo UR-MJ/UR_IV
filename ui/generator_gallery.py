@@ -4,7 +4,7 @@
 """
 import os
 import json
-from PyQt6.QtWidgets import QListWidgetItem, QMessageBox, QMenu
+from PyQt6.QtWidgets import QMessageBox, QMenu
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QGuiApplication, QAction
 

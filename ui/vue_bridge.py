@@ -115,12 +115,6 @@ class VueBridge(QObject):
     def send_start(self):
         self.generationStarted.emit()
 
-    def send_error(self, msg: str):
-        error_msg = f'[E020] {msg}'
-        self.generationError.emit(error_msg)
-        self.showNotification.emit('error', error_msg)
-        print(f"[E020] Generation Error: {msg}")
-
     # ── Vue → Python 슬롯 ──
 
     @pyqtSlot(str, str)
