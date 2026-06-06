@@ -1293,6 +1293,28 @@ function insertAllTriggers() {
   storeWidgets.main_prompt_text = cur ? (cur.replace(/,?\s*$/, '') + ', ' + add.join(', ')) : add.join(', ')
   addToast('success', `트리거 ${add.length}개 삽입`)
 }
+// 시작 시 Ollama 모델 검증 — 저장된 모델이 설치 목록에 없으면(또는 비어있으면)
+// 첫 번째 설치 모델로 자동 교체 + 영속. Settings를 열어 모델을 바꾸지 않아도
+// 프롬프트 강화/자연어가 바로 동작하게 한다. (실패해도 조용히 무시)
+async function ensureOllamaModel() {
+  try {
+    const bk = await getBackend()
+    if (!bk || !bk.ollamaListModels) return
+    const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
+    bk.ollamaListModels(url, (json) => {
+      try {
+        const models = JSON.parse(json)
+        if (!Array.isArray(models) || models.length === 0) return
+        const cur = window.localStorage.getItem('ollamaModel') || ''
+        if (!cur || !models.includes(cur)) {
+          window.localStorage.setItem('ollamaModel', models[0])
+          requestAction('save_ui_prefs', { ollamaModel: models[0], ollamaUrl: url })
+        }
+      } catch {}
+    })
+  } catch {}
+}
+
 // LoRA 매니저(Vue 모달)
 const showLoraModal = ref(false)
 const showCondModal = ref(false)   // 조건부 프롬프트 모달
@@ -1810,6 +1832,7 @@ onMounted(async () => {
   await initBridge()
   storeWidgets.negpip_group = 'true'   // NegPiP 상시 적용 (UI 토글 제거)
   loadCondRules()                      // 조건부 프롬프트 규칙 로드 (모달/Search 공유)
+  setTimeout(ensureOllamaModel, 3000)  // 폴백: uiPrefsLoaded가 안 와도 AI 모델 검증
   // Settings 등 다른 곳에서 ui.scale 변경 시 즉시 반영
   window.addEventListener('storage', (e) => {
     if (e.key === 'ui.scale') _applyUiScale(e.newValue)
@@ -2014,6 +2037,11 @@ onMounted(async () => {
   onBackendEvent('uiPrefsLoaded', (json) => {
     try {
       const prefs = JSON.parse(json)
+      // AI Assistant 모델/URL을 영속 prefs → localStorage 복원 (PromptPanel이 localStorage를 읽음)
+      // 그 후 설치 목록과 대조해 유효하지 않으면 자동 교체 → Settings를 안 열어도 바로 동작.
+      if (prefs.ollamaUrl) window.localStorage.setItem('ollamaUrl', prefs.ollamaUrl)
+      if (prefs.ollamaModel) window.localStorage.setItem('ollamaModel', prefs.ollamaModel)
+      ensureOllamaModel()
       if (Array.isArray(prefs.ratingFilter) && prefs.ratingFilter.length === ratingFilters.length) {
         prefs.ratingFilter.forEach((v, i) => { ratingFilters[i].on = !!v })
         window.localStorage.setItem('ratingFilter', JSON.stringify(prefs.ratingFilter))
