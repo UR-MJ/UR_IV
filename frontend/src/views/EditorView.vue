@@ -245,6 +245,7 @@ function loadImage(path: string) {
   initialImagePath.value = path
   isDirty.value = false
   imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
+  canvasRef.value?.clearSelection(true)   // 새 이미지: stale 마스크 + undo/redo 스택 초기화
   _pushRecentFile(path)
   const img = new Image()
   img.onload = () => { imgWidth.value = img.naturalWidth; imgHeight.value = img.naturalHeight }
@@ -288,7 +289,7 @@ function pushState(path: string, clearMask = true) {
   const img = new Image()
   img.onload = () => { imgWidth.value = img.naturalWidth; imgHeight.value = img.naturalHeight }
   img.src = 'file:///' + path
-  if (clearMask) canvasRef.value?.clearSelection()
+  if (clearMask) canvasRef.value?.clearSelection(true)   // 이미지 작업 후: 마스크 히스토리도 리셋
 }
 
 function doUndo() {

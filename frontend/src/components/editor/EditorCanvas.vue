@@ -270,7 +270,6 @@ function onMouseDown(e: PointerEvent) {
     return
   }
   initMask()
-  saveMaskState()  // 마스킹 전 상태 저장
   const pos = getImagePos(e)
   drawing = true
   startX = pos.x; startY = pos.y
@@ -287,6 +286,12 @@ function onMouseDown(e: PointerEvent) {
   }
   const brushR = sizeFor(props.brushSize)
 
+  // maskData가 즉시 바뀌는 도구만 undo 스냅샷 저장 (box/lasso는 mouseup 적용 시 저장 —
+  //  빈 클릭/미세 드래그가 빈 undo 단계로 쌓이거나 redo를 날리는 것 방지)
+  if (props.tool === 'brush' || props.tool === 'stamp'
+      || (props.tool === 'eraser' && (props.eraserRestore || props.eraserMode === 'brush'))) {
+    saveMaskState()
+  }
   if (props.tool === 'lasso') {
     const sp = props.magneticLasso ? snapToEdge(pos.x, pos.y) : pos
     lassoPoints = [{ x: sp.x, y: sp.y }]
@@ -425,17 +430,17 @@ function onMouseUp(e: PointerEvent) {
   if (props.tool === 'box') {
     const x1 = Math.round(Math.min(startX, pos.x)), y1 = Math.round(Math.min(startY, pos.y))
     const x2 = Math.round(Math.max(startX, pos.x)), y2 = Math.round(Math.max(startY, pos.y))
-    if (x2 - x1 > 3 && y2 - y1 > 3) fillMaskRect(x1, y1, x2, y2)
+    if (x2 - x1 > 3 && y2 - y1 > 3) { saveMaskState(); fillMaskRect(x1, y1, x2, y2) }
   } else if (props.tool === 'lasso') {
-    if (lassoPoints.length > 2) fillMaskPolygon(lassoPoints)
+    if (lassoPoints.length > 2) { saveMaskState(); fillMaskPolygon(lassoPoints) }
     lassoPoints = []
   } else if (props.tool === 'eraser') {
     if (props.eraserMode === 'box') {
       const x1 = Math.round(Math.min(startX, pos.x)), y1 = Math.round(Math.min(startY, pos.y))
       const x2 = Math.round(Math.max(startX, pos.x)), y2 = Math.round(Math.max(startY, pos.y))
-      if (x2 - x1 > 3 && y2 - y1 > 3) eraseMaskRect(x1, y1, x2, y2)
+      if (x2 - x1 > 3 && y2 - y1 > 3) { saveMaskState(); eraseMaskRect(x1, y1, x2, y2) }
     } else if (props.eraserMode === 'lasso') {
-      if (lassoPoints.length > 2) eraseMaskPolygon(lassoPoints)
+      if (lassoPoints.length > 2) { saveMaskState(); eraseMaskPolygon(lassoPoints) }
       lassoPoints = []
     }
   }
@@ -624,13 +629,15 @@ function onWheel(e: WheelEvent) {
   else { zoom.value = Math.max(0.1, Math.min(10, zoom.value * (e.deltaY > 0 ? 0.9 : 1.1))) }
 }
 
-function clearSelection() {
+function clearSelection(resetHistory = false) {
   if (maskData) maskData.fill(0)
   hasMask.value = false; lassoPoints = []
-  // 마스크가 비워지면 마스크 히스토리도 리셋 — 이미지 작업 후 stale 마스크 undo가
-  // 이미지 undo를 가리지 않도록(통합 undo/redo 일관성).
-  maskUndoStack = []; maskRedoStack = []
-  maskUndoCount.value = 0; maskRedoCount.value = 0
+  // 이미지 작업/새 이미지 로드 후에만(resetHistory=true) 마스크 히스토리 리셋 — stale 마스크
+  // undo가 이미지 undo를 가리지 않게. Esc/취소(기본 false)는 보존 → Ctrl+Z로 마스크 복구 가능.
+  if (resetHistory) {
+    maskUndoStack = []; maskRedoStack = []
+    maskUndoCount.value = 0; maskRedoCount.value = 0
+  }
   renderMaskOverlay()
 }
 
@@ -664,6 +671,7 @@ function loadMaskFromBase64(b64: string) {
     const tctx = tc.getContext('2d')!; tctx.drawImage(img, 0, 0, tc.width, tc.height)
     const id = tctx.getImageData(0, 0, tc.width, tc.height)
     initMask()
+    saveMaskState()   // 자동 감지 마스크도 undo 한 단계로 (통합 undo에서 마스크 우선 되돌림)
     for (let i = 0; i < maskData!.length; i++) { if (id.data[i * 4] > 127) maskData![i] = 255 }
     renderMaskOverlay()
     emitMaskBounds()
