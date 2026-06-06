@@ -1563,7 +1563,13 @@ class GeneratorMainUI(
         _orig_add = self.queue_panel.add_single_item
         def _wrapped_add(item):
             _orig_add(item)
-            self._sync_queue_item_added(item)
+            # 실제 생성된 항목(id 포함)을 전달 — 원본 item엔 id가 없어 Vue 중복 방지가
+            # 동작하지 않던 문제 방지
+            try:
+                actual = self.queue_panel.queue_items[-1] if self.queue_panel.queue_items else item
+            except Exception:
+                actual = item
+            self._sync_queue_item_added(actual)
         self.queue_panel.add_single_item = _wrapped_add
 
     def _sync_queue_item_added(self, item: dict):

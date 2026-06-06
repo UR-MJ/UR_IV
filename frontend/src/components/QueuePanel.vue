@@ -272,19 +272,10 @@ onMounted(() => {
     } catch {}
   }))
 
-  // 아이템 추가 이벤트 — queueUpdated가 전체 상태를 보내므로 여기선 중복 방지하며 보강
-  _unsubs.push(onBackendEvent('queueItemAdded', (json) => {
-    try {
-      const item = JSON.parse(json)
-      // id 기준 중복 체크 — queueUpdated가 이미 반영했다면 push 안 함
-      if (item.id && items.value.some(it => it.id === item.id)) {
-        isExpanded.value = true
-        return
-      }
-      items.value.push(item)
-      isExpanded.value = true
-    } catch {}
-  }))
+  // 아이템 추가 이벤트 — queueUpdated가 전체 목록(id 포함)을 권위 있게 보내므로
+  // 여기선 패널만 펼친다. (예전엔 여기서 push했는데, queueItemAdded payload에 id가 없어
+  // 중복 체크를 통과하지 못하고 매번 push되어 '깡통 큐' 중복 항목이 생기던 버그였음.)
+  _unsubs.push(onBackendEvent('queueItemAdded', () => { isExpanded.value = true }))
 
   // 완료 이벤트
   _unsubs.push(onBackendEvent('queueCompleted', (json) => {

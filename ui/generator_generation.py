@@ -202,7 +202,23 @@ class GenerationMixin:
         if not lora_text and hasattr(self, 'lora_active_panel'):
             lora_text = self.lora_active_panel.get_active_lora_text()
         if lora_text:
-            final_prompt = f"{final_prompt}, {lora_text}" if final_prompt else lora_text
+            # 프롬프트에 이미 <lora:NAME...>이 있으면(큐 항목의 EXIF 로라 등) 스택의 같은
+            # LoRA는 제외 — 동일 LoRA 이중 적용 방지.
+            import re as _re
+            existing = {n.strip().lower()
+                        for n in _re.findall(r'<lora:([^:>]+)', final_prompt or '', flags=_re.IGNORECASE)}
+            if existing:
+                kept = []
+                for seg in lora_text.split(','):
+                    s = seg.strip()
+                    m = _re.match(r'<lora:([^:>]+)', s, flags=_re.IGNORECASE)
+                    if m and m.group(1).strip().lower() in existing:
+                        continue
+                    if s:
+                        kept.append(s)
+                lora_text = ', '.join(kept)
+            if lora_text:
+                final_prompt = f"{final_prompt}, {lora_text}" if final_prompt else lora_text
 
         # Payload 생성
         payload = {
