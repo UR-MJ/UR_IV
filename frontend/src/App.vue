@@ -2319,7 +2319,7 @@ onMounted(async () => {
 .rand-res-add span { color: var(--text-muted); font-size: 10px; }
 .rand-res-input { width: 50px; padding: 3px 4px; font-size: 10px; text-align: center; }
 .rand-res-btn { width: 24px; height: 24px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-weight: 900; cursor: pointer; font-size: 14px; }
-.ext-check-row { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px; white-space: nowrap; }
+.ext-check-row { display: flex; width: fit-content; max-width: 100%; align-self: flex-start; align-items: center; gap: 7px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px; white-space: nowrap; }
 /* 체크박스 → 토글 스위치 (ADVANCED SETTINGS 주요 토글 전체) */
 .ext-check-row input[type="checkbox"] {
   appearance: none; -webkit-appearance: none; margin: 0; flex-shrink: 0;
