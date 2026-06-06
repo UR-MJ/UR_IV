@@ -702,6 +702,29 @@ class ActionsMixin:
             if not self.gallery_tab._all_paths and self.gallery_tab._current_folder:
                 self.gallery_tab.load_folder(self.gallery_tab._current_folder)
                 
+    def _greedy_merge_words(self, words):
+        """공백 구분 단어들을 알려진 다중단어 태그로 greedy 결합 (최장 우선).
+        예: [tokyo, afterschool, summoners] → [tokyo afterschool summoners].
+        DB에 없는 조합은 단일 단어로 유지."""
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            ti = get_tag_intelligence()
+        except Exception:
+            return list(words)
+        out, i, n = [], 0, len(words)
+        while i < n:
+            took = 1
+            for j in range(min(5, n - i), 1, -1):   # 5..2 단어 조합을 길이순으로
+                cand = ' '.join(words[i:i + j])
+                if ti.is_known(cand) or ti.is_character(cand) or ti.is_copyright(cand):
+                    out.append(cand)
+                    took = j
+                    break
+            else:
+                out.append(words[i])
+            i += took
+        return out
+
     def handle_prompt_only_transfer(self, prompt, negative):
         """PNG Info/Gallery에서 프롬프트만 전송"""
         import re
@@ -718,7 +741,14 @@ class ActionsMixin:
         if ',' in raw:
             tokens = [t.strip() for t in raw.split(',') if t.strip()]
         else:
-            tokens = [t.strip().replace('_', ' ') for t in raw.split() if t.strip()]
+            words = [w for w in raw.split() if w.strip()]
+            if any('_' in w for w in words):
+                # 언더스코어 태그가 공백 구분 (white_hair blue_eyes) → 그대로 변환
+                tokens = [w.replace('_', ' ').strip() for w in words]
+            else:
+                # 순수 공백 구분 단어 → 알려진 다중단어 태그로 greedy 결합
+                # (tokyo afterschool summoners 가 3개로 쪼개지던 버그 수정)
+                tokens = self._greedy_merge_words(words)
         classified = self.tag_classifier.classify_tags_for_event(tokens)
         # 분류 보강: wiki 분류기(265k)가 못 잡은 캐릭터/작품을 저장된 캐릭터 프리셋 +
         # tag_intelligence(characterization.json 34k)로 재분류 → general(main) 누수 방지

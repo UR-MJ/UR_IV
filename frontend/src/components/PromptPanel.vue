@@ -756,9 +756,12 @@ function useNlAsMain() {
   add = add.replace(/^\s*Resolution:.*$/im, '').trim()   // 해상도 줄은 별도 버튼이라 제외
   const firstBlock = add.split(/\n\s*\n/)[0].trim()        // 다중 블록(창의)이면 첫 블록(태그)만
   if (firstBlock) add = firstBlock
-  // 앞의 태그는 override하지 않고 맨 뒤에 추가
-  const cur = (widgets.main_prompt_text || '').trim()
-  widgets.main_prompt_text = cur ? (cur.replace(/,?\s*$/, '') + ', ' + add) : add
+  // 앞의 태그는 override하지 않고 맨 뒤에 추가.
+  // 자연어(콤마 없음)는 공백으로, 태그(콤마 있음)는 콤마로 구분 — 자연어 앞에 콤마가
+  // 이상하게 붙던 버그 수정.
+  const cur = (widgets.main_prompt_text || '').trim().replace(/[,\s]+$/, '')
+  const sep = add.includes(',') ? ', ' : ' '
+  widgets.main_prompt_text = cur ? (cur + sep + add) : add
   nlResult.value = ''
   nlRes.value = null
   nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })

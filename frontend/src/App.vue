@@ -517,7 +517,7 @@
           <div v-for="img in visibleHistory" :key="img" class="hist-card"
             @click="selectHistoryImage(img)"
             @contextmenu.prevent="showHistoryMenu($event, img)"
-            :class="{ selected: currentImage === img }"
+            :class="{ selected: currentImage === img, blink: historyBlink && currentImage === img }"
             draggable="true" @dragstart="onDragStart($event, img)"
           >
             <img :key="historyImageSrc(img)" :src="historyImageSrc(img)" loading="lazy" />
@@ -1052,6 +1052,8 @@ import { uiModals, closeCharPresetModal, openAbTestModal, closeAbTestModal,
 
 const currentImage = ref('')
 const imageVersions = reactive({})
+// HISTORY 선택 이미지 테두리 깜빡임 (Settings에서 on/off)
+const historyBlink = ref(window.localStorage.getItem('historyBlinkSelected') !== 'false')
 const resolution = ref('')
 const seed = ref('')
 const status = ref('')
@@ -1641,7 +1643,8 @@ const ctxDelete = () => {
 }
 
 async function selectHistoryImage(path) {
-  imageVersions[path] = Date.now()
+  // (선택 시엔 이미지 내용이 안 바뀌므로 cache-bust 하지 않음 — 매 선택마다 썸네일이
+  //  재로드되어 점멸하던 버그 수정. 재생성 시 cache-bust는 imageGenerated 핸들러가 처리.)
   currentImage.value = path
   const img = new Image()
   img.onload = () => { resolution.value = `${img.naturalWidth} × ${img.naturalHeight}` }
@@ -1734,6 +1737,8 @@ onMounted(async () => {
   })
   // 같은 창에서의 변경 (Settings 슬라이더)도 즉시 — 커스텀 이벤트
   window.addEventListener('uiScaleChanged', (e) => _applyUiScale(e.detail?.value))
+  // HISTORY 선택 깜빡임 토글 — Settings에서 변경 시 즉시 반영
+  window.addEventListener('historyBlinkChanged', (e) => { historyBlink.value = !!e.detail?.value })
   // localStorage 캐시로 즉시 표시 (응답 빠르게), 그 후 backend에서 최신 가져옴
   try {
     const cached = localStorage.getItem('historyImagesCache')
@@ -2378,6 +2383,11 @@ onMounted(async () => {
 .hist-card { position: relative; flex: 1 1 0; min-height: 0; border-radius: var(--radius-card); overflow: hidden; border: 2px solid transparent; cursor: pointer; transition: border-color 0.15s; }
 .hist-card:hover { border-color: #333; }
 .hist-card.selected { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-dim); }
+.hist-card.selected.blink { animation: histBlink 1s ease-in-out infinite; }
+@keyframes histBlink {
+  0%, 100% { border-color: var(--accent); box-shadow: 0 0 6px var(--accent-dim); }
+  50% { border-color: #fff; box-shadow: 0 0 20px var(--accent); }
+}
 .hist-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 /* Context Menu */

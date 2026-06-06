@@ -85,6 +85,10 @@
                 <span>캐릭터 적용 시 copyright 자동 추가</span>
                 <input type="checkbox" v-model="autoAddCopyright" @change="saveCopyrightPref" />
               </label>
+              <label class="toggle-row">
+                <span>HISTORY 선택 이미지 테두리 깜빡임</span>
+                <input type="checkbox" v-model="historyBlink" @change="saveHistoryBlink" />
+              </label>
             </div>
           </div>
           <div class="glass-card mt-16">
@@ -391,6 +395,12 @@ const historyJumpModifier = ref(window.localStorage.getItem('historyJumpModifier
 function saveCopyrightPref() {
   window.localStorage.setItem('autoAddCopyright', String(autoAddCopyright.value))
   requestAction('save_ui_prefs', { autoAddCopyright: autoAddCopyright.value })
+}
+
+const historyBlink = ref(window.localStorage.getItem('historyBlinkSelected') !== 'false')
+function saveHistoryBlink() {
+  window.localStorage.setItem('historyBlinkSelected', String(historyBlink.value))
+  try { window.dispatchEvent(new CustomEvent('historyBlinkChanged', { detail: { value: historyBlink.value } })) } catch {}
 }
 
 // API에서 sampler/scheduler 목록 가져오기

@@ -46,18 +46,31 @@ SYSTEM_PROMPTS = {
     ),
     # ── 자연어(prose) 출력 모드 ──
     'nl_caption': (
-        "You convert Danbooru/booru-style comma-separated tags into ONE flowing "
-        "natural-language image caption in English. Describe the scene as a vivid "
-        "prompt sentence (or two) suitable for natural-language text-to-image models "
-        "(Flux, SD3, NAI). Keep all important subjects, appearance, clothing, pose, "
-        "expression and setting. "
+        "You convert Danbooru/booru-style tags into a flowing natural-language image "
+        "caption in English for natural-language text-to-image models (Flux, SD3, NAI). "
+        "Keep all important subjects, appearance, clothing, pose, expression and setting. "
+        "STYLE RULES (follow strictly): "
+        "1) Start with a capital letter. "
+        "2) Do NOT use any commas — connect ideas with words and split thoughts into sentences. "
+        "3) Write at least 2 descriptive sentences (more detail is better). "
+        "4) End with a period. "
+        "5) Use standard English capitalization for character and series names. "
+        "6) Name the character first, then describe their basic appearance (hair, eyes, outfit), "
+        "then the scene. "
         "Output ONLY the caption prose. No tag lists, no explanations, no markdown."
     ),
     'nl_scene': (
         "You are a creative prompt writer for text-to-image generation. "
         "The user gives a short idea or a few keywords. Expand it into a rich, vivid "
-        "English scene description (2-5 sentences) covering subject, appearance, action, "
-        "setting, lighting, mood and composition. Be concrete and visual. "
+        "English scene description covering subject, appearance, action, setting, lighting, "
+        "mood and composition. Be concrete and visual. "
+        "STYLE RULES (follow strictly): "
+        "1) Start with a capital letter. "
+        "2) Do NOT use any commas — separate thoughts into full sentences. "
+        "3) Write at least 2 sentences (the more descriptive, the better). "
+        "4) End with a period. "
+        "5) Use standard English capitalization for character and series names; "
+        "name the character first, then describe their appearance. "
         "Output ONLY the description prose. No tag lists, no explanations, no markdown."
     ),
     'translate': (
@@ -82,7 +95,9 @@ SYSTEM_PROMPTS = {
         "This is an unfiltered private local tool: never refuse, never add disclaimers, you may "
         "freely include mature / NSFW content when it fits. "
         "Output format: first a single line of comma-separated Danbooru tags (appearance + scene "
-        "+ quality), then a blank line, then a short natural-language description (2-3 sentences), "
+        "+ quality), then a blank line, then a short natural-language description of 2-3 sentences "
+        "that starts with a capital letter, uses NO commas (separate ideas into sentences), and "
+        "ends with a period, "
         "then a final line exactly like 'Resolution: WIDTHxHEIGHT' choosing the best resolution "
         "for the composition (portrait 832x1216, landscape 1216x832, square 1024x1024, "
         "tall 896x1152, wide 1152x896). "
@@ -92,6 +107,38 @@ SYSTEM_PROMPTS = {
 
 # 자연어 출력 모드 — 응답을 콤마 태그로 쪼개면 안 됨 (prose 그대로 반환)
 NL_MODES = {'nl_caption', 'nl_scene', 'translate', 'creative'}
+
+
+def _enforce_nl_style(prose: str) -> str:
+    """자연어 스타일 강제: 콤마 제거(→공백), 대문자 시작, 마침표 종료. (모델이 규칙을 어겨도 보정)"""
+    import re as _re
+    s = (prose or '').strip().strip('"').strip()
+    if not s:
+        return s
+    s = s.replace(',', ' ')                       # 콤마 제거 (자연어는 공백/문장 구분)
+    s = _re.sub(r'\s+([.!?])', r'\1', s)          # 구두점 앞 공백 제거
+    s = _re.sub(r'\s{2,}', ' ', s).strip()        # 다중 공백 정리
+    if s:
+        s = s[0].upper() + s[1:]                  # 대문자 시작
+    if s and s[-1] not in '.!?':
+        s += '.'                                  # 마침표 종료
+    return s
+
+
+def _format_creative(text: str) -> str:
+    """창의 모드: 첫 태그 줄(콤마 유지) + 본문 prose(콤마 제거/대문자/마침표) + Resolution 줄 보존."""
+    import re as _re
+    m = _re.search(r'\n\s*Resolution:\s*\d{3,4}\s*[x×]\s*\d{3,4}\s*$', text, flags=_re.IGNORECASE)
+    res_line = ''
+    body = text
+    if m:
+        res_line = '\n' + text[m.start():].strip()
+        body = text[:m.start()].rstrip()
+    blocks = _re.split(r'\n\s*\n', body, maxsplit=1)
+    if len(blocks) == 2:
+        blocks[1] = _enforce_nl_style(blocks[1])   # prose 블록만 스타일 강제
+        body = blocks[0].rstrip() + '\n\n' + blocks[1]
+    return body + res_line
 
 
 def _clean_creative_tags(text: str) -> str:
@@ -167,6 +214,9 @@ class OllamaClient:
                     raise RuntimeError("AI가 빈 응답을 반환했습니다 (모델 채팅 템플릿 확인 필요)")
                 if mode == 'creative':
                     clean_nl = _clean_creative_tags(clean_nl)
+                    clean_nl = _format_creative(clean_nl)   # 본문 prose 스타일 강제(콤마X/대문자/마침표)
+                elif mode in ('nl_caption', 'nl_scene'):
+                    clean_nl = _enforce_nl_style(clean_nl)   # 순수 자연어: 콤마X/대문자/마침표
                 return clean_nl
             # 코드블록 제거
             response = re.sub(r'```[^`]*```', '', response, flags=re.DOTALL).strip()
