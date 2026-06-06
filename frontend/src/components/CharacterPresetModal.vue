@@ -70,6 +70,16 @@
                 <span v-if="coreTags.length === 0" class="cpm-none">없음</span>
               </div>
 
+              <template v-if="auxTags.length">
+                <div class="cpm-section-label aux">보조 특징 ({{ auxTags.length }}) <span class="cpm-etc-hint">헤어스타일·체형·피부 등</span></div>
+                <div class="cpm-chips">
+                  <button v-for="(t, i) in auxTags" :key="'a'+i" class="cpm-chip aux"
+                    :class="chipClass(t)" :disabled="t.existing" @click="toggleChip(t)">
+                    {{ t.tag }}<span v-if="t.existing" class="cpm-exist">(존재)</span>
+                  </button>
+                </div>
+              </template>
+
               <template v-if="costumeTags.length">
                 <div class="cpm-section-label costume">
                   의상 · 추가 특징 ({{ costumeTags.length }})
@@ -183,7 +193,8 @@ const selectedChar = ref('')
 const charCount = ref(0)
 const coreTags = ref([])         // [{tag, existing, costume, checked}]
 const costumeTags = ref([])
-const etcTags = ref([])          // 기타(스타일·체형·포즈 등) — 기본 미선택
+const etcTags = ref([])          // 기타(포즈·표정·동작 등 목록 밖) — 기본 미선택
+const auxTags = ref([])          // 보조 특징(characteristic_list.txt) — 기본 선택
 const customTags = ref([])       // [{tag, checked}]
 const condRules = ref([])        // [{condition, exists, tags:[], location, action, enabled}]
 const presetStatus = ref('')
@@ -279,6 +290,7 @@ async function selectChar(key) {
   coreTags.value = []
   costumeTags.value = []
   etcTags.value = []
+  auxTags.value = []
   customTags.value = []
   condRules.value = []
   copyright.value = ''
@@ -290,6 +302,7 @@ async function selectChar(key) {
   coreTags.value = (data.core || []).map(t => ({ ...t, checked: !t.existing }))
   costumeTags.value = (data.costume || []).map(t => ({ ...t, checked: !t.existing }))
   etcTags.value = (data.etc || []).map(t => ({ ...t, checked: false }))   // 기타는 기본 미선택
+  auxTags.value = (data.aux || []).map(t => ({ ...t, checked: !t.existing }))  // 보조는 기본 선택
   customTags.value = (data.custom || []).map(tag => ({ tag, checked: true }))
   // 조건부 규칙 파싱
   condRules.value = []
@@ -311,12 +324,14 @@ function toggleChip(t) { if (!t.existing) t.checked = !t.checked }
 
 function selectAll() {
   for (const t of coreTags.value) if (!t.existing) t.checked = true
+  for (const t of auxTags.value) if (!t.existing) t.checked = true
   for (const t of costumeTags.value) if (!t.existing) t.checked = true
   for (const t of etcTags.value) if (!t.existing) t.checked = true
   for (const t of customTags.value) t.checked = true
 }
 function deselectAll() {
   for (const t of coreTags.value) if (!t.existing) t.checked = false
+  for (const t of auxTags.value) if (!t.existing) t.checked = false
   for (const t of costumeTags.value) if (!t.existing) t.checked = false
   for (const t of etcTags.value) if (!t.existing) t.checked = false
   for (const t of customTags.value) t.checked = false
@@ -341,6 +356,7 @@ async function fetchDanbooru() {
   coreTags.value = fresh.map(t => ({ tag: t, existing: false, costume: false, checked: true }))
   costumeTags.value = []
   etcTags.value = []
+  auxTags.value = []
   presetStatus.value = `🌐 danbooru ${res.sampled}건 집계`
   requestAction('show_toast', { type: 'success', msg: `danbooru ${fresh.length}개 태그 로드 — 검토 후 '프리셋 저장'` })
 }
@@ -352,7 +368,7 @@ function addCustom() {
     const tag = part.trim()
     if (!tag) continue
     const n = norm(tag)
-    const exists = [...coreTags.value, ...costumeTags.value, ...etcTags.value, ...customTags.value]
+    const exists = [...coreTags.value, ...auxTags.value, ...costumeTags.value, ...etcTags.value, ...customTags.value]
       .some(t => norm(t.tag) === n)
     if (!exists) customTags.value.push({ tag, checked: true })
   }
@@ -362,6 +378,7 @@ function addCustom() {
 function checkedTags() {
   const out = []
   for (const t of coreTags.value) if (!t.existing && t.checked) out.push(t.tag)
+  for (const t of auxTags.value) if (!t.existing && t.checked) out.push(t.tag)
   for (const t of costumeTags.value) if (!t.existing && t.checked) out.push(t.tag)
   for (const t of etcTags.value) if (!t.existing && t.checked) out.push(t.tag)
   for (const t of customTags.value) if (t.checked) out.push(t.tag)
@@ -502,6 +519,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .cpm-section-label.core { color: var(--accent); }
 .cpm-section-label.costume { color: #fb923c; }
 .cpm-section-label.etc { color: #94a3b8; }
+.cpm-section-label.aux { color: #38bdf8; }
 .cpm-etc-hint { font-size: 9px; font-weight: 400; color: var(--text-muted); margin-left: 4px; }
 .cpm-section-label.custom { color: #f59e0b; }
 .cpm-regiontoggle { float: right; background: var(--bg-button); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: 9px; font-weight: 700; padding: 2px 8px; cursor: pointer; }
@@ -515,6 +533,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .cpm-chip.off { background: var(--bg-button); color: var(--text-muted); text-decoration: line-through; }
 .cpm-chip.costume:not(.off) { background: #fb923c; }
 .cpm-chip.etc:not(.off) { background: #64748b; }
+.cpm-chip.aux:not(.off) { background: #38bdf8; color: #03263a; }
 .cpm-chip.cust:not(.off) { background: #f59e0b; color: #000; }
 .cpm-chip.existing { background: var(--bg-button); color: var(--text-muted); border: 1px dashed var(--border); cursor: default; text-decoration: none; }
 .cpm-exist { margin-left: 4px; opacity: 0.7; }

@@ -214,6 +214,35 @@ def is_core_appearance_tag(tag: str) -> bool:
     return False
 
 
+# ── 보조 특징 (tags_db/characteristic_list.txt 등재 외형 특성) ──
+_AUX_SET = None
+
+
+def _load_aux_set() -> set:
+    """characteristic_list.txt를 normalize해서 로드 (lazy, 1회)."""
+    global _AUX_SET
+    if _AUX_SET is not None:
+        return _AUX_SET
+    _AUX_SET = set()
+    try:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            "tags_db", "characteristic_list.txt")
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                t = _norm_tag(line)
+                if t:
+                    _AUX_SET.add(t)
+    except Exception:
+        pass
+    return _AUX_SET
+
+
+def is_aux_feature_tag(tag: str) -> bool:
+    """보조 특징 — characteristic_list.txt에 등재된 외형 특성(ahoge, 헤어스타일, 체형, 피부 등).
+    (색/핵심 신체특징은 lookup_core가 먼저 가져가므로 lookup_aux에선 core 제외)"""
+    return _norm_tag(tag) in _load_aux_set()
+
+
 class CharacterFeatureLookup:
     """캐릭터 이름 → 핵심/의상 특징 분리 조회 (lazy loading, singleton)"""
 
@@ -369,16 +398,30 @@ class CharacterFeatureLookup:
             return None
         return (", ".join(core_tags), self._count_for(key))
 
+    def lookup_aux(self, name: str) -> tuple[str, int] | None:
+        """보조 특징 — characteristic_list.txt에 등재됐고 비의상·비핵심인 외형 특성.
+        헤어스타일(long/twintails/ahoge), 체형(breasts), 피부, 헤어 디테일 등."""
+        self._ensure_loaded()
+        key = self._resolve_key(name)
+        if key is None:
+            return None
+        aux_tags = [t for t in self._all_feature_tags(key)
+                    if not _is_costume_tag(t) and not is_core_appearance_tag(t)
+                    and is_aux_feature_tag(t)]
+        if not aux_tags:
+            return None
+        return (", ".join(aux_tags), self._count_for(key))
+
     def lookup_etc(self, name: str) -> tuple[str, int] | None:
-        """기타 특징 — 비의상이면서 핵심 외형(색+신체)도 아닌 것.
-        헤어스타일(long/twintails), 일반 체형(breasts/navel), 포즈(hand up),
-        주관표현(bishounen) 등이 여기로 분류된다."""
+        """기타 특징 — 비의상·비핵심·비보조(목록 밖)인 것.
+        포즈(hand up/standing), 표정(smile), 동작(holding), 주관표현(bishounen) 등."""
         self._ensure_loaded()
         key = self._resolve_key(name)
         if key is None:
             return None
         etc_tags = [t for t in self._all_feature_tags(key)
-                    if not _is_costume_tag(t) and not is_core_appearance_tag(t)]
+                    if not _is_costume_tag(t) and not is_core_appearance_tag(t)
+                    and not is_aux_feature_tag(t)]
         if not etc_tags:
             return None
         return (", ".join(etc_tags), self._count_for(key))
@@ -441,13 +484,15 @@ class CharacterFeatureLookup:
             if not name:
                 continue
             core = self.lookup_core(name)
+            aux = self.lookup_aux(name)
             costume = self.lookup_costume(name)
             etc = self.lookup_etc(name)
             full = self.lookup(name)
-            if core or costume or etc or full:
+            if core or aux or costume or etc or full:
                 count = (core[1] if core else 0) or (full[1] if full else 0)
                 results[name] = {
                     "core": core,
+                    "aux": aux,
                     "costume": costume,
                     "etc": etc,
                     "count": count,
