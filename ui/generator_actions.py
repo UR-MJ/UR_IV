@@ -753,7 +753,22 @@ class ActionsMixin:
                 
     def handle_prompt_only_transfer(self, prompt, negative):
         """PNG Info/Gallery에서 프롬프트만 전송"""
-        classified = self.tag_classifier.classify_tags_for_event([t.strip() for t in prompt.split(',') if t.strip()])
+        import re
+        # ② LoRA/LyCO/hypernet 토큰 제거 — main에 들어가면 LoRA STACK과 충돌
+        def _strip_lora(s):
+            s = re.sub(r'<(?:lora|lyco|lycoris|hypernet|lokr|loha|ip-?adapter):[^>]*>', '',
+                       s or '', flags=re.IGNORECASE)
+            return re.sub(r'\s*,\s*,\s*', ', ', s).strip().strip(',').strip()
+        prompt = _strip_lora(prompt)
+        negative = _strip_lora(negative)
+        # ① 스마트 토큰화: 콤마 있으면 콤마, 없으면 공백(언더스코어→공백) 기준으로 각 태그를
+        #    개별 분류 (공백 구분 프롬프트가 통째로 1덩어리→general(main)로 새던 버그 수정)
+        raw = (prompt or '').strip()
+        if ',' in raw:
+            tokens = [t.strip() for t in raw.split(',') if t.strip()]
+        else:
+            tokens = [t.strip().replace('_', ' ') for t in raw.split() if t.strip()]
+        classified = self.tag_classifier.classify_tags_for_event(tokens)
         bundle = {
             # count(인물수)를 general 앞에 포함 → apply_prompt_from_data가 인물수
             # 섹션(char_count_input)으로 분리. (과거엔 count를 빼서 1girl/2boys 등이
@@ -765,7 +780,9 @@ class ActionsMixin:
         }
         # preserve_locked=True → 선행/후행/작가 칸은 덮어쓰지 않고, 그 칸들과 겹치는
         # 태그는 당겨오지 않음 (인물수/캐릭터/main은 그대로 override)
-        self.apply_prompt_from_data(bundle, preserve_locked=True)
+        # comma_only=True → 당겨오기는 항상 콤마 구분이므로, 단일 다중단어 태그
+        # ('genshin impact')가 공백으로 쪼개지지(망가지지) 않게 함
+        self.apply_prompt_from_data(bundle, preserve_locked=True, comma_only=True)
         self.neg_prompt_text.setPlainText(negative)
         # Vue에서 T2I 탭으로 전환 유도
         if hasattr(self, 'vue_bridge'):

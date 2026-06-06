@@ -48,10 +48,12 @@ class PromptHandlingMixin:
 
         self.total_prompt_display.setPlainText(final)
     
-    def apply_prompt_from_data(self, bundle, preserve_locked=False):
+    def apply_prompt_from_data(self, bundle, preserve_locked=False, comma_only=False):
         """검색 결과 데이터를 프롬프트 입력창에 적용.
         preserve_locked=True (프롬프트 당겨오기): 선행/후행/작가 칸을 덮어쓰지 않고,
-        당겨오는 태그를 그 칸들과 중복되면 제거한다 (인물수/캐릭터/main은 그대로 override)."""
+        당겨오는 태그를 그 칸들과 중복되면 제거한다 (인물수/캐릭터/main은 그대로 override).
+        comma_only=True: 항상 콤마로만 토큰 분리 (당겨오기/EXIF — 다중단어 태그를
+        공백으로 쪼개지 않음). False면 콤마 없을 때 공백 분리(검색 결과 호환)."""
         # 1. 데이터 추출
         general_str = str(bundle.get('general', ''))
         artist_str = str(bundle.get('artist', ''))
@@ -67,10 +69,11 @@ class PromptHandlingMixin:
             # 포맷 인식: 콤마 있으면 콤마 구분(2025/2026 검색·EXIF 프롬프트 — 태그
             # 내부 공백 유지), 없으면 공백 구분 + 언더스코어→공백(2026_06 검색 —
             # 'black_hair'가 'black','hair'로 안 쪼개지고 프롬프트엔 'black hair'로 들어감).
+            # comma_only=True면 콤마 없어도 공백 분리 안 함(단일 다중단어 태그 보존).
             text = (text or '').strip()
             if not text:
                 return []
-            if ',' in text:
+            if comma_only or ',' in text:
                 return [t.strip() for t in text.split(',') if t.strip()]
             return [t.strip().replace('_', ' ') for t in text.split() if t.strip()]
 

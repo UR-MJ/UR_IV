@@ -906,19 +906,21 @@
       </div>
     </transition>
 
-    <div class="toast-container" :class="{ 'toast-multi': toasts.length > 1 }">
-      <button v-if="toasts.length > 1" class="toast-clear-all" @click="clearAllToasts" title="모두 닫기">
-        모두 닫기 ({{ toasts.length }})
-      </button>
-      <transition-group name="toast" tag="div" class="toast-stack">
-        <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">
-          <span class="toast-icon">{{ t.type === 'error' ? '⚠' : t.type === 'success' ? '✓' : 'ℹ' }}</span>
-          <span class="toast-msg">{{ t.msg }}</span>
-          <span v-if="t.count > 1" class="toast-count">×{{ t.count }}</span>
-          <button class="toast-close" @click.stop="removeToast(t.id)" title="닫기">✕</button>
-        </div>
-      </transition-group>
-    </div>
+    <Teleport to="body">
+      <div class="toast-container" :class="{ 'toast-multi': toasts.length > 1 }">
+        <button v-if="toasts.length > 1" class="toast-clear-all" @click="clearAllToasts" title="모두 닫기">
+          모두 닫기 ({{ toasts.length }})
+        </button>
+        <transition-group name="toast" tag="div" class="toast-stack">
+          <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">
+            <span class="toast-icon">{{ t.type === 'error' ? '⚠' : t.type === 'success' ? '✓' : 'ℹ' }}</span>
+            <span class="toast-msg">{{ t.msg }}</span>
+            <span v-if="t.count > 1" class="toast-count">×{{ t.count }}</span>
+            <button class="toast-close" @click.stop="removeToast(t.id)" title="닫기">✕</button>
+          </div>
+        </transition-group>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1171,12 +1173,12 @@ function addToast(type, msg) {
     last._ts = Date.now()  // 타이머 리셋
     // 기존 타이머 취소 + 새로 설정
     if (last._timer) clearTimeout(last._timer)
-    last._timer = setTimeout(() => removeToast(last.id), 5000)
+    last._timer = setTimeout(() => removeToast(last.id), 3000)
     return
   }
   const toast = { id, type, msg, count: 1, _ts: Date.now() }
   toasts.value.push(toast)
-  toast._timer = setTimeout(() => removeToast(id), 5000)
+  toast._timer = setTimeout(() => removeToast(id), 3000)
   // 스택 초과분 — 가장 오래된 것부터 제거 (화면엔 최대 5개)
   while (toasts.value.length > MAX_TOASTS) {
     const oldest = toasts.value.shift()
@@ -2413,7 +2415,7 @@ onMounted(async () => {
 
 /* Toast Notifications */
 .toast-container {
-  position: fixed; top: 70px; right: 20px; z-index: 2000;
+  position: fixed; top: 70px; right: 20px; z-index: 99999;
   display: flex; flex-direction: column; gap: 6px; pointer-events: none;
   max-width: 400px;
 }
