@@ -6,11 +6,18 @@
           <h3>조건부 프롬프트</h3>
           <span class="cp-sub">태그 조건에 따라 프롬프트를 자동으로 추가/제거/대체합니다</span>
         </div>
-        <label class="cp-master" :class="{ on: condEnabled }">
-          <input type="checkbox" v-model="condEnabled" />
+        <div class="cp-master" :class="{ on: condEnabled }">
+          <ToggleSwitch v-model="condEnabled" />
           <span>{{ condEnabled ? 'ON' : 'OFF' }}</span>
-        </label>
+        </div>
         <button class="cp-close" @click="close">✕</button>
+      </div>
+
+      <div class="cp-optbar">
+        <label class="cp-opt">
+          <ToggleSwitch :model-value="preventDupe" size="sm" @update:modelValue="emit('update:preventDupe', $event)" />
+          <span>중복 방지 <em>이미 있는 태그는 다시 추가하지 않음</em></span>
+        </label>
       </div>
 
       <div class="cp-body" :class="{ disabled: !condEnabled }">
@@ -21,7 +28,7 @@
             <p class="cp-desc">조건 태그가 있으면/없으면 본문 프롬프트에 추가·제거·대체</p>
             <div v-for="(rule, ri) in condPositive" :key="'p'+ri" class="cp-rule">
               <div class="cp-row">
-                <input type="checkbox" v-model="rule.enabled" />
+                <ToggleSwitch v-model="rule.enabled" size="sm" />
                 <span class="cp-kw">IF</span>
                 <input v-model="rule.condition" placeholder="조건 태그" class="cp-input" />
                 <select v-model="rule.exists" class="cp-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
@@ -43,7 +50,7 @@
             <p class="cp-desc">조건 태그가 있으면/없으면 네거티브 프롬프트에 추가·제거</p>
             <div v-for="(rule, ri) in condNegative" :key="'n'+ri" class="cp-rule">
               <div class="cp-row">
-                <input type="checkbox" v-model="rule.enabled" />
+                <ToggleSwitch v-model="rule.enabled" size="sm" />
                 <span class="cp-kw">IF</span>
                 <input v-model="rule.condition" placeholder="조건 태그" class="cp-input" />
                 <select v-model="rule.exists" class="cp-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
@@ -74,8 +81,10 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
 import { condPositive, condNegative, condEnabled, addCondRule, removeCondRule, saveCondRules, loadCondRules } from '../composables/condRules.js'
+import ToggleSwitch from './ToggleSwitch.vue'
 
-const emit = defineEmits(['close'])
+defineProps({ preventDupe: { type: Boolean, default: true } })
+const emit = defineEmits(['close', 'update:preventDupe'])
 function close() { emit('close') }
 function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
 onMounted(() => { loadCondRules(); window.addEventListener('keydown', onKey, true) })
@@ -92,6 +101,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .cp-master.on { color: #4ade80; border-color: #4ade80; }
 .cp-close { width: 30px; height: 30px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); cursor: pointer; }
 .cp-close:hover { color: var(--text-primary); border-color: var(--accent); }
+.cp-optbar { padding: 8px 20px; border-bottom: 1px solid var(--border); }
+.cp-opt { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--text-secondary); cursor: pointer; }
+.cp-opt em { font-style: normal; font-weight: 400; color: var(--text-muted); margin-left: 4px; }
 .cp-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
 .cp-body.disabled { opacity: 0.45; pointer-events: none; }
 .cp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

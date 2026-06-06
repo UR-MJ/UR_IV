@@ -15,6 +15,23 @@
         <button class="optimize-btn" @click="toggleSeparate" title="표정/배경/포즈/사물/메타 태그를 분류해서 제거하거나 추출">🏷 분류</button>
         <span class="opt-result" v-if="optResult">{{ optResult }}</span>
       </div>
+      <!-- 🧹 OPTIMIZE before/after 미리보기 → [적용] 클릭 시 반영 -->
+      <div class="opt-preview" v-if="optPreview">
+        <div class="opt-prev-head">
+          <span>🧹 OPTIMIZE 미리보기</span>
+          <span class="opt-prev-stat">중복 {{ optPreview.removed }}개 제거 · {{ optPreview.tagCount }}개 태그</span>
+        </div>
+        <div class="opt-prev-cols">
+          <div class="opt-prev-col"><label>BEFORE</label><div class="opt-prev-text before">{{ optPreview.before }}</div></div>
+          <div class="opt-prev-col"><label>AFTER</label><div class="opt-prev-text after">{{ optPreview.after }}</div></div>
+        </div>
+        <div class="opt-prev-conf" v-if="optPreview.conflicts.length">⚠ 충돌: <span v-for="c in optPreview.conflicts" :key="c.group">{{ c.group }}({{ c.tags.join('/') }}) </span></div>
+        <div class="opt-prev-btns">
+          <button class="opt-apply" @click="applyOptimize">✓ 적용</button>
+          <button class="opt-cancel" @click="cancelOptimize">취소</button>
+        </div>
+      </div>
+
       <!-- ⑤ 카테고리 분리 토글 -->
       <div class="separate-panel" v-if="showSeparate">
         <div class="sep-chips">
@@ -589,20 +606,37 @@ watch(tagBlockMode, v => { if (v) setTimeout(classifyVisibleTags, 200) })
 // 딥 프롬프트 클리너
 const optResult = ref('')
 const promptConflicts = ref([])
+const optPreview = ref(null)   // {before, after, removed, tagCount, conflicts}
 async function optimizePrompt() {
   const backend = await getBackend()
   if (!backend.deepCleanPrompt) return
-  backend.deepCleanPrompt(JSON.stringify({ prompt: widgets.total_prompt_display || '' }), (json) => {
+  const before = widgets.total_prompt_display || ''
+  backend.deepCleanPrompt(JSON.stringify({ prompt: before }), (json) => {
     try {
       const d = JSON.parse(json)
       if (d.error) { optResult.value = d.error; return }
-      if (d.optimized) widgets.main_prompt_text = d.optimized
-      promptConflicts.value = d.conflicts || []
-      optResult.value = `${d.removed}개 중복 제거, ${d.tag_count}개 태그`
-      setTimeout(() => { optResult.value = '' }, 5000)
+      // 즉시 적용하지 않고 before/after 비교 후 [적용]으로 반영
+      optPreview.value = {
+        before,
+        after: d.optimized || before,
+        removed: d.removed || 0,
+        tagCount: d.tag_count || 0,
+        conflicts: d.conflicts || [],
+      }
     } catch {}
   })
 }
+function applyOptimize() {
+  const p = optPreview.value
+  if (!p) return
+  widgets.main_prompt_text = p.after
+  promptConflicts.value = p.conflicts || []
+  optResult.value = `${p.removed}개 중복 제거, ${p.tagCount}개 태그`
+  optPreview.value = null
+  nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
+  setTimeout(() => { optResult.value = '' }, 5000)
+}
+function cancelOptimize() { optPreview.value = null }
 
 // ⑤ 카테고리 분리 토글
 const SEP_CATS = [
@@ -902,6 +936,18 @@ summary::-webkit-details-marker { display: none; }
 .optimize-btn { padding: 3px 10px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 9px; font-weight: 700; cursor: pointer; }
 .optimize-btn:hover { border-color: var(--accent); color: var(--accent); }
 .opt-result { font-size: 9px; color: #4ade80; }
+.opt-preview { margin-top: 6px; background: var(--bg-secondary); border: 1px solid var(--accent); border-radius: 8px; padding: 9px; }
+.opt-prev-head { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 800; color: var(--accent); margin-bottom: 7px; }
+.opt-prev-stat { font-size: 9px; font-weight: 700; color: var(--text-muted); }
+.opt-prev-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opt-prev-col label { display: block; font-size: 8px; font-weight: 800; color: var(--text-muted); margin-bottom: 3px; letter-spacing: 1px; }
+.opt-prev-text { max-height: 110px; overflow-y: auto; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; font-size: 10px; line-height: 1.4; color: var(--text-secondary); word-break: break-word; white-space: pre-wrap; }
+.opt-prev-text.after { color: var(--text-primary); border-color: rgba(74,222,128,0.4); }
+.opt-prev-conf { margin-top: 6px; font-size: 9px; color: #fbbf24; }
+.opt-prev-btns { display: flex; gap: 6px; margin-top: 8px; }
+.opt-apply { flex: 1; padding: 6px; background: var(--accent); color: #000; border: none; border-radius: 5px; font-size: 10px; font-weight: 800; cursor: pointer; }
+.opt-apply:hover { background: var(--accent-hover); }
+.opt-cancel { padding: 6px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
 
 /* ⑤ 카테고리 분리 패널 */
 .separate-panel { margin-top: 6px; padding: 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; }

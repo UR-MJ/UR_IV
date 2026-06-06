@@ -33,7 +33,7 @@
               <button class="tool-btn" @click="showOrderManager = true; loadPromptOrder()" title="최종 프롬프트의 섹션 순서를 직접 지정">ORDER</button>
               <button class="tool-btn" @click="openAbTestModal()">A/B TEST</button>
               <button class="tool-btn" @click="showStatsModal = true; loadGenStats()">STATS</button>
-              <button class="tool-btn" @click="showCondModal = true" title="태그 조건부 프롬프트 (IF→THEN) 관리">조건부</button>
+              <button class="tool-btn" :class="{ 'tool-btn-on': condEnabled }" @click="showCondModal = true" :title="`태그 조건부 프롬프트 (IF→THEN) 관리 — 현재 ${condEnabled ? 'ON' : 'OFF'}`">조건부<span v-if="condEnabled" class="tool-dot"></span></button>
             </div>
           </div>
 
@@ -430,14 +430,7 @@
               </details>
             </details>
 
-            <!-- NegPiP — 상시 적용 (토글 제거됨) -->
-
-            <!-- 조건부 프롬프트 → STUDIO TOOLS의 '조건부' 버튼에서 관리 -->
-            <div class="ext-card">
-              <div class="ext-title">CONDITIONAL PROMPTS</div>
-              <div class="ext-hint">조건부 프롬프트는 Search 탭 하단에서 관리합니다</div>
-              <label class="ext-check-row"><input type="checkbox" v-model="extWidgets.cond_prevent_dupe" /><span>중복 방지</span></label>
-            </div>
+            <!-- NegPiP 상시 적용 / 조건부 프롬프트는 STUDIO TOOLS '조건부' 모달로 이동 -->
 
             <!-- LoRA Stack -->
             <div class="ext-card">
@@ -601,7 +594,7 @@
     <ABTestModal v-if="uiModals.abTest" @close="closeAbTestModal" />
     <CharFeatureOverrideModal v-if="uiModals.charOverride" @close="closeCharOverrideModal" />
     <LoraManagerModal v-if="showLoraModal" @close="showLoraModal = false" @add="onLoraAdd" />
-    <CondPromptModal v-if="showCondModal" @close="showCondModal = false" />
+    <CondPromptModal v-if="showCondModal" v-model:preventDupe="extWidgets.cond_prevent_dupe" @close="showCondModal = false" />
 
     <!-- Weight Manager Modal -->
     <transition name="fade">
@@ -1050,7 +1043,7 @@ import ABTestModal from './components/ABTestModal.vue'
 import CharFeatureOverrideModal from './components/CharFeatureOverrideModal.vue'
 import LoraManagerModal from './components/LoraManagerModal.vue'
 import CondPromptModal from './components/CondPromptModal.vue'
-import { loadCondRules } from './composables/condRules.js'
+import { loadCondRules, condEnabled } from './composables/condRules.js'
 import { uiModals, closeCharPresetModal, openAbTestModal, closeAbTestModal,
          openCharOverrideModal, closeCharOverrideModal } from './composables/uiModals.js'
 
@@ -2171,7 +2164,9 @@ onMounted(async () => {
 /* Tool Card */
 .tool-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }
 .tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.tool-btn { padding: 8px 4px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.tool-btn { position: relative; padding: 8px 4px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.tool-btn-on { color: #4ade80; border-color: #4ade80; box-shadow: 0 0 0 1px rgba(74,222,128,0.25) inset; }
+.tool-dot { position: absolute; top: 3px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 5px #4ade80; }
 .tool-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .tool-btn.highlight { color: var(--accent); border-color: var(--accent-dim); }
 
