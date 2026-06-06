@@ -411,6 +411,7 @@ const schedulerList = computed(() => wStore.getProperty('scheduler_combo', 'item
 // UI prefs 로드 시 동기화
 import { onBackendEvent, getBackend } from '../bridge.js'
 onMounted(async () => {
+  autoLoadOllamaModels()   // AI Assistant 모델 목록 시작 시 자동 로드
   // defaults 로드
   const bk = await getBackend()
   if (bk.getTabDefaults) {
@@ -600,6 +601,28 @@ async function testOllama() {
   }
 }
 function loadOllamaModels() { testOllama() }
+// 시작 시 조용히 모델 목록 자동 로드 (caption 탭과 동일). 실패하면 Ollama 연결부터 안내.
+async function autoLoadOllamaModels() {
+  const { getBackend } = await import('../bridge.js')
+  const backend = await getBackend()
+  if (!backend.ollamaListModels) return
+  backend.ollamaListModels(ollamaUrl.value, (json) => {
+    try {
+      const models = JSON.parse(json)
+      if (Array.isArray(models) && models.length > 0) {
+        ollamaModels.value = models
+        if (ollamaModel.value && !models.includes(ollamaModel.value)) {
+          ollamaModel.value = models[0]
+          saveOllamaSettings()
+        }
+      } else {
+        requestAction('show_toast', { type: 'warning', msg: 'Ollama 연결을 먼저 확인하세요 (실행 중인지 · URL · 설치된 모델). Settings → AI Assistant' })
+      }
+    } catch {
+      requestAction('show_toast', { type: 'error', msg: 'Ollama 연결 실패 — Ollama 실행/URL을 먼저 확인하세요' })
+    }
+  })
+}
 </script>
 
 <style scoped>

@@ -20,19 +20,40 @@
         <span class="expand-icon">{{ isExpanded ? '▼' : '▲' }}</span>
       </div>
     </div>
-    <div class="queue-list" v-if="isExpanded && items.length">
-      <div v-for="(item, i) in items" :key="item.id || i" class="queue-item"
-        :class="{ active: i === currentIdx, done: item._done, selected: selectedIds.has(item.id) }"
-        @click="onItemClick($event, item, i)">
-        <span class="q-idx">#{{ i + 1 }}</span>
-        <span class="q-status" v-if="i === currentIdx && isRunning && !isPaused">⏳</span>
-        <span class="q-status" v-else-if="i === currentIdx && isPaused">⏸</span>
-        <span class="q-status" v-else-if="item._done">✅</span>
-        <span class="q-text">{{ (item.prompt || 'No prompt').toString().substring(0, 80) }}</span>
-        <div class="q-controls" @click.stop>
-          <button class="q-mv" @click="moveItem(item, 'up')" v-if="canMoveUp(i)" title="위로">▲</button>
-          <button class="q-mv" @click="moveItem(item, 'down')" v-if="canMoveDown(i)" title="아래로">▼</button>
-          <button class="q-rm" @click="removeItem(item, i)" v-if="!isItemRunning(i)" title="삭제">×</button>
+    <div class="queue-strip" v-if="isExpanded && items.length">
+      <template v-for="(item, i) in items" :key="item.id || i">
+        <button class="q-chip"
+          :class="{ active: i === currentIdx && isRunning, done: item._done }"
+          :title="(item.prompt || 'No prompt').toString().substring(0, 160) + '\n(클릭하여 편집)'"
+          @click="openEdit(item, i)">
+          <span class="q-chip-st" v-if="i === currentIdx && isRunning && !isPaused">⏳</span>
+          <span class="q-chip-st" v-else-if="i === currentIdx && isPaused">⏸</span>
+          <span class="q-chip-st" v-else-if="item._done">✅</span>
+          <span class="q-chip-num">큐{{ i + 1 }}</span>
+          <span class="q-chip-prev">{{ (item.prompt || '—').toString().slice(0, 16) }}</span>
+        </button>
+        <span class="q-arrow" v-if="i < items.length - 1">→</span>
+      </template>
+    </div>
+
+    <!-- 큐 항목 편집 모달 -->
+    <div class="qe-overlay" v-if="editItem" @click.self="closeEdit">
+      <div class="qe-modal">
+        <div class="qe-head">
+          <h3>큐{{ editIdx + 1 }} 편집</h3>
+          <button class="qe-x" @click="closeEdit">✕</button>
+        </div>
+        <label class="qe-label">프롬프트</label>
+        <textarea v-model="editPrompt" class="qe-text" rows="6" placeholder="프롬프트..."></textarea>
+        <label class="qe-label">네거티브</label>
+        <textarea v-model="editNeg" class="qe-text" rows="3" placeholder="네거티브..."></textarea>
+        <div class="qe-foot">
+          <button class="qe-btn" @click="moveEdit('up')" :disabled="editIdx <= 0">▲ 위로</button>
+          <button class="qe-btn" @click="moveEdit('down')" :disabled="editIdx >= items.length - 1">▼ 아래로</button>
+          <button class="qe-btn danger" @click="deleteEdit">🗑 삭제</button>
+          <div class="qe-sp"></div>
+          <button class="qe-btn" @click="closeEdit">취소</button>
+          <button class="qe-btn primary" @click="saveEdit">💾 저장</button>
         </div>
       </div>
     </div>
@@ -64,6 +85,41 @@ const currentIdx = ref(-1)
 const completedCount = ref(0)
 const selectedIds = ref(new Set())  // 다중 선택 (Shift+클릭으로 범위 선택)
 const _lastClickedIdx = ref(-1)
+
+// 큐 항목 편집 모달
+const editItem = ref(null)
+const editIdx = ref(-1)
+const editPrompt = ref('')
+const editNeg = ref('')
+function openEdit(item, i) {
+  editItem.value = item
+  editIdx.value = i
+  editPrompt.value = (item.prompt || '').toString()
+  editNeg.value = (item.negative_prompt || '').toString()
+}
+function closeEdit() { editItem.value = null; editIdx.value = -1 }
+function saveEdit() {
+  if (editItem.value && editItem.value.id) {
+    requestAction('update_queue_item', {
+      item_id: editItem.value.id,
+      prompt: editPrompt.value,
+      negative_prompt: editNeg.value,
+    })
+  }
+  closeEdit()
+}
+function deleteEdit() {
+  if (editItem.value && editItem.value.id) {
+    requestAction('remove_queue_items', { item_ids: [editItem.value.id] })
+  }
+  closeEdit()
+}
+function moveEdit(dir) {
+  if (editItem.value && editItem.value.id) {
+    requestAction('move_queue_item', { item_id: editItem.value.id, direction: dir })
+  }
+  closeEdit()
+}
 
 // ETA 추적: 처리된 항목당 평균 시간
 const _startTime = ref(0)
@@ -243,11 +299,16 @@ onMounted(() => {
 })
 
 // Settings에서 autoResumeOnStart 변경 시 즉시 반영 (다른 창/탭 — 같은 창은 거의 불필요)
-onMounted(() => { window.addEventListener('storage', _onStorageEvent) })
+function _onEditKey(e) { if (e.key === 'Escape' && editItem.value) { e.stopPropagation(); closeEdit() } }
+onMounted(() => {
+  window.addEventListener('storage', _onStorageEvent)
+  window.addEventListener('keydown', _onEditKey, true)
+})
 onUnmounted(() => {
   for (const off of _unsubs) { try { off() } catch {} }
   _unsubs.length = 0
   window.removeEventListener('storage', _onStorageEvent)
+  window.removeEventListener('keydown', _onEditKey, true)
 })
 
 defineExpose({ items })
@@ -280,23 +341,38 @@ defineExpose({ items })
 
 /* (auto-resume 토글은 Settings로 이전됨) */
 
-.queue-list { flex: 1; overflow-y: auto; padding: 2px 8px; }
-.queue-item {
-  display: flex; align-items: center; gap: 6px; padding: 5px 8px;
-  font-size: 11px; border-radius: 4px; margin-bottom: 2px; transition: 0.15s;
-  cursor: pointer; user-select: none;
+/* 가로 칩 스트립 — 큐1 → 큐2 → 큐3 */
+.queue-strip { display: flex; align-items: center; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 6px 12px; }
+.q-chip {
+  flex-shrink: 0; width: 86px; height: 50px; display: flex; flex-direction: column;
+  align-items: flex-start; justify-content: center; gap: 1px; padding: 5px 8px;
+  background: #161616; border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer; transition: 0.15s; position: relative; text-align: left;
 }
-.queue-item:hover { background: rgba(255,255,255,0.03); }
-.queue-item.active { background: rgba(226, 179, 64, 0.05); border-left: 2px solid var(--accent); }
-.queue-item.done { opacity: 0.4; }
-.queue-item.selected { background: rgba(96, 165, 250, 0.12); border-left: 2px solid #60a5fa; }
-.q-idx { color: var(--accent); font-weight: 700; font-size: 10px; min-width: 24px; }
-.q-status { font-size: 12px; }
-.q-text { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.q-controls { display: flex; align-items: center; gap: 2px; }
-.q-mv { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 10px; padding: 0 3px; opacity: 0.5; }
-.q-mv:hover { color: var(--accent); opacity: 1; }
-.q-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; padding: 0 4px; }
+.q-chip:hover { background: #1f1f1f; border-color: var(--accent); }
+.q-chip.active { border-color: var(--accent); background: rgba(226,179,64,0.1); box-shadow: 0 0 0 1px var(--accent) inset; }
+.q-chip.done { opacity: 0.45; }
+.q-chip-st { position: absolute; top: 3px; right: 5px; font-size: 11px; }
+.q-chip-num { color: var(--accent); font-weight: 800; font-size: 11px; }
+.q-chip-prev { color: var(--text-muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+.q-arrow { flex-shrink: 0; color: #444; font-size: 12px; user-select: none; }
+
+/* 큐 항목 편집 모달 */
+.qe-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+.qe-modal { width: min(620px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.qe-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.qe-head h3 { font-size: 16px; font-weight: 800; color: var(--text-primary); }
+.qe-x { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 28px; height: 28px; cursor: pointer; }
+.qe-label { display: block; font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; margin: 8px 0 4px; }
+.qe-text { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; color: var(--text-primary); font-size: 12px; line-height: 1.5; resize: vertical; }
+.qe-text:focus { outline: none; border-color: var(--accent); }
+.qe-foot { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
+.qe-sp { flex: 1; }
+.qe-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; padding: 7px 12px; cursor: pointer; }
+.qe-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent); }
+.qe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.qe-btn.danger { color: #f87171; }
+.qe-btn.primary { background: var(--accent); color: #000; border-color: var(--accent); }
 
 .queue-progress { padding: 4px 16px 8px; }
 .progress-bar { width: 100%; height: 3px; background: var(--bg-input); border-radius: 2px; overflow: hidden; }

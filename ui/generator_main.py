@@ -1197,6 +1197,28 @@ class GeneratorMainUI(
                     if moved:
                         self._sync_queue_to_vue()
 
+            elif action == 'update_queue_item':
+                # payload: { item_id: str, prompt?: str, negative_prompt?: str } — 큐 항목 편집
+                if hasattr(self, 'queue_panel'):
+                    iid = payload.get('item_id', '')
+                    found = False
+                    for it in self.queue_panel.queue_items:
+                        if it.get('id') == iid:
+                            if 'prompt' in payload:
+                                it['prompt'] = payload.get('prompt', '')
+                            if 'negative_prompt' in payload:
+                                it['negative_prompt'] = payload.get('negative_prompt', '')
+                            found = True
+                            break
+                    if found:
+                        try:
+                            self.queue_panel._refresh_display()
+                            self.queue_panel._persist_to_disk()
+                        except Exception:
+                            pass
+                        self.show_status("큐 항목 수정됨")
+                        self._sync_queue_to_vue()
+
             elif action == 'clear_queue':
                 # 전체 삭제 — 확인 다이얼로그 우회 (Vue 측에서 이미 확인 받음)
                 if hasattr(self, 'queue_panel') and self.queue_panel.queue_items:
@@ -1560,7 +1582,7 @@ class GeneratorMainUI(
                 out = {}
                 for k, v in d.items():
                     if isinstance(v, str):
-                        out[k] = v[:200] if k == 'prompt' or k == 'negative_prompt' else v[:500]
+                        out[k] = v[:4000] if k in ('prompt', 'negative_prompt') else v[:500]
                     elif isinstance(v, (int, float, bool)):
                         out[k] = v
                 return out
