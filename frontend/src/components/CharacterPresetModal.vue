@@ -431,15 +431,32 @@ async function fetchDanbooru() {
 function addCustom() {
   const txt = newCustom.value.trim()
   if (!txt) return
+  const feats = [...coreTags.value, ...auxTags.value, ...costumeTags.value, ...etcTags.value]
+  let added = 0, activated = 0, dup = 0
   for (const part of txt.split(',')) {
     const tag = part.trim()
     if (!tag) continue
     const n = norm(tag)
-    const exists = [...coreTags.value, ...auxTags.value, ...costumeTags.value, ...etcTags.value, ...customTags.value]
-      .some(t => norm(t.tag) === n)
-    if (!exists) customTags.value.push({ tag, checked: true })
+    if (customTags.value.some(t => norm(t.tag) === n)) { dup++; continue }
+    const f = feats.find(t => norm(t.tag) === n)
+    if (f) {
+      // 이미 캐릭터 특징에 있는 태그 → 새로 추가 대신 그 특징을 활성화(체크)
+      if (!f.existing && !f.checked) { f.checked = true; activated++ }
+      else dup++
+      continue
+    }
+    customTags.value.push({ tag, checked: true }); added++
   }
   newCustom.value = ''
+  // 조용한 실패 방지 — 항상 결과를 토스트로 알림
+  const parts: string[] = []
+  if (added) parts.push(`추가 ${added}`)
+  if (activated) parts.push(`특징 활성화 ${activated}`)
+  if (dup) parts.push(`이미 있음 ${dup}`)
+  requestAction('show_toast', {
+    type: (added || activated) ? 'success' : 'info',
+    msg: '커스텀 태그 ' + (parts.join(' · ') || '변경 없음'),
+  })
 }
 
 function checkedTags(): string[] {

@@ -238,6 +238,7 @@
                 <label class="ext-check-row"><ToggleSwitch v-model="removeMeta" size="sm" /><span>메타 제거</span></label>
                 <label class="ext-check-row"><ToggleSwitch v-model="removeCensorship" size="sm" /><span>검열 제거</span></label>
                 <label class="ext-check-row"><ToggleSwitch v-model="removeText" size="sm" /><span>텍스트 제거</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="promptFocus" size="sm" /><span title="muscular male이 있으면 muscular처럼, 더 구체적인 태그에 포함되는 광범위 태그를 제거해 집중 태그만 남김">프롬프트 집중</span></label>
                 <label class="ext-check-row"><ToggleSwitch v-model="autoCharFeatures" size="sm" /><span>특징 자동 추가</span></label>
                 <label class="ext-check-row"><ToggleSwitch v-model="autoRemoveCharFeatures" size="sm" /><span title="closed eyes 있으면 눈색 특징 생략, 머리 길이 충돌 시 생략">특징 auto remove</span></label>
               </div>
@@ -1026,6 +1027,7 @@ const removeCharacterFeatures = computed({ get: () => storeWidgets.chk_remove_ch
 const removeMeta = computed({ get: () => storeWidgets.chk_remove_meta === 'true', set: v => { storeWidgets.chk_remove_meta = v ? 'true' : 'false' } })
 const removeCensorship = computed({ get: () => storeWidgets.chk_remove_censorship === 'true', set: v => { storeWidgets.chk_remove_censorship = v ? 'true' : 'false' } })
 const removeText = computed({ get: () => storeWidgets.chk_remove_text === 'true', set: v => { storeWidgets.chk_remove_text = v ? 'true' : 'false' } })
+const promptFocus = computed({ get: () => storeWidgets.chk_prompt_focus === 'true', set: v => { storeWidgets.chk_prompt_focus = v ? 'true' : 'false' } })
 const autoCharFeatures = computed({ get: () => storeWidgets.chk_auto_char_features === 'true', set: v => { storeWidgets.chk_auto_char_features = v ? 'true' : 'false' } })
 const autoRemoveCharFeatures = computed({ get: () => storeWidgets.chk_auto_remove_char_features === 'true', set: v => { storeWidgets.chk_auto_remove_char_features = v ? 'true' : 'false' } })
 const ad_enabled = computed({ get: () => storeWidgets.adetailer_group === 'true', set: v => { storeWidgets.adetailer_group = v ? 'true' : 'false' } })

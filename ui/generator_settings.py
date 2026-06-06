@@ -114,6 +114,7 @@ class SettingsMixin:
             "remove_censorship": self.chk_remove_censorship.isChecked(),
             "remove_text": self.chk_remove_text.isChecked(),
 
+            "prompt_focus": self.chk_prompt_focus.isChecked() if hasattr(self, 'chk_prompt_focus') else False,
             "auto_char_features": self.chk_auto_char_features.isChecked() if hasattr(self, 'chk_auto_char_features') else False,
             "auto_remove_char_features": self.chk_auto_remove_char_features.isChecked() if hasattr(self, 'chk_auto_remove_char_features') else False,
             "char_feature_mode": self.combo_char_feature_mode.currentIndex() if hasattr(self, 'combo_char_feature_mode') else 0,
@@ -320,6 +321,8 @@ class SettingsMixin:
                 self.web_tab.set_home_url(web_home)
             
             # 캐릭터 특징 자동 추가
+            if hasattr(self, 'chk_prompt_focus'):
+                self.chk_prompt_focus.setChecked(settings.get("prompt_focus", False))
             if hasattr(self, 'chk_auto_char_features'):
                 self.chk_auto_char_features.setChecked(settings.get("auto_char_features", False))
             if hasattr(self, 'chk_auto_remove_char_features'):

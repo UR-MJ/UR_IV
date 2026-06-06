@@ -803,6 +803,15 @@ class PromptHandlingMixin:
         final_prompt = ", ".join(final_parts)
         final_neg = self.neg_prompt_text.toPlainText().strip()
 
+        # 프롬프트 토큰 집중 — 더 구체적인 태그에 포함되는 광범위 태그 제거
+        # (예: muscular, muscular male, dress, blue dress → muscular male, blue dress)
+        if hasattr(self, 'chk_prompt_focus') and self.chk_prompt_focus.isChecked():
+            try:
+                from core.prompt_focus import focus_prompt
+                final_prompt = focus_prompt(final_prompt)
+            except Exception:
+                pass
+
         # 와일드카드 치환
         wc_enabled = (hasattr(self, 'settings_tab') and
                       hasattr(self.settings_tab, 'chk_wildcard_enabled') and

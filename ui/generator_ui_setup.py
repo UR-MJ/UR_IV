@@ -289,6 +289,8 @@ class UISetupMixin:
         )
 
         b = self.vue_bridge
+        # 프롬프트 토큰 집중 — 더 구체적인 태그에 포함되는 광범위 태그 제거
+        self.chk_prompt_focus = CheckBoxProxy(b, 'chk_prompt_focus')
         self.chk_auto_char_features = CheckBoxProxy(b, 'chk_auto_char_features')
         # 자동화 시 특징 자동추가의 'auto remove'(충돌 자동 처리) 토글
         self.chk_auto_remove_char_features = CheckBoxProxy(b, 'chk_auto_remove_char_features')
