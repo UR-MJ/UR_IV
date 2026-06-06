@@ -1510,6 +1510,35 @@ class VueBridge(QObject):
             return json.dumps({"error": str(e)})
 
     @pyqtSlot(str, result=str)
+    def saveSession(self, payload_json: str) -> str:
+        """세션 상태(탭/프롬프트 등)를 config/session_backup.json에 저장 (크래시 복구용).
+        localStorage가 PID별로 초기화돼도 살아남도록 백엔드 파일에 보관."""
+        try:
+            import os
+            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            path = os.path.join(base, 'config', 'session_backup.json')
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(payload_json or '{}')
+            return json.dumps({"ok": True})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(result=str)
+    def getSession(self) -> str:
+        """저장된 세션 상태 반환 (없으면 {})."""
+        try:
+            import os
+            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            path = os.path.join(base, 'config', 'session_backup.json')
+            if os.path.exists(path):
+                with open(path, encoding='utf-8') as f:
+                    return f.read() or '{}'
+            return json.dumps({})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
     def getClothingRegions(self, tags_json: str) -> str:
         """④ 의류 태그를 부위(region)별로 그룹화 → [{region, label, tags:[...]}]."""
         try:

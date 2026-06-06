@@ -610,6 +610,13 @@
     <LoraManagerModal v-if="showLoraModal" @close="showLoraModal = false" @add="onLoraAdd" />
     <CondPromptModal v-if="showCondModal" v-model:preventDupe="extWidgets.cond_prevent_dupe" @close="showCondModal = false" />
 
+    <!-- 세션 복구 배너 (크래시/OOM 후) -->
+    <div v-if="sessionRestore" class="session-restore">
+      <span class="sr-msg">⏮ 이전 세션의 작업이 남아 있습니다. 복원할까요?</span>
+      <button class="sr-apply" @click="applySessionRestore">복원</button>
+      <button class="sr-dismiss" @click="dismissSessionRestore">닫기</button>
+    </div>
+
     <!-- Weight Manager Modal -->
     <transition name="fade">
       <div v-if="showWeightManager" class="wm-overlay" @click.self="showWeightManager = false">
@@ -620,7 +627,7 @@
             <button class="close-btn" @click="showWeightManager = false">✕</button>
           </div>
           <div class="wm-body">
-            <div v-for="(w, i) in globalWeights" :key="i" class="wm-row">
+            <div v-for="(w, i) in globalWeights" :key="w.tag || i" class="wm-row">
               <input v-model="w.tag" placeholder="태그명..." class="wm-tag-input" />
               <input type="range" min="50" max="200" v-model.number="w.weight" class="wm-slider" />
               <span class="wm-val">{{ (w.weight / 100).toFixed(2) }}</span>
@@ -1847,8 +1854,51 @@ watch(historyImages, (arr) => {
   try { localStorage.setItem('historyImagesCache', JSON.stringify(arr.slice(0, 50))) } catch {}
 }, { deep: false })
 
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 const router = useRouter()
+const route = useRoute()
+
+// ── 세션 복구 (크래시/VRAM OOM 후 작업 이어가기) ──
+const sessionRestore = ref(null)   // {tab, prompt, negative} | null
+let _sessionSaveTimer = null
+function _saveSessionNow() {
+  getBackend().then((bk) => {
+    if (!bk || !bk.saveSession) return
+    const data = {
+      tab: (route && route.name) || 't2i',
+      prompt: storeWidgets.main_prompt_text || '',
+      negative: storeWidgets.neg_prompt_text || '',
+    }
+    bk.saveSession(JSON.stringify(data), () => {})
+  }).catch(() => {})
+}
+function _scheduleSessionSave() {
+  if (_sessionSaveTimer) clearTimeout(_sessionSaveTimer)
+  _sessionSaveTimer = setTimeout(_saveSessionNow, 2500)
+}
+async function _checkSessionRestore() {
+  const bk = await getBackend()
+  if (!bk || !bk.getSession) return
+  bk.getSession((json) => {
+    try {
+      const d = JSON.parse(json)
+      // 현재 메인이 비어 있는데 저장된 프롬프트가 있으면 복원 제안 (정상 시작 땐 안 띄움)
+      if (d && d.prompt && !(storeWidgets.main_prompt_text || '').trim()) {
+        sessionRestore.value = d
+      }
+    } catch {}
+  })
+}
+function applySessionRestore() {
+  const d = sessionRestore.value
+  if (!d) { return }
+  if (d.prompt) storeWidgets.main_prompt_text = d.prompt
+  if (d.negative) storeWidgets.neg_prompt_text = d.negative
+  if (d.tab) { try { router.push({ name: d.tab }) } catch {} }
+  sessionRestore.value = null
+  addToast('success', '이전 세션을 복원했습니다')
+}
+function dismissSessionRestore() { sessionRestore.value = null }
 
 // UI 크기 — Chromium zoom 으로 전역 확대 (폰트/아이콘/패딩 비례)
 // 변경 시 즉시 반영, localStorage 영속, 다른 탭(Settings)에서 변경하면 storage event로 동기화
@@ -1864,6 +1914,9 @@ onMounted(async () => {
   storeWidgets.negpip_group = 'true'   // NegPiP 상시 적용 (UI 토글 제거)
   loadCondRules()                      // 조건부 프롬프트 규칙 로드 (모달/Search 공유)
   setTimeout(ensureOllamaModel, 3000)  // 폴백: uiPrefsLoaded가 안 와도 AI 모델 검증
+  setTimeout(_checkSessionRestore, 1200)   // 세션 복구 제안 (프롬프트 로드된 뒤)
+  watch(() => [storeWidgets.main_prompt_text, storeWidgets.neg_prompt_text, route.name], _scheduleSessionSave)
+  setInterval(_saveSessionNow, 30000)      // 30초 주기 백업 (root는 언마운트 안 됨)
   // Settings 등 다른 곳에서 ui.scale 변경 시 즉시 반영
   window.addEventListener('storage', (e) => {
     if (e.key === 'ui.scale') _applyUiScale(e.newValue)
@@ -2303,6 +2356,11 @@ onMounted(async () => {
 .tool-btn { position: relative; padding: 8px 4px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; transition: var(--transition); }
 .tool-btn-on { color: #4ade80; border-color: #4ade80; box-shadow: 0 0 0 1px rgba(74,222,128,0.25) inset; }
 .tool-dot { position: absolute; top: 3px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 5px #4ade80; }
+/* 세션 복구 배너 */
+.session-restore { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: center; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--accent); border-radius: 10px; padding: 10px 16px; box-shadow: 0 8px 28px rgba(0,0,0,0.5); }
+.sr-msg { font-size: 12px; color: var(--text-primary); }
+.sr-apply { background: var(--accent); color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: 800; padding: 6px 14px; cursor: pointer; }
+.sr-dismiss { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; padding: 6px 12px; cursor: pointer; }
 .tool-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .tool-btn.highlight { color: var(--accent); border-color: var(--accent-dim); }
 
