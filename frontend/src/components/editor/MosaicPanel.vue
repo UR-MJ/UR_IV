@@ -183,20 +183,43 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 
-const emit = defineEmits(['tool-changed','effect-changed','effect-apply','cancel-selection','crop','resize','perspective','rotate','flip','remove-bg','add-model','clear-models','auto-censor','auto-detect','params-changed','eraser-mode-changed','eraser-restore-changed','magnetic-changed'])
-const props = defineProps({ modelLabel: { type: String, default: 'No Model Loaded' }, detectStatus: { type: String, default: '' } })
+interface Tool { id: number; label: string; icon: string }
+interface Effect { id: number; label: string }
+interface SamModelOption { id: string; label: string; tip: string }
 
-const tools = [
+const emit = defineEmits<{
+  'tool-changed': [payload: { tool: number; size: number }]
+  'effect-changed': [payload: { effect: number }]
+  'effect-apply': [payload: { tool: number; effect: number; toolSize: number; strength: number }]
+  'cancel-selection': []
+  'crop': []
+  'resize': []
+  'perspective': []
+  'rotate': [dir: string]
+  'flip': [dir: string]
+  'remove-bg': [payload: { quality: string }]
+  'add-model': []
+  'clear-models': []
+  'auto-censor': [payload: { confidence: number; samModel: string; excludePrompt: string }]
+  'auto-detect': [payload: { confidence: number; samModel: string; excludePrompt: string }]
+  'params-changed': [payload: { toolSize: number; strength: number; stampSpacing: number; barW: number; barH: number; stampShape: string }]
+  'eraser-mode-changed': [mode: string]
+  'eraser-restore-changed': [val: boolean]
+  'magnetic-changed': [val: boolean]
+}>()
+const props = withDefaults(defineProps<{ modelLabel?: string; detectStatus?: string }>(), { modelLabel: 'No Model Loaded', detectStatus: '' })
+
+const tools: Tool[] = [
   { id: 0, label: 'RECT', icon: '⬚' },
   { id: 1, label: 'LASSO', icon: '➰' },
   { id: 2, label: 'BRUSH', icon: '🖌' },
   { id: 3, label: 'ERASER', icon: '⌫' },
   { id: 4, label: 'STAMP', icon: '⬡' },
 ]
-const effects = [
+const effects: Effect[] = [
   { id: 0, label: 'MOSAIC' },
   { id: 1, label: 'BLACK BAR' },
   { id: 2, label: 'BLUR' },
@@ -208,7 +231,7 @@ const toolSize = ref(20)
 const strength = ref(15)
 const detectConf = ref(25)
 const samModel = ref('auto')
-const samModels = [
+const samModels: SamModelOption[] = [
   { id: 'auto',       label: 'AUTO',   tip: '자동 — MobileSAM 우선, 없으면 SAM3' },
   { id: 'mobile_sam', label: 'MOBILE', tip: 'MobileSAM (가벼움/빠름, bbox 기반)' },
   { id: 'sam3',       label: 'SAM3',   tip: 'Meta SAM 3 (텍스트 프롬프트, GPU 권장)' },
@@ -238,9 +261,9 @@ const bgQuality = ref('balanced')
 const barW = ref(40)
 const barH = ref(15)
 
-function selectTool(id) { selectedTool.value = id; emit('tool-changed', { tool: id, size: toolSize.value }) }
-function selectEffect(id) { selectedEffect.value = id; emit('effect-changed', { effect: id }) }
-function setEraserMode(mode) { eraserMode.value = mode; emit('eraser-mode-changed', mode) }
+function selectTool(id: number) { selectedTool.value = id; emit('tool-changed', { tool: id, size: toolSize.value }) }
+function selectEffect(id: number) { selectedEffect.value = id; emit('effect-changed', { effect: id }) }
+function setEraserMode(mode: string) { eraserMode.value = mode; emit('eraser-mode-changed', mode) }
 function onApply() { emit('effect-apply', { tool: selectedTool.value, effect: selectedEffect.value, toolSize: toolSize.value, strength: strength.value }) }
 
 watch([toolSize, strength, stampSpacing, stampShapeLocal, barW, barH, selectedEffect, selectedTool], () => {

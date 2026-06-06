@@ -126,27 +126,60 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import CustomSelect from '../CustomSelect.vue'
 
-const emit = defineEmits([
-  'apply-text',
-  'apply-image',
-  'preview',
-  'preview-clear',
-  'pick-text-color',
-  'load-watermark-image',
-  'clamp-changed',
-])
+interface PositionPreset {
+  name: string
+  x: number
+  y: number
+}
 
-const props = defineProps({
-  textColor: { type: String, default: '#FFFFFF' },
-  imageFileName: { type: String, default: '이미지 없음' },
-  fonts: { type: Array, default: () => ['Arial', 'Times New Roman', 'Courier New', 'Verdana', 'Georgia'] },
-})
+interface TextWatermarkConfig {
+  type: 'text'
+  text: string
+  fontFamily: string
+  fontSize: number
+  xPct: number
+  yPct: number
+  opacity: number
+  rotation: number
+  tile: boolean
+}
 
-const positionPresets = [
+interface ImageWatermarkConfig {
+  type: 'image'
+  xPct: number
+  yPct: number
+  opacity: number
+  scale: number
+}
+
+const emit = defineEmits<{
+  'apply-text': [config: TextWatermarkConfig]
+  'apply-image': [config: ImageWatermarkConfig]
+  'preview': [config: TextWatermarkConfig | ImageWatermarkConfig]
+  'preview-clear': []
+  'pick-text-color': []
+  'load-watermark-image': []
+  'clamp-changed': [val: boolean]
+}>()
+
+const props = withDefaults(
+  defineProps<{
+    textColor?: string
+    imageFileName?: string
+    fonts?: string[]
+  }>(),
+  {
+    textColor: '#FFFFFF',
+    imageFileName: '이미지 없음',
+    fonts: () => ['Arial', 'Times New Roman', 'Courier New', 'Verdana', 'Georgia'],
+  }
+)
+
+const positionPresets: PositionPreset[] = [
   { name: '좌상', x: 5, y: 5 },
   { name: '우상', x: 95, y: 5 },
   { name: '중앙', x: 50, y: 50 },
@@ -170,12 +203,12 @@ const imgScale = ref(100)
 
 const clampToImage = ref(true)
 
-function setTextPosition(x, y) {
+function setTextPosition(x: number, y: number) {
   textX.value = x
   textY.value = y
 }
 
-function setImagePosition(x, y) {
+function setImagePosition(x: number, y: number) {
   imgX.value = x
   imgY.value = y
 }
@@ -200,7 +233,7 @@ watch(clampToImage, (val) => {
   emit('clamp-changed', val)
 })
 
-function buildTextConfig() {
+function buildTextConfig(): TextWatermarkConfig {
   return {
     type: 'text',
     text: textValue.value.trim(),
@@ -214,7 +247,7 @@ function buildTextConfig() {
   }
 }
 
-function buildImageConfig() {
+function buildImageConfig(): ImageWatermarkConfig {
   return {
     type: 'image',
     xPct: imgX.value,

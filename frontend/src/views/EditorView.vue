@@ -170,7 +170,7 @@ function _syncSidePanelWidthFromStorage() {
   const v = parseInt(window.localStorage.getItem('editorSidePanelWidth') || '280')
   if (v !== sidePanelWidth.value) sidePanelWidth.value = v
 }
-const currentTool = ref('box')
+const currentTool = ref<any>('box')   // 문자열(toolMap) 또는 DrawPanel tool 객체 둘 다 담김(동적)
 const brushSize = ref(20)
 const eraserMode = ref('brush')
 const eraserRestore = ref(false)
@@ -457,7 +457,7 @@ function doCrop() {
   const sel = canvasRef.value?.getSelection()
   if (sel) doOp('crop', { selection: sel })
 }
-function doResize(params: any) { doOp('resize', params) }
+function doResize(params?: any) { doOp('resize', params) }
 function applyAdj(adj: any) { doOp('color_adjust', adj) }
 // previewAdj / previewAdvAdj — 미구현 빈 함수였음. 실시간 프리뷰는 향후 구현 예정 (TODO).
 // resetAdj — ColorPanel 내부에서 자체 reset만 수행하면 됨 (백엔드 호출 불필요).

@@ -58,26 +58,42 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 
-const emit = defineEmits([
-  'adjustment-changed',
-  'apply',
-  'reset',
-  'auto-correct',
-  'filter-preview',
-  'filter-apply',
-  'filter-cancel',
-])
+interface Adjustment {
+  brightness: number
+  contrast: number
+  saturation: number
+}
+
+interface FilterPayload {
+  filter: string
+  strength: number
+}
+
+interface Preset {
+  label: string
+  name: string
+}
+
+const emit = defineEmits<{
+  'adjustment-changed': [payload: Adjustment]
+  apply: [payload: Adjustment]
+  reset: []
+  'auto-correct': []
+  'filter-preview': [payload: FilterPayload]
+  'filter-apply': [payload: FilterPayload]
+  'filter-cancel': []
+}>()
 
 const brightness = ref(0)
 const contrast = ref(0)
 const saturation = ref(0)
 const filterStrength = ref(100)
-const activeFilter = ref(null)
+const activeFilter = ref<string | null>(null)
 
-const presets = [
+const presets: Preset[] = [
   { label: '흑백', name: 'grayscale' },
   { label: '세피아', name: 'sepia' },
   { label: '선명하게', name: 'sharpen' },
@@ -128,7 +144,7 @@ function resetSliders() {
   saturation.value = 0
 }
 
-function onFilterSelect(name) {
+function onFilterSelect(name: string) {
   if (activeFilter.value === name) {
     onFilterCancel()
     return

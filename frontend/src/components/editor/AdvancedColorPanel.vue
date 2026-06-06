@@ -62,17 +62,25 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 
-const emit = defineEmits([
-  'preview',
-  'apply',
-  'reset',
-])
+interface ColorAdjustments {
+  blackPoint: number
+  whitePoint: number
+  gamma: number
+  temperature: number
+  tint: number
+}
 
-const histCanvas = ref(null)
-const curvesCanvas = ref(null)
+const emit = defineEmits<{
+  preview: [payload: ColorAdjustments]
+  apply: [payload: ColorAdjustments]
+  reset: []
+}>()
+
+const histCanvas = ref<HTMLCanvasElement | null>(null)
+const curvesCanvas = ref<HTMLCanvasElement | null>(null)
 
 const blackPoint = ref(0)
 const whitePoint = ref(255)

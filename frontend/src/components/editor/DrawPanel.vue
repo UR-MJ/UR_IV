@@ -96,31 +96,47 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 
-const emit = defineEmits([
-  'tool-changed',
-  'color-changed',
-  'params-changed',
-  'pick-custom-color',
-  'pick-gradient-end-color',
-  'heal-apply',
-  'flatten-layer',
-  'layer-opacity-changed',
-])
+interface DrawTool {
+  id: number
+  name: string
+  label: string
+}
 
-const props = defineProps({
-  gradientEndColor: { type: String, default: '#000000' },
+interface ToolParams {
+  tool: string
+  color: string
+  size: number
+  opacity: number
+  filled: boolean
+}
+
+const emit = defineEmits<{
+  'tool-changed': [params: ToolParams]
+  'color-changed': [payload: { color: string }]
+  'params-changed': [params: ToolParams]
+  'pick-custom-color': []
+  'pick-gradient-end-color': []
+  'heal-apply': []
+  'flatten-layer': []
+  'layer-opacity-changed': [value: number]
+}>()
+
+const props = withDefaults(defineProps<{
+  gradientEndColor?: string
+}>(), {
+  gradientEndColor: '#000000',
 })
 
-const paletteColors = [
+const paletteColors: string[] = [
   '#000000', '#FFFFFF', '#FF0000', '#00FF00',
   '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
   '#FF8800', '#8800FF', '#888888', '#FF4488',
 ]
 
-const drawTools = [
+const drawTools: DrawTool[] = [
   { id: 0, name: 'pen', label: '펜 (자유 그리기)' },
   { id: 1, name: 'line', label: '직선' },
   { id: 2, name: 'rect', label: '사각형' },
@@ -133,7 +149,7 @@ const drawTools = [
   { id: 9, name: 'heal', label: '복원 브러시' },
 ]
 
-const toolNameMap = Object.fromEntries(drawTools.map(t => [t.id, t.name]))
+const toolNameMap: Record<number, string> = Object.fromEntries(drawTools.map(t => [t.id, t.name]))
 
 const selectedTool = ref(0)
 const currentColor = ref('#000000')
@@ -144,12 +160,12 @@ const layerOpacity = ref(100)
 
 const currentToolName = computed(() => toolNameMap[selectedTool.value] || 'pen')
 
-function selectTool(id) {
+function selectTool(id: number) {
   selectedTool.value = id
   emitToolChanged()
 }
 
-function onPaletteClick(color) {
+function onPaletteClick(color: string) {
   currentColor.value = color
   emit('color-changed', { color })
   emitParamsChanged()
@@ -184,7 +200,7 @@ watch(layerOpacity, (val) => {
 })
 
 /** Called by parent to set color from eyedropper */
-function setColor(hexColor) {
+function setColor(hexColor: string) {
   currentColor.value = hexColor
 }
 

@@ -91,24 +91,44 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import CustomSelect from '../CustomSelect.vue'
 
-const emit = defineEmits([
-  'start-move',
-  'confirm-move',
-  'cancel-move',
-  'undo-move',
-  'send-inpaint',
-  'rotation-changed',
-  'scale-changed',
-])
+interface MoveStartPayload {
+  fillColor: string
+  rotation: number
+  scale: number
+}
 
-const props = defineProps({
-  statusText: { type: String, default: '마스킹을 먼저 해주세요' },
-  canUndo: { type: Boolean, default: false },
-  canInpaint: { type: Boolean, default: false },
+interface MoveConfirmPayload {
+  rotation: number
+  scale: number
+}
+
+interface InpaintPayload {
+  prompt: string
+  negPrompt: string
+}
+
+const emit = defineEmits<{
+  'start-move': [payload: MoveStartPayload]
+  'confirm-move': [payload: MoveConfirmPayload]
+  'cancel-move': []
+  'undo-move': []
+  'send-inpaint': [payload: InpaintPayload]
+  'rotation-changed': [val: number]
+  'scale-changed': [val: number]
+}>()
+
+const props = withDefaults(defineProps<{
+  statusText?: string
+  canUndo?: boolean
+  canInpaint?: boolean
+}>(), {
+  statusText: '마스킹을 먼저 해주세요',
+  canUndo: false,
+  canInpaint: false,
 })
 
 const isMoving = ref(false)
@@ -156,7 +176,7 @@ function onSendInpaint() {
 }
 
 /** Called by parent to update moving state */
-function setMovingState(moving) {
+function setMovingState(moving: boolean) {
   isMoving.value = moving
 }
 

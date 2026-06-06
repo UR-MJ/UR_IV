@@ -15,28 +15,46 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 
-const props = defineProps({
-  imageSrc: { type: String, default: '' },
-  tool: { type: String, default: 'box' },
-  brushSize: { type: Number, default: 20 },
-  eraserMode: { type: String, default: 'brush' },
-  eraserRestore: { type: Boolean, default: false },
-  stampSpacing: { type: Number, default: 30 },
-  stampShape: { type: String, default: 'circle' }, // 'circle' or 'bar'
-  barWidth: { type: Number, default: 40 },
-  barHeight: { type: Number, default: 15 },
-  magneticLasso: { type: Boolean, default: false },
-  snapRadius: { type: Number, default: 12 },
+interface Point { x: number; y: number }
+interface SelectionBounds { x: number; y: number; w: number; h: number }
+
+const props = withDefaults(defineProps<{
+  imageSrc?: string
+  tool?: string
+  brushSize?: number
+  eraserMode?: string
+  eraserRestore?: boolean
+  stampSpacing?: number
+  stampShape?: string // 'circle' or 'bar'
+  barWidth?: number
+  barHeight?: number
+  magneticLasso?: boolean
+  snapRadius?: number
+}>(), {
+  imageSrc: '',
+  tool: 'box',
+  brushSize: 20,
+  eraserMode: 'brush',
+  eraserRestore: false,
+  stampSpacing: 30,
+  stampShape: 'circle',
+  barWidth: 40,
+  barHeight: 15,
+  magneticLasso: false,
+  snapRadius: 12,
 })
 
-const emit = defineEmits(['selection-changed', 'mask-changed'])
+const emit = defineEmits<{
+  'selection-changed': [bounds: SelectionBounds]
+  'mask-changed': [arg: any]
+}>()
 
-const containerRef = ref(null)
-const canvasEl = ref(null)
-const maskCanvasEl = ref(null)
+const containerRef = ref<HTMLDivElement | null>(null)
+const canvasEl = ref<HTMLCanvasElement | null>(null)
+const maskCanvasEl = ref<HTMLCanvasElement | null>(null)
 const imgWidth = ref(0)
 const imgHeight = ref(0)
 const zoom = ref(1)
@@ -45,24 +63,24 @@ const panX = ref(0)
 const panY = ref(0)
 const hasMask = ref(false)
 
-let ctx = null
-let maskCtx = null
-let sourceImg = null
+let ctx: CanvasRenderingContext2D | null = null
+let maskCtx: CanvasRenderingContext2D | null = null
+let sourceImg: HTMLImageElement | null = null
 let drawing = false
 let panning = false
 let startX = 0, startY = 0
 let panStartX = 0, panStartY = 0
 let lastBrushX = -1, lastBrushY = -1
-let lassoPoints = []
-let maskData = null
+let lassoPoints: Point[] = []
+let maskData: Uint8Array | null = null
 let lastAltClick = 0  // Alt 더블클릭 감지
 let stampAccum = 0
-let maskUndoStack = []
-let maskRedoStack = []
+let maskUndoStack: Uint8Array[] = []
+let maskRedoStack: Uint8Array[] = []
 const MAX_MASK_UNDO = 10
 let savedZoom = 1, savedRotation = 0, savedPanX = 0, savedPanY = 0
-let pristineImg = null  // 원본 이미지 (모자이크 지우개용)
-let edgeMapData = null  // Canny edge map (자석 올가미용) — Uint8Array
+let pristineImg: HTMLCanvasElement | null = null  // 원본 이미지 (모자이크 지우개용)
+let edgeMapData: Uint8Array | null = null  // Canny edge map (자석 올가미용) — Uint8Array
 let edgeMapW = 0, edgeMapH = 0
 
 const canvasStyle = computed(() => {
@@ -90,7 +108,7 @@ const canvasStyle = computed(() => {
 })
 
 // ── 이미지 로드 (zoom/rotation 보존 옵션) ──
-function loadNewImage(src, preserveTransform = false) {
+function loadNewImage(src: string, preserveTransform = false) {
   if (!src) return
   if (!preserveTransform) {
     savedZoom = 1; savedRotation = 0; savedPanX = 0; savedPanY = 0
@@ -113,7 +131,7 @@ function loadNewImage(src, preserveTransform = false) {
       // 원본 이미지 저장 (모자이크 지우개용)
       const pc = document.createElement('canvas')
       pc.width = img.naturalWidth; pc.height = img.naturalHeight
-      pc.getContext('2d').drawImage(img, 0, 0)
+      pc.getContext('2d')!.drawImage(img, 0, 0)
       pristineImg = pc
     }
     drawAll()
@@ -121,7 +139,7 @@ function loadNewImage(src, preserveTransform = false) {
   img.src = src
 }
 
-watch(() => props.imageSrc, (src) => {
+watch(() => props.imageSrc, (src: string) => {
   // 효과 적용 후 이미지 교체 시 transform 유지
   const preserve = sourceImg !== null
   loadNewImage(src, preserve)
@@ -139,7 +157,7 @@ function drawAll() {
   const c = canvasEl.value
   c.width = sourceImg.naturalWidth
   c.height = sourceImg.naturalHeight
-  ctx = c.getContext('2d')
+  ctx = c.getContext('2d')!
   ctx.clearRect(0, 0, c.width, c.height)
   ctx.drawImage(sourceImg, 0, 0)
   const mc = maskCanvasEl.value
@@ -172,7 +190,7 @@ function renderMaskOverlay() {
 // FIX 2 (이번): CSS max-width로 캔버스가 축소 표시되는 경우, zoom으로 나누면
 //              실제 표시 배율과 안 맞아 클릭 위치가 좌측 위로 어긋남.
 //              base scale = clientWidth/canvas.width 로 정확히 계산.
-function getImagePos(e) {
+function getImagePos(e: MouseEvent | PointerEvent): Point {
   if (!canvasEl.value) return { x: 0, y: 0 }
   const c = canvasEl.value
   const rect = c.getBoundingClientRect()
@@ -209,7 +227,7 @@ function resetTransform() {
 }
 
 // ── Alt 더블클릭: 위치 복귀 ──
-function onDblClick(e) {
+function onDblClick(e: MouseEvent) {
   if (e.altKey) resetTransform()
 }
 
@@ -223,17 +241,17 @@ function saveMaskState() {
 function undoMask() {
   if (maskUndoStack.length === 0 || !maskData) return
   maskRedoStack.push(new Uint8Array(maskData))
-  maskData.set(maskUndoStack.pop())
+  maskData.set(maskUndoStack.pop()!)
   renderMaskOverlay(); emitMaskBounds()
 }
 function redoMask() {
   if (maskRedoStack.length === 0 || !maskData) return
   maskUndoStack.push(new Uint8Array(maskData))
-  maskData.set(maskRedoStack.pop())
+  maskData.set(maskRedoStack.pop()!)
   renderMaskOverlay(); emitMaskBounds()
 }
 
-function onMouseDown(e) {
+function onMouseDown(e: PointerEvent) {
   if (e.altKey || e.button === 1) {
     panning = true
     panStartX = e.clientX - panX.value
@@ -250,7 +268,7 @@ function onMouseDown(e) {
 
   // 압력 감응 — 펜 입력일 때만 적용 (마우스는 항상 0.5로 고정되어 의미 없음)
   // 펜 압력 0~1 → 0.3~1.2 배율로 매핑 (최소 30% 보장, 최대 120%)
-  const sizeFor = (base) => {
+  const sizeFor = (base: number) => {
     if (e.pointerType === 'pen' && typeof e.pressure === 'number' && e.pressure > 0) {
       return Math.max(2, base * (0.3 + 0.9 * Math.min(1, e.pressure)))
     }
@@ -279,7 +297,7 @@ function onMouseDown(e) {
   }
 }
 
-function onMouseMoveWrap(e) {
+function onMouseMoveWrap(e: PointerEvent) {
   onMouseMove(e)
   // 큰 커서를 마스크 오버레이에 직접 그리기
   const rawSize = Math.round(props.brushSize * zoom.value * 2)
@@ -302,7 +320,7 @@ function onMouseMoveWrap(e) {
   }
 }
 
-function onMouseMove(e) {
+function onMouseMove(e: PointerEvent) {
   if (panning) {
     panX.value = e.clientX - panStartX
     panY.value = e.clientY - panStartY
@@ -387,7 +405,7 @@ function onMouseMove(e) {
   }
 }
 
-function onMouseUp(e) {
+function onMouseUp(e: PointerEvent) {
   if (panning) { panning = false; return }
   if (!drawing) return
   drawing = false
@@ -415,7 +433,7 @@ function onMouseUp(e) {
 }
 
 // ── 마스크 조작 ──
-function paintMaskBar(cx, cy, bw, bh) {
+function paintMaskBar(cx: number, cy: number, bw: number, bh: number) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   const x1 = Math.max(0, Math.round(cx - bw / 2))
@@ -425,13 +443,13 @@ function paintMaskBar(cx, cy, bw, bh) {
   for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) maskData[y * w + x] = 255
 }
 
-function paintStamp(cx, cy) {
+function paintStamp(cx: number, cy: number) {
   if (props.stampShape === 'bar') paintMaskBar(cx, cy, props.barWidth, props.barHeight)
   else if (props.stampShape === 'rect') paintMaskBar(cx, cy, props.brushSize * 2, props.brushSize * 2)
   else paintMaskCircle(cx, cy, props.brushSize)
 }
 
-function paintMaskCircle(cx, cy, r) {
+function paintMaskCircle(cx: number, cy: number, r: number) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   const radius = Math.max(1, r)
@@ -441,7 +459,7 @@ function paintMaskCircle(cx, cy, r) {
     }
   }
 }
-function paintMaskLine(x0, y0, x1, y1, r) {
+function paintMaskLine(x0: number, y0: number, x1: number, y1: number, r: number) {
   const dist = Math.hypot(x1 - x0, y1 - y0)
   const steps = Math.max(1, Math.ceil(dist / Math.max(1, r * 0.3)))
   for (let i = 0; i <= steps; i++) {
@@ -449,7 +467,7 @@ function paintMaskLine(x0, y0, x1, y1, r) {
     paintMaskCircle(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r)
   }
 }
-function eraseMaskCircle(cx, cy, r) {
+function eraseMaskCircle(cx: number, cy: number, r: number) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   const radius = Math.max(1, r)
@@ -459,7 +477,7 @@ function eraseMaskCircle(cx, cy, r) {
     }
   }
 }
-function eraseMaskLine(x0, y0, x1, y1, r) {
+function eraseMaskLine(x0: number, y0: number, x1: number, y1: number, r: number) {
   const dist = Math.hypot(x1 - x0, y1 - y0)
   const steps = Math.max(1, Math.ceil(dist / Math.max(1, r * 0.3)))
   for (let i = 0; i <= steps; i++) {
@@ -467,19 +485,19 @@ function eraseMaskLine(x0, y0, x1, y1, r) {
     eraseMaskCircle(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r)
   }
 }
-function fillMaskRect(x1, y1, x2, y2) {
+function fillMaskRect(x1: number, y1: number, x2: number, y2: number) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   for (let y = Math.max(0, y1); y < Math.min(h, y2); y++)
     for (let x = Math.max(0, x1); x < Math.min(w, x2); x++) maskData[y * w + x] = 255
 }
-function eraseMaskRect(x1, y1, x2, y2) {
+function eraseMaskRect(x1: number, y1: number, x2: number, y2: number) {
   if (!maskData || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   for (let y = Math.max(0, y1); y < Math.min(h, y2); y++)
     for (let x = Math.max(0, x1); x < Math.min(w, x2); x++) maskData[y * w + x] = 0
 }
-function fillMaskPolygon(pts) {
+function fillMaskPolygon(pts: Point[]) {
   if (!maskData || !sourceImg || pts.length < 3) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -488,7 +506,7 @@ function fillMaskPolygon(pts) {
     for (let x = Math.max(0, Math.floor(minX)); x < Math.min(w, Math.ceil(maxX)); x++)
       if (pip(x, y, pts)) maskData[y * w + x] = 255
 }
-function eraseMaskPolygon(pts) {
+function eraseMaskPolygon(pts: Point[]) {
   if (!maskData || !sourceImg || pts.length < 3) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -497,7 +515,7 @@ function eraseMaskPolygon(pts) {
     for (let x = Math.max(0, Math.floor(minX)); x < Math.min(w, Math.ceil(maxX)); x++)
       if (pip(x, y, pts)) maskData[y * w + x] = 0
 }
-function pip(x, y, poly) {
+function pip(x: number, y: number, poly: Point[]) {
   let inside = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y
@@ -507,7 +525,7 @@ function pip(x, y, poly) {
 }
 
 // ── 모자이크 지우개 (원본 복원) ──
-function restoreCircle(cx, cy, r) {
+function restoreCircle(cx: number, cy: number, r: number) {
   if (!ctx || !pristineImg || !sourceImg) return
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   const radius = Math.max(1, r)
@@ -518,7 +536,7 @@ function restoreCircle(cx, cy, r) {
   const sw = x2 - x1, sh = y2 - y1
   if (sw <= 0 || sh <= 0) return
   // pristine에서 해당 영역 가져오기
-  const pCtx = pristineImg.getContext('2d')
+  const pCtx = pristineImg.getContext('2d')!
   const srcData = pCtx.getImageData(x1, y1, sw, sh)
   const dstData = ctx.getImageData(x1, y1, sw, sh)
   // 원형 영역만 복원
@@ -536,7 +554,7 @@ function restoreCircle(cx, cy, r) {
   }
   ctx.putImageData(dstData, x1, y1)
 }
-function restoreLine(x0, y0, x1, y1, r) {
+function restoreLine(x0: number, y0: number, x1: number, y1: number, r: number) {
   const dist = Math.hypot(x1 - x0, y1 - y0)
   const steps = Math.max(1, Math.ceil(dist / Math.max(1, r * 0.3)))
   for (let i = 0; i <= steps; i++) {
@@ -546,13 +564,13 @@ function restoreLine(x0, y0, x1, y1, r) {
 }
 
 // ── 자석 올가미: edge map 로드 + snap ──
-function loadEdgeMap(b64) {
+function loadEdgeMap(b64: string) {
   if (!b64) return
   const img = new Image()
   img.onload = () => {
     const tc = document.createElement('canvas')
     tc.width = img.naturalWidth; tc.height = img.naturalHeight
-    const tctx = tc.getContext('2d')
+    const tctx = tc.getContext('2d')!
     tctx.drawImage(img, 0, 0)
     const id = tctx.getImageData(0, 0, tc.width, tc.height)
     edgeMapW = tc.width; edgeMapH = tc.height
@@ -562,7 +580,7 @@ function loadEdgeMap(b64) {
   img.src = b64
 }
 
-function snapToEdge(x, y) {
+function snapToEdge(x: number, y: number): Point {
   if (!edgeMapData || !props.magneticLasso) return { x, y }
   const r = props.snapRadius
   let bestDist = Infinity, bx = x, by = y
@@ -590,7 +608,7 @@ function emitMaskBounds() {
   hasMask.value = any
 }
 
-function onWheel(e) {
+function onWheel(e: WheelEvent) {
   if (e.shiftKey) { rotation.value += e.deltaY > 0 ? 5 : -5 }
   else { zoom.value = Math.max(0.1, Math.min(10, zoom.value * (e.deltaY > 0 ? 0.9 : 1.1))) }
 }
@@ -615,7 +633,7 @@ function getMaskBase64() {
   if (!maskData || !sourceImg) return null
   const w = sourceImg.naturalWidth, h = sourceImg.naturalHeight
   const tc = document.createElement('canvas'); tc.width = w; tc.height = h
-  const tctx = tc.getContext('2d')
+  const tctx = tc.getContext('2d')!
   const id = tctx.createImageData(w, h)
   for (let i = 0; i < maskData.length; i++) { id.data[i*4] = id.data[i*4+1] = id.data[i*4+2] = maskData[i]; id.data[i*4+3] = 255 }
   tctx.putImageData(id, 0, 0)
@@ -623,15 +641,15 @@ function getMaskBase64() {
 }
 
 // 외부에서 마스크 로드 (YOLO auto-detect 결과)
-function loadMaskFromBase64(b64) {
+function loadMaskFromBase64(b64: string) {
   if (!sourceImg) return
   const img = new Image()
   img.onload = () => {
-    const tc = document.createElement('canvas'); tc.width = sourceImg.naturalWidth; tc.height = sourceImg.naturalHeight
-    const tctx = tc.getContext('2d'); tctx.drawImage(img, 0, 0, tc.width, tc.height)
+    const tc = document.createElement('canvas'); tc.width = sourceImg!.naturalWidth; tc.height = sourceImg!.naturalHeight
+    const tctx = tc.getContext('2d')!; tctx.drawImage(img, 0, 0, tc.width, tc.height)
     const id = tctx.getImageData(0, 0, tc.width, tc.height)
     initMask()
-    for (let i = 0; i < maskData.length; i++) { if (id.data[i * 4] > 127) maskData[i] = 255 }
+    for (let i = 0; i < maskData!.length; i++) { if (id.data[i * 4] > 127) maskData![i] = 255 }
     renderMaskOverlay()
     emitMaskBounds()
   }
