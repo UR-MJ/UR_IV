@@ -55,8 +55,11 @@ SYSTEM_PROMPTS = {
         "3) Write at least 2 descriptive sentences (more detail is better). "
         "4) End with a period. "
         "5) Use standard English capitalization for character and series names. "
-        "6) Name the character first, then describe their basic appearance (hair, eyes, outfit), "
-        "then the scene. "
+        "6) Name the character (and series) explicitly, then describe their appearance, "
+        "clothing, pose and action while still referring to them BY NAME — do NOT rely on bare "
+        "pronouns like 'he/she/his/her', because the model confuses who is who. "
+        "Example: write 'Ryu from Street Fighter with black hair and red eyes wearing a red "
+        "hachimaki around his head' instead of 'He has black hair'. "
         "Output ONLY the caption prose. No tag lists, no explanations, no markdown."
     ),
     'nl_scene': (
@@ -70,7 +73,11 @@ SYSTEM_PROMPTS = {
         "3) Write at least 2 sentences (the more descriptive, the better). "
         "4) End with a period. "
         "5) Use standard English capitalization for character and series names; "
-        "name the character first, then describe their appearance. "
+        "name the character (and series) explicitly and keep referring to them BY NAME when "
+        "describing appearance, clothing, pose and action — avoid bare pronouns like "
+        "'he/she/his/her' because the model confuses who is who. "
+        "Example: 'Ryu from Street Fighter with black hair and red eyes wearing a red hachimaki "
+        "around his head' rather than 'He has black hair'. "
         "Output ONLY the description prose. No tag lists, no explanations, no markdown."
     ),
     'translate': (
@@ -97,7 +104,10 @@ SYSTEM_PROMPTS = {
         "Output format: first a single line of comma-separated Danbooru tags (appearance + scene "
         "+ quality), then a blank line, then a short natural-language description of 2-3 sentences "
         "that starts with a capital letter, uses NO commas (separate ideas into sentences), and "
-        "ends with a period, "
+        "ends with a period. In that description, name the character (and series) explicitly and "
+        "keep referring to them BY NAME when describing appearance, clothing, pose and action "
+        "instead of bare pronouns like 'he/she/his/her' (e.g. 'Ryu from Street Fighter with black "
+        "hair wearing a red hachimaki' not 'He has black hair'), "
         "then a final line exactly like 'Resolution: WIDTHxHEIGHT' choosing the best resolution "
         "for the composition (portrait 832x1216, landscape 1216x832, square 1024x1024, "
         "tall 896x1152, wide 1152x896). "

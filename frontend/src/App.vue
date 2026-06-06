@@ -7,7 +7,7 @@
     <main class="main-workspace">
       <!-- Left Panel -->
       <aside class="side-panel left" v-if="showLeftPanel">
-        <div class="panel-scroll">
+        <div class="panel-scroll" v-scroll-memory="'leftPanel'">
           <PromptPanel @toggle-extend="showExtendPanel = !showExtendPanel"
             @open-wildcard="openWildcardByName" />
           <!-- 워크플로우 프로파일 -->
@@ -116,7 +116,7 @@
             <h3>ADVANCED SETTINGS</h3>
             <button class="close-btn" @click="showExtendPanel = false" title="닫기 (ESC)">✕</button>
           </div>
-          <div class="extend-scroll">
+          <div class="extend-scroll" v-scroll-memory="'extendPanel'">
             <!-- Parameters (기본) -->
             <div class="ext-card">
               <div class="ext-title">PARAMETERS</div>
@@ -519,7 +519,7 @@
           <span class="count-badge">{{ historyImages.length }}</span>
         </div>
         <button class="hist-nav-btn" @click="histPage = Math.max(0, histPage - 1)" :disabled="histPage <= 0">▲</button>
-        <div class="hist-scroll">
+        <div class="hist-scroll" v-scroll-memory="'history'">
           <div v-for="img in visibleHistory" :key="img" class="hist-card"
             @click="selectHistoryImage(img)"
             @contextmenu.prevent="showHistoryMenu($event, img)"
@@ -1073,6 +1073,32 @@ const progressVal = ref(0)
 const genStartTime = ref(0)
 const genEta = ref('')
 const showLeftPanel = ref(true)
+
+// 스크롤 위치 기억 — 탭 전환/버튼으로 패널이 언마운트→재마운트돼도 위치 복원.
+// 모듈 스코프 객체에 key별 scrollTop 저장 (세션 동안 유지).
+const _scrollMem = {}
+const vScrollMemory = {
+  mounted(el, binding) {
+    const key = binding.value
+    el.__sk = key
+    el.__onScroll = () => { _scrollMem[key] = el.scrollTop }
+    el.addEventListener('scroll', el.__onScroll, { passive: true })
+    const restore = () => { if (key in _scrollMem) el.scrollTop = _scrollMem[key] }
+    nextTick(restore)
+    setTimeout(restore, 80)   // 콘텐츠가 늦게 채워지는 경우 한 번 더
+  },
+  updated(el) {
+    // 같은 탭에서 콘텐츠가 갱신돼 scrollTop이 0으로 튀면 복원
+    const key = el.__sk
+    if (key && (key in _scrollMem) && el.scrollTop === 0 && _scrollMem[key] > 0) {
+      nextTick(() => { el.scrollTop = _scrollMem[key] })
+    }
+  },
+  beforeUnmount(el) {
+    if (el.__sk) _scrollMem[el.__sk] = el.scrollTop
+    if (el.__onScroll) el.removeEventListener('scroll', el.__onScroll)
+  },
+}
 const showExtendPanel = ref(false)
 const historyImages = ref([])
 const histPage = ref(0)
