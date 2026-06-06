@@ -73,6 +73,11 @@ export function getProperty(id, prop, def = '') { return state.properties[id]?.[
 export function setValue(id, val) { state.values[id] = val }
 
 // 액션 요청
+/**
+ * Vue → Python 액션 요청. (이름 정합성 강제는 tests/test_bridge_contract.py)
+ * @param {import('../types/bridge').ActionName} action  백엔드 액션 이름(에디터 자동완성)
+ * @param {object} [payload]
+ */
 export function requestAction(action, payload = {}) {
   if (_backend) {
     console.log(`[Vue -> Python] Action: ${action}`, payload)

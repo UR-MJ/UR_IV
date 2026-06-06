@@ -30,6 +30,15 @@ PyQt6(백엔드) + Vue 3 SPA(프론트) 데스크탑 AI 이미지 생성기. (�
 - **회귀 가드**: `tests/test_bridge_contract.py` — 프론트 액션/이벤트 이름이 Python
   핸들러/시그널과 매칭되는지 정적 검증. 새 액션 추가 시 핸들러 빠지면 테스트가 잡음.
 
+## 프론트 타입 (점진 TS 도입 ②)
+- `frontend/jsconfig.json` — 에디터(VS Code) 타입서비스 설정. **Vite 빌드는 무시**(esbuild가
+  타입만 벗겨냄 — 빌드는 타입검사 안 함).
+- `frontend/src/types/bridge.d.ts` — 브리지 계약 타입(`ActionName`/`BackendEvent` + 페이로드).
+  `requestAction`/`onBackendEvent`에 JSDoc으로 연결 → 에디터 자동완성. 이름 정합성의 **강제
+  소스는 `tests/test_bridge_contract.py`**(이 .d.ts는 에디터 편의용, 드리프트해도 `(string&{})`라 무해).
+- **전체 .vue→TS 마이그레이션은 점진적으로**: `npm i -D typescript vue-tsc` 후 컴포넌트마다
+  `<script setup lang="ts">`로 전환 + 그때그때 런타임 스모크. 한 번에 갈아엎지 말 것.
+
 ## 커밋 규칙
 - 한국어 conventional: feat/fix/refactor/test/chore/docs
 - 메시지 끝에 `Co-Authored-By: Claude ...` 트레일러
