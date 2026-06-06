@@ -698,7 +698,7 @@
     <!-- 워크플로우 프로파일 관리 모달 -->
     <transition name="fade">
       <div v-if="showProfileManager" class="wc-overlay" @click.self="showProfileManager = false">
-        <div class="wc-modal" style="max-width: 520px;">
+        <div class="wc-modal" style="max-width: 640px;">
           <div class="wc-modal-header">
             <h3>워크플로우 프로파일</h3>
             <span class="wc-path">config/profiles/*.json</span>
@@ -733,7 +733,7 @@
     <!-- 프롬프트 섹션 순서 매니저 모달 -->
     <transition name="fade">
       <div v-if="showOrderManager" class="wc-overlay" @click.self="showOrderManager = false">
-        <div class="wc-modal" style="max-width: 540px;">
+        <div class="wc-modal" style="max-width: 680px;">
           <div class="wc-modal-header">
             <h3>프롬프트 섹션 순서</h3>
             <span class="wc-path">생성 시 합쳐지는 순서를 ↑/↓로 조정. 저장 시 즉시 반영</span>
@@ -2355,7 +2355,7 @@ onMounted(async () => {
 
 /* Preset Manager */
 .pm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
-.pm-modal { width: 650px; height: 450px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.pm-modal { width: min(860px, 94vw); height: min(640px, 90vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .pm-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .pm-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); flex: 1; }
 .pm-body { flex: 1; display: flex; overflow: hidden; }
@@ -2378,7 +2378,7 @@ onMounted(async () => {
 
 /* Weight Manager */
 .wm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
-.wm-modal { width: 500px; max-height: 500px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.wm-modal { width: min(680px, 92vw); max-height: 86vh; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .wm-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wm-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); }
 .wm-desc { font-size: 9px; color: var(--text-muted); flex: 1; }
@@ -2394,7 +2394,7 @@ onMounted(async () => {
 
 /* Generation Stats Modal */
 .stats-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
-.stats-modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; width: 640px; max-height: 85vh; overflow-y: auto; }
+.stats-modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; width: min(860px, 94vw); max-height: 88vh; overflow-y: auto; }
 .stats-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
 .stats-header h3 { font-size: 13px; font-weight: 900; letter-spacing: 2px; color: var(--text-primary); }
 .stats-body { padding: 24px; display: flex; flex-direction: column; gap: 24px; }
@@ -2434,7 +2434,7 @@ onMounted(async () => {
 
 /* Wildcard Manager Modal */
 .wc-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
-.wc-modal { width: 700px; height: 500px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.wc-modal { width: min(980px, 95vw); height: min(740px, 90vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .wc-modal-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .wc-modal-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); }
 .wc-path { font-size: 10px; color: var(--text-muted); font-family: monospace; flex: 1; }

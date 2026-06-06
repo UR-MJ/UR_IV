@@ -45,7 +45,7 @@
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
         >
-          <img :src="thumbCache[img] || BLANK" loading="lazy" />
+          <img :src="'file:///' + img" loading="lazy" />
           <div class="card-hover-actions">
             <button class="tiny-btn" @click.stop="removeFav(img)" title="즐겨찾기 제거">⭐</button>
             <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)" title="복사">📋</button>
@@ -78,32 +78,32 @@
             <div class="viewer-info">
               <div class="vi-size">{{ viewerData.size }}</div>
               <div v-if="viewerData.prompt" class="vi-section">
-                <div class="vi-head">
-                  <label>PROMPT</label>
-                  <button class="copy-btn" @click="copySection(viewerData.prompt, 'Prompt')" title="Prompt 복사">📋</button>
+                <div class="vi-head"><label>PROMPT</label></div>
+                <div class="vi-pre-wrap">
+                  <button class="vi-copy-float" @click="copySection(viewerData.prompt, 'Prompt')" title="Prompt 복사">📋</button>
+                  <pre>{{ viewerData.prompt }}</pre>
                 </div>
-                <pre>{{ viewerData.prompt }}</pre>
               </div>
               <div v-if="viewerData.negative" class="vi-section">
-                <div class="vi-head">
-                  <label class="neg">NEGATIVE</label>
-                  <button class="copy-btn" @click="copySection(viewerData.negative, 'Negative')" title="Negative 복사">📋</button>
+                <div class="vi-head"><label class="neg">NEGATIVE</label></div>
+                <div class="vi-pre-wrap">
+                  <button class="vi-copy-float" @click="copySection(viewerData.negative, 'Negative')" title="Negative 복사">📋</button>
+                  <pre>{{ viewerData.negative }}</pre>
                 </div>
-                <pre>{{ viewerData.negative }}</pre>
               </div>
               <div v-if="viewerData.raw && !viewerData.prompt" class="vi-section">
-                <div class="vi-head">
-                  <label>RAW</label>
-                  <button class="copy-btn" @click="copySection(viewerData.raw, 'Raw')" title="Raw 복사">📋</button>
+                <div class="vi-head"><label>RAW</label></div>
+                <div class="vi-pre-wrap">
+                  <button class="vi-copy-float" @click="copySection(viewerData.raw, 'Raw')" title="Raw 복사">📋</button>
+                  <pre>{{ viewerData.raw }}</pre>
                 </div>
-                <pre>{{ viewerData.raw }}</pre>
               </div>
               <div v-if="viewerParams" class="vi-section">
-                <div class="vi-head">
-                  <label>PARAMETERS</label>
-                  <button class="copy-btn" @click="copySection(viewerParams, 'Parameters')" title="Parameters 복사">📋</button>
+                <div class="vi-head"><label>PARAMETERS</label></div>
+                <div class="vi-pre-wrap">
+                  <button class="vi-copy-float" @click="copySection(viewerParams, 'Parameters')" title="Parameters 복사">📋</button>
+                  <pre>{{ viewerParams }}</pre>
                 </div>
-                <pre>{{ viewerParams }}</pre>
               </div>
               <div class="vi-actions-section">
                 <label class="vi-actions-label">SEND TO</label>
@@ -187,7 +187,8 @@ const displayImages = computed(() => {
   return source.slice(0, visibleCount.value)
 })
 // 보이는 카드의 썸네일만 요청
-watch(displayImages, (list) => requestThumbs(list), { immediate: true })
+// 썸네일 캐싱 비활성화 — Gallery처럼 원본을 직접 표시(저화질 썸네일 회피)
+// watch(displayImages, (list) => requestThumbs(list), { immediate: true })
 
 const largeViewParams = computed(() => {
   if (!largeView.value?.raw) return ''
@@ -418,13 +419,16 @@ onUnmounted(() => {
 .viewer-body { flex: 1; display: flex; overflow: hidden; }
 .viewer-img { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; padding: 16px; }
 .viewer-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.viewer-info { width: 320px; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; border-left: 1px solid #1A1A1A; }
-.vi-size { color: #585858; font-size: 11px; }
-.vi-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; min-height: 18px; }
-.vi-head label { color: var(--accent); font-size: 10px; font-weight: 700; margin: 0; }
+.viewer-info { width: 460px; max-width: 46vw; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; border-left: 1px solid #1A1A1A; }
+.vi-size { color: #585858; font-size: 12px; }
+.vi-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; min-height: 18px; }
+.vi-head label { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 0.5px; margin: 0; }
 .vi-head label.neg { color: #f87171; }
-.vi-section:hover .copy-btn { opacity: 0.7; }
-.vi-section pre { color: #B0B0B0; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #111; padding: 8px; border-radius: 4px; margin: 0; max-height: 220px; overflow-y: auto; }
+.vi-pre-wrap { position: relative; }
+.vi-copy-float { position: absolute; top: 7px; right: 7px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: rgba(20,20,20,0.5); border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; color: #ddd; font-size: 14px; cursor: pointer; opacity: 0.5; backdrop-filter: blur(3px); transition: opacity .15s, background .15s, border-color .15s; z-index: 2; }
+.vi-pre-wrap:hover .vi-copy-float { opacity: 0.85; }
+.vi-copy-float:hover { opacity: 1 !important; background: rgba(45,45,45,0.9); border-color: var(--accent); color: var(--accent); }
+.vi-section pre { color: #C4C4C4; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; background: #111; padding: 12px 14px; border-radius: 6px; margin: 0; max-height: 360px; overflow-y: auto; }
 .vi-actions-section { margin-top: auto; padding-top: 12px; }
 .vi-actions-label { display: block; font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 8px; }
 .vi-send-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }

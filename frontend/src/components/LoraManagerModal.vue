@@ -106,7 +106,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 
 <style scoped>
 .lm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 2200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-.lm-modal { width: min(680px, 92vw); height: min(760px, 90vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.lm-modal { width: min(840px, 94vw); height: min(840px, 92vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 .lm-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .lm-header h3 { font-size: 17px; font-weight: 800; color: var(--text-primary); }
 .lm-sub { font-size: 11px; color: var(--text-muted); }
