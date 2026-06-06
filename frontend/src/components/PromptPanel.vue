@@ -563,16 +563,20 @@ function toggleException(tag) {
 
 // 최종 프롬프트 블록 변경 시 → 원본 필드에서 태그 제거
 function onTotalBlockChange(newVal) {
-  const newTags = new Set(newVal.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))
-  // 각 필드에서 없어진 태그 제거 (인물수/캐릭터/작품/작가 섹션도 포함 —
-  // FINAL에서 1boy 등을 지워도 인물수 칸에 남던 버그 수정)
+  // FINAL 블록의 새 순서 — 태그(소문자) → 위치 인덱스
+  const order = newVal.split(',').map(t => t.trim()).filter(Boolean)
+  const orderIdx = new Map()
+  order.forEach((t, i) => { const k = t.toLowerCase(); if (!orderIdx.has(k)) orderIdx.set(k, i) })
+  const newTags = new Set(order.map(t => t.toLowerCase()))
+  // 각 필드: (1) FINAL에서 사라진 태그 제거 (FINAL에서 지우면 인물수 칸 등에 남던 버그 수정)
+  //          (2) 남은 태그를 FINAL 순서로 재정렬 → FINAL에서 블록을 옮기면 해당 필드 내부 순서가 따라감.
+  //   (필드 순서 자체는 구조상 고정이므로 필드 경계를 넘는 이동은 각 필드 영역 내 재정렬로만 반영됨)
   for (const key of ['char_count_input', 'character_input', 'copyright_input', 'artist_input',
                      'main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text']) {
     const cur = widgets[key] || ''
-    const filtered = cur.split(',').map(t => t.trim()).filter(t => {
-      return t && newTags.has(t.toLowerCase())
-    })
-    const result = filtered.join(', ')
+    const kept = cur.split(',').map(t => t.trim()).filter(t => t && newTags.has(t.toLowerCase()))
+    kept.sort((a, b) => (orderIdx.get(a.toLowerCase()) ?? 0) - (orderIdx.get(b.toLowerCase()) ?? 0))
+    const result = kept.join(', ')
     if (result !== cur.trim()) widgets[key] = result
   }
 }
