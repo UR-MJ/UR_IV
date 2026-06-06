@@ -198,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { getBackend } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
@@ -310,8 +310,48 @@ async function toggleDeckOnly() {
   }
 }
 
+// ── per-캐릭터 작업 상태(체크 ON/OFF + 커스텀) 영속 ──
+// 닫아도 유지: 사용자가 ON 한 칩은 직접 OFF 하기 전까지 ON으로 고정(반대도 동일).
+const CPM_STATE_KEY = 'cpmCharState'
+let _loadingChar = false
+function _loadCharState(key: string): any {
+  try { return (JSON.parse(window.localStorage.getItem(CPM_STATE_KEY) || '{}'))[key] || null } catch { return null }
+}
+function _saveCharState() {
+  if (_loadingChar || !selectedChar.value) return
+  try {
+    const m = JSON.parse(window.localStorage.getItem(CPM_STATE_KEY) || '{}')
+    const checked: Record<string, boolean> = {}
+    for (const arr of [coreTags, auxTags, costumeTags, etcTags])
+      for (const t of arr.value) checked[norm(t.tag)] = !!t.checked
+    m[selectedChar.value] = { checked, custom: customTags.value.map(t => ({ tag: t.tag, checked: !!t.checked })) }
+    window.localStorage.setItem(CPM_STATE_KEY, JSON.stringify(m))
+  } catch {}
+}
+function _applyCharState(key: string) {
+  const saved = _loadCharState(key)
+  if (!saved) return
+  const ck = saved.checked || {}
+  // 저장된 ON/OFF가 기본값(_defChecked)을 덮어씀 — existing(이미 프롬프트에 있음)은 건드리지 않음
+  for (const arr of [coreTags, auxTags, costumeTags, etcTags])
+    for (const t of arr.value) { const n = norm(t.tag); if (!t.existing && n in ck) t.checked = !!ck[n] }
+  if (Array.isArray(saved.custom)) {
+    for (const c of saved.custom) {
+      const found = customTags.value.find(t => norm(t.tag) === norm(c.tag))
+      if (found) found.checked = c.checked !== false
+      else customTags.value.push({ tag: c.tag, checked: c.checked !== false })
+    }
+  }
+}
+// 체크/커스텀 변경 시 자동 저장 (로드 중엔 무시)
+watch([coreTags, auxTags, costumeTags, etcTags, customTags], () => {
+  if (_loadingChar || !selectedChar.value) return
+  _saveCharState()
+}, { deep: true })
+
 async function selectChar(key: string) {
   // 비동기 로드 전에 이전 캐릭터 상태를 먼저 비운다 (로드 실패 시 이전 태그 잔존 방지)
+  _loadingChar = true
   selectedChar.value = key
   presetStatus.value = ''
   status.value = ''
@@ -324,7 +364,7 @@ async function selectChar(key: string) {
   condRules.value = []
   copyright.value = ''
   const data = await callBk('getCharacterFeatures', key)
-  if (!data || data.error) { status.value = '특징 조회 실패'; return }
+  if (!data || data.error) { status.value = '특징 조회 실패'; _loadingChar = false; return }
   charCount.value = data.count || 0
   copyright.value = data.copyright || ''
   addCopyright.value = data.autoAddCopyright !== false
@@ -346,6 +386,8 @@ async function selectChar(key: string) {
     } catch {}
   }
   if (data.hasPreset) presetStatus.value = '★ 저장된 프리셋'
+  _applyCharState(key)    // 저장된 작업 상태(ON/OFF + 커스텀) 복원 — 기본값 위에 덮어씀
+  _loadingChar = false
 }
 
 function chipClass(t: TagItem) { return { off: !t.checked, existing: t.existing } }
@@ -548,7 +590,7 @@ onMounted(async () => {
     searchEl.value.focus()
   }
 })
-onUnmounted(() => window.removeEventListener('keydown', onKey, true))
+onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKey, true) })
 </script>
 
 <style scoped>
