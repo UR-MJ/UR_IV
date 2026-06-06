@@ -37,6 +37,7 @@ class VueBridge(QObject):
     condRulesLoaded = pyqtSignal(str)    # JSON {positive, negative}
     batchFilesSelected = pyqtSignal(str) # JSON [paths]
     ollamaResult = pyqtSignal(str)       # JSON {tags, mode} or {error}
+    genNlResult = pyqtSignal(str)        # JSON {tags, mode} or {error} — 생성 시 태그→자연어 전용 채널
     globalWeightsLoaded = pyqtSignal(str) # JSON [{tag, weight}]
     uiPrefsLoaded = pyqtSignal(str)      # JSON {tagBlockMode, ...}
     compareImageLoaded = pyqtSignal(str) # JSON {slot, path}
@@ -999,6 +1000,38 @@ class VueBridge(QObject):
             self._ollama_worker.start()
         except Exception as e:
             self.ollamaResult.emit(json.dumps({'error': str(e)}))
+
+    @pyqtSlot(str, str)
+    def convertPromptToNl(self, text: str, extra_json: str):
+        """생성 시 태그→자연어(nl_caption) 변환 — 전용 시그널 genNlResult로 결과 전달.
+        PromptPanel의 ollamaResult 리스너와 충돌하지 않도록 별도 채널을 사용한다."""
+        try:
+            if hasattr(self, '_gennl_worker') and self._gennl_worker and self._gennl_worker.isRunning():
+                self._gennl_worker.disconnect()
+                self._gennl_worker.quit()
+                self._gennl_worker.wait(1000)
+            extra = json.loads(extra_json) if extra_json else {}
+            from workers.ollama_worker import OllamaWorker
+            url = extra.get('url', 'http://localhost:11434')
+            model = (extra.get('model') or '').strip()
+            # 모델 검증 (ollamaEnhance와 동일 — 미설치/별칭 문제 방지)
+            try:
+                from core.ollama_client import OllamaClient
+                installed = OllamaClient(base_url=url).list_models()
+                if installed:
+                    def _b(s): return (s or '').split(':')[0].lower()
+                    if not (model and any(m == model or _b(m) == _b(model) for m in installed)):
+                        model = installed[0]
+            except Exception:
+                pass
+            if not model:
+                model = 'gemma3:4b'
+            self._gennl_worker = OllamaWorker(url, model, text, 'nl_caption', '', self)
+            self._gennl_worker.finished.connect(lambda r: self.genNlResult.emit(r))
+            self._gennl_worker.error.connect(lambda e: self.genNlResult.emit(json.dumps({'error': e})))
+            self._gennl_worker.start()
+        except Exception as e:
+            self.genNlResult.emit(json.dumps({'error': str(e)}))
 
     def _build_creative_input(self, hints: str, character: str):
         """창의 모드 입력 구성 — 캐릭터의 실제 외견 핵심 태그(우리 DB)를 함께 전달.

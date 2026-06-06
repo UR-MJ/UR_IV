@@ -89,9 +89,13 @@
             </div>
             <div class="auto-status-sub" v-else-if="autoWaiting">대기 중...</div>
           </div>
+          <label class="auto-nl-toggle" :class="{ on: autoNlGen }" title="생성 시 메인 프롬프트의 태그를 자연어 문장으로 자동 변환한 뒤 생성합니다 (Flux/SD3/NAI 등 자연어 모델용). Ollama 필요.">
+            <ToggleSwitch v-model="autoNlGen" size="sm" />
+            <span>🅣→🅝 생성 시 태그→자연어 변환</span>
+          </label>
           <div class="generate-row">
-            <button class="btn-generate" :class="{ automating: isAutomating }" @click="doGenerate" :disabled="isGenerating && !isAutomating">
-              {{ isAutomating ? '⏹ STOP AUTOMATION' : isGenerating ? 'GENERATING...' : autoMode ? '▶ START AUTOMATION' : 'GENERATE IMAGE' }}
+            <button class="btn-generate" :class="{ automating: isAutomating, converting: nlConverting }" @click="doGenerate" :disabled="(isGenerating && !isAutomating) || nlConverting">
+              {{ nlConverting ? '🅣→🅝 자연어 변환 중…' : isAutomating ? '⏹ STOP AUTOMATION' : isGenerating ? 'GENERATING...' : autoMode ? '▶ START AUTOMATION' : 'GENERATE IMAGE' }}
             </button>
             <button v-if="isGenerating && !isAutomating" class="btn-cancel" @click="cancelGeneration" title="생성 취소">✕</button>
           </div>
@@ -1128,6 +1132,15 @@ const exifContent = computed(() => {
 
 const autoMode = ref(false)
 const isAutomating = ref(false)
+// 생성 시 태그→자연어 자동 변환 토글
+const autoNlGen = ref(window.localStorage.getItem('autoNlGen') === 'true')
+const nlConverting = ref(false)
+const _lastAutoNl = ref('')   // 마지막 변환 결과(NL→NL 재변환 방지)
+let _nlGenResolve = null
+watch(autoNlGen, (v) => {
+  try { window.localStorage.setItem('autoNlGen', v ? 'true' : 'false') } catch {}
+  saveUiPrefs({ autoNlGen: v })
+})
 const autoGenCount = ref(0)
 const autoWaiting = ref(false)
 const deckRemaining = ref(0)
@@ -1723,7 +1736,29 @@ function insertWildcardTag(tag) {
   storeWidgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
 }
 
-function doGenerate() {
+// 태그→자연어 변환 (전용 채널 genNlResult로 결과 수신 — PromptPanel 리스너와 분리)
+function _convertTagsToNl(tags) {
+  return new Promise((resolve) => {
+    _nlGenResolve = resolve
+    nlConverting.value = true
+    const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
+    const model = window.localStorage.getItem('ollamaModel') || 'gemma3:4b'
+    getBackend().then(b => {
+      if (!b || !b.convertPromptToNl) { requestAction('show_toast', { type: 'error', msg: 'AI 변환 불가 — 태그 그대로 생성' }); _finishNlGen(null); return }
+      b.convertPromptToNl(tags, JSON.stringify({ url, model }))
+    }).catch(() => _finishNlGen(null))
+    setTimeout(() => {
+      if (_nlGenResolve) { requestAction('show_toast', { type: 'error', msg: 'AI 자연어 변환 시간 초과 — 태그 그대로 생성' }); _finishNlGen(null) }
+    }, 65000)
+  })
+}
+function _finishNlGen(result) {
+  if (!_nlGenResolve) return
+  const r = _nlGenResolve; _nlGenResolve = null; nlConverting.value = false
+  r(result)
+}
+
+async function doGenerate() {
   // 자동화 중이면 중지
   if (isAutomating.value) {
     action('stop_automation')
@@ -1731,6 +1766,25 @@ function doGenerate() {
     autoWaiting.value = false
     return
   }
+  if (nlConverting.value) return
+  // 생성 시 태그→자연어 자동 변환 (단일 생성에서만 — 자동화는 프롬프트마다 변환하면 너무 느림)
+  if (autoNlGen.value && !autoMode.value) {
+    const tags = (storeWidgets.main_prompt_text || '').trim()
+    if (tags && tags !== _lastAutoNl.value) {
+      const nl = await _convertTagsToNl(tags)
+      if (nl && nl.trim()) {
+        storeWidgets.main_prompt_text = nl.trim()
+        _lastAutoNl.value = nl.trim()
+        await nextTick()
+        await new Promise(r => setTimeout(r, 60))   // 위젯이 백엔드로 동기화될 여유
+      }
+      // 변환 실패/빈응답 시 원본 태그 그대로 진행 (fallback)
+    }
+  }
+  _doGenerateNow()
+}
+
+function _doGenerateNow() {
   // 글로벌 가중치 적용
   if (globalWeights.length > 0) {
     const cur = storeWidgets.main_prompt_text || ''
@@ -2142,11 +2196,24 @@ onMounted(async () => {
       if (Array.isArray(prefs.tabOrder) && prefs.tabOrder.length > 0) {
         window.localStorage.setItem('tabOrder', JSON.stringify(prefs.tabOrder))
       }
+      if (typeof prefs.autoNlGen === 'boolean') {
+        autoNlGen.value = prefs.autoNlGen
+        try { window.localStorage.setItem('autoNlGen', prefs.autoNlGen ? 'true' : 'false') } catch {}
+      }
     } catch {}
   })
 
   // 에러도 Toast로 표시
   onBackendEvent('generationError', (msg) => { addToast('error', msg) })
+
+  // 생성용 태그→자연어 변환 결과 (전용 채널 — PromptPanel의 ollamaResult와 분리)
+  onBackendEvent('genNlResult', (json) => {
+    try {
+      const d = JSON.parse(json)
+      if (d && d.tags && !d.error) { _finishNlGen(d.tags) }
+      else { if (d && d.error) requestAction('show_toast', { type: 'error', msg: 'AI 변환 실패 — 태그 그대로 생성' }); _finishNlGen(null) }
+    } catch { _finishNlGen(null) }
+  })
 
   // LoRA 추가 이벤트 (Python lora_manager → Vue)
   onBackendEvent('loraInserted', (json) => {
@@ -2566,6 +2633,9 @@ onMounted(async () => {
 .btn-generate:disabled { opacity: 0.5; cursor: wait; }
 .btn-generate.automating { background: #f87171; color: #fff; }
 .btn-generate.automating:hover:not(:disabled) { background: #ef4444; box-shadow: 0 8px 24px rgba(248, 113, 113, 0.3); }
+.btn-generate.converting { background: #8b5cf6; color: #fff; cursor: wait; }
+.auto-nl-toggle { display: flex; align-items: center; gap: 8px; padding: 7px 11px; margin-bottom: 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); font-size: 11px; font-weight: 700; color: var(--text-secondary); cursor: pointer; transition: var(--transition); user-select: none; width: fit-content; max-width: 100%; }
+.auto-nl-toggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 
 /* Viewport */
 .viewport-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #050505; }
