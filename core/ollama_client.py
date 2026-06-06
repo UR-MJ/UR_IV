@@ -60,7 +60,9 @@ SYSTEM_PROMPTS = {
         "pronouns like 'he/she/his/her', because the model confuses who is who. "
         "Example: write 'Ryu from Street Fighter with black hair and red eyes wearing a red "
         "hachimaki around his head' instead of 'He has black hair'. "
-        "Output ONLY the caption prose. No tag lists, no explanations, no markdown."
+        "CRITICAL: Output ONLY the final caption sentences themselves. Do NOT show any reasoning, "
+        "analysis, planning, checklists, restated rules, section labels, or draft versions, and "
+        "do NOT wrap the output in quotes. No tag lists, no explanations, no markdown."
     ),
     'nl_scene': (
         "You are a creative prompt writer for text-to-image generation. "
@@ -78,7 +80,9 @@ SYSTEM_PROMPTS = {
         "'he/she/his/her' because the model confuses who is who. "
         "Example: 'Ryu from Street Fighter with black hair and red eyes wearing a red hachimaki "
         "around his head' rather than 'He has black hair'. "
-        "Output ONLY the description prose. No tag lists, no explanations, no markdown."
+        "CRITICAL: Output ONLY the final description sentences themselves. Do NOT show any "
+        "reasoning, analysis, planning, checklists, restated rules, section labels, or drafts, and "
+        "do NOT wrap the output in quotes. No tag lists, no explanations, no markdown."
     ),
     'translate': (
         "You are a translator for image-generation prompts. "
@@ -202,6 +206,36 @@ def _clean_creative_tags(text: str) -> str:
     return text
 
 
+def _extract_final_nl(text: str) -> str:
+    """추론형 모델이 사고과정/체크리스트/규칙복창/초안을 함께 뱉을 때 최종 캡션만 추출.
+    - 충분히 긴 인용 블록("...")이 있으면 마지막 것을 최종 답으로 사용
+    - 없으면 마지막 prose 문단을 사용
+    일반(깔끔한) 응답은 그대로 통과."""
+    import re as _re
+    if not text:
+        return text
+    t = text.strip()
+    markers = ('* ', 'Check.', 'Wait', 'Let me', 'I should', 'Sentence 1', 'Sentence 2',
+               'Output ONLY', 'Start with a capital', 'NO commas', 'No commas', 'one more time',
+               'Re-read', 'Input:', 'Tags/Keywords', 'Additional Description', 'Character:',
+               'Appearance:', 'Action/Pose', 'instead of')
+    looks_reasoning = sum(1 for m in markers if m in t) >= 2
+    if not looks_reasoning:
+        return t
+    # 1) 마지막의 충분히 긴 인용 블록 (최종 답은 보통 따옴표 안 + 맨 뒤)
+    quotes = [q.strip() for q in _re.findall(r'"([^"]{40,})"', t)
+              if '*' not in q and 'Check' not in q and '. ' in q]
+    if quotes:
+        return quotes[-1]
+    # 2) 인용 없으면 마지막 prose 문단 (불릿/헤더/라벨 제외)
+    paras = [p.strip() for p in _re.split(r'\n\s*\n', t) if p.strip()]
+    for p in reversed(paras):
+        if (not p.startswith(('*', '#', '-', '•')) and '. ' in p
+                and 'Check' not in p and '*' not in p and ':' not in p[:20]):
+            return p
+    return t
+
+
 class OllamaClient:
     """Ollama REST API 래퍼"""
 
@@ -282,6 +316,7 @@ class OllamaClient:
                     clean_nl = _clean_creative_tags(clean_nl)
                     clean_nl = _format_creative(clean_nl)   # 본문 prose 스타일 강제(콤마X/대문자/마침표)
                 elif mode in ('nl_caption', 'nl_scene'):
+                    clean_nl = _extract_final_nl(clean_nl)   # 추론형 모델: 사고과정 제거하고 최종 캡션만
                     clean_nl = _enforce_nl_style(clean_nl)   # 순수 자연어: 콤마X/대문자/마침표
                 return clean_nl
             # 코드블록 제거
