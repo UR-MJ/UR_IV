@@ -975,7 +975,20 @@ class VueBridge(QObject):
             extra = json.loads(extra_json) if extra_json else {}
             from workers.ollama_worker import OllamaWorker
             url = extra.get('url', 'http://localhost:11434')
-            model = extra.get('model', 'gemma3:4b')
+            model = (extra.get('model') or '').strip()
+            # 모델 검증 — 설치 목록과 대조해 없으면 첫 설치 모델로 대체.
+            # (저장된 기본값 gemma3:4b 미설치, :latest 유무 등으로 모델 못 불러오던 문제 방지)
+            try:
+                from core.ollama_client import OllamaClient
+                installed = OllamaClient(base_url=url).list_models()
+                if installed:
+                    def _b(s): return (s or '').split(':')[0].lower()
+                    if not (model and any(m == model or _b(m) == _b(model) for m in installed)):
+                        model = installed[0]
+            except Exception:
+                pass
+            if not model:
+                model = 'gemma3:4b'
             extra_prompt = extra.get('prompt', '')
             if mode == 'creative':
                 # 창의 모드: 캐릭터의 실제 외견 태그를 DB에서 조회해 입력에 포함

@@ -6,7 +6,7 @@
 
     <main class="main-workspace">
       <!-- Left Panel -->
-      <aside class="side-panel left" v-if="showLeftPanel">
+      <aside class="side-panel left" v-show="showLeftPanel">
         <div class="panel-scroll" v-scroll-memory="'leftPanel'">
           <PromptPanel @toggle-extend="showExtendPanel = !showExtendPanel"
             @open-wildcard="openWildcardByName" />
@@ -513,7 +513,7 @@
       </section>
 
       <!-- Right: History -->
-      <aside class="side-panel right" v-if="showLeftPanel">
+      <aside class="side-panel right" v-show="showLeftPanel">
         <div class="hist-header">
           <h3>HISTORY</h3>
           <span class="count-badge">{{ historyImages.length }}</span>
