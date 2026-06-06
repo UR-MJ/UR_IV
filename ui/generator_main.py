@@ -63,7 +63,6 @@ class GeneratorMainUI(
             self.s1_widgets = {'prompt': type('P',(),{'installEventFilter':lambda *a:None})()}
             self.s2_widgets = {'prompt': type('P',(),{'installEventFilter':lambda *a:None})()}
             self.is_programmatic_change = False
-            self.is_automation_running = False
             self.generation_data = {}
             self.filtered_results = []
 
@@ -1600,7 +1599,6 @@ class GeneratorMainUI(
         self.start_generation()
 
     def _on_queue_completed(self, total_count: int):
-        self.is_automation_running = False
         self._queue_completed_count = total_count
         if hasattr(self, 'vue_bridge'):
             self.vue_bridge.queueCompleted.emit(json.dumps({'total': total_count}))

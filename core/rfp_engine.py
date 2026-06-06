@@ -86,87 +86,8 @@ def remove_collisions(main_tags: list[str],
 
 
 # ─────────────────────────────────────────────────────────────────
-# 2) 빈도 제한 (frequency limit)
+# 2) 카테고리 기반 필터링 (NSFW / 위치 / 색상 / 의상 등)
 # ─────────────────────────────────────────────────────────────────
-
-def frequency_limit(tags: list[str],
-                    freq_dict: dict[str, int],
-                    min_freq: int) -> tuple[list[str], list[str]]:
-    """빈도가 ``min_freq`` 미만인 태그 제거.
-
-    :param tags: 입력 태그
-    :param freq_dict: ``{tag_name: frequency_count}`` — 호출자가 제공
-    :param min_freq: 최소 등장 횟수. 미만이면 제거
-    :returns: ``(kept, removed)``
-    """
-    kept: list[str] = []
-    removed: list[str] = []
-    for t in tags:
-        if freq_dict.get(t, 0) >= min_freq:
-            kept.append(t)
-        else:
-            removed.append(t)
-    return kept, removed
-
-
-# ─────────────────────────────────────────────────────────────────
-# 3) 프롬프트 압축 (compress)
-# ─────────────────────────────────────────────────────────────────
-
-def compress_prompt(tags: list[str]) -> tuple[list[str], list[str]]:
-    """단어 단위 subset 관계인 태그 중 더 짧은 것 제거.
-
-    예: ``["blue hair", "long blue hair"]`` → ``["long blue hair"]``
-    ("blue hair"의 단어들이 "long blue hair"에 모두 포함됨)
-
-    :returns: ``(compressed, removed)``
-    """
-    split = [t.split() for t in tags]
-    removed: list[str] = []
-    i = 0
-    while i < len(split):
-        j = 0
-        merged = False
-        while j < len(split):
-            if i != j:
-                if all(w in split[j] for w in split[i]):
-                    if len(split[i]) <= len(split[j]):
-                        removed.append(" ".join(split[i]))
-                        del split[i]
-                        merged = True
-                        break
-                    else:
-                        removed.append(" ".join(split[j]))
-                        del split[j]
-                        j -= 1
-            j += 1
-        if not merged:
-            i += 1
-    compressed = [" ".join(s) for s in split]
-    return compressed, removed
-
-
-# ─────────────────────────────────────────────────────────────────
-# 4) 카테고리 기반 필터링 (NSFW / 위치 / 색상 / 의상 등)
-# ─────────────────────────────────────────────────────────────────
-
-def filter_blocked(tags: list[str],
-                   blocked_set: set[str],
-                   whitelist_set: Optional[set[str]] = None) -> tuple[list[str], list[str]]:
-    """``blocked_set``에 포함된 태그 제거. ``whitelist_set``에 있으면 유지.
-
-    :returns: ``(kept, removed)``
-    """
-    wl = whitelist_set or set()
-    kept: list[str] = []
-    removed: list[str] = []
-    for t in tags:
-        if t in blocked_set and t not in wl:
-            removed.append(t)
-        else:
-            kept.append(t)
-    return kept, removed
-
 
 def filter_contains(tags: list[str],
                     needles: Iterable[str]) -> tuple[list[str], list[str]]:
@@ -300,34 +221,6 @@ def _insert_after_keyword(prompts: list[str],
     return prompts
 
 
-def apply_conditional_commands(commands_text: str,
-                               prompts: list[str],
-                               prefix: list[str],
-                               postfix: list[str],
-                               rating: Optional[str] = None) -> list[str]:
-    """쉼표 구분된 명령 텍스트를 순서대로 적용.
-
-    조건 평가 시 prompts + prefix(가중치 마커 제거)를 합쳐서 검사.
-    ``#`` 로 시작하는 명령은 주석 처리(스킵).
-    """
-    if not commands_text or not commands_text.strip():
-        return prompts
-
-    strip_marks = str.maketrans("", "", "{}[]")
-    commands = [c.strip() for c in commands_text.split(",") if c.strip() and not c.strip().startswith("#")]
-
-    for cmd in commands:
-        try:
-            condition, body = parse_conditional_command(cmd)
-            # prefix는 가중치 마커 제거 후 조건 평가용으로 합침
-            prefix_clean = [t.translate(strip_marks).strip() for t in prefix if not t.startswith("#")]
-            if evaluate_condition(condition, prompts + prefix_clean, rating):
-                prompts = execute_command(prompts, body, prefix, postfix)
-        except Exception:
-            _logger.exception(f"conditional command failed: {cmd!r}")
-    return prompts
-
-
 # ─────────────────────────────────────────────────────────────────
 # 6) PromptPipeline 훅 팩토리
 # ─────────────────────────────────────────────────────────────────
@@ -340,47 +233,5 @@ def make_dedupe_hook() -> Callable:
     def hook(ctx) -> None:
         ctx.main_tags = remove_collisions(
             dedupe(ctx.main_tags), ctx.prefix_tags, ctx.postfix_tags
-        )
-    return hook
-
-
-def make_frequency_limit_hook(freq_dict: dict[str, int], min_freq: int) -> Callable:
-    """빈도 미달 태그 제거 훅."""
-    def hook(ctx) -> None:
-        kept, removed = frequency_limit(ctx.main_tags, freq_dict, min_freq)
-        ctx.main_tags = kept
-        ctx.metadata.setdefault("rfp_removed", []).extend(removed)
-    return hook
-
-
-def make_compress_hook() -> Callable:
-    """프롬프트 압축 훅 (subset 관계 단축)."""
-    def hook(ctx) -> None:
-        kept, removed = compress_prompt(ctx.main_tags)
-        ctx.main_tags = kept
-        ctx.metadata.setdefault("rfp_removed", []).extend(removed)
-    return hook
-
-
-def make_blocked_filter_hook(blocked: set[str],
-                             whitelist: Optional[set[str]] = None) -> Callable:
-    """블록 리스트 필터 훅 (NSFW / 카테고리)."""
-    def hook(ctx) -> None:
-        kept, removed = filter_blocked(ctx.main_tags, blocked, whitelist)
-        ctx.main_tags = kept
-        ctx.metadata.setdefault("rfp_removed", []).extend(removed)
-    return hook
-
-
-def make_conditional_commands_hook(commands_text: str,
-                                   rating_key: str = "rating") -> Callable:
-    """조건부 명령 훅. rating은 ``ctx.metadata[rating_key]``에서 읽음.
-
-    POST_PROCESSING 단계 등록 권장 (와일드카드 확장 전).
-    """
-    def hook(ctx) -> None:
-        rating = ctx.metadata.get(rating_key)
-        ctx.main_tags = apply_conditional_commands(
-            commands_text, ctx.main_tags, ctx.prefix_tags, ctx.postfix_tags, rating
         )
     return hook
