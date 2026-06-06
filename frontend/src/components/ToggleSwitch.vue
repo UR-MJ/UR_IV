@@ -5,9 +5,13 @@
   </button>
 </template>
 
-<script setup>
-defineProps({ modelValue: { type: Boolean, default: false }, size: { type: String, default: 'md' } })
-defineEmits(['update:modelValue'])
+<script setup lang="ts">
+// 첫 TypeScript 컴포넌트(② 점진 전환). 타입 기반 props/emits.
+withDefaults(defineProps<{ modelValue?: boolean; size?: 'sm' | 'md' }>(), {
+  modelValue: false,
+  size: 'md',
+})
+defineEmits<{ 'update:modelValue': [value: boolean] }>()
 </script>
 
 <style scoped>
