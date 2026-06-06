@@ -93,7 +93,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 
 <style scoped>
 .cp-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 2200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-.cp-modal { width: min(1150px, 96vw); height: min(880px, 92vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.cp-modal { width: min(1450px, 97vw); height: min(920px, 94vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 .cp-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .cp-header h3 { font-size: 17px; font-weight: 800; color: var(--text-primary); }
 .cp-sub { font-size: 11px; color: var(--text-muted); }
@@ -116,10 +116,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .cp-rule { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 11px; margin-bottom: 9px; display: flex; flex-direction: column; gap: 8px; }
 .cp-row { display: flex; align-items: center; gap: 7px; }
 .cp-kw { font-size: 12px; font-weight: 800; color: var(--text-muted); min-width: 16px; text-align: center; }
-.cp-input { flex: 1; min-width: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; color: var(--text-primary); font-size: 13px; }
+.cp-input { flex: 1 1 auto; min-width: 180px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; color: var(--text-primary); font-size: 13px; }
 .cp-input.neg { color: #fca5a5; }
 .cp-input:focus { outline: none; border-color: var(--accent); }
-.cp-sel { background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 9px 6px; color: var(--text-primary); font-size: 13px; }
+.cp-sel { flex: 0 0 auto; width: 72px; min-width: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 9px 4px; color: var(--text-primary); font-size: 12px; }
 .cp-rm { background: transparent; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
 .cp-add { width: 100%; padding: 6px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
 .cp-footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
