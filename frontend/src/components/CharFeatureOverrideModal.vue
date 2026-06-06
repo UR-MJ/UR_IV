@@ -35,22 +35,22 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getBackend } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
-const emit = defineEmits(['close'])
+const emit = defineEmits<{ close: [] }>()
 const hairLength = ref(false)
 const eyeColor = ref(false)
 
 function close() { emit('close') }
-function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
 
 async function save() {
-  const bk = await getBackend()
+  const bk: any = await getBackend()   // QWebChannel 백엔드 — 동적 타입
   if (bk && bk.setCharFeatureOverride) {
-    bk.setCharFeatureOverride(JSON.stringify({ hair_length: hairLength.value, eye_color: eyeColor.value }), (json) => { /* 응답 무시 가능 */ })
+    bk.setCharFeatureOverride(JSON.stringify({ hair_length: hairLength.value, eye_color: eyeColor.value }), (_json: string) => { /* 응답 무시 가능 */ })
   }
   requestAction('show_toast', { type: 'success', msg: 'override 설정 저장' })
   close()
@@ -58,9 +58,9 @@ async function save() {
 
 onMounted(async () => {
   window.addEventListener('keydown', onKey, true)
-  const bk = await getBackend()
+  const bk: any = await getBackend()
   if (bk && bk.getCharFeatureOverride) {
-    bk.getCharFeatureOverride((json) => {
+    bk.getCharFeatureOverride((json: string) => {
       try {
         const d = JSON.parse(json)
         hairLength.value = !!d.hair_length

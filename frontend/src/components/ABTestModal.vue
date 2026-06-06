@@ -40,12 +40,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getBackend } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
-const emit = defineEmits(['close'])
+const emit = defineEmits<{ close: [] }>()
 
 const promptA = ref('')
 const promptB = ref('')
@@ -54,22 +54,22 @@ const seed = ref(12345)
 const status = ref('')
 
 function close() { emit('close') }
-function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
 
 async function run() {
   if (!promptA.value.trim() && !promptB.value.trim()) {
     requestAction('show_toast', { type: 'info', msg: '프롬프트 A/B를 입력하세요' })
     return
   }
-  const bk = await getBackend()
+  const bk: any = await getBackend()   // QWebChannel 백엔드 — 동적 타입
   if (!bk || !bk.submitABTest) { close(); return }
   bk.submitABTest(JSON.stringify({
     prompt_a: promptA.value.trim(),
     prompt_b: promptB.value.trim(),
     negative: negative.value.trim(),
     seed: seed.value,
-  }), (json) => {
-    let r = null
+  }), (json: string) => {
+    let r: any = null
     try { r = JSON.parse(json) } catch {}
     if (r && r.ok) {
       requestAction('show_toast', { type: 'success', msg: `A/B 대기열 추가 (${r.added}건, 시드 ${r.seed})` })
@@ -82,10 +82,10 @@ async function run() {
 
 onMounted(async () => {
   window.addEventListener('keydown', onKey, true)
-  const bk = await getBackend()
+  const bk: any = await getBackend()
   if (bk && bk.getWidgetValue) {
-    bk.getWidgetValue('main_prompt_text', (v) => { promptA.value = v || ''; promptB.value = v || '' })
-    bk.getWidgetValue('neg_prompt_text', (v) => { negative.value = v || '' })
+    bk.getWidgetValue('main_prompt_text', (v: string) => { promptA.value = v || ''; promptB.value = v || '' })
+    bk.getWidgetValue('neg_prompt_text', (v: string) => { negative.value = v || '' })
   }
 })
 onUnmounted(() => window.removeEventListener('keydown', onKey, true))
