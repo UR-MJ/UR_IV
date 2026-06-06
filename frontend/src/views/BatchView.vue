@@ -284,7 +284,12 @@
       <div class="ad-settings">
         <h3>IMAGE CAPTION</h3>
         <label class="s-label">캡션 모델 (Ollama 비전)</label>
-        <input class="s-input" v-model="captionModel" @change="saveCaptionModel" placeholder="예: qwen2.5vl:7b" />
+        <div class="cap-model-row">
+          <CustomSelect v-if="ollamaModels.length" v-model="captionModel" :options="ollamaModels"
+            placeholder="모델 선택..." @update:modelValue="saveCaptionModel" />
+          <input v-else class="s-input" v-model="captionModel" @change="saveCaptionModel" placeholder="모델 로딩 중..." />
+          <button class="cap-refresh" @click="loadCaptionModels" title="모델 목록 새로고침">🔄</button>
+        </div>
         <label class="s-label">프롬프트</label>
         <textarea class="s-textarea" v-model="captionPrompt" @change="saveCaptionPrompt" rows="4"></textarea>
         <div class="cap-opts">
@@ -329,7 +334,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
@@ -386,9 +391,23 @@ const captionOverwrite = ref(false)
 const captionRunning = ref(false)
 const captionCur = ref(0)
 const captionTotal = ref(0)
+const ollamaModels = ref([])
 
 const captionUrl = () => window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
 function saveCaptionModel() { window.localStorage.setItem('ollamaCaptionModel', captionModel.value) }
+async function loadCaptionModels() {
+  const backend = await getBackend()
+  if (!backend.ollamaListModels) return
+  backend.ollamaListModels(captionUrl(), (json) => {
+    try {
+      const models = JSON.parse(json)
+      if (Array.isArray(models)) {
+        ollamaModels.value = models
+        if (!captionModel.value && models.length) { captionModel.value = models[0]; saveCaptionModel() }
+      }
+    } catch {}
+  })
+}
 function saveCaptionPrompt() { window.localStorage.setItem('captionPrompt', captionPrompt.value) }
 function clearCaption() { captionItems.value = [] }
 function statusLabel(s) {
@@ -598,8 +617,14 @@ function runSam3Batch() {
 // 외부에서 이미지 수신 (History/Gallery 우클릭 → "ADetailer 적용")
 defineProps({ initialAdPath: { type: String, default: '' } })
 
+// 캡션 탭을 열 때마다 모델 목록 새로고침
+watch(subTab, (v) => { if (v === 'caption') loadCaptionModels() })
+
 onMounted(async () => {
   const backend = await getBackend()
+
+  // 캡션 모델 드롭다운 — UI 시작 시 자동 새로고침
+  loadCaptionModels()
 
   // 업스케일러 로드
   if (backend.getUpscalers) {
@@ -742,6 +767,10 @@ onMounted(async () => {
 /* CAPTION 탭 */
 .s-textarea { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.4; }
 .s-textarea:focus { outline: none; border-color: var(--accent); }
+.cap-model-row { display: flex; gap: 6px; align-items: center; }
+.cap-model-row > :first-child { flex: 1; min-width: 0; }
+.cap-refresh { flex-shrink: 0; width: 32px; height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
+.cap-refresh:hover { color: var(--accent); border-color: var(--accent); }
 .cap-opts { display: flex; gap: 14px; margin: 8px 0; }
 .cap-opts label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
 .cap-pick { display: flex; gap: 8px; margin-top: 6px; }
