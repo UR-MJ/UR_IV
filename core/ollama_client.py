@@ -131,7 +131,14 @@ def _strip_channels(text: str) -> str:
     t = _re.sub(r'<\|(?:start|end|return|message|channel|assistant|system|user)\b[^>]*>?', '', t, flags=_re.IGNORECASE)
     # 4) 선두 채널 라벨 잔여물 (analysis/thought/commentary/final/assistantfinal)
     t = _re.sub(r'^\s*(?:assistant)?\s*(?:analysis|thought|commentary|final)\b[\s:>-]*', '', t, flags=_re.IGNORECASE)
-    return t.strip()
+    result = t.strip()
+    # 안전망: 과도한 제거로 비어버리면, 토큰만 제거한 보수적 버전으로 폴백 (빈 응답 오인 방지)
+    if not result and text.strip():
+        safe = _re.sub(r'<think>.*?</think>', '', text, flags=_re.DOTALL | _re.IGNORECASE)
+        safe = _re.sub(r'<\|[^<>]*?\|?>', '', safe)
+        safe = _re.sub(r'<[^<>]*?\|>', '', safe)
+        result = safe.strip()
+    return result
 
 
 def _enforce_nl_style(prose: str) -> str:
@@ -206,7 +213,6 @@ class OllamaClient:
             "system": system,
             "prompt": user_msg,
             "stream": False,
-            "think": False,   # thinking 모델(qwen3/gpt-oss)의 사고과정 출력 비활성화 (미지원 모델은 무시)
             "options": {
                 "temperature": 0.8 if is_nl else 0.7,
                 "num_predict": 1024 if is_nl else 500,
@@ -219,14 +225,6 @@ class OllamaClient:
                 json=payload,
                 timeout=self.timeout,
             )
-            # think 미지원 모델은 400을 반환 → think 빼고 1회 재시도
-            if r.status_code >= 400 and 'think' in payload:
-                payload.pop('think', None)
-                r = requests.post(
-                    f"{self.base_url}/api/generate",
-                    json=payload,
-                    timeout=self.timeout,
-                )
             r.raise_for_status()
             data = r.json()
             response = data.get('response', '').strip()
