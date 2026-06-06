@@ -296,6 +296,12 @@
           <label><input type="checkbox" v-model="captionSave" /> .txt 저장</label>
           <label><input type="checkbox" v-model="captionOverwrite" /> 기존 덮어쓰기</label>
         </div>
+        <label class="s-label">저장 위치</label>
+        <div class="cap-outdir">
+          <span class="cap-outdir-path" :title="captionOutDir || '이미지와 같은 폴더'">{{ captionOutDir || '이미지와 같은 폴더 (.txt 사이드카)' }}</span>
+          <button class="cap-refresh" @click="action('caption_pick_outdir')" title="저장 폴더 선택">📁</button>
+          <button v-if="captionOutDir" class="cap-refresh" @click="clearCaptionOutDir" title="기본값(이미지 옆)으로">↺</button>
+        </div>
         <div class="cap-pick">
           <button class="link-btn" @click="action('caption_pick_files')">📄 파일 선택</button>
           <button class="link-btn" @click="action('caption_pick_folder')">📁 폴더 선택</button>
@@ -388,6 +394,8 @@ const captionPrompt = ref(window.localStorage.getItem('captionPrompt')
   || 'Describe this image in detail, naming the main subject and listing appearance, clothing, pose, and background.')
 const captionSave = ref(true)
 const captionOverwrite = ref(false)
+const captionOutDir = ref(window.localStorage.getItem('captionOutDir') || '')
+function clearCaptionOutDir() { captionOutDir.value = ''; window.localStorage.removeItem('captionOutDir') }
 const captionRunning = ref(false)
 const captionCur = ref(0)
 const captionTotal = ref(0)
@@ -429,7 +437,7 @@ async function captionSingle(item) {
   if (!backend.captionImage) { item.status = ''; return }
   backend.captionImage(JSON.stringify({
     path: item.path, prompt: captionPrompt.value, model: captionModel.value,
-    url: captionUrl(), save: captionSave.value,
+    url: captionUrl(), save: captionSave.value, outDir: captionOutDir.value,
   }), (json) => {
     try {
       const d = JSON.parse(json)
@@ -448,7 +456,8 @@ async function captionAll() {
   if (!backend.startCaptionBatch) { captionRunning.value = false; return }
   backend.startCaptionBatch(JSON.stringify({
     files: captionItems.value.map(i => i.path), prompt: captionPrompt.value,
-    model: captionModel.value, url: captionUrl(), save: captionSave.value, overwrite: captionOverwrite.value,
+    model: captionModel.value, url: captionUrl(), save: captionSave.value,
+    overwrite: captionOverwrite.value, outDir: captionOutDir.value,
   }), (json) => {
     try { const d = JSON.parse(json); if (d.error) { requestAction('show_toast', { type: 'error', msg: d.error }); captionRunning.value = false } } catch {}
   })
@@ -457,7 +466,7 @@ async function captionAll() {
 async function saveCaptionItem(item) {
   const backend = await getBackend()
   if (!backend.saveCaption) return
-  backend.saveCaption(JSON.stringify({ path: item.path, caption: item.caption }), (json) => {
+  backend.saveCaption(JSON.stringify({ path: item.path, caption: item.caption, outDir: captionOutDir.value }), (json) => {
     try { const d = JSON.parse(json); if (d.ok) requestAction('show_toast', { type: 'success', msg: '캡션 저장됨' }) } catch {}
   })
 }
@@ -747,6 +756,10 @@ onMounted(async () => {
       }
     } catch {}
   })
+  onBackendEvent('captionOutDirSelected', (p) => {
+    captionOutDir.value = p
+    window.localStorage.setItem('captionOutDir', p)
+  })
   onBackendEvent('captionDone', (json) => {
     captionRunning.value = false
     try { const d = JSON.parse(json); requestAction('show_toast', { type: 'success', msg: `캡션 완료: ${d.ok}/${d.total}${d.failed ? ` (실패 ${d.failed})` : ''}` }) } catch {}
@@ -772,6 +785,8 @@ onMounted(async () => {
 .cap-refresh { flex-shrink: 0; width: 32px; height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
 .cap-refresh:hover { color: var(--accent); border-color: var(--accent); }
 .cap-opts { display: flex; gap: 14px; margin: 8px 0; }
+.cap-outdir { display: flex; gap: 6px; align-items: center; }
+.cap-outdir-path { flex: 1; min-width: 0; font-size: 11px; color: var(--text-secondary); background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cap-opts label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
 .cap-pick { display: flex; gap: 8px; margin-top: 6px; }
 .cap-clear { margin-top: 8px; align-self: flex-start; }

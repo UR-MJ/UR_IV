@@ -392,6 +392,26 @@ class TagIntelligence:
                 rest.append(t)
         return {"rest": rest, "groups": groups}
 
+    def remove_redundant_subtags(self, tags):
+        """덜 구체적인 태그 제거 — 어떤 태그 A의 단어들이 다른 '더 긴' 태그 B의 단어집합에
+        진부분집합으로 포함되면 A 제거 (더 구체적인 B만 남김).
+        예: muscular ⊂ muscular male → muscular 제거; dress ⊂ blue dress → dress 제거.
+        Returns (kept, removed)."""
+        items = []
+        for t in tags:
+            ws = frozenset(_norm(t).split())
+            items.append((t, ws))
+        kept, removed = [], []
+        for i, (t, w) in enumerate(items):
+            if not w:
+                kept.append(t)
+                continue
+            if any(j != i and w < w2 for j, (_t2, w2) in enumerate(items)):
+                removed.append(t)
+            else:
+                kept.append(t)
+        return kept, removed
+
     # ── ② color 페어링 결합 ──
     def pair_colors(self, tags):
         """분리된 단일 색상 단어를 바로 뒤 태그와 결합 (결합 결과가 실재 태그일 때만).

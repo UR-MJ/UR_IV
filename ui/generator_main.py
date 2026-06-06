@@ -926,6 +926,10 @@ class GeneratorMainUI(
                         self.vue_bridge.showNotification.emit('info', f'{len(imgs)}개 이미지 발견')
                     else:
                         self.vue_bridge.showNotification.emit('warning', '이미지가 없습니다')
+            elif action == 'caption_pick_outdir':
+                folder = QFileDialog.getExistingDirectory(self, "캡션 저장 폴더 선택")
+                if folder:
+                    self.vue_bridge.captionOutDirSelected.emit(folder.replace('\\', '/'))
 
             # ═══════ 클립보드 복사 ═══════
             elif action == 'copy_to_clipboard':

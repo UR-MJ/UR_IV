@@ -25,6 +25,7 @@ class VueBridge(QObject):
     captionFilesSelected = pyqtSignal(str)  # JSON [path] — 캡션 대상 이미지
     captionProgress = pyqtSignal(str)       # JSON {index,total,path,caption,error}
     captionDone = pyqtSignal(str)           # JSON {total,ok,failed}
+    captionOutDirSelected = pyqtSignal(str)  # 캡션 저장 폴더 경로
     i2iImageLoaded = pyqtSignal(str)     # file path
     galleryFolderLoaded = pyqtSignal(str)  # folder path
     inpaintImageLoaded = pyqtSignal(str)   # file path (PngInfo + InpaintView 공용)
@@ -1465,6 +1466,23 @@ class VueBridge(QObject):
             return json.dumps({"error": str(e)})
 
     @pyqtSlot(str, result=str)
+    def refineToSpecificTags(self, prompt: str) -> str:
+        """덜 구체적인(상위) 태그 제거 — muscular+muscular male → muscular male,
+        dress+blue dress → blue dress. Returns {result, before, after, removed:[...]}"""
+        try:
+            from core.tag_intelligence import get_tag_intelligence
+            tags = [t.strip() for t in (prompt or "").split(",") if t.strip()]
+            kept, removed = get_tag_intelligence().remove_redundant_subtags(tags)
+            return json.dumps({
+                "result": ", ".join(kept),
+                "before": len(tags),
+                "after": len(kept),
+                "removed": removed,
+            }, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @pyqtSlot(str, result=str)
     def getClothingRegions(self, tags_json: str) -> str:
         """④ 의류 태그를 부위(region)별로 그룹화 → [{region, label, tags:[...]}]."""
         try:
@@ -2016,9 +2034,17 @@ class VueBridge(QObject):
             return json.dumps({'error': str(e)})
 
     # ── 이미지 캡션 (Ollama 비전 모델, taggui 방식 .txt 사이드카) ──
+    def _caption_txt_path(self, image_path: str, out_dir: str = '') -> str:
+        """캡션 .txt 경로. out_dir 지정+유효 시 그 폴더에 {basename}.txt, 아니면 이미지 옆."""
+        import os
+        if out_dir and os.path.isdir(out_dir):
+            base = os.path.splitext(os.path.basename(image_path))[0]
+            return os.path.join(out_dir, base + '.txt')
+        return os.path.splitext(image_path)[0] + '.txt'
+
     @pyqtSlot(str, result=str)
     def captionImage(self, payload_json: str) -> str:
-        """단일 이미지 캡션. payload {path, prompt, model, url, save}. → {caption, txtPath, saved}."""
+        """단일 이미지 캡션. payload {path, prompt, model, url, save, outDir}. → {caption, txtPath, saved}."""
         try:
             import os
             from core.ollama_client import OllamaClient
@@ -2031,7 +2057,7 @@ class VueBridge(QObject):
                 return json.dumps({"error": "캡션 모델을 지정하세요"})
             url = p.get('url') or 'http://localhost:11434'
             cap = OllamaClient(url, model).caption_image(path, p.get('prompt', ''))
-            txt = os.path.splitext(path)[0] + '.txt'
+            txt = self._caption_txt_path(path, p.get('outDir', ''))
             saved = False
             if p.get('save', True):
                 with open(txt, 'w', encoding='utf-8') as f:
@@ -2061,6 +2087,12 @@ class VueBridge(QObject):
             prompt = p.get('prompt', '')
             save = bool(p.get('save', True))
             overwrite = bool(p.get('overwrite', False))
+            out_dir = p.get('outDir', '') or ''
+            if out_dir:
+                try:
+                    os.makedirs(out_dir, exist_ok=True)
+                except Exception:
+                    pass
 
             def _emit(d):
                 self.captionProgress.emit(json.dumps(d, ensure_ascii=False))
@@ -2069,7 +2101,7 @@ class VueBridge(QObject):
                 client = OllamaClient(url, model)
                 total, ok, failed = len(files), 0, 0
                 for i, path in enumerate(files):
-                    txt = os.path.splitext(path)[0] + '.txt'
+                    txt = self._caption_txt_path(path, out_dir)
                     pn = path.replace('\\', '/')
                     if save and not overwrite and os.path.exists(txt):
                         try:
@@ -2112,14 +2144,20 @@ class VueBridge(QObject):
 
     @pyqtSlot(str, result=str)
     def saveCaption(self, payload_json: str) -> str:
-        """캡션을 .txt 사이드카로 저장. payload {path, caption}. → {ok, txtPath}."""
+        """캡션을 .txt 사이드카로 저장. payload {path, caption, outDir}. → {ok, txtPath}."""
         try:
             import os
             p = json.loads(payload_json) if payload_json else {}
             path = p.get('path', '')
             if not path:
                 return json.dumps({"error": "경로 없음"})
-            txt = os.path.splitext(path)[0] + '.txt'
+            out_dir = p.get('outDir', '') or ''
+            if out_dir:
+                try:
+                    os.makedirs(out_dir, exist_ok=True)
+                except Exception:
+                    pass
+            txt = self._caption_txt_path(path, out_dir)
             with open(txt, 'w', encoding='utf-8') as f:
                 f.write(p.get('caption', '') or '')
             return json.dumps({"ok": True, "txtPath": txt.replace('\\', '/')}, ensure_ascii=False)

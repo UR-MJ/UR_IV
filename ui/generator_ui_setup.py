@@ -112,6 +112,7 @@ class UISetupMixin:
         self._init_prompt_proxies()
         self._init_settings_proxies()
         self._init_button_proxies()
+        self._preload_loras()   # LoRA 목록 백그라운드 프리로드 (매니저 첫 오픈 대기 제거)
 
         # ── 호환성 더미 (Python 백엔드 코드에서 참조하는 속성들) ──
         self.vue_bridge.set_action_handler(self._handle_vue_action)
@@ -632,7 +633,7 @@ class UISetupMixin:
         self.height_input.setText(w)
 
     def _open_lora_manager(self):
-        """LoRA 브라우저 다이얼로그 열기"""
+        """LoRA 매니저 다이얼로그 열기"""
         from widgets.lora_manager import LoraManagerDialog
         from backends import get_backend
         try:
@@ -643,6 +644,28 @@ class UISetupMixin:
         dlg.lora_inserted.connect(self._on_lora_inserted)
         dlg.loras_batch_inserted.connect(self._on_lora_batch_inserted)
         dlg.exec()
+
+    def _preload_loras(self):
+        """앱 시작 시 LoRA 목록을 백그라운드로 미리 로드 → 매니저 첫 오픈 시 대기 없음.
+        LoraManagerDialog._lora_cache(클래스 캐시)를 워밍한다."""
+        import threading
+
+        def _do():
+            try:
+                import time as _t
+                _t.sleep(2.0)   # 백엔드 연결 대기
+                from backends import get_backend
+                from widgets.lora_manager import LoraManagerDialog
+                backend = get_backend()
+                if backend is None:
+                    return
+                loras = backend.get_loras()
+                if loras:
+                    LoraManagerDialog._lora_cache = loras
+                    print(f"[LoRA] 프리로드 완료: {len(loras)}개")
+            except Exception as e:
+                print(f"[LoRA] 프리로드 건너뜀: {e}")
+        threading.Thread(target=_do, daemon=True).start()
 
     def _on_lora_inserted(self, lora_text: str):
         """LoRA를 활성 패널에 추가 + Vue로 전달"""

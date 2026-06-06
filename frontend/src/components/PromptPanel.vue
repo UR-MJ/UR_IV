@@ -13,7 +13,6 @@
       <div class="prompt-actions">
         <button class="optimize-btn" @click="optimizePrompt">🧹 OPTIMIZE</button>
         <button class="optimize-btn" @click="toggleSeparate" title="표정/배경/포즈/사물/메타 태그를 분류해서 제거하거나 추출">🏷 분류</button>
-        <button class="optimize-btn" @click="pairColors" title="분리된 색상 단어를 뒤 태그와 결합 (예: blue, dress → blue dress)">🎨 색상결합</button>
         <span class="opt-result" v-if="optResult">{{ optResult }}</span>
       </div>
       <!-- ⑤ 카테고리 분리 토글 -->
@@ -165,7 +164,9 @@
         <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <details class="input-group exclude-section">
-        <summary class="exclude-toggle">EXCLUDE (LOCAL) ▾ <button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true">🔍 MANAGER</button></summary>
+        <summary class="exclude-toggle">EXCLUDE (LOCAL) ▾
+          <button class="excl-mgr-btn" @click.prevent.stop="refineSpecific" title="덜 구체적인 상위 태그 제거 (muscular+muscular male → muscular male, dress+blue dress → blue dress)">🎯 구체화</button>
+          <button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true">🔍 MANAGER</button></summary>
         <div class="exclude-help">
           <span>단어 → 포함하는 모든 태그 제외 (short → short hair, very short hair)</span>
           <span>*단어 → 완전 일치만 제외 (*blue hair → blue hair만)</span>
@@ -650,17 +651,19 @@ async function applySeparate(mode) {
 }
 
 // ② color 페어링 결합
-async function pairColors() {
+// 🎯 구체화 — 덜 구체적인(상위) 태그 제거 (muscular+muscular male → muscular male)
+async function refineSpecific() {
   const backend = await getBackend()
-  if (!backend || !backend.pairColors) return
-  backend.pairColors(widgets.main_prompt_text || '', (json) => {
+  if (!backend || !backend.refineToSpecificTags) return
+  backend.refineToSpecificTags(widgets.main_prompt_text || '', (json) => {
     try {
       const d = JSON.parse(json)
-      if (d.error) { requestAction('show_toast', { type: 'error', msg: '색상결합 실패: ' + d.error }); return }
+      if (d.error) { requestAction('show_toast', { type: 'error', msg: '구체화 실패: ' + d.error }); return }
       widgets.main_prompt_text = d.result || ''
-      optResult.value = d.merged > 0 ? `색상 ${d.merged}개 결합` : '결합할 색상 없음'
+      const n = (d.removed || []).length
+      optResult.value = n > 0 ? `상위태그 ${n}개 제거: ${d.removed.join(', ')}` : '제거할 상위태그 없음'
       nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
-      setTimeout(() => { optResult.value = '' }, 4000)
+      setTimeout(() => { optResult.value = '' }, 5000)
     } catch {}
   })
 }

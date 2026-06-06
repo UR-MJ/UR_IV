@@ -41,7 +41,7 @@ class LoraManagerDialog(QDialog):
 
     def __init__(self, backend=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("LoRA 관리자")
+        self.setWindowTitle("LoRA 매니저")
         self.setMinimumSize(500, 600)
         self.resize(550, 700)
         self.setStyleSheet(f"background-color: {get_color('bg_secondary')}; color: {get_color('text_primary')};")
