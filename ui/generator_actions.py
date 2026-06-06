@@ -495,7 +495,71 @@ class ActionsMixin:
         self._wait_end_time = 0
 
         self.auto_current_repeat += 1
+
+        # 생성 시 태그→자연어 자동 변환 (비동기 worker — UI 안 멈춤).
+        # 이미 변환된 프롬프트(반복 생성 등)는 문자열 비교로 건너뜀 → 누적 방지.
+        # 큐 우선 항목은 _automation_generate를 거치지 않으므로 자연스럽게 제외됨.
+        if getattr(self, '_auto_nl_enabled', False) and not getattr(self, '_auto_processing_queue', False):
+            cur = self.main_prompt_text.toPlainText().strip()
+            if cur and cur != getattr(self, '_auto_nl_last_output', None):
+                if self._start_auto_nl_then_generate(cur):
+                    return   # worker 완료 콜백에서 start_generation 호출
         self.start_generation()
+
+    def _start_auto_nl_then_generate(self, base_tags: str) -> bool:
+        """태그→nl_caption 변환을 비동기로 시작. 성공 시 True(호출자는 start_generation 생략)."""
+        try:
+            from workers.ollama_worker import OllamaWorker
+            url = getattr(self, '_auto_nl_url', '') or 'http://localhost:11434'
+            model = getattr(self, '_auto_nl_model', '') or ''
+            # 모델 검증 (미설치/별칭 문제 방지) — list_models는 빠른 로컬 호출
+            try:
+                from core.ollama_client import OllamaClient
+                installed = OllamaClient(base_url=url).list_models()
+                if installed:
+                    def _b(s): return (s or '').split(':')[0].lower()
+                    if not (model and any(m == model or _b(m) == _b(model) for m in installed)):
+                        model = installed[0]
+            except Exception:
+                pass
+            if not model:
+                model = 'gemma3:4b'
+            self._auto_nl_base = base_tags
+            w = OllamaWorker(url, model, base_tags, 'nl_caption', '', self)
+            w.finished.connect(self._on_auto_nl_done)
+            w.error.connect(self._on_auto_nl_error)
+            self._auto_nl_worker = w
+            if hasattr(self, 'show_status'):
+                self.show_status("🅣→🅝 자연어 변환 중…")
+            w.start()
+            return True
+        except Exception as e:
+            print(f"[AutoNL] 변환 시작 실패(태그로 생성): {e}")
+            return False
+
+    def _on_auto_nl_done(self, result: str):
+        """변환 완료 → 태그 뒤에 자연어 추가 → 생성 (UI 스레드에서 실행됨)."""
+        try:
+            import json as _json
+            d = _json.loads(result)
+            nl = (d.get('tags') or '').strip()
+            base = getattr(self, '_auto_nl_base', '') or ''
+            if nl:
+                combined = (base + ', ' + nl) if base else nl
+                self._auto_nl_last_output = combined
+                self.main_prompt_text.setPlainText(combined)
+                if hasattr(self, 'update_total_prompt_display'):
+                    self.update_total_prompt_display()
+        except Exception as e:
+            print(f"[AutoNL] 결과 처리 실패: {e}")
+        if self.is_automating:
+            self.start_generation()
+
+    def _on_auto_nl_error(self, err: str):
+        """변환 실패 → 원본 태그 그대로 생성."""
+        print(f"[AutoNL] 변환 실패(태그로 생성): {err}")
+        if self.is_automating:
+            self.start_generation()
 
     def _ensure_wait_timer(self):
         """자동화 대기 카운트다운 타이머 보장 (100ms 간격)."""

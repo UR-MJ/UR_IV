@@ -694,6 +694,10 @@ class GeneratorMainUI(
                     # F2: 정기 cleanup 주기 (LoRA patches 누적 회피용, 0=비활성)
                     'cleanupEveryN': int(payload.get('cleanupEveryN', 0)),
                 }
+                # 생성 시 태그→자연어 자동 변환 (자동화 루프에서 nl_caption 적용)
+                self._auto_nl_enabled = bool(payload.get('autoNl', False))
+                self._auto_nl_url = str(payload.get('ollamaUrl', '') or 'http://localhost:11434')
+                self._auto_nl_model = str(payload.get('ollamaModel', '') or '')
                 # queue_manager에 즉시 반영
                 try:
                     if hasattr(self, 'queue_manager'):

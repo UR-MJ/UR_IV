@@ -1140,6 +1140,7 @@ let _nlGenResolve = null
 watch(autoNlGen, (v) => {
   try { window.localStorage.setItem('autoNlGen', v ? 'true' : 'false') } catch {}
   saveUiPrefs({ autoNlGen: v })
+  syncAutomationSettings()   // 자동화 백엔드에도 즉시 반영 (실행 중 토글 대비)
 })
 const autoGenCount = ref(0)
 const autoWaiting = ref(false)
@@ -1193,6 +1194,10 @@ function syncAutomationSettings() {
     allowDupes: !!autoSettings.allowDupes,
     maxRetries: Number.isFinite(maxRetries) && maxRetries >= 0 ? maxRetries : 2,
     cleanupEveryN: Number.isFinite(cleanupEveryN) && cleanupEveryN >= 0 ? cleanupEveryN : 0,
+    // 자동화 중 태그→자연어 자동 변환 (백엔드 루프가 nl_caption 적용)
+    autoNl: autoNlGen.value,
+    ollamaUrl: window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434',
+    ollamaModel: window.localStorage.getItem('ollamaModel') || 'gemma3:4b',
   })
 }
 
@@ -1773,8 +1778,9 @@ async function doGenerate() {
     if (tags && tags !== _lastAutoNl.value) {
       const nl = await _convertTagsToNl(tags)
       if (nl && nl.trim()) {
-        storeWidgets.main_prompt_text = nl.trim()
-        _lastAutoNl.value = nl.trim()
+        const combined = tags + ', ' + nl.trim()   // 태그 뒤에 자연어 추가 ('main에 넣기'와 동일)
+        storeWidgets.main_prompt_text = combined
+        _lastAutoNl.value = combined
         await nextTick()
         await new Promise(r => setTimeout(r, 60))   // 위젯이 백엔드로 동기화될 여유
       }
