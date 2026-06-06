@@ -22,6 +22,18 @@ PyQt6(백엔드) + Vue 3 SPA(프론트) 데스크탑 AI 이미지 생성기. (�
 - 위젯 프록시: `ui/widget_proxies.py` — Vue `storeWidgets.<id>` ↔ 프록시 widget_id
 - 상태 저장소: `frontend/src/stores/widgetStore.js`
 
+## 작업 방식 — 작은 단일책임 파일 선호 (중요)
+- **거대 파일보다 작은 파일이 낫다.** 부분만 정확히 읽고 고칠 수 있고, 버그가 격리되며,
+  전체를 안 읽어도 돼 빠르고 실수가 적다. (이게 App.vue 분할·utils/core/tabs 분리의 이유)
+- 큰 파일(App.vue ~2600줄, `ui/generator_main.py` 등)을 만질 땐 **먼저 grep으로 위치를 찾고
+  Read는 offset/limit로 해당 부분만** — 통째로 로드하지 말 것.
+- **새 응집 기능은 거대 파일에 더하지 말고 별도 모듈/composable로 만든다.**
+  - 프론트: `frontend/src/composables/use*.js` (예: `useLoraStack`/`useHighRes`/`useRatingFilter`).
+    App.vue는 `<script setup>` 최상위 destructure로 노출 — **템플릿이 쓰는 이름 전부 destructure**
+    해야 함(누락 시 빌드는 통과해도 런타임에 깨짐). 공유 헬퍼(`saveUiPrefs`/`addToast`)는 주입.
+  - 백엔드: 순수 로직은 Qt에서 분리해 `core/`·`utils/`로 (테스트도 같이).
+- 분할/추출은 **동작 보존(위치만 이동)** 원칙 + 추출마다 `npm run build`/`run_tests.py`/스모크.
+
 ## 브리지 계약 (불일치 = 버그 주원인)
 - 액션: Vue `requestAction(name, payload)` / `action(name)` → `generator_main._handle_vue_action`
   의 `action == 'name'` 또는 `action in ('a','b')`
