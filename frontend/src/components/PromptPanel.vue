@@ -236,7 +236,7 @@
                   @click.stop ref="exRuleEditRef" />
                 <!-- 표시 모드 -->
                 <span v-else class="em-rule-text" @dblclick.stop="startEditExRule(ri)">{{ rule }}</span>
-                <span class="em-match-count">{{ excludeMatches[ri]?.length || '...' }}</span>
+                <span class="em-match-count">{{ excludeMatches[rule]?.length || '...' }}</span>
                 <button class="em-rule-rm" @click.stop="removeExcludeRule(ri)">✕</button>
               </div>
               <div v-if="excludeRules.length === 0" class="em-empty-sm">제외 규칙 없음</div>
@@ -472,7 +472,7 @@ const showExcludeManager = ref(false)
 const excludeRuleCount = computed(() =>
   (widgets.exclude_prompt_local_input || '').split(',').filter((t: string) => t.trim()).length)
 const selectedExRule = ref<any>(-1)
-const excludeMatches = ref<Record<string, string[]>>({})  // {ruleIdx: [tags]}
+const excludeMatches = ref<Record<string, string[]>>({})  // {규칙텍스트: [tags]} — 인덱스 아닌 규칙 문자열로 키잉(중간 삭제/순서변경에도 안 어긋남)
 
 const excludeRules = computed(() => {
   const text = widgets.exclude_prompt_local_input || ''
@@ -480,7 +480,8 @@ const excludeRules = computed(() => {
 })
 
 const currentExMatches = computed(() => {
-  return excludeMatches.value[selectedExRule.value] || []
+  const r = excludeRules.value[selectedExRule.value]
+  return r ? (excludeMatches.value[r] || []) : []
 })
 
 async function loadExcludeMatches(rule: string) {
@@ -490,7 +491,7 @@ async function loadExcludeMatches(rule: string) {
     try {
       const tags = JSON.parse(json)
       if (Array.isArray(tags)) {
-        excludeMatches.value = { ...excludeMatches.value, [selectedExRule.value]: tags }
+        excludeMatches.value = { ...excludeMatches.value, [rule]: tags }
       }
     } catch {}
   })
