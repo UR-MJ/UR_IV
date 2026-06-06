@@ -1332,9 +1332,14 @@ async function ensureOllamaModel() {
         const models = JSON.parse(json)
         if (!Array.isArray(models) || models.length === 0) return
         const cur = window.localStorage.getItem('ollamaModel') || ''
-        if (!cur || !models.includes(cur)) {
-          window.localStorage.setItem('ollamaModel', models[0])
-          requestAction('save_ui_prefs', { ollamaModel: models[0], ollamaUrl: url })
+        // 태그(:latest 등) 차이를 허용하는 관대한 매칭 — 직접 추가한 커스텀 모델도 유지.
+        // base 매칭되면 실제 목록 이름으로 정규화, 전혀 없으면 첫 모델로 폴백.
+        const base = (s) => (s || '').split(':')[0].toLowerCase()
+        const match = models.includes(cur) ? cur : models.find((m) => cur && base(m) === base(cur))
+        const next = match || models[0]
+        if (next && next !== cur) {
+          window.localStorage.setItem('ollamaModel', next)
+          requestAction('save_ui_prefs', { ollamaModel: next, ollamaUrl: url })
         }
       } catch {}
     })

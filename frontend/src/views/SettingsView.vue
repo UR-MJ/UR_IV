@@ -611,8 +611,14 @@ async function autoLoadOllamaModels() {
       const models = JSON.parse(json)
       if (Array.isArray(models) && models.length > 0) {
         ollamaModels.value = models
-        if (ollamaModel.value && !models.includes(ollamaModel.value)) {
-          ollamaModel.value = models[0]
+        // 태그 차이 허용: base 매칭이면 목록 이름으로 정규화, 전혀 없으면 첫 모델로
+        const base = (s) => (s || '').split(':')[0].toLowerCase()
+        const match = models.includes(ollamaModel.value)
+          ? ollamaModel.value
+          : models.find((m) => ollamaModel.value && base(m) === base(ollamaModel.value))
+        const next = match || models[0]
+        if (next && next !== ollamaModel.value) {
+          ollamaModel.value = next
           saveOllamaSettings()
         }
       } else {

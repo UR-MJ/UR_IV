@@ -330,6 +330,7 @@
               <div class="cap-actions">
                 <button class="cap-btn" @click="captionSingle(it)" :disabled="captionRunning">🏷 캡션</button>
                 <button class="cap-btn" @click="saveCaptionItem(it)">💾 저장</button>
+                <button class="cap-btn t2i" @click="sendCaptionToT2I(it)" :disabled="!it.caption" title="이 캡션을 T2I 메인 프롬프트에 추가하고 이동">→ T2I</button>
               </div>
             </div>
           </div>
@@ -341,10 +342,13 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { getBackend, onBackendEvent } from '../bridge.js'
-import { requestAction } from '../stores/widgetStore.js'
+import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
 
+const router = useRouter()
+const widgets = useWidgetStore()
 const subTab = ref('batch')
 const action = (name, payload = {}) => requestAction(name, payload)
 const basename = (p) => typeof p === 'string' ? p.split('/').pop().split('\\').pop() : p.name || p
@@ -469,6 +473,16 @@ async function saveCaptionItem(item) {
   backend.saveCaption(JSON.stringify({ path: item.path, caption: item.caption, outDir: captionOutDir.value }), (json) => {
     try { const d = JSON.parse(json); if (d.ok) requestAction('show_toast', { type: 'success', msg: '캡션 저장됨' }) } catch {}
   })
+}
+
+// 캡션을 T2I 메인 프롬프트에 추가하고 T2I 탭으로 이동
+function sendCaptionToT2I(item) {
+  const cap = (item.caption || '').trim()
+  if (!cap) { requestAction('show_toast', { type: 'warning', msg: '캡션이 비어있습니다' }); return }
+  const cur = (widgets.main_prompt_text || '').trim().replace(/[,\s]+$/, '')
+  widgets.main_prompt_text = cur ? (cur + ', ' + cap) : cap
+  router.push('/')   // T2I 탭 (path '/')
+  requestAction('show_toast', { type: 'success', msg: 'T2I 프롬프트에 추가했습니다' })
 }
 
 // ── ADetailer ──
@@ -806,6 +820,8 @@ onMounted(async () => {
 .cap-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: 10px; font-weight: 700; padding: 4px 10px; cursor: pointer; }
 .cap-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .cap-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cap-btn.t2i { color: var(--accent); border-color: rgba(226,179,64,0.4); }
+.cap-btn.t2i:hover:not(:disabled) { background: var(--accent); color: #000; }
 .tab-body { flex: 1; overflow-y: auto; padding: 20px; }
 
 .panel { max-width: 500px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
