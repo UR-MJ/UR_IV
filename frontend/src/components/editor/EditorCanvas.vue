@@ -78,6 +78,8 @@ let stampAccum = 0
 let maskUndoStack: Uint8Array[] = []
 let maskRedoStack: Uint8Array[] = []
 const MAX_MASK_UNDO = 10
+const maskUndoCount = ref(0)   // 버튼 disabled 반응형 (마스크 undo/redo 가능 여부)
+const maskRedoCount = ref(0)
 let savedZoom = 1, savedRotation = 0, savedPanX = 0, savedPanY = 0
 let pristineImg: HTMLCanvasElement | null = null  // 원본 이미지 (모자이크 지우개용)
 let edgeMapData: Uint8Array | null = null  // Canny edge map (자석 올가미용) — Uint8Array
@@ -236,19 +238,28 @@ function saveMaskState() {
     maskUndoStack.push(new Uint8Array(maskData))
     while (maskUndoStack.length > MAX_MASK_UNDO) maskUndoStack.shift()
     maskRedoStack = []
+    maskUndoCount.value = maskUndoStack.length
+    maskRedoCount.value = 0
   }
 }
-function undoMask() {
-  if (maskUndoStack.length === 0 || !maskData) return
+// 마스크를 한 단계 되돌림. 되돌렸으면 true(이미지 undo로 안 넘어가도록), 없으면 false.
+function undoMask(): boolean {
+  if (maskUndoStack.length === 0 || !maskData) return false
   maskRedoStack.push(new Uint8Array(maskData))
   maskData.set(maskUndoStack.pop()!)
+  maskUndoCount.value = maskUndoStack.length
+  maskRedoCount.value = maskRedoStack.length
   renderMaskOverlay(); emitMaskBounds()
+  return true
 }
-function redoMask() {
-  if (maskRedoStack.length === 0 || !maskData) return
+function redoMask(): boolean {
+  if (maskRedoStack.length === 0 || !maskData) return false
   maskUndoStack.push(new Uint8Array(maskData))
   maskData.set(maskRedoStack.pop()!)
+  maskUndoCount.value = maskUndoStack.length
+  maskRedoCount.value = maskRedoStack.length
   renderMaskOverlay(); emitMaskBounds()
+  return true
 }
 
 function onMouseDown(e: PointerEvent) {
@@ -616,6 +627,10 @@ function onWheel(e: WheelEvent) {
 function clearSelection() {
   if (maskData) maskData.fill(0)
   hasMask.value = false; lassoPoints = []
+  // 마스크가 비워지면 마스크 히스토리도 리셋 — 이미지 작업 후 stale 마스크 undo가
+  // 이미지 undo를 가리지 않도록(통합 undo/redo 일관성).
+  maskUndoStack = []; maskRedoStack = []
+  maskUndoCount.value = 0; maskRedoCount.value = 0
   renderMaskOverlay()
 }
 
@@ -659,7 +674,7 @@ function loadMaskFromBase64(b64: string) {
 // zoom/rotation 초기화
 function resetView() { resetTransform() }  // 하위 호환 alias
 
-defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, loadEdgeMap, drawAll, resetView, resetTransform, undoMask, redoMask })
+defineExpose({ clearSelection, getSelection, getMaskBase64, loadMaskFromBase64, loadEdgeMap, drawAll, resetView, resetTransform, undoMask, redoMask, maskUndoCount, maskRedoCount })
 
 onMounted(() => {
   if (props.imageSrc) loadNewImage(props.imageSrc, false)

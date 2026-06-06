@@ -10,10 +10,10 @@
           <button class="bar-btn" @click="pasteFromClipboard" title="Ctrl+V">📋 붙여넣기</button>
         </div>
         <div class="bar-group center">
-          <button class="bar-btn" @click="doUndo" :disabled="undoStack.length <= 1" title="Ctrl+Z">
+          <button class="bar-btn" @click="onUndo" :disabled="undoStack.length <= 1 && !canvasRef?.maskUndoCount" title="Ctrl+Z (마스킹 우선)">
             ↩ Undo <span class="bar-counter">({{ Math.max(0, undoStack.length - 1) }}/{{ MAX_UNDO }})</span>
           </button>
-          <button class="bar-btn" @click="doRedo" :disabled="redoStack.length === 0" title="Ctrl+Y">
+          <button class="bar-btn" @click="onRedo" :disabled="redoStack.length === 0 && !canvasRef?.maskRedoCount" title="Ctrl+Y (마스킹 우선)">
             ↪ Redo <span class="bar-counter">({{ redoStack.length }})</span>
           </button>
           <span class="bar-sep">|</span>
@@ -305,6 +305,9 @@ function doRedo() {
   imagePath.value = path
   imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
 }
+// 통합 undo/redo — 마스킹이 있으면 마스킹 먼저, 없으면 이미지 작업. (버튼·Ctrl+Z/Y 공용)
+function onUndo() { if (canvasRef.value?.undoMask()) return; doUndo() }
+function onRedo() { if (canvasRef.value?.redoMask()) return; doRedo() }
 
 async function doOp(operation: string, params: any = {}) {
   if (!imagePath.value) return
@@ -598,15 +601,15 @@ function onEditorKeyDown(e: KeyboardEvent) {
   // — Editor 탭에서는 Editor undo가 우선권을 가짐 (사용자 명시 요구사항)
   if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z') {
     e.preventDefault(); e.stopImmediatePropagation()
-    canvasRef.value?.redoMask() || doRedo(); return
+    onRedo(); return
   }
   if (e.ctrlKey && e.key.toLowerCase() === 'z') {
     e.preventDefault(); e.stopImmediatePropagation()
-    canvasRef.value?.undoMask() || doUndo(); return
+    onUndo(); return
   }
   if (e.ctrlKey && e.key.toLowerCase() === 'y') {
     e.preventDefault(); e.stopImmediatePropagation()
-    canvasRef.value?.redoMask() || doRedo(); return
+    onRedo(); return
   }
   if (e.key === 'Escape') canvasRef.value?.clearSelection()
 }
