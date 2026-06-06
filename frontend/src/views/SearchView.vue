@@ -370,6 +370,7 @@ const fields = reactive([
 
 const results = ref([])
 const filteredResults = ref([])
+const deepBase = ref([])  // 심층검색 결과(매니저 필터 적용 전 베이스) — rating 등 매니저 필터와 합성
 const lastResults = ref([])  // 검색 폼으로 돌아가도 보존
 const previewIdx = ref(0)
 const searching = ref(false)
@@ -568,13 +569,14 @@ async function search() {
 }
 
 function newSearch() {
-  results.value = []; filteredResults.value = []; previewIdx.value = 0
+  results.value = []; deepBase.value = []; filteredResults.value = []; previewIdx.value = 0
   deepInclude.value = ''; deepExclude.value = ''; isFiltered.value = false
   // lastResults는 보존 — 검색 폼에서 다시 볼 수 있음
 }
 
 function restoreLastResults() {
   results.value = lastResults.value
+  deepBase.value = lastResults.value
   filteredResults.value = lastResults.value
   previewIdx.value = 0
   viewMode.value = 'list'
@@ -583,6 +585,7 @@ function restoreLastResults() {
 
 function restoreAndRandom() {
   results.value = lastResults.value
+  deepBase.value = lastResults.value
   filteredResults.value = lastResults.value
   previewIdx.value = Math.floor(Math.random() * lastResults.value.length)
   viewMode.value = 'single'
@@ -642,6 +645,7 @@ onMounted(() => {
       if (Array.isArray(active) && active.length > 0) {
         const base = (Array.isArray(full) && full.length) ? full : active
         results.value = base; lastResults.value = base   // 전체(필터 해제 베이스)
+        deepBase.value = active                           // 심층검색 베이스 = 복원된 표시 셋
         filteredResults.value = active                    // 표시 = 필터된 셋
         statusText.value = `${active.length.toLocaleString()} MATCHES (디스크 복원)`
         return
@@ -656,6 +660,7 @@ onMounted(() => {
       if (Array.isArray(active) && active.length > 0) {
         const base = (Array.isArray(full) && full.length) ? full : active
         results.value = base; lastResults.value = base
+        deepBase.value = active
         filteredResults.value = active
         statusText.value = `${active.length.toLocaleString()} MATCHES (localStorage 복원)`
       }
@@ -666,7 +671,7 @@ onMounted(() => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
-        results.value = data; filteredResults.value = data; previewIdx.value = 0
+        results.value = data; deepBase.value = data; filteredResults.value = data; previewIdx.value = 0
         lastResults.value = data
         statusText.value = `${data.length} MATCHES`
         // 새 검색 → 기존 필터 칩 초기화 (옛 필터가 stale하게 남지 않도록)
@@ -723,31 +728,37 @@ function applyDeepSearch() {
   const inc = deepInclude.value.toLowerCase().trim()
   const exc = deepExclude.value.toLowerCase().trim()
   if (!inc && !exc) return
-  // 현재 상태를 분기로 저장
+  // deepBase(매니저 필터 전) 스냅샷을 분기로 저장
   const label = [inc ? `+${inc.substring(0,15)}` : '', exc ? `-${exc.substring(0,15)}` : ''].filter(Boolean).join(' ')
-  filterHistory.value.push({ label, count: filteredResults.value.length, data: [...filteredResults.value] })
-  // 현재 filteredResults 기준 누적 필터
-  filteredResults.value = filteredResults.value.filter(r => {
+  filterHistory.value.push({ label, count: deepBase.value.length, data: [...deepBase.value] })
+  // deepBase 누적 필터 → 매니저 필터(rating 등) 재적용해 표시/덱 갱신
+  deepBase.value = deepBase.value.filter(r => {
     const all = `${r.copyright} ${r.character} ${r.artist} ${r.general}`.toLowerCase()
     if (inc) { for (const t of inc.split(',')) { if (t.trim() && !all.includes(t.trim())) return false } }
     if (exc) { for (const t of exc.split(',')) { if (t.trim() && all.includes(t.trim())) return false } }
     return true
   })
+  filteredResults.value = _applyManagerFilters(deepBase.value)
   previewIdx.value = 0; isFiltered.value = true
   deepInclude.value = ''; deepExclude.value = ''
   statusText.value = `DEEP: ${filteredResults.value.length} / ${results.value.length}`
+  syncDeck()
 }
 function restoreBranch(idx) {
-  filteredResults.value = [...filterHistory.value[idx].data]
+  deepBase.value = [...filterHistory.value[idx].data]
   filterHistory.value = filterHistory.value.slice(0, idx)
+  filteredResults.value = _applyManagerFilters(deepBase.value)
   previewIdx.value = 0
   isFiltered.value = filterHistory.value.length > 0
   statusText.value = `BRANCH: ${filteredResults.value.length}`
+  syncDeck()
 }
 function resetDeepSearch() {
   deepInclude.value = ''; deepExclude.value = ''
-  clearAllFilters()
-  isFiltered.value = false; filterHistory.value = []
+  deepBase.value = [...results.value]
+  filterHistory.value = []
+  clearAllFilters()   // 매니저 필터 해제 + filteredResults=deepBase + 덱 동기화
+  isFiltered.value = false
   statusText.value = `${results.value.length} MATCHES`
 }
 
@@ -901,15 +912,22 @@ const activeFilterCount = computed(() =>
   activeFilters.ratings.size + activeFilters.characters.size + activeFilters.copyrights.size + activeFilters.artists.size
 )
 
-// 필터 적용 미리보기
-const filteredByManager = computed(() => {
-  let next = results.value
+// 매니저 필터 로직 (주어진 배열에 적용) — deepBase 위에서 합성하므로 심층검색 유지
+function _applyManagerFilters(arr) {
+  let next = arr
   if (activeFilters.ratings.size) next = next.filter(r => activeFilters.ratings.has(r.rating))
   if (activeFilters.characters.size) next = next.filter(r => _splitDanbooruTags(r.character).some(c => activeFilters.characters.has(c)))
   if (activeFilters.copyrights.size) next = next.filter(r => _splitDanbooruTags(r.copyright).some(c => activeFilters.copyrights.has(c)))
   if (activeFilters.artists.size) next = next.filter(r => _splitDanbooruTags(r.artist).some(a => activeFilters.artists.has(a)))
   return next
-})
+}
+// 필터 적용 미리보기 — 전체(results)가 아니라 deepBase(심층검색 결과) 위에서 필터
+const filteredByManager = computed(() => _applyManagerFilters(deepBase.value))
+// filteredResults → 자동화 덱 동기화 (모든 필터 변경 시 호출 → 덱이 항상 표시와 일치)
+function syncDeck() {
+  requestAction('update_prompt_deck', { results: filteredResults.value })
+  try { window.localStorage.setItem('lastSearchResults', JSON.stringify(filteredResults.value.slice(0, 500))) } catch {}
+}
 
 // activeFilters(Set들)를 localStorage에 영속 → 재시작 시 필터 칩 복원
 function _persistActiveFilters() {
@@ -927,9 +945,7 @@ function applyFilterManager() {
   filteredResults.value = [...filteredByManager.value]
   previewIdx.value = 0
   showFilterManager.value = false
-  requestAction('update_prompt_deck', { results: filteredResults.value })
-  // 재시작 시 Vue 표시도 '필터된 셋'이 되도록 localStorage 갱신(Python 덱과 일치) + 칩 영속
-  try { window.localStorage.setItem('lastSearchResults', JSON.stringify(filteredResults.value.slice(0, 500))) } catch {}
+  syncDeck()   // 덱 동기화 + lastSearchResults 갱신
   _persistActiveFilters()
   requestAction('show_toast', { type: 'success', msg: `필터 적용: ${filteredResults.value.length}건` })
 }
@@ -939,10 +955,9 @@ function clearAllFilters() {
   activeFilters.characters.clear()
   activeFilters.copyrights.clear()
   activeFilters.artists.clear()
-  filteredResults.value = [...results.value]
+  filteredResults.value = [...deepBase.value]   // 심층검색은 유지, 매니저 필터만 해제
   previewIdx.value = 0
-  requestAction('update_prompt_deck', { results: results.value })
-  try { window.localStorage.setItem('lastSearchResults', JSON.stringify(results.value.slice(0, 500))) } catch {}
+  syncDeck()
   _persistActiveFilters()
   requestAction('show_toast', { type: 'info', msg: '필터 해제됨' })
 }
