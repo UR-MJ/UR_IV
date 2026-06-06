@@ -16,31 +16,33 @@
   </nav>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { routes } from '../router.js'
 import { requestAction } from '../stores/widgetStore.js'
 
+interface Tab { name: string; title: string; path: string }
+
 const router = useRouter()
 const route = useRoute()
-const currentTab = ref(route.name || 't2i')
+const currentTab = ref<string>(String(route.name || 't2i'))
 
-const allTabs = routes.map(r => ({
+const allTabs: Tab[] = routes.map((r: any) => ({
   name: r.name,
   title: r.meta?.title || r.name,
   path: r.path,
 }))
 
 // localStorage에서 탭 순서 로드
-const tabs = ref(sortTabs())
-function sortTabs() {
+const tabs = ref<Tab[]>(sortTabs())
+function sortTabs(): Tab[] {
   try {
     const saved = JSON.parse(window.localStorage.getItem('tabOrder') || '[]')
     if (saved.length > 0) {
-      const byTitle = {}
+      const byTitle: Record<string, Tab> = {}
       allTabs.forEach(t => { byTitle[t.title] = t })
-      const ordered = saved.map(title => byTitle[title]).filter(Boolean)
+      const ordered = saved.map((title: string) => byTitle[title]).filter(Boolean) as Tab[]
       // 저장 안 된 새 탭 추가
       allTabs.forEach(t => { if (!ordered.find(o => o.name === t.name)) ordered.push(t) })
       return ordered
@@ -59,12 +61,12 @@ function _onTabOrderChange() {
     }
   } catch {}
 }
-function _onStorageEvent(e) {
+function _onStorageEvent(e: StorageEvent) {
   if (e.key === 'tabOrder' || e.key === null /* clear */) _onTabOrderChange()
 }
 // Ctrl+Tab / Ctrl+Shift+Tab — 다음/이전 탭으로 이동
-function _onTabNavigate(e) {
-  const direction = e.detail?.direction || 1
+function _onTabNavigate(e: Event) {
+  const direction = (e as CustomEvent).detail?.direction || 1
   const allTabsArr = tabs.value
   if (!allTabsArr.length) return
   const curIdx = allTabsArr.findIndex(t => t.name === currentTab.value)
@@ -91,18 +93,18 @@ const nativeTabs = [
   { id: 'backend', title: 'Backend' },
 ]
 
-watch(route, (r) => { currentTab.value = r.name })
+watch(route, (r) => { currentTab.value = String(r.name || '') })
 
-const emit = defineEmits(['tab-changed'])
+const emit = defineEmits<{ 'tab-changed': [name: string] }>()
 
-function switchTo(tab) {
+function switchTo(tab: Tab) {
   currentTab.value = tab.name
   router.push(tab.path)
   requestAction('vue_tab_switch', { tab: tab.name })
   emit('tab-changed', tab.name)
 }
 
-function switchToNative(id) {
+function switchToNative(id: string) {
   currentTab.value = id
   requestAction('native_tab_switch', { tab: id })
   emit('tab-changed', id)

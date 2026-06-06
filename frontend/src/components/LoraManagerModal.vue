@@ -48,17 +48,22 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getBackend } from '../bridge.js'
 
-const emit = defineEmits(['close', 'add'])
+interface LoraItem { name: string; triggerWords: string[]; _w?: number; [k: string]: any }
 
-const loras = ref([])
+const emit = defineEmits<{
+  close: []
+  add: [payload: { name: string; weight: number; triggerWords: string[] }]
+}>()
+
+const loras = ref<LoraItem[]>([])
 const query = ref('')
 const loading = ref(false)
 const batchText = ref('')
-const searchEl = ref(null)
+const searchEl = ref<HTMLInputElement | null>(null)
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -67,24 +72,25 @@ const filtered = computed(() => {
 
 async function load(mode = '') {
   loading.value = true
-  const backend = await getBackend()
+  const backend: any = await getBackend()   // QWebChannel 백엔드 — 동적 타입
   if (!backend || !backend.getLoras) { loading.value = false; return }
-  backend.getLoras(mode, (json) => {
+  backend.getLoras(mode, (json: string) => {
     loading.value = false
     try {
       const d = JSON.parse(json)
-      if (Array.isArray(d)) loras.value = d.map(l => ({ ...l, _w: 1.0 }))
+      if (Array.isArray(d)) loras.value = d.map((l: any) => ({ ...l, _w: 1.0 }))
     } catch {}
   })
 }
 
-function add(l) {
+function add(l: LoraItem) {
   emit('add', { name: l.name, weight: (typeof l._w === 'number' ? l._w : 1.0), triggerWords: l.triggerWords || [] })
 }
 
 function applyBatch() {
   const re = /<lora:([^:>]+):([-\d.]+)>/gi
-  let m, n = 0
+  let m: RegExpExecArray | null = null
+  let n = 0
   while ((m = re.exec(batchText.value)) !== null) {
     const name = m[1].trim()
     const w = parseFloat(m[2]) || 1.0
@@ -94,7 +100,7 @@ function applyBatch() {
 }
 
 function close() { emit('close') }
-function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
 
 onMounted(() => {
   window.addEventListener('keydown', onKey, true)
