@@ -443,7 +443,9 @@
               <div class="lora-empty" v-if="loraStack.length === 0">
                 LoRA 매니저에서 추가하세요
               </div>
-              <div v-for="(lora, i) in loraStack" :key="i" class="lora-block">
+              <div v-for="(lora, i) in loraStack" :key="i" class="lora-block" :class="{ 'lora-drag-over': loraDragIdx === i }"
+                draggable="true" @dragstart="loraDragStart(i)" @dragover.prevent @drop="loraDrop(i)" @dragend="loraDragIdx = -1">
+                <span class="lora-grip" title="드래그하여 순서 변경">⠿</span>
                 <label class="lora-check"><input type="checkbox" v-model="lora.enabled" /></label>
                 <div class="lora-info-col">
                   <div class="lora-name">{{ lora.name }}</div>
@@ -453,7 +455,8 @@
                   </div>
                 </div>
                 <input type="range" min="-100" max="200" v-model.number="lora.weight" class="lora-slider" />
-                <span class="lora-weight">{{ (lora.weight / 100).toFixed(2) }}</span>
+                <input type="number" class="lora-weight-input" :value="(lora.weight / 100).toFixed(2)" step="0.05" min="-1" max="3"
+                  title="가중치 직접 입력" @change="lora.weight = Math.round((parseFloat($event.target.value) || 0) * 100)" @mousedown.stop />
                 <button class="lora-remove" @click="loraStack.splice(i, 1)">✕</button>
               </div>
               <button class="ext-add-btn" @click="showLoraModal = true">+ ADD LoRA</button>
@@ -1326,6 +1329,17 @@ function deleteLoraSet() {
   loraSets.value = cp; _persistLoraSets(); loraSetSel.value = ''
   addToast('info', `세트 삭제: ${n}`)
 }
+// LoRA STACK 드래그 순서 변경
+const loraDragIdx = ref(-1)
+function loraDragStart(i) { loraDragIdx.value = i }
+function loraDrop(i) {
+  const from = loraDragIdx.value
+  loraDragIdx.value = -1
+  if (from < 0 || from === i) return
+  const moved = loraStack.splice(from, 1)[0]
+  loraStack.splice(i, 0, moved)
+  _saveLoraStack(); syncLoraStack()
+}
 
 // History pagination
 const visibleHistory = computed(() => {
@@ -2127,6 +2141,11 @@ onMounted(async () => {
 .trigger-chip:hover { background: rgba(250, 204, 21, 0.2); border-color: var(--accent); }
 .lora-slider { width: 60px; accent-color: var(--accent); }
 .lora-weight { font-size: 10px; color: var(--accent); min-width: 30px; text-align: right; font-family: monospace; }
+.lora-grip { cursor: grab; color: var(--text-muted); font-size: 12px; user-select: none; flex-shrink: 0; }
+.lora-grip:active { cursor: grabbing; }
+.lora-drag-over { outline: 1px dashed var(--accent); outline-offset: -1px; }
+.lora-weight-input { width: 48px; flex-shrink: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; color: var(--accent); font-size: 10px; text-align: center; font-family: monospace; }
+.lora-weight-input:focus { outline: none; border-color: var(--accent); }
 .lora-remove { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
 .lora-tools { float: right; display: inline-flex; gap: 4px; }
 .lora-tool-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: 9px; font-weight: 700; padding: 2px 7px; cursor: pointer; }
@@ -2188,7 +2207,21 @@ onMounted(async () => {
 .rand-res-add span { color: var(--text-muted); font-size: 10px; }
 .rand-res-input { width: 50px; padding: 3px 4px; font-size: 10px; text-align: center; }
 .rand-res-btn { width: 24px; height: 24px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-weight: 900; cursor: pointer; font-size: 14px; }
-.ext-check-row { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 4px; white-space: nowrap; }
+.ext-check-row { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px; white-space: nowrap; }
+/* 체크박스 → 토글 스위치 (ADVANCED SETTINGS 주요 토글 전체) */
+.ext-check-row input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; margin: 0; flex-shrink: 0;
+  width: 32px; height: 17px; border-radius: 9px;
+  background: var(--bg-button); border: 1px solid var(--border);
+  position: relative; cursor: pointer; transition: background .18s, border-color .18s;
+}
+.ext-check-row input[type="checkbox"]::before {
+  content: ''; position: absolute; top: 1px; left: 1px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--text-muted); transition: left .18s, background .18s;
+}
+.ext-check-row input[type="checkbox"]:checked { background: rgba(74,222,128,0.28); border-color: #4ade80; }
+.ext-check-row input[type="checkbox"]:checked::before { left: 16px; background: #4ade80; }
 .ext-check-row input[type="checkbox"] { flex-shrink: 0; margin: 0; }
 .ext-check-row span { overflow: hidden; text-overflow: ellipsis; }
 .ext-check-row input[type="checkbox"] { accent-color: var(--accent); }

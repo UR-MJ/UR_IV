@@ -663,7 +663,20 @@ function loadOllamaModels() { testOllama() }
 }
 .toggle-row:hover { background: var(--bg-button); }
 .toggle-row span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.toggle-row input { width: 40px; height: 20px; accent-color: var(--accent); }
+/* 체크박스 → 토글 스위치 */
+.toggle-row input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; margin: 0; flex-shrink: 0;
+  width: 42px; height: 22px; border-radius: 12px;
+  background: var(--bg-button); border: 1px solid var(--border);
+  position: relative; cursor: pointer; transition: background .18s, border-color .18s;
+}
+.toggle-row input[type="checkbox"]::before {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--text-muted); transition: left .18s, background .18s;
+}
+.toggle-row input[type="checkbox"]:checked { background: rgba(74,222,128,0.28); border-color: #4ade80; }
+.toggle-row input[type="checkbox"]:checked::before { left: 22px; background: #4ade80; }
 
 .btn-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .mt-16 { margin-top: 16px; }
