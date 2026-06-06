@@ -129,11 +129,11 @@
                   <button class="ext-mini-btn" @click="action('swap_resolution')">↔</button>
                 </div>
                 <div class="ext-res-opts">
-                  <label class="ext-check-sm"><input type="checkbox" v-model="randomResEnabled" /><span>랜덤</span></label>
-                  <label class="ext-check-sm"><input type="checkbox" v-model="autoResEnabled" /><span>자동(Parquet)</span></label>
+                  <label class="ext-check-sm"><ToggleSwitch v-model="randomResEnabled" size="sm" /><span>랜덤</span></label>
+                  <label class="ext-check-sm"><ToggleSwitch v-model="autoResEnabled" size="sm" /><span>자동(Parquet)</span></label>
                   <label class="ext-check-sm hr-toggle" :class="{ active: highResEnabled }"
                     title="입력 해상도 × 배율로 처음부터 더 크게 생성 (hires.fix와 다른 단일 패스)&#10;&#10;⚠ SAM3 자동 검열과 동시 사용 시 VRAM OOM 위험&#10;⚠ 16GB GPU + 1.5× + SAM3 = inpaint 단계에서 메모리 부족&#10;⚠ 모델 학습 해상도(보통 1024±)를 크게 넘으면 이중 캐릭터/왜곡 가능&#10;&#10;권장: 1.5× 단독 사용 또는 SAM3 단독 사용 (둘 중 하나)">
-                    <input type="checkbox" v-model="highResEnabled" />
+                    <ToggleSwitch v-model="highResEnabled" size="sm" />
                     <span>고해상도 {{ highResFactor.toFixed(2) }}×<span v-if="highResEnabled" class="hr-warn">⚠</span></span>
                   </label>
                 </div>
@@ -191,7 +191,7 @@
             <!-- Hires.fix -->
             <details class="ext-card">
               <summary class="ext-title">HIRES.FIX</summary>
-              <label class="ext-check-row"><input type="checkbox" v-model="hires_enabled" /><span>Hires.fix 활성화</span></label>
+              <label class="ext-check-row"><ToggleSwitch v-model="hires_enabled" size="sm" /><span>Hires.fix 활성화</span></label>
               <div class="ext-field">
                 <label>Upscaler</label>
                 <CustomSelect v-model="storeWidgets.upscaler_combo" :options="upscalerItems" placeholder="Upscaler..." />
@@ -227,15 +227,15 @@
                   :class="{ active: r.on }" @click="r.on = !r.on; saveRatingFilter()">{{ r.label }}</button>
               </div>
               <div class="ext-toggle-grid">
-                <label class="ext-check-row"><input type="checkbox" v-model="removeCharacter" /><span>캐릭터 제거</span></label>
-                <label class="ext-check-row"><input type="checkbox" v-model="removeCharacterFeatures" /><span>캐릭터 특징 제거</span></label>
-                <label class="ext-check-row"><input type="checkbox" v-model="removeCopyright" /><span>작품 제거</span></label>
-                <label class="ext-check-row"><input type="checkbox" v-model="removeArtist" /><span>작가 제거</span></label>
-                <label class="ext-check-row"><input type="checkbox" v-model="removeMeta" /><span>메타 제거</span></label>
-                <label class="ext-check-row"><input type="checkbox" v-model="removeCensorship" /><span>검열 제거</span></label>
-                <label class="ext-check-row"><input type="checkbox" v-model="removeText" /><span>텍스트 제거</span></label>
-                <label class="ext-check-row"><input type="checkbox" v-model="autoCharFeatures" /><span>특징 자동 추가</span></label>
-                <label class="ext-check-row"><input type="checkbox" v-model="autoRemoveCharFeatures" /><span title="closed eyes 있으면 눈색 특징 생략, 머리 길이 충돌 시 생략">특징 auto remove</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="removeCharacter" size="sm" /><span>캐릭터 제거</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="removeCharacterFeatures" size="sm" /><span>캐릭터 특징 제거</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="removeCopyright" size="sm" /><span>작품 제거</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="removeArtist" size="sm" /><span>작가 제거</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="removeMeta" size="sm" /><span>메타 제거</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="removeCensorship" size="sm" /><span>검열 제거</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="removeText" size="sm" /><span>텍스트 제거</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="autoCharFeatures" size="sm" /><span>특징 자동 추가</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="autoRemoveCharFeatures" size="sm" /><span title="closed eyes 있으면 눈색 특징 생략, 머리 길이 충돌 시 생략">특징 auto remove</span></label>
               </div>
               <div v-if="autoRemoveCharFeatures" class="char-ovr-row">
                 <button class="char-ovr-btn" @click="openCharOverrideModal()">⚙ override 설정 (머리길이 / 눈색)</button>
@@ -245,10 +245,10 @@
             <!-- ADetailer -->
             <details class="ext-card">
               <summary class="ext-title">ADETAILER</summary>
-              <label class="ext-check-row"><input type="checkbox" v-model="ad_enabled" /><span>ADetailer 활성화</span></label>
+              <label class="ext-check-row"><ToggleSwitch v-model="ad_enabled" size="sm" /><span>ADetailer 활성화</span></label>
               <!-- Slot 1 -->
               <div class="ext-sub-title">Slot 1</div>
-              <label class="ext-check-row"><input type="checkbox" v-model="ad_s1_enabled" /><span>Slot 1 활성화</span></label>
+              <label class="ext-check-row"><ToggleSwitch v-model="ad_s1_enabled" size="sm" /><span>Slot 1 활성화</span></label>
               <div class="ext-field"><label>Model</label>
                 <CustomSelect v-model="storeWidgets._ad_s1_model" :options="adModelItems" placeholder="AD Model..." /></div>
               <div class="ext-field"><label>Prompt</label>
@@ -267,37 +267,37 @@
               <div class="ext-field"><label>Mask Merge</label>
                 <CustomSelect v-model="storeWidgets._ad_s1_mask_merge" :options="['None', 'Merge', 'Merge and Invert']" placeholder="None" /></div>
               <!-- Separate settings -->
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s1_use_inp_size" true-value="true" false-value="false" /><span>별도 Inpaint 크기</span></label>
+              <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_inp_size === 'true'" @update:model-value="storeWidgets._ad_s1_use_inp_size = $event ? 'true' : 'false'" size="sm" /><span>별도 Inpaint 크기</span></label>
               <div class="ext-row" v-if="storeWidgets._ad_s1_use_inp_size === 'true'">
                 <div class="ext-field"><label>Width</label><input type="number" v-model="storeWidgets._ad_s1_inp_w" /></div>
                 <div class="ext-field"><label>Height</label><input type="number" v-model="storeWidgets._ad_s1_inp_h" /></div>
               </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s1_use_steps" true-value="true" false-value="false" /><span>별도 Steps</span></label>
+              <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_steps === 'true'" @update:model-value="storeWidgets._ad_s1_use_steps = $event ? 'true' : 'false'" size="sm" /><span>별도 Steps</span></label>
               <div class="ext-row" v-if="storeWidgets._ad_s1_use_steps === 'true'">
                 <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets._ad_s1_steps" min="1" /></div>
               </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s1_use_cfg" true-value="true" false-value="false" /><span>별도 CFG</span></label>
+              <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_cfg === 'true'" @update:model-value="storeWidgets._ad_s1_use_cfg = $event ? 'true' : 'false'" size="sm" /><span>별도 CFG</span></label>
               <div class="ext-row" v-if="storeWidgets._ad_s1_use_cfg === 'true'">
                 <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets._ad_s1_cfg" step="0.5" /></div>
               </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s1_use_sampler" true-value="true" false-value="false" /><span>별도 Sampler</span></label>
+              <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_sampler === 'true'" @update:model-value="storeWidgets._ad_s1_use_sampler = $event ? 'true' : 'false'" size="sm" /><span>별도 Sampler</span></label>
               <div class="ext-row" v-if="storeWidgets._ad_s1_use_sampler === 'true'">
                 <div class="ext-field"><label>Sampler</label>
                   <CustomSelect v-model="storeWidgets._ad_s1_sampler" :options="samplerItems" placeholder="Sampler" /></div>
                 <div class="ext-field"><label>Scheduler</label>
                   <CustomSelect v-model="storeWidgets._ad_s1_scheduler" :options="schedulerItems" placeholder="Scheduler" /></div>
               </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s1_use_ckpt" true-value="true" false-value="false" /><span>별도 Checkpoint</span></label>
+              <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_ckpt === 'true'" @update:model-value="storeWidgets._ad_s1_use_ckpt = $event ? 'true' : 'false'" size="sm" /><span>별도 Checkpoint</span></label>
               <div class="ext-field" v-if="storeWidgets._ad_s1_use_ckpt === 'true'"><label>Checkpoint</label>
                 <CustomSelect v-model="storeWidgets._ad_s1_ckpt" :options="adCheckpointItems" placeholder="Use same checkpoint" /></div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s1_use_vae" true-value="true" false-value="false" /><span>별도 VAE</span></label>
+              <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_vae === 'true'" @update:model-value="storeWidgets._ad_s1_use_vae = $event ? 'true' : 'false'" size="sm" /><span>별도 VAE</span></label>
               <div class="ext-field" v-if="storeWidgets._ad_s1_use_vae === 'true'"><label>VAE</label>
                 <CustomSelect v-model="storeWidgets._ad_s1_vae" :options="adVaeItems" placeholder="Use same VAE" /></div>
 
               <!-- Slot 2 -->
               <details class="ext-sub">
                 <summary>Slot 2</summary>
-                <label class="ext-check-row"><input type="checkbox" v-model="ad_s2_enabled" /><span>Slot 2 활성화</span></label>
+                <label class="ext-check-row"><ToggleSwitch v-model="ad_s2_enabled" size="sm" /><span>Slot 2 활성화</span></label>
                 <div class="ext-field"><label>Model</label>
                   <CustomSelect v-model="storeWidgets._ad_s2_model" :options="adModelItems" placeholder="AD Model..." /></div>
                 <div class="ext-field"><label>Prompt</label>
@@ -315,30 +315,30 @@
                 </div>
                 <div class="ext-field"><label>Mask Merge</label>
                   <CustomSelect v-model="storeWidgets._ad_s2_mask_merge" :options="['None', 'Merge', 'Merge and Invert']" placeholder="None" /></div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s2_use_inp_size" true-value="true" false-value="false" /><span>별도 Inpaint 크기</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_inp_size === 'true'" @update:model-value="storeWidgets._ad_s2_use_inp_size = $event ? 'true' : 'false'" size="sm" /><span>별도 Inpaint 크기</span></label>
                 <div class="ext-row" v-if="storeWidgets._ad_s2_use_inp_size === 'true'">
                   <div class="ext-field"><label>Width</label><input type="number" v-model="storeWidgets._ad_s2_inp_w" /></div>
                   <div class="ext-field"><label>Height</label><input type="number" v-model="storeWidgets._ad_s2_inp_h" /></div>
                 </div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s2_use_steps" true-value="true" false-value="false" /><span>별도 Steps</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_steps === 'true'" @update:model-value="storeWidgets._ad_s2_use_steps = $event ? 'true' : 'false'" size="sm" /><span>별도 Steps</span></label>
                 <div class="ext-row" v-if="storeWidgets._ad_s2_use_steps === 'true'">
                   <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets._ad_s2_steps" min="1" /></div>
                 </div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s2_use_cfg" true-value="true" false-value="false" /><span>별도 CFG</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_cfg === 'true'" @update:model-value="storeWidgets._ad_s2_use_cfg = $event ? 'true' : 'false'" size="sm" /><span>별도 CFG</span></label>
                 <div class="ext-row" v-if="storeWidgets._ad_s2_use_cfg === 'true'">
                   <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets._ad_s2_cfg" step="0.5" /></div>
                 </div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s2_use_sampler" true-value="true" false-value="false" /><span>별도 Sampler</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_sampler === 'true'" @update:model-value="storeWidgets._ad_s2_use_sampler = $event ? 'true' : 'false'" size="sm" /><span>별도 Sampler</span></label>
                 <div class="ext-row" v-if="storeWidgets._ad_s2_use_sampler === 'true'">
                   <div class="ext-field"><label>Sampler</label>
                     <CustomSelect v-model="storeWidgets._ad_s2_sampler" :options="samplerItems" placeholder="Sampler" /></div>
                   <div class="ext-field"><label>Scheduler</label>
                     <CustomSelect v-model="storeWidgets._ad_s2_scheduler" :options="schedulerItems" placeholder="Scheduler" /></div>
                 </div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s2_use_ckpt" true-value="true" false-value="false" /><span>별도 Checkpoint</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_ckpt === 'true'" @update:model-value="storeWidgets._ad_s2_use_ckpt = $event ? 'true' : 'false'" size="sm" /><span>별도 Checkpoint</span></label>
                 <div class="ext-field" v-if="storeWidgets._ad_s2_use_ckpt === 'true'"><label>Checkpoint</label>
                   <CustomSelect v-model="storeWidgets._ad_s2_ckpt" :options="adCheckpointItems" placeholder="Use same checkpoint" /></div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._ad_s2_use_vae" true-value="true" false-value="false" /><span>별도 VAE</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_vae === 'true'" @update:model-value="storeWidgets._ad_s2_use_vae = $event ? 'true' : 'false'" size="sm" /><span>별도 VAE</span></label>
                 <div class="ext-field" v-if="storeWidgets._ad_s2_use_vae === 'true'"><label>VAE</label>
                   <CustomSelect v-model="storeWidgets._ad_s2_vae" :options="adVaeItems" placeholder="Use same VAE" /></div>
               </details>
@@ -347,7 +347,7 @@
             <!-- SAM3 Mask — Forge Neo SAM3 확장과 1:1 -->
             <details class="ext-card">
               <summary class="ext-title">SAM3 Mask</summary>
-              <label class="ext-check-row"><input type="checkbox" v-model="sam3_enabled" /><span>Enable SAM3</span></label>
+              <label class="ext-check-row"><ToggleSwitch v-model="sam3_enabled" size="sm" /><span>Enable SAM3</span></label>
 
               <div class="ext-field"><label>SAM3 Detect Prompt</label>
                 <input type="text" v-model="storeWidgets._sam3_detect_prompt" placeholder="face" /></div>
@@ -369,7 +369,7 @@
                 <div class="ext-field"><label>Mask Dilation (px)</label><input type="number" v-model="storeWidgets._sam3_mask_dilation" min="0" /></div>
               </div>
               <div class="ext-row">
-                <label class="ext-check-row" style="flex:1" title="머리카락 가닥 등을 감싸 마스크를 채움"><input type="checkbox" v-model="storeWidgets._sam3_mask_hull" true-value="true" false-value="false" /><span>Convex Hull (wrap strands)</span></label>
+                <label class="ext-check-row" style="flex:1" title="머리카락 가닥 등을 감싸 마스크를 채움"><ToggleSwitch :model-value="storeWidgets._sam3_mask_hull === 'true'" @update:model-value="storeWidgets._sam3_mask_hull = $event ? 'true' : 'false'" size="sm" /><span>Convex Hull (wrap strands)</span></label>
                 <div class="ext-field"><label>Outline expand (edge-aware, px)</label><input type="number" v-model="storeWidgets._sam3_mask_outline_px" min="0" /></div>
               </div>
               <div class="ext-field"><label>SAM3 Checkpoint</label>
@@ -379,9 +379,9 @@
                 <CustomSelect v-model="storeWidgets._sam3_device" :options="sam3DeviceItems" placeholder="cuda" />
                 <div class="ext-note">cuda 권장 — auto는 CPU로 떨어져 검출이 느려질 수 있음</div>
               </div>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_preview_overlay" true-value="true" false-value="false" /><span>Replace output with overlay preview</span></label>
-              <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_save_artifacts" true-value="true" false-value="false" /><span>Save mask/overlay artifacts</span></label>
-              <label class="ext-check-row" title="검출 직후 SAM3(~3.5GB) VRAM 회수 — 16GB GPU 권장"><input type="checkbox" v-model="storeWidgets._sam3_unload_after" true-value="true" false-value="false" /><span>Unload SAM3 from VRAM after detection (~3.5GB)</span></label>
+              <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_preview_overlay === 'true'" @update:model-value="storeWidgets._sam3_preview_overlay = $event ? 'true' : 'false'" size="sm" /><span>Replace output with overlay preview</span></label>
+              <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_save_artifacts === 'true'" @update:model-value="storeWidgets._sam3_save_artifacts = $event ? 'true' : 'false'" size="sm" /><span>Save mask/overlay artifacts</span></label>
+              <label class="ext-check-row" title="검출 직후 SAM3(~3.5GB) VRAM 회수 — 16GB GPU 권장"><ToggleSwitch :model-value="storeWidgets._sam3_unload_after === 'true'" @update:model-value="storeWidgets._sam3_unload_after = $event ? 'true' : 'false'" size="sm" /><span>Unload SAM3 from VRAM after detection (~3.5GB)</span></label>
 
               <!-- 인페인트 하위 섹션 -->
               <details class="ext-card" open style="margin-top:8px">
@@ -395,38 +395,38 @@
                     <CustomSelect v-model="storeWidgets._sam3_inpainting_fill" :options="sam3FillItems" placeholder="original" /></div>
                   <div class="ext-field"><label>Inpaint padding</label><input type="number" v-model="storeWidgets._sam3_padding" min="0" /></div>
                 </div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_inpaint_only_masked" true-value="true" false-value="false" /><span>마스크된 영역만</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_inpaint_only_masked === 'true'" @update:model-value="storeWidgets._sam3_inpaint_only_masked = $event ? 'true' : 'false'" size="sm" /><span>마스크된 영역만</span></label>
 
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_inp_size" true-value="true" false-value="false" /><span>Use separate inpaint width/height</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_use_inp_size === 'true'" @update:model-value="storeWidgets._sam3_use_inp_size = $event ? 'true' : 'false'" size="sm" /><span>Use separate inpaint width/height</span></label>
                 <div class="ext-row" v-if="storeWidgets._sam3_use_inp_size === 'true'">
                   <div class="ext-field"><label>Inpaint Width</label><input type="number" v-model="storeWidgets._sam3_inp_w" /></div>
                   <div class="ext-field"><label>Inpaint Height</label><input type="number" v-model="storeWidgets._sam3_inp_h" /></div>
                 </div>
 
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_steps" true-value="true" false-value="false" /><span>별도의 단계 사용</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_use_steps === 'true'" @update:model-value="storeWidgets._sam3_use_steps = $event ? 'true' : 'false'" size="sm" /><span>별도의 단계 사용</span></label>
                 <div class="ext-row" v-if="storeWidgets._sam3_use_steps === 'true'">
                   <div class="ext-field"><label>단계</label><input type="number" v-model="storeWidgets._sam3_steps" min="1" /></div>
                 </div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_cfg" true-value="true" false-value="false" /><span>별도의 CFG 스케일 사용</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_use_cfg === 'true'" @update:model-value="storeWidgets._sam3_use_cfg = $event ? 'true' : 'false'" size="sm" /><span>별도의 CFG 스케일 사용</span></label>
                 <div class="ext-row" v-if="storeWidgets._sam3_use_cfg === 'true'">
                   <div class="ext-field"><label>CFG 스케일</label><input type="number" v-model="storeWidgets._sam3_cfg" step="0.5" /></div>
                 </div>
-                <label class="ext-check-row" title="OFF면 base 생성의 sampler 상속&#10;ON이고 'Use same sampler' 이외면 SAM3 단계에서 override"><input type="checkbox" v-model="storeWidgets._sam3_use_sampler" true-value="true" false-value="false" /><span>별도의 샘플러 사용</span></label>
+                <label class="ext-check-row" title="OFF면 base 생성의 sampler 상속&#10;ON이고 'Use same sampler' 이외면 SAM3 단계에서 override"><ToggleSwitch :model-value="storeWidgets._sam3_use_sampler === 'true'" @update:model-value="storeWidgets._sam3_use_sampler = $event ? 'true' : 'false'" size="sm" /><span>별도의 샘플러 사용</span></label>
                 <div class="ext-field" v-if="storeWidgets._sam3_use_sampler === 'true'"><label>샘플러</label>
                   <CustomSelect v-model="storeWidgets._sam3_sampler" :options="['Use same sampler', ...samplerItems]" placeholder="Use same sampler" /></div>
-                <label class="ext-check-row" title="OFF면 base 생성의 scheduler 상속"><input type="checkbox" v-model="storeWidgets._sam3_use_scheduler" true-value="true" false-value="false" /><span>Use separate scheduler</span></label>
+                <label class="ext-check-row" title="OFF면 base 생성의 scheduler 상속"><ToggleSwitch :model-value="storeWidgets._sam3_use_scheduler === 'true'" @update:model-value="storeWidgets._sam3_use_scheduler = $event ? 'true' : 'false'" size="sm" /><span>Use separate scheduler</span></label>
                 <div class="ext-field" v-if="storeWidgets._sam3_use_scheduler === 'true'"><label>Scheduler</label>
                   <CustomSelect v-model="storeWidgets._sam3_scheduler" :options="['Use same scheduler', ...schedulerItems]" placeholder="Use same scheduler" /></div>
 
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_seed" true-value="true" false-value="false" /><span>Use specified seed (instead of parent's)</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_use_seed === 'true'" @update:model-value="storeWidgets._sam3_use_seed = $event ? 'true' : 'false'" size="sm" /><span>Use specified seed (instead of parent's)</span></label>
                 <div class="ext-field" v-if="storeWidgets._sam3_use_seed === 'true'"><label>Seed (-1 = random)</label>
                   <input type="number" v-model="storeWidgets._sam3_seed" /></div>
 
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_use_noise_mul" true-value="true" false-value="false" /><span>Use noise multiplier</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_use_noise_mul === 'true'" @update:model-value="storeWidgets._sam3_use_noise_mul = $event ? 'true' : 'false'" size="sm" /><span>Use noise multiplier</span></label>
                 <div class="ext-row" v-if="storeWidgets._sam3_use_noise_mul === 'true'">
                   <div class="ext-field"><label>Noise Multiplier</label><input type="number" v-model="storeWidgets._sam3_noise_mul" step="0.01" min="0" max="2" /></div>
                 </div>
-                <label class="ext-check-row"><input type="checkbox" v-model="storeWidgets._sam3_restore_face" true-value="true" false-value="false" /><span>Restore face</span></label>
+                <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._sam3_restore_face === 'true'" @update:model-value="storeWidgets._sam3_restore_face = $event ? 'true' : 'false'" size="sm" /><span>Restore face</span></label>
               </details>
             </details>
 
