@@ -1342,6 +1342,7 @@ class VueBridge(QObject):
             lookup = get_character_features()
             core = lookup.lookup_core(name)
             costume = lookup.lookup_costume(name)
+            etc = lookup.lookup_etc(name)
             full = lookup.lookup(name)
             count = (core[1] if core else 0) or (full[1] if full else 0)
 
@@ -1356,7 +1357,8 @@ class VueBridge(QObject):
 
             core_tags = _split(core[0]) if core else []
             costume_tags = _split(costume[0]) if costume else []
-            if not core_tags and not costume_tags and full:
+            etc_tags = _split(etc[0]) if etc else []
+            if not core_tags and not costume_tags and not etc_tags and full:
                 core_tags = _split(full[0])
 
             def _mk(tags, is_costume):
@@ -1387,7 +1389,7 @@ class VueBridge(QObject):
                 cond_json = preset.get("cond_rules_json", "") or ""
                 feature_norms = {
                     t.strip().lower().replace("_", " ")
-                    for t in (core_tags + costume_tags)
+                    for t in (core_tags + costume_tags + etc_tags)
                 }
                 for t in (preset.get("extra_prompt", "") or "").split(","):
                     tag = t.strip()
@@ -1410,6 +1412,7 @@ class VueBridge(QObject):
                 "name": name,
                 "count": int(count or 0),
                 "core": _mk(core_tags, False),
+                "etc": _mk(etc_tags, False),
                 "costume": _mk(costume_tags, True),
                 "custom": custom,
                 "hasPreset": has_preset,

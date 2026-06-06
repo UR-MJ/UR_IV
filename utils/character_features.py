@@ -147,6 +147,73 @@ def is_hair_length_tag(tag: str) -> bool:
     return _norm_tag(tag) in _HAIR_LENGTH_TAGS
 
 
+# ── 핵심 외형 분류 (색 + 고정 신체특징) — 나머지는 '기타' ──
+_HAIR_COLOR_WORDS: set[str] = {
+    "aqua", "black", "blonde", "blue", "brown", "green", "grey", "gray",
+    "orange", "pink", "purple", "red", "white", "silver", "light", "dark",
+    "multicolored", "two-tone", "gradient", "streaked", "rainbow", "colored",
+}
+_HAIR_COLOR_SPECIAL: set[str] = {
+    "multicolored hair", "two-tone hair", "gradient hair", "streaked hair",
+    "rainbow hair", "colored inner hair", "split-color hair",
+}
+# 종족/특수 신체 (고정 외형 — 헤어스타일·일반 체형 제외)
+_SPECIES_WORDS: set[str] = {
+    "elf", "demon", "monster", "dragon", "robot", "android", "cyborg",
+    "mermaid", "merfolk", "angel", "vampire", "oni", "kitsune", "succubus",
+    "lamia", "harpy", "slime", "ghost", "fairy", "centaur", "orc", "goblin",
+    "dullahan", "yokai", "youkai",
+}
+# 색·종족 외에 핵심으로 남길 신체 특징 (정확 일치)
+_PHYS_EXACT: set[str] = {
+    "pointy ears", "third eye", "extra eyes", "glowing eyes", "empty eyes",
+    "no pupils", "slit pupils", "constricted pupils", "ringed eyes",
+    "sharp teeth", "fangs", "fang", "halo", "claws", "tusks", "freckles",
+    "tan", "tanlines", "dark-skinned female", "dark-skinned male",
+}
+
+
+def is_hair_color_tag(tag: str) -> bool:
+    """'blue hair' 같은 머리 색 태그인지 (길이/스타일은 False)."""
+    n = _norm_tag(tag)
+    if not n:
+        return False
+    if n in _HAIR_COLOR_SPECIAL:
+        return True
+    if is_hair_length_tag(tag) or not n.endswith(" hair"):
+        return False
+    return bool(set(n.split()) & _HAIR_COLOR_WORDS)
+
+
+def is_core_appearance_tag(tag: str) -> bool:
+    """핵심 외형 = 머리색 + 눈색 + 고정 신체특징(귀/뿔/꼬리/날개/종족/특수동공/점·흉터/피부 등).
+    헤어스타일(long/twintails), 일반 체형(breasts/navel), 포즈(hand up),
+    주관표현(bishounen)은 False → '기타'로 분류된다."""
+    if is_hair_color_tag(tag) or is_eye_color_tag(tag):
+        return True
+    n = _norm_tag(tag)
+    if not n or is_hair_length_tag(tag):
+        return False
+    if n in _PHYS_EXACT:
+        return True
+    words = set(n.split())
+    if "ears" in words and "earrings" not in words:   # 귀(귀걸이 제외)
+        return True
+    if "horns" in words or "horn" in words:           # 뿔
+        return True
+    if "tail" in words or "tails" in words:            # 꼬리
+        return True
+    if "wings" in words or "wing" in words:            # 날개
+        return True
+    if "pupils" in words:                              # 특수 동공
+        return True
+    if "mole" in words or "scar" in n or "skin" in words:   # 점/흉터/피부
+        return True
+    if words & _SPECIES_WORDS:                         # 종족
+        return True
+    return False
+
+
 class CharacterFeatureLookup:
     """캐릭터 이름 → 핵심/의상 특징 분리 조회 (lazy loading, singleton)"""
 
@@ -296,10 +363,25 @@ class CharacterFeatureLookup:
         key = self._resolve_key(name)
         if key is None:
             return None
-        core_tags = [t for t in self._all_feature_tags(key) if not _is_costume_tag(t)]
+        core_tags = [t for t in self._all_feature_tags(key)
+                     if not _is_costume_tag(t) and is_core_appearance_tag(t)]
         if not core_tags:
             return None
         return (", ".join(core_tags), self._count_for(key))
+
+    def lookup_etc(self, name: str) -> tuple[str, int] | None:
+        """기타 특징 — 비의상이면서 핵심 외형(색+신체)도 아닌 것.
+        헤어스타일(long/twintails), 일반 체형(breasts/navel), 포즈(hand up),
+        주관표현(bishounen) 등이 여기로 분류된다."""
+        self._ensure_loaded()
+        key = self._resolve_key(name)
+        if key is None:
+            return None
+        etc_tags = [t for t in self._all_feature_tags(key)
+                    if not _is_costume_tag(t) and not is_core_appearance_tag(t)]
+        if not etc_tags:
+            return None
+        return (", ".join(etc_tags), self._count_for(key))
 
     def lookup_costume(self, name: str) -> tuple[str, int] | None:
         """의상/액세서리 특징만 조회 — 전체 특징에서 _is_costume_tag 인 것만."""
@@ -360,12 +442,14 @@ class CharacterFeatureLookup:
                 continue
             core = self.lookup_core(name)
             costume = self.lookup_costume(name)
+            etc = self.lookup_etc(name)
             full = self.lookup(name)
-            if core or full:
+            if core or costume or etc or full:
                 count = (core[1] if core else 0) or (full[1] if full else 0)
                 results[name] = {
                     "core": core,
                     "costume": costume,
+                    "etc": etc,
                     "count": count,
                 }
         return results
