@@ -61,34 +61,34 @@
           <div class="glass-card">
             <label>PROMPT AUTOMATION</label>
             <div class="toggle-grid">
-              <label class="toggle-row">
+              <div class="toggle-row">
                 <span>Auto-clean Duplicates</span>
-                <input type="checkbox" v-model="cleanDuplicates" />
-              </label>
-              <label class="toggle-row">
+                <ToggleSwitch v-model="cleanDuplicates" />
+              </div>
+              <div class="toggle-row">
                 <span>Sanitize Whitespaces</span>
-                <input type="checkbox" v-model="cleanSpaces" />
-              </label>
-              <label class="toggle-row">
+                <ToggleSwitch v-model="cleanSpaces" />
+              </div>
+              <div class="toggle-row">
                 <span>Convert Underscores</span>
-                <input type="checkbox" v-model="cleanUnderscore" />
-              </label>
-              <label class="toggle-row">
+                <ToggleSwitch v-model="cleanUnderscore" />
+              </div>
+              <div class="toggle-row">
                 <span>Tag Block Mode</span>
-                <input type="checkbox" v-model="defaultBlockMode" @change="setBlockMode" />
-              </label>
-              <label class="toggle-row">
+                <ToggleSwitch :model-value="defaultBlockMode" @update:model-value="defaultBlockMode = $event; setBlockMode()" />
+              </div>
+              <div class="toggle-row">
                 <span>Gallery Metadata Panel</span>
-                <input type="checkbox" v-model="galleryMetadata" @change="window.localStorage.setItem('galleryShowMetadata', String(galleryMetadata))" />
-              </label>
-              <label class="toggle-row">
+                <ToggleSwitch :model-value="galleryMetadata" @update:model-value="galleryMetadata = $event; window.localStorage.setItem('galleryShowMetadata', String(galleryMetadata))" />
+              </div>
+              <div class="toggle-row">
                 <span>캐릭터 적용 시 copyright 자동 추가</span>
-                <input type="checkbox" v-model="autoAddCopyright" @change="saveCopyrightPref" />
-              </label>
-              <label class="toggle-row">
+                <ToggleSwitch :model-value="autoAddCopyright" @update:model-value="autoAddCopyright = $event; saveCopyrightPref()" />
+              </div>
+              <div class="toggle-row">
                 <span>HISTORY 선택 이미지 테두리 깜빡임</span>
-                <input type="checkbox" v-model="historyBlink" @change="saveHistoryBlink" />
-              </label>
+                <ToggleSwitch :model-value="historyBlink" @update:model-value="historyBlink = $event; saveHistoryBlink()" />
+              </div>
             </div>
           </div>
           <div class="glass-card mt-16">
@@ -350,6 +350,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
+import ToggleSwitch from '../components/ToggleSwitch.vue'
 
 const subTabs = [
   // keywords: 사용자 검색 시 라벨 외에도 매칭할 한/영 키워드들
