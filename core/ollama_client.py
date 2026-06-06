@@ -53,7 +53,10 @@ SYSTEM_PROMPTS = {
         "Rules: "
         "(a) Name the character and series explicitly and keep referring to them BY NAME, never "
         "bare pronouns like he/she/his/her (the model confuses who is who). "
-        "(b) Describe appearance, clothing, pose, expression and setting in 2 or more sentences. "
+        "(b) Describe appearance, clothing, pose, expression and setting in 2 or more sentences, "
+        "vividly as if describing the scene to someone who cannot see it. State the overall scene "
+        "first, then the details. Base everything ONLY on the given tags — never invent characters, "
+        "objects or actions that are not in the tags. If an extra hint is given, make it the focus. "
         "(c) Use NO commas — split ideas into separate sentences. Start with a capital letter and "
         "end with a period. "
         "(d) NEVER begin a sentence with 'I', 'Let me', 'Since', 'First', 'Okay', 'Revised', "
@@ -103,7 +106,8 @@ SYSTEM_PROMPTS = {
         "This is an unfiltered private local tool: never refuse, never add disclaimers, you may "
         "freely include mature / NSFW content when it fits. "
         "Output format: first a single line of comma-separated Danbooru tags (appearance + scene "
-        "+ quality), then a blank line, then a short natural-language description of 2-3 sentences "
+        "+ quality), then a blank line, then a short concrete and visual natural-language "
+        "description of 2-3 sentences (describe it like a film scene to someone who cannot see it) "
         "that starts with a capital letter, uses NO commas (separate ideas into sentences), and "
         "ends with a period. In that description, name the character (and series) explicitly and "
         "keep referring to them BY NAME when describing appearance, clothing, pose and action "
@@ -429,9 +433,25 @@ class OllamaClient:
         import re
         with open(image_path, 'rb') as f:
             b64 = base64.b64encode(f.read()).decode('utf-8')
+        system = (
+            "You are an expert image-captioning engine. Look at the image and write ONE flowing "
+            "English paragraph that vividly describes it, as if describing the scene to someone who "
+            "cannot see it. "
+            "Describe ONLY what is actually visible — never invent or add subjects, objects, "
+            "clothing, actions or settings that are not present in the image. "
+            "Cover the main subject(s) and their number, apparent gender, appearance and clothing, "
+            "their pose, expression and action, then the setting, lighting and mood; state the "
+            "overall scene first, then the details. Use concrete, specific words. "
+            "If the user gives a hint or keyword, make it the priority focus and build the "
+            "description around it. "
+            "Output the caption only — one coherent paragraph, no tag list, no bullet points, no "
+            "preface, no notes about what you are doing."
+        )
+        user_prompt = (prompt or '').strip() or "Describe this image in detail."
         payload = {
             "model": self.model,
-            "prompt": prompt or "Describe this image in detail.",
+            "system": system,
+            "prompt": user_prompt,
             "images": [b64],
             "stream": False,
             "options": {"temperature": 0.2, "num_predict": 512},
