@@ -163,10 +163,11 @@ class GenerationMixin:
                 width, height = cand_w, cand_h
                 print(f"[HighRes] {hr_factor}x → {base_w}x{base_h} → {width}x{height}")
 
-        # ANIMA 면적 안전캡: 자동 해상도 모드에서 최종 면적이 1536²를 넘으면 비율
-        # 유지하며 면적이 한도 이하가 되도록 축소(8배수). base 자체가 큰 경우
-        # (고해상도 미적용)도 처리. floor 정렬이라 결과 면적은 항상 한도 이하.
-        if _auto_res and (width * height > _ANIMA_MAX_AREA):
+        # ANIMA 면적 안전캡: 자동 해상도 모드 또는 고해상도 모드에서 최종 면적이 1536²를
+        # 넘으면 비율 유지하며 면적이 한도 이하가 되도록 축소(8배수).
+        # 예) 고해상도로 2048×2048이 나오면 1536×1536으로 캡.
+        # (수동 해상도 + 고해상도 OFF는 사용자 의도 존중 → 미적용.)
+        if (_auto_res or hr_factor > 1.0) and (width * height > _ANIMA_MAX_AREA):
             _scale = (_ANIMA_MAX_AREA / float(width * height)) ** 0.5
             _nw = max(8, (int(width * _scale) // 8) * 8)
             _nh = max(8, (int(height * _scale) // 8) * 8)
