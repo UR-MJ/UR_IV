@@ -2319,22 +2319,10 @@ onMounted(async () => {
 .rand-res-add span { color: var(--text-muted); font-size: 10px; }
 .rand-res-input { width: 50px; padding: 3px 4px; font-size: 10px; text-align: center; }
 .rand-res-btn { width: 24px; height: 24px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-weight: 900; cursor: pointer; font-size: 14px; }
-.ext-check-row { display: flex; width: fit-content; max-width: 100%; align-self: flex-start; align-items: center; gap: 7px; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 6px; white-space: nowrap; }
-/* 체크박스 → 토글 스위치 (ADVANCED SETTINGS 주요 토글 전체) */
-.ext-check-row input[type="checkbox"] {
-  appearance: none; -webkit-appearance: none; margin: 0; flex-shrink: 0;
-  width: 32px; height: 17px; border-radius: 9px;
-  background: var(--bg-button); border: 1px solid var(--border);
-  position: relative; cursor: pointer; transition: background .18s, border-color .18s;
-}
-.ext-check-row input[type="checkbox"]::before {
-  content: ''; position: absolute; top: 1px; left: 1px;
-  width: 13px; height: 13px; border-radius: 50%;
-  background: var(--text-muted); transition: left .18s, background .18s;
-}
-.ext-check-row input[type="checkbox"]:checked { background: rgba(74,222,128,0.28); border-color: #4ade80; }
-.ext-check-row input[type="checkbox"]:checked::before { left: 16px; background: #4ade80; }
-.ext-check-row input[type="checkbox"] { flex-shrink: 0; margin: 0; }
+.ext-check-row { display: flex; align-items: center; gap: 6px; width: fit-content; max-width: 100%; font-size: 10px; color: var(--text-secondary); cursor: pointer; margin-bottom: 5px; white-space: nowrap; }
+/* 네이티브 체크박스(초록 강조) — appearance:none 토글이 왕복 위젯에서 반응이
+   불안정해(한 박자 늦게 켜짐) 안정적인 네이티브로 복귀. accent-color로 색만 입힘. */
+.ext-check-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: #4ade80; cursor: pointer; flex-shrink: 0; margin: 0; }
 .ext-check-row span { overflow: hidden; text-overflow: ellipsis; }
 .ext-check-row input[type="checkbox"] { accent-color: var(--accent); }
 .ext-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
