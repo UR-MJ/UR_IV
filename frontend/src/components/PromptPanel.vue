@@ -273,6 +273,7 @@ watch(tagBlockMode, v => window.localStorage.setItem('tagBlockMode', String(v)))
 
 // 같은 SPA 내 변경 감지 (keep-alive 환경)
 let _blockModeTimer = null
+const _backendUnsubs = []   // onBackendEvent 해제 함수 (탭 전환 시 누수 방지)
 onMounted(() => {
   _blockModeTimer = setInterval(() => {
     const stored = window.localStorage.getItem('tagBlockMode') === 'true'
@@ -290,6 +291,8 @@ onUnmounted(() => {
   if (_blockModeTimer) clearInterval(_blockModeTimer)
   window.removeEventListener('keydown', onKeyDownGlobal)
   if (debounceTimer) clearTimeout(debounceTimer)
+  for (const off of _backendUnsubs) { try { off() } catch {} }
+  _backendUnsubs.length = 0
   // UNDO watch들 일괄 해제
   for (const stop of _undoWatchStops) {
     try { stop() } catch {}
@@ -853,7 +856,7 @@ function growAll() { nextTick(() => { ;[totalPromptRef, negRef, artistRef, prefi
 onMounted(() => {
   setTimeout(growAll, 500); setTimeout(growAll, 1500)
   // UI prefs 로드 (재시작 시 블록 모드 복원)
-  onBackendEvent('uiPrefsLoaded', (json) => {
+  _backendUnsubs.push(onBackendEvent('uiPrefsLoaded', (json) => {
     try {
       const prefs = JSON.parse(json)
       if (typeof prefs.tagBlockMode === 'boolean') {
@@ -862,8 +865,8 @@ onMounted(() => {
       }
       if (typeof prefs.galleryShowMetadata === 'boolean') window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata))
     } catch {}
-  })
-  onBackendEvent('ollamaResult', (json) => {
+  }))
+  _backendUnsubs.push(onBackendEvent('ollamaResult', (json) => {
     ollamaLoading.value = false
     clearTimeout(ollamaTimer)
     try {
@@ -898,7 +901,7 @@ onMounted(() => {
         }
       }
     } catch {}
-  })
+  }))
 })
 
 watch(() => widgets.total_prompt_display, () => nextTick(() => { if (totalPromptRef.value) autoGrow(totalPromptRef.value) }))

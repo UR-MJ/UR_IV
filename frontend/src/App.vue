@@ -443,7 +443,7 @@
               <div class="lora-empty" v-if="loraStack.length === 0">
                 LoRA 매니저에서 추가하세요
               </div>
-              <div v-for="(lora, i) in loraStack" :key="i" class="lora-block" :class="{ 'lora-drag-over': loraDragIdx === i }"
+              <div v-for="(lora, i) in loraStack" :key="lora.name" class="lora-block" :class="{ 'lora-drag-over': loraDragIdx === i }"
                 draggable="true" @dragstart="loraDragStart(i)" @dragover.prevent @drop="loraDrop(i)" @dragend="loraDragIdx = -1">
                 <span class="lora-grip" title="드래그하여 순서 변경">⠿</span>
                 <label class="lora-check"><input type="checkbox" v-model="lora.enabled" /></label>
