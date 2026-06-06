@@ -10,6 +10,7 @@ export const condEnabled = ref(window.localStorage.getItem('condEnabled') !== 'f
 
 function _payload() {
   return {
+    enabled: condEnabled.value,   // 마스터 토글 — 백엔드가 cond_rules.json에서 읽어 ON/OFF 판단
     positive: condPositive.filter(r => r.condition || r.target),
     negative: condNegative.filter(r => r.condition || r.target),
   }
@@ -29,7 +30,7 @@ export function saveCondRules() {
 }
 watch(condPositive, _autoSave, { deep: true })
 watch(condNegative, _autoSave, { deep: true })
-watch(condEnabled, v => { try { window.localStorage.setItem('condEnabled', String(v)) } catch {} })
+watch(condEnabled, v => { try { window.localStorage.setItem('condEnabled', String(v)) } catch {}; saveCondRules() })
 
 export function addCondRule(which) {
   const arr = which === 'neg' ? condNegative : condPositive
@@ -58,6 +59,7 @@ export function loadCondRules() {
       const d = JSON.parse(json)
       if (condPositive.length === 0 && Array.isArray(d.positive)) d.positive.forEach(r => condPositive.push(r))
       if (condNegative.length === 0 && Array.isArray(d.negative)) d.negative.forEach(r => condNegative.push(r))
+      if (typeof d.enabled === 'boolean' && window.localStorage.getItem('condEnabled') === null) condEnabled.value = d.enabled
     } catch {}
   })
 }

@@ -358,11 +358,8 @@ class PromptHandlingMixin:
                      self.chk_remove_character_features.isChecked())):
             self._auto_insert_character_features(character_list)
 
-        # 10. 조건부 프롬프트 1차 적용 (와일드카드 해석 전)
-        cond_enabled = (hasattr(self, 'cond_prompt_check') and
-                        self.cond_prompt_check.isChecked())
-        if cond_enabled:
-            self._apply_conditional_prompts()
+        # 10. 조건부 프롬프트 1차 적용 (와일드카드 해석 전) — cond_rules.json 기반(내부에서 ON/OFF 판단)
+        self._apply_conditional_prompts()
 
         # 11. 와일드카드 치환
         wc_enabled = (hasattr(self, 'settings_tab') and
@@ -383,7 +380,7 @@ class PromptHandlingMixin:
             self.is_programmatic_change = False
 
         # 12. 조건부 프롬프트 2차 적용 (와일드카드 해석 후 새 태그에 대해)
-        if cond_enabled and wc_enabled:
+        if wc_enabled:
             self._apply_conditional_prompts()
 
         # 13. 자동 해상도 (Parquet H/W)
@@ -631,17 +628,26 @@ class PromptHandlingMixin:
         self.is_programmatic_change = False
 
     def _apply_conditional_prompts(self):
-        """조건부 프롬프트 규칙 적용 (블록 에디터 기반)"""
-        from utils.condition_block import apply_rules
-
-        rules = self.cond_block_editor_pos.get_rules() + self.cond_block_editor_neg.get_rules()
-        if not rules:
+        """조건부 프롬프트 적용 — Vue 모달이 저장한 config/cond_rules.json을 소스로 사용.
+        (자동화 덱 경로 포함 모든 경로. 기존엔 비어있는 블록에디터를 읽어 동작하지 않았다.)"""
+        import os
+        import json as _json
+        try:
+            path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                'config', 'cond_rules.json')
+            if not os.path.exists(path):
+                return
+            with open(path, 'r', encoding='utf-8') as f:
+                data = _json.load(f)
+        except Exception:
             return
-
-        all_tags = self._collect_all_tags()
-        prevent_dupe = self.cond_prevent_dupe_check.isChecked()
-        result = apply_rules(rules, all_tags, prevent_dupe=prevent_dupe)
-        self._apply_condition_result(result)
+        if data.get('enabled') is False:   # 마스터 토글 OFF
+            return
+        pos = [r for r in data.get('positive', []) if r.get('enabled', True)]
+        neg = [r for r in data.get('negative', []) if r.get('enabled', True)]
+        if pos or neg:
+            # 동작하는 Vue 규칙 변환기 재사용 (add/remove/replace, main/prefix/suffix/neg)
+            self._apply_vue_conditional_rules(pos, neg)
 
     def apply_random_prompt(self):
         """랜덤 프롬프트 적용 (rating 필터 반영)"""
