@@ -12,6 +12,7 @@ import { requestAction } from '../stores/widgetStore.js'
  * @param {Function} deps.saveUiPrefs (payload) ui_prefs 영속
  */
 export function useLoraStack({ storeWidgets, addToast, saveUiPrefs }) {
+  /** @type {import('../types/bridge').LoraEntry[]} */
   const loraStack = reactive([])
 
   // localStorage 복원 (빠른 폴백 — 시작 시 uiPrefs가 override)

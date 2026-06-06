@@ -463,7 +463,7 @@
                 </div>
                 <input type="range" min="-100" max="200" v-model.number="lora.weight" class="lora-slider" />
                 <input type="number" class="lora-weight-input" :value="(lora.weight / 100).toFixed(2)" step="0.05" min="-1" max="3"
-                  title="가중치 직접 입력" @change="lora.weight = Math.round((parseFloat($event.target.value) || 0) * 100)" @mousedown.stop />
+                  title="가중치 직접 입력" @change="lora.weight = Math.round((parseFloat(($event.target as HTMLInputElement).value) || 0) * 100)" @mousedown.stop />
                 <button class="lora-remove" @click="loraStack.splice(i, 1)">✕</button>
               </div>
               </template>
@@ -948,7 +948,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { initBridge, onBackendEvent, getBackend } from './bridge.js'
 import { requestAction, useWidgetStore } from './stores/widgetStore.js'
@@ -964,7 +964,7 @@ const upscalerItems = computed(() => wStore.getProperty('upscaler_combo', 'items
 const sam3CheckpointItems = computed(() => wStore.getProperty('_sam3_checkpoint', 'items') || ['sam3.pt'])
 const sam3DeviceItems = ['cuda', 'auto', 'cpu']
 const sam3FillItems = ['fill', 'original', 'latent noise', 'latent nothing']
-const adModelItems = ref([])
+const adModelItems = ref<string[]>([])
 // ADetailer 슬롯 별도 Checkpoint/VAE 목록 (s1/s2 동일하게 Python이 채움)
 const adCheckpointItems = computed(() => wStore.getProperty('_ad_s1_ckpt', 'items') || ['Use same checkpoint'])
 const adVaeItems = computed(() => wStore.getProperty('_ad_s1_vae', 'items') || ['Use same VAE'])
@@ -984,13 +984,13 @@ const {
 } = useHighRes({ storeWidgets, saveUiPrefs })
 
 // 랜덤 해상도 관리
-const randomResList = ref([])
+const randomResList = ref<Array<[number, number, string]>>([])
 const newResW = ref(832)
 const newResH = ref(1216)
 async function loadRandomResList() {
   const bk = await getBackend()
   if (bk.getRandomResolutions) {
-    bk.getRandomResolutions((json) => {
+    bk.getRandomResolutions((json: string) => {
       try { randomResList.value = JSON.parse(json) } catch {}
     })
   }
@@ -1002,7 +1002,7 @@ function addRandomRes() {
   randomResList.value.push([w, h, `${w}x${h}`])
   requestAction('set_random_resolutions', { list: randomResList.value })
 }
-function removeRandomRes(i) {
+function removeRandomRes(i: number) {
   randomResList.value.splice(i, 1)
   requestAction('set_random_resolutions', { list: randomResList.value })
 }
@@ -1010,7 +1010,7 @@ const negpipEnabled = computed({ get: () => storeWidgets.negpip_group === 'true'
 
 const hires_enabled = computed({ get: () => storeWidgets.hires_options_group === 'true', set: v => { storeWidgets.hires_options_group = v ? 'true' : 'false' } })
 // 공유 헬퍼 — 여러 composable이 주입받아 사용(함수 선언이라 hoisting으로 위에서도 호출됨)
-function saveUiPrefs(payload) {
+function saveUiPrefs(payload: any) {
   requestAction('save_ui_prefs', payload)
 }
 // Rating 필터 — composables/useRatingFilter.js로 추출 (App.vue 분할 ④)
@@ -1047,7 +1047,7 @@ import { uiModals, closeCharPresetModal, openAbTestModal, closeAbTestModal,
          openCharOverrideModal, closeCharOverrideModal } from './composables/uiModals.js'
 
 const currentImage = ref('')
-const imageVersions = reactive({})
+const imageVersions = reactive<Record<string, number>>({})
 // HISTORY 선택 이미지 테두리 깜빡임 (Settings에서 on/off)
 const historyBlink = ref(window.localStorage.getItem('historyBlinkSelected') !== 'false')
 const resolution = ref('')
@@ -1061,9 +1061,9 @@ const showLeftPanel = ref(true)
 
 // 스크롤 위치 기억 — 탭 전환/버튼으로 패널이 언마운트→재마운트돼도 위치 복원.
 // 모듈 스코프 객체에 key별 scrollTop 저장 (세션 동안 유지).
-const _scrollMem = {}
+const _scrollMem: Record<string, number> = {}
 const vScrollMemory = {
-  mounted(el, binding) {
+  mounted(el: any, binding: any) {
     const key = binding.value
     el.__sk = key
     el.__onScroll = () => { _scrollMem[key] = el.scrollTop }
@@ -1072,20 +1072,20 @@ const vScrollMemory = {
     nextTick(restore)
     setTimeout(restore, 80)   // 콘텐츠가 늦게 채워지는 경우 한 번 더
   },
-  updated(el) {
+  updated(el: any) {
     // 같은 탭에서 콘텐츠가 갱신돼 scrollTop이 0으로 튀면 복원
     const key = el.__sk
     if (key && (key in _scrollMem) && el.scrollTop === 0 && _scrollMem[key] > 0) {
       nextTick(() => { el.scrollTop = _scrollMem[key] })
     }
   },
-  beforeUnmount(el) {
+  beforeUnmount(el: any) {
     if (el.__sk) _scrollMem[el.__sk] = el.scrollTop
     if (el.__onScroll) el.removeEventListener('scroll', el.__onScroll)
   },
 }
 const showExtendPanel = ref(false)
-const historyImages = ref([])
+const historyImages = ref<string[]>([])
 const histPage = ref(0)
 const histPerPage = 5
 
@@ -1096,7 +1096,9 @@ const exifTabs = [
   { id: 'negative', label: 'Negative' },
   { id: 'params', label: 'Parameters' },
 ]
-const currentExif = ref({ prompt: '', negative: '', raw: '' })
+interface ExifParams { generation?: string; core?: string; model?: string; hires?: string; extensions?: string; other?: string; [k: string]: any }
+interface ExifData { prompt: string; negative: string; raw: string; params?: ExifParams | null; params_line?: string; [k: string]: any }
+const currentExif = ref<ExifData>({ prompt: '', negative: '', raw: '' })
 const exifContent = computed(() => {
   if (activeExifTab.value === 'positive') return currentExif.value.prompt || 'No EXIF data'
   if (activeExifTab.value === 'negative') return currentExif.value.negative || ''
@@ -1109,7 +1111,7 @@ const isAutomating = ref(false)
 const autoNlGen = ref(window.localStorage.getItem('autoNlGen') === 'true')
 const nlConverting = ref(false)
 const _lastAutoNl = ref('')   // 마지막 변환 결과(NL→NL 재변환 방지)
-let _nlGenResolve = null
+let _nlGenResolve: ((value: any) => void) | null = null
 watch(autoNlGen, (v) => {
   try { window.localStorage.setItem('autoNlGen', v ? 'true' : 'false') } catch {}
   saveUiPrefs({ autoNlGen: v })
@@ -1183,18 +1185,20 @@ watch(autoSettings, () => {
 }, { deep: true })
 
 // Toast 알림 시스템
-const toasts = ref([])
+interface Toast { id: number; type: string; msg: string; count: number; _ts: number; _timer?: ReturnType<typeof setTimeout>; [k: string]: any }
+interface ToastHistoryItem { id: number; type: string; msg: string; ts: number; [k: string]: any }
+const toasts = ref<Toast[]>([])
 let toastId = 0
 const MAX_TOASTS = 5
 
 // 알림(토스트) 히스토리 — 🔔 버튼으로 사라진 토스트 다시 보기
-const toastHistory = ref([])
+const toastHistory = ref<ToastHistoryItem[]>([])
 const showNotifPanel = ref(false)
 const unread = ref(0)
 const MAX_HISTORY = 40
 function toggleNotifPanel() { showNotifPanel.value = !showNotifPanel.value; if (showNotifPanel.value) unread.value = 0 }
 function clearNotifHistory() { toastHistory.value = [] }
-function relTime(ts) {
+function relTime(ts: number) {
   const s = Math.floor((Date.now() - ts) / 1000)
   if (s < 60) return `${s}초 전`
   const m = Math.floor(s / 60); if (m < 60) return `${m}분 전`
@@ -1202,7 +1206,7 @@ function relTime(ts) {
   return `${Math.floor(h / 24)}일 전`
 }
 
-function addToast(type, msg) {
+function addToast(type: string, msg: string) {
   const id = toastId++
   // 같은 메시지가 직전에 있으면 카운터만 증가 (스팸 방지)
   const last = toasts.value[toasts.value.length - 1]
@@ -1214,12 +1218,12 @@ function addToast(type, msg) {
     last._timer = setTimeout(() => removeToast(last.id), 3000)
     return
   }
-  const toast = { id, type, msg, count: 1, _ts: Date.now() }
+  const toast: Toast = { id, type, msg, count: 1, _ts: Date.now() }
   toasts.value.push(toast)
   toast._timer = setTimeout(() => removeToast(id), 3000)
   // 스택 초과분 — 가장 오래된 것부터 제거 (화면엔 최대 5개)
   while (toasts.value.length > MAX_TOASTS) {
-    const oldest = toasts.value.shift()
+    const oldest = toasts.value.shift()!
     if (oldest._timer) clearTimeout(oldest._timer)
   }
   // 알림 기록에 누적 (사라진 토스트도 🔔에서 다시 볼 수 있게)
@@ -1227,7 +1231,7 @@ function addToast(type, msg) {
   if (toastHistory.value.length > MAX_HISTORY) toastHistory.value.length = MAX_HISTORY
   if (!showNotifPanel.value) unread.value++
 }
-function removeToast(id) {
+function removeToast(id: number) {
   const t = toasts.value.find(x => x.id === id)
   if (t && t._timer) clearTimeout(t._timer)
   toasts.value = toasts.value.filter(t => t.id !== id)
@@ -1262,15 +1266,15 @@ async function ensureOllamaModel() {
     const bk = await getBackend()
     if (!bk || !bk.ollamaListModels) return
     const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
-    bk.ollamaListModels(url, (json) => {
+    bk.ollamaListModels(url, (json: string) => {
       try {
         const models = JSON.parse(json)
         if (!Array.isArray(models) || models.length === 0) return
         const cur = window.localStorage.getItem('ollamaModel') || ''
         // 태그(:latest 등) 차이를 허용하는 관대한 매칭 — 직접 추가한 커스텀 모델도 유지.
         // base 매칭되면 실제 목록 이름으로 정규화, 전혀 없으면 첫 모델로 폴백.
-        const base = (s) => (s || '').split(':')[0].toLowerCase()
-        const match = models.includes(cur) ? cur : models.find((m) => cur && base(m) === base(cur))
+        const base = (s: string) => (s || '').split(':')[0].toLowerCase()
+        const match = models.includes(cur) ? cur : models.find((m: string) => cur && base(m) === base(cur))
         const next = match || models[0]
         if (next && next !== cur) {
           window.localStorage.setItem('ollamaModel', next)
@@ -1303,19 +1307,20 @@ const ctxMenuStyle = computed(() => {
   return { top: y + 'px', left: x + 'px' }
 })
 
-const wildcards = ref([])
+interface Wildcard { name: string; file: string; tags: string[]; [k: string]: any }
+const wildcards = ref<Wildcard[]>([])
 const showPresetManager = ref(false)
-const presetList = ref([])
+const presetList = ref<string[]>([])
 const selectedPreset = ref('')
-const presetPreview = ref(null)
+const presetPreview = ref<any>(null)
 
 async function loadPresetList() {
   const bk = await getBackend()
-  if (bk.getPresetList) bk.getPresetList((json) => { try { presetList.value = JSON.parse(json) } catch {} })
+  if (bk.getPresetList) bk.getPresetList((json: string) => { try { presetList.value = JSON.parse(json) } catch {} })
 }
-async function loadPresetPreview(name) {
+async function loadPresetPreview(name: string) {
   const bk = await getBackend()
-  if (bk.getPresetData) bk.getPresetData(name, (json) => { try { presetPreview.value = JSON.parse(json) } catch {} })
+  if (bk.getPresetData) bk.getPresetData(name, (json: string) => { try { presetPreview.value = JSON.parse(json) } catch {} })
 }
 function loadSelectedPreset() {
   if (!selectedPreset.value) return
@@ -1337,7 +1342,8 @@ function saveNewPreset() {
 }
 
 const showWeightManager = ref(false)
-const globalWeights = reactive([])  // [{tag, weight}]
+interface GlobalWeight { tag: string; weight: number; [k: string]: any }
+const globalWeights = reactive<GlobalWeight[]>([])  // [{tag, weight}]
 
 function saveGlobalWeights() {
   const valid = globalWeights.filter(w => w.tag.trim())
@@ -1346,7 +1352,7 @@ function saveGlobalWeights() {
 }
 
 // 프롬프트에 글로벌 가중치 적용
-function applyGlobalWeights(text) {
+function applyGlobalWeights(text: string) {
   if (!globalWeights.length) return text
   let result = text
   for (const w of globalWeights) {
@@ -1367,16 +1373,25 @@ function applyGlobalWeights(text) {
 }
 // Generation Stats
 const showStatsModal = ref(false)
-const genStats = reactive({ total: 0, success: 0, fail: 0, success_rate: 0, avg_time: 0, total_time: 0, daily: [], daily_max: 0, top_models: [], top_resolutions: [], recent: [] })
+interface DailyStat { date: string; count: number; [k: string]: any }
+interface ModelStat { name: string; count: number; [k: string]: any }
+interface ResStat { res: string; count: number; [k: string]: any }
+interface RecentStat { timestamp: string; success: boolean; duration_sec: number; width: number; height: number; model: string; [k: string]: any }
+interface GenStats {
+  total: number; success: number; fail: number; success_rate: number; avg_time: number; total_time: number;
+  daily: DailyStat[]; daily_max: number; top_models: ModelStat[]; top_resolutions: ResStat[]; recent: RecentStat[];
+  [k: string]: any
+}
+const genStats = reactive<GenStats>({ total: 0, success: 0, fail: 0, success_rate: 0, avg_time: 0, total_time: 0, daily: [], daily_max: 0, top_models: [], top_resolutions: [], recent: [] })
 async function loadGenStats() {
   const bk = await getBackend()
   if (bk.getGenStats) {
-    bk.getGenStats((json) => {
+    bk.getGenStats((json: string) => {
       try { Object.assign(genStats, JSON.parse(json)) } catch {}
     })
   }
 }
-function formatTime(sec) {
+function formatTime(sec: number) {
   if (!sec) return '0s'
   if (sec < 60) return sec + 's'
   if (sec < 3600) return Math.floor(sec / 60) + 'm ' + Math.round(sec % 60) + 's'
@@ -1386,18 +1401,19 @@ function formatTime(sec) {
 const showWcManager = ref(false)
 const selectedWc = ref('')
 const selectedWcData = computed(() => wildcards.value.find(w => w.name === selectedWc.value) || null)
-const wcEditLines = ref([])
+const wcEditLines = ref<string[]>([])
 const wcInsertTarget = ref('main')
 
 // 워크플로우 프로파일
 const showProfileManager = ref(false)
-const workflowProfiles = ref([])  // [{name, created_at, model, vae}]
+interface WorkflowProfile { name: string; created_at?: string; model?: string; vae?: string; [k: string]: any }
+const workflowProfiles = ref<WorkflowProfile[]>([])  // [{name, created_at, model, vae}]
 const profileNames = computed(() => workflowProfiles.value.map(p => p.name))
 
 function loadWorkflowProfilesList() {
   action('workflow_profile_list', {})
 }
-function loadWorkflowProfile(name) {
+function loadWorkflowProfile(name: string | number) {
   if (!name) return
   action('workflow_profile_load', { name })
 }
@@ -1409,12 +1425,12 @@ function saveCurrentAsProfile() {
   if (existing && !window.confirm(`'${name}' 이미 존재합니다. 덮어쓸까요?`)) return
   action('workflow_profile_save', { name: name.trim() })
 }
-function deleteWorkflowProfile(name) {
+function deleteWorkflowProfile(name: string) {
   if (!window.confirm(`'${name}' 삭제할까요?`)) return
   action('workflow_profile_delete', { name })
   workflowProfiles.value = workflowProfiles.value.filter(p => p.name !== name)
 }
-function renameWorkflowProfile(oldName) {
+function renameWorkflowProfile(oldName: string) {
   const newName = window.prompt(`'${oldName}' → 새 이름:`, oldName)
   if (!newName || !newName.trim() || newName.trim() === oldName) return
   action('workflow_profile_rename', { old: oldName, new: newName.trim() })
@@ -1422,18 +1438,19 @@ function renameWorkflowProfile(oldName) {
 
 // 프롬프트 섹션 순서 매니저
 const showOrderManager = ref(false)
-const promptOrderList = ref([])  // [{key, label}, ...]
+interface PromptOrderSection { key: string; label: string; [k: string]: any }
+const promptOrderList = ref<PromptOrderSection[]>([])  // [{key, label}, ...]
 
 function loadPromptOrder() {
   action('prompt_order_list', {})
 }
-function moveOrderUp(i) {
+function moveOrderUp(i: number) {
   if (i <= 0) return
   const arr = [...promptOrderList.value]
   ;[arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]
   promptOrderList.value = arr
 }
-function moveOrderDown(i) {
+function moveOrderDown(i: number) {
   if (i >= promptOrderList.value.length - 1) return
   const arr = [...promptOrderList.value]
   ;[arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]
@@ -1453,14 +1470,15 @@ function resetPromptOrder() {
 
 // PR 8: Instant Wildcards 상태
 const showInstantWcManager = ref(false)
-const instantWildcards = ref([])  // [{name, lines}]
+interface InstantWildcard { name: string; lines: string[]; [k: string]: any }
+const instantWildcards = ref<InstantWildcard[]>([])  // [{name, lines}]
 const selectedInstantWc = ref('')
 const selectedInstantWcData = computed(() =>
   instantWildcards.value.find(w => w.name === selectedInstantWc.value) || null
 )
-const iwEditLines = ref([])
+const iwEditLines = ref<string[]>([])
 
-function selectInstantWc(name) {
+function selectInstantWc(name: string) {
   selectedInstantWc.value = name
   const iw = instantWildcards.value.find(w => w.name === name)
   iwEditLines.value = iw ? [...iw.lines] : []
@@ -1493,7 +1511,7 @@ function saveCurrentInstantWc() {
   addToast('success', `인스턴트 와일드카드 저장: $$${selectedInstantWc.value}$$`)
 }
 
-function deleteInstantWc(name) {
+function deleteInstantWc(name: string) {
   if (!window.confirm(`'${name}' 삭제할까요?`)) return
   action('instant_wildcards_delete', { name })
   instantWildcards.value = instantWildcards.value.filter(w => w.name !== name)
@@ -1503,7 +1521,7 @@ function deleteInstantWc(name) {
   }
 }
 
-function selectWildcard(name) {
+function selectWildcard(name: string) {
   selectedWc.value = name
   const wc = wildcards.value.find(w => w.name === name)
   wcEditLines.value = wc ? [...wc.tags] : []
@@ -1513,7 +1531,7 @@ async function saveCurrentWildcard() {
   if (!selectedWc.value) return
   const bk = await getBackend()
   const content = wcEditLines.value.join('\n')
-  bk.saveWildcard(selectedWc.value + '.txt', content, (json) => {
+  bk.saveWildcard(selectedWc.value + '.txt', content, (json: string) => {
     try { const r = JSON.parse(json); if (r.ok) addToast('success', '와일드카드 저장됨') } catch {}
   })
   // 로컬 업데이트
@@ -1531,7 +1549,7 @@ async function createNewWildcard() {
   })
 }
 
-async function deleteWildcard(name) {
+async function deleteWildcard(name: string) {
   if (!confirm(`"${name}" 와일드카드를 삭제할까요?`)) return
   const bk = await getBackend()
   bk.deleteWildcard(name, () => {
@@ -1540,7 +1558,7 @@ async function deleteWildcard(name) {
   })
 }
 
-async function renameWildcard(oldName) {
+async function renameWildcard(oldName: string) {
   const newName = prompt('새 이름:', oldName)
   if (!newName || newName === oldName) return
   const bk = await getBackend()
@@ -1553,7 +1571,7 @@ async function renameWildcard(oldName) {
 
 const wcRenaming = ref(false)
 const wcNewName = ref('')
-const wcRenameRef = ref(null)
+const wcRenameRef = ref<HTMLInputElement | null>(null)
 
 function startWcRename() {
   wcRenaming.value = true
@@ -1582,7 +1600,7 @@ function useWcSyntax() {
     navigator.clipboard?.writeText(syntax)
     addToast('info', '문법 복사됨: ' + syntax)
   } else {
-    const targetMap = { main: 'main_prompt_text', prefix: 'prefix_prompt_text', suffix: 'suffix_prompt_text' }
+    const targetMap: Record<string, string> = { main: 'main_prompt_text', prefix: 'prefix_prompt_text', suffix: 'suffix_prompt_text' }
     const key = targetMap[wcInsertTarget.value] || 'main_prompt_text'
     const cur = storeWidgets[key] || ''
     storeWidgets[key] = cur ? cur.replace(/,?\s*$/, '') + ', ' + syntax + ', ' : syntax + ', '
@@ -1590,23 +1608,23 @@ function useWcSyntax() {
   }
 }
 
-function addWcLine(afterIdx) { wcEditLines.value.splice(afterIdx + 1, 0, '') }
+function addWcLine(afterIdx: number) { wcEditLines.value.splice(afterIdx + 1, 0, '') }
 
-function openWildcardByName(name) {
+function openWildcardByName(name: string) {
   showWcManager.value = true
   selectWildcard(name)
 }
 
-function action(name, payload = {}) { requestAction(name, payload) }
+function action(name: string, payload: any = {}) { requestAction(name, payload) }
 
-function insertWildcardTag(tag) {
+function insertWildcardTag(tag: string) {
   const cur = storeWidgets.main_prompt_text || ''
   storeWidgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
 }
 
 // 태그→자연어 변환 (전용 채널 genNlResult로 결과 수신 — PromptPanel 리스너와 분리)
-function _convertTagsToNl(tags) {
-  return new Promise((resolve) => {
+function _convertTagsToNl(tags: string) {
+  return new Promise<any>((resolve) => {
     _nlGenResolve = resolve
     nlConverting.value = true
     const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
@@ -1620,7 +1638,7 @@ function _convertTagsToNl(tags) {
     }, 65000)
   })
 }
-function _finishNlGen(result) {
+function _finishNlGen(result: any) {
   if (!_nlGenResolve) return
   const r = _nlGenResolve; _nlGenResolve = null; nlConverting.value = false
   r(result)
@@ -1676,13 +1694,13 @@ function cancelGeneration() {
   genEta.value = ''
 }
 
-function showHistoryMenu(e, path) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
+function showHistoryMenu(e: MouseEvent, path: string) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
 function hideCtxMenu() { ctxMenu.value.show = false }
 const ctxAddFavorite = () => { action('add_favorite', { path: ctxMenu.value.path }); hideCtxMenu() }
 const ctxSendI2I = () => { action('send_to_i2i', { path: ctxMenu.value.path }); hideCtxMenu() }
 const ctxSendInpaint = () => { action('send_to_inpaint', { path: ctxMenu.value.path }); hideCtxMenu() }
 const ctxSendEditor = () => { action('send_to_editor', { path: ctxMenu.value.path }); hideCtxMenu() }
-const ctxCompare = (slot) => { action('send_to_compare', { path: ctxMenu.value.path, slot }); hideCtxMenu() }
+const ctxCompare = (slot: any) => { action('send_to_compare', { path: ctxMenu.value.path, slot }); hideCtxMenu() }
 const ctxRunAdetailer = () => { action('run_adetailer_single', { path: ctxMenu.value.path, settings: { ad_model: 'face_yolov8n.pt', ad_confidence: 0.3, ad_denoise: 0.4 } }); hideCtxMenu() }
 const ctxCopyPath = () => { navigator.clipboard?.writeText(ctxMenu.value.path); hideCtxMenu() }
 const ctxPullPrompt = () => { action('pull_prompt_from_image', { path: ctxMenu.value.path }); hideCtxMenu() }
@@ -1700,7 +1718,7 @@ const ctxDelete = () => {
   hideCtxMenu()
 }
 
-async function selectHistoryImage(path) {
+async function selectHistoryImage(path: string) {
   // (선택 시엔 이미지 내용이 안 바뀌므로 cache-bust 하지 않음 — 매 선택마다 썸네일이
   //  재로드되어 점멸하던 버그 수정. 재생성 시 cache-bust는 imageGenerated 핸들러가 처리.)
   currentImage.value = path
@@ -1710,7 +1728,7 @@ async function selectHistoryImage(path) {
   // EXIF 로드
   const backend = await getBackend()
   if (backend.getImageExif) {
-    backend.getImageExif(path, (json) => {
+    backend.getImageExif(path, (json: string) => {
       try {
         const d = JSON.parse(json)
         currentExif.value = { prompt: d.prompt || '', negative: d.negative || '', raw: d.raw || '', params: d.params || null, params_line: d.params_line || '' }
@@ -1719,14 +1737,14 @@ async function selectHistoryImage(path) {
   }
 }
 
-function historyImageSrc(path) {
+function historyImageSrc(path: string) {
   if (!path) return ''
   return `file:///${path}?t=${imageVersions[path] || 0}`
 }
 
 // History 키보드 상하 네비게이션 — 전역 ↑/↓로 이전/다음 이미지 선택.
 // 선택이 없으면 첫 이미지부터. 페이지 경계를 넘으면 histPage도 따라 이동.
-function navigateHistory(dir) {
+function navigateHistory(dir: number) {
   const list = historyImages.value
   if (!list.length) return
   let idx = list.indexOf(currentImage.value)
@@ -1737,7 +1755,7 @@ function navigateHistory(dir) {
 }
 
 // 최상단(top=최신)/최하단(bottom=가장 오래됨)으로 바로 이동 (Shift+화살표 등)
-function navigateHistoryEdge(edge) {
+function navigateHistoryEdge(edge: string) {
   const list = historyImages.value
   if (!list.length) return
   const idx = edge === 'top' ? 0 : list.length - 1
@@ -1746,12 +1764,12 @@ function navigateHistoryEdge(edge) {
 }
 
 // 드래그 앤 드롭 지원
-function onDragStart(e, path) {
-  e.dataTransfer.setData('text/plain', path)
-  e.dataTransfer.effectAllowed = 'copy'
+function onDragStart(e: DragEvent, path: string) {
+  e.dataTransfer!.setData('text/plain', path)
+  e.dataTransfer!.effectAllowed = 'copy'
 }
 
-function onTabChanged(tabName) {
+function onTabChanged(tabName: string) {
   showLeftPanel.value = ['t2i', 'i2i', 'inpaint'].includes(tabName)
   showExtendPanel.value = false
   hideCtxMenu()
@@ -1760,7 +1778,7 @@ function onTabChanged(tabName) {
 async function loadHistory() {
   const backend = await getBackend()
   if (backend.getGalleryImages) {
-    backend.getGalleryImages('', (json) => {
+    backend.getGalleryImages('', (json: string) => {
       try {
         const arr = JSON.parse(json)  // 무제한 — 생성/저장한 만큼 전부 표시
         historyImages.value = arr
@@ -1780,8 +1798,9 @@ const router = useRouter()
 const route = useRoute()
 
 // ── 세션 복구 (크래시/VRAM OOM 후 작업 이어가기) ──
-const sessionRestore = ref(null)   // {tab, prompt, negative} | null
-let _sessionSaveTimer = null
+interface SessionData { tab?: string; prompt?: string; negative?: string; [k: string]: any }
+const sessionRestore = ref<SessionData | null>(null)   // {tab, prompt, negative} | null
+let _sessionSaveTimer: ReturnType<typeof setTimeout> | null = null
 function _saveSessionNow() {
   getBackend().then((bk) => {
     if (!bk || !bk.saveSession) return
@@ -1800,7 +1819,7 @@ function _scheduleSessionSave() {
 async function _checkSessionRestore() {
   const bk = await getBackend()
   if (!bk || !bk.getSession) return
-  bk.getSession((json) => {
+  bk.getSession((json: string) => {
     try {
       const d = JSON.parse(json)
       // 현재 메인이 비어 있는데 저장된 프롬프트가 있으면 복원 제안 (정상 시작 땐 안 띄움)
@@ -1823,7 +1842,7 @@ function dismissSessionRestore() { sessionRestore.value = null }
 
 // UI 크기 — Chromium zoom 으로 전역 확대 (폰트/아이콘/패딩 비례)
 // 변경 시 즉시 반영, localStorage 영속, 다른 탭(Settings)에서 변경하면 storage event로 동기화
-const _applyUiScale = (val) => {
+const _applyUiScale = (val: any) => {
   const n = parseFloat(val)
   const scale = (!isNaN(n) && n >= 0.7 && n <= 2.0) ? n : 1.0
   try { document.documentElement.style.zoom = String(scale) } catch {}
@@ -1843,9 +1862,9 @@ onMounted(async () => {
     if (e.key === 'ui.scale') _applyUiScale(e.newValue)
   })
   // 같은 창에서의 변경 (Settings 슬라이더)도 즉시 — 커스텀 이벤트
-  window.addEventListener('uiScaleChanged', (e) => _applyUiScale(e.detail?.value))
+  window.addEventListener('uiScaleChanged', (e) => _applyUiScale((e as CustomEvent).detail?.value))
   // HISTORY 선택 깜빡임 토글 — Settings에서 변경 시 즉시 반영
-  window.addEventListener('historyBlinkChanged', (e) => { historyBlink.value = !!e.detail?.value })
+  window.addEventListener('historyBlinkChanged', (e) => { historyBlink.value = !!(e as CustomEvent).detail?.value })
   // localStorage 캐시로 즉시 표시 (응답 빠르게), 그 후 backend에서 최신 가져옴
   try {
     const cached = localStorage.getItem('historyImagesCache')
@@ -1884,7 +1903,7 @@ onMounted(async () => {
     }
     // History ↑/↓ 네비게이션 — 입력 필드/모달 포커스 중이 아닐 때만
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      const ae = document.activeElement
+      const ae = document.activeElement as HTMLElement | null
       const tag = (ae?.tagName || '').toLowerCase()
       const editable = tag === 'input' || tag === 'textarea' || tag === 'select' || ae?.isContentEditable
       const anyModal = showExtendPanel.value || showPresetManager.value || showWeightManager.value
@@ -1894,7 +1913,7 @@ onMounted(async () => {
         e.preventDefault()
         // 설정된 보조키(기본 Shift) + 화살표 → 최상단/최하단으로 바로 점프
         const mod = localStorage.getItem('historyJumpModifier') || 'shiftKey'
-        if (e[mod]) {
+        if ((e as any)[mod]) {
           navigateHistoryEdge(e.key === 'ArrowDown' ? 'bottom' : 'top')
         } else {
           navigateHistory(e.key === 'ArrowDown' ? 1 : -1)
@@ -1909,13 +1928,13 @@ onMounted(async () => {
   // 워크플로우 프로파일 목록 미리 로드 (드롭다운에 즉시 보이도록)
   setTimeout(loadWorkflowProfilesList, 800)
 
-  onBackendEvent('tabChanged', (tabId) => {
+  onBackendEvent('tabChanged', (tabId: string) => {
     const targetPath = tabId === 't2i' ? '/' : `/${tabId}`
     router.push(targetPath)
     onTabChanged(tabId)
   })
 
-  onBackendEvent('imageGenerated', async (data) => {
+  onBackendEvent('imageGenerated', async (data: string) => {
     const parsed = JSON.parse(data)
     if (parsed.path) imageVersions[parsed.path] = Date.now()
     isGenerating.value = false
@@ -1942,7 +1961,7 @@ onMounted(async () => {
       // 생성 직후 EXIF 자동 로드 (추종 중일 때만 현재 EXIF 갱신)
       const bk = await getBackend()
       if (bk.getImageExif) {
-        bk.getImageExif(parsed.path, (json) => {
+        bk.getImageExif(parsed.path, (json: string) => {
           try {
             const d = JSON.parse(json)
             currentExif.value = { prompt: d.prompt || '', negative: d.negative || '', raw: d.raw || '', params: d.params || null, params_line: d.params_line || '' }
@@ -1952,7 +1971,7 @@ onMounted(async () => {
     }
   })
   onBackendEvent('generationStarted', () => { isGenerating.value = true; autoWaiting.value = false; progressVal.value = 0; genStartTime.value = Date.now(); genEta.value = '' })
-  onBackendEvent('automationStatus', (json) => {
+  onBackendEvent('automationStatus', (json: string) => {
     try {
       const d = JSON.parse(json)
       isAutomating.value = d.running || false
@@ -1968,28 +1987,28 @@ onMounted(async () => {
     } catch {}
   })
   // 워크플로우 프로파일 목록 수신
-  onBackendEvent('workflowProfilesList', (json) => {
+  onBackendEvent('workflowProfilesList', (json: string) => {
     try {
       const arr = JSON.parse(json)
       if (Array.isArray(arr)) workflowProfiles.value = arr
     } catch {}
   })
   // 프롬프트 섹션 순서 수신
-  onBackendEvent('promptOrderLoaded', (json) => {
+  onBackendEvent('promptOrderLoaded', (json: string) => {
     try {
       const arr = JSON.parse(json)
       if (Array.isArray(arr)) promptOrderList.value = arr
     } catch {}
   })
   // PR 8: 인스턴트 와일드카드 목록 수신
-  onBackendEvent('instantWildcardsList', (json) => {
+  onBackendEvent('instantWildcardsList', (json: string) => {
     try {
       const arr = JSON.parse(json)
       if (Array.isArray(arr)) instantWildcards.value = arr
     } catch {}
   })
   // PR 9: 백엔드가 모드별 자동화 설정을 푸시 (시작 시 + 백엔드 모드 전환 시)
-  onBackendEvent('automationSettingsLoaded', (json) => {
+  onBackendEvent('automationSettingsLoaded', (json: string) => {
     try {
       const d = JSON.parse(json)
       _applyingAutoFromServer = true  // watch에서 다시 서버로 보내는 루프 방지
@@ -2003,7 +2022,7 @@ onMounted(async () => {
       Promise.resolve().then(() => { _applyingAutoFromServer = false })
     } catch {}
   })
-  onBackendEvent('generationProgress', (step, total) => {
+  onBackendEvent('generationProgress', (step: number, total: number) => {
     progressVal.value = Math.round(step / total * 100)
     status.value = `Generating... ${step}/${total}`
     // 간단 ETA: 시작 시각 기준
@@ -2015,11 +2034,11 @@ onMounted(async () => {
         : `ETA ${remaining.toFixed(0)}s`
     }
   })
-  onBackendEvent('generationError', (msg) => { isGenerating.value = false; genEta.value = ''; status.value = `Error: ${msg}` })
+  onBackendEvent('generationError', (msg: string) => { isGenerating.value = false; genEta.value = ''; status.value = `Error: ${msg}` })
 
   // 글로벌 가중치 로드
-  onBackendEvent('globalWeightsLoaded', (json) => {
-    try { const d = JSON.parse(json); globalWeights.splice(0); d.forEach(w => globalWeights.push(w)) } catch {}
+  onBackendEvent('globalWeightsLoaded', (json: string) => {
+    try { const d = JSON.parse(json); globalWeights.splice(0); d.forEach((w: GlobalWeight) => globalWeights.push(w)) } catch {}
   })
 
   // 랜덤 해상도 로드
@@ -2028,18 +2047,18 @@ onMounted(async () => {
   // ADetailer 모델 로드
   const _bk = await getBackend()
   syncAutomationSettings()
-  if (_bk.getADetailerModels) _bk.getADetailerModels((json) => { try { adModelItems.value = JSON.parse(json) } catch {} })
+  if (_bk.getADetailerModels) _bk.getADetailerModels((json: string) => { try { adModelItems.value = JSON.parse(json) } catch {} })
 
   // 와일드카드 로드
-  if (_bk.getWildcardTree) _bk.getWildcardTree((json) => { try { wildcards.value = JSON.parse(json) } catch {} })
+  if (_bk.getWildcardTree) _bk.getWildcardTree((json: string) => { try { wildcards.value = JSON.parse(json) } catch {} })
 
   // VRAM 실시간 업데이트
-  onBackendEvent('vramUpdated', (json) => { try { vramInfo.value = JSON.parse(json) } catch {} })
+  onBackendEvent('vramUpdated', (json: string) => { try { vramInfo.value = JSON.parse(json) } catch {} })
 
   // Global Toast 알림 (Python → Vue)
-  onBackendEvent('showNotification', (type, msg) => { addToast(type, msg) })
+  onBackendEvent('showNotification', (type: string, msg: string) => { addToast(type, msg) })
 
-  onBackendEvent('uiPrefsLoaded', (json) => {
+  onBackendEvent('uiPrefsLoaded', (json: string) => {
     try {
       const prefs = JSON.parse(json)
       // AI Assistant 모델/URL을 영속 prefs → localStorage 복원 (PromptPanel이 localStorage를 읽음)
@@ -2064,10 +2083,10 @@ onMounted(async () => {
   })
 
   // 에러도 Toast로 표시
-  onBackendEvent('generationError', (msg) => { addToast('error', msg) })
+  onBackendEvent('generationError', (msg: string) => { addToast('error', msg) })
 
   // 생성용 태그→자연어 변환 결과 (전용 채널 — PromptPanel의 ollamaResult와 분리)
-  onBackendEvent('genNlResult', (json) => {
+  onBackendEvent('genNlResult', (json: string) => {
     try {
       const d = JSON.parse(json)
       if (d && d.tags && !d.error) { _finishNlGen(d.tags) }
@@ -2076,7 +2095,7 @@ onMounted(async () => {
   })
 
   // LoRA 추가 이벤트 (Python lora_manager → Vue)
-  onBackendEvent('loraInserted', (json) => {
+  onBackendEvent('loraInserted', (json: string) => {
     try {
       const d = JSON.parse(json)
       addLoraToStack(d.name, d.weight || 0.8, d.trigger_words || [])
