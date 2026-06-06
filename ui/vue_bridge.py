@@ -1625,6 +1625,43 @@ class VueBridge(QObject):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+    @pyqtSlot(result=str)
+    def getCharGlobalPrefs(self) -> str:
+        """캐릭터 프리셋 글로벌 설정 로드 (모든 캐릭터 공통).
+        {categoryOff: [핵심/보조/의상/기타 중 OFF인 것], wordOff: [전역 제외 단어]}"""
+        try:
+            import os
+            path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                'config', 'char_global_prefs.json')
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    d = json.load(f)
+                return json.dumps({
+                    "categoryOff": list(d.get("categoryOff", [])),
+                    "wordOff": list(d.get("wordOff", [])),
+                })
+        except Exception:
+            pass
+        # 기본값: 기타 카테고리만 OFF
+        return json.dumps({"categoryOff": ["etc"], "wordOff": []})
+
+    @pyqtSlot(str, result=str)
+    def saveCharGlobalPrefs(self, prefs_json: str) -> str:
+        """캐릭터 프리셋 글로벌 설정 저장."""
+        try:
+            import os
+            d = json.loads(prefs_json) if prefs_json else {}
+            base = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config')
+            os.makedirs(base, exist_ok=True)
+            with open(os.path.join(base, 'char_global_prefs.json'), 'w', encoding='utf-8') as f:
+                json.dump({
+                    "categoryOff": list(d.get("categoryOff", [])),
+                    "wordOff": list(d.get("wordOff", [])),
+                }, f, ensure_ascii=False, indent=2)
+            return json.dumps({"ok": True})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     @pyqtSlot(str, result=str)
     def applyCharacterPreset(self, payload_json: str) -> str:
         """Vue 모달의 적용 결과를 프롬프트 위젯에 반영.

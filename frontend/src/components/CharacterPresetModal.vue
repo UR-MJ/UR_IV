@@ -61,6 +61,23 @@
 
             <!-- Tag chips (scroll) -->
             <div class="cpm-tagscroll">
+              <!-- 전역(모든 캐릭터) 설정 -->
+              <div class="cpm-global" v-if="selectedChar">
+                <div class="cpm-global-head">🌐 전역 — 모든 캐릭터에 적용</div>
+                <div class="cpm-global-cats">
+                  <span class="cpm-global-sub">카테고리</span>
+                  <button v-for="c in CAT_LIST" :key="c.key" class="cpm-gcat" :class="{ off: !globalCatOn[c.key] }"
+                    @click="toggleGlobalCat(c.key)" :title="'클릭하여 ' + (globalCatOn[c.key] ? 'OFF' : 'ON')">
+                    {{ c.label }} {{ globalCatOn[c.key] ? 'ON' : 'OFF' }}
+                  </button>
+                </div>
+                <div class="cpm-global-words">
+                  <span class="cpm-global-sub">단어 OFF</span>
+                  <input v-model="newGlobalWord" @keydown.enter="addGlobalWord" placeholder="전역 제외 단어 (Enter)" class="cpm-gword-in" />
+                  <button class="cpm-gword-add" @click="addGlobalWord" title="추가">＋</button>
+                  <button v-for="w in globalWordOff" :key="w" class="cpm-gword-chip" @click="removeGlobalWord(w)" title="클릭하여 해제">{{ w }} ✕</button>
+                </div>
+              </div>
               <div class="cpm-section-label core">핵심 특징 ({{ coreTags.length }})</div>
               <div class="cpm-chips">
                 <button v-for="(t, i) in coreTags" :key="'c'+i" class="cpm-chip"
@@ -181,7 +198,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { getBackend } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 
@@ -195,6 +212,11 @@ const coreTags = ref([])         // [{tag, existing, costume, checked}]
 const costumeTags = ref([])
 const etcTags = ref([])          // 기타(포즈·표정·동작 등 목록 밖) — 기본 미선택
 const auxTags = ref([])          // 보조 특징(characteristic_list.txt) — 기본 선택
+// ── 전역(모든 캐릭터 공통) 설정 ──
+const CAT_LIST = [{ key: 'core', label: '핵심' }, { key: 'aux', label: '보조' }, { key: 'costume', label: '의상' }, { key: 'etc', label: '기타' }]
+const globalCatOn = reactive({ core: true, aux: true, costume: true, etc: false })
+const globalWordOff = ref([])    // 모든 캐릭터에서 항상 OFF인 단어(normalized)
+const newGlobalWord = ref('')
 const customTags = ref([])       // [{tag, checked}]
 const condRules = ref([])        // [{condition, exists, tags:[], location, action, enabled}]
 const presetStatus = ref('')
@@ -299,10 +321,10 @@ async function selectChar(key) {
   charCount.value = data.count || 0
   copyright.value = data.copyright || ''
   addCopyright.value = data.autoAddCopyright !== false
-  coreTags.value = (data.core || []).map(t => ({ ...t, checked: !t.existing }))
-  costumeTags.value = (data.costume || []).map(t => ({ ...t, checked: !t.existing }))
-  etcTags.value = (data.etc || []).map(t => ({ ...t, checked: false }))   // 기타는 기본 미선택
-  auxTags.value = (data.aux || []).map(t => ({ ...t, checked: !t.existing }))  // 보조는 기본 선택
+  coreTags.value = (data.core || []).map(t => ({ ...t, checked: _defChecked('core', t) }))
+  costumeTags.value = (data.costume || []).map(t => ({ ...t, checked: _defChecked('costume', t) }))
+  etcTags.value = (data.etc || []).map(t => ({ ...t, checked: _defChecked('etc', t) }))
+  auxTags.value = (data.aux || []).map(t => ({ ...t, checked: _defChecked('aux', t) }))
   customTags.value = (data.custom || []).map(tag => ({ tag, checked: true }))
   // 조건부 규칙 파싱
   condRules.value = []
@@ -321,6 +343,44 @@ async function selectChar(key) {
 
 function chipClass(t) { return { off: !t.checked, existing: t.existing } }
 function toggleChip(t) { if (!t.existing) t.checked = !t.checked }
+
+// ── 전역(모든 캐릭터) 설정: 로드/저장/적용 ──
+async function loadGlobals() {
+  const p = await callBk('getCharGlobalPrefs')
+  const off = new Set((p && p.categoryOff) || ['etc'])
+  globalCatOn.core = !off.has('core'); globalCatOn.aux = !off.has('aux')
+  globalCatOn.costume = !off.has('costume'); globalCatOn.etc = !off.has('etc')
+  globalWordOff.value = (p && Array.isArray(p.wordOff)) ? p.wordOff : []
+}
+function saveGlobals() {
+  const categoryOff = CAT_LIST.map(c => c.key).filter(k => !globalCatOn[k])
+  callBk('saveCharGlobalPrefs', JSON.stringify({ categoryOff, wordOff: globalWordOff.value }))
+}
+function _defChecked(cat, t) {
+  if (t.existing) return false
+  if (!globalCatOn[cat]) return false
+  if (globalWordOff.value.includes(norm(t.tag))) return false
+  return true
+}
+const _catArr = { core: coreTags, aux: auxTags, costume: costumeTags, etc: etcTags }
+function toggleGlobalCat(cat) {
+  globalCatOn[cat] = !globalCatOn[cat]
+  const arr = _catArr[cat]
+  if (arr) for (const t of arr.value) if (!t.existing) t.checked = _defChecked(cat, t)
+  saveGlobals()
+}
+function addGlobalWord() {
+  const w = norm(newGlobalWord.value); newGlobalWord.value = ''
+  if (!w || globalWordOff.value.includes(w)) return
+  globalWordOff.value.push(w)
+  for (const cat of Object.keys(_catArr))
+    for (const t of _catArr[cat].value) if (norm(t.tag) === w && !t.existing) t.checked = false
+  saveGlobals()
+}
+function removeGlobalWord(w) {
+  globalWordOff.value = globalWordOff.value.filter(x => x !== w)
+  saveGlobals()
+}
 
 function selectAll() {
   for (const t of coreTags.value) if (!t.existing) t.checked = true
@@ -451,6 +511,7 @@ function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
 
 onMounted(async () => {
   window.addEventListener('keydown', onKey, true)
+  await loadGlobals()   // 전역(모든 캐릭터) 설정 로드 — 캐릭터 load 전에 적용되도록
   // 현재 프롬프트의 캐릭터로 검색 프리필
   const bk = await getBackend()
   if (bk && bk.getWidgetValue) {
@@ -534,6 +595,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .cpm-chip.costume:not(.off) { background: #fb923c; }
 .cpm-chip.etc:not(.off) { background: #64748b; }
 .cpm-chip.aux:not(.off) { background: #38bdf8; color: #03263a; }
+
+/* 전역(모든 캐릭터) 설정 바 */
+.cpm-global { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+.cpm-global-head { font-size: 10px; font-weight: 800; color: var(--accent); letter-spacing: 0.5px; margin-bottom: 7px; }
+.cpm-global-cats { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 7px; }
+.cpm-global-words { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.cpm-global-sub { font-size: 9px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.5px; margin-right: 2px; }
+.cpm-gcat { padding: 4px 10px; border-radius: 12px; border: 1px solid #4ade80; background: rgba(74,222,128,0.18); color: #4ade80; font-size: 10px; font-weight: 800; cursor: pointer; }
+.cpm-gcat.off { border-color: var(--border); background: var(--bg-button); color: var(--text-muted); }
+.cpm-gword-in { flex: 0 1 170px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; color: var(--text-primary); font-size: 11px; }
+.cpm-gword-add { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg-button); color: var(--accent); font-weight: 900; cursor: pointer; flex-shrink: 0; }
+.cpm-gword-chip { padding: 4px 8px; border-radius: 12px; border: 1px solid #f87171; background: rgba(248,113,113,0.15); color: #fca5a5; font-size: 10px; font-weight: 700; cursor: pointer; }
+.cpm-gword-chip:hover { background: rgba(248,113,113,0.3); }
 .cpm-chip.cust:not(.off) { background: #f59e0b; color: #000; }
 .cpm-chip.existing { background: var(--bg-button); color: var(--text-muted); border: 1px dashed var(--border); cursor: default; text-decoration: none; }
 .cpm-exist { margin-left: 4px; opacity: 0.7; }

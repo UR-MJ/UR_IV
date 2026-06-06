@@ -95,3 +95,4 @@ Desktop.ini
 *.tmp
 *.swp
 config/session_backup.json
+config/char_global_prefs.json
