@@ -14,34 +14,38 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 
-const props = defineProps({
-  beforeSrc: { type: String, default: '' },
-  afterSrc: { type: String, default: '' },
+withDefaults(defineProps<{
+  beforeSrc?: string
+  afterSrc?: string
+}>(), {
+  beforeSrc: '',
+  afterSrc: '',
 })
 
-const container = ref(null)
+const container = ref<HTMLElement | null>(null)
 const position = ref(50)
 const dragging = ref(false)
 const imgSize = ref('')
 
 const clipStyle = computed(() => `inset(0 ${100 - position.value}% 0 0)`)
 
-function onImgLoad(e) {
-  imgSize.value = `${e.target.naturalWidth} × ${e.target.naturalHeight}`
+function onImgLoad(e: Event) {
+  const img = e.target as HTMLImageElement
+  imgSize.value = `${img.naturalWidth} × ${img.naturalHeight}`
 }
 
-function getPos(e) {
+function getPos(e: MouseEvent | TouchEvent): number {
   if (!container.value) return 50
   const rect = container.value.getBoundingClientRect()
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
   return Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100))
 }
 
-function startDrag(e) { dragging.value = true; position.value = getPos(e) }
-function onDrag(e) { if (dragging.value) position.value = getPos(e) }
+function startDrag(e: MouseEvent | TouchEvent) { dragging.value = true; position.value = getPos(e) }
+function onDrag(e: MouseEvent | TouchEvent) { if (dragging.value) position.value = getPos(e) }
 function endDrag() { dragging.value = false }
 </script>
 

@@ -13,28 +13,32 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
-const props = defineProps({
-  modelValue: { type: [String, Number], default: '' },
-  options: { type: Array, default: () => [] },
-  placeholder: { type: String, default: 'Select...' },
+const props = withDefaults(defineProps<{
+  modelValue?: string | number
+  options?: (string | number)[]
+  placeholder?: string
+}>(), {
+  modelValue: '',
+  options: () => [],
+  placeholder: 'Select...',
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{ 'update:modelValue': [value: string | number] }>()
 
 const isOpen = ref(false)
-const root = ref(null)
+const root = ref<HTMLElement | null>(null)
 
 const displayText = computed(() => props.modelValue || props.placeholder)
 
-function select(opt) {
+function select(opt: string | number) {
   emit('update:modelValue', opt)
   isOpen.value = false
 }
 
-function onClickOutside(e) {
-  if (root.value && !root.value.contains(e.target)) isOpen.value = false
+function onClickOutside(e: MouseEvent) {
+  if (root.value && !root.value.contains(e.target as Node)) isOpen.value = false
 }
 
 onMounted(() => document.addEventListener('click', onClickOutside))
