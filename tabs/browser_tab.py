@@ -108,8 +108,8 @@ class BrowserTab(QWidget):
         return self.home_url        
 
     def go_home(self):
-        """홈으로 이동"""
-        self.web_view.setUrl(QUrl(self.default_url))
+        """홈으로 이동 (설정된 home_url 우선, 없으면 default_url)"""
+        self.web_view.setUrl(QUrl(getattr(self, 'home_url', '') or self.default_url))
 
     def go_back(self):
         """뒤로 가기"""

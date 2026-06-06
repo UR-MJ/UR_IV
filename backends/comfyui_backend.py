@@ -319,7 +319,6 @@ class ComfyUIBackend(AbstractBackend):
             # 위젯 값을 inputs에 매핑
             widget_values = node.get('widgets_values', [])
             node_inputs = node.get('inputs', [])
-            node_outputs = node.get('outputs', [])
 
             # 입력 슬롯 처리 (링크 연결)
             for inp in node_inputs:

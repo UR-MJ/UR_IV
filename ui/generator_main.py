@@ -629,12 +629,6 @@ class GeneratorMainUI(
                 if path:
                     self.show_status(f"Watermark image: {os.path.basename(path)}")
 
-            # 14. 갤러리 폴더 변경
-            elif action == 'gallery_change_folder':
-                folder = payload.get('folder', '')
-                if folder and hasattr(self, 'gallery_tab'):
-                    self.gallery_tab.load_folder(folder)
-
             # 15. Search parquet 저장/불러오기
             elif action == 'export_search_results':
                 # Vue에서 필터링된 결과를 직접 받아서 저장
@@ -1042,7 +1036,6 @@ class GeneratorMainUI(
                     if clean.startswith('/') and ':' in clean[1:3]: clean = clean[1:]
                     self.vue_bridge.tabChanged.emit('png')
                     QTimer.singleShot(100, lambda: self.vue_bridge.compareImageLoaded.emit(json.dumps({'slot': slot, 'path': clean})))
-                    self.vue_bridge.tabChanged.emit('png')
 
             # ═══════ UI 설정 저장 ═══════
             elif action == 'save_ui_prefs':

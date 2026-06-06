@@ -1241,7 +1241,6 @@ class VueBridge(QObject):
         return json.dumps(tree)
 
     vramUpdated = pyqtSignal(str)  # JSON {used, total, pct}
-    seedExploreResult = pyqtSignal(str)  # JSON {index, path, seed}
 
     @pyqtSlot(result=str)
     def getPresetList(self) -> str:

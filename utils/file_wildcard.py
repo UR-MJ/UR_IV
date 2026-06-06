@@ -133,7 +133,9 @@ class FileWildcardManager:
             try:
                 n_pick = int(parts[1].strip())
             except ValueError:
-                name = raw
+                # ':뒤'가 숫자가 아니면 콜론 앞 이름만 사용(전체) — 'name:bad'를 그대로
+                # 파일명으로 쓰면 절대 못 찾던 버그 수정
+                name = parts[0].strip()
                 n_pick = 0  # 0 = 전체
         else:
             name = raw.strip()

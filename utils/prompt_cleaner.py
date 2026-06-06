@@ -307,9 +307,8 @@ def clean_prompt(text: str) -> str:
 
 
 def escape_parentheses(text: str) -> str:
-    """간편 함수: 괄호 이스케이프"""
-    cleaner = PromptCleaner()
-    return cleaner._escape_parentheses(text)
+    """간편 함수: 괄호 이스케이프 (싱글턴 재사용 — 호출마다 PromptCleaner 생성/디스크 IO 제거)"""
+    return get_prompt_cleaner()._escape_parentheses(text)
 
 
 def unescape_parentheses(text: str) -> str:

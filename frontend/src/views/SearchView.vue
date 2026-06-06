@@ -410,7 +410,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
@@ -602,6 +602,7 @@ async function search() {
   //     TAU=3000 → 3초까지 63%, 6초까지 86%, 9초까지 95%, 12초까지 98%
   const startTime = Date.now()
   const TAU = 3000  // 시간 상수 (ms)
+  if (progressTimer) clearInterval(progressTimer)   // 직전 타이머 정리(중복 누적 방지)
   progressTimer = setInterval(() => {
     const elapsed = Date.now() - startTime
     const target = 99 * (1 - Math.exp(-elapsed / TAU))
@@ -652,6 +653,10 @@ function restoreAndRandom() {
 
 // localStorage가 진실의 원천 — 복원 여부 추적해서 uiPrefsLoaded 덮어쓰기 방지
 let _restoredFromLocalStorage = false
+
+onUnmounted(() => {
+  if (progressTimer) { clearInterval(progressTimer); progressTimer = null }
+})
 
 onMounted(() => {
   // 이전 검색 입력 필드 복원
@@ -752,7 +757,14 @@ onMounted(() => {
     searching.value = false; searchProgress.value = 100
     if (progressTimer) { clearInterval(progressTimer); progressTimer = null }
   })
-  onBackendEvent('searchStatus', (msg) => { statusText.value = msg.toUpperCase() })
+  onBackendEvent('searchStatus', (msg) => {
+    statusText.value = msg.toUpperCase()
+    // 데이터 없음/종료 상태에서 searchResultsReady가 안 와도 진행바 타이머 정리(누수 방지)
+    if (/없|실패|완료|0/.test(msg)) {
+      if (progressTimer) { clearInterval(progressTimer); progressTimer = null }
+      searching.value = false
+    }
+  })
   onBackendEvent('uiPrefsLoaded', (json) => {
     // localStorage/능동 fetch로 이미 복원했으면 무시 (중복 적용 방지)
     if (_restoredFromLocalStorage) return
