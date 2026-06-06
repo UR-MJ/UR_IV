@@ -126,15 +126,27 @@ export function useLoraStack({ storeWidgets, addToast, saveUiPrefs }) {
     addToast('info', `세트 삭제: ${n}`)
   }
 
-  // 드래그 순서 변경
-  const loraDragIdx = ref(-1)
+  // 드래그 순서 변경 — 그립(⠿)만 draggable, 삽입 위치(loraDropIdx)를 마커로 표시
+  const loraDragIdx = ref(-1)   // 드래그 출발 인덱스
+  const loraDropIdx = ref(-1)   // 삽입 위치 (0..length)
   function loraDragStart(i) { loraDragIdx.value = i }
-  function loraDrop(i) {
+  function loraDragOver(e, i) {
+    // 블록 상/하 절반으로 'i 앞' / 'i+1 앞' 삽입 결정
+    try {
+      const r = e.currentTarget.getBoundingClientRect()
+      loraDropIdx.value = (e.clientY - r.top) > r.height / 2 ? i + 1 : i
+    } catch { loraDropIdx.value = i }
+  }
+  function loraDragEnd() { loraDragIdx.value = -1; loraDropIdx.value = -1 }
+  function loraDrop() {
     const from = loraDragIdx.value
-    loraDragIdx.value = -1
-    if (from < 0 || from === i) return
+    let to = loraDropIdx.value
+    loraDragIdx.value = -1; loraDropIdx.value = -1
+    if (from < 0 || to < 0) return
+    if (to > from) to -= 1          // 앞쪽 제거로 인덱스 보정
+    if (to === from) return          // 제자리 → 무동작
     const moved = loraStack.splice(from, 1)[0]
-    loraStack.splice(i, 0, moved)
+    loraStack.splice(to, 0, moved)
     _saveLoraStack(); syncLoraStack()
   }
 
@@ -176,7 +188,7 @@ export function useLoraStack({ storeWidgets, addToast, saveUiPrefs }) {
     allLorasOn, toggleAllLoras, insertTriggerWord, insertAllTriggers,
     showLoraModal, onLoraAdd,
     loraSetName, loraSetSel, loraSetNames, saveLoraSet, loadLoraSet, deleteLoraSet,
-    loraDragIdx, loraDragStart, loraDrop,
+    loraDragIdx, loraDropIdx, loraDragStart, loraDragOver, loraDragEnd, loraDrop,
     restoreFromPrefs, buildActiveLoraText,
   }
 }

@@ -447,9 +447,12 @@
               <div class="lora-empty" v-if="loraStack.length === 0">
                 LoRA 매니저에서 추가하세요
               </div>
-              <div v-for="(lora, i) in loraStack" :key="lora.name" class="lora-block" :class="{ 'lora-drag-over': loraDragIdx === i }"
-                draggable="true" @dragstart="loraDragStart(i)" @dragover.prevent @drop="loraDrop(i)" @dragend="loraDragIdx = -1">
-                <span class="lora-grip" title="드래그하여 순서 변경">⠿</span>
+              <template v-for="(lora, i) in loraStack" :key="lora.name">
+              <div class="lora-drop-marker" v-if="loraDragIdx >= 0 && loraDropIdx === i && i !== loraDragIdx && i !== loraDragIdx + 1"></div>
+              <div class="lora-block" :class="{ 'lora-dragging': loraDragIdx === i }"
+                @dragover.prevent="loraDragOver($event, i)" @drop.prevent="loraDrop">
+                <span class="lora-grip" title="여기(⠿)를 잡아 순서 변경" draggable="true"
+                  @dragstart.stop="loraDragStart(i)" @dragend="loraDragEnd">⠿</span>
                 <label class="lora-check"><input type="checkbox" v-model="lora.enabled" /></label>
                 <div class="lora-info-col">
                   <div class="lora-name">{{ lora.name }}</div>
@@ -463,6 +466,8 @@
                   title="가중치 직접 입력" @change="lora.weight = Math.round((parseFloat($event.target.value) || 0) * 100)" @mousedown.stop />
                 <button class="lora-remove" @click="loraStack.splice(i, 1)">✕</button>
               </div>
+              </template>
+              <div class="lora-drop-marker" v-if="loraDragIdx >= 0 && loraDropIdx === loraStack.length && loraStack.length !== loraDragIdx + 1"></div>
               <button class="ext-add-btn" @click="showLoraModal = true">+ ADD LoRA</button>
               <!-- LoRA 세트 저장/불러오기 -->
               <div class="lora-sets">
@@ -1281,7 +1286,7 @@ const {
   allLorasOn, toggleAllLoras, insertTriggerWord, insertAllTriggers,
   showLoraModal, onLoraAdd,
   loraSetName, loraSetSel, loraSetNames, saveLoraSet, loadLoraSet, deleteLoraSet,
-  loraDragIdx, loraDragStart, loraDrop,
+  loraDragIdx, loraDropIdx, loraDragStart, loraDragOver, loraDragEnd, loraDrop,
   restoreFromPrefs: restoreLoraFromPrefs, buildActiveLoraText,
 } = useLoraStack({ storeWidgets, addToast, saveUiPrefs })
 // 시작 시 Ollama 모델 검증 — 저장된 모델이 설치 목록에 없으면(또는 비어있으면)
@@ -2203,7 +2208,11 @@ onMounted(async () => {
 .lora-weight { font-size: 10px; color: var(--accent); min-width: 30px; text-align: right; font-family: monospace; }
 .lora-grip { cursor: grab; color: var(--text-muted); font-size: 12px; user-select: none; flex-shrink: 0; }
 .lora-grip:active { cursor: grabbing; }
+.lora-grip:hover { color: var(--accent); }
 .lora-drag-over { outline: 1px dashed var(--accent); outline-offset: -1px; }
+.lora-dragging { opacity: 0.4; }
+/* 드롭(삽입) 위치 — 블록 사이 가로선 (태그블록 마커와 동일 콘셉트) */
+.lora-drop-marker { height: 3px; background: var(--accent); border-radius: 2px; margin: 1px 2px; pointer-events: none; box-shadow: 0 0 4px var(--accent); }
 .lora-weight-input { width: 48px; flex-shrink: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; color: var(--accent); font-size: 10px; text-align: center; font-family: monospace; }
 .lora-weight-input:focus { outline: none; border-color: var(--accent); }
 .lora-remove { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
