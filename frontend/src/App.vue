@@ -953,6 +953,8 @@ import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { initBridge, onBackendEvent, getBackend } from './bridge.js'
 import { requestAction, useWidgetStore } from './stores/widgetStore.js'
 import { useLoraStack } from './composables/useLoraStack.js'
+import { useHighRes } from './composables/useHighRes.js'
+import { useRatingFilter } from './composables/useRatingFilter.js'
 
 const wStore = useWidgetStore()
 const storeWidgets = wStore.widgets
@@ -975,36 +977,11 @@ const hiresSchedulerItems = computed(() => wStore.getProperty('hires_scheduler_c
 const randomResEnabled = computed({ get: () => storeWidgets.random_res_check === 'true', set: v => { storeWidgets.random_res_check = v ? 'true' : 'false'; if (v) loadRandomResList() } })
 const autoResEnabled = computed({ get: () => storeWidgets.auto_res_check === 'true', set: v => { storeWidgets.auto_res_check = v ? 'true' : 'false' } })
 
-// 고해상도 모드 — 생성 시점에 width/height × factor 적용 (Python이 처리)
-// 입력 해상도는 그대로 유지 (UI에 보이는 값은 base, 실제 생성만 확대)
-const highResEnabled = ref(localStorage.getItem('highRes.enabled') === 'true')
-const highResFactor = ref(parseFloat(localStorage.getItem('highRes.factor') || '1.5') || 1.5)
-// 미리보기 — 8 배수 정렬된 실제 생성 해상도
-const hrActualW = computed(() => {
-  const w = parseInt(storeWidgets.width_input || 0) || 0
-  return Math.max(8, Math.floor((w * highResFactor.value) / 8) * 8)
-})
-const hrActualH = computed(() => {
-  const h = parseInt(storeWidgets.height_input || 0) || 0
-  return Math.max(8, Math.floor((h * highResFactor.value) / 8) * 8)
-})
-// 토글/배율 변경 시 즉시 Python으로 동기화 + localStorage 영속
-function _syncHighRes() {
-  try {
-    localStorage.setItem('highRes.enabled', highResEnabled.value ? 'true' : 'false')
-    localStorage.setItem('highRes.factor', String(highResFactor.value))
-  } catch {}
-  // 단일 소스(ui_prefs.json)에도 영속 — 캐시 삭제/다중 인스턴스에도 유지
-  saveUiPrefs({ highResEnabled: highResEnabled.value, highResFactor: highResFactor.value })
-  requestAction('set_high_res_factor', {
-    enabled: highResEnabled.value,
-    factor: highResFactor.value,
-  })
-}
-watch(highResEnabled, _syncHighRes)
-watch(highResFactor, _syncHighRes)
-// 앱 시작 직후 한 번 — Python이 옛 상태 갖고 있을 수 있어 동기화
-setTimeout(_syncHighRes, 400)
+// 고해상도(단일 패스) 모드 — composables/useHighRes.js로 추출 (App.vue 분할 ④)
+const {
+  highResEnabled, highResFactor, hrActualW, hrActualH,
+  restoreFromPrefs: restoreHighResFromPrefs,
+} = useHighRes({ storeWidgets, saveUiPrefs })
 
 // 랜덤 해상도 관리
 const randomResList = ref([])
@@ -1032,27 +1009,15 @@ function removeRandomRes(i) {
 const negpipEnabled = computed({ get: () => storeWidgets.negpip_group === 'true', set: v => { storeWidgets.negpip_group = v ? 'true' : 'false' } })
 
 const hires_enabled = computed({ get: () => storeWidgets.hires_options_group === 'true', set: v => { storeWidgets.hires_options_group = v ? 'true' : 'false' } })
-// Rating 필터
-const ratingFilters = reactive([
-  { key: 'g', label: 'G', on: true },
-  { key: 's', label: 'S', on: true },
-  { key: 'q', label: 'Q', on: false },
-  { key: 'e', label: 'E', on: false },
-])
-// localStorage에서 복원
-try {
-  const saved = JSON.parse(window.localStorage.getItem('ratingFilter') || '[]')
-  if (saved.length === 4) saved.forEach((v, i) => { ratingFilters[i].on = v })
-} catch {}
+// 공유 헬퍼 — 여러 composable이 주입받아 사용(함수 선언이라 hoisting으로 위에서도 호출됨)
 function saveUiPrefs(payload) {
   requestAction('save_ui_prefs', payload)
 }
-function saveRatingFilter() {
-  window.localStorage.setItem('ratingFilter', JSON.stringify(ratingFilters.map(r => r.on)))
-  saveUiPrefs({ ratingFilter: ratingFilters.map(r => r.on) })
-  // Python에 전달
-  requestAction('set_rating_filter', { ratings: ratingFilters.filter(r => r.on).map(r => r.key) })
-}
+// Rating 필터 — composables/useRatingFilter.js로 추출 (App.vue 분할 ④)
+const {
+  ratingFilters, saveRatingFilter, pushRatingFilter,
+  restoreFromPrefs: restoreRatingFromPrefs,
+} = useRatingFilter({ saveUiPrefs })
 
 const removeArtist = computed({ get: () => storeWidgets.chk_remove_artist === 'true', set: v => { storeWidgets.chk_remove_artist = v ? 'true' : 'false' } })
 const removeCopyright = computed({ get: () => storeWidgets.chk_remove_copyright === 'true', set: v => { storeWidgets.chk_remove_copyright = v ? 'true' : 'false' } })
@@ -1939,7 +1904,7 @@ onMounted(async () => {
   })
 
   // 초기 rating 필터 전달
-  requestAction('set_rating_filter', { ratings: ratingFilters.filter(r => r.on).map(r => r.key) })
+  pushRatingFilter()
 
   // 워크플로우 프로파일 목록 미리 로드 (드롭다운에 즉시 보이도록)
   setTimeout(loadWorkflowProfilesList, 800)
@@ -2082,14 +2047,8 @@ onMounted(async () => {
       if (prefs.ollamaUrl) window.localStorage.setItem('ollamaUrl', prefs.ollamaUrl)
       if (prefs.ollamaModel) window.localStorage.setItem('ollamaModel', prefs.ollamaModel)
       ensureOllamaModel()
-      if (Array.isArray(prefs.ratingFilter) && prefs.ratingFilter.length === ratingFilters.length) {
-        prefs.ratingFilter.forEach((v, i) => { ratingFilters[i].on = !!v })
-        window.localStorage.setItem('ratingFilter', JSON.stringify(prefs.ratingFilter))
-        requestAction('set_rating_filter', { ratings: ratingFilters.filter(r => r.on).map(r => r.key) })
-      }
-      // 고해상도: 단일 소스(ui_prefs)가 localStorage를 override (watch가 Python+localStorage 재동기)
-      if (typeof prefs.highResFactor === 'number') highResFactor.value = prefs.highResFactor
-      if (typeof prefs.highResEnabled === 'boolean') highResEnabled.value = prefs.highResEnabled
+      restoreRatingFromPrefs(prefs)   // rating 필터 단일 소스(ui_prefs) 복원 (useRatingFilter)
+      restoreHighResFromPrefs(prefs)   // 고해상도: 단일 소스(ui_prefs)가 localStorage override (useHighRes)
       restoreLoraFromPrefs(prefs)   // 단일 소스(ui_prefs.loraStack) 복원 (useLoraStack)
       // tabOrder 복원 (Settings 탭 미방문 시에도 적용)
       if (Array.isArray(prefs.tabOrder) && prefs.tabOrder.length > 0) {
