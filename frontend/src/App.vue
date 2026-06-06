@@ -429,16 +429,9 @@
               </details>
             </details>
 
-            <!-- NegPiP -->
-            <div class="ext-card">
-              <label class="ext-check-row">
-                <input type="checkbox" v-model="negpipEnabled" />
-                <span class="ext-title" style="margin:0">NegPiP 확장</span>
-              </label>
-              <div class="ext-hint">(keyword:-1.0) 네거티브 가중치 문법</div>
-            </div>
+            <!-- NegPiP — 상시 적용 (토글 제거됨) -->
 
-            <!-- 조건부 프롬프트 → Search 탭에서 관리 -->
+            <!-- 조건부 프롬프트 → STUDIO TOOLS의 '조건부' 버튼에서 관리 -->
             <div class="ext-card">
               <div class="ext-title">CONDITIONAL PROMPTS</div>
               <div class="ext-hint">조건부 프롬프트는 Search 탭 하단에서 관리합니다</div>
@@ -1763,6 +1756,7 @@ _applyUiScale(localStorage.getItem('ui.scale') || '1.0')
 
 onMounted(async () => {
   await initBridge()
+  storeWidgets.negpip_group = 'true'   // NegPiP 상시 적용 (UI 토글 제거)
   // Settings 등 다른 곳에서 ui.scale 변경 시 즉시 반영
   window.addEventListener('storage', (e) => {
     if (e.key === 'ui.scale') _applyUiScale(e.newValue)
@@ -2050,7 +2044,7 @@ onMounted(async () => {
 }
 /* Extended Panel Overlay */
 .extend-overlay {
-  position: absolute; left: 360px; top: 0; bottom: 0; width: 320px;
+  position: absolute; left: 360px; top: 0; bottom: 0; width: 440px;
   background: var(--bg-secondary); border-right: 1px solid var(--border);
   z-index: 50; display: flex; flex-direction: column;
   box-shadow: 8px 0 32px rgba(0,0,0,0.5);

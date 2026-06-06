@@ -164,7 +164,8 @@
         <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <details class="input-group exclude-section">
-        <summary class="exclude-toggle">EXCLUDE (LOCAL) ▾
+        <summary class="exclude-toggle">EXCLUDE (LOCAL)
+          <span v-if="excludeRuleCount" class="excl-badge">{{ excludeRuleCount }}</span> ▾
           <button class="excl-mgr-btn" @click.prevent.stop="refineSpecific" title="덜 구체적인 상위 태그 제거 (muscular+muscular male → muscular male, dress+blue dress → blue dress)">🎯 구체화</button>
           <button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true">🔍 MANAGER</button></summary>
         <div class="exclude-help">
@@ -433,6 +434,8 @@ const blockColorCache = ref({})
 
 // ── Exclude Manager ──
 const showExcludeManager = ref(false)
+const excludeRuleCount = computed(() =>
+  (widgets.exclude_prompt_local_input || '').split(',').filter(t => t.trim()).length)
 const selectedExRule = ref(-1)
 const excludeMatches = ref({})  // {ruleIdx: [tags]}
 
@@ -940,6 +943,7 @@ summary::-webkit-details-marker { display: none; }
 label.danger { color: #f87171; }
 .exclude-section { margin-bottom: 0; }
 .exclude-toggle { font-size: 10px; font-weight: 800; color: #f87171; letter-spacing: 1px; cursor: pointer; list-style: none; }
+.excl-badge { display: inline-block; min-width: 14px; padding: 0 5px; border-radius: 7px; background: rgba(248,113,113,0.2); color: #f87171; font-size: 9px; font-weight: 800; text-align: center; }
 .exclude-toggle::-webkit-details-marker { display: none; }
 .exclude-help { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; padding: 6px 8px; background: rgba(248,113,113,0.03); border: 1px solid rgba(248,113,113,0.1); border-radius: 4px; }
 .exclude-help span { font-size: 9px; color: var(--text-muted); font-family: 'Consolas', monospace; }
