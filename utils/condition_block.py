@@ -119,6 +119,41 @@ def migrate_old_rules(text: str) -> List[ConditionRule]:
     return rules
 
 
+def legacy_cond_rules_to_vue(legacy_json: str) -> dict:
+    """옛 전역 조건식 저장 포맷(prompt_settings.cond_rules_json:
+    [{condition, exists, tags[list], location, action, enabled}, ...])을
+    Vue cond_rules.json 단일 소스 포맷({positive, negative, enabled})으로 변환.
+
+    - tags(list) → target(콤마 문자열)
+    - location == 'neg' → negative 버킷, 그 외 → positive 버킷
+    - after_condition/random → main 으로 정규화
+    - 조건/대상이 비면 해당 규칙은 건너뛴다.
+    순수 함수(Qt 비의존) — 마이그레이션 1회용, 테스트 용이.
+    """
+    rules = rules_from_json(legacy_json)
+    positive: List[dict] = []
+    negative: List[dict] = []
+    for r in rules:
+        tags = r.target_tags if isinstance(r.target_tags, list) else [r.target_tags]
+        target = ", ".join(str(t).strip() for t in tags if str(t).strip())
+        if not (r.condition_tag and target):
+            continue
+        loc = r.location if r.location in ("main", "prefix", "suffix") else "main"
+        rule_d = {
+            "condition": r.condition_tag,
+            "exists": bool(r.condition_exists),
+            "target": target,
+            "action": r.action or "add",
+            "location": loc,
+            "enabled": bool(r.enabled),
+        }
+        if r.location == "neg":
+            negative.append(rule_d)
+        else:
+            positive.append(rule_d)
+    return {"positive": positive, "negative": negative, "enabled": True}
+
+
 def apply_rules(
     rules: List[ConditionRule],
     all_tags: set[str],

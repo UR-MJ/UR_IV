@@ -988,6 +988,8 @@ function _syncHighRes() {
     localStorage.setItem('highRes.enabled', highResEnabled.value ? 'true' : 'false')
     localStorage.setItem('highRes.factor', String(highResFactor.value))
   } catch {}
+  // 단일 소스(ui_prefs.json)에도 영속 — 캐시 삭제/다중 인스턴스에도 유지
+  saveUiPrefs({ highResEnabled: highResEnabled.value, highResFactor: highResFactor.value })
   requestAction('set_high_res_factor', {
     enabled: highResEnabled.value,
     factor: highResFactor.value,
@@ -2192,6 +2194,9 @@ onMounted(async () => {
         window.localStorage.setItem('ratingFilter', JSON.stringify(prefs.ratingFilter))
         requestAction('set_rating_filter', { ratings: ratingFilters.filter(r => r.on).map(r => r.key) })
       }
+      // 고해상도: 단일 소스(ui_prefs)가 localStorage를 override (watch가 Python+localStorage 재동기)
+      if (typeof prefs.highResFactor === 'number') highResFactor.value = prefs.highResFactor
+      if (typeof prefs.highResEnabled === 'boolean') highResEnabled.value = prefs.highResEnabled
       if (Array.isArray(prefs.loraStack)) {
         _loraRestoring = true
         loraStack.splice(0, loraStack.length, ...prefs.loraStack.map(l => ({ ...l })))
@@ -2201,6 +2206,8 @@ onMounted(async () => {
       // tabOrder 복원 (Settings 탭 미방문 시에도 적용)
       if (Array.isArray(prefs.tabOrder) && prefs.tabOrder.length > 0) {
         window.localStorage.setItem('tabOrder', JSON.stringify(prefs.tabOrder))
+        // 항상 마운트돼 있는 TabBar는 같은 창 setItem을 못 받으므로 커스텀 이벤트로 재읽기 유도
+        try { window.dispatchEvent(new CustomEvent('tabOrderChanged')) } catch {}
       }
       if (typeof prefs.autoNlGen === 'boolean') {
         autoNlGen.value = prefs.autoNlGen

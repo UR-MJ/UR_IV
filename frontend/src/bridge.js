@@ -7,6 +7,22 @@ let _backend = null
 let _resolveReady = null
 const _ready = new Promise(resolve => { _resolveReady = resolve })
 
+// startup에 1회만 emit되는 설정 이벤트 — 늦게 마운트된(라우터 전환) 컴포넌트도
+// 마지막 페이로드를 받도록 "sticky"로 캐싱했다가 신규 구독자에게 즉시 재생한다.
+// (복원 순서 race / 단일 소스 일관성: ui_prefs·cond_rules·loraStack·weights가 항상 이김)
+const STICKY_EVENTS = ['uiPrefsLoaded', 'condRulesLoaded', 'loraStackLoaded', 'globalWeightsLoaded']
+const _stickyCache = Object.create(null)
+function _installStickyCaches(backend) {
+  if (!backend) return
+  for (const name of STICKY_EVENTS) {
+    const sig = backend[name]
+    if (sig && typeof sig.connect === 'function') {
+      // bridge가 가장 먼저(구독 컴포넌트보다 앞서) 연결 → 모든 emit을 캐싱
+      sig.connect((...args) => { _stickyCache[name] = args })
+    }
+  }
+}
+
 /**
  * QWebChannel 사용 가능할 때까지 대기
  */
@@ -40,6 +56,7 @@ export async function initBridge() {
     return new Promise((resolve) => {
       new window.QWebChannel(window.qt.webChannelTransport, (channel) => {
         _backend = channel.objects.backend
+        _installStickyCaches(_backend)
         connectStore(_backend)
         _resolveReady(_backend)
         resolve(_backend)
@@ -81,6 +98,10 @@ export function onBackendEvent(eventName, callback) {
       _signal = backend[eventName]
       _signal.connect(callback)
       _connected = true
+      // sticky: 이미 발생한 1회성 설정 이벤트면 최신 페이로드를 즉시 재생 (늦은 마운트 대응)
+      if (STICKY_EVENTS.includes(eventName) && _stickyCache[eventName] !== undefined) {
+        try { callback(..._stickyCache[eventName]) } catch {}
+      }
     }
   })
   return () => {

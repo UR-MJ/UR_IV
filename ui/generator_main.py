@@ -378,22 +378,9 @@ class GeneratorMainUI(
                         r for r in deck if r.get('rating', 'g') in rating_filter
                     ]
                     _rnd.shuffle(self.shuffled_prompt_deck)
-                    # 필터 적용 결과를 디스크에 저장 → 재시작 시 '필터링된' 덱이 복원됨.
-                    # (기존엔 마지막 '검색'(전체)만 last_search_results.json에 저장돼
-                    #  재시작 시 필터가 풀렸음.) 덱 소비 진행도도 함께 저장.
-                    try:
-                        # NOTE: os는 모듈 레벨(line 8)에서 import됨. 여기서 'import os'를
-                        # 다시 하면 _handle_vue_action 전체에서 os가 지역변수로 묶여
-                        # 다른 분기(save_ui_prefs 등)에서 UnboundLocalError가 발생함.
-                        import json as _json
-                        cache_dir = os.path.join(
-                            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
-                        os.makedirs(cache_dir, exist_ok=True)
-                        with open(os.path.join(cache_dir, 'last_search_results.json'),
-                                  'w', encoding='utf-8') as f:
-                            _json.dump(deck, f, ensure_ascii=False)
-                    except Exception as e:
-                        print(f"[Filter] 필터 덱 디스크 저장 실패: {e}")
+                    # 필터 적용 결과를 디스크에 저장(단일 쓰기 경로) → 재시작 시 '필터링된' 덱 복원.
+                    #   full은 갱신 안 함(새 검색 때만) → '필터 해제' 베이스(last_full)는 유지.
+                    self._persist_search_results(deck)
                     if hasattr(self, '_save_deck_state'):
                         self._save_deck_state()
             elif action == 'run_adetailer_single':
@@ -1247,11 +1234,116 @@ class GeneratorMainUI(
             from core.error_handler import handle_error
             handle_error('E010', f'Action: {action}', e)
 
+    def _persist_search_results(self, active, full=None):
+        """검색 결과 디스크 영속화 — 단일 쓰기 경로(중복 제거).
+        디스크 = 영속 단일 소스. 메모리(filtered_results/shuffled_prompt_deck)는 런타임 캐시,
+        Vue localStorage(slim ≤500)는 폴백.
+          active: 표시/자동화 덱용(필터 적용) 셋 → last_search_results.json (항상)
+          full  : '필터 해제' 베이스(전체) 셋 → last_full_results.json (새 검색 때만 전달)
+        NOTE: os/json은 모듈 레벨 import — 여기서 지역 재import 금지(UnboundLocalError 회피)."""
+        try:
+            cache_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(os.path.join(cache_dir, 'last_search_results.json'),
+                      'w', encoding='utf-8') as f:
+                json.dump(active, f, ensure_ascii=False)
+            if full is not None:
+                with open(os.path.join(cache_dir, 'last_full_results.json'),
+                          'w', encoding='utf-8') as f:
+                    json.dump(full, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"[Search] 디스크 영속 실패: {e}")
+
+    def _restore_runtime_prefs(self, prefs: dict):
+        """ui_prefs.json(단일 소스)에서 런타임 상태를 직접 복원.
+        Vue가 set_rating_filter / set_high_res_factor 를 아직 안 보낸 시점(예: 재시작 직후
+        자동화 즉시 시작)에도 올바른 rating 필터/고해상도 배율로 동작하도록 한다."""
+        try:
+            rf = prefs.get('ratingFilter')
+            if isinstance(rf, list) and len(rf) == 4:
+                keys = ('g', 's', 'q', 'e')
+                self._rating_filter = {keys[i] for i, on in enumerate(rf) if on}
+        except Exception:
+            pass
+        try:
+            if prefs.get('highResEnabled'):
+                factor = float(prefs.get('highResFactor', 1.5) or 1.5)
+                self._high_res_factor = max(1.0, min(4.0, factor))
+            else:
+                self._high_res_factor = 1.0
+        except Exception:
+            pass
+        try:
+            lora = prefs.get('loraStack')
+            if isinstance(lora, list):
+                # 생성이 읽는 런타임 미러 — Vue가 set_lora_stack/set_lora_text를 아직 안 보낸
+                # 시점(재시작 직후 자동화 즉시 시작 등)에도 올바른 LoRA로 생성되도록 한다.
+                self._vue_lora_entries = lora
+                from core.lora_stack import build_lora_text
+                self._vue_lora_text = build_lora_text(lora)  # generator_generation이 읽음
+                if hasattr(self, 'lora_active_panel'):
+                    try:
+                        self.lora_active_panel.set_entries(lora)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def _migrate_legacy_lora_stack(self, prefs: dict, prefs_path: str):
+        """LoRA 스택 단일 소스(ui_prefs.loraStack) 통합 — ui_prefs에 loraStack이 없고
+        옛 prompt_settings.active_loras가 있으면 1회 흡수(prefs를 제자리 수정 + 영속)."""
+        try:
+            if not isinstance(prefs, dict) or isinstance(prefs.get('loraStack'), list):
+                return
+            ps_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                   'config', 'prompt_settings.json')
+            if not os.path.exists(ps_path):
+                return
+            with open(ps_path, 'r', encoding='utf-8') as f:
+                ps = json.load(f)
+            legacy = ps.get('active_loras') if isinstance(ps, dict) else None
+            if isinstance(legacy, list) and legacy:
+                prefs['loraStack'] = legacy
+                with open(prefs_path, 'w', encoding='utf-8') as f:
+                    json.dump(prefs, f, ensure_ascii=False, indent=2)
+                print(f"[Config] Legacy active_loras migrated → ui_prefs.loraStack ({len(legacy)})")
+        except Exception as e:
+            print(f"[Config] Legacy lora migration skipped: {e}")
+
+    def _migrate_legacy_cond_rules(self, cond_path: str):
+        """옛 전역 조건식(prompt_settings.cond_rules_json) → config/cond_rules.json 1회 이관.
+        cond_rules.json이 아직 없을 때만 실행하여 레거시 cond_block_editor 데이터 유실을 방지한다."""
+        try:
+            ps_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                   'config', 'prompt_settings.json')
+            if not os.path.exists(ps_path):
+                return
+            with open(ps_path, 'r', encoding='utf-8') as f:
+                ps = json.load(f)
+            legacy = ps.get('cond_rules_json', '') if isinstance(ps, dict) else ''
+            if not legacy:
+                return
+            from utils.condition_block import legacy_cond_rules_to_vue
+            vue = legacy_cond_rules_to_vue(legacy)
+            if not (vue.get('positive') or vue.get('negative')):
+                return
+            os.makedirs(os.path.dirname(cond_path), exist_ok=True)
+            with open(cond_path, 'w', encoding='utf-8') as f:
+                json.dump(vue, f, ensure_ascii=False, indent=2)
+            print(f"[Config] Legacy cond rules migrated → cond_rules.json "
+                  f"({len(vue['positive'])}P + {len(vue['negative'])}N)")
+        except Exception as e:
+            print(f"[Config] Legacy cond migration skipped: {e}")
+
     def _load_saved_configs(self):
         """앱 시작 시 조건식 + 기본값 로드"""
         try:
-            # 조건식 로드
+            # 조건식 로드 — config/cond_rules.json 단일 소스
             cond_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'cond_rules.json')
+            if not os.path.exists(cond_path):
+                # 레거시 1회 마이그레이션: 옛 prompt_settings.cond_rules_json → cond_rules.json
+                self._migrate_legacy_cond_rules(cond_path)
             if os.path.exists(cond_path):
                 with open(cond_path, 'r', encoding='utf-8') as f:
                     rules = json.load(f)
@@ -1305,10 +1397,15 @@ class GeneratorMainUI(
             from core.config_migration import load_ui_prefs
             prefs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ui_prefs.json')
             prefs = load_ui_prefs(prefs_path)
+            # 레거시 흡수: ui_prefs에 loraStack이 없고 옛 prompt_settings.active_loras가 있으면 1회 이관
+            self._migrate_legacy_lora_stack(prefs, prefs_path)
             if prefs and hasattr(self, 'vue_bridge'):
                 self.vue_bridge.uiPrefsLoaded.emit(json.dumps(prefs))
                 # FIX: 시작 시점에 LOGIC 토글을 prompt_cleaner에 적용
                 self._apply_ui_prefs_to_cleaner(prefs)
+                # 단일 소스(ui_prefs.json)에서 런타임 상태 직접 복원 —
+                #   Vue가 set_rating_filter/set_high_res_factor를 아직 안 보낸 시점(자동화 즉시 시작 등)에도 올바른 값.
+                self._restore_runtime_prefs(prefs)
                 print(f"[Config] UI prefs loaded + LOGIC toggles applied")
         except Exception as e:
             print(f"[Config] Failed to load UI prefs: {e}")
@@ -1400,12 +1497,8 @@ class GeneratorMainUI(
                 self.model_combo.setCurrentText(str(settings['model']))
             if 'sampler' in settings and settings['sampler']:
                 self.sampler_combo.setCurrentText(str(settings['sampler']))
-            if 'active_loras' in settings:
-                self._vue_lora_entries = settings.get('active_loras', [])
-                if hasattr(self, 'lora_active_panel'):
-                    self.lora_active_panel.set_entries(self._vue_lora_entries)
-                if hasattr(self, 'vue_bridge'):
-                    self.vue_bridge.loraStackLoaded.emit(json.dumps(self._vue_lora_entries, ensure_ascii=False))
+            # LoRA 스택: ui_prefs.json(loraStack) 단일 소스로 이관 — 여기서 active_loras를 읽지 않는다.
+            #   (_restore_runtime_prefs가 ui_prefs.loraStack에서 _vue_lora_entries를 채우고 패널/Vue에 복원)
             if hasattr(self, 'vue_bridge'):
                 self.vue_bridge.endBatchUpdate()
             self.update_total_prompt_display()

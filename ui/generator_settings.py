@@ -49,9 +49,7 @@ class SettingsMixin:
         model_val = self.model_combo.currentText() or self._get_existing_setting("model")
         sampler_val = self.sampler_combo.currentText() or self._get_existing_setting("sampler")
         scheduler_val = self.scheduler_combo.currentText() or self._get_existing_setting("scheduler")
-        active_loras = getattr(self, '_vue_lora_entries', None)
-        if not isinstance(active_loras, list):
-            active_loras = self.lora_active_panel.get_entries() if hasattr(self, 'lora_active_panel') else []
+        # LoRA 스택은 config/ui_prefs.json(loraStack)이 단일 소스 — prompt_settings에 중복 저장하지 않음.
 
         settings = {
             "char_count": self.char_count_input.text(),
@@ -80,7 +78,6 @@ class SettingsMixin:
             "random_res_enabled": self.random_res_check.isChecked(),
             "random_resolutions": self.random_resolutions,
             "res_presets": self._res_presets if hasattr(self, '_res_presets') else [],
-            "active_loras": active_loras,
 
             "hires_enabled": self.hires_options_group.isChecked(),
             "hires_upscaler": self.upscaler_combo.currentText() or self._get_existing_setting("hires_upscaler"),
@@ -123,7 +120,9 @@ class SettingsMixin:
             "char_feature_override": getattr(self, '_char_feature_override', {'hair_length': False, 'eye_color': False}),
 
             "cond_prompt_enabled": self.cond_prompt_check.isChecked(),
-            "cond_rules_json": self._get_combined_cond_rules_json(),
+            # 전역 조건식의 단일 소스는 config/cond_rules.json (Vue 모달이 저장).
+            #   레거시 cond_block_editor 위젯은 Vue SPA에서 표시되지 않고 앱도 읽지 않으므로
+            #   여기서 cond_rules_json을 더 이상 저장하지 않는다(이중 저장 제거).
             "cond_prevent_dupe": self.cond_prevent_dupe_check.isChecked(),
 
             "base_prefix_prompt": self.base_prefix_prompt,
@@ -240,12 +239,9 @@ class SettingsMixin:
                         self._res_presets[i] = list(preset)
                         self._res_preset_btns[i].setText(preset[0])
 
-            # LoRA 활성 목록 복원
-            if hasattr(self, 'lora_active_panel') and "active_loras" in settings:
-                self.lora_active_panel.set_entries(settings["active_loras"])
-            self._vue_lora_entries = settings.get("active_loras", [])
-            if hasattr(self, 'vue_bridge'):
-                self.vue_bridge.loraStackLoaded.emit(json.dumps(self._vue_lora_entries, ensure_ascii=False))
+            # LoRA 활성 목록: config/ui_prefs.json(loraStack) 단일 소스로 이관됨
+            #   (복원은 generator_main._restore_runtime_prefs + App.vue uiPrefsLoaded).
+            #   레거시 prompt_settings.active_loras는 여기서 더 이상 읽지 않는다.
 
             # 랜덤 해상도
             self.random_res_check.setChecked(settings.get("random_res_enabled", False))
@@ -340,30 +336,10 @@ class SettingsMixin:
             self.cond_prompt_check.setChecked(settings.get("cond_prompt_enabled", False))
             self.cond_prevent_dupe_check.setChecked(settings.get("cond_prevent_dupe", True))
 
-            # 새 JSON 포맷 우선, 없으면 기존 텍스트 포맷 마이그레이션
-            cond_json = settings.get("cond_rules_json", "")
-            all_rules = []
-            if cond_json:
-                from utils.condition_block import rules_from_json
-                all_rules = rules_from_json(cond_json)
-            else:
-                old_pos = settings.get("cond_prompt_rules", "")
-                old_neg = settings.get("cond_neg_rules", "")
-                if old_pos or old_neg:
-                    from utils.condition_block import migrate_old_rules
-                    if old_pos:
-                        all_rules.extend(migrate_old_rules(old_pos))
-                    if old_neg:
-                        neg_rules = migrate_old_rules(old_neg)
-                        for r in neg_rules:
-                            r.location = "neg"
-                        all_rules.extend(neg_rules)
-            if all_rules:
-                pos_rules = [r for r in all_rules if r.location != "neg"]
-                neg_rules = [r for r in all_rules if r.location == "neg"]
-                self.cond_block_editor_pos.set_rules(pos_rules)
-                self.cond_block_editor_neg.set_rules(neg_rules)
-            
+            # 전역 조건식: config/cond_rules.json 단일 소스로 이관됨
+            #   (로드/마이그레이션은 generator_main._load_saved_configs 에서 처리).
+            #   레거시 prompt_settings.cond_rules_json은 더 이상 cond_block_editor에 로드하지 않는다.
+
             # 베이스 프롬프트
             self.base_prefix_prompt = settings.get("base_prefix_prompt", "")
             self.base_suffix_prompt = settings.get("base_suffix_prompt", "")
@@ -493,13 +469,6 @@ class SettingsMixin:
             from utils.app_logger import get_logger
             get_logger('settings').error(f"설정 불러오기 실패: {e}")
     
-    def _get_combined_cond_rules_json(self) -> str:
-        """Positive/Negative 에디터의 규칙을 합쳐 JSON으로 반환"""
-        from utils.condition_block import rules_to_json
-        pos_rules = self.cond_block_editor_pos.get_rules()
-        neg_rules = self.cond_block_editor_neg.get_rules()
-        return rules_to_json(pos_rules + neg_rules)
-
     def _get_slot_settings(self, widgets):
         """ADetailer 슬롯 설정 가져오기"""
         return {

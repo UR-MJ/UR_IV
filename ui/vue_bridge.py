@@ -781,25 +781,24 @@ class VueBridge(QObject):
                 if hasattr(main_win, '_save_deck_state'):
                     main_win._save_deck_state()
 
-            # ── 디스크 백업: 재시작 시 자동 복원 → 자동화 즉시 사용 가능 ──
-            # localStorage 5MB cap을 우회 — 파일은 무제한
-            try:
-                import os
-                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                cache_dir = os.path.join(base_dir, 'config')
-                os.makedirs(cache_dir, exist_ok=True)
-                path = os.path.join(cache_dir, 'last_search_results.json')
-                with open(path, 'w', encoding='utf-8') as f:
-                    json.dump(out, f, ensure_ascii=False)
-                # 전체(필터 전) 셋도 별도 저장 — 재시작 후 '필터 해제' 시 전체 복구용.
-                # 필터 적용(update_prompt_deck)은 last_search_results.json만 덮어쓰므로
-                # 여긴 항상 전체가 유지됨.
-                with open(os.path.join(cache_dir, 'last_full_results.json'), 'w', encoding='utf-8') as f:
-                    json.dump(out, f, ensure_ascii=False)
-                print(f"[Search] saved {len(out):,} rows to {path}")
-            except Exception as e:
-                print(f"[Search] disk backup failed: {e}")
-                print(f"[Search] filtered_results updated: {len(out)} items")
+            # ── 디스크 영속(단일 쓰기 경로): 재시작 시 자동 복원 → 자동화 즉시 사용 ──
+            #   새 검색이므로 active=full 동일(전체). 디스크=영속 단일소스, localStorage(slim)=폴백.
+            #   쓰기 로직은 generator_main._persist_search_results 한 곳으로 통일(드리프트 방지).
+            if main_win and hasattr(main_win, '_persist_search_results'):
+                main_win._persist_search_results(out, full=out)
+                print(f"[Search] saved {len(out):,} rows to disk (single write path)")
+            else:
+                # 폴백: 메인 윈도우 없음(개발/단독) — 직접 기록
+                try:
+                    import os
+                    cache_dir = os.path.join(
+                        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
+                    os.makedirs(cache_dir, exist_ok=True)
+                    for name in ('last_search_results.json', 'last_full_results.json'):
+                        with open(os.path.join(cache_dir, name), 'w', encoding='utf-8') as f:
+                            json.dump(out, f, ensure_ascii=False)
+                except Exception as e:
+                    print(f"[Search] disk backup failed: {e}")
         except Exception as e:
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
 
