@@ -269,7 +269,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
 import { openCharPresetModal } from '../composables/uiModals.js'
@@ -286,8 +286,8 @@ const tagBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
 watch(tagBlockMode, v => window.localStorage.setItem('tagBlockMode', String(v)))
 
 // 같은 SPA 내 변경 감지 (keep-alive 환경)
-let _blockModeTimer = null
-const _backendUnsubs = []   // onBackendEvent 해제 함수 (탭 전환 시 누수 방지)
+let _blockModeTimer: ReturnType<typeof setInterval> | null = null
+const _backendUnsubs: Array<() => void> = []   // onBackendEvent 해제 함수 (탭 전환 시 누수 방지)
 onMounted(() => {
   _blockModeTimer = setInterval(() => {
     const stored = window.localStorage.getItem('tagBlockMode') === 'true'
@@ -320,41 +320,41 @@ const artistLocked = computed({
 })
 function toggleArtistLock() { artistLocked.value = !artistLocked.value; requestAction('set_artist_locked', { locked: artistLocked.value }) }
 
-const totalPromptRef = ref(null)
-const negRef = ref(null)
-const artistRef = ref(null)
-const prefixRef = ref(null)
-const mainRef = ref(null)
-const suffixRef = ref(null)
+const totalPromptRef = ref<HTMLTextAreaElement | null>(null)
+const negRef = ref<HTMLTextAreaElement | null>(null)
+const artistRef = ref<HTMLTextAreaElement | null>(null)
+const prefixRef = ref<HTMLTextAreaElement | null>(null)
+const mainRef = ref<HTMLTextAreaElement | null>(null)
+const suffixRef = ref<HTMLTextAreaElement | null>(null)
 
 const modelItems = computed(() => store.getProperty('model_combo', 'items') || [])
 const vaeItems = computed(() => store.getProperty('vae_main_combo', 'items') || [])
 const teItems = computed(() => store.getProperty('te_main_input', 'items') || [])
 const teSelectedList = computed(() => {
   const raw = widgets.te_main_input || ''
-  return raw.split(',').map(s => s.trim()).filter(Boolean)
+  return raw.split(',').map((s: string) => s.trim()).filter(Boolean)
 })
 const teUnselectedItems = computed(() => {
   const selected = new Set(teSelectedList.value)
-  return teItems.value.filter(f => !selected.has(f))
+  return teItems.value.filter((f: string) => !selected.has(f))
 })
-function _serializeTe(list) {
+function _serializeTe(list: string[]) {
   widgets.te_main_input = list.join(', ')
 }
-function addTeFile(name) {
+function addTeFile(name: any) {
   if (!name) return
   const cur = teSelectedList.value
   if (cur.includes(name)) return
   // teItems 정렬 순서 유지
-  const next = teItems.value.filter(f => cur.includes(f) || f === name)
+  const next = teItems.value.filter((f: string) => cur.includes(f) || f === name)
   _serializeTe(next)
 }
-function removeTeFile(name) {
-  _serializeTe(teSelectedList.value.filter(f => f !== name))
+function removeTeFile(name: string) {
+  _serializeTe(teSelectedList.value.filter((f: string) => f !== name))
 }
 // 토큰 카운트 헬퍼 — SD/CLIP 근사 (실제 토크나이저보다 약간 보수적)
 // 규칙: 각 태그(쉼표 구분) → 단어 수 합산 + 쉼표 수
-function approxTokens(text) {
+function approxTokens(text: string) {
   if (!text || !String(text).trim()) return 0
   const chunks = String(text).split(',').map(s => s.trim()).filter(Boolean)
   let total = 0
@@ -377,7 +377,7 @@ const sectionTokens = computed(() => ({
 }))
 // 75 = CLIP 1청크 한계, 150 = 2청크(BREAK), 225 = 3청크
 // 0=숨김, <75=녹색, <150=노랑, ≥150=빨강
-function tokenBadgeClass(n) {
+function tokenBadgeClass(n: number) {
   if (!n) return ''
   if (n < 75) return 'tk-ok'
   if (n < 150) return 'tk-warn'
@@ -392,18 +392,19 @@ const UNDO_KEYS = [
   'neg_prompt_text',
   'exclude_prompt_local_input',
 ]
-const undoStack = ref([])    // 과거 스냅샷
-const redoStack = ref([])    // 미래 (Ctrl+Y용)
+type Snapshot = Record<string, string>
+const undoStack = ref<Snapshot[]>([])    // 과거 스냅샷
+const redoStack = ref<Snapshot[]>([])    // 미래 (Ctrl+Y용)
 const MAX_UNDO = 50
 let applying = false         // undo 적용 중에는 watch 다시 push 안 함
-let debounceTimer = null     // 빠른 타이핑 묶기
+let debounceTimer: ReturnType<typeof setTimeout> | null = null     // 빠른 타이핑 묶기
 
-function _snap() {
-  const s = {}
+function _snap(): Snapshot {
+  const s: Snapshot = {}
   for (const k of UNDO_KEYS) s[k] = widgets[k] || ''
   return s
 }
-function _eq(a, b) {
+function _eq(a: Snapshot, b: Snapshot) {
   for (const k of UNDO_KEYS) if ((a[k] || '') !== (b[k] || '')) return false
   return true
 }
@@ -415,7 +416,7 @@ function pushUndoSnapshot() {
   if (undoStack.value.length > MAX_UNDO) undoStack.value.shift()
   redoStack.value = []  // 새 변경 시 redo 초기화
 }
-function applySnapshot(snap) {
+function applySnapshot(snap: Snapshot) {
   applying = true
   for (const k of UNDO_KEYS) {
     if (widgets[k] !== snap[k]) widgets[k] = snap[k]
@@ -424,31 +425,31 @@ function applySnapshot(snap) {
 }
 function performUndo() {
   if (undoStack.value.length < 2) return  // 첫 스냅(현재) 외에 없으면 안 함
-  const cur = undoStack.value.pop()       // 현재 상태
+  const cur = undoStack.value.pop() as Snapshot       // 현재 상태
   redoStack.value.push(cur)
   const prev = undoStack.value[undoStack.value.length - 1]
   applySnapshot(prev)
 }
 function performRedo() {
   if (redoStack.value.length === 0) return
-  const next = redoStack.value.pop()
+  const next = redoStack.value.pop() as Snapshot
   undoStack.value.push(next)
   applySnapshot(next)
 }
 
 // 디바운스 watch — 빠른 타이핑이 끝나면 스냅샷 (500ms)
 // 메모리 누수 방지: stop 함수를 모아 onUnmounted에서 일괄 해제
-const _undoWatchStops = []
+const _undoWatchStops: Array<() => void> = []
 for (const k of UNDO_KEYS) {
   _undoWatchStops.push(watch(() => widgets[k], () => {
     if (applying) return
-    clearTimeout(debounceTimer)
+    if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(pushUndoSnapshot, 500)
   }))
 }
 
 // 키보드 단축키 (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
-function onKeyDownGlobal(e) {
+function onKeyDownGlobal(e: KeyboardEvent) {
   if (!(e.ctrlKey || e.metaKey)) return
   // 입력 요소 안에서도 동작 — input 자체 undo는 우회됨 (덜 자주 쓰임)
   // 단, contenteditable이나 textarea의 native undo는 그대로 (이건 우리가 못 막음)
@@ -464,28 +465,28 @@ function onKeyDownGlobal(e) {
 
 // 블록 색상 분류
 const countPattern = /^(\d+)?(girl|boy|other)s?$|^solo$|^multiple_/
-const blockColorCache = ref({})
+const blockColorCache = ref<Record<string, string>>({})
 
 // ── Exclude Manager ──
 const showExcludeManager = ref(false)
 const excludeRuleCount = computed(() =>
-  (widgets.exclude_prompt_local_input || '').split(',').filter(t => t.trim()).length)
-const selectedExRule = ref(-1)
-const excludeMatches = ref({})  // {ruleIdx: [tags]}
+  (widgets.exclude_prompt_local_input || '').split(',').filter((t: string) => t.trim()).length)
+const selectedExRule = ref<any>(-1)
+const excludeMatches = ref<Record<string, string[]>>({})  // {ruleIdx: [tags]}
 
 const excludeRules = computed(() => {
   const text = widgets.exclude_prompt_local_input || ''
-  return text.split(',').map(t => t.trim()).filter(Boolean)
+  return text.split(',').map((t: string) => t.trim()).filter(Boolean)
 })
 
 const currentExMatches = computed(() => {
   return excludeMatches.value[selectedExRule.value] || []
 })
 
-async function loadExcludeMatches(rule) {
-  const backend = await getBackend()
+async function loadExcludeMatches(rule: string) {
+  const backend: any = await getBackend()
   if (!backend.getExcludeMatches) return
-  backend.getExcludeMatches(rule, (json) => {
+  backend.getExcludeMatches(rule, (json: string) => {
     try {
       const tags = JSON.parse(json)
       if (Array.isArray(tags)) {
@@ -498,15 +499,15 @@ async function loadExcludeMatches(rule) {
 const newExcludeRule = ref('')
 const editingExRule = ref(-1)
 const editExRuleText = ref('')
-const exRuleEditRef = ref(null)
+const exRuleEditRef = ref<any>(null)
 
-function startEditExRule(idx) {
+function startEditExRule(idx: any) {
   editingExRule.value = idx
   editExRuleText.value = excludeRules.value[idx]
   nextTick(() => { if (exRuleEditRef.value?.[0]) exRuleEditRef.value[0].focus() })
 }
 
-function finishEditExRule(idx) {
+function finishEditExRule(idx: any) {
   if (editingExRule.value !== idx) return
   const newText = editExRuleText.value.trim()
   editingExRule.value = -1
@@ -527,19 +528,19 @@ function addExcludeRule() {
   newExcludeRule.value = ''
 }
 
-function removeExcludeRule(idx) {
+function removeExcludeRule(idx: any) {
   const rules = excludeRules.value.slice()
   rules.splice(idx, 1)
   widgets.exclude_prompt_local_input = rules.join(', ')
   if (selectedExRule.value >= rules.length) selectedExRule.value = -1
 }
 
-function isExcepted(tag) {
+function isExcepted(tag: string) {
   const cur = (widgets.exclude_prompt_local_input || '').toLowerCase()
   return cur.includes('~' + tag.toLowerCase())
 }
 
-function addExactExclude(tag) {
+function addExactExclude(tag: string) {
   // 우클릭: *완전일치 제외 규칙 추가
   const cur = widgets.exclude_prompt_local_input || ''
   const rule = '*' + tag
@@ -548,12 +549,12 @@ function addExactExclude(tag) {
   }
 }
 
-function toggleException(tag) {
+function toggleException(tag: string) {
   const cur = widgets.exclude_prompt_local_input || ''
   const exception = '~' + tag
   if (isExcepted(tag)) {
     // 예외 해제 — ~tag 제거
-    const rules = cur.split(',').map(r => r.trim()).filter(r => r.toLowerCase() !== exception.toLowerCase())
+    const rules = cur.split(',').map((r: string) => r.trim()).filter((r: string) => r.toLowerCase() !== exception.toLowerCase())
     widgets.exclude_prompt_local_input = rules.join(', ')
   } else {
     // 예외 추가
@@ -562,26 +563,26 @@ function toggleException(tag) {
 }
 
 // 최종 프롬프트 블록 변경 시 → 원본 필드에서 태그 제거
-function onTotalBlockChange(newVal) {
+function onTotalBlockChange(newVal: string) {
   // FINAL 블록의 새 순서 — 태그(소문자) → 위치 인덱스
-  const order = newVal.split(',').map(t => t.trim()).filter(Boolean)
-  const orderIdx = new Map()
-  order.forEach((t, i) => { const k = t.toLowerCase(); if (!orderIdx.has(k)) orderIdx.set(k, i) })
-  const newTags = new Set(order.map(t => t.toLowerCase()))
+  const order = newVal.split(',').map((t: string) => t.trim()).filter(Boolean)
+  const orderIdx = new Map<string, number>()
+  order.forEach((t: string, i: number) => { const k = t.toLowerCase(); if (!orderIdx.has(k)) orderIdx.set(k, i) })
+  const newTags = new Set(order.map((t: string) => t.toLowerCase()))
   // 각 필드: (1) FINAL에서 사라진 태그 제거 (FINAL에서 지우면 인물수 칸 등에 남던 버그 수정)
   //          (2) 남은 태그를 FINAL 순서로 재정렬 → FINAL에서 블록을 옮기면 해당 필드 내부 순서가 따라감.
   //   (필드 순서 자체는 구조상 고정이므로 필드 경계를 넘는 이동은 각 필드 영역 내 재정렬로만 반영됨)
   for (const key of ['char_count_input', 'character_input', 'copyright_input', 'artist_input',
                      'main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text']) {
     const cur = widgets[key] || ''
-    const kept = cur.split(',').map(t => t.trim()).filter(t => t && newTags.has(t.toLowerCase()))
-    kept.sort((a, b) => (orderIdx.get(a.toLowerCase()) ?? 0) - (orderIdx.get(b.toLowerCase()) ?? 0))
+    const kept = cur.split(',').map((t: string) => t.trim()).filter((t: string) => t && newTags.has(t.toLowerCase()))
+    kept.sort((a: string, b: string) => (orderIdx.get(a.toLowerCase()) ?? 0) - (orderIdx.get(b.toLowerCase()) ?? 0))
     const result = kept.join(', ')
     if (result !== cur.trim()) widgets[key] = result
   }
 }
 
-function excludeColorFn(text) {
+function excludeColorFn(text: string) {
   const t = text.trim()
   if (t.startsWith('~')) return 'bc-action'       // 예외 계열 (초록)
   if (t.startsWith('*')) return 'bc-expression'   // 완전 일치 (노랑)
@@ -591,7 +592,7 @@ function excludeColorFn(text) {
   return 'bc-nsfw'
 }
 
-function blockColorClass(text) {
+function blockColorClass(text: string) {
   if (text.includes('__') && /__(.+?)__/.test(text)) return 'wc-block'
   let t = text.trim().toLowerCase().replace(/ /g, '_').replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
   if (countPattern.test(t)) return 'bc-count'
@@ -600,23 +601,23 @@ function blockColorClass(text) {
 
 // 태그 분류 요청
 async function classifyVisibleTags() {
-  const allTags = new Set()
+  const allTags = new Set<string>()
   for (const key of ['main_prompt_text', 'prefix_prompt_text', 'suffix_prompt_text', 'total_prompt_display']) {
-    const text = widgets[key] || ''
+    const text: string = widgets[key] || ''
     for (const t of text.split(',')) {
       let tag = t.trim().replace(/ /g, '_').replace(/^\(+/, '').replace(/[\):.\d]+$/, '').trim()
       if (tag && !countPattern.test(tag.toLowerCase()) && !blockColorCache.value[tag.toLowerCase()] && !/__(.+?)__/.test(tag)) allTags.add(tag)
     }
   }
   if (allTags.size === 0) return
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.classifyTags) {
-    backend.classifyTags(JSON.stringify([...allTags]), (json) => {
+    backend.classifyTags(JSON.stringify([...allTags]), (json: string) => {
       try {
         const r = JSON.parse(json)
         if (!r.error) {
-          const m = { sexual:'nsfw', body_parts:'body', clothing:'clothing', pose:'action', expression:'expression', background:'bg', composition:'bg', effect:'effect', objects:'objects', color:'color', character_trait:'trait' }
-          for (const [tag, cat] of Object.entries(r)) blockColorCache.value[tag.toLowerCase()] = m[cat] || ''
+          const m: Record<string, string> = { sexual:'nsfw', body_parts:'body', clothing:'clothing', pose:'action', expression:'expression', background:'bg', composition:'bg', effect:'effect', objects:'objects', color:'color', character_trait:'trait' }
+          for (const [tag, cat] of Object.entries(r)) blockColorCache.value[tag.toLowerCase()] = m[cat as string] || ''
         }
       } catch {}
     })
@@ -625,14 +626,16 @@ async function classifyVisibleTags() {
 watch(tagBlockMode, v => { if (v) setTimeout(classifyVisibleTags, 200) })
 
 // 딥 프롬프트 클리너
+interface Conflict { group: string; tags: string[]; [k: string]: any }
+interface OptPreview { before: string; after: string; removed: number; tagCount: number; conflicts: Conflict[]; [k: string]: any }
 const optResult = ref('')
-const promptConflicts = ref([])
-const optPreview = ref(null)   // {before, after, removed, tagCount, conflicts}
+const promptConflicts = ref<Conflict[]>([])
+const optPreview = ref<OptPreview | null>(null)   // {before, after, removed, tagCount, conflicts}
 async function optimizePrompt() {
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend.deepCleanPrompt) return
   const before = widgets.total_prompt_display || ''
-  backend.deepCleanPrompt(JSON.stringify({ prompt: before }), (json) => {
+  backend.deepCleanPrompt(JSON.stringify({ prompt: before }), (json: string) => {
     try {
       const d = JSON.parse(json)
       if (d.error) { optResult.value = d.error; return }
@@ -668,14 +671,14 @@ const SEP_CATS = [
   { key: 'meta', label: '메타' },
 ]
 const showSeparate = ref(false)
-const sepCats = reactive({ expression: false, location: false, pose: false, object: false, meta: false })
-const sepCounts = ref({})
+const sepCats = reactive<Record<string, boolean>>({ expression: false, location: false, pose: false, object: false, meta: false })
+const sepCounts = ref<Record<string, number>>({})
 const sepResult = ref('')
 async function refreshSepCounts() {
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend || !backend.separateTags) return
   const allKeys = SEP_CATS.map(c => c.key)
-  backend.separateTags(widgets.main_prompt_text || '', JSON.stringify(allKeys), (json) => {
+  backend.separateTags(widgets.main_prompt_text || '', JSON.stringify(allKeys), (json: string) => {
     try { const d = JSON.parse(json); if (!d.error) sepCounts.value = d.counts || {} } catch {}
   })
 }
@@ -683,12 +686,12 @@ function toggleSeparate() {
   showSeparate.value = !showSeparate.value
   if (showSeparate.value) refreshSepCounts()
 }
-async function applySeparate(mode) {
+async function applySeparate(mode: string) {
   const selected = SEP_CATS.map(c => c.key).filter(k => sepCats[k])
   if (!selected.length) { requestAction('show_toast', { type: 'info', msg: '분류할 카테고리를 선택하세요' }); return }
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend || !backend.separateTags) return
-  backend.separateTags(widgets.main_prompt_text || '', JSON.stringify(selected), (json) => {
+  backend.separateTags(widgets.main_prompt_text || '', JSON.stringify(selected), (json: string) => {
     try {
       const d = JSON.parse(json)
       if (d.error) { requestAction('show_toast', { type: 'error', msg: '분류 실패: ' + d.error }); return }
@@ -711,9 +714,9 @@ async function applySeparate(mode) {
 // ② color 페어링 결합
 // 🎯 구체화 — 덜 구체적인(상위) 태그 제거 (muscular+muscular male → muscular male)
 async function refineSpecific() {
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (!backend || !backend.refineToSpecificTags) return
-  backend.refineToSpecificTags(widgets.main_prompt_text || '', (json) => {
+  backend.refineToSpecificTags(widgets.main_prompt_text || '', (json: string) => {
     try {
       const d = JSON.parse(json)
       if (d.error) { requestAction('show_toast', { type: 'error', msg: '구체화 실패: ' + d.error }); return }
@@ -727,18 +730,18 @@ async function refineSpecific() {
 }
 
 // 캐릭터 인사이트
-const charInsight = ref({ tags: [], raw: '' })
+const charInsight = ref<{ tags: string[]; raw: string }>({ tags: [], raw: '' })
 async function loadCharTags() {
   const char = widgets.character_input
   if (!char || char.length < 2) { charInsight.value = { tags: [], raw: '' }; return }
-  const backend = await getBackend()
+  const backend: any = await getBackend()
   if (backend.getCharacterInsight) {
-    backend.getCharacterInsight(char, (json) => {
+    backend.getCharacterInsight(char, (json: string) => {
       try { const d = JSON.parse(json); charInsight.value = { tags: d.tags || [], raw: d.raw || '' } } catch { charInsight.value = { tags: [], raw: '' } }
     })
   }
 }
-function insertCharTag(tag) {
+function insertCharTag(tag: string) {
   const cur = widgets.main_prompt_text || ''
   if (!cur.toLowerCase().includes(tag.toLowerCase())) widgets.main_prompt_text = cur ? cur.replace(/,?\s*$/, '') + ', ' + tag + ', ' : tag + ', '
 }
@@ -752,10 +755,10 @@ const nlPrompt = ref('')
 // LLM 버튼 2개(태그 AI / 자연어 AI) 드롭다운
 const aiMenu = ref('')           // '' | 'tag' | 'nl'
 const pendingNlMode = ref('nl2tags')
-const nlInputRef = ref(null)
-function toggleAiMenu(which) { aiMenu.value = aiMenu.value === which ? '' : which }
-function runAi(mode) { aiMenu.value = ''; ollamaMode.value = mode; runOllama() }
-function openNlInput(mode) {
+const nlInputRef = ref<HTMLInputElement | null>(null)
+function toggleAiMenu(which: string) { aiMenu.value = aiMenu.value === which ? '' : which }
+function runAi(mode: string) { aiMenu.value = ''; ollamaMode.value = mode; runOllama() }
+function openNlInput(mode: string) {
   aiMenu.value = ''
   pendingNlMode.value = mode
   showNlInput.value = true
@@ -767,8 +770,8 @@ function runPendingNl() {
   runOllama()
 }
 const nlResult = ref('')
-const nlRes = ref(null)   // 창의 모드 추천 해상도 {w, h}
-let ollamaTimer = null
+const nlRes = ref<{ w: string; h: string } | null>(null)   // 창의 모드 추천 해상도 {w, h}
+let ollamaTimer: ReturnType<typeof setTimeout> | null = null
 async function runOllama() {
   const mode = ollamaMode.value
   const main = widgets.main_prompt_text || ''
@@ -790,15 +793,15 @@ async function runOllama() {
   }
   ollamaLoading.value = true
   // 타임아웃 안전장치
-  clearTimeout(ollamaTimer)
+  if (ollamaTimer) clearTimeout(ollamaTimer)
   ollamaTimer = setTimeout(() => {
     if (ollamaLoading.value) {
       ollamaLoading.value = false
       requestAction('show_toast', { type: 'error', msg: 'AI 응답 시간 초과 — Ollama 서버 상태를 확인하세요' })
     }
   }, 65000)
-  const backend = await getBackend()
-  if (!backend.ollamaEnhance) { ollamaLoading.value = false; clearTimeout(ollamaTimer); return }
+  const backend: any = await getBackend()
+  if (!backend.ollamaEnhance) { ollamaLoading.value = false; if (ollamaTimer) clearTimeout(ollamaTimer); return }
   const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
   const model = window.localStorage.getItem('ollamaModel') || 'gemma3:4b'
   backend.ollamaEnhance(contentArg, mode, JSON.stringify({ prompt: extraPrompt, character: creativeChar, url, model }))
@@ -811,15 +814,15 @@ async function runSmartNegative() {
     return
   }
   ollamaLoading.value = true
-  clearTimeout(ollamaTimer)
+  if (ollamaTimer) clearTimeout(ollamaTimer)
   ollamaTimer = setTimeout(() => {
     if (ollamaLoading.value) {
       ollamaLoading.value = false
       requestAction('show_toast', { type: 'error', msg: 'AI 응답 시간 초과' })
     }
   }, 65000)
-  const backend = await getBackend()
-  if (!backend.ollamaEnhance) { ollamaLoading.value = false; clearTimeout(ollamaTimer); return }
+  const backend: any = await getBackend()
+  if (!backend.ollamaEnhance) { ollamaLoading.value = false; if (ollamaTimer) clearTimeout(ollamaTimer); return }
   const url = window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
   const model = window.localStorage.getItem('ollamaModel') || 'gemma3:4b'
   backend.ollamaEnhance(positivePrompt, 'negative', JSON.stringify({ url, model }))
@@ -853,45 +856,45 @@ function applyNlRes() {
 }
 
 // 자동완성
-const acItems = ref([])
+const acItems = ref<string[]>([])
 const acIdx = ref(0)
 const fieldAcTarget = ref('')
-let acTimer = null
+let acTimer: ReturnType<typeof setTimeout> | null = null
 
-function onFieldInput(e, fieldId) {
+function onFieldInput(e: any, fieldId: string) {
   fieldAcTarget.value = fieldId
   const text = e.target.value; const lastComma = text.lastIndexOf(',')
   const prefix = (lastComma >= 0 ? text.substring(lastComma + 1) : text).trim()
   if (prefix.length < 2) { acItems.value = []; return }
-  clearTimeout(acTimer)
+  if (acTimer) clearTimeout(acTimer)
   acTimer = setTimeout(async () => {
-    const backend = await getBackend()
-    if (backend.getTagSuggestions) backend.getTagSuggestions(prefix, (json) => { try { acItems.value = JSON.parse(json).slice(0, 10); acIdx.value = 0 } catch { acItems.value = [] } })
+    const backend: any = await getBackend()
+    if (backend.getTagSuggestions) backend.getTagSuggestions(prefix, (json: string) => { try { acItems.value = JSON.parse(json).slice(0, 10); acIdx.value = 0 } catch { acItems.value = [] } })
   }, 300)
 }
-function onFieldKey(e, fieldId) {
+function onFieldKey(e: KeyboardEvent, fieldId: string) {
   if (fieldAcTarget.value !== fieldId || !acItems.value.length) return
   if (e.key === 'ArrowDown') { e.preventDefault(); acIdx.value = Math.min(acIdx.value + 1, acItems.value.length - 1) }
   else if (e.key === 'ArrowUp') { e.preventDefault(); acIdx.value = Math.max(0, acIdx.value - 1) }
   else if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); acceptFieldSuggestion(acItems.value[acIdx.value], fieldId) }
   else if (e.key === 'Escape') { acItems.value = []; fieldAcTarget.value = '' }
 }
-function acceptFieldSuggestion(tag, fieldId) {
+function acceptFieldSuggestion(tag: string, fieldId: string) {
   const text = widgets[fieldId] || ''; const lastComma = text.lastIndexOf(',')
   widgets[fieldId] = (lastComma >= 0 ? text.substring(0, lastComma + 1) + ' ' : '') + tag + ', '
   acItems.value = []; fieldAcTarget.value = ''
 }
-function onMainInput(e) { autoGrow(e.target); fieldAcTarget.value = 'main_prompt_text'; onFieldInput(e, 'main_prompt_text') }
-function onAutoKey(e) { onFieldKey(e, 'main_prompt_text') }
-function acceptSuggestion(tag) { acceptFieldSuggestion(tag, 'main_prompt_text'); nextTick(() => { if (mainRef.value) { mainRef.value.focus(); autoGrow(mainRef.value) } }) }
+function onMainInput(e: any) { autoGrow(e.target); fieldAcTarget.value = 'main_prompt_text'; onFieldInput(e, 'main_prompt_text') }
+function onAutoKey(e: KeyboardEvent) { onFieldKey(e, 'main_prompt_text') }
+function acceptSuggestion(tag: string) { acceptFieldSuggestion(tag, 'main_prompt_text'); nextTick(() => { if (mainRef.value) { mainRef.value.focus(); autoGrow(mainRef.value) } }) }
 
-function autoGrow(el) { if (!el) return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }
+function autoGrow(el: any) { if (!el) return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }
 function growAll() { nextTick(() => { ;[totalPromptRef, negRef, artistRef, prefixRef, mainRef, suffixRef].forEach(r => { if (r.value) autoGrow(r.value) }) }) }
 
 onMounted(() => {
   setTimeout(growAll, 500); setTimeout(growAll, 1500)
   // UI prefs 로드 (재시작 시 블록 모드 복원)
-  _backendUnsubs.push(onBackendEvent('uiPrefsLoaded', (json) => {
+  _backendUnsubs.push(onBackendEvent('uiPrefsLoaded', (json: string) => {
     try {
       const prefs = JSON.parse(json)
       if (typeof prefs.tagBlockMode === 'boolean') {
@@ -901,9 +904,9 @@ onMounted(() => {
       if (typeof prefs.galleryShowMetadata === 'boolean') window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata))
     } catch {}
   }))
-  _backendUnsubs.push(onBackendEvent('ollamaResult', (json) => {
+  _backendUnsubs.push(onBackendEvent('ollamaResult', (json: string) => {
     ollamaLoading.value = false
-    clearTimeout(ollamaTimer)
+    if (ollamaTimer) clearTimeout(ollamaTimer)
     try {
       const d = JSON.parse(json)
       if (d.error) {

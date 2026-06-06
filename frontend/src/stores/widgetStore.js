@@ -3,6 +3,7 @@
  */
 import { reactive, watch } from 'vue'
 
+/** @type {{ values: Record<string, any>, properties: Record<string, Record<string, any>> }} */
 const state = reactive({
   values: {},      // { widget_id: value_string }
   properties: {},  // { widget_id: { items, enabled, ... } }
