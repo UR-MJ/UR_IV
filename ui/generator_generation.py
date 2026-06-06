@@ -134,46 +134,17 @@ class GenerationMixin:
             width = int(self.width_input.text() or '1024')
             height = int(self.height_input.text() or '1024')
 
-        # 고해상도 모드 — Vue의 'set_high_res_factor' 액션이 self._high_res_factor 설정
-        # 입력 해상도는 그대로 두고 생성 시점에만 곱함 → UI에 base 값 유지
+        # 고해상도/자동해상도 + ANIMA 면적캡(1536²) — 순수 함수로 분리.
+        # 동작/테스트: core/resolution_guard.py, tests/test_resolution_guard.py
         hr_factor = getattr(self, '_high_res_factor', 1.0) or 1.0
         _auto_res = bool(getattr(self, 'auto_res_check', None)
                          and self.auto_res_check.isChecked())
-        # ANIMA 가드: 자동 해상도 모드에서 '총 픽셀 수(면적)'를 1536×1536 이하로 제한.
-        # 한 변 제한이 아니라 면적 제한 → 1248×1824(2,276,352px)처럼 한 변이 1536을
-        # 넘어도 면적이 한도(2,359,296px) 이내면 허용. 넘으면 비율 유지하며 축소.
-        _ANIMA_MAX_AREA = 1536 * 1536  # = 2,359,296 px
-
-        if hr_factor > 1.0:
-            base_w, base_h = width, height
-            # SD 호환을 위해 8 배수로 내림 정렬
-            cand_w = max(8, (int(base_w * hr_factor) // 8) * 8)
-            cand_h = max(8, (int(base_h * hr_factor) // 8) * 8)
-
-            # ── 히든 가드: 자동(PARQUET) 해상도 모드에서만 동작 ──────────────
-            # 고해상도 결과의 '면적'이 한도를 넘으면 '이번 생성만' 고해상도를 스킵하고
-            # base로 생성. 매 생성 새로 평가(상태 없음) → 다음 생성에서 작아지면 자동
-            # 재적용. 수동 해상도 모드는 사용자 의도 존중 → 미적용.
-            if _auto_res and (cand_w * cand_h > _ANIMA_MAX_AREA):
-                width, height = base_w, base_h
-                print(f"[HighRes] 자동+고해상도 {cand_w}x{cand_h}"
-                      f"({cand_w * cand_h:,}px) > {_ANIMA_MAX_AREA:,} → "
-                      f"고해상도 스킵 (base {base_w}x{base_h})")
-            else:
-                width, height = cand_w, cand_h
-                print(f"[HighRes] {hr_factor}x → {base_w}x{base_h} → {width}x{height}")
-
-        # ANIMA 면적 안전캡: 자동 해상도 모드 또는 고해상도 모드에서 최종 면적이 1536²를
-        # 넘으면 비율 유지하며 면적이 한도 이하가 되도록 축소(8배수).
-        # 예) 고해상도로 2048×2048이 나오면 1536×1536으로 캡.
-        # (수동 해상도 + 고해상도 OFF는 사용자 의도 존중 → 미적용.)
-        if (_auto_res or hr_factor > 1.0) and (width * height > _ANIMA_MAX_AREA):
-            _scale = (_ANIMA_MAX_AREA / float(width * height)) ** 0.5
-            _nw = max(8, (int(width * _scale) // 8) * 8)
-            _nh = max(8, (int(height * _scale) // 8) * 8)
-            print(f"[HighRes] ANIMA 면적캡: {width}x{height}({width * height:,}px) "
-                  f"> {_ANIMA_MAX_AREA:,} → {_nw}x{_nh}({_nw * _nh:,}px)")
-            width, height = _nw, _nh
+        from core.resolution_guard import apply_anima_resolution, ANIMA_MAX_AREA
+        _bw, _bh = width, height
+        width, height = apply_anima_resolution(_bw, _bh, hr_factor, _auto_res)
+        if (width, height) != (_bw, _bh):
+            print(f"[HighRes] base {_bw}x{_bh} (hr={hr_factor}, auto={_auto_res}) "
+                  f"→ {width}x{height} ({width * height:,}px ≤ ANIMA {ANIMA_MAX_AREA:,})")
         
         combined_neg_prompt = self.neg_prompt_text.toPlainText().strip()
 
