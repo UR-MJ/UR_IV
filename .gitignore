@@ -78,6 +78,7 @@ ex/
 
 # Logs & backups
 *.log
+*.log.*
 *.bak
 
 # Archives
@@ -88,6 +89,13 @@ danbooru wiki/
 
 # Windows
 nul
+
+# 생성되는 런타임 데이터 — danbooru_character.csv에서 생성, character_features.py가 경로로 로드.
+#   옮기거나 지우면 캐릭터 '전체 특징' 로딩이 깨짐. 로컬 유지(필요 시 수동 커밋해 다른 PC에 배포).
+/danbooru_character.py
+
+# 개인 디버그/스크래치 (참조 안 되는 일회성 파일들을 한데 모음)
+/scratch/
 Thumbs.db
 Desktop.ini
 
