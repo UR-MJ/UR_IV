@@ -220,3 +220,35 @@ def apply_rules(
                 result["_replace"].append((rule.condition_tag, tag))
 
     return result
+
+
+# ── Vue 조건부(다중조건 AND + after_condition) 순수 로직 — tests/test_cond_apply.py ──
+def norm_tag(t: str) -> str:
+    """태그 정규화 — trim + lowercase + 언더스코어→공백."""
+    return (t or "").strip().lower().replace("_", " ")
+
+
+def multi_cond_met(condition: str, all_tags: set, exists: bool = True) -> bool:
+    """콤마 다중 조건(AND) 평가. all_tags = 정규화된 태그 집합.
+    exists=True  → 나열한 조건 태그가 '모두' 있어야 True.
+    exists=False → 그 AND 조건이 충족되지 '않을' 때 True(하나라도 빠지면).
+    """
+    terms = [norm_tag(c) for c in (condition or "").split(",") if c.strip()]
+    if not terms:
+        return False
+    all_present = all(t in all_tags for t in terms)
+    return all_present if exists else (not all_present)
+
+
+def insert_after(tags: list, anchor_norm: str, target: str):
+    """tags(원형 리스트)에서 anchor_norm과 정규화 일치하는 '첫' 태그 바로 뒤에 target 삽입한
+    새 리스트 반환. target이 이미 있으면 원본 복사본, anchor가 이 리스트에 없으면 None."""
+    norms = [norm_tag(t) for t in tags]
+    if norm_tag(target) in norms:
+        return list(tags)
+    for i, n in enumerate(norms):
+        if n == anchor_norm:
+            out = list(tags)
+            out.insert(i + 1, target)
+            return out
+    return None

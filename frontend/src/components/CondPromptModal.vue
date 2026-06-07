@@ -30,7 +30,7 @@
               <div class="cp-row">
                 <ToggleSwitch v-model="rule.enabled" size="sm" />
                 <span class="cp-kw">IF</span>
-                <input v-model="rule.condition" placeholder="조건 태그" class="cp-input" />
+                <input v-model="rule.condition" placeholder="조건 태그 (쉼표=모두 AND)" class="cp-input" />
                 <select v-model="rule.exists" class="cp-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
                 <button class="cp-rm" @click="removeCondRule('pos', ri)">✕</button>
               </div>
@@ -38,7 +38,7 @@
                 <span class="cp-kw">→</span>
                 <input v-model="rule.target" placeholder="대상 태그" class="cp-input" />
                 <select v-model="rule.action" class="cp-sel"><option value="add">추가</option><option value="remove">제거</option><option value="replace">대체</option></select>
-                <select v-model="rule.location" class="cp-sel" title="삽입 위치"><option value="main">본문</option><option value="prefix">선행</option><option value="suffix">후행</option></select>
+                <select v-model="rule.location" class="cp-sel" title="삽입 위치"><option value="main">본문</option><option value="prefix">선행</option><option value="suffix">후행</option><option value="after_condition">바로 뒤</option></select>
               </div>
             </div>
             <button class="cp-add" @click="addCondRule('pos')">+ 규칙 추가</button>
@@ -52,7 +52,7 @@
               <div class="cp-row">
                 <ToggleSwitch v-model="rule.enabled" size="sm" />
                 <span class="cp-kw">IF</span>
-                <input v-model="rule.condition" placeholder="조건 태그" class="cp-input" />
+                <input v-model="rule.condition" placeholder="조건 태그 (쉼표=모두 AND)" class="cp-input" />
                 <select v-model="rule.exists" class="cp-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
                 <button class="cp-rm" @click="removeCondRule('neg', ri)">✕</button>
               </div>

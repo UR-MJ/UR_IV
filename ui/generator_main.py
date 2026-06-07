@@ -1411,57 +1411,98 @@ class GeneratorMainUI(
             print(f"[Config] Failed to load UI prefs: {e}")
 
     def _apply_vue_conditional_rules(self, pos_rules: list, neg_rules: list):
-        """Vue에서 전달된 조건부 프롬프트 규칙 적용"""
+        """Vue에서 전달된 조건부 프롬프트 규칙 적용.
+        - 조건은 '전 필드(=final prompt)' 기준으로 평가 (캐릭터/작품/선행/본문/후행).
+        - 콤마 다중 조건은 AND (모두 있어야).
+        - location='after_condition' → 조건 첫 태그가 있는 '그 칸'에서 바로 뒤에 삽입.
+        """
         try:
-            current_tags = set(t.strip().lower() for t in self.main_prompt_text.toPlainText().split(',') if t.strip())
+            from utils.condition_block import norm_tag, multi_cond_met, insert_after
+
+            # 위치별 위젯 — 조건 평가 + after_condition 삽입 대상 (neg 제외)
+            pos_fields = [
+                self.character_input, self.copyright_input,
+                self.prefix_prompt_text, self.main_prompt_text, self.suffix_prompt_text,
+            ]
+            def _get(w):
+                return w.text() if hasattr(w, 'text') else w.toPlainText()
+            def _set(w, v):
+                (w.setText if hasattr(w, 'text') else w.setPlainText)(v)
+
+            # 전 필드 태그 집합 (정규화) — 조건 매칭 기준
+            all_tags = set()
+            for w in pos_fields:
+                for t in _get(w).split(','):
+                    n = norm_tag(t)
+                    if n:
+                        all_tags.add(n)
+
+            loc_widget = {
+                'main': self.main_prompt_text,
+                'prefix': self.prefix_prompt_text,
+                'suffix': self.suffix_prompt_text,
+            }
 
             for rule in pos_rules:
-                cond = rule.get('condition', '').strip().lower()
+                cond = rule.get('condition', '')
                 exists = rule.get('exists', True)
                 target = rule.get('target', '').strip()
                 action = rule.get('action', 'add')
                 location = rule.get('location', 'main')
-                if not cond or not target: continue
-
-                cond_met = (cond in current_tags) if exists else (cond not in current_tags)
-                if not cond_met: continue
-
-                widget_map = {
-                    'main': self.main_prompt_text,
-                    'prefix': self.prefix_prompt_text,
-                    'suffix': self.suffix_prompt_text,
-                }
-                widget = widget_map.get(location, self.main_prompt_text)
-                text = widget.toPlainText()
+                if not cond or not target:
+                    continue
+                if not multi_cond_met(cond, all_tags, exists):
+                    continue
 
                 if action == 'add':
-                    if target.lower() not in text.lower():
-                        widget.setPlainText((text + ', ' + target).strip(', '))
+                    if location == 'after_condition':
+                        # 조건의 첫 태그가 있는 칸을 찾아 그 태그 바로 뒤에 삽입
+                        anchor = norm_tag(cond.split(',')[0])
+                        placed = False
+                        for w in pos_fields:
+                            tags = [t.strip() for t in _get(w).split(',') if t.strip()]
+                            newtags = insert_after(tags, anchor, target)
+                            if newtags is not None:
+                                _set(w, ', '.join(newtags))
+                                placed = True
+                                break
+                        if not placed and norm_tag(target) not in all_tags:
+                            mw = self.main_prompt_text
+                            mw.setPlainText((mw.toPlainText() + ', ' + target).strip(', '))
+                    else:
+                        w = loc_widget.get(location, self.main_prompt_text)
+                        if norm_tag(target) not in {norm_tag(t) for t in _get(w).split(',')}:
+                            _set(w, (_get(w) + ', ' + target).strip(', '))
                 elif action == 'remove':
-                    tags = [t.strip() for t in text.split(',')]
-                    tags = [t for t in tags if t.lower() != target.lower()]
-                    widget.setPlainText(', '.join(tags))
+                    # 전 필드에서 target 제거
+                    tn = norm_tag(target)
+                    for w in pos_fields:
+                        tags = [t.strip() for t in _get(w).split(',') if t.strip()]
+                        filtered = [t for t in tags if norm_tag(t) != tn]
+                        if len(filtered) != len(tags):
+                            _set(w, ', '.join(filtered))
                 elif action == 'replace':
-                    widget.setPlainText(text.replace(cond, target))
+                    w = loc_widget.get(location, self.main_prompt_text)
+                    _set(w, _get(w).replace(cond, target))
 
+            # NEGATIVE — 조건은 전 필드 기준, 추가/제거는 네거티브 프롬프트
             for rule in neg_rules:
-                cond = rule.get('condition', '').strip().lower()
+                cond = rule.get('condition', '')
                 exists = rule.get('exists', True)
                 target = rule.get('target', '').strip()
                 action = rule.get('action', 'add')
-                if not cond or not target: continue
-
-                cond_met = (cond in current_tags) if exists else (cond not in current_tags)
-                if not cond_met: continue
-
-                neg_text = self.neg_prompt_text.toPlainText()
+                if not cond or not target:
+                    continue
+                if not multi_cond_met(cond, all_tags, exists):
+                    continue
+                neg = self.neg_prompt_text
                 if action == 'add':
-                    if target.lower() not in neg_text.lower():
-                        self.neg_prompt_text.setPlainText((neg_text + ', ' + target).strip(', '))
+                    if norm_tag(target) not in {norm_tag(t) for t in neg.toPlainText().split(',')}:
+                        neg.setPlainText((neg.toPlainText() + ', ' + target).strip(', '))
                 elif action == 'remove':
-                    tags = [t.strip() for t in neg_text.split(',')]
-                    tags = [t for t in tags if t.lower() != target.lower()]
-                    self.neg_prompt_text.setPlainText(', '.join(tags))
+                    tn = norm_tag(target)
+                    tags = [t.strip() for t in neg.toPlainText().split(',') if t.strip()]
+                    neg.setPlainText(', '.join(t for t in tags if norm_tag(t) != tn))
         except Exception as e:
             print(f"[Error] Conditional rules: {e}")
 
