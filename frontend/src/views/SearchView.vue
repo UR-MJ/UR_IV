@@ -741,13 +741,19 @@ function applyDeepSearch() {
   const label = [inc ? `+${inc.substring(0,15)}` : '', exc ? `-${exc.substring(0,15)}` : ''].filter(Boolean).join(' ')
   filterHistory.value.push({ label, count: deepBase.value.length, data: [...deepBase.value] })
   // deepBase 누적 필터 → 매니저 필터(rating 등) 재적용해 표시/덱 갱신
-  // 데이터는 언더스코어(monkey_d._luffy)인데 입력은 공백(monkey d. luffy)일 수 있으므로
-  // 양쪽을 공백으로 정규화해 매칭한다. (이 정규화가 빠져 심층검색 제외가 전혀 안 됐음)
-  const _u2s = (s: string) => s.replace(/_/g, ' ')
+  // '태그 단위 정확 일치'로 매칭한다. 데이터는 "monkey_d._luffy roronoa_zoro"처럼 공백으로
+  // 태그를 구분하고 언더스코어는 태그 '내부'에 둔다. 입력의 공백을 언더스코어로 바꿔 태그 형식과
+  // 맞춘 뒤, 행의 태그 집합에 그 태그가 '정확히' 있는지로 판정한다.
+  //   부분일치(includes)면 'girl'이 '1girl'을, 'other'가 'mother'를 잡아 과다 제외됨.
+  //   포함=모두 가져야(AND), 제외=하나라도 가지면 버림(OR).
+  const s2u = (s: string) => s.trim().replace(/\s+/g, '_')
+  const incTerms = inc ? inc.split(',').map(s2u).filter(Boolean) : []
+  const excTerms = exc ? exc.split(',').map(s2u).filter(Boolean) : []
   deepBase.value = deepBase.value.filter(r => {
-    const all = _u2s(`${r.copyright} ${r.character} ${r.artist} ${r.general}`.toLowerCase())
-    if (inc) { for (const t of inc.split(',')) { const q = _u2s(t.trim()); if (q && !all.includes(q)) return false } }
-    if (exc) { for (const t of exc.split(',')) { const q = _u2s(t.trim()); if (q && all.includes(q)) return false } }
+    const tags = new Set(`${r.copyright} ${r.character} ${r.artist} ${r.general}`
+      .toLowerCase().split(/[\s,]+/).filter(Boolean))
+    if (incTerms.some(q => !tags.has(q))) return false
+    if (excTerms.some(q => tags.has(q))) return false
     return true
   })
   filteredResults.value = _applyManagerFilters(deepBase.value)
