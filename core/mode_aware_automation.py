@@ -34,6 +34,7 @@ _DEFAULT_AUTOMATION_SETTINGS: dict[str, Any] = {
     "repeat": 1,
     "delay": 1.0,
     "allowDupes": False,
+    "autoResetDeck": False,
     "maxRetries": 2,
 }
 
@@ -63,6 +64,7 @@ class ModeAwareAutomationSettings(ModeAwareMixin):
             "repeat": int(raw.get("repeat", 1)),
             "delay": float(raw.get("delay", 1.0)),
             "allowDupes": bool(raw.get("allowDupes", False)),
+            "autoResetDeck": bool(raw.get("autoResetDeck", False)),
             "maxRetries": int(raw.get("maxRetries", 2)),
         }
 

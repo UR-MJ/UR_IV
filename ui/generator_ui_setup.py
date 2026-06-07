@@ -524,6 +524,7 @@ class UISetupMixin:
             'repeat': 1,
             'delay': 1.0,
             'allowDupes': False,
+            'autoResetDeck': False,
             'maxRetries': 2,
         }
 
@@ -571,6 +572,7 @@ class UISetupMixin:
                 'repeat_per_prompt': repeat,
                 'delay': delay,
                 'allow_duplicates': bool(raw.get('allowDupes', False)),
+                'auto_reset_deck': bool(raw.get('autoResetDeck', False)),
                 'max_retries': max_retries,
             }
 

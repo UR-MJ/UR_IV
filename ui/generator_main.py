@@ -687,6 +687,7 @@ class GeneratorMainUI(
                     'repeat': payload.get('repeat', 1),
                     'delay': payload.get('delay', 1.0),
                     'allowDupes': bool(payload.get('allowDupes', False)),
+                    'autoResetDeck': bool(payload.get('autoResetDeck', False)),
                     # PR 3: 재시도 설정 (기본 2회)
                     'maxRetries': int(payload.get('maxRetries', 2)),
                     # F2: 정기 cleanup 주기 (LoRA patches 누적 회피용, 0=비활성)

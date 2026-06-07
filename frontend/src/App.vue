@@ -68,6 +68,7 @@
               <input type="number" v-model.number="autoSettings.cleanupEveryN" min="0" max="100" class="auto-input" />
             </div>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
+            <label class="auto-check"><input type="checkbox" v-model="autoSettings.autoResetDeck" /><span title="덱을 다 쓰면 자동으로 다시 채워 계속(모두 1회씩 뽑은 뒤 재셔플 — 무한·공평)">덱 소진 시 초기화</span></label>
             <div class="auto-deck-pre" v-if="deckTotal > 0 && !isAutomating">
               <span>🎴 덱 <strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용<template v-if="deckAllowDup"> (중복·무한)</template></span>
               <button class="deck-reset-btn" @click="resetDeck" title="덱을 가득 다시 채움 (사용 0으로 초기화)">↻ 덱 초기화</button>
@@ -1159,7 +1160,7 @@ function onVramClick() {
   requestAction('unload_model_request', {})
   requestAction('show_toast', { type: 'info', msg: '백엔드에 모델 unload 요청 전송됨' })
 }
-const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, maxRetries: 2, cleanupEveryN: 0 })
+const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, autoResetDeck: false, maxRetries: 2, cleanupEveryN: 0 })
 
 function syncAutomationSettings() {
   const limit = Number(autoSettings.limit)
@@ -1174,6 +1175,7 @@ function syncAutomationSettings() {
     repeat: Number.isFinite(repeat) && repeat > 0 ? repeat : 1,
     delay: Number.isFinite(delay) && delay >= 0 ? delay : 1,
     allowDupes: !!autoSettings.allowDupes,
+    autoResetDeck: !!autoSettings.autoResetDeck,
     maxRetries: Number.isFinite(maxRetries) && maxRetries >= 0 ? maxRetries : 2,
     cleanupEveryN: Number.isFinite(cleanupEveryN) && cleanupEveryN >= 0 ? cleanupEveryN : 0,
     // 자동화 중 태그→자연어 자동 변환 (백엔드 루프가 nl_caption 적용)
@@ -2024,6 +2026,7 @@ onMounted(async () => {
       if (typeof d.repeat === 'number') autoSettings.repeat = d.repeat
       if (typeof d.delay === 'number') autoSettings.delay = d.delay
       if (typeof d.allowDupes === 'boolean') autoSettings.allowDupes = d.allowDupes
+      if (typeof d.autoResetDeck === 'boolean') autoSettings.autoResetDeck = d.autoResetDeck
       if (typeof d.maxRetries === 'number') autoSettings.maxRetries = d.maxRetries
       // watch 콜백이 큐잉 처리되도록 microtask 끝난 후 가드 해제
       Promise.resolve().then(() => { _applyingAutoFromServer = false })

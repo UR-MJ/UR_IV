@@ -295,8 +295,8 @@ class ActionsMixin:
         
         # 덱이 비었으면 리필
         if not self.shuffled_prompt_deck:
-            if settings.get('allow_duplicates', False):
-                # 중복 허용: 덱 리필
+            if settings.get('allow_duplicates', False) or settings.get('auto_reset_deck', False):
+                # 중복 허용 / 덱 소진 시 자동 초기화: 덱 리필
                 self.shuffled_prompt_deck = self.filtered_results.copy()
                 random.shuffle(self.shuffled_prompt_deck)
                 self.show_status("🔄 덱을 다시 섞었습니다.")
@@ -463,8 +463,18 @@ class ActionsMixin:
             # ★★★ 새 프롬프트 적용 (apply_random_prompt 사용!) ★★★
             # 덱이 비었는지 확인
             if not self.shuffled_prompt_deck and not settings.get('allow_duplicates', False):
-                self._stop_automation("✅ 모든 프롬프트 처리 완료!")
-                return
+                if settings.get('auto_reset_deck', False):
+                    # 한 바퀴 완료 → 덱 자동 초기화(재셔플)하고 계속 (무한·공평: 모두 1회씩 후 다시)
+                    import random as _rnd
+                    rf = getattr(self, '_rating_filter', {'g', 's', 'q', 'e'})
+                    self.shuffled_prompt_deck = [r for r in (self.filtered_results or []) if r.get('rating', 'g') in rf]
+                    _rnd.shuffle(self.shuffled_prompt_deck)
+                    self.show_status(f"🔄 덱 소진 → 자동 초기화 ({len(self.shuffled_prompt_deck)})")
+                    if hasattr(self, '_save_deck_state'):
+                        self._save_deck_state()
+                else:
+                    self._stop_automation("✅ 모든 프롬프트 처리 완료!")
+                    return
             
             self.apply_random_prompt()
         
