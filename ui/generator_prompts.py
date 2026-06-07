@@ -153,7 +153,7 @@ class PromptHandlingMixin:
                 return True
             return False
 
-        def filter_tags(tags):
+        def filter_tags(tags, proper=False):
             res = []
             for t in tags:
                 nt = _normalize(t)
@@ -164,21 +164,26 @@ class PromptHandlingMixin:
                 # 완전 일치
                 if nt in norm_exact:
                     continue
-                # 포함
-                if any(c in nt for c in norm_contains):
-                    continue
-                # 접두 (short_ → short로 시작)
+                # 포함: general은 부분일치, 고유명사(캐릭터/작품/작가)는 '전체 태그 일치'만.
+                #   (예: 'tank' 규칙이 캐릭터 'wakan tanka'(=wakan_tanka)를 부분일치로 통째 지우던 버그 방지.
+                #    general의 'tank top' 제거는 그대로 유지.)
+                if proper:
+                    if any(nt == c for c in norm_contains):
+                        continue
+                else:
+                    if any(c in nt for c in norm_contains):
+                        continue
+                # 접두/접미는 태그 경계 기준이라 고유명사에도 안전 (그대로 적용)
                 if any(nt.startswith(p) for p in norm_prefix):
                     continue
-                # 접미 (_short → short로 끝남)
                 if any(nt.endswith(s) for s in norm_suffix):
                     continue
                 res.append(t)
             return res
 
-        artist_list = filter_tags(artist_list)
-        copyright_list = filter_tags(copyright_list)
-        character_list = filter_tags(character_list)
+        artist_list = filter_tags(artist_list, proper=True)
+        copyright_list = filter_tags(copyright_list, proper=True)
+        character_list = filter_tags(character_list, proper=True)
         general_list = filter_tags(general_list)
 
         # 4. 제거 토글 적용
