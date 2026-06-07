@@ -106,6 +106,9 @@ class PandasSearchWorker(QThread):
                     total_mask &= cm
                     print(f"[Search]     ↳ cumulative AND mask: {int(total_mask.sum()):,}")
 
+            # 제외 적용 전 매칭 수 — 0건 원인이 '제외'인지 사용자에게 알리기 위해 보관
+            pre_exclude_count = int(total_mask.sum())
+
             # ── 제외 검색 — 항상 AND-NOT, 리스트 내부는 항상 OR ──
             #   제외 리스트의 콤마는 "이것들 중 하나라도면 제외" 의미이므로, 검색이 AND 모드여도
             #   OR로 결합한다(기존엔 AND라 '나열한 걸 모두 동시에 가진 행'만 제외돼 거의 안 빠졌음).
@@ -128,9 +131,16 @@ class PandasSearchWorker(QThread):
             results = final_df.to_dict('records')
 
             self.results_ready.emit(results, total_count)
-            self.status_update.emit(
-                f"✅ {self.combine_mode.upper()} 검색 완료: {total_count:,}건"
-            )
+            has_exclude = any(v for v in self.exclude_queries.values())
+            if total_count == 0 and pre_exclude_count > 0 and has_exclude:
+                # 포함은 있었는데 제외가 전부 걷어낸 경우 — 원인을 명확히 안내
+                self.status_update.emit(
+                    f"⚠️ 포함 {pre_exclude_count:,}건이 제외 조건에 모두 걸러졌습니다 — '제외' 칸을 확인하세요"
+                )
+            else:
+                self.status_update.emit(
+                    f"✅ {self.combine_mode.upper()} 검색 완료: {total_count:,}건"
+                )
 
         except Exception as e:
             self.status_update.emit(f"❌ 오류 발생: {str(e)}")
