@@ -75,6 +75,27 @@ def parse_query(query: str) -> list:
     return conditions
 
 
+def _apply_or_plain(col_series: pd.Series, terms: list) -> pd.Series:
+    """연산자(*, _ 접두/접미) 없는 plain 텀 여러 개를 '하나의 정규식 교대'로 1회 매칭(OR).
+    큰 OR 그룹(수백 캐릭터)에서 텀마다 전체 컬럼을 재스캔하던 것을 1회로 단축 — 9.2M행에서 수십 배 빠름.
+    의미는 _apply_pattern 기본 경로와 동일(공백/언더스코어 양쪽 부분일치).
+    """
+    alts = []
+    for t in terms:
+        tl = (t or '').strip().lower()
+        if not tl:
+            continue
+        a = re.escape(tl.replace('_', ' '))
+        b = re.escape(tl.replace(' ', '_'))
+        alts.append(a)
+        if b != a:
+            alts.append(b)
+    if not alts:
+        return pd.Series(False, index=col_series.index)
+    pat = '(?:' + '|'.join(alts) + ')'
+    return col_series.str.contains(pat, regex=True, na=False)
+
+
 def _eval_condition(col_lower: pd.Series, cond: dict, index) -> pd.Series:
     """단일 조건(dict)을 평가하여 Boolean mask 반환.
     cond['type']: 'or' | 'and' | 'single'
@@ -83,9 +104,17 @@ def _eval_condition(col_lower: pd.Series, cond: dict, index) -> pd.Series:
         # has_wildcard=True 면 [A|B|] 같은 빈 토큰 포함 그룹 → 무조건 통과
         if cond.get('has_wildcard'):
             return pd.Series(True, index=index)
-        # [A|B] — 명시적 OR
-        cm = pd.Series(False, index=index)
+        # [A|B] — 명시적 OR. 성능: plain 텀들은 정규식 교대로 1회 스캔, 연산자 텀만 개별 처리.
+        plain, special = [], []
         for term in cond['terms']:
+            ts = (term or '').strip()
+            if not ts:
+                continue
+            (special if (ts[0] in '*_' or ts[-1] == '_') else plain).append(ts)
+        cm = pd.Series(False, index=index)
+        if plain:
+            cm |= _apply_or_plain(col_lower, plain)
+        for term in special:
             cm |= _apply_pattern(col_lower, term)
         return cm
     elif cond['type'] == 'and':

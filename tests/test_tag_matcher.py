@@ -41,5 +41,28 @@ class TestTagMatcherExclude(unittest.TestCase):
         self.assertEqual(list(mask_and), [False, False, False])
 
 
+@unittest.skipUnless(_HAS_PANDAS, "pandas/tag_matcher 미설치")
+class TestTagMatcherOrGroup(unittest.TestCase):
+    def test_or_group_batched_matches_any(self):
+        # [A|B|C] 큰 OR 그룹 — plain 텀들이 정규식 1회 스캔으로 묶여도 결과 동일.
+        # 공백 입력 → 언더스코어 데이터 매칭. 어느 하나라도 가진 행이 True.
+        df = pd.DataFrame({'character': [
+            'phainon_(honkai:_star_rail)',
+            'mydei_(honkai:_star_rail)',
+            'random_char',
+            'sanji_(one_piece), nami',
+        ]})
+        q = '[phainon (honkai: star rail)|sanji (one piece)|nobody here]'
+        mask = filter_dataframe(df, 'character', q, default_combine='and')
+        self.assertEqual(list(mask), [True, False, False, True])
+
+    def test_or_group_mixes_plain_and_operator_terms(self):
+        # plain + 연산자(*완전일치) 텀 혼합 OR 그룹도 정확히 동작
+        df = pd.DataFrame({'general': ['1girl, smile', 'big smile, blush', '1boy, frown']})
+        # [frown|*1girl] → 'frown' 부분일치 OR '1girl' 완전일치
+        mask = filter_dataframe(df, 'general', '[frown|*1girl]', default_combine='and')
+        self.assertEqual(list(mask), [True, False, True])
+
+
 if __name__ == "__main__":
     unittest.main()
