@@ -36,6 +36,22 @@ class TestAnimaResolution(unittest.TestCase):
             self.assertEqual(w % 8, 0)
             self.assertEqual(h % 8, 0)
 
+    def test_side_cap_preserves_ratio(self):
+        # 한 변(3000)이 max_side(2048) 초과, 면적은 한도 이내 → 비율 유지하며 양쪽 축소
+        w, h = apply_anima_resolution(3000, 500, auto_res=True)
+        self.assertLessEqual(max(w, h), 2048)
+        self.assertAlmostEqual(w / h, 6.0, delta=0.3)   # 6:1 비율 유지
+        self.assertEqual(w % 8, 0)
+        self.assertEqual(h % 8, 0)
+
+    def test_side_2048_within_area_kept(self):
+        # 1024×2048 (긴 변 2048, 면적 2.1M < 캡) → 그대로 (실측 안전 케이스)
+        self.assertEqual(apply_anima_resolution(1024, 2048, auto_res=True), (1024, 2048))
+
+    def test_big_square_auto_capped_to_1536(self):
+        # 2048×2048 자동해상도 → 면적캡으로 1536×1536
+        self.assertEqual(apply_anima_resolution(2048, 2048, auto_res=True), (1536, 1536))
+
 
 if __name__ == "__main__":
     unittest.main()

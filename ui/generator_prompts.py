@@ -398,9 +398,10 @@ class PromptHandlingMixin:
                     # 면적 캡(비율 유지·8배수) — raw 크기가 커도 총 픽셀을 안전치 이내로 축소.
                     #   기존엔 각 변만 2048로 클램프해 2048×2048(4.2M px)까지 허용 → 큰 원본에서
                     #   백엔드 OOM(500 Internal Server Error)이 간헐적으로 발생했음.
+                    # guard가 면적·한변 캡을 비율 유지로 처리 → 여기선 최소만 보정(비율 안 깸)
                     w, h = apply_anima_resolution(int(float(raw_w)), int(float(raw_h)), auto_res=True)
-                    w = max(256, min(2048, w))
-                    h = max(256, min(2048, h))
+                    w = max(256, w)
+                    h = max(256, h)
                     self.width_input.setText(str(w))
                     self.height_input.setText(str(h))
                 except (ValueError, TypeError):
