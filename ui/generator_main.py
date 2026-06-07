@@ -656,6 +656,12 @@ class GeneratorMainUI(
                     try:
                         import pandas as pd
                         df = pd.read_parquet(path)
+                        def _idim(v):
+                            try:
+                                iv = int(float(v))
+                                return iv if iv > 0 else None
+                            except (ValueError, TypeError):
+                                return None
                         out = []
                         for _, row in df.iterrows():
                             out.append({
@@ -664,6 +670,9 @@ class GeneratorMainUI(
                                 'artist': str(row.get('tag_string_artist', row.get('artist', ''))),
                                 'general': str(row.get('tag_string_general', row.get('general', ''))),
                                 'rating': str(row.get('rating', '')),
+                                # 해상도 보존 — 자동(Parquet) 해상도 + Search 해상도 표기용 (없으면 None)
+                                'image_width': _idim(row.get('image_width')),
+                                'image_height': _idim(row.get('image_height')),
                             })
                         self._last_search_results = out
                         # Python filtered_results + shuffled_prompt_deck 업데이트
