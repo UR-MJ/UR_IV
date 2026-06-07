@@ -197,7 +197,6 @@
       <details class="input-group exclude-section">
         <summary class="exclude-toggle">EXCLUDE (LOCAL)
           <span v-if="excludeRuleCount" class="excl-badge">{{ excludeRuleCount }}</span> ▾
-          <button class="excl-mgr-btn" @click.prevent.stop="refineSpecific" title="덜 구체적인 상위 태그 제거 (muscular+muscular male → muscular male, dress+blue dress → blue dress)">🎯 구체화</button>
           <button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true">🔍 MANAGER</button></summary>
         <div class="exclude-help">
           <span>단어 → 포함하는 모든 태그 제외 (short → short hair, very short hair)</span>
@@ -227,19 +226,21 @@
           <div class="em-body">
             <!-- 좌측: 규칙 목록 + 추가 -->
             <div class="em-rules">
-              <div v-for="(rule, ri) in excludeRules" :key="ri" class="em-rule-item"
-                :class="[excludeColorFn(rule), { active: selectedExRule === ri }]"
-                @click="selectedExRule = ri; loadExcludeMatches(rule)">
+              <input v-model="exRuleSearch" class="em-search" placeholder="🔍 규칙 검색..." />
+              <div v-for="item in filteredExRules" :key="item.i" class="em-rule-item"
+                :class="[excludeColorFn(item.rule), { active: selectedExRule === item.i }]"
+                @click="selectedExRule = item.i; loadExcludeMatches(item.rule)">
                 <!-- 편집 모드 -->
-                <input v-if="editingExRule === ri" class="em-rule-edit" v-model="editExRuleText"
-                  @blur="finishEditExRule(ri)" @keydown.enter="finishEditExRule(ri)" @keydown.escape="editingExRule = -1"
+                <input v-if="editingExRule === item.i" class="em-rule-edit" v-model="editExRuleText"
+                  @blur="finishEditExRule(item.i)" @keydown.enter="finishEditExRule(item.i)" @keydown.escape="editingExRule = -1"
                   @click.stop ref="exRuleEditRef" />
                 <!-- 표시 모드 -->
-                <span v-else class="em-rule-text" @dblclick.stop="startEditExRule(ri)">{{ rule }}</span>
-                <span class="em-match-count">{{ excludeMatches[rule]?.length || '...' }}</span>
-                <button class="em-rule-rm" @click.stop="removeExcludeRule(ri)">✕</button>
+                <span v-else class="em-rule-text" @dblclick.stop="startEditExRule(item.i)">{{ item.rule }}</span>
+                <span class="em-match-count">{{ excludeMatches[item.rule]?.length || '...' }}</span>
+                <button class="em-rule-rm" @click.stop="removeExcludeRule(item.i)">✕</button>
               </div>
               <div v-if="excludeRules.length === 0" class="em-empty-sm">제외 규칙 없음</div>
+              <div v-else-if="filteredExRules.length === 0" class="em-empty-sm">검색 결과 없음</div>
               <div class="em-add-row">
                 <input v-model="newExcludeRule" placeholder="규칙 추가..." class="em-add-input" @keydown.enter="addExcludeRule" />
                 <button class="em-add-btn" @click="addExcludeRule">+</button>
@@ -479,6 +480,14 @@ const excludeRules = computed(() => {
   return text.split(',').map((t: string) => t.trim()).filter(Boolean)
 })
 
+// 매니저 규칙 검색 — 원본 인덱스(i)를 함께 들고 다녀 selectedExRule/remove가 정확히 동작
+const exRuleSearch = ref('')
+const filteredExRules = computed(() => {
+  const q = exRuleSearch.value.trim().toLowerCase()
+  const items = excludeRules.value.map((rule: string, i: number) => ({ rule, i }))
+  return q ? items.filter((x: { rule: string; i: number }) => x.rule.toLowerCase().includes(q)) : items
+})
+
 const currentExMatches = computed(() => {
   const r = excludeRules.value[selectedExRule.value]
   return r ? (excludeMatches.value[r] || []) : []
@@ -713,22 +722,7 @@ async function applySeparate(mode: string) {
 }
 
 // ② color 페어링 결합
-// 🎯 구체화 — 덜 구체적인(상위) 태그 제거 (muscular+muscular male → muscular male)
-async function refineSpecific() {
-  const backend: any = await getBackend()
-  if (!backend || !backend.refineToSpecificTags) return
-  backend.refineToSpecificTags(widgets.main_prompt_text || '', (json: string) => {
-    try {
-      const d = JSON.parse(json)
-      if (d.error) { requestAction('show_toast', { type: 'error', msg: '구체화 실패: ' + d.error }); return }
-      widgets.main_prompt_text = d.result || ''
-      const n = (d.removed || []).length
-      optResult.value = n > 0 ? `상위태그 ${n}개 제거: ${d.removed.join(', ')}` : '제거할 상위태그 없음'
-      nextTick(() => { if (mainRef.value) autoGrow(mainRef.value) })
-      setTimeout(() => { optResult.value = '' }, 5000)
-    } catch {}
-  })
-}
+// (🎯 구체화 버튼 제거 — ADVANCED의 '프롬프트 집중' 토글로 대체됨)
 
 // 캐릭터 인사이트
 const charInsight = ref<{ tags: string[]; raw: string }>({ tags: [], raw: '' })
@@ -1048,12 +1042,14 @@ label.danger { color: #f87171; }
 
 /* Exclude Manager Modal */
 .em-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: flex; align-items: center; justify-content: center; }
-.em-modal { width: 700px; height: 500px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.em-modal { width: min(94vw, 1080px); height: min(88vh, 760px); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .em-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .em-header h3 { font-size: 12px; letter-spacing: 2px; color: #f87171; }
 .em-desc { font-size: 9px; color: var(--text-muted); flex: 1; }
 .em-body { flex: 1; display: flex; overflow: hidden; }
-.em-rules { width: 200px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px; }
+.em-rules { width: 280px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px; }
+.em-search { width: 100%; box-sizing: border-box; padding: 6px 10px; margin-bottom: 8px; font-size: 11px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text); position: sticky; top: -8px; z-index: 1; }
+.em-search:focus { outline: none; border-color: #f87171; }
 .em-rule-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 11px; cursor: pointer; border-radius: 4px; margin-bottom: 2px; border: 1px solid transparent; }
 .em-rule-item:hover { background: var(--bg-input); }
 .em-rule-item.active { border-color: #f87171; background: rgba(248,113,113,0.05); }
