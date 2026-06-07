@@ -383,6 +383,17 @@ class GeneratorMainUI(
                     self._persist_search_results(deck)
                     if hasattr(self, '_save_deck_state'):
                         self._save_deck_state()
+            elif action == 'reset_prompt_deck':
+                # 덱 초기화 — filtered_results에서 덱을 가득 다시 채우고 셔플 (사용 0으로 리셋)
+                import random as _rnd
+                fr = getattr(self, 'filtered_results', None) or []
+                rating_filter = getattr(self, '_rating_filter', {'g', 's', 'q', 'e'})
+                self.shuffled_prompt_deck = [r for r in fr if r.get('rating', 'g') in rating_filter]
+                _rnd.shuffle(self.shuffled_prompt_deck)
+                if hasattr(self, '_save_deck_state'):
+                    self._save_deck_state()
+                if hasattr(self, '_emit_auto_status'):
+                    self._emit_auto_status()   # 덱 현황(남은/사용) 즉시 갱신
             elif action == 'run_adetailer_single':
                 self._run_adetailer_single(payload)
             elif action == 'run_adetailer_batch':

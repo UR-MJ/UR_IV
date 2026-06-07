@@ -69,7 +69,8 @@
             </div>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
             <div class="auto-deck-pre" v-if="deckTotal > 0 && !isAutomating">
-              🎴 덱 <strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용<template v-if="deckAllowDup"> (중복·무한)</template>
+              <span>🎴 덱 <strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용<template v-if="deckAllowDup"> (중복·무한)</template></span>
+              <button class="deck-reset-btn" @click="resetDeck" title="덱을 가득 다시 채움 (사용 0으로 초기화)">↻ 덱 초기화</button>
             </div>
           </div>
           <!-- 자동화 상태 표시 -->
@@ -1125,6 +1126,10 @@ const deckRemaining = ref(0)
 const deckTotal = ref(0)
 const deckUsed = ref(0)
 const deckAllowDup = ref(false)
+function resetDeck() {
+  requestAction('reset_prompt_deck')   // 백엔드: filtered_results에서 덱 가득 채우고 셔플 + 상태 재전송
+  addToast('success', '덱을 초기화했습니다 (사용 0)')
+}
 // 자동화 대기 카운트다운 (다음 생성까지) — Search % 바 느낌
 const waitRemainingMs = ref(0)
 const waitTotalMs = ref(0)
@@ -2481,7 +2486,9 @@ onMounted(async () => {
 
 /* 자동화 상태 */
 .auto-status { padding: 8px 12px; background: rgba(250, 204, 21, 0.05); border: 1px solid var(--accent-dim); border-radius: 8px; margin-bottom: 8px; }
-.auto-deck-pre { margin-top: 8px; font-size: 11px; color: var(--text-muted); padding: 6px 10px; background: rgba(250,204,21,0.05); border: 1px solid var(--accent-dim); border-radius: 6px; }
+.auto-deck-pre { margin-top: 8px; font-size: 11px; color: var(--text-muted); padding: 6px 10px; background: rgba(250,204,21,0.05); border: 1px solid var(--accent-dim); border-radius: 6px; display: flex; align-items: center; gap: 8px; }
+.deck-reset-btn { margin-left: auto; flex-shrink: 0; padding: 3px 9px; font-size: 10px; font-weight: 700; background: var(--bg-button); color: var(--text); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; transition: all .12s; }
+.deck-reset-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(250,204,21,0.08); }
 .auto-deck-pre strong { color: var(--accent); font-weight: 900; }
 .auto-status-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--accent); font-weight: 700; }
 .auto-status-sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
