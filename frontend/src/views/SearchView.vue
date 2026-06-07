@@ -708,8 +708,11 @@ onMounted(() => {
   })
   onBackendEvent('searchStatus', (msg: string) => {
     statusText.value = msg.toUpperCase()
-    // 데이터 없음/종료 상태에서 searchResultsReady가 안 와도 진행바 타이머 정리(누수 방지)
-    if (/없|실패|완료|0/.test(msg)) {
+    // 결과 이벤트(searchResultsReady)가 안 오는 '진짜 종료(❌ 로드실패/데이터없음)'만 잡아 정리.
+    // (기존 /없|실패|완료|0/ 은 '📊 2026_06 데이터 병합 중'의 연도 '0', '파일 없음'(파일별 경고),
+    //  '검색 완료' 등 진행/정상 메시지까지 오매칭 → 검색 도중 로딩이 꺼지고 '결과 없음'이 먼저 떴음.
+    //  정상 완료/0건은 searchResultsReady 핸들러가 searching=false 처리하므로 여기선 불필요.)
+    if (/^\s*❌/.test(msg)) {
       if (progressTimer) { clearInterval(progressTimer); progressTimer = null }
       searching.value = false
     }
