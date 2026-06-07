@@ -106,18 +106,13 @@ class PandasSearchWorker(QThread):
                     total_mask &= cm
                     print(f"[Search]     ↳ cumulative AND mask: {int(total_mask.sum()):,}")
 
-            # 제외 적용 전 매칭 수 — 0건 원인이 '제외'인지 사용자에게 알리기 위해 보관
-            pre_exclude_count = int(total_mask.sum())
-
-            # ── 제외 검색 — 항상 AND-NOT, 리스트 내부는 항상 OR ──
-            #   제외 리스트의 콤마는 "이것들 중 하나라도면 제외" 의미이므로, 검색이 AND 모드여도
-            #   OR로 결합한다(기존엔 AND라 '나열한 걸 모두 동시에 가진 행'만 제외돼 거의 안 빠졌음).
+            # ── 제외 검색 — 모드와 무관하게 항상 AND-NOT ──
             for col, search_text in self.exclude_queries.items():
                 if not search_text:
                     continue
                 if col not in df.columns:
                     continue
-                exclude_mask = self._parse_condition(df, col, search_text, combine='or')
+                exclude_mask = self._parse_condition(df, col, search_text)
                 n_excl = int(exclude_mask.sum())
                 print(f"[Search] EXC | {col:>10s} '{search_text[:60]}...' → {n_excl:,} excluded")
                 total_mask &= ~exclude_mask
@@ -131,28 +126,20 @@ class PandasSearchWorker(QThread):
             results = final_df.to_dict('records')
 
             self.results_ready.emit(results, total_count)
-            has_exclude = any(v for v in self.exclude_queries.values())
-            if total_count == 0 and pre_exclude_count > 0 and has_exclude:
-                # 포함은 있었는데 제외가 전부 걷어낸 경우 — 원인을 명확히 안내
-                self.status_update.emit(
-                    f"⚠️ 포함 {pre_exclude_count:,}건이 제외 조건에 모두 걸러졌습니다 — '제외' 칸을 확인하세요"
-                )
-            else:
-                self.status_update.emit(
-                    f"✅ {self.combine_mode.upper()} 검색 완료: {total_count:,}건"
-                )
+            self.status_update.emit(
+                f"✅ {self.combine_mode.upper()} 검색 완료: {total_count:,}건"
+            )
 
         except Exception as e:
             self.status_update.emit(f"❌ 오류 발생: {str(e)}")
             self.results_ready.emit([], 0)
 
-    def _parse_condition(self, df, col, query_text, combine=None):
+    def _parse_condition(self, df, col, query_text):
         """통합 태그 매칭 엔진 — 와일드카드 + 그룹 + OR/AND 지원
         combine_mode를 tag_matcher에 전달:
         - 'and': 콤마=AND (기존)
         - 'or':  콤마=OR (필드 내 콤마도 OR로 결합)
         명시적 [A|B], [A,B] 그룹은 모드와 무관하게 항상 OR/AND.
-        combine 인자를 주면 그 값으로 강제(제외 리스트는 'or'로 호출).
 
         성능: col_lower 캐시 사용 — 같은 rating set 내에서 lowercase 재사용.
         쿼리 1회당 ~수백ms (5M rows) 절약.
@@ -160,7 +147,7 @@ class PandasSearchWorker(QThread):
         from core.tag_matcher import filter_dataframe
         col_lower = self._get_col_lower(df, col)
         return filter_dataframe(df, col, query_text,
-                                default_combine=(combine or self.combine_mode),
+                                default_combine=self.combine_mode,
                                 col_lower=col_lower)
 
     @classmethod

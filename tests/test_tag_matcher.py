@@ -1,8 +1,8 @@
-"""tag_matcher 매칭 — 제외 리스트 OR 결합 + 공백/언더스코어 양쪽 매칭 회귀.
+"""tag_matcher.filter_dataframe — 결합 모드(AND/OR) + 공백/언더스코어 양쪽 매칭 회귀.
 
-심층 검색 제외 버그: 제외 리스트가 검색 모드(AND)로 결합돼 '나열한 걸 모두 동시에 가진 행'만
-제외 → 거의 안 빠졌음. 제외는 항상 OR 결합이어야 함. 또 입력은 공백(monkey d. luffy)인데
-데이터는 언더스코어(monkey_d._luffy)여도 매칭돼야 함.
+- combine_mode가 'or'면 콤마 리스트가 OR로, 'and'면 AND로 결합된다(검색 모드를 따름).
+- 입력은 공백(monkey d. luffy)인데 데이터는 언더스코어(monkey_d._luffy)여도 매칭된다
+  (matcher가 양쪽 형식을 모두 시도 — 일반검색이 이 경로를 씀. 심층검색은 별도 JS 경로).
 """
 import unittest
 
@@ -28,14 +28,14 @@ class TestTagMatcherExclude(unittest.TestCase):
         mask = filter_dataframe(self._df(), 'character', 'monkey d. luffy', default_combine='and')
         self.assertEqual(list(mask), [True, False, False])
 
-    def test_exclude_list_or_combines(self):
-        # 제외 리스트는 OR — 어느 하나라도 매칭하면 True (이게 제외 대상)
+    def test_or_combine_matches_any(self):
+        # OR 결합이면 어느 하나라도 매칭하면 True
         q = 'monkey d. luffy, kaeya (genshin impact)'
         mask_or = filter_dataframe(self._df(), 'character', q, default_combine='or')
         self.assertEqual(list(mask_or), [True, True, False])
 
-    def test_and_combine_was_the_bug(self):
-        # AND로 결합하면(기존 버그) 둘을 동시에 가진 행이 없어 전부 False → 아무것도 제외 안 됨
+    def test_and_combine_requires_all_terms(self):
+        # AND 결합이면 나열한 텀을 모두 동시에 가진 행만 매칭 (여기선 없어 전부 False)
         q = 'monkey d. luffy, kaeya (genshin impact)'
         mask_and = filter_dataframe(self._df(), 'character', q, default_combine='and')
         self.assertEqual(list(mask_and), [False, False, False])
