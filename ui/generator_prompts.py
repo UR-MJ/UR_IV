@@ -394,12 +394,13 @@ class PromptHandlingMixin:
             raw_h = bundle.get('image_height')
             if raw_w is not None and raw_h is not None:
                 try:
-                    import math
-                    w = int(float(raw_w))
-                    h = int(float(raw_h))
-                    # 8의 배수로 반올림
-                    w = max(256, min(2048, round(w / 8) * 8))
-                    h = max(256, min(2048, round(h / 8) * 8))
+                    from core.resolution_guard import apply_anima_resolution
+                    # 면적 캡(비율 유지·8배수) — raw 크기가 커도 총 픽셀을 안전치 이내로 축소.
+                    #   기존엔 각 변만 2048로 클램프해 2048×2048(4.2M px)까지 허용 → 큰 원본에서
+                    #   백엔드 OOM(500 Internal Server Error)이 간헐적으로 발생했음.
+                    w, h = apply_anima_resolution(int(float(raw_w)), int(float(raw_h)), auto_res=True)
+                    w = max(256, min(2048, w))
+                    h = max(256, min(2048, h))
                     self.width_input.setText(str(w))
                     self.height_input.setText(str(h))
                 except (ValueError, TypeError):
