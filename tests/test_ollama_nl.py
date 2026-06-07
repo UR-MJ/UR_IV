@@ -59,6 +59,24 @@ class TestNLLeakRemoval(unittest.TestCase):
         self.assertNotIn("*", out)
         self.assertNotIn("Input tags", out)
 
+    def test_decomposition_multi_draft_leak(self):
+        # Goal:/* Subject:/* Hair colors:/*Refining the Scene:*/*Draft:*/*Constraint Check:* 구조 —
+        # 마지막 *Draft:* 뒤 ~ 첫 '*'(Constraint Check) 사이의 최종 캡션만 남겨야.
+        t = ("Goal: Rewrite into a flowing English caption. "
+             "* Constraints: 1. Name character. *Correction*: Wait if no name how do I name them. "
+             "* Subject: A male character. * Hair colors: black white green. "
+             "Wait the tags are contradictory. "
+             "*Refining the Scene:* A man stands before a cloudy sky. He has many scars. "
+             "*Check Constraints:* No commas? Yes. *Wait* let me look at the hair again. "
+             "*Draft:* A man with multi-colored hair stands before a cloudy sky. "
+             "He has visible scars across his eye. The man is seen from behind with crossed arms. "
+             "*Constraint Check:* No commas. Separate sentences.")
+        out = _extract_final_nl(t)
+        self.assertIn("A man with multi-colored hair stands before a cloudy sky", out)
+        self.assertIn("crossed arms", out)
+        for bad in ("Goal", "Subject", "Refining", "Draft", "Constraint", "Wait", "*"):
+            self.assertNotIn(bad, out)
+
     def test_bullet_label_meta_sentence_detection(self):
         # 불릿/라벨 문장은 메타로 인식 (선두/후미 제거용)
         self.assertTrue(_is_meta_sentence("* Task: Rewrite the caption."))

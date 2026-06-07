@@ -248,8 +248,10 @@ def _is_meta_sentence(s: str) -> bool:
         _META_OPENER = _re.compile(
             r"(?i)^\s*\**\s*(?:"
             # 라벨/불릿(체크리스트·규칙복창) — 콜론 동반
-            r"task\s*:|constraints?\b|appearance\s*:|clothing\s*:|action\s*:|setting\s*:|"
+            r"task\s*:|constraints?\b|appearance\s*:|clothing(?:\s+options)?\s*:|actions?\s*:|setting\s*:|"
             r"shot\s*type\s*:|input\s+tags?\b|series\s*:|character\s*/\s*series\b|"
+            r"goal\s*:|subject\s*:|scene\s*:|scars?\s*:|hair\s+colou?rs?\s*:|draft\s*:|"
+            r"refin(?:e|ed|ing)\s+the\s+scene\b|correction\b|"
             r"let'?s\b|let me\b|wait\b|hmm+\b|actually\b|alright\b|well[, ]|"
             r"first[, ]|firstly\b|now[, ]|next[, ]|then[, ]|so[, ]|but wait\b|hold on\b|oh[, ]|"
             r"i'(?:ll|ve|d|m)\b|i\s+(?:should|think|will|need|must|guess|am|can|could|have to|"
@@ -333,6 +335,7 @@ def _extract_final_nl(text: str) -> str:
     marker = _re.compile(
         r"(?im)\**\s*\b(?:"
         r"revised(?:\s+\w+)?|final(?:\s+\w+)?|corrected(?:\s+\w+)?|"
+        r"draft(?:\s+\w+)?|refin(?:ed|ing)(?:\s+the\s+scene)?|rewrite|"
         r"here(?:'s| is)\s+(?:the\s+|your\s+|a\s+)?(?:final\s+|revised\s+|corrected\s+|new\s+|updated\s+)?caption|"
         r"(?:the\s+)?caption|the\s+output|final\s+answer"
         r")\b\s*\**\s*:\s*\**\s*")
