@@ -217,7 +217,7 @@
 
     <!-- Exclude Manager Modal -->
     <transition name="fade">
-      <div v-if="showExcludeManager" class="em-overlay" @click.self="showExcludeManager = false">
+      <div v-if="showExcludeManager" class="em-overlay" @mousedown.self="showExcludeManager = false">
         <div class="em-modal">
           <div class="em-header">
             <h3>EXCLUDE MANAGER</h3>

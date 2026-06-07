@@ -579,7 +579,7 @@
 
     <!-- Preset Manager Modal -->
     <transition name="fade">
-      <div v-if="showPresetManager" class="pm-overlay" @click.self="showPresetManager = false">
+      <div v-if="showPresetManager" class="pm-overlay" @mousedown.self="showPresetManager = false">
         <div class="pm-modal">
           <div class="pm-header">
             <h3>PRESET MANAGER</h3>
@@ -629,7 +629,7 @@
 
     <!-- Weight Manager Modal -->
     <transition name="fade">
-      <div v-if="showWeightManager" class="wm-overlay" @click.self="showWeightManager = false">
+      <div v-if="showWeightManager" class="wm-overlay" @mousedown.self="showWeightManager = false">
         <div class="wm-modal">
           <div class="wm-header">
             <h3>GLOBAL TAG WEIGHTS</h3>
@@ -654,7 +654,7 @@
 
     <!-- Wildcard Manager Modal -->
     <transition name="fade">
-      <div v-if="showWcManager" class="wc-overlay" @click.self="showWcManager = false">
+      <div v-if="showWcManager" class="wc-overlay" @mousedown.self="showWcManager = false">
         <div class="wc-modal">
           <div class="wc-modal-header">
             <h3>WILDCARD MANAGER</h3>
@@ -707,7 +707,7 @@
 
     <!-- 워크플로우 프로파일 관리 모달 -->
     <transition name="fade">
-      <div v-if="showProfileManager" class="wc-overlay" @click.self="showProfileManager = false">
+      <div v-if="showProfileManager" class="wc-overlay" @mousedown.self="showProfileManager = false">
         <div class="wc-modal" style="max-width: 640px;">
           <div class="wc-modal-header">
             <h3>워크플로우 프로파일</h3>
@@ -742,7 +742,7 @@
 
     <!-- 프롬프트 섹션 순서 매니저 모달 -->
     <transition name="fade">
-      <div v-if="showOrderManager" class="wc-overlay" @click.self="showOrderManager = false">
+      <div v-if="showOrderManager" class="wc-overlay" @mousedown.self="showOrderManager = false">
         <div class="wc-modal" style="max-width: 680px;">
           <div class="wc-modal-header">
             <h3>프롬프트 섹션 순서</h3>
@@ -775,7 +775,7 @@
 
     <!-- PR 8: INSTANT WILDCARD Manager Modal -->
     <transition name="fade">
-      <div v-if="showInstantWcManager" class="wc-overlay" @click.self="showInstantWcManager = false">
+      <div v-if="showInstantWcManager" class="wc-overlay" @mousedown.self="showInstantWcManager = false">
         <div class="wc-modal">
           <div class="wc-modal-header">
             <h3>INSTANT WILDCARD MANAGER</h3>
@@ -830,7 +830,7 @@
 
     <!-- Generation Stats Modal -->
     <transition name="fade">
-      <div v-if="showStatsModal" class="stats-overlay" @click.self="showStatsModal = false">
+      <div v-if="showStatsModal" class="stats-overlay" @mousedown.self="showStatsModal = false">
         <div class="stats-modal">
           <div class="stats-header">
             <h3>GENERATION STATISTICS</h3>

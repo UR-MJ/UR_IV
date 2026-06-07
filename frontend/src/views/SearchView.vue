@@ -288,7 +288,7 @@
       </div>
       <!-- Filter Manager Modal -->
       <transition name="fade">
-        <div v-if="showFilterManager" class="fm-overlay" @click.self="showFilterManager = false">
+        <div v-if="showFilterManager" class="fm-overlay" @mousedown.self="showFilterManager = false">
           <div class="fm-modal">
             <div class="fm-header">
               <h3>FILTER MANAGER</h3>

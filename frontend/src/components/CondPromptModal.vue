@@ -1,5 +1,5 @@
 <template>
-  <div class="cp-overlay" @click.self="close">
+  <div class="cp-overlay" @mousedown.self="close">
     <div class="cp-modal">
       <div class="cp-header">
         <div>

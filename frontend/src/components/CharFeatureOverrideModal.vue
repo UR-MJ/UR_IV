@@ -1,5 +1,5 @@
 <template>
-  <div class="ovr-overlay" @click.self="close">
+  <div class="ovr-overlay" @mousedown.self="close">
     <div class="ovr-modal">
       <div class="ovr-header">
         <div>

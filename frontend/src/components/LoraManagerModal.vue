@@ -1,5 +1,5 @@
 <template>
-  <div class="lm-overlay" @click.self="close">
+  <div class="lm-overlay" @mousedown.self="close">
     <div class="lm-modal">
       <div class="lm-header">
         <div>

@@ -69,7 +69,7 @@
 
     <!-- 이미지 확대 뷰 (풀스크린 오버레이) -->
     <transition name="fade">
-      <div v-if="largeView" class="large-view-overlay" @click.self="closeLargeView">
+      <div v-if="largeView" class="large-view-overlay" @mousedown.self="closeLargeView">
         <div class="large-view-panel">
           <div class="large-view-header">
             <span class="large-filename">{{ largeView.filename }}</span>

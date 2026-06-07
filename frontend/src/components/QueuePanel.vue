@@ -37,7 +37,7 @@
     </div>
 
     <!-- 큐 항목 편집 모달 -->
-    <div class="qe-overlay" v-if="editItem" @click.self="closeEdit">
+    <div class="qe-overlay" v-if="editItem" @mousedown.self="closeEdit">
       <div class="qe-modal">
         <div class="qe-head">
           <h3>큐{{ editIdx + 1 }} 편집</h3>

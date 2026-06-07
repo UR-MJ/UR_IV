@@ -1,5 +1,5 @@
 <template>
-  <div class="abt-overlay" @click.self="close">
+  <div class="abt-overlay" @mousedown.self="close">
     <div class="abt-modal">
       <div class="abt-header">
         <div>

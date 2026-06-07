@@ -1,5 +1,5 @@
 <template>
-  <div class="cpm-overlay" @click.self="close" @keydown.esc="close">
+  <div class="cpm-overlay" @mousedown.self="close" @keydown.esc="close">
     <div class="cpm-modal">
       <!-- Header -->
       <div class="cpm-header">

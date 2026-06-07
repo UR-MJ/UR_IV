@@ -65,7 +65,7 @@
 
     <!-- 별도 뷰어 창 (이미지 확대 + EXIF + 전송 버튼) — 이전 Favorites 방식 복원 -->
     <transition name="fade">
-      <div v-if="viewerData" class="viewer-overlay" @click.self="viewerData = null">
+      <div v-if="viewerData" class="viewer-overlay" @mousedown.self="viewerData = null">
         <div class="viewer-panel">
           <div class="viewer-header">
             <span>{{ viewerData.filename }}</span>
