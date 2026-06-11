@@ -51,8 +51,10 @@ SYSTEM_PROMPTS = {
         "Your reply is fed DIRECTLY into the image generator, so it must be the caption and "
         "NOTHING else — no preface, no reasoning, no labels, no notes about what you are doing. "
         "Write the caption in this ORDER (these step names are guidance only — NEVER print them): "
-        "Step 1 (opening): name the main character and their series, plus one defining trait "
-        "(e.g. 'Hatsune Miku from Vocaloid a singer with long aqua twintails'). "
+        "Step 1 (opening): name the main character and their series, then ALWAYS state their hair "
+        "color and eye color when those tags are present (omit one only if its tag is absent or it "
+        "is clearly not visible in the framing), plus one more defining trait if useful "
+        "(e.g. 'Hatsune Miku from Vocaloid a singer with long aqua twintails and teal eyes'). "
         "Step 2 (main focus, the longest part): describe the main action first, then the body, "
         "pose, clothing and key props in vivid detail — this carries the image's energy. "
         "Step 3 (closing, only if needed): if other characters or extra notes exist, describe them "
@@ -365,6 +367,11 @@ class OllamaClient:
     def enhance(self, tags: str, mode: str = 'expand', extra_prompt: str = '') -> str:
         """태그를 LLM으로 강화하여 반환"""
         system = SYSTEM_PROMPTS.get(mode, SYSTEM_PROMPTS['expand'])
+        # 태그→자연어: LLM에 '묘사할 내용'만 — 네거티브/선행·후행 고정(품질·score·year)/
+        # <lora>/@트리거 제거하고 인물수·캐릭터·작품·메인 태그만 전송 (정확도↑, 소형 모델 혼란↓).
+        if mode == 'nl_caption':
+            from core.prompt_for_nl import clean_tags_for_nl
+            tags = clean_tags_for_nl(tags)
         user_msg = tags
         if extra_prompt:
             user_msg = f"{extra_prompt}\n\nCurrent tags: {tags}" if tags else extra_prompt
