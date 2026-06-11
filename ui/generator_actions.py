@@ -345,9 +345,8 @@ class ActionsMixin:
             idmap = self._deck_idmap
             idx = [idmap[id(b)] for b in deck if id(b) in idmap]
             path = self._deck_state_path()
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump({'pool_size': len(fr), 'remaining': idx}, f)
+            from utils.atomic_json import atomic_write_json
+            atomic_write_json(path, {'pool_size': len(fr), 'remaining': idx}, indent=None)
         except Exception as e:
             print(f"[Deck] save 실패: {e}")
 
@@ -699,6 +698,14 @@ class ActionsMixin:
         """자동화 중지"""
         was_running = self.is_automating
         self.is_automating = False
+        # 진행 중 생성도 실제로 중단 (cancel → 백엔드 interrupt).
+        # 사이클 사이에 불리면 워커가 없어 no-op.
+        worker = getattr(self, 'gen_worker', None)
+        if worker is not None and hasattr(worker, 'cancel') and worker.isRunning():
+            try:
+                worker.cancel()
+            except Exception:
+                pass
         # 대기 카운트다운 정지
         if getattr(self, '_wait_timer', None):
             self._wait_timer.stop()

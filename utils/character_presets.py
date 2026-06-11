@@ -1,7 +1,8 @@
 # utils/character_presets.py
 """캐릭터별 커스텀 프리셋 저장/로드 (메모리 캐싱)"""
 import os
-import json
+
+from utils.atomic_json import atomic_write_json, load_json_safe
 
 _FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_data", "character_presets.json")
 
@@ -13,14 +14,8 @@ def _load() -> dict:
     global _cache
     if _cache is not None:
         return _cache
-    if not os.path.exists(_FILE):
-        _cache = {}
-        return _cache
-    try:
-        with open(_FILE, "r", encoding="utf-8") as f:
-            _cache = json.load(f)
-    except Exception:
-        _cache = {}
+    # 손상 시 .corrupt 백업 — 빈 캐시로 다음 저장이 덮어써 영구 소실되는 것 방지
+    _cache = load_json_safe(_FILE, {})
     return _cache
 
 
@@ -28,8 +23,7 @@ def _save(data: dict):
     global _cache
     _cache = data
     try:
-        with open(_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        atomic_write_json(_FILE, data)
     except Exception as e:
         print(f"[CharPreset] 저장 실패: {e}")
         raise

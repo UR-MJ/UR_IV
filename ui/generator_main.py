@@ -37,6 +37,8 @@ from widgets.queue_manager import QueueManager
 from utils.prompt_cleaner import get_prompt_cleaner
 from utils.theme_manager import get_theme_manager, get_color
 from utils.tray_manager import TrayManager
+from utils.atomic_json import atomic_write_json
+from core.file_naming import sanitize_filename
 
 
 class GeneratorMainUI(
@@ -220,11 +222,17 @@ class GeneratorMainUI(
                     self.show_status(f"고해상도 설정 실패: {e}")
 
             elif action == 'cancel_generation':
+                # 자동화 중 취소 = 자동화도 중지 (안 끄면 다음 사이클이 계속 돎)
+                if getattr(self, 'is_automating', False):
+                    try:
+                        self._stop_automation('사용자 취소')
+                    except Exception:
+                        self.is_automating = False
                 worker = getattr(self, 'gen_worker', None)
                 if worker is not None and hasattr(worker, 'cancel') and worker.isRunning():
-                    worker.cancel()
-                    self.show_status("생성 취소됨")
-                    # worker가 finished를 안 쏠 수 있으므로 버튼/타이틀 즉시 복구
+                    worker.cancel()   # 플래그 + 백엔드 interrupt → 곧 cancelled finished 도착
+                    self.show_status("생성 취소 중...")
+                    # 버튼/타이틀 즉시 복구 (finished의 cancelled 분기가 마무리)
                     if hasattr(self, '_restore_generate_button'):
                         self._restore_generate_button()
                 else:
@@ -347,8 +355,7 @@ class GeneratorMainUI(
                         cur['width'] = int(self.width_input.text() or 1024)
                         cur['height'] = int(self.height_input.text() or 1024)
                         cur['seed'] = self.seed_input.text() or '-1'
-                        with open(defaults_path, 'w', encoding='utf-8') as f:
-                            json.dump(cur, f, ensure_ascii=False, indent=2)
+                        atomic_write_json(defaults_path, cur)
                 except Exception:
                     pass
                 if hasattr(self, 'vue_bridge'):
@@ -526,20 +533,18 @@ class GeneratorMainUI(
             # 10. 프리셋
             elif action == 'save_preset_by_name':
                 try:
-                    name = payload.get('name', '')
+                    name = sanitize_filename(payload.get('name', ''), fallback='')
                     if name:
                         preset = self._build_settings_dict()
                         preset_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets')
-                        os.makedirs(preset_dir, exist_ok=True)
-                        with open(os.path.join(preset_dir, f"{name}.json"), 'w', encoding='utf-8') as f:
-                            json.dump(preset, f, ensure_ascii=False, indent=2)
+                        atomic_write_json(os.path.join(preset_dir, f"{name}.json"), preset)
                         self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 저장됨')
                 except Exception as e:
                     self.vue_bridge.showNotification.emit('error', f'저장 실패: {e}')
 
             elif action == 'load_preset_by_name':
                 try:
-                    name = payload.get('name', '')
+                    name = sanitize_filename(payload.get('name', ''), fallback='')
                     if name:
                         fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets', f"{name}.json")
                         with open(fp, 'r', encoding='utf-8') as f:
@@ -552,25 +557,23 @@ class GeneratorMainUI(
 
             elif action == 'delete_preset':
                 try:
-                    name = payload.get('name', '')
-                    fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets', f"{name}.json")
-                    if os.path.exists(fp): os.remove(fp)
-                    self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 삭제됨')
+                    name = sanitize_filename(payload.get('name', ''), fallback='')
+                    if name:
+                        fp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets', f"{name}.json")
+                        if os.path.exists(fp): os.remove(fp)
+                        self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 삭제됨')
                 except Exception as e:
                     self.vue_bridge.showNotification.emit('error', f'삭제 실패: {e}')
 
             elif action == 'save_preset':
                 try:
-                    name, ok = QMessageBox.question(self, "프리셋", ""), None
                     from PyQt6.QtWidgets import QInputDialog
                     name, ok = QInputDialog.getText(self, "프리셋 저장", "프리셋 이름:")
+                    name = sanitize_filename(name, fallback='')
                     if ok and name:
                         preset = self._build_settings_dict()
                         preset_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets')
-                        os.makedirs(preset_dir, exist_ok=True)
-                        path = os.path.join(preset_dir, f"{name}.json")
-                        with open(path, 'w', encoding='utf-8') as f:
-                            json.dump(preset, f, ensure_ascii=False, indent=2)
+                        atomic_write_json(os.path.join(preset_dir, f"{name}.json"), preset)
                         self.vue_bridge.showNotification.emit('success', f'프리셋 "{name}" 저장됨')
                 except Exception as e:
                     self.vue_bridge.showNotification.emit('error', f'프리셋 저장 실패: {e}')
@@ -1104,9 +1107,7 @@ class GeneratorMainUI(
                 try:
                     weights = payload.get('weights', [])
                     wpath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'global_weights.json')
-                    os.makedirs(os.path.dirname(wpath), exist_ok=True)
-                    with open(wpath, 'w', encoding='utf-8') as f:
-                        json.dump(weights, f, ensure_ascii=False, indent=2)
+                    atomic_write_json(wpath, weights)
                     self.vue_bridge.showNotification.emit('success', '가중치가 저장되었습니다')
                 except Exception as e:
                     self.vue_bridge.showNotification.emit('error', f'가중치 저장 실패: {e}')
@@ -1127,9 +1128,7 @@ class GeneratorMainUI(
             elif action == 'save_cond_rules':
                 try:
                     cond_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'cond_rules.json')
-                    os.makedirs(os.path.dirname(cond_path), exist_ok=True)
-                    with open(cond_path, 'w', encoding='utf-8') as f:
-                        json.dump(payload, f, ensure_ascii=False, indent=2)
+                    atomic_write_json(cond_path, payload)
                     self.vue_bridge.showNotification.emit('success', '조건식이 저장되었습니다')
                 except Exception as e:
                     self.vue_bridge.showNotification.emit('error', f'조건식 저장 실패: {e}')
@@ -1138,9 +1137,7 @@ class GeneratorMainUI(
             elif action == 'save_tab_defaults':
                 try:
                     defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'tab_defaults.json')
-                    os.makedirs(os.path.dirname(defaults_path), exist_ok=True)
-                    with open(defaults_path, 'w', encoding='utf-8') as f:
-                        json.dump(payload, f, ensure_ascii=False, indent=2)
+                    atomic_write_json(defaults_path, payload)
                     self.vue_bridge.showNotification.emit('success', '기본값이 저장되었습니다')
                 except Exception as e:
                     self.vue_bridge.showNotification.emit('error', f'기본값 저장 실패: {e}')
@@ -1265,14 +1262,12 @@ class GeneratorMainUI(
         try:
             cache_dir = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
-            os.makedirs(cache_dir, exist_ok=True)
-            with open(os.path.join(cache_dir, 'last_search_results.json'),
-                      'w', encoding='utf-8') as f:
-                json.dump(active, f, ensure_ascii=False)
+            # 대용량(수십만 행)이라 indent 없이 — 원자적 쓰기로 강제 종료 시 절단 방지
+            atomic_write_json(os.path.join(cache_dir, 'last_search_results.json'),
+                              active, indent=None)
             if full is not None:
-                with open(os.path.join(cache_dir, 'last_full_results.json'),
-                          'w', encoding='utf-8') as f:
-                    json.dump(full, f, ensure_ascii=False)
+                atomic_write_json(os.path.join(cache_dir, 'last_full_results.json'),
+                                  full, indent=None)
         except Exception as e:
             print(f"[Search] 디스크 영속 실패: {e}")
 
@@ -1326,8 +1321,7 @@ class GeneratorMainUI(
             legacy = ps.get('active_loras') if isinstance(ps, dict) else None
             if isinstance(legacy, list) and legacy:
                 prefs['loraStack'] = legacy
-                with open(prefs_path, 'w', encoding='utf-8') as f:
-                    json.dump(prefs, f, ensure_ascii=False, indent=2)
+                atomic_write_json(prefs_path, prefs)
                 print(f"[Config] Legacy active_loras migrated → ui_prefs.loraStack ({len(legacy)})")
         except Exception as e:
             print(f"[Config] Legacy lora migration skipped: {e}")
@@ -1349,9 +1343,7 @@ class GeneratorMainUI(
             vue = legacy_cond_rules_to_vue(legacy)
             if not (vue.get('positive') or vue.get('negative')):
                 return
-            os.makedirs(os.path.dirname(cond_path), exist_ok=True)
-            with open(cond_path, 'w', encoding='utf-8') as f:
-                json.dump(vue, f, ensure_ascii=False, indent=2)
+            atomic_write_json(cond_path, vue)
             print(f"[Config] Legacy cond rules migrated → cond_rules.json "
                   f"({len(vue['positive'])}P + {len(vue['negative'])}N)")
         except Exception as e:
@@ -1820,7 +1812,8 @@ class GeneratorMainUI(
     def _setup_tray(self):
         self._tray_manager = TrayManager(self)
         self._tray_manager.show_window_requested.connect(self.showNormal)
-        self._tray_manager.quit_requested.connect(QApplication.quit)
+        # _quit_app 경유 — QApplication.quit 직결이면 설정/UI 상태 저장이 통째로 생략됨
+        self._tray_manager.quit_requested.connect(self._quit_app)
         self._tray_manager.show()
 
     def _update_vram_status(self):
@@ -2274,4 +2267,20 @@ class GeneratorMainUI(
                 self.ui_state.save_all()
         except Exception as e:
             print(f"[Warning] UI 상태 저장 실패: {e}")
+        try:
+            # 진행 중 생성 워커에 취소(+백엔드 interrupt) — GPU 작업 중단
+            worker = getattr(self, 'gen_worker', None)
+            if worker is not None and hasattr(worker, 'cancel') and worker.isRunning():
+                worker.cancel()
+        except Exception:
+            pass
+        try:
+            # SQLite 정리 — 쓰기마다 commit이라 미close여도 손상은 없지만 깔끔하게
+            if hasattr(self, 'db') and hasattr(self.db, 'close'):
+                self.db.close()
+        except Exception:
+            pass
+        # os._exit 유지 — QApplication.quit()은 QWebEngineProfile/Page 해체 순서
+        # 크래시·행이 재발함 (커밋 24d7856d6, e6f964c6f 이력). 저장은 위에서 끝났고
+        # 워커는 전부 daemon이라 안전.
         os._exit(0)

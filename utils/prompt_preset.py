@@ -1,26 +1,19 @@
 # utils/prompt_preset.py
 """프롬프트 프리셋 저장/불러오기"""
 import os
-import json
+
+from utils.atomic_json import atomic_write_json, load_json_safe
 
 _PRESET_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user_data', 'prompt_presets.json')
 
 
 def _load_all() -> dict[str, dict]:
-    if not os.path.exists(_PRESET_FILE):
-        return {}
-    try:
-        with open(_PRESET_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    return load_json_safe(_PRESET_FILE, {})
 
 
 def _save_all(presets: dict[str, dict]):
     try:
-        with open(_PRESET_FILE, 'w', encoding='utf-8') as f:
-            json.dump(presets, f, ensure_ascii=False, indent=2)
+        atomic_write_json(_PRESET_FILE, presets)
     except Exception as e:
         print(f"[Preset] 저장 실패: {e}")
         raise  # 호출자에게 전파하여 사용자에게 알림 가능

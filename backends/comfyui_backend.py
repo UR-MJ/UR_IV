@@ -162,6 +162,18 @@ class ComfyUIBackend(AbstractBackend):
     def get_backend_type(self) -> str:
         return "comfyui"
 
+    def interrupt(self):
+        """진행 중 생성 중단 — POST /interrupt + 대기 큐에서 항목 삭제 (best-effort)."""
+        try:
+            requests.post(f'{self.api_url}/interrupt', timeout=5)
+            pid = getattr(self, '_current_prompt_id', None)
+            if pid:
+                # 아직 실행 전(큐 대기)이면 큐에서 제거
+                requests.post(f'{self.api_url}/queue', json={'delete': [pid]}, timeout=5)
+            _logger.info("interrupt 요청 전송")
+        except Exception as e:
+            _logger.debug(f"interrupt 실패(무시): {e}")
+
     def test_connection(self) -> bool:
         """ComfyUI 연결 상태 확인"""
         try:
@@ -620,6 +632,7 @@ class ComfyUIBackend(AbstractBackend):
                     _logger.warning(f"노드 경고: {details}")
 
             _logger.info(f"프롬프트 등록 완료: {prompt_id}")
+            self._current_prompt_id = prompt_id   # interrupt()의 큐 삭제용
 
             # 결과 대기
             return self._wait_for_result(ws, prompt_id, progress_callback)
@@ -679,6 +692,11 @@ class ComfyUIBackend(AbstractBackend):
                     error_msg += "\n" + "".join(traceback_lines[-3:])
                 _logger.error(f"실행 오류: {error_msg}")
                 return GenerationResult(success=False, error=f"ComfyUI 실행 오류:\n{error_msg}")
+
+            elif msg_type == 'execution_interrupted':
+                # interrupt() 호출로 서버가 실행을 중단함
+                _logger.info("실행 중단됨 (interrupt)")
+                return GenerationResult(success=False, error="생성 취소됨")
 
             elif msg_type == 'execution_cached':
                 # 캐시된 노드 알림

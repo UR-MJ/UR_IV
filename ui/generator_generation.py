@@ -99,17 +99,28 @@ class GenerationMixin:
 
     def start_generation(self):
         """이미지 생성 시작"""
+        # 1) 입력 파싱 + payload 구성 + 검증 — UI를 '생성 중'으로 전환하기 *전에* 수행.
+        #    (검증 실패 시 버튼/Vue 스피너가 '생성 중'으로 영구 잔류하던 버그 방지)
+        try:
+            payload, err = self._build_generation_payload()
+        except Exception as e:
+            _logger.exception("payload 구성 실패")
+            payload, err = None, str(e)
+        if payload is None:
+            self._abort_generation(err or '생성 준비 실패')
+            return
+
         self._maybe_unload_ollama()
         self._gen_start_time = time.time()
         # 상태 표시 업데이트
-        self.setWindowTitle("AI Studio - Pro [생성 중...]")        
+        self.setWindowTitle("AI Studio - Pro [생성 중...]")
         self.btn_generate.setText("⏳ 생성 중...")
         self.btn_generate.setEnabled(False)
         self.btn_generate.setStyleSheet(_gen_btn_style('#e67e22'))
-        
+
         # 상태바 업데이트
         self.show_status("🎨 이미지 생성 중...")
-        
+
         # 뷰어에 로딩 표시
         if hasattr(self, 'vue_bridge'):
             self.vue_bridge.send_start()
@@ -124,15 +135,59 @@ class GenerationMixin:
                 font-weight: bold;
             }}
         """)
-        
+
+        _logger.info("Sending Payload to WebUI API")
+        _logger.debug(f"프롬프트: {payload['prompt'][:100]}...")
+
+        selected_model = self.model_combo.currentText()
+        self._cleanup_gen_worker()
+        self.gen_worker = GenerationFlowWorker(selected_model, payload)
+        self.gen_worker.finished.connect(self.on_generation_finished)
+        self.gen_worker.progress.connect(self._on_generation_progress)
+
+        # 프로그레스 바 초기화
+        self.gen_progress_bar.setValue(0)
+        self.gen_progress_bar.setRange(0, 100)
+        self.gen_progress_bar.setFormat("생성 준비 중...")
+        self.gen_progress_bar.show()
+
+        self.gen_worker.start()
+
+    def _abort_generation(self, msg: str):
+        """생성 시작 실패 — UI 복구 + 에러 통지 + 자동화 명시적 중지.
+        (기존엔 bare return으로 스피너 잔류 + 자동화가 조용히 멈췄음)"""
+        _logger.error("generation aborted: %s", msg)
+        try:
+            self._restore_generate_button()
+        except Exception:
+            pass
+        try:
+            self.gen_progress_bar.hide()
+        except Exception:
+            pass
+        self.show_status(f"설정 오류: {msg}", 5000)
+        if hasattr(self, 'vue_bridge'):
+            # generationError → App.vue가 에러 토스트 + isGenerating(스피너) 리셋
+            self.vue_bridge.generationError.emit(f'설정 오류: {msg}')
+        # 자동화 중 검증 실패는 다음 사이클도 같은 이유(설정 문제)로 실패 →
+        # 무한 루프/조용한 정지 대신 사유를 보여주며 중지
+        if getattr(self, 'is_automating', False):
+            try:
+                self._stop_automation(f"설정 오류로 자동화 중지: {msg}")
+            except Exception:
+                self.is_automating = False
+
+    def _build_generation_payload(self):
+        """입력 위젯 → 검증된 payload. 성공 시 (payload, None), 실패 시 (None, 사유).
+        UI 상태는 건드리지 않음 — start_generation이 검증 통과 후에만 busy 전환."""
         # 해상도 결정
         if self.random_res_check.isChecked() and self.random_resolutions:
             width, height, _ = random.choice(self.random_resolutions)
             self.width_input.setText(str(width))
             self.height_input.setText(str(height))
         else:
-            width = int(self.width_input.text() or '1024')
-            height = int(self.height_input.text() or '1024')
+            width = _widget_int(self.width_input, 1024)
+            height = _widget_int(self.height_input, 1024)
 
         # 고해상도/자동해상도 + ANIMA 면적캡(1536²) — 순수 함수로 분리.
         # 동작/테스트: core/resolution_guard.py, tests/test_resolution_guard.py
@@ -198,9 +253,9 @@ class GenerationMixin:
             "negative_prompt": combined_neg_prompt,
             "sampler_name": self.sampler_combo.currentText(),
             "scheduler": self.scheduler_combo.currentText(),
-            "steps": int(self.steps_input.text() or '28'),
-            "cfg_scale": float(self.cfg_input.text() or '7'),
-            "seed": int(self.seed_input.text() or '-1'),
+            "steps": _widget_int(self.steps_input, 28),
+            "cfg_scale": _widget_float(self.cfg_input, 7.0),
+            "seed": _widget_int(self.seed_input, -1),
             "width": width,
             "height": height,
             "send_images": True,
@@ -215,13 +270,13 @@ class GenerationMixin:
             payload["forge_additional_modules"] = extra_modules
 
         # Shift (Distilled CFG Scale)
-        shift_val = float(self.shift_input.text() or '0')
+        shift_val = _widget_float(self.shift_input, 0.0)
         if shift_val > 0:
             payload["distilled_cfg_scale"] = shift_val
 
         # Hires.fix
         if self.hires_options_group.isChecked():
-            hr_scale = float(self.hires_scale_input.text() or '2.0')
+            hr_scale = _widget_float(self.hires_scale_input, 2.0)
             if hr_scale <= 0:
                 hr_scale = 2.0
             # Hires 패스에서 모듈 처리:
@@ -236,12 +291,12 @@ class GenerationMixin:
             hr_payload = {
                 "enable_hr": True,
                 "hr_upscaler": self.upscaler_combo.currentText(),
-                "hr_second_pass_steps": int(self.hires_steps_input.text() or '0'),
-                "denoising_strength": float(self.hires_denoising_input.text() or '0.5'),
+                "hr_second_pass_steps": _widget_int(self.hires_steps_input, 0),
+                "denoising_strength": _widget_float(self.hires_denoising_input, 0.5),
                 "hr_scale": hr_scale,
                 "hr_additional_modules": hr_modules,
             }
-            hr_cfg = float(self.hires_cfg_input.text() or '0')
+            hr_cfg = _widget_float(self.hires_cfg_input, 0.0)
             if hr_cfg > 0:
                 hr_payload["hr_cfg"] = hr_cfg
 
@@ -284,27 +339,9 @@ class GenerationMixin:
         if not vr.ok:
             msg = " / ".join(vr.errors)
             _logger.error("payload invalid: %s", msg)
-            if hasattr(self, 'vue_bridge'):
-                self.vue_bridge.showNotification.emit('error', f'설정 오류: {msg}')
-            self.show_status(f"설정 오류: {msg}")
-            return
+            return None, msg
 
-        _logger.info("Sending Payload to WebUI API")
-        _logger.debug(f"프롬프트: {payload['prompt'][:100]}...")
-
-        selected_model = self.model_combo.currentText()
-        self._cleanup_gen_worker()
-        self.gen_worker = GenerationFlowWorker(selected_model, payload)
-        self.gen_worker.finished.connect(self.on_generation_finished)
-        self.gen_worker.progress.connect(self._on_generation_progress)
-
-        # 프로그레스 바 초기화
-        self.gen_progress_bar.setValue(0)
-        self.gen_progress_bar.setRange(0, 100)
-        self.gen_progress_bar.setFormat("생성 준비 중...")
-        self.gen_progress_bar.show()
-
-        self.gen_worker.start()
+        return payload, None
 
     def _build_vae_te_override(self) -> list:
         """메인 VAE + TE 파일들을 Forge Neo의 ``forge_additional_modules``
@@ -351,8 +388,13 @@ class GenerationMixin:
                 pass
         try:
             if worker.isRunning():
+                # cancel() = 취소 플래그 + 백엔드 interrupt → 블로킹 HTTP가 곧 반환되어
+                # run()이 자연 종료됨. terminate(스레드 강제 종료, 락 잡은 채 죽을 수
+                # 있음)는 최후 수단으로만.
+                if hasattr(worker, 'cancel'):
+                    worker.cancel()
                 worker.quit()
-                if not worker.wait(2000):
+                if not worker.wait(5000):
                     _logger.warning("gen_worker wait timeout — terminate 호출")
                     worker.terminate()
                     worker.wait(500)
@@ -432,6 +474,17 @@ class GenerationMixin:
             }}
         """)
         
+        # 취소 분기 — 에러(E020)/실패 통계/자동화 재시도로 처리하지 않음
+        if isinstance(gen_info, dict) and gen_info.get('cancelled'):
+            self.viewer_label.setText("⏹ 생성 취소됨")
+            self.show_status("⏹ 생성 취소됨", 3000)
+            if hasattr(self, 'vue_bridge'):
+                # Vue 스피너 리셋 (✕로 이미 리셋된 경우 무해)
+                self.vue_bridge.generationError.emit('생성 취소됨')
+            if hasattr(self, 'queue_manager') and self.queue_manager.is_running:
+                self.queue_manager.on_generation_completed(False)
+            return
+
         if isinstance(result, bytes):
             self._auto_retry_count = 0   # 성공 — 자동화 재시도 카운터 리셋
             self._process_new_image(result, gen_info)

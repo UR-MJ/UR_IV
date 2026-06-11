@@ -11,23 +11,17 @@ from utils.theme_manager import get_color
 
 _FAV_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_data", "favorite_tags.json")
 
+from utils.atomic_json import atomic_write_json, load_json_safe
+
 
 def _load_favs() -> list[dict]:
     """[{name: str, tags: str}, ...]"""
-    if not os.path.exists(_FAV_FILE):
-        return []
-    try:
-        with open(_FAV_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    return load_json_safe(_FAV_FILE, [])
 
 
 def _save_favs(favs: list[dict]):
     try:
-        with open(_FAV_FILE, "w", encoding="utf-8") as f:
-            json.dump(favs, f, ensure_ascii=False, indent=2)
+        atomic_write_json(_FAV_FILE, favs)
     except Exception:
         pass
 

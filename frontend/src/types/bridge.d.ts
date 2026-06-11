@@ -46,7 +46,7 @@ export type BackendEvent =
   | 'searchResultsReady' | 'searchStatus' | 'queueUpdated' | 'queueItemAdded' | 'queueCompleted'
   | 'uiPrefsLoaded' | 'condRulesLoaded' | 'loraStackLoaded' | 'loraInserted' | 'globalWeightsLoaded'
   | 'promptOrderLoaded' | 'instantWildcardsList' | 'workflowProfilesList'
-  | 'editorImageLoaded' | 'yoloModelUpdated' | 'i2iImageLoaded' | 'inpaintImageLoaded'
+  | 'editorImageLoaded' | 'editorResult' | 'yoloModelUpdated' | 'i2iImageLoaded' | 'inpaintImageLoaded'
   | 'compareImageLoaded' | 'galleryFolderLoaded' | 'thumbnailReady'
   | 'batchFilesSelected' | 'adetailerResult' | 'adetailerProgress' | 'sam3Result' | 'sam3Progress'
   | 'captionFilesSelected' | 'captionProgress' | 'captionDone' | 'captionOutDirSelected'

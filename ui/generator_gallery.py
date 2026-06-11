@@ -258,8 +258,8 @@ class GalleryMixin:
     def _save_favorites_to_file(self):
         """즐겨찾기 파일에 저장"""
         try:
-            with open(FAVORITES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.favorites_list, f, ensure_ascii=False, indent=2)
+            from utils.atomic_json import atomic_write_json
+            atomic_write_json(FAVORITES_FILE, self.favorites_list)
         except Exception as e:
             print(f"즐겨찾기 저장 실패: {e}")
 

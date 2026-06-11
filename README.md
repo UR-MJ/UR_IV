@@ -105,8 +105,10 @@ cd frontend && npm install && npm run build && cd ..
 #    Forge:  webui.bat --api          (포트 7860)
 #    ComfyUI: python main.py          (포트 8188)
 
-# 3) 앱 실행
-python main.py
+# 3) 앱 실행 (venv 활성화 + 의존성 체크 + 데이터 준비 포함)
+new_run_main_ui.bat
+# 또는 수동 실행:
+python core\check_requirements.py && python core\fetch_data.py && python new_main_ui.py
 ```
 
 설정 → NETWORK 탭에서 백엔드 URL 입력 후 "TEST CONNECTIVITY".
@@ -192,7 +194,8 @@ Hugging Face에서 다운로드 가능: `wd-tagger` 또는 Danbooru 덤프 프�
 
 ```
 .
-├── main.py                   # 진입점
+├── new_main_ui.py            # 진입점 (new_run_main_ui.bat로 실행)
+├── new_run_main_ui.bat       # 실행 스크립트 (venv + 의존성 체크 + 데이터 fetch)
 ├── ui/                       # PyQt 메인 윈도우 + Vue Bridge
 ├── backends/                 # WebUI / ComfyUI / Forge 클라이언트
 ├── core/                     # 공용 로직 (큐, 파이프라인, SAM/edge refiner...)

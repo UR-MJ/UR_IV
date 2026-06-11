@@ -1,11 +1,16 @@
 import os
 from urllib.parse import urlparse
 
+import warnings
+
 from PIL import Image
-Image.MAX_IMAGE_PIXELS = None
+# 대형 업스케일 결과(8K+)는 PIL 기본 한도(~178MP)를 넘으므로 상한을 올리되,
+# 무제한(None) 대신 유한 상한으로 손상/폭주 이미지의 OOM은 차단.
+Image.MAX_IMAGE_PIXELS = 1_000_000_000  # 1기가픽셀 (32K×32K급)
+warnings.filterwarnings('ignore', category=Image.DecompressionBombWarning)
 
 from PyQt6.QtGui import QImageReader
-QImageReader.setAllocationLimit(0)  # Qt 이미지 할당 제한 해제
+QImageReader.setAllocationLimit(4096)  # MB 단위 — 16K RGBA 직전까지 허용 (기본 256MB는 8K RGBA도 초과)
 
 # QtWebEngine은 QApplication 생성 전에 import 필요
 from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401

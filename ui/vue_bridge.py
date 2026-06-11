@@ -184,23 +184,60 @@ class VueBridge(QObject):
 
     # ── Editor ──
 
+    editorResult = pyqtSignal(str)  # 에디터 비동기 처리 결과 JSON (path|mask_base64|error + operation, job_id)
+
     @pyqtSlot(str, str, str, result=str)
     def editorProcess(self, image_path: str, operation: str, params_json: str) -> str:
-        """에디터 이미지 처리 (Python OpenCV)"""
+        """에디터 이미지 처리 — 무거운 작업(YOLO/SAM/rembg/OpenCV)을 백그라운드 스레드로.
+
+        동기 슬롯으로 GUI 스레드에서 전부 돌면 클릭마다 창 전체가 수~수십 초 멈춤
+        (YOLO 로드+추론, SAM 체크포인트 로드, alpha_matting rembg).
+        즉시 {'started': True, 'job_id': n}을 반환하고, 완료 시 editorResult
+        시그널로 결과를 보낸다 (generateThumbnails / startCaptioning과 동일 패턴).
+        """
+        clean_path = _normalize_vue_path(image_path)
+        if not clean_path:
+            logger.warning("[Editor] invalid or forbidden path")
+            return json.dumps({'error': '유효하지 않은 이미지 경로입니다'})
+
+        # params가 객체로 올 수도 있고 JSON 문자열로 올 수도 있음
         try:
-            import cv2
-            import numpy as np
-
-            clean_path = _normalize_vue_path(image_path)
-            if not clean_path:
-                logger.warning("[Editor] invalid or forbidden path")
-                return json.dumps({'error': '유효하지 않은 이미지 경로입니다'})
-
-            # params가 객체로 올 수도 있고 JSON 문자열로 올 수도 있음
             if isinstance(params_json, str):
                 params = json.loads(params_json) if params_json else {}
             else:
-                params = params_json
+                params = params_json or {}
+            if not isinstance(params, dict):
+                params = {}
+        except Exception as e:
+            return json.dumps({'error': f'잘못된 파라미터: {e}'})
+
+        self._editor_job_seq = getattr(self, '_editor_job_seq', 0) + 1
+        job_id = self._editor_job_seq
+
+        import threading
+
+        def _work():
+            result_json = self._editor_process_impl(clean_path, operation, params)
+            try:
+                payload = json.loads(result_json)
+            except Exception:
+                payload = {'error': '에디터 내부 오류'}
+            payload['job_id'] = job_id
+            payload['operation'] = operation
+            try:
+                # 비-Qt 스레드 emit은 queued connection이라 안전
+                self.editorResult.emit(json.dumps(payload))
+            except Exception:
+                pass
+
+        threading.Thread(target=_work, daemon=True).start()
+        return json.dumps({'started': True, 'job_id': job_id})
+
+    def _editor_process_impl(self, clean_path: str, operation: str, params: dict) -> str:
+        """editorProcess 본체 — 워커 스레드에서 실행. 위젯 직접 접근 금지(시그널 emit만)."""
+        try:
+            import cv2
+            import numpy as np
 
             img = cv2.imread(clean_path)
             if img is None:
@@ -683,10 +720,29 @@ class VueBridge(QObject):
             # 결과 cap 비활성화 — 사용자가 "무제한" 모드 선택 시
             self._disable_result_cap = bool(q.get('disable_result_cap', False))
 
+            # 이전 검색 워커 정리 — 덮어쓰기만 하면 stale 결과가 새 결과를 덮거나
+            # 실행 중 QThread 파괴로 크래시 가능 (ollamaEnhance와 동일 패턴)
+            prev = getattr(self, '_search_worker', None)
+            if prev is not None and prev.isRunning():
+                try:
+                    prev.results_ready.disconnect(self._on_search_results)
+                except TypeError:
+                    pass
+                prev.stop()
+                if not prev.wait(1000):
+                    # 아직 도는 중 — 참조를 보관해 가비지 파괴 크래시 방지, 종료 시 자동 제거
+                    if not hasattr(self, '_stale_search_workers'):
+                        self._stale_search_workers = []
+                    self._stale_search_workers.append(prev)
+                    prev.finished.connect(
+                        lambda w=prev: self._stale_search_workers.remove(w)
+                        if w in getattr(self, '_stale_search_workers', []) else None)
+
             self._search_worker = PandasSearchWorker(
                 PARQUET_DIR, ratings, queries, excludes,
                 combine_mode=combine_mode,
                 dataset_year=dataset_year,
+                result_cap=None if self._disable_result_cap else 500_000,
             )
             self._search_worker.results_ready.connect(self._on_search_results)
             self._search_worker.start()
@@ -704,6 +760,11 @@ class VueBridge(QObject):
         과거 코드가 DataFrame 가정으로 hasattr(iterrows)만 체크 → list 무시 → 0건.
         list / DataFrame 양쪽 지원 + 컬럼명도 두 스키마 (tag_string_* / *) 호환.
         """
+        # 순서 역전 차단 — 현재 워커가 아닌(이전 검색의) 늦은 시그널은 무시
+        sender = self.sender()
+        if sender is not None and sender is not getattr(self, '_search_worker', None):
+            print("[Search] stale worker result ignored")
+            return
         try:
             import random as _rnd
             out = []
@@ -791,12 +852,11 @@ class VueBridge(QObject):
                 # 폴백: 메인 윈도우 없음(개발/단독) — 직접 기록
                 try:
                     import os
+                    from utils.atomic_json import atomic_write_json
                     cache_dir = os.path.join(
                         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
-                    os.makedirs(cache_dir, exist_ok=True)
                     for name in ('last_search_results.json', 'last_full_results.json'):
-                        with open(os.path.join(cache_dir, name), 'w', encoding='utf-8') as f:
-                            json.dump(out, f, ensure_ascii=False)
+                        atomic_write_json(os.path.join(cache_dir, name), out, indent=None)
                 except Exception as e:
                     print(f"[Search] disk backup failed: {e}")
         except Exception as e:
@@ -927,10 +987,14 @@ class VueBridge(QObject):
         """파일 이름 변경"""
         try:
             import os
+            from core.file_naming import sanitize_filename
             if not os.path.exists(filepath):
                 return json.dumps({'error': '파일을 찾을 수 없습니다'})
             dir_path = os.path.dirname(filepath)
             ext = os.path.splitext(filepath)[1]
+            # 구분자 제거 — 새 이름은 같은 디렉토리 안의 단일 파일명만 허용
+            stem, new_ext = os.path.splitext(new_name)
+            new_name = sanitize_filename(stem, fallback='renamed', max_len=128) + (new_ext or '')
             if not new_name.endswith(ext):
                 new_name += ext
             new_path = os.path.join(dir_path, new_name)
@@ -1760,15 +1824,22 @@ class VueBridge(QObject):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+    @staticmethod
+    def _wildcard_path(name: str) -> str:
+        """와일드카드 이름 → wildcards/ 안의 안전한 .txt 경로 (탈출 차단)."""
+        import os
+        from core.file_naming import sanitize_filename
+        wc_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wildcards')
+        os.makedirs(wc_dir, exist_ok=True)
+        if name.endswith('.txt'):
+            name = name[:-4]
+        return os.path.join(wc_dir, sanitize_filename(name, fallback='wildcard') + '.txt')
+
     @pyqtSlot(str, str, result=str)
     def saveWildcard(self, filename: str, content: str) -> str:
         """와일드카드 파일 저장/수정"""
-        import os
-        wc_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wildcards')
-        os.makedirs(wc_dir, exist_ok=True)
-        if not filename.endswith('.txt'): filename += '.txt'
         try:
-            with open(os.path.join(wc_dir, filename), 'w', encoding='utf-8') as f:
+            with open(self._wildcard_path(filename), 'w', encoding='utf-8') as f:
                 f.write(content)
             return json.dumps({'ok': True})
         except Exception as e:
@@ -1778,9 +1849,8 @@ class VueBridge(QObject):
     def deleteWildcard(self, filename: str) -> str:
         """와일드카드 파일 삭제"""
         import os
-        wc_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wildcards')
-        fp = os.path.join(wc_dir, filename if filename.endswith('.txt') else filename + '.txt')
         try:
+            fp = self._wildcard_path(filename)
             if os.path.exists(fp): os.remove(fp)
             return json.dumps({'ok': True})
         except Exception as e:
@@ -1790,10 +1860,9 @@ class VueBridge(QObject):
     def renameWildcard(self, old_name: str, new_name: str) -> str:
         """와일드카드 파일 이름 변경"""
         import os
-        wc_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'wildcards')
-        old_fp = os.path.join(wc_dir, old_name if old_name.endswith('.txt') else old_name + '.txt')
-        new_fp = os.path.join(wc_dir, new_name if new_name.endswith('.txt') else new_name + '.txt')
         try:
+            old_fp = self._wildcard_path(old_name)
+            new_fp = self._wildcard_path(new_name)
             if os.path.exists(old_fp): os.rename(old_fp, new_fp)
             return json.dumps({'ok': True})
         except Exception as e:

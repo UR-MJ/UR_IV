@@ -44,6 +44,16 @@ class _CancellableMixin:
 
     def cancel(self):
         self._cancelled = True
+        # 플래그만으론 이미 보낸 HTTP 요청이 끝까지 돈다 — 백엔드에 실제 중단 요청.
+        # fire-and-forget: 메인 스레드를 막지 않고, 실패해도 무시.
+        import threading
+
+        def _do_interrupt():
+            try:
+                get_backend().interrupt()
+            except Exception:
+                logger.debug("backend interrupt 실패(무시)", exc_info=True)
+        threading.Thread(target=_do_interrupt, daemon=True).start()
 
     @property
     def is_cancelled(self) -> bool:
@@ -124,6 +134,12 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
 
             result = backend.txt2img(self.model_name, payload, progress_callback=on_progress)
 
+            # 취소 후 도착한 결과(interrupt의 부분 이미지 포함)는 성공으로 emit하지 않음
+            # — 디스크 저장/히스토리/성공 통계/자동화 계속으로 이어지던 버그 방지
+            if self.is_cancelled:
+                self.finished.emit("생성 취소됨", {'cancelled': True})
+                return
+
             if not result.success:
                 self.finished.emit(result.error, {})
                 return
@@ -132,12 +148,19 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
                 backend, result.image_data, postprocess_chain,
                 cancelled_cb=lambda: self.is_cancelled,
             )
+            if self.is_cancelled:
+                self.finished.emit("생성 취소됨", {'cancelled': True})
+                return
             info = dict(result.info or {})
             if pp_errors:
                 info['postprocess_errors'] = pp_errors
             self.finished.emit(final_image, info)
 
         except Exception as e:
+            if self.is_cancelled:
+                # interrupt로 인한 요청 중단 예외는 '취소'로 보고
+                self.finished.emit("생성 취소됨", {'cancelled': True})
+                return
             logger.exception("GenerationFlowWorker failed")
             self.finished.emit(f"이미지 생성 중 오류: {sanitize_for_ui(e)}", {})
 
@@ -170,6 +193,10 @@ class Img2ImgFlowWorker(QThread, _CancellableMixin):
 
             result = backend.img2img(self.model_name, payload, progress_callback=on_progress)
 
+            if self.is_cancelled:
+                self.finished.emit("생성 취소됨", {'cancelled': True})
+                return
+
             if not result.success:
                 self.finished.emit(result.error, {})
                 return
@@ -178,11 +205,17 @@ class Img2ImgFlowWorker(QThread, _CancellableMixin):
                 backend, result.image_data, postprocess_chain,
                 cancelled_cb=lambda: self.is_cancelled,
             )
+            if self.is_cancelled:
+                self.finished.emit("생성 취소됨", {'cancelled': True})
+                return
             info = dict(result.info or {})
             if pp_errors:
                 info['postprocess_errors'] = pp_errors
             self.finished.emit(final_image, info)
 
         except Exception as e:
+            if self.is_cancelled:
+                self.finished.emit("생성 취소됨", {'cancelled': True})
+                return
             logger.exception("Img2ImgFlowWorker failed")
             self.finished.emit(f"img2img 생성 중 오류: {sanitize_for_ui(e)}", {})

@@ -73,6 +73,12 @@ class AbstractBackend(ABC):
         """SAM3 처리. base64 결과 반환"""
         ...
 
+    def interrupt(self):
+        """진행 중 생성을 서버 측에서 중단 (best-effort).
+        취소 플래그만으로는 이미 보낸 HTTP 요청이 끝까지 돌므로,
+        실제 취소는 이 훅으로 백엔드에 전달한다. 기본 구현은 no-op."""
+        return
+
     def get_loras(self) -> List[Dict]:
         """LoRA 목록 반환. 각 항목: {'name': str, 'alias': str, 'path': str}"""
         return []

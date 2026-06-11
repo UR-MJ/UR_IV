@@ -70,11 +70,9 @@ def _profiles_dir() -> Path:
 
 
 def _sanitize_name(name: str) -> str:
-    """파일명 안전 — 영숫자/한글/_-/공백만 허용. 너무 길면 자름."""
-    s = (name or "").strip()
-    # 위험 문자 제거 (백슬래시, 슬래시, 콜론 등)
-    s = re.sub(r'[\\/:*?"<>|]', '', s)
-    return s[:64] or "프로파일"
+    """파일명 안전 — core/file_naming.py 공용 유틸 위임 (기존 폴백 유지)."""
+    from core.file_naming import sanitize_filename
+    return sanitize_filename(name, fallback="프로파일")
 
 
 def _path(name: str) -> Path:

@@ -132,6 +132,16 @@ class WebUIBackend(AbstractBackend):
     def get_backend_type(self) -> str:
         return "webui"
 
+    def interrupt(self):
+        """진행 중 생성 중단 — POST /sdapi/v1/interrupt (best-effort, 실패 무시).
+        호출되면 진행 중이던 txt2img/img2img requests.post가 부분 결과로 곧 반환된다."""
+        try:
+            requests.post(f'{self.api_url}/sdapi/v1/interrupt',
+                          headers=_HEADERS, timeout=5)
+            logger.info("interrupt 요청 전송")
+        except Exception as e:
+            logger.debug(f"interrupt 실패(무시): {e}")
+
     def test_connection(self) -> bool:
         """WebUI 연결 상태 확인"""
         try:

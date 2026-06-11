@@ -30,8 +30,16 @@ class PandasSearchWorker(QThread):
     AVAILABLE_YEARS = ('2026_06', '2026', '2025')
     DEFAULT_YEAR = '2026_06'
 
+    # 결과로 내보내는 컬럼 — bridge의 dict 재구성(_pick/_dim)이 읽는 키만.
+    # to_dict 전에 이 컬럼만 남겨 안 쓰는 컬럼(meta, 전체컬럼 폴백분)의 복제를 제거.
+    OUTPUT_COLUMNS = ['rating', 'copyright', 'character', 'artist', 'general',
+                      'image_width', 'image_height',
+                      'tag_string_copyright', 'tag_string_character',
+                      'tag_string_artist', 'tag_string_general']
+
     def __init__(self, parquet_dir, selected_ratings, queries, exclude_queries=None,
-                 combine_mode: str = 'and', dataset_year: str = None):
+                 combine_mode: str = 'and', dataset_year: str = None,
+                 result_cap: int = None):
         """
         :param queries: { col: 'pattern' } 포함 검색 — 필드 간 결합은 combine_mode로 제어
         :param exclude_queries: { col: 'pattern' } 제외 검색 — 모드와 무관하게
@@ -39,6 +47,8 @@ class PandasSearchWorker(QThread):
         :param combine_mode: 'and' (교집합) | 'or' (합집합) — 필드 간 결합 방식
         :param dataset_year: '2026' (기본) | '2025' — 데이터셋 년도 선택
             2026은 2025를 포함하는 확장판이므로 둘을 동시 선택할 필요 없음
+        :param result_cap: 결과 행 수 상한 (무작위 샘플, 무편향). None = 무제한.
+            워커 단계에서 자르면 '전체 결과 list[dict] 물질화'가 사라져 피크 RAM이 준다.
         """
         super().__init__()
         self.parquet_dir = parquet_dir
@@ -52,12 +62,15 @@ class PandasSearchWorker(QThread):
         self.dataset_year = str(dataset_year or self.DEFAULT_YEAR)
         if self.dataset_year not in self.AVAILABLE_YEARS:
             self.dataset_year = self.DEFAULT_YEAR
+        self.result_cap = int(result_cap) if result_cap else None
         self.is_running = True
 
     def run(self):
         """검색 실행"""
         try:
             if not self._load_data():
+                return
+            if not self.is_running:   # 새 검색으로 대체됨 — stale 결과 emit 금지
                 return
 
             if self.cached_df is None or self.cached_df.empty:
@@ -92,6 +105,8 @@ class PandasSearchWorker(QThread):
                 # OR: 빈 마스크에서 시작해 |= 누적
                 total_mask = pd.Series(False, index=df.index)
                 for col, search_text in non_empty_fields:
+                    if not self.is_running:
+                        return
                     cm = self._parse_condition(df, col, search_text)
                     n_match = int(cm.sum())
                     print(f"[Search] OR  | {col:>10s} '{search_text[:60]}...' → {n_match:,} matches{_wc_note(n_match)}")
@@ -100,6 +115,8 @@ class PandasSearchWorker(QThread):
                 # AND: True에서 시작해 &= 누적
                 total_mask = pd.Series(True, index=df.index)
                 for col, search_text in non_empty_fields:
+                    if not self.is_running:
+                        return
                     cm = self._parse_condition(df, col, search_text)
                     n_match = int(cm.sum())
                     print(f"[Search] AND | {col:>10s} '{search_text[:60]}...' → {n_match:,} matches{_wc_note(n_match)}")
@@ -112,6 +129,8 @@ class PandasSearchWorker(QThread):
                     continue
                 if col not in df.columns:
                     continue
+                if not self.is_running:
+                    return
                 exclude_mask = self._parse_condition(df, col, search_text)
                 n_excl = int(exclude_mask.sum())
                 print(f"[Search] EXC | {col:>10s} '{search_text[:60]}...' → {n_excl:,} excluded")
@@ -120,11 +139,24 @@ class PandasSearchWorker(QThread):
             # 결과 필터링
             filtered_df = df[total_mask]
             total_count = len(filtered_df)
-            print(f"[Search] === DONE === final mask: {int(total_mask.sum()):,} → emitting {total_count:,} rows")
+            print(f"[Search] === DONE === final mask: {int(total_mask.sum()):,} → {total_count:,} rows")
+
+            # cap을 여기(워커)에서 적용 — 전체 결과의 dict 물질화 자체를 회피.
+            # sample()은 무작위라 기존 '셔플 후 슬라이스'와 동등(무편향).
+            if self.result_cap and total_count > self.result_cap:
+                print(f"[Search] capping {total_count:,} → {self.result_cap:,} (워커 단계, RAM 절약)")
+                filtered_df = filtered_df.sample(n=self.result_cap)
+
+            # 출력 컬럼만 — 검색용으로만 쓰는 meta/전체컬럼 폴백분 복제 제거
+            out_cols = [c for c in self.OUTPUT_COLUMNS if c in filtered_df.columns]
+            if out_cols:
+                filtered_df = filtered_df[out_cols]
 
             final_df = filtered_df.fillna("")
             results = final_df.to_dict('records')
 
+            if not self.is_running:   # emit 직전 최종 체크
+                return
             self.results_ready.emit(results, total_count)
             self.status_update.emit(
                 f"✅ {self.combine_mode.upper()} 검색 완료: {total_count:,}건"
@@ -176,6 +208,8 @@ class PandasSearchWorker(QThread):
         dfs = []
 
         for rating in self.selected_ratings:
+            if not self.is_running:   # 새 검색으로 대체됨 — 비싼 parquet 로드 중단
+                return False
             # dataset_year가 그대로 prefix — '2026_06'이면 danbooru_2026_06_{rating}.parquet
             file_name = f"danbooru_{self.dataset_year}_{rating}.parquet"
             path = os.path.join(self.parquet_dir, file_name)

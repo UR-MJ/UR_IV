@@ -314,11 +314,11 @@ async function doOp(operation: string, params: any = {}) {
   if (!imagePath.value) return
   const backend: any = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
+  // 처리는 비동기 — 결과는 editorResult 이벤트로 도착. 콜백은 즉시 거절(경로/파라미터 오류)만.
   backend.editorProcess(cleanPath, operation, JSON.stringify(params), (json: string) => {
     try {
       const result = JSON.parse(json)
-      if (result.path) pushState(result.path)
-      else if (result.error) console.error('[Editor] error:', result.error)
+      if (result.error) console.error('[Editor] error:', result.error)
     } catch (e) { console.error('[Editor] parse error:', e) }
   })
 }
@@ -338,10 +338,28 @@ async function doOpWithMask(operation: string, params: any = {}) {
   backend.editorProcess(cleanPath, operation, JSON.stringify(fullParams), (json: string) => {
     try {
       const result = JSON.parse(json)
-      if (result.path) pushState(result.path)
-      else if (result.error) console.error('[Editor] error:', result.error)
+      if (result.error) console.error('[Editor] error:', result.error)
     } catch (e) { console.error('[Editor] parse error:', e) }
   })
+}
+
+// editorResult — 백그라운드 처리 완료 수신 (onMounted에서 연결)
+function onEditorResult(json: string) {
+  try {
+    const result = JSON.parse(json)
+    if (result.path) {
+      pushState(result.path)
+      if (result.operation === 'auto_censor') detectStatus.value = '완료'
+    } else if (result.mask_base64) {
+      canvasRef.value?.loadMaskFromBase64(result.mask_base64)
+      detectStatus.value = `${result.detect_count || 0}개 감지됨`
+    } else if (result.error) {
+      console.error('[Editor] error:', result.error)
+      if (result.operation === 'auto_censor' || result.operation === 'auto_detect') {
+        detectStatus.value = result.error
+      }
+    }
+  } catch (e) { console.error('[Editor] parse error:', e) }
 }
 
 function onToolChanged(data: any) {
@@ -421,11 +439,11 @@ async function runAutoCensor(params: any) {
   if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
     payload.exclude_prompt = String(params.excludePrompt).trim()
   }
+  // 결과는 editorResult 이벤트로 도착 — 콜백은 즉시 거절만 처리
   backend.editorProcess(cleanPath, 'auto_censor', JSON.stringify(payload), (json: string) => {
     try {
       const result = JSON.parse(json)
-      if (result.path) { pushState(result.path); detectStatus.value = '완료' }
-      else { detectStatus.value = result.error || '실패' }
+      if (result.error) detectStatus.value = result.error
     } catch { detectStatus.value = '오류' }
   })
 }
@@ -443,16 +461,11 @@ async function runAutoDetect(params: any) {
   if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
     payload.exclude_prompt = String(params.excludePrompt).trim()
   }
+  // 결과(mask_base64)는 editorResult 이벤트로 도착 — 콜백은 즉시 거절만 처리
   backend.editorProcess(cleanPath, 'auto_detect', JSON.stringify(payload), (json: string) => {
     try {
       const result = JSON.parse(json)
-      if (result.mask_base64) {
-        // 마스크를 캔버스에 로드
-        canvasRef.value?.loadMaskFromBase64(result.mask_base64)
-        detectStatus.value = `${result.detect_count || 0}개 감지됨`
-      } else if (result.error) {
-        detectStatus.value = result.error
-      }
+      if (result.error) detectStatus.value = result.error
     } catch { detectStatus.value = '오류' }
   })
 }
@@ -678,6 +691,7 @@ async function _checkAutoSaveRecovery() {
 onMounted(() => {
   onBackendEvent('editorImageLoaded', (path: string) => loadImage(path))
   onBackendEvent('yoloModelUpdated', (label: string) => { modelLabel.value = label })
+  onBackendEvent('editorResult', onEditorResult)
   // 앱 시작 시 YOLO 모델 자동 감지 + 최근 파일 로드 + 크래시 복구 확인
   refreshYoloLabel()
   _loadRecentFiles()

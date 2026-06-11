@@ -1,7 +1,8 @@
 # utils/prompt_history.py
 """최근 프롬프트 히스토리 관리"""
 import os
-import json
+
+from utils.atomic_json import atomic_write_json, load_json_safe
 
 _HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user_data', 'prompt_history.json')
 _MAX_HISTORY = 50
@@ -9,21 +10,13 @@ _MAX_HISTORY = 50
 
 def _load() -> list[dict]:
     """히스토리 파일 로드"""
-    if not os.path.exists(_HISTORY_FILE):
-        return []
-    try:
-        with open(_HISTORY_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    return load_json_safe(_HISTORY_FILE, [])
 
 
 def _save(history: list[dict]):
     """히스토리 파일 저장"""
     try:
-        with open(_HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(history[:_MAX_HISTORY], f, ensure_ascii=False, indent=2)
+        atomic_write_json(_HISTORY_FILE, history[:_MAX_HISTORY])
     except Exception:
         pass
 
