@@ -135,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import EditorCanvas from '../components/editor/EditorCanvas.vue'
@@ -599,7 +599,15 @@ async function refreshYoloLabel() {
 let _lastCtrlTime = 0
 const CTRL_DOUBLE_TAP_MS = 300
 
+// keep-alive로 에디터 뷰가 항상 mount된 상태(탭 워밍)라도, 전역 keydown 핸들러는
+// 에디터 탭이 *활성*일 때만 동작해야 한다. (안 그러면 t2i 등에서 Ctrl+V/Z/Y/S/O를
+// 에디터가 가로채 일반 붙여넣기/실행취소가 막힘 — 워밍 도입 후 회귀)
+let _editorActive = false
+onActivated(() => { _editorActive = true })
+onDeactivated(() => { _editorActive = false })
+
 function onEditorKeyDown(e: KeyboardEvent) {
+  if (!_editorActive) return   // 에디터 탭이 아닐 땐 단축키 가로채지 않음
   // ── Ctrl 단독 두 번 빠르게 → 변환 reset (모자이크/그리기는 유지)
   // (다른 Ctrl 조합은 _lastCtrlTime 갱신 안 함 — Ctrl+Z 등과 충돌 회피)
   if (e.key === 'Control' && !e.altKey && !e.shiftKey) {
