@@ -1247,18 +1247,25 @@ class GeneratorMainUI(
         Vue localStorage(slim ≤500)는 폴백.
           active: 표시/자동화 덱용(필터 적용) 셋 → last_search_results.json (항상)
           full  : '필터 해제' 베이스(전체) 셋 → last_full_results.json (새 검색 때만 전달)
-        NOTE: os/json은 모듈 레벨 import — 여기서 지역 재import 금지(UnboundLocalError 회피)."""
-        try:
-            cache_dir = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
-            # 대용량(수십만 행)이라 indent 없이 — 원자적 쓰기로 강제 종료 시 절단 방지
-            atomic_write_json(os.path.join(cache_dir, 'last_search_results.json'),
-                              active, indent=None)
-            if full is not None:
-                atomic_write_json(os.path.join(cache_dir, 'last_full_results.json'),
-                                  full, indent=None)
-        except Exception as e:
-            print(f"[Search] 디스크 영속 실패: {e}")
+        NOTE: os/json은 모듈 레벨 import — 여기서 지역 재import 금지(UnboundLocalError 회피).
+        대용량(수십만 행) 직렬화+쓰기를 GUI 스레드에서 하면 검색 완료 시 UI가 멈추므로
+        백그라운드 데몬 스레드로 수행(atomic_write_json은 Qt 비의존이라 스레드 안전)."""
+        cache_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
+
+        def _write():
+            try:
+                # indent 없이 — 원자적 쓰기로 강제 종료 시 절단 방지
+                atomic_write_json(os.path.join(cache_dir, 'last_search_results.json'),
+                                  active, indent=None)
+                if full is not None:
+                    atomic_write_json(os.path.join(cache_dir, 'last_full_results.json'),
+                                      full, indent=None)
+            except Exception as e:
+                print(f"[Search] 디스크 영속 실패: {e}")
+
+        import threading
+        threading.Thread(target=_write, daemon=True).start()
 
     def _restore_runtime_prefs(self, prefs: dict):
         """ui_prefs.json(단일 소스)에서 런타임 상태를 직접 복원.
@@ -1743,7 +1750,8 @@ class GeneratorMainUI(
                 'running': running,
                 'paused': paused,
                 'current_index': current_index,
-                'completed': getattr(self, '_queue_completed_count', 0),
+                # 이번 실행의 '라이브' 완료 수 (이전 실행 종료값이 아니라) — 진행률 정확화
+                'completed': getattr(qm, 'generated_count', 0) if qm else 0,
             }
             self.vue_bridge.queueUpdated.emit(json.dumps(state))
         except Exception as e:
@@ -1793,10 +1801,15 @@ class GeneratorMainUI(
 
     def _on_queue_completed(self, total_count: int):
         self._queue_completed_count = total_count
+        # 자연 완료(큐 소진)와 사용자 수동 중지 구분 — 수동 중지면 '완료' 팝업/성공알림 생략
+        natural = getattr(getattr(self, 'queue_manager', None), 'last_stop_natural', True)
         if hasattr(self, 'vue_bridge'):
-            self.vue_bridge.queueCompleted.emit(json.dumps({'total': total_count}))
-            self.vue_bridge.showNotification.emit('success', f'{total_count}장 생성 완료')
-        QMessageBox.information(self, "Task Complete", f"Successfully generated {total_count} images.")
+            # Vue running 상태 리셋은 항상 (수동 중지에도 큐가 멈췄음을 알려야 함)
+            self.vue_bridge.queueCompleted.emit(json.dumps({'total': total_count, 'natural': natural}))
+            if natural:
+                self.vue_bridge.showNotification.emit('success', f'{total_count}장 생성 완료')
+        if natural:
+            QMessageBox.information(self, "Task Complete", f"Successfully generated {total_count} images.")
 
     def _setup_tray(self):
         self._tray_manager = TrayManager(self)
@@ -1844,12 +1857,13 @@ class GeneratorMainUI(
             self._load_vue_ui()
             self._await_signal(getattr(self, 'vue_viewer', None), 'loadFinished', 12000, app)
 
-            # 4. 로컬 데이터 — 검색 덱 디스크 복원 → Vue
-            _step("검색 결과 복원 중…", 55)
-            self._restore_search_deck()
+            # 4. 검색 덱 디스크 복원은 무거운 JSON 파싱이라 시작(부트스트랩)을 막지 않게
+            #    window 표시 *후*로 지연. (자동화는 즉시 필요 없고, 곧 준비되면 됨)
+            from PyQt6.QtCore import QTimer as _QTimer
+            _QTimer.singleShot(600, self._restore_search_deck)
 
             # 5. 백엔드 연결 + 모델/샘플러/LoRA → Vue
-            _step("백엔드 연결 · 모델 로딩 중…", 78)
+            _step("백엔드 연결 · 모델 로딩 중…", 60)
             self._apply_backend_startup_result()
             self._await_signal(getattr(self, 'info_worker', None), 'info_ready', 8000, app,
                                also='error_occurred')
@@ -2385,13 +2399,42 @@ class GeneratorMainUI(
                 worker.cancel()
         except Exception:
             pass
+        # QThread 워커들 정지·짧게 대기 — Python 데몬 스레드가 아니므로 그냥 두고 os._exit하면
+        # 실행 중 파괴로 Qt 경고/드문 크래시 가능. 각 ~0.5초만 기다리고 안 끝나면 포기(워치독).
+        for _name in ('gen_worker', '_search_worker', 'info_worker',
+                      '_ollama_worker', '_gennl_worker'):
+            try:
+                w = getattr(self, _name, None)
+                if w is None or not hasattr(w, 'isRunning') or not w.isRunning():
+                    continue
+                for _stopper in ('cancel', 'stop'):
+                    fn = getattr(w, _stopper, None)
+                    if callable(fn):
+                        try: fn()
+                        except Exception: pass
+                try: w.quit()
+                except Exception: pass
+                try: w.wait(500)
+                except Exception: pass
+            except Exception:
+                pass
+        # 검색 stale 워커들(브리지가 보관)도 동일 처리
+        try:
+            for w in list(getattr(self.vue_bridge, '_stale_search_workers', []) or []):
+                try:
+                    if w.isRunning():
+                        w.stop(); w.wait(300)
+                except Exception:
+                    pass
+        except Exception:
+            pass
         try:
             # SQLite 정리 — 쓰기마다 commit이라 미close여도 손상은 없지만 깔끔하게
             if hasattr(self, 'db') and hasattr(self.db, 'close'):
                 self.db.close()
         except Exception:
             pass
-        # os._exit 유지 — QApplication.quit()은 QWebEngineProfile/Page 해체 순서
-        # 크래시·행이 재발함 (커밋 24d7856d6, e6f964c6f 이력). 저장은 위에서 끝났고
-        # 워커는 전부 daemon이라 안전.
+        # 최종 종료는 os._exit 유지 — QApplication.quit()은 QWebEngineProfile/Page 해체 순서
+        # 크래시·행이 재발함(커밋 24d7856d6, e6f964c6f 이력). 위에서 설정 저장 + QThread
+        # 정지·대기 + DB close를 마쳤고, 에디터/캡션/영속 쓰기는 Python 데몬 스레드라 안전.
         os._exit(0)

@@ -1357,8 +1357,9 @@ function saveNewPreset() {
   const name = prompt('프리셋 이름:')
   if (!name) return
   action('save_preset_by_name', { name })
-  presetList.value.push(name)
   addToast('success', `프리셋 "${name}" 저장됨`)
+  // 원본 이름을 낙관적으로 넣지 않음 — 백엔드가 정규화해 저장하므로 실제 목록을 재조회
+  setTimeout(loadPresetList, 200)
 }
 
 const showWeightManager = ref(false)

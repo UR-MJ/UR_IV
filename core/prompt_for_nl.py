@@ -37,13 +37,23 @@ def clean_tags_for_nl(prompt: str) -> str:
         return ''
     s = prompt
     s = _RE_LORA.sub('', s)
-    s = _RE_NEG_GROUP.sub('', s)        # 네거티브 그룹 먼저 (내부 콤마 포함) 제거
+    # 네거티브 그룹 제거 — 중첩( ((tag:-1.2)) )에서 안쪽이 먼저 지워지고 바깥
+    # 빈 괄호가 남으므로, 변화가 없을 때까지 반복.
+    for _ in range(5):
+        s2 = _RE_NEG_GROUP.sub('', s)
+        if s2 == s:
+            break
+        s = s2
     s = _RE_POS_GROUP.sub(r'\1', s)     # 양수 가중치 → 내용만
+    # 남은 빈/외톨이 괄호 정리 — '1girl, (), blue hair' → '1girl, , blue hair'
+    s = re.sub(r'\(\s*\)', '', s)
 
     out = []
     for raw in s.split(','):
         t = raw.strip()
-        if not t:
+        # 영숫자/한글이 전혀 없는 토큰(외톨이 '(' ')' '()' 등)은 버림.
+        # 'alex (stardew valley)'처럼 괄호가 정상 포함된 토큰은 보존(영숫자 있음).
+        if not t or not re.search(r'[A-Za-z0-9가-힣]', t):
             continue
         low = t.lower()
         if t.startswith('@'):           # 화풍/LoRA 트리거 태그

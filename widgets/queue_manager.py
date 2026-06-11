@@ -58,10 +58,12 @@ class QueueManager(QObject):
         self.queue_panel.update_progress(0, self.total_count)
         self._process_next()
 
-    def stop(self):
-        """자동화 중지"""
+    def stop(self, natural: bool = False):
+        """자동화 중지. natural=True면 큐를 다 소진한 '정상 완료', False면 사용자 수동 중지.
+        (수동 중지일 때 '완료' 팝업/성공 알림을 띄우지 않도록 _on_queue_completed가 읽음)"""
         self.is_running = False
         self.is_paused = False
+        self.last_stop_natural = natural
         self.paused_changed.emit(False)
         self.queue_panel.set_processing(False)
         self.queue_panel.reset_progress()
@@ -95,7 +97,7 @@ class QueueManager(QObject):
         if not item:
             # 큐가 비었으면 자연 완료
             if self.generated_count > 0:
-                self.stop()
+                self.stop(natural=True)
                 return
             self.need_new_prompt.emit()
             return
@@ -153,7 +155,7 @@ class QueueManager(QObject):
 
             if self.queue_panel.is_empty() and is_last_of_group:
                 # 큐가 비어있고 마지막 그룹 → 자연 완료
-                self.stop()
+                self.stop(natural=True)
             else:
                 self._process_next()
 

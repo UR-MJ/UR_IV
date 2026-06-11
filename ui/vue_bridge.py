@@ -1332,8 +1332,10 @@ class VueBridge(QObject):
     def getPresetData(self, name: str) -> str:
         """프리셋 데이터 반환"""
         import os
+        from core.file_naming import sanitize_filename
         preset_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'presets')
-        fp = os.path.join(preset_dir, f"{name}.json")
+        # 읽기 경로도 정규화 — 저장/삭제와 동일 규칙(traversal 차단, 라운드트립 일치)
+        fp = os.path.join(preset_dir, f"{sanitize_filename(name, fallback='')}.json")
         try:
             if os.path.exists(fp):
                 with open(fp, 'r', encoding='utf-8') as f:

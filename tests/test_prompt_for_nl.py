@@ -58,6 +58,21 @@ class TestCleanTagsForNl(unittest.TestCase):
                     '@enast', '@o6nine', 'eyelashes', 'skinny', 'lips', 'censored'):
             self.assertNotIn(bad, out)
 
+    def test_nested_negative_weight_leaves_no_stray_parens(self):
+        # ((tag:-1.2)) — 안쪽 제거 후 바깥 빈 괄호가 남던 버그 회귀 방지
+        s = "1girl, ((bad hands, extra fingers:-1.2)), blue hair"
+        out = self._tags(s)
+        self.assertEqual(out, ['1girl', 'blue hair'])
+        self.assertNotIn('(', clean_tags_for_nl(s))  # 이 입력엔 캐릭터 괄호 없음 → 괄호 0
+        self.assertNotIn(')', clean_tags_for_nl(s))
+
+    def test_nested_does_not_break_character_parens(self):
+        # 중첩 네거티브 정리가 정상 캐릭터 괄호를 깨면 안 됨
+        s = "1boy, alex (stardew valley), ((censored:-1.1)), brown hair"
+        out = self._tags(s)
+        self.assertIn('alex (stardew valley)', out)
+        self.assertNotIn('censored', out)
+
     def test_empty(self):
         self.assertEqual(clean_tags_for_nl(''), '')
         self.assertEqual(clean_tags_for_nl(None), '')

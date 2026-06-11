@@ -310,14 +310,25 @@ function doRedo() {
 function onUndo() { if (canvasRef.value?.undoMask()) return; doUndo() }
 function onRedo() { if (canvasRef.value?.redoMask()) return; doRedo() }
 
+// 에디터 작업 순서 보장 — editorProcess는 클릭마다 백그라운드 스레드를 띄우고 job_id를
+// 반환한다. 느린 작업 A 뒤에 빠른 B를 실행하면 A 결과가 *나중*에 도착해 B를 덮을 수 있다.
+// 시작 시 받은 job_id 중 최대값(_latestEditorJob)만 유효로 보고, 더 낮은 job 결과는 버린다.
+let _latestEditorJob = 0
+function _captureJob(result: any) {
+  if (result && typeof result.job_id === 'number' && result.job_id > _latestEditorJob) {
+    _latestEditorJob = result.job_id
+  }
+}
+
 async function doOp(operation: string, params: any = {}) {
   if (!imagePath.value) return
   const backend: any = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
-  // 처리는 비동기 — 결과는 editorResult 이벤트로 도착. 콜백은 즉시 거절(경로/파라미터 오류)만.
+  // 처리는 비동기 — 결과는 editorResult 이벤트로 도착. 콜백은 즉시 거절(경로/파라미터 오류)만 + job_id 캡처.
   backend.editorProcess(cleanPath, operation, JSON.stringify(params), (json: string) => {
     try {
       const result = JSON.parse(json)
+      _captureJob(result)
       if (result.error) console.error('[Editor] error:', result.error)
     } catch (e) { console.error('[Editor] parse error:', e) }
   })
@@ -338,6 +349,7 @@ async function doOpWithMask(operation: string, params: any = {}) {
   backend.editorProcess(cleanPath, operation, JSON.stringify(fullParams), (json: string) => {
     try {
       const result = JSON.parse(json)
+      _captureJob(result)
       if (result.error) console.error('[Editor] error:', result.error)
     } catch (e) { console.error('[Editor] parse error:', e) }
   })
@@ -347,6 +359,10 @@ async function doOpWithMask(operation: string, params: any = {}) {
 function onEditorResult(json: string) {
   try {
     const result = JSON.parse(json)
+    // 순서 역전 차단 — 더 새 작업(job_id↑)이 이미 시작됐으면 늦게 온 옛 결과는 버림
+    if (typeof result.job_id === 'number' && result.job_id < _latestEditorJob) {
+      return
+    }
     if (result.path) {
       pushState(result.path)
       if (result.operation === 'auto_censor') detectStatus.value = '완료'
@@ -439,10 +455,11 @@ async function runAutoCensor(params: any) {
   if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
     payload.exclude_prompt = String(params.excludePrompt).trim()
   }
-  // 결과는 editorResult 이벤트로 도착 — 콜백은 즉시 거절만 처리
+  // 결과는 editorResult 이벤트로 도착 — 콜백은 즉시 거절만 처리 + job_id 캡처
   backend.editorProcess(cleanPath, 'auto_censor', JSON.stringify(payload), (json: string) => {
     try {
       const result = JSON.parse(json)
+      _captureJob(result)
       if (result.error) detectStatus.value = result.error
     } catch { detectStatus.value = '오류' }
   })
@@ -461,10 +478,11 @@ async function runAutoDetect(params: any) {
   if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
     payload.exclude_prompt = String(params.excludePrompt).trim()
   }
-  // 결과(mask_base64)는 editorResult 이벤트로 도착 — 콜백은 즉시 거절만 처리
+  // 결과(mask_base64)는 editorResult 이벤트로 도착 — 콜백은 즉시 거절만 처리 + job_id 캡처
   backend.editorProcess(cleanPath, 'auto_detect', JSON.stringify(payload), (json: string) => {
     try {
       const result = JSON.parse(json)
+      _captureJob(result)
       if (result.error) detectStatus.value = result.error
     } catch { detectStatus.value = '오류' }
   })

@@ -25,8 +25,9 @@ class SettingsMixin:
         """설정 저장"""
         try:
             settings = self._build_settings_dict()
-            with open(PROMPT_SETTINGS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(settings, f, ensure_ascii=False, indent=4)
+            # 원자적 쓰기 — 비정상 종료/디스크 오류 시 핵심 설정 파일 절단 방지
+            from utils.atomic_json import atomic_write_json
+            atomic_write_json(PROMPT_SETTINGS_FILE, settings, indent=4)
             self.show_status("✅ 설정이 저장되었습니다.", 3000)
         except Exception as e:
             from utils.app_logger import get_logger

@@ -1,6 +1,7 @@
 # workers/search_worker.py
 import os
 import re
+import threading
 import pandas as pd
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -8,6 +9,12 @@ class PandasSearchWorker(QThread):
     """Pandas를 이용한 검색 워커"""
     results_ready = pyqtSignal(list, int)
     status_update = pyqtSignal(str)
+
+    # 클래스 전역 캐시(cached_df/cached_col_lower) 보호 — 이전 워커가 1초 내 종료되지
+    # 않아 새 워커와 겹칠 때, 서로 다른 연도/등급 로드가 캐시를 동시 변이해 인덱스 불일치
+    # 마스크/오데이터/RAM 중복이 나던 경합 방지. run() 전체를 직렬화한다(검색은 사실상
+    # 사용자 직렬이라 동시성 손실 무해).
+    _run_lock = threading.RLock()
 
     # 검색에 필요한 컬럼만 로드 (메모리 절약)
     # image_width/height 추가 — 자동(PARQUET) 해상도 + Search 결과 해상도 표기용.
@@ -66,7 +73,18 @@ class PandasSearchWorker(QThread):
         self.is_running = True
 
     def run(self):
-        """검색 실행"""
+        """검색 실행 — 클래스 락으로 직렬화(공유 캐시 경합 방지). 대체된 워커는
+        락을 기다리는 동안에도 is_running=False면 즉시 빠져나간다."""
+        try:
+            if not self.is_running:   # 이미 대체됨 — 락 잡기 전 빠른 탈출
+                return
+            with PandasSearchWorker._run_lock:
+                self._run_locked()
+        except Exception as e:
+            self.status_update.emit(f"❌ 오류 발생: {str(e)}")
+            self.results_ready.emit([], 0)
+
+    def _run_locked(self):
         try:
             if not self._load_data():
                 return
