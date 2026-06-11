@@ -59,11 +59,17 @@ class UISetupMixin:
         self.web_profile.setCachePath(os.path.join(base_cache_path, "Cache"))
         self.web_profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
         
+        from PyQt6.QtGui import QColor
+        # 배경을 어둡게 — Vue가 그려지기 전(초기 로딩/전환 순간) 창 기본 '흰색'이 비쳐
+        # '응답 없음'처럼 보이던 문제 방지. 창/스택/뷰/페이지 모두 동일 다크로 고정.
+        _DARK = "#0d0d0d"
+        self.setStyleSheet(f"QMainWindow {{ background: {_DARK}; }}")
         self.vue_viewer = QWebEngineView()
-        self.vue_viewer.setStyleSheet("border: none; background: transparent; margin: 0px; padding: 0px;")
-        
+        self.vue_viewer.setStyleSheet(f"border: none; background: {_DARK}; margin: 0px; padding: 0px;")
+
         # 중요: 새로 만든 프로필로 페이지 생성
         page = _DebugPage(self.web_profile, self.vue_viewer)
+        page.setBackgroundColor(QColor(_DARK))  # 페이지 자체 배경(첫 페인트 전)도 다크
         self.vue_viewer.setPage(page)
 
         channel = QWebChannel(page)
@@ -81,13 +87,16 @@ class UISetupMixin:
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
 
+        # Vue 로드(setUrl)는 백엔드 선택 *후* _load_vue_ui()에서 시작한다.
+        # (다이얼로그가 떠 있는 동안 Vue/Chromium 로딩이 CPU를 경쟁해 선택이 버벅이던 문제 방지 —
+        #  '백엔드 선택 → 로드 → UI' 순서)
         frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend_dist', 'index.html')
-        if os.path.exists(frontend_path):
-            self.vue_viewer.setUrl(QUrl.fromLocalFile(frontend_path))
+        self._pending_vue_url = QUrl.fromLocalFile(frontend_path) if os.path.exists(frontend_path) else None
 
         # QStackedWidget: 0=Vue SPA, 1=Web, 2=Backend
         from PyQt6.QtWidgets import QStackedWidget
         self._main_stack = QStackedWidget()
+        self._main_stack.setStyleSheet(f"background: {_DARK};")
         self._main_stack.setContentsMargins(0, 0, 0, 0)
         self._main_stack.addWidget(self.vue_viewer)  # index 0
 
@@ -670,6 +679,15 @@ class UISetupMixin:
             except Exception as e:
                 print(f"[LoRA] 프리로드 건너뜀: {e}")
         threading.Thread(target=_do, daemon=True).start()
+
+    def _load_vue_ui(self):
+        """백엔드 선택 완료 후 Vue SPA 로드 시작 (지연 로드).
+        _setup_ui에서 미뤄둔 setUrl을 여기서 호출 — 선택 다이얼로그가 떠 있는 동안
+        Vue/Chromium 로딩이 경쟁하지 않게 하여 선택을 매끄럽게 한다."""
+        url = getattr(self, '_pending_vue_url', None)
+        if url is not None and hasattr(self, 'vue_viewer'):
+            self.vue_viewer.setUrl(url)
+            self._pending_vue_url = None
 
     def _on_lora_inserted(self, lora_text: str):
         """LoRA를 활성 패널에 추가 + Vue로 전달"""

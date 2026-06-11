@@ -87,6 +87,10 @@ def main():
     sys.excepthook = _excepthook
 
     window = GeneratorMainUI()
+    # 스플래시 로딩 시퀀스: 백엔드 선택 → 로딩창 → 데이터 준비 → 완성된 UI.
+    # (실패해도 내부 폴백으로 앱은 뜸. 시작 다이얼로그 X면 SystemExit로 종료.)
+    if hasattr(window, '_run_startup_sequence'):
+        window._run_startup_sequence(app)
     window.showMaximized()
 
     sys.exit(app.exec())

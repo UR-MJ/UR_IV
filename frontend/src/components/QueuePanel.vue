@@ -1,40 +1,86 @@
 <template>
-  <div class="queue-panel" :class="{ expanded: isExpanded }">
-    <div class="queue-header" @click="isExpanded = !isExpanded">
-      <span class="title">
-        QUEUE
-        <span class="count-badge" v-if="items.length">{{ items.length }}</span>
-        <span class="running-badge" v-if="isRunning && !isPaused">▶ RUNNING</span>
-        <span class="paused-badge" v-if="isPaused">⏸ PAUSED</span>
-        <span class="selected-badge" v-if="selectedIds.size > 0">{{ selectedIds.size }} 선택됨</span>
-      </span>
-      <div class="queue-actions" @click.stop>
-        <button class="btn" @click="startQueue" v-if="items.length && !isRunning">▶ 시작</button>
-        <button class="btn" @click="pauseQueue" v-if="isRunning && !isPaused" title="일시정지">⏸ 일시정지</button>
-        <button class="btn primary" @click="resumeQueue" v-if="isPaused" title="재개">▶ 재개</button>
-        <button class="btn danger" @click="stopQueue" v-if="isRunning">⏹ 중지</button>
-        <button class="btn danger" @click="removeSelected" v-if="selectedIds.size > 0" title="선택한 항목 삭제">
-          🗑 선택삭제 ({{ selectedIds.size }})
-        </button>
-        <button class="btn" @click="clearAll" v-if="items.length && !isRunning && selectedIds.size === 0">🗑 전체</button>
-        <span class="expand-icon">{{ isExpanded ? '▼' : '▲' }}</span>
-      </div>
-    </div>
-    <div class="queue-strip" v-if="isExpanded && items.length">
-      <template v-for="(item, i) in items" :key="item.id || i">
-        <button class="q-chip"
-          :class="{ active: i === currentIdx && isRunning, done: item._done }"
-          :title="(item.prompt || 'No prompt').toString().substring(0, 160) + '\n(클릭하여 편집)'"
-          @click="openEdit(item, i)">
-          <span class="q-chip-st" v-if="i === currentIdx && isRunning && !isPaused">⏳</span>
-          <span class="q-chip-st" v-else-if="i === currentIdx && isPaused">⏸</span>
-          <span class="q-chip-st" v-else-if="item._done">✅</span>
-          <span class="q-chip-num">큐{{ i + 1 }}</span>
-          <span class="q-chip-prev">{{ (item.prompt || '—').toString().slice(0, 16) }}</span>
-        </button>
-        <span class="q-arrow" v-if="i < items.length - 1">→</span>
-      </template>
-    </div>
+  <div class="queue-root">
+    <!-- 슬림 핀 — 항상 보임. 접혀도 카운트/러닝 상태가 보이므로 '있는 이유'가 살아있음. -->
+    <button class="queue-pin"
+      :class="{ running: isRunning && !isPaused, paused: isPaused, open: drawerOpen, bump: pinBump }"
+      @click="drawerOpen = !drawerOpen"
+      :title="isRunning ? '큐 실행 중 — 클릭하여 관리' : '큐 열기 (관리)'">
+      <span class="qp-ico">≣</span>
+      <span class="qp-label">QUEUE</span>
+      <span class="qp-count" v-if="items.length">{{ items.length }}</span>
+      <span class="qp-run" v-if="isRunning && !isPaused" title="실행 중">▶</span>
+      <span class="qp-run paused" v-else-if="isPaused" title="일시정지">⏸</span>
+    </button>
+
+    <!-- 우측 슬라이드 드로어 — 세로 리스트라 항목이 안 찌그러짐 -->
+    <transition name="qd-fade">
+      <div class="qd-backdrop" v-if="drawerOpen" @click="drawerOpen = false"></div>
+    </transition>
+    <transition name="qd-slide">
+      <aside class="queue-drawer" v-if="drawerOpen">
+        <div class="qd-head">
+          <span class="title">
+            QUEUE
+            <span class="count-badge" v-if="items.length">{{ items.length }}</span>
+            <span class="running-badge" v-if="isRunning && !isPaused">▶ RUNNING</span>
+            <span class="paused-badge" v-if="isPaused">⏸ PAUSED</span>
+            <span class="selected-badge" v-if="selectedIds.size > 0">{{ selectedIds.size }} 선택됨</span>
+          </span>
+          <button class="qd-x" @click="drawerOpen = false" title="닫기 (Esc)">✕</button>
+        </div>
+
+        <div class="qd-actions">
+          <button class="btn" @click="startQueue" v-if="items.length && !isRunning">▶ 시작</button>
+          <button class="btn" @click="pauseQueue" v-if="isRunning && !isPaused" title="일시정지">⏸ 일시정지</button>
+          <button class="btn primary" @click="resumeQueue" v-if="isPaused" title="재개">▶ 재개</button>
+          <button class="btn danger" @click="stopQueue" v-if="isRunning">⏹ 중지</button>
+          <button class="btn danger" @click="removeSelected" v-if="selectedIds.size > 0" title="선택한 항목 삭제">
+            🗑 선택삭제 ({{ selectedIds.size }})
+          </button>
+          <button class="btn" @click="clearAll" v-if="items.length && !isRunning && selectedIds.size === 0">🗑 전체</button>
+        </div>
+
+        <div class="queue-progress" v-if="isRunning">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: progressPct + '%' }"></div>
+          </div>
+          <span class="progress-text">
+            {{ completedCount }} / {{ items.length }}
+            <span v-if="etaText" class="eta">· ETA {{ etaText }}</span>
+          </span>
+        </div>
+
+        <!-- 세로 스크롤 리스트 -->
+        <div class="qd-list" v-if="items.length">
+          <div v-for="(item, i) in items" :key="item.id || i"
+            class="q-row"
+            :class="{ active: i === currentIdx && isRunning, done: item._done, sel: item.id && selectedIds.has(item.id) }"
+            @click="onItemClick($event, item, i)"
+            :title="(item.prompt || 'No prompt').toString().substring(0, 200)">
+            <span class="q-row-st">
+              <template v-if="i === currentIdx && isRunning && !isPaused">⏳</template>
+              <template v-else-if="i === currentIdx && isPaused">⏸</template>
+              <template v-else-if="item._done">✅</template>
+              <template v-else>{{ i + 1 }}</template>
+            </span>
+            <span class="q-row-body">
+              <span class="q-row-prompt">{{ (item.prompt || '—').toString().slice(0, 90) || '—' }}</span>
+              <span class="q-row-neg" v-if="item.negative_prompt">⊘ {{ item.negative_prompt.toString().slice(0, 60) }}</span>
+            </span>
+            <span class="q-row-tools" @click.stop>
+              <button class="qr-btn" @click="moveItem(item, 'up')" :disabled="!canMoveUp(i)" title="위로">▲</button>
+              <button class="qr-btn" @click="moveItem(item, 'down')" :disabled="!canMoveDown(i)" title="아래로">▼</button>
+              <button class="qr-btn" @click="openEdit(item, i)" title="편집">✎</button>
+              <button class="qr-btn danger" @click="removeItem(item, i)" title="삭제">🗑</button>
+            </span>
+          </div>
+        </div>
+        <div class="queue-empty" v-else>
+          대기열이 비어있습니다<br>
+          <span class="qe-hint">생성 화면에서 프롬프트를 큐에 추가하세요</span>
+        </div>
+      </aside>
+    </transition>
 
     <!-- 큐 항목 편집 모달 -->
     <div class="qe-overlay" v-if="editItem" @mousedown.self="closeEdit">
@@ -57,18 +103,6 @@
         </div>
       </div>
     </div>
-    <div class="queue-progress" v-if="isRunning">
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: progressPct + '%' }"></div>
-      </div>
-      <span class="progress-text">
-        {{ completedCount }} / {{ items.length }}
-        <span v-if="etaText" class="eta">· ETA {{ etaText }}</span>
-      </span>
-    </div>
-    <div class="queue-empty" v-if="isExpanded && !items.length">
-      대기열이 비어있습니다
-    </div>
   </div>
 </template>
 
@@ -86,7 +120,8 @@ interface QueueItem {
 }
 
 const items = ref<QueueItem[]>([])
-const isExpanded = ref(false)
+const drawerOpen = ref(false)   // 우측 드로어 열림 (옛 isExpanded 대체)
+const pinBump = ref(false)      // 항목 추가 시 핀 1회 강조 애니메이션
 const isRunning = ref(false)
 const isPaused = ref(false)
 const currentIdx = ref(-1)
@@ -227,21 +262,20 @@ function stopQueue() {
 function pauseQueue() { requestAction('pause_queue') }
 function resumeQueue() { requestAction('resume_queue') }
 
+// 핀 강조 — 항목이 큐에 추가되면 1회 펄스 (드로어 안 열어도 변화 인지)
+let _bumpTimer: ReturnType<typeof setTimeout> | null = null
+function _bumpPin() {
+  pinBump.value = true
+  if (_bumpTimer) clearTimeout(_bumpTimer)
+  _bumpTimer = setTimeout(() => { pinBump.value = false }, 600)
+}
+// queueItemAdded가 누락되는 경로(직접 queueUpdated만 오는 경우)도 커버
+watch(() => items.value.length, (n, old) => { if (n > old) _bumpPin() })
+
 // 이벤트 disconnect 핸들 — onUnmounted에서 정리 (메모리 누수 방지)
 const _unsubs: Array<() => void> = []
 
-// 자동화 자동 재시작 옵션 — Settings에서 토글, 여기선 읽기만
-// 기본값 ON — 사용자가 명시적으로 'false' 저장한 경우만 OFF
-// 기본 OFF — 큐를 열어 보기만 해도 이전 세션 큐가 자동 재시작되던 문제 방지.
-// 자동 재시작을 원하면 설정에서 켜면 됨(localStorage 'queue.autoResumeOnStart'='true').
-const autoResumeOnStart = ref(localStorage.getItem('queue.autoResumeOnStart') === 'true')
-// Settings에서 변경 시 즉시 반영 (storage 이벤트는 다른 탭, 같은 탭은 작동 안 해서 unused지만 안전망)
-function _onStorageEvent(e: StorageEvent) {
-  if (e.key === 'queue.autoResumeOnStart') {
-    autoResumeOnStart.value = e.newValue !== 'false'
-  }
-}
-let _autoResumeTried = false  // 1회만 시도 (재실행 방지)
+// (자동 재시작 기능 제거됨 — 큐는 오직 '▶ 시작' 버튼으로만 시작. 사용자 요청.)
 
 onMounted(() => {
   // Python → Vue: 대기열 상태 실시간 동기화
@@ -262,28 +296,16 @@ onMounted(() => {
       if (typeof data.paused === 'boolean') isPaused.value = data.paused
       if (typeof data.current_index === 'number') currentIdx.value = data.current_index
       if (typeof data.completed === 'number') completedCount.value = data.completed
-      // 자동 확장
-      if (data.items?.length > 0) isExpanded.value = true
-      // 시작 시 복구된 큐가 있으면 사용자 옵션에 따라 자동 재시작
-      if (!_autoResumeTried && autoResumeOnStart.value
-          && items.value.length > 0 && !isRunning.value) {
-        _autoResumeTried = true
-        // 살짝 늦춰서 — backend도 준비될 시간 + 사용자가 토스트 보고 인지 가능
-        setTimeout(() => {
-          if (items.value.length > 0 && !isRunning.value) {
-            requestAction('show_toast', { type: 'info',
-              msg: `이전 세션의 대기열 ${items.value.length}개 자동 재시작 중...` })
-            startQueue()
-          }
-        }, 1500)
-      }
+      // 자동으로 드로어를 열지 않음 — 오버레이가 매번 튀어나오면 거슬림.
+      // 대신 항상 보이는 핀의 카운트로 큐 변화를 인지(watch로 핀 강조).
+      // 자동시작 없음 — 큐 추가/복원만으로는 절대 생성 시작 안 함. 오직 '▶ 시작' 버튼만.
     } catch {}
   }))
 
   // 아이템 추가 이벤트 — queueUpdated가 전체 목록(id 포함)을 권위 있게 보내므로
-  // 여기선 패널만 펼친다. (예전엔 여기서 push했는데, queueItemAdded payload에 id가 없어
+  // 여기선 핀만 1회 강조한다. (예전엔 여기서 push했는데, queueItemAdded payload에 id가 없어
   // 중복 체크를 통과하지 못하고 매번 push되어 '깡통 큐' 중복 항목이 생기던 버그였음.)
-  _unsubs.push(onBackendEvent('queueItemAdded', () => { isExpanded.value = true }))
+  _unsubs.push(onBackendEvent('queueItemAdded', () => { _bumpPin() }))
 
   // 완료 이벤트
   _unsubs.push(onBackendEvent('queueCompleted', (json: string) => {
@@ -297,16 +319,19 @@ onMounted(() => {
   }))
 })
 
-// Settings에서 autoResumeOnStart 변경 시 즉시 반영 (다른 창/탭 — 같은 창은 거의 불필요)
-function _onEditKey(e: KeyboardEvent) { if (e.key === 'Escape' && editItem.value) { e.stopPropagation(); closeEdit() } }
+// Esc — 편집 모달 먼저, 없으면 드로어 닫기
+function _onEditKey(e: KeyboardEvent) {
+  if (e.key !== 'Escape') return
+  if (editItem.value) { e.stopPropagation(); closeEdit() }
+  else if (drawerOpen.value) { e.stopPropagation(); drawerOpen.value = false }
+}
 onMounted(() => {
-  window.addEventListener('storage', _onStorageEvent)
   window.addEventListener('keydown', _onEditKey, true)
 })
 onUnmounted(() => {
   for (const off of _unsubs) { try { off() } catch {} }
   _unsubs.length = 0
-  window.removeEventListener('storage', _onStorageEvent)
+  if (_bumpTimer) { clearTimeout(_bumpTimer); _bumpTimer = null }
   window.removeEventListener('keydown', _onEditKey, true)
 })
 
@@ -314,47 +339,83 @@ defineExpose({ items })
 </script>
 
 <style scoped>
-.queue-panel {
-  background: #0A0A0A; min-height: 36px; max-height: 240px;
-  display: flex; flex-direction: column; flex-shrink: 0;
-  border-top: 1px solid var(--border);
+.queue-root { display: contents; }  /* 레이아웃 흐름 차지 안 함 — 핀/드로어는 모두 fixed */
+
+/* ── 슬림 핀 (항상 보임, 우하단 플로팅) ── */
+.queue-pin {
+  position: fixed; right: 18px; bottom: 32px;  /* 하단 VRAM 바(22px) 위로 띄움 */
+  z-index: 2400; display: flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 14px; border-radius: 18px;
+  background: #141414; border: 1px solid var(--border); color: var(--text-muted);
+  font-size: 11px; font-weight: 800; letter-spacing: 0.5px; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4); transition: 0.18s;
 }
-.queue-panel.expanded { min-height: 80px; }
-.queue-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 16px; cursor: pointer; user-select: none;
+.queue-pin:hover { background: #1e1e1e; color: #E8E8E8; border-color: var(--accent); }
+.queue-pin.open { border-color: var(--accent); color: var(--accent); }
+.queue-pin.running { border-color: #4ade80; color: #4ade80; }
+.queue-pin.paused { border-color: #fbbf24; color: #fbbf24; }
+.queue-pin.bump { animation: pin-bump 0.55s ease; }
+@keyframes pin-bump { 0% { transform: scale(1); } 30% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.qp-ico { font-size: 13px; opacity: 0.9; }
+.qp-label { letter-spacing: 1px; }
+.qp-count { background: var(--accent); color: #000; min-width: 16px; text-align: center; padding: 1px 5px; border-radius: 9px; font-size: 10px; font-weight: 900; }
+.queue-pin.running .qp-count { background: #4ade80; }
+.queue-pin.paused .qp-count { background: #fbbf24; }
+.qp-run { font-size: 10px; }
+.qp-run.paused { color: #fbbf24; }
+
+/* ── 우측 드로어 ── */
+.qd-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 2450; }
+.queue-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 94vw);
+  z-index: 2500; background: var(--bg-secondary); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; box-shadow: -10px 0 40px rgba(0,0,0,0.55);
 }
-.title { color: var(--text-muted); font-size: 11px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+.qd-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.title { color: var(--text-secondary); font-size: 12px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .count-badge { background: var(--accent); color: #000; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 900; }
 .running-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 900; animation: pulse 1.5s infinite; }
 .paused-badge { background: #fbbf24; color: #000; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 900; }
 .selected-badge { background: #60a5fa; color: #000; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 900; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-.queue-actions { display: flex; align-items: center; gap: 6px; }
-.expand-icon { color: var(--text-muted); font-size: 10px; }
-.btn { padding: 3px 10px; background: #181818; border: none; border-radius: 4px; color: #585858; font-size: 10px; cursor: pointer; font-weight: 600; }
+.qd-x { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 30px; height: 30px; cursor: pointer; font-size: 13px; }
+.qd-x:hover { color: var(--text-primary); border-color: var(--accent); }
+
+.qd-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.btn { padding: 5px 12px; background: #181818; border: none; border-radius: 5px; color: #9a9a9a; font-size: 11px; cursor: pointer; font-weight: 700; }
 .btn:hover { background: #222; color: #E8E8E8; }
 .btn.danger { color: #f87171; }
 .btn.primary { background: var(--accent); color: #000; }
 .btn.primary:hover { background: #fff176; }
 
-/* (auto-resume 토글은 Settings로 이전됨) */
-
-/* 가로 칩 스트립 — 큐1 → 큐2 → 큐3 */
-.queue-strip { display: flex; align-items: center; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 6px 12px; }
-.q-chip {
-  flex-shrink: 0; width: 86px; height: 50px; display: flex; flex-direction: column;
-  align-items: flex-start; justify-content: center; gap: 1px; padding: 5px 8px;
-  background: #161616; border: 1px solid var(--border); border-radius: 8px;
-  cursor: pointer; transition: 0.15s; position: relative; text-align: left;
+/* ── 세로 리스트 (찌그러짐 없음) ── */
+.qd-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
+.q-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin: 3px 0;
+  background: #141414; border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer; transition: 0.12s;
 }
-.q-chip:hover { background: #1f1f1f; border-color: var(--accent); }
-.q-chip.active { border-color: var(--accent); background: rgba(226,179,64,0.1); box-shadow: 0 0 0 1px var(--accent) inset; }
-.q-chip.done { opacity: 0.45; }
-.q-chip-st { position: absolute; top: 3px; right: 5px; font-size: 11px; }
-.q-chip-num { color: var(--accent); font-weight: 800; font-size: 11px; }
-.q-chip-prev { color: var(--text-muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
-.q-arrow { flex-shrink: 0; color: #444; font-size: 12px; user-select: none; }
+.q-row:hover { background: #1c1c1c; border-color: #333; }
+.q-row.active { border-color: var(--accent); background: rgba(226,179,64,0.1); }
+.q-row.sel { border-color: #60a5fa; background: rgba(96,165,250,0.08); }
+.q-row.done { opacity: 0.45; }
+.q-row-st { flex-shrink: 0; width: 22px; text-align: center; color: var(--accent); font-weight: 800; font-size: 12px; }
+.q-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.q-row-prompt { color: var(--text-primary); font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-row-neg { color: #f8717188; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-row-tools { flex-shrink: 0; display: flex; gap: 3px; opacity: 0; transition: 0.12s; }
+.q-row:hover .q-row-tools { opacity: 1; }
+.qr-btn { width: 24px; height: 24px; background: #222; border: 1px solid var(--border); border-radius: 5px; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 0; }
+.qr-btn:hover:not(:disabled) { color: #E8E8E8; border-color: var(--accent); }
+.qr-btn.danger:hover:not(:disabled) { color: #f87171; border-color: #f87171; }
+.qr-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* 드로어 슬라이드/백드롭 트랜지션 */
+.qd-slide-enter-active, .qd-slide-leave-active { transition: transform 0.22s ease; }
+.qd-slide-enter-from, .qd-slide-leave-to { transform: translateX(100%); }
+.qd-fade-enter-active, .qd-fade-leave-active { transition: opacity 0.22s ease; }
+.qd-fade-enter-from, .qd-fade-leave-to { opacity: 0; }
+.qe-hint { color: #4a4a4a; font-size: 10px; }
 
 /* 큐 항목 편집 모달 */
 .qe-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }

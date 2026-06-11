@@ -95,22 +95,11 @@ class GeneratorMainUI(
             self.connect_signals()
             self.load_settings()
 
-            # 4-A. 검색 결과 덱 디스크 복원 — 자동화가 Search 탭 방문 없이도 즉시 사용 가능.
-            #   기존엔 Vue SearchView onMounted에서만 loadLastSearchResults가 호출돼,
-            #   앱이 다른 탭(T2I 등)에서 시작하면 shuffled_prompt_deck이 빈 채로 남아
-            #   '자동화 종료 후 재시작 시 검색 import 안 됨 → 자동화 불가' 발생.
-            #   여기서 동기 복원하면 어느 탭에서 시작하든 덱이 준비됨.
-            try:
-                if hasattr(self, 'vue_bridge') and hasattr(self.vue_bridge, 'loadLastSearchResults'):
-                    self.vue_bridge.loadLastSearchResults()
-            except Exception as e:
-                print(f"[Search] 시작 시 덱 복원 실패: {e}")
+            # 5. 백엔드 선택 + 선(先)로딩 + Vue 준비는 main()이 _run_startup_sequence로
+            #   스플래시와 함께 구동한다 (백엔드 선택 → 로딩창 → 데이터 준비 → 완성된 UI 노출).
+            #   __init__은 UI/시그널/대기열/트레이 구성까지만 — 다이얼로그/무거운 로딩은 안 함.
 
-            # 5. 백엔드 브릿지 가동
-            self._startup_backend_check()
-            self._apply_backend_startup_result()
-            
-            # 6. 대기열 및 시스템 트레이
+            # 8. 대기열 및 시스템 트레이
             self._setup_queue()
             self._setup_tray()
 
@@ -1816,11 +1805,131 @@ class GeneratorMainUI(
         self._tray_manager.quit_requested.connect(self._quit_app)
         self._tray_manager.show()
 
-    def _update_vram_status(self):
+    def _run_startup_sequence(self, app):
+        """스플래시 로딩 화면과 함께 시작 구동 (main()이 showMaximized 전에 호출).
+
+        순서: 백엔드 선택 → 스플래시 → Vue 로드(완료 대기) → 검색 덱 복원 →
+              백엔드 연결·모델 로딩(완료 대기) → 스플래시 닫고 메인 창 노출.
+        Vue를 (창 숨긴 채) 먼저 로드해 두므로, 이후 데이터 push가 도달해 패널이
+        '뒤에서 천천히'가 아니라 노출 시점에 채워진다.
+
+        안전망: 어느 단계가 실패해도 앱은 뜬다 — except에서 핵심 단계(Vue 로드/백엔드
+        적용/덱 복원)를 폴백 보장하고, 모든 대기는 타임아웃이 있어 무한 멈춤이 없다.
+        시작 다이얼로그 X(SystemExit)만 그대로 전파해 종료한다."""
+        splash = None
         try:
-            from backends import get_backend
-            backend = get_backend()
-            if backend:
+            # 1. 백엔드 선택 — 스플래시 전(다이얼로그 단독 노출, 깔끔)
+            self._startup_backend_check()
+
+            # 2. 스플래시 표시 (이후 로딩 단계 시각화)
+            try:
+                from ui.splash_loader import SplashLoader
+                splash = SplashLoader()
+                splash.show()
+                app.processEvents()
+            except Exception as e:
+                print(f"[Startup] splash 생성 실패(무시): {e}")
+                splash = None
+
+            def _step(msg, pct):
+                if splash:
+                    try:
+                        splash.step(msg, pct)
+                        app.processEvents()
+                    except Exception:
+                        pass
+
+            # 3. Vue UI 로드 + 완료 대기 (창은 아직 숨김 — push가 도달하도록 먼저 로드)
+            _step("UI 로딩 중…", 20)
+            self._load_vue_ui()
+            self._await_signal(getattr(self, 'vue_viewer', None), 'loadFinished', 12000, app)
+
+            # 4. 로컬 데이터 — 검색 덱 디스크 복원 → Vue
+            _step("검색 결과 복원 중…", 55)
+            self._restore_search_deck()
+
+            # 5. 백엔드 연결 + 모델/샘플러/LoRA → Vue
+            _step("백엔드 연결 · 모델 로딩 중…", 78)
+            self._apply_backend_startup_result()
+            self._await_signal(getattr(self, 'info_worker', None), 'info_ready', 8000, app,
+                               also='error_occurred')
+            _step("완료", 100)
+        except SystemExit:
+            if splash is not None:
+                try: splash.close()
+                except Exception: pass
+            raise  # 시작 다이얼로그 X → 종료
+        except Exception as e:
+            print(f"[Startup] 시퀀스 오류 — 기본 시작으로 폴백: {e}")
+            # 폴백: 핵심 단계 누락 시 보장 (앱이 정상 동작하도록)
+            try:
+                if getattr(self, '_pending_vue_url', None) is not None:
+                    self._load_vue_ui()
+            except Exception: pass
+            try:
+                self._apply_backend_startup_result()
+            except Exception: pass
+            try:
+                self._restore_search_deck()
+            except Exception: pass
+        finally:
+            if splash is not None:
+                try: splash.close()
+                except Exception: pass
+
+    def _await_signal(self, obj, signal_name, timeout_ms, app, also=None):
+        """obj.<signal_name>(또는 also)이 올 때까지 로컬 이벤트루프로 대기.
+        반드시 타임아웃이 있어 무한 대기하지 않는다. obj가 None이거나 이미 끝난
+        QThread면 즉시 반환. (app.exec() 진입 전 부트스트랩에서 쓰는 중첩 이벤트루프)"""
+        if obj is None:
+            return
+        try:
+            from PyQt6.QtCore import QEventLoop, QTimer
+            sig = getattr(obj, signal_name, None)
+            if sig is None:
+                return
+            # 이미 끝난 워커면 대기 불필요
+            if hasattr(obj, 'isRunning') and not obj.isRunning():
+                return
+            loop = QEventLoop()
+            try:
+                sig.connect(loop.quit)
+            except Exception:
+                return
+            if also:
+                alt = getattr(obj, also, None)
+                if alt is not None:
+                    try: alt.connect(loop.quit)
+                    except Exception: pass
+            QTimer.singleShot(max(500, int(timeout_ms)), loop.quit)  # 타임아웃 폴백
+            loop.exec()
+        except Exception as e:
+            print(f"[Startup] await {signal_name} 실패(무시): {e}")
+
+    def _restore_search_deck(self):
+        """검색 결과 덱 디스크 복원 — window 표시 후 1회 지연 실행.
+        큰 JSON 파싱이라 __init__ 동기 경로에서 빼내 시작 프리징을 없앴다.
+        자동화가 Search 탭 방문 없이도 즉시 사용 가능하게 filtered_results/덱을 미리 채운다.
+        (Vue SearchView onMounted도 별도로 호출하지만, 다른 탭에서 시작해도 준비되게 함)"""
+        try:
+            if hasattr(self, 'vue_bridge') and hasattr(self.vue_bridge, 'loadLastSearchResults'):
+                self.vue_bridge.loadLastSearchResults()
+        except Exception as e:
+            print(f"[Search] 시작 시 덱 복원 실패: {e}")
+
+    def _update_vram_status(self):
+        # 백엔드 HTTP(get_system_stats, timeout=3)를 워커 스레드에서 수행.
+        # 메인(GUI) 스레드에서 직접 호출하면 백엔드 응답이 느릴 때(예: 같은 GPU에서
+        # LoRA 학습이 도는 중) 30초마다 최대 3초씩 UI가 얼던 '묘한 프리징' 발생.
+        # vramUpdated는 Qt 시그널 → 워커 스레드에서 emit해도 queued connection으로 안전.
+        import threading
+
+        def _work():
+            try:
+                from backends import get_backend
+                backend = get_backend()
+                if not backend:
+                    return
                 stats = backend.get_system_stats()
                 if stats and stats.get('vram_total', 0) > 0:
                     used = stats['vram_used'] / (1024**3)
@@ -1830,8 +1939,10 @@ class GeneratorMainUI(
                         self.vue_bridge.vramUpdated.emit(json.dumps({
                             'used': round(used, 1), 'total': round(total, 1), 'pct': pct
                         }))
-        except Exception:
-            pass  # VRAM 모니터링은 비핵심 — GPU 미탑재 환경에서 실패 가능
+            except Exception:
+                pass  # VRAM 모니터링은 비핵심 — GPU 미탑재/백엔드 미응답 시 무시
+
+        threading.Thread(target=_work, daemon=True).start()
 
     def closeEvent(self, event):
         from PyQt6.QtWidgets import QMessageBox as _QMB

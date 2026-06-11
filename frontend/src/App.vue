@@ -569,6 +569,17 @@
 
     <QueuePanel />
 
+    <!-- 탭 워밍 오버레이 — 시작 시 모든 탭을 미리 mount(keep-alive)하는 동안 화면을 덮어
+         라우터 순회 깜빡임을 숨김. 끝나면 이후 탭 전환이 즉시(첫 mount 프리징 제거). -->
+    <div v-if="warming" class="warm-overlay">
+      <div class="warm-box">
+        <div class="warm-title">🚀 AI Studio Pro</div>
+        <div class="warm-sub">준비 중… {{ warmTab }}</div>
+        <div class="warm-bar"><div class="warm-fill" :style="{ width: warmPct + '%' }"></div></div>
+        <div class="warm-pct">{{ warmPct }}%</div>
+      </div>
+    </div>
+
     <!-- VRAM 게이지 (하단 고정) — 클릭으로 상세 메모리 정보 + 권장사항 -->
     <div class="vram-bar" v-if="vramInfo.total > 0" @click="onVramClick" :title="vramTooltip">
       <div class="vram-fill" :style="{ width: vramInfo.pct + '%' }" :class="vramClass"></div>
@@ -1806,6 +1817,42 @@ import { useRouter, useRoute } from 'vue-router'
 const router = useRouter()
 const route = useRoute()
 
+// ── 탭 워밍 ── 첫 방문 시 2~3초 mount 프리징 제거.
+// 시작 시 모든 탭을 한 번씩 router로 순회 mount → keep-alive 캐시 → 이후 전환 즉시.
+// warming은 default ON — 창이 뜨자마자 t2i가 아니라 이 로딩 오버레이가 보이게 해서
+//   "UI 먼저 뜨고 뒤에서 로딩" 느낌을 제거(백엔드 선택 → 로딩 → UI).
+// gallery/fav는 mount 시 이미지 폴더를 스캔/로딩하므로 제외(첫 방문 시 로드 — 수용됨).
+const warming = ref(true)
+const warmPct = ref(0)
+const warmTab = ref('')
+let _warmedTabs = false
+async function warmAllTabs() {
+  if (_warmedTabs) return
+  _warmedTabs = true
+  const order: Array<[string, string]> = [
+    ['i2i', 'I2I'], ['inpaint', 'Inpaint'], ['event', 'Event Gen'], ['search', 'Search'],
+    ['batch', 'Batch / Upscale'], ['xyz', 'XYZ Plot'], ['png', 'PNG Info'],
+    ['editor', 'Editor'], ['settings', 'Settings'],
+  ]
+  const startPath = route.fullPath || '/'
+  try {
+    for (let i = 0; i < order.length; i++) {
+      // 진행률 + 현재 탭 이름을 '먼저' 그린 뒤 무거운 mount 시작 → 바가 멈춰 보이지 않음
+      warmTab.value = order[i][1]
+      warmPct.value = Math.round((i / order.length) * 100)
+      await new Promise<void>(r => requestAnimationFrame(() => r()))  // 리페인트 양보
+      try { await router.push({ name: order[i][0] }) } catch {}
+      await nextTick()
+    }
+    warmPct.value = 100
+  } finally {
+    try { await router.push(startPath) } catch {}
+    await nextTick()
+    onTabChanged('t2i')   // 패널 상태 복원 (워밍은 직접 push라 onTabChanged 안 거침)
+    warming.value = false
+  }
+}
+
 // ── 세션 복구 (크래시/VRAM OOM 후 작업 이어가기) ──
 interface SessionData { tab?: string; prompt?: string; negative?: string; [k: string]: any }
 const sessionRestore = ref<SessionData | null>(null)   // {tab, prompt, negative} | null
@@ -1936,6 +1983,11 @@ onMounted(async () => {
 
   // 워크플로우 프로파일 목록 미리 로드 (드롭다운에 즉시 보이도록)
   setTimeout(loadWorkflowProfilesList, 800)
+
+  // 탭 워밍 — 창이 보이면 바로 시작 (warming 오버레이가 이미 덮고 있음)
+  setTimeout(() => { warmAllTabs() }, 60)
+  // 안전망: 어떤 이유로 워밍이 안 끝나도 30초 뒤 오버레이 강제 해제 (앱 잠김 방지)
+  setTimeout(() => { warming.value = false }, 30000)
 
   onBackendEvent('tabChanged', (tabId: string) => {
     const targetPath = tabId === 't2i' ? '/' : `/${tabId}`
@@ -2120,8 +2172,21 @@ onMounted(async () => {
 
 <style scoped>
 .app-container { width: 100%; height: 100vh; display: flex; flex-direction: column; background: var(--bg-primary); }
+
+/* 탭 워밍 오버레이 — 시작 시 전 탭 mount 동안 화면 전체를 불투명하게 덮어 깜빡임 숨김 */
+.warm-overlay { position: fixed; inset: 0; z-index: 99999; background: #0A0A0A;
+  display: flex; align-items: center; justify-content: center; }
+.warm-box { text-align: center; }
+.warm-title { color: var(--accent); font-size: 19px; font-weight: 800; margin-bottom: 6px; }
+.warm-sub { color: #A0A0A0; font-size: 12px; margin-bottom: 16px; min-height: 16px; }
+.warm-bar { width: 240px; height: 8px; background: #1A1A1A; border-radius: 4px; overflow: hidden; margin: 0 auto; }
+.warm-fill { height: 100%; background: var(--accent); transition: width 0.2s ease; }
+.warm-pct { color: #888; font-size: 11px; margin-top: 8px; }
 .app-header { height: 60px; display: flex; align-items: center; justify-content: center; background: var(--bg-primary); border-bottom: 1px solid var(--border); z-index: 100; }
-.main-workspace { flex: 1; display: flex; overflow: hidden; position: relative; }
+/* 하단 고정 VRAM 바(22px)에 콘텐츠가 가리지 않도록 여백 확보.
+   (큐가 하단 도크였을 땐 그 도크가 스페이서 역할을 했으나, 우측 드로어로 옮기며
+   콘텐츠가 화면 맨 아래까지 내려와 GENERATE 버튼이 VRAM 바에 잘리던 문제 수정) */
+.main-workspace { flex: 1; display: flex; overflow: hidden; position: relative; padding-bottom: 24px; }
 
 .side-panel { width: 360px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); z-index: 10; }
 .side-panel.right { width: 220px; border-right: none; border-left: 1px solid var(--border); }
