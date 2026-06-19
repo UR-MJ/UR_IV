@@ -33,7 +33,7 @@ from config import *  # noqa: F401,F403  (OUTPUT_DIR 등)
 from ui.generator_main import GeneratorMainUI
 
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt, QObject, pyqtSlot, QEventLoop, QTimer
+from PyQt6.QtCore import Qt, QObject, pyqtSlot, QEventLoop, QTimer, QJsonDocument
 from PyQt6.QtWebChannel import QWebChannel, QWebChannelAbstractTransport
 from PyQt6.QtWebSockets import QWebSocketServer
 from PyQt6.QtNetwork import QHostAddress
@@ -52,29 +52,35 @@ _DIST = os.path.join(_ROOT, "frontend_dist")
 # QWebChannel ↔ WebSocket transport (Qt 공식 chat 예제의 PyQt 포팅)
 # ──────────────────────────────────────────────────────────────────────────
 class WebSocketTransport(QWebChannelAbstractTransport):
-    """단일 QWebSocket 연결을 QWebChannel transport로 감싼다."""
+    """단일 QWebSocket 연결을 QWebChannel transport로 감싼다.
+
+    Qt 공식 'qwebchannel/standalone' 예제의 PyQt 포팅. 메시지를 dict가 아니라
+    QJsonDocument/QJsonObject로 주고받아야 핸드셰이크가 완료된다 (dict 직접 emit은
+    버전에 따라 QJsonObject 변환이 어긋나 채널 초기화가 멈출 수 있음).
+    """
 
     def __init__(self, socket):
-        super().__init__()
+        super().__init__(socket)
         self._socket = socket
         self._socket.textMessageReceived.connect(self._on_text)
         self._socket.disconnected.connect(self.deleteLater)
 
     @pyqtSlot(str)
     def _on_text(self, message):
-        try:
-            data = json.loads(message)
-        except Exception:
+        doc = QJsonDocument.fromJson(message.encode("utf-8"))
+        if doc.isNull() or not doc.isObject():
             return
-        # QWebChannel 은 dict(QJsonObject)를 기대한다
-        self.messageReceived.emit(data, self)
+        # QWebChannel 로 실제 QJsonObject 를 전달
+        self.messageReceived.emit(doc.object(), self)
 
     def sendMessage(self, message):
-        # message: dict(QJsonObject) → 텍스트 프레임으로 송신
+        # message: QJsonObject(dict 로 도착) → 컴팩트 JSON 텍스트로 송신
         try:
-            self._socket.sendTextMessage(json.dumps(message))
-        except Exception:
-            pass
+            doc = QJsonDocument(message)
+            text = bytes(doc.toJson(QJsonDocument.JsonFormat.Compact)).decode("utf-8")
+            self._socket.sendTextMessage(text)
+        except Exception as e:
+            print(f"[web] sendMessage 실패: {e}")
 
 
 class WebChannelServer(QObject):

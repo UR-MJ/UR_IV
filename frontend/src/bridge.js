@@ -59,6 +59,7 @@ function waitForQWebChannel(maxWait = 5000) {
  * 공통 마무리 — transport 종류와 무관하게 backend 확보 후 동일 처리
  */
 function _bindBackend(backend, resolve) {
+  console.log('[bridge] backend ready', backend ? Object.keys(backend).length + ' members' : '(null)')
   _backend = backend
   _installStickyCaches(_backend)
   connectStore(_backend)
