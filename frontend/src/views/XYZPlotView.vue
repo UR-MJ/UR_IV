@@ -65,7 +65,7 @@
         </div>
         <div class="result-grid">
           <div v-for="(img, i) in resultImages" :key="i" class="result-item">
-            <img :src="'file:///' + img.path" />
+            <img :src="mediaUrl(img.path)" />
             <div class="result-label">{{ img.label }}</div>
           </div>
         </div>
@@ -77,6 +77,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
+import { mediaUrl } from '../utils/media.js'
 import CustomSelect from '../components/CustomSelect.vue'
 import { getBackend } from '../bridge.js'
 

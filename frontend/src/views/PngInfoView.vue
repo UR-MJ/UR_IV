@@ -9,7 +9,7 @@
     <!-- PNG Info 탭 -->
     <div v-if="subTab === 'info'" class="tab-content info-layout">
       <div class="image-area" @dragover.prevent @drop.prevent="onDrop" @dblclick="openFile">
-        <img v-if="imagePath" :src="'file:///' + imagePath" class="preview-img" />
+        <img v-if="imagePath" :src="mediaUrl(imagePath)" class="preview-img" />
         <div v-else class="drop-hint">
           <div class="icon">📄</div>
           <div>이미지를 드래그하거나 더블클릭</div>
@@ -115,8 +115,8 @@
       </div>
       <div class="compare-area">
         <CompareSlider v-if="compareBefore && compareAfter"
-          :before-src="'file:///' + compareBefore"
-          :after-src="'file:///' + compareAfter"
+          :before-src="mediaUrl(compareBefore)"
+          :after-src="mediaUrl(compareAfter)"
         />
         <div v-else class="compare-hint">
           <div class="icon">🔍</div>
@@ -164,7 +164,7 @@
         <button class="gif-btn" @click="exportGif" :disabled="gifExporting">
           {{ gifExporting ? 'Exporting...' : '🎬 Export GIF' }}
         </button>
-        <a v-if="gifResult" :href="'file:///' + gifResult" class="gif-link" target="_blank">📥 {{ gifResult.split('/').pop() }}</a>
+        <a v-if="gifResult" :href="mediaUrl(gifResult)" class="gif-link" target="_blank">📥 {{ gifResult.split('/').pop() }}</a>
       </div>
     </div>
   </div>
@@ -174,6 +174,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
+import { mediaUrl } from '../utils/media.js'
 import CompareSlider from '../components/CompareSlider.vue'
 import CustomSelect from '../components/CustomSelect.vue'
 

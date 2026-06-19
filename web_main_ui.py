@@ -21,6 +21,8 @@ import os
 import json
 import threading
 import functools
+import mimetypes
+from urllib.parse import urlparse, parse_qs, unquote
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 os.environ.setdefault(
@@ -158,10 +160,44 @@ class _DistHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_local_file(self):
+        """`/file?path=<로컬경로>` — 로컬 이미지 파일을 HTTP 로 서빙.
+
+        원격 브라우저는 file:/// 를 못 읽으므로 프론트 mediaUrl() 이 이 경로로 요청한다.
+        보안: core.path_safety.safe_input_path 로 검증(존재·일반파일·이미지 확장자·
+        시스템 디렉터리 차단). A1111 --listen 과 같은 신뢰 LAN 전제.
+        """
+        try:
+            from core.path_safety import safe_input_path
+        except Exception:
+            safe_input_path = None
+        qs = parse_qs(urlparse(self.path).query)
+        raw = unquote((qs.get("path") or [""])[0])
+        safe = safe_input_path(raw) if safe_input_path else None
+        if not safe or not os.path.isfile(safe):
+            self.send_error(404, "file not found or not allowed")
+            return
+        ctype = mimetypes.guess_type(safe)[0] or "application/octet-stream"
+        try:
+            with open(safe, "rb") as f:
+                data = f.read()
+        except OSError:
+            self.send_error(404, "read error")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html"):
             self._serve_index()
+            return
+        if path == "/file":
+            self._serve_local_file()
             return
         super().do_GET()
 

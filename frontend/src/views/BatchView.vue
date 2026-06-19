@@ -41,7 +41,7 @@
         </div>
         <div v-else class="thumb-grid">
           <div v-for="(f, i) in batchFiles" :key="f" class="thumb-card">
-            <img :src="'file:///' + f" :alt="basename(f)" loading="lazy" />
+            <img :src="mediaUrl(f)" :alt="basename(f)" loading="lazy" />
             <div class="thumb-name" :title="f">{{ basename(f) }}</div>
             <button class="thumb-rm" @click="batchFiles.splice(i, 1)" title="제거">×</button>
           </div>
@@ -80,7 +80,7 @@
         </div>
         <div v-else class="thumb-grid">
           <div v-for="(f, i) in upscaleFiles" :key="f" class="thumb-card">
-            <img :src="'file:///' + f" :alt="basename(f)" loading="lazy" />
+            <img :src="mediaUrl(f)" :alt="basename(f)" loading="lazy" />
             <div class="thumb-name" :title="f">{{ basename(f) }}</div>
             <button class="thumb-rm" @click="upscaleFiles.splice(i, 1)" title="제거">×</button>
           </div>
@@ -160,15 +160,15 @@
         <div v-if="adBefore && adAfter" class="compare-split">
           <div class="compare-col">
             <div class="compare-label">BEFORE</div>
-            <img :src="'file:///' + adBefore" />
+            <img :src="mediaUrl(adBefore)" />
           </div>
           <div class="compare-col">
             <div class="compare-label">AFTER</div>
-            <img :src="'file:///' + adAfter" />
+            <img :src="mediaUrl(adAfter)" />
           </div>
         </div>
         <div v-else-if="adPreview" class="preview-single">
-          <img :src="'file:///' + adPreview" />
+          <img :src="mediaUrl(adPreview)" />
         </div>
         <div v-else class="compare-empty">
           좌측에서 이미지를 선택하면 미리보기가 표시됩니다
@@ -263,15 +263,15 @@
         <div v-if="sam3Before && sam3After" class="compare-split">
           <div class="compare-col">
             <div class="compare-label">BEFORE</div>
-            <img :src="'file:///' + sam3Before" />
+            <img :src="mediaUrl(sam3Before)" />
           </div>
           <div class="compare-col">
             <div class="compare-label">AFTER</div>
-            <img :src="'file:///' + sam3After" />
+            <img :src="mediaUrl(sam3After)" />
           </div>
         </div>
         <div v-else-if="sam3Preview" class="preview-single">
-          <img :src="'file:///' + sam3Preview" />
+          <img :src="mediaUrl(sam3Preview)" />
         </div>
         <div v-else class="compare-empty">
           좌측에서 이미지를 선택하면 미리보기가 표시됩니다
@@ -320,7 +320,7 @@
         </div>
         <div v-else class="cap-list">
           <div v-for="it in captionItems" :key="it.path" class="cap-item">
-            <img :src="'file:///' + it.path" loading="lazy" class="cap-thumb" />
+            <img :src="mediaUrl(it.path)" loading="lazy" class="cap-thumb" />
             <div class="cap-body">
               <div class="cap-name" :title="it.path">
                 {{ basename(it.path) }}
@@ -344,6 +344,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getBackend, onBackendEvent } from '../bridge.js'
+import { mediaUrl } from '../utils/media.js'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
 

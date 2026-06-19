@@ -966,6 +966,7 @@
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { initBridge, onBackendEvent, getBackend } from './bridge.js'
 import { requestAction, useWidgetStore } from './stores/widgetStore.js'
+import { mediaUrl } from './utils/media.js'
 import { useLoraStack } from './composables/useLoraStack.js'
 import { useHighRes } from './composables/useHighRes.js'
 import { useRatingFilter } from './composables/useRatingFilter.js'
@@ -1760,7 +1761,8 @@ async function selectHistoryImage(path: string) {
 
 function historyImageSrc(path: string) {
   if (!path) return ''
-  return `file:///${path}?t=${imageVersions[path] || 0}`
+  const base = mediaUrl(path)
+  return base + (base.includes('?') ? '&' : '?') + 't=' + (imageVersions[path] || 0)
 }
 
 // History 키보드 상하 네비게이션 — 전역 ↑/↓로 이전/다음 이미지 선택.
