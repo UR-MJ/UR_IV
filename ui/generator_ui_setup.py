@@ -667,6 +667,10 @@ class UISetupMixin:
             try:
                 import time as _t
                 _t.sleep(2.0)   # 백엔드 연결 대기
+                # 미연결(건너뛰기/연결 실패)이면 프리로드 생략 — get_backend()는 항상
+                # 객체라 None 체크론 못 거른다. 매니저 첫 오픈 시 어차피 로드되므로 무해.
+                if not getattr(self, '_backend_connected', False):
+                    return
                 from backends import get_backend
                 from widgets.lora_manager import LoraManagerDialog
                 backend = get_backend()

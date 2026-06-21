@@ -104,6 +104,11 @@ class GeneratorMainUI(
             self._setup_tray()
 
             # 7. 타이머 가동
+            # 백엔드 실제 연결 여부 — get_backend()는 항상 객체를 돌려주므로(미설정 시
+            # config로 WebUI 기본 생성) 'None 체크'로는 미연결을 구분할 수 없다. 이 플래그로
+            # 미연결/건너뛰기 상태에선 VRAM 폴링·LoRA 프리로드가 헛되이 백엔드를 두드리지
+            # 않게 한다. on_webui_info_loaded에서 True, 실패/건너뛰기에서 False.
+            self._backend_connected = False
             self._vram_timer = QTimer()
             self._vram_timer.setInterval(30000)
             self._vram_timer.timeout.connect(self._update_vram_status)
@@ -1932,6 +1937,11 @@ class GeneratorMainUI(
             print(f"[Search] 시작 시 덱 복원 실패: {e}")
 
     def _update_vram_status(self):
+        # 백엔드 미연결(건너뛰기/연결 실패) 상태면 폴링 자체를 건너뛴다 —
+        # get_backend()는 항상 객체를 돌려줘 매 30초 연결거부로 WARNING이 쌓이고
+        # 헛수고만 했었다. 연결되면(on_webui_info_loaded) 다음 틱부터 자동 재개.
+        if not getattr(self, '_backend_connected', False):
+            return
         # 백엔드 HTTP(get_system_stats, timeout=3)를 워커 스레드에서 수행.
         # 메인(GUI) 스레드에서 직접 호출하면 백엔드 응답이 느릴 때(예: 같은 GPU에서
         # LoRA 학습이 도는 중) 30초마다 최대 3초씩 UI가 얼던 '묘한 프리징' 발생.
