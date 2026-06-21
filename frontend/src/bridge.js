@@ -81,7 +81,14 @@ function _initWebSocketBridge(resolve) {
     const socket = new WebSocket(wsUrl)
     socket.onopen = () => {
       console.log('[bridge] WebSocket open — handshaking QWebChannel')
-      new QWebChannelWS(socket, (channel) => _bindBackend(channel.objects.backend, resolve))
+      new QWebChannelWS(socket, (channel) => {
+        const backend = channel.objects.backend
+        _bindBackend(backend, resolve)
+        // 웹 모드: 핸드셰이크 완료(=시그널 구독 완료) 후 시작 설정을 Python에 재요청.
+        // startup의 1회 push는 브라우저 연결 전이라 유실되므로 여기서 pull한다.
+        // sticky 캐시는 _bindBackend에서 이미 연결돼 있어 늦은 컴포넌트도 받는다.
+        try { backend.requestInitialConfig && backend.requestInitialConfig() } catch (e) {}
+      })
     }
     socket.onclose = () => {
       // 백엔드 재시작/끊김 시 자동 재연결 (페이지 새로고침 없이 복구)

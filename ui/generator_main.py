@@ -2346,6 +2346,10 @@ class GeneratorMainUI(
 
         def _set_main_geometry(state: dict) -> None:
             """저장된 윈도우 기하 복원 — 타이틀바가 가려지지 않도록 보정."""
+            # 웹 모드: 호스트 PyQt 창을 띄우지 않는다(브라우저로만 사용).
+            # 저장된 상태가 maximized면 showMaximized가 창을 노출하던 문제 차단.
+            if getattr(self, 'web_mode', False):
+                return
             if not isinstance(state, dict):
                 return
             try:

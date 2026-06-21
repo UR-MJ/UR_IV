@@ -271,6 +271,8 @@ def main():
 
     # 백엔드 윈도우 생성 (창은 띄우지 않음 — 로직/프록시/vue_bridge 만 사용)
     window = GeneratorMainUI()
+    # 웹 모드 표시 — 저장된 창 기하 복원(showMaximized 등)이 호스트 창을 띄우지 않게.
+    window.web_mode = True
 
     # WebChannel + WebSocket 서버
     channel = QWebChannel()
