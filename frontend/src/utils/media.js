@@ -9,9 +9,12 @@
  * 즉 컴포넌트는 경로(raw path)만 다루고, 화면 표시용 src 는 항상 이 헬퍼를 거친다.
  */
 
-// 웹 모드 감지 — Python 정적 서버가 index.html 에 주입한 전역으로 판별
-const _isWeb = typeof window !== 'undefined' &&
-  !!(window.__AISTUDIO_WS_PORT__ || window.__AISTUDIO_WS_URL__)
+// 웹 모드 감지 — Python 정적 서버가 index.html 에 주입한 전역으로 판별.
+// 호출 시점마다 window 를 확인한다(모듈 로드 시점 1회 캡처는 주입 타이밍에 취약).
+function _detectWeb() {
+  return typeof window !== 'undefined' &&
+    !!(window.__AISTUDIO_WS_PORT__ || window.__AISTUDIO_WS_URL__)
+}
 
 /**
  * 로컬 파일 경로 → 화면 표시용 src.
@@ -27,7 +30,7 @@ export function mediaUrl(path, bust = false) {
   // file:/// 접두사 제거 → 순수 경로
   const clean = s.replace(/^file:\/\/\//, '').replace(/^file:\/\//, '')
   let url
-  if (_isWeb) {
+  if (_detectWeb()) {
     url = '/file?path=' + encodeURIComponent(clean)
   } else {
     url = 'file:///' + clean
@@ -37,4 +40,4 @@ export function mediaUrl(path, bust = false) {
 }
 
 /** 웹 모드 여부 (컴포넌트에서 분기 필요 시) */
-export function isWebMode() { return _isWeb }
+export function isWebMode() { return _detectWeb() }

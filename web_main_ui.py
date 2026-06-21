@@ -175,6 +175,7 @@ class _DistHandler(SimpleHTTPRequestHandler):
         raw = unquote((qs.get("path") or [""])[0])
         safe = safe_input_path(raw) if safe_input_path else None
         if not safe or not os.path.isfile(safe):
+            print(f"[web] /file 404 — raw={raw!r} safe={safe!r}")
             self.send_error(404, "file not found or not allowed")
             return
         ctype = mimetypes.guess_type(safe)[0] or "application/octet-stream"
