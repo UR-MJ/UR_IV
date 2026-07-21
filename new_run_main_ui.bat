@@ -1,5 +1,11 @@
 @echo off
 setlocal
+cd /d "%~dp0"
+if errorlevel 1 (
+    echo [run] Failed to enter app directory: %~dp0
+    pause
+    exit /b 1
+)
 
 call venv\Scripts\activate.bat
 if errorlevel 1 (

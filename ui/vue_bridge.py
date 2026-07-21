@@ -1001,11 +1001,19 @@ class VueBridge(QObject):
     def loadImageBase64(self, filepath: str) -> str:
         """이미지를 base64로 반환"""
         import base64, os
-        if not os.path.exists(filepath):
+        clean = _normalize_vue_path(filepath)
+        if not clean:
             return ''
-        with open(filepath, 'rb') as f:
+        try:
+            # base64는 원본보다 약 33% 커지므로 비정상적인 대용량 입력은 거절한다.
+            if os.path.getsize(clean) > 64 * 1024 * 1024:
+                logger.warning("loadImageBase64 blocked oversized image: %s", clean)
+                return ''
+        except OSError:
+            return ''
+        with open(clean, 'rb') as f:
             data = f.read()
-        ext = os.path.splitext(filepath)[1].lower()
+        ext = os.path.splitext(clean)[1].lower()
         mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp'}.get(ext, 'image/png')
         return f"data:{mime};base64,{base64.b64encode(data).decode()}"
 
@@ -1035,24 +1043,34 @@ class VueBridge(QObject):
     @pyqtSlot(str, str, result=str)
     def saveImageExif(self, filepath: str, new_params: str) -> str:
         """이미지의 PNG 메타데이터(parameters)를 수정하여 저장"""
+        tmp_path = ''
         try:
-            import os
+            import os, tempfile
             from PIL import Image as PILImage
             from PIL.PngImagePlugin import PngInfo
-            if not filepath or not os.path.exists(filepath):
+            clean = _normalize_vue_path(filepath)
+            if not clean:
                 return json.dumps({'error': '파일을 찾을 수 없습니다'})
-            if not filepath.lower().endswith('.png'):
+            if not clean.lower().endswith('.png'):
                 return json.dumps({'error': 'PNG 파일만 메타데이터 수정 가능'})
-            img = PILImage.open(filepath)
-            meta = PngInfo()
-            meta.add_text("parameters", new_params)
-            # 기존 메타데이터 중 parameters 외 보존
-            for k, v in img.info.items():
-                if k != "parameters" and isinstance(v, str):
-                    meta.add_text(k, v)
-            img.save(filepath, pnginfo=meta)
+            with PILImage.open(clean) as img:
+                meta = PngInfo()
+                meta.add_text("parameters", new_params)
+                # 기존 메타데이터 중 parameters 외 보존
+                for k, v in img.info.items():
+                    if k != "parameters" and isinstance(v, str):
+                        meta.add_text(k, v)
+                fd, tmp_path = tempfile.mkstemp(prefix='.exif_', suffix='.png', dir=os.path.dirname(clean))
+                os.close(fd)
+                img.save(tmp_path, pnginfo=meta)
+            os.replace(tmp_path, clean)
             return json.dumps({'ok': True})
         except Exception as e:
+            try:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
             return json.dumps({'error': str(e)})
 
     @pyqtSlot(str, str, result=str)
@@ -1061,17 +1079,20 @@ class VueBridge(QObject):
         try:
             import os
             from core.file_naming import sanitize_filename
-            if not os.path.exists(filepath):
+            clean = _normalize_vue_path(filepath)
+            if not clean:
                 return json.dumps({'error': '파일을 찾을 수 없습니다'})
-            dir_path = os.path.dirname(filepath)
-            ext = os.path.splitext(filepath)[1]
+            dir_path = os.path.dirname(clean)
+            ext = os.path.splitext(clean)[1]
             # 구분자 제거 — 새 이름은 같은 디렉토리 안의 단일 파일명만 허용
             stem, new_ext = os.path.splitext(new_name)
             new_name = sanitize_filename(stem, fallback='renamed', max_len=128) + (new_ext or '')
             if not new_name.endswith(ext):
                 new_name += ext
             new_path = os.path.join(dir_path, new_name)
-            os.rename(filepath, new_path)
+            if os.path.normcase(new_path) != os.path.normcase(clean) and os.path.exists(new_path):
+                return json.dumps({'error': '같은 이름의 파일이 이미 존재합니다'})
+            os.rename(clean, new_path)
             return json.dumps({'ok': True, 'new_path': new_path.replace('\\', '/')})
         except Exception as e:
             return json.dumps({'error': str(e)})
@@ -1238,9 +1259,10 @@ class VueBridge(QObject):
             import time
             from pathlib import Path
             import tempfile
-            src = Path(path.replace('file:///', ''))
-            if not src.is_file():
+            clean = _normalize_vue_path(path)
+            if not clean:
                 return json.dumps({})
+            src = Path(clean)
             tmp_dir = Path(tempfile.gettempdir()) / "AIStudioPro_editor"
             tmp_dir.mkdir(parents=True, exist_ok=True)
             # 단일 복구 파일 (덮어쓰기)
@@ -1315,11 +1337,11 @@ class VueBridge(QObject):
     def getFileInfo(self, path: str) -> str:
         """파일 기본 정보 반환 (포맷/용량)."""
         try:
-            import os
             from pathlib import Path
-            p = Path(path)
-            if not p.is_file():
+            clean = _normalize_vue_path(path)
+            if not clean:
                 return json.dumps({})
+            p = Path(clean)
             stat = p.stat()
             ext = p.suffix.lstrip('.').upper() or ''
             return json.dumps({"size": stat.st_size, "format": ext})
@@ -1366,21 +1388,44 @@ class VueBridge(QObject):
             pass
         return json.dumps([])
 
-    @pyqtSlot()
-    def requestInitialConfig(self):
-        """웹 모드: 브라우저가 연결·핸드셰이크 완료된 뒤 호출 → 시작 설정을 (재)emit.
+    @pyqtSlot(result=str)
+    def getInitialConfig(self) -> str:
+        """클라이언트별 초기 설정 응답.
 
-        시작 설정(condRules/uiPrefs/globalWeights/tabDefaults)은 startup에 1회만
-        push되는데, 웹 모드는 그 시점에 아직 브라우저(WebSocket)가 연결 전이라 emit이
-        유실된다. 연결 직후 프론트가 이 슬롯을 호출하면 같은 설정을 다시 emit하여
-        sticky 이벤트로 전달된다. (창 모드는 호출 안 함 — 임베드 Vue는 항상 연결됨.
-        호출돼도 idempotent하므로 무해.)"""
+        QWebChannel 시그널 재발행은 연결된 모든 브라우저에 방송되므로, 새 웹
+        클라이언트 하나가 기존 클라이언트 상태까지 다시 덮어쓰지 않게 직접 반환한다.
+        """
+        root = os.path.dirname(os.path.dirname(__file__))
+
+        def _load(name, default):
+            try:
+                path = os.path.join(root, 'config', name)
+                if os.path.isfile(path):
+                    with open(path, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+            except Exception as e:
+                logger.warning("initial config load failed (%s): %s", name, e)
+            return default
+
         try:
-            gen = self.parent()
-            if gen and hasattr(gen, '_load_saved_configs'):
-                gen._load_saved_configs()
-        except Exception as e:
-            print(f"[Config] requestInitialConfig 실패: {e}")
+            ui_prefs = json.loads(self.getUiPrefs() or '{}')
+        except Exception:
+            ui_prefs = {}
+        try:
+            tab_defaults = json.loads(self.getTabDefaults() or '{}')
+        except Exception:
+            tab_defaults = {}
+        return json.dumps({
+            'uiPrefs': ui_prefs,
+            'condRules': _load('cond_rules.json', {'positive': [], 'negative': []}),
+            'globalWeights': _load('global_weights.json', []),
+            'tabDefaults': tab_defaults,
+        }, ensure_ascii=False)
+
+    @pyqtSlot(result=str)
+    def requestInitialConfig(self) -> str:
+        """구버전 프론트 호환 별칭 — 더 이상 전역 시그널을 재발행하지 않는다."""
+        return self.getInitialConfig()
 
     @pyqtSlot(result=str)
     def getGenStats(self) -> str:
@@ -2211,8 +2256,12 @@ class VueBridge(QObject):
             from PIL import Image as PILImage
             import os, time
 
-            img_a = PILImage.open(before_path)
-            img_b = PILImage.open(after_path)
+            clean_before = _normalize_vue_path(before_path)
+            clean_after = _normalize_vue_path(after_path)
+            if not clean_before or not clean_after:
+                return json.dumps({'error': '비교 이미지 경로가 올바르지 않습니다'})
+            img_a = PILImage.open(clean_before)
+            img_b = PILImage.open(clean_after)
 
             # 크기 통일 (작은 쪽에 맞춤)
             w = min(img_a.width, img_b.width)
@@ -2500,12 +2549,15 @@ class VueBridge(QObject):
         try:
             from PIL import Image
             import os, re
-            img = Image.open(filepath)
+            clean = _normalize_vue_path(filepath)
+            if not clean:
+                return json.dumps({'error': '파일을 찾을 수 없습니다', 'path': filepath})
+            img = Image.open(clean)
             info = {}
             raw = img.info.get('parameters', img.info.get('prompt', ''))
             info['raw'] = raw
-            info['path'] = filepath.replace('\\', '/')
-            info['filename'] = os.path.basename(filepath)
+            info['path'] = clean.replace('\\', '/')
+            info['filename'] = os.path.basename(clean)
             info['size'] = f"{img.width} × {img.height}"
             if raw and 'Steps:' in raw:
                 parts = raw.split('\nNegative prompt: ')

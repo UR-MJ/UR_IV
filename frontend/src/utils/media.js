@@ -39,5 +39,17 @@ export function mediaUrl(path, bust = false) {
   return url
 }
 
+/** 웹 갤러리 카드용 축소 URL. Qt 임베드 모드는 원본 file URL을 그대로 사용한다. */
+export function thumbnailUrl(path, width = 384) {
+  if (!path) return ''
+  if (!_detectWeb()) return mediaUrl(path)
+  const s = String(path)
+  if (/^(data:|blob:)/i.test(s)) return s
+  if (/^https?:/i.test(s)) return s
+  const clean = s.replace(/^file:\/\/\//, '').replace(/^file:\/\//, '')
+  const safeWidth = Math.max(64, Math.min(1024, Math.round(Number(width) || 384)))
+  return '/thumbnail?path=' + encodeURIComponent(clean) + '&width=' + safeWidth
+}
+
 /** 웹 모드 여부 (컴포넌트에서 분기 필요 시) */
 export function isWebMode() { return _detectWeb() }

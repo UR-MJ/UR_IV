@@ -45,7 +45,7 @@
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
         >
-          <img :src="mediaUrl(img)" loading="lazy" />
+          <img :src="thumbnailUrl(img, thumbSize * thumbPixelRatio)" loading="lazy" />
           <div class="card-hover-actions">
             <button class="tiny-btn" @click.stop="removeFav(img)" title="즐겨찾기 제거">⭐</button>
             <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)" title="복사">📋</button>
@@ -153,7 +153,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
-import { mediaUrl } from '../utils/media.js'
+import { mediaUrl, thumbnailUrl } from '../utils/media.js'
 
 interface ViewerData {
   filename?: string
@@ -170,6 +170,7 @@ const visibleCount = ref(40)
 
 // 썸네일 크기 — localStorage 영속 (gallery와 공유)
 const thumbSize = ref(parseInt(window.localStorage.getItem('gallery_thumb_size') || '200'))
+const thumbPixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1))
 watch(thumbSize, (v) => window.localStorage.setItem('gallery_thumb_size', String(v)))
 
 // ── 썸네일 캐싱 (백그라운드 생성 + thumbnailReady 시그널) ──

@@ -45,7 +45,7 @@
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
         >
-          <img :src="mediaUrl(img)" loading="lazy" />
+          <img :src="thumbnailUrl(img, thumbSize * thumbPixelRatio)" loading="lazy" />
           <div class="card-hover-actions">
             <button class="tiny-btn" @click.stop="quickAction('add_favorite', img)">⭐</button>
             <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)">📋</button>
@@ -183,7 +183,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
-import { mediaUrl } from '../utils/media.js'
+import { mediaUrl, thumbnailUrl } from '../utils/media.js'
 
 import { computed, nextTick } from 'vue'
 
@@ -223,6 +223,7 @@ const visibleCount = ref(40)
 
 // 썸네일 크기 — localStorage 영속, 100~380px
 const thumbSize = ref(parseInt(window.localStorage.getItem('gallery_thumb_size') || '200'))
+const thumbPixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1))
 watch(thumbSize, (v) => {
   window.localStorage.setItem('gallery_thumb_size', String(v))
 })

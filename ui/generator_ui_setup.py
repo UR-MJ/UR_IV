@@ -110,11 +110,6 @@ class UISetupMixin:
         self.backend_ui_tab = BackendUITab(self)
         self._main_stack.addWidget(self.backend_ui_tab)  # index 2
 
-        # Editor는 Vue에서 처리 (PyQt MosaicEditor 제거)
-        from tabs.editor_tab import MosaicEditor
-        self.mosaic_editor = MosaicEditor()
-        self.mosaic_editor.setParent(None)  # 화면에 추가하지 않음
-
         self.setCentralWidget(self._main_stack)
 
         # ── 프록시 위젯 초기화 ──
@@ -204,10 +199,9 @@ class UISetupMixin:
         self.png_info_tab.setParent(None)
         self.batch_tab = BatchTab(self)
         self.batch_tab.setParent(None)
-        self.web_tab = BrowserTab(self)
-        self.web_tab.setParent(None)
-        self.backend_ui_tab = BackendUITab(self)
-        self.backend_ui_tab.setParent(None)
+        # web_tab/backend_ui_tab은 위에서 _main_stack에 넣은 인스턴스를 그대로 사용한다.
+        # 여기서 다시 만들면 표시 중인 뷰와 설정/백엔드 로드 대상이 달라지고 Chromium
+        # 프로필도 불필요하게 두 벌 생성된다.
         self._batch_upscale_tabs = _D()
         self.fav_tab = _D()
 

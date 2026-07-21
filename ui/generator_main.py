@@ -517,12 +517,17 @@ class GeneratorMainUI(
             elif action == 'delete_image':
                 path = payload.get('path', '')
                 if path:
-                    clean_path = _clean_path(path)
-                    from core.image_utils import move_to_trash
-                    move_to_trash(clean_path)
-                    self.show_status("Moved to trash.")
-                    if hasattr(self, 'vue_bridge'):
-                        self.vue_bridge.showNotification.emit('info', '휴지통으로 이동됨')
+                    from core.path_safety import safe_input_path
+                    clean_path = safe_input_path(_clean_path(path))
+                    if not clean_path:
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit('error', '허용되지 않은 이미지 경로입니다')
+                    else:
+                        from core.image_utils import move_to_trash
+                        move_to_trash(clean_path)
+                        self.show_status("Moved to trash.")
+                        if hasattr(self, 'vue_bridge'):
+                            self.vue_bridge.showNotification.emit('info', '휴지통으로 이동됨')
 
             # 10. 프리셋
             elif action == 'save_preset_by_name':

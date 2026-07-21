@@ -10,6 +10,7 @@ const state = reactive({
 })
 
 let _backend = null
+let _disconnectBackend = null
 let _applyingFromBackend = false
 const _prevSnapshot = Object.create(null)
 
@@ -47,38 +48,53 @@ function applyBackendValues(data) {
  * 브릿지 연결
  */
 export function connectStore(backend) {
+  if (_disconnectBackend) _disconnectBackend()
   _backend = backend
 
   // 1. Python -> Vue: 개별 값 수신
-  backend.widgetValueChanged.connect((id, val) => {
+  const onValueChanged = (id, val) => {
     if (state.values[id] !== val) applyBackendValues({ [id]: val })
-  })
+  }
+  backend.widgetValueChanged.connect(onValueChanged)
 
   // 2. Python -> Vue: 속성 수신
-  backend.widgetPropertyChanged.connect((id, prop, valJson) => {
+  const onPropertyChanged = (id, prop, valJson) => {
     if (!state.properties[id]) state.properties[id] = {}
     try {
       state.properties[id][prop] = JSON.parse(valJson)
     } catch {
       state.properties[id][prop] = valJson
     }
-  })
+  }
+  backend.widgetPropertyChanged.connect(onPropertyChanged)
 
   // 3. Python -> Vue: 배치 업데이트
-  backend.batchUpdate.connect((json) => {
+  const onBatchUpdate = (json) => {
     try {
       const data = JSON.parse(json)
       applyBackendValues(data)
     } catch (e) { console.error('[Store] Batch Error:', e) }
-  })
+  }
+  backend.batchUpdate.connect(onBatchUpdate)
 
   // 4. 초기값 로드
   backend.getAllWidgetValues((json) => {
+    if (_backend !== backend) return
     try {
       const data = JSON.parse(json)
       applyBackendValues(data)
     } catch (e) { console.error('[Store] Init Error:', e) }
   })
+
+  const disconnect = () => {
+    try { backend.widgetValueChanged.disconnect(onValueChanged) } catch {}
+    try { backend.widgetPropertyChanged.disconnect(onPropertyChanged) } catch {}
+    try { backend.batchUpdate.disconnect(onBatchUpdate) } catch {}
+    if (_backend === backend) _backend = null
+    if (_disconnectBackend === disconnect) _disconnectBackend = null
+  }
+  _disconnectBackend = disconnect
+  return disconnect
 }
 
 export function getValue(id) { return state.values[id] ?? '' }

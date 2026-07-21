@@ -1,0 +1,216 @@
+"""웹 모드 인증, 파일 전송, 제한 브릿지 계약 회귀 테스트."""
+
+from __future__ import annotations
+
+import http.client
+import json
+import os
+import pathlib
+import re
+import tempfile
+import threading
+import unittest
+from urllib.parse import quote
+from unittest import mock
+
+from PIL import Image
+
+try:
+    import web_main_ui
+    from ui.vue_bridge import VueBridge
+    _WEB_IMPORT_ERROR = ""
+except ModuleNotFoundError as exc:
+    if not (exc.name or "").startswith("PyQt6"):
+        raise
+    web_main_ui = None
+    VueBridge = None
+    _WEB_IMPORT_ERROR = str(exc)
+
+
+@unittest.skipIf(web_main_ui is None, f"PyQt6 WebEngine unavailable: {_WEB_IMPORT_ERROR}")
+class TestWebModeSecurity(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.thumb_patch = mock.patch.object(web_main_ui, "_THUMB_DIR", cls.temp_dir.name)
+        cls.thumb_patch.start()
+        cls.image_path = os.path.join(cls.temp_dir.name, "source.png")
+        Image.new("RGB", (320, 160), (20, 40, 80)).save(cls.image_path)
+
+        cls.server = web_main_ui.ThreadingHTTPServer(
+            ("127.0.0.1", 0), web_main_ui._DistHandler
+        )
+        cls.server.daemon_threads = True
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+        cls.port = cls.server.server_address[1]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=2)
+        cls.thumb_patch.stop()
+        cls.temp_dir.cleanup()
+
+    def _request(self, path, *, headers=None, method="GET"):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        conn.request(method, path, headers=headers or {})
+        response = conn.getresponse()
+        body = response.read()
+        result = response.status, dict(response.getheaders()), body
+        conn.close()
+        return result
+
+    def _authenticated_cookie(self):
+        status, headers, _body = self._request(
+            f"/?token={quote(web_main_ui.SESSION_TOKEN)}"
+        )
+        self.assertEqual(status, 303)
+        self.assertNotIn("token=", headers["Location"])
+        return headers["Set-Cookie"].split(";", 1)[0]
+
+    def test_http_requires_session_and_cleans_token_url(self):
+        status, _headers, _body = self._request("/")
+        self.assertEqual(status, 401)
+
+        cookie = self._authenticated_cookie()
+        status, headers, body = self._request(
+            "/runtime-config.js", headers={"Cookie": cookie}
+        )
+        self.assertEqual(status, 200)
+        self.assertIn(b"__AISTUDIO_WS_PORT__", body)
+        self.assertEqual(headers["Referrer-Policy"], "no-referrer")
+
+    def test_file_streaming_cache_and_thumbnail(self):
+        cookie = self._authenticated_cookie()
+        encoded = quote(self.image_path)
+        status, headers, body = self._request(
+            f"/file?path={encoded}", headers={"Cookie": cookie}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(len(body), os.path.getsize(self.image_path))
+        self.assertIn("ETag", headers)
+        self.assertIn("Last-Modified", headers)
+
+        status, _headers, body = self._request(
+            f"/file?path={encoded}",
+            headers={"Cookie": cookie, "If-None-Match": headers["ETag"]},
+        )
+        self.assertEqual(status, 304)
+        self.assertEqual(body, b"")
+
+        status, headers, body = self._request(
+            f"/thumbnail?path={encoded}&width=96", headers={"Cookie": cookie}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "image/jpeg")
+        self.assertGreater(len(body), 0)
+
+    def test_origin_and_cookie_validation(self):
+        self.assertTrue(web_main_ui._token_matches(web_main_ui.SESSION_TOKEN))
+        self.assertFalse(web_main_ui._token_matches("wrong"))
+        self.assertEqual(
+            web_main_ui._cookie_token(
+                f"other=x; {web_main_ui.SESSION_COOKIE}={web_main_ui.SESSION_TOKEN}"
+            ),
+            web_main_ui.SESSION_TOKEN,
+        )
+        self.assertTrue(
+            web_main_ui._origin_matches(
+                f"http://127.0.0.1:{web_main_ui.HTTP_PORT}", "127.0.0.1"
+            )
+        )
+        self.assertFalse(web_main_ui._origin_matches("https://evil.example", "127.0.0.1"))
+
+    def test_websocket_requires_cookie_and_matching_origin(self):
+        from PyQt6.QtCore import QCoreApplication, QEventLoop, QTimer, QUrl
+        from PyQt6.QtNetwork import QNetworkRequest
+        from PyQt6.QtWebChannel import QWebChannel
+        from PyQt6.QtWebSockets import QWebSocket
+
+        app = QCoreApplication.instance() or QCoreApplication([])
+        bridge = VueBridge()
+        channel = QWebChannel()
+        facade = web_main_ui.WebBridgeFacade(bridge, channel)
+        channel.registerObject("backend", facade)
+        server = web_main_ui.WebChannelServer(channel, "127.0.0.1", 0)
+        port = server.server.serverPort()
+
+        def wait_for(signal, action, timeout=2000):
+            loop = QEventLoop()
+            fired = []
+            signal.connect(lambda: (fired.append(True), loop.quit()))
+            QTimer.singleShot(timeout, loop.quit)
+            action()
+            loop.exec()
+            return bool(fired)
+
+        origin = f"http://127.0.0.1:{web_main_ui.HTTP_PORT}"
+        good = QWebSocket(origin)
+        request = QNetworkRequest(QUrl(f"ws://127.0.0.1:{port}"))
+        request.setRawHeader(
+            b"Cookie",
+            f"{web_main_ui.SESSION_COOKIE}={web_main_ui.SESSION_TOKEN}".encode("ascii"),
+        )
+        self.assertTrue(wait_for(good.connected, lambda: good.open(request)))
+        app.processEvents()
+        self.assertEqual(len(server._connections), 1)
+        self.assertTrue(wait_for(good.disconnected, good.close))
+        app.processEvents()
+        self.assertEqual(len(server._connections), 0)
+
+        bad = QWebSocket("https://evil.example")
+        bad_request = QNetworkRequest(QUrl(f"ws://127.0.0.1:{port}"))
+        bad_request.setRawHeader(
+            b"Cookie",
+            f"{web_main_ui.SESSION_COOKIE}={web_main_ui.SESSION_TOKEN}".encode("ascii"),
+        )
+        self.assertTrue(wait_for(bad.disconnected, lambda: bad.open(bad_request)))
+        app.processEvents()
+        self.assertEqual(len(server._connections), 0)
+        server.close()
+
+    def test_facade_blocks_unlisted_methods_and_config_is_not_broadcast(self):
+        bridge = VueBridge()
+        facade = web_main_ui.WebBridgeFacade(bridge)
+        capabilities = json.loads(facade.getCapabilities())
+        self.assertIn("getInitialConfig", capabilities["methods"])
+        self.assertNotIn("requestInitialConfig", capabilities["methods"])
+
+        allowed = json.loads(facade.invoke("getAllWidgetValues", "[]"))
+        blocked = json.loads(facade.invoke("set_action_handler", "[]"))
+        self.assertTrue(allowed["ok"])
+        self.assertFalse(blocked["ok"])
+
+        broadcasts = []
+        bridge.uiPrefsLoaded.connect(broadcasts.append)
+        payload = json.loads(bridge.requestInitialConfig())
+        self.assertIn("uiPrefs", payload)
+        self.assertEqual(broadcasts, [])
+
+    def test_frontend_slot_usage_is_covered_by_facade(self):
+        root = pathlib.Path(__file__).resolve().parents[1]
+        source = (root / "ui" / "vue_bridge.py").read_text(encoding="utf-8")
+        frontend = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (root / "frontend" / "src").rglob("*")
+            if path.suffix in {".vue", ".js", ".ts"}
+        )
+        slots = set(re.findall(
+            r"(?:^[ \t]*@pyqtSlot[^\n]*\n)+^[ \t]*def\s+(\w+)",
+            source,
+            re.MULTILINE,
+        ))
+        used = {
+            name for name in slots
+            if re.search(r"\." + re.escape(name) + r"\b", frontend)
+            or re.search(r"[\"']" + re.escape(name) + r"[\"']", frontend)
+        }
+        missing = used - web_main_ui._WEB_METHODS - {"requestInitialConfig"}
+        self.assertEqual(missing, set())
+        self.assertTrue(all(callable(getattr(VueBridge, name, None)) for name in web_main_ui._WEB_METHODS))
+
+
+if __name__ == "__main__":
+    unittest.main()
