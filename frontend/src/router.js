@@ -1,19 +1,20 @@
 import { createRouter, createMemoryHistory } from 'vue-router'
 
 import ImageViewer from './components/ImageViewer.vue'
-import I2IView from './views/I2IView.vue'
-import InpaintView from './views/InpaintView.vue'
-import EventGenView from './views/EventGenView.vue'
-import SearchView from './views/SearchView.vue'
-import BatchView from './views/BatchView.vue'
-import GalleryView from './views/GalleryView.vue'
-import XYZPlotView from './views/XYZPlotView.vue'
-import PngInfoView from './views/PngInfoView.vue'
-import FavoritesView from './views/FavoritesView.vue'
-import SettingsView from './views/SettingsView.vue'
-import EditorView from './views/EditorView.vue'
-import WebView from './views/WebView.vue'
-import BackendView from './views/BackendView.vue'
+
+// T2I만 초기 번들에 포함하고 나머지 탭은 첫 방문 시 로드한다.
+// 로컬 QWebEngine에서도 초기 JS 파싱과 컴포넌트 생성 비용을 줄일 수 있다.
+const I2IView = () => import('./views/I2IView.vue')
+const InpaintView = () => import('./views/InpaintView.vue')
+const EventGenView = () => import('./views/EventGenView.vue')
+const SearchView = () => import('./views/SearchView.vue')
+const BatchView = () => import('./views/BatchView.vue')
+const GalleryView = () => import('./views/GalleryView.vue')
+const XYZPlotView = () => import('./views/XYZPlotView.vue')
+const PngInfoView = () => import('./views/PngInfoView.vue')
+const FavoritesView = () => import('./views/FavoritesView.vue')
+const SettingsView = () => import('./views/SettingsView.vue')
+const EditorView = () => import('./views/EditorView.vue')
 
 const routes = [
   { path: '/', name: 't2i', component: ImageViewer, meta: { title: 'T2I' } },

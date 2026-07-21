@@ -409,6 +409,7 @@ const schedulerList = computed(() => wStore.getProperty('scheduler_combo', 'item
 // UI prefs 로드 시 동기화
 import { onBackendEvent, getBackend } from '../bridge.js'
 onMounted(async () => {
+  onBackendEvent('ollamaModelsReady', handleOllamaModels)
   autoLoadOllamaModels()   // AI Assistant 모델 목록 시작 시 자동 로드
   // defaults 로드
   const bk: any = await getBackend()
@@ -568,57 +569,51 @@ function saveOllamaSettings() {
 }
 
 async function testOllama() {
-  const { getBackend } = await import('../bridge.js')
+  _ollamaRequestMode = 'test'
   const backend: any = await getBackend()
-  if (backend.ollamaListModels) {
-    backend.ollamaListModels(ollamaUrl.value, (json: string) => {
-      try {
-        const models = JSON.parse(json)
-        ollamaModels.value = models
-        if (models.length > 0) {
-          requestAction('show_toast', { type: 'success', msg: `Ollama 연결 성공! ${models.length}개 모델 발견` })
-          // 현재 선택 모델이 목록에 없으면 첫번째로 설정
-          if (!models.includes(ollamaModel.value)) {
-            ollamaModel.value = models[0]
-            saveOllamaSettings()
-          }
-        } else {
-          requestAction('show_toast', { type: 'info', msg: 'Ollama 연결됨 — 설치된 모델 없음' })
-        }
-      } catch {
-        requestAction('show_toast', { type: 'error', msg: 'Ollama 연결 실패' })
-      }
-    })
-  }
+  if (backend.requestOllamaModels) backend.requestOllamaModels(ollamaUrl.value)
+  else if (backend.ollamaListModels) backend.ollamaListModels(ollamaUrl.value, handleOllamaModels)
 }
 function loadOllamaModels() { testOllama() }
 // 시작 시 조용히 모델 목록 자동 로드 (caption 탭과 동일). 실패하면 Ollama 연결부터 안내.
 async function autoLoadOllamaModels() {
-  const { getBackend } = await import('../bridge.js')
+  _ollamaRequestMode = 'auto'
   const backend: any = await getBackend()
-  if (!backend.ollamaListModels) return
-  backend.ollamaListModels(ollamaUrl.value, (json: string) => {
-    try {
-      const models = JSON.parse(json)
-      if (Array.isArray(models) && models.length > 0) {
-        ollamaModels.value = models
-        // 태그 차이 허용: base 매칭이면 목록 이름으로 정규화, 전혀 없으면 첫 모델로
-        const base = (s: string) => (s || '').split(':')[0].toLowerCase()
-        const match = models.includes(ollamaModel.value)
-          ? ollamaModel.value
-          : models.find((m: string) => ollamaModel.value && base(m) === base(ollamaModel.value))
-        const next = match || models[0]
-        if (next && next !== ollamaModel.value) {
-          ollamaModel.value = next
-          saveOllamaSettings()
-        }
-      } else {
-        requestAction('show_toast', { type: 'warning', msg: 'Ollama 연결을 먼저 확인하세요 (실행 중인지 · URL · 설치된 모델). Settings → AI Assistant' })
-      }
-    } catch {
-      requestAction('show_toast', { type: 'error', msg: 'Ollama 연결 실패 — Ollama 실행/URL을 먼저 확인하세요' })
+  if (backend.requestOllamaModels) backend.requestOllamaModels(ollamaUrl.value)
+  else if (backend.ollamaListModels) backend.ollamaListModels(ollamaUrl.value, handleOllamaModels)
+}
+let _ollamaRequestMode: 'test' | 'auto' | null = null
+function handleOllamaModels(json: string) {
+  if (!_ollamaRequestMode) return
+  const mode = _ollamaRequestMode
+  try {
+    const payload = JSON.parse(json)
+    const models = Array.isArray(payload) ? payload : payload.models
+    if (!Array.isArray(payload) && payload.url && payload.url !== ollamaUrl.value) {
+      _ollamaRequestMode = null
+      return
     }
-  })
+    _ollamaRequestMode = null
+    if (!Array.isArray(models)) throw new Error('invalid models payload')
+    ollamaModels.value = models
+    if (models.length > 0) {
+      if (mode === 'test') requestAction('show_toast', { type: 'success', msg: `Ollama 연결 성공! ${models.length}개 모델 발견` })
+      const base = (s: string) => (s || '').split(':')[0].toLowerCase()
+      const match = models.includes(ollamaModel.value)
+        ? ollamaModel.value
+        : models.find((m: string) => ollamaModel.value && base(m) === base(ollamaModel.value))
+      const next = match || models[0]
+      if (next && next !== ollamaModel.value) { ollamaModel.value = next; saveOllamaSettings() }
+    } else {
+      const msg = mode === 'test'
+        ? 'Ollama 연결됨 — 설치된 모델 없음'
+        : 'Ollama 연결을 먼저 확인하세요 (실행 중인지 · URL · 설치된 모델). Settings → AI Assistant'
+      requestAction('show_toast', { type: mode === 'test' ? 'info' : 'warning', msg })
+    }
+  } catch {
+    _ollamaRequestMode = null
+    requestAction('show_toast', { type: 'error', msg: 'Ollama 연결 실패 — Ollama 실행/URL을 확인하세요' })
+  }
 }
 </script>
 

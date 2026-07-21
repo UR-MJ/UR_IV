@@ -6,6 +6,7 @@ PyQt6 ↔ Vue 통신 브릿지 (QWebChannel)
 import json
 import logging
 import os
+import threading
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from core.path_safety import safe_input_path as _normalize_vue_path  # noqa: F401
@@ -41,6 +42,10 @@ class VueBridge(QObject):
     globalWeightsLoaded = pyqtSignal(str) # JSON [{tag, weight}]
     uiPrefsLoaded = pyqtSignal(str)      # JSON {tagBlockMode, ...}
     compareImageLoaded = pyqtSignal(str) # JSON {slot, path}
+    galleryImagesReady = pyqtSignal(str) # JSON {folder, files}
+    upscalersReady = pyqtSignal(str)      # JSON [name]
+    ollamaModelsReady = pyqtSignal(str)   # JSON {url, models}
+    adetailerModelsReady = pyqtSignal(str) # JSON [name]
     queueItemAdded = pyqtSignal(str)     # JSON {prompt, ...}
     queueCompleted = pyqtSignal(str)     # JSON {total}
     showNotification = pyqtSignal(str, str)  # (type: success|error|info, message)
@@ -72,6 +77,27 @@ class VueBridge(QObject):
         self._batch_mode = False
         self._batch_buffer = {}
         self._action_handler = None  # 액션 디스패처 (메인 윈도우에서 설정)
+        self._async_lookup_inflight = set()
+        self._async_lookup_lock = threading.Lock()
+        self.adetailerModelsReady.connect(self._apply_adetailer_models_json)
+
+    def _run_async_lookup(self, key, loader, signal):
+        """GUI 스레드를 막는 조회를 중복 없이 백그라운드에서 실행한다."""
+        with self._async_lookup_lock:
+            if key in self._async_lookup_inflight:
+                return
+            self._async_lookup_inflight.add(key)
+
+        def _work():
+            try:
+                signal.emit(loader())
+            except Exception as e:
+                logger.warning("async lookup failed (%s): %s", key, e)
+            finally:
+                with self._async_lookup_lock:
+                    self._async_lookup_inflight.discard(key)
+
+        threading.Thread(target=_work, daemon=True, name=f"vue-{key}").start()
 
     def _register_proxy(self, widget_id: str, proxy):
         """위젯 프록시 등록 + 부모 설정 (GC 방지)"""
@@ -604,24 +630,46 @@ class VueBridge(QObject):
         with open(cfg, 'w') as f:
             f.write(folder)
 
-    @pyqtSlot(str, result=str)
-    def getGalleryImages(self, folder: str) -> str:
-        """폴더의 이미지 목록 반환"""
+    def _gallery_images_payload(self, folder: str) -> str:
+        """scandir의 stat 캐시를 이용해 날짜순 이미지 목록을 만든다."""
         import os
         from config import OUTPUT_DIR
         target = folder if folder else OUTPUT_DIR
         if not os.path.isdir(target):
-            return json.dumps([])
+            return json.dumps({'folder': folder, 'files': []})
         exts = ('.png', '.jpg', '.jpeg', '.webp')
-        files = []
+        entries = []
         try:
-            for f in sorted(os.listdir(target), key=lambda x: os.path.getmtime(os.path.join(target, x)), reverse=True):
-                if f.lower().endswith(exts):
-                    fp = os.path.join(target, f).replace('\\', '/')
-                    files.append(fp)
+            with os.scandir(target) as scan:
+                for entry in scan:
+                    if entry.is_file() and entry.name.lower().endswith(exts):
+                        try:
+                            mtime = entry.stat().st_mtime
+                        except OSError:
+                            mtime = 0
+                        entries.append((mtime, entry.path.replace('\\', '/')))
+            entries.sort(key=lambda item: item[0], reverse=True)
         except Exception as e:
             logger.warning("getGalleryImages failed (%s): %s", target, e)
-        return json.dumps(files)
+        return json.dumps({'folder': folder, 'files': [path for _, path in entries]})
+
+    @pyqtSlot(str, result=str)
+    def getGalleryImages(self, folder: str) -> str:
+        """하위호환 동기 API. 신규 Vue 코드는 requestGalleryImages를 사용한다."""
+        try:
+            return json.dumps(json.loads(self._gallery_images_payload(folder))['files'])
+        except Exception:
+            return '[]'
+
+    @pyqtSlot(str)
+    def requestGalleryImages(self, folder: str):
+        """폴더 스캔/정렬을 백그라운드에서 수행해 GUI 멈춤을 방지한다."""
+        key = f"gallery:{folder or '<default>'}"
+        self._run_async_lookup(
+            key,
+            lambda: self._gallery_images_payload(folder),
+            self.galleryImagesReady,
+        )
 
     @pyqtSlot(result=str)
     def getFavorites(self) -> str:
@@ -788,17 +836,33 @@ class VueBridge(QObject):
                     return None
 
             if isinstance(results, list):
-                # 새 형식 (현재): list of dicts
-                for row in results:
-                    out.append({
-                        'copyright': _pick(row, 'tag_string_copyright', 'copyright'),
-                        'character': _pick(row, 'tag_string_character', 'character'),
-                        'artist':    _pick(row, 'tag_string_artist',    'artist'),
-                        'general':   _pick(row, 'tag_string_general',   'general'),
-                        'rating':    str(row.get('rating') or ''),
-                        'image_width':  _dim(row, 'image_width'),
-                        'image_height': _dim(row, 'image_height'),
-                    })
+                # 현재 워커 결과는 이 시점 이후 다른 소비자가 없으므로 기존 dict를
+                # 정규화해 재사용한다. 수십만 행에서 동일 크기의 두 번째 list[dict]가
+                # 동시에 존재하던 피크 메모리를 제거한다.
+                out = results
+                write_idx = 0
+                for row in out:
+                    if not isinstance(row, dict):
+                        continue
+                    copyright = _pick(row, 'tag_string_copyright', 'copyright')
+                    character = _pick(row, 'tag_string_character', 'character')
+                    artist = _pick(row, 'tag_string_artist', 'artist')
+                    general = _pick(row, 'tag_string_general', 'general')
+                    rating = str(row.get('rating') or '')
+                    image_width = _dim(row, 'image_width')
+                    image_height = _dim(row, 'image_height')
+                    row.clear()
+                    row['copyright'] = copyright
+                    row['character'] = character
+                    row['artist'] = artist
+                    row['general'] = general
+                    row['rating'] = rating
+                    row['image_width'] = image_width
+                    row['image_height'] = image_height
+                    out[write_idx] = row
+                    write_idx += 1
+                if write_idx < len(out):
+                    del out[write_idx:]
             elif hasattr(results, 'iterrows'):
                 # 옛 형식 fallback: DataFrame
                 for _, row in results.iterrows():
@@ -829,7 +893,8 @@ class VueBridge(QObject):
                 out = out[:MAX_RESULTS_TO_VUE]
 
             # Vue로 전달
-            self.searchResultsReady.emit(json.dumps(out))
+            self.searchResultsReady.emit(
+                json.dumps(out, ensure_ascii=False, separators=(',', ':')))
             self.searchStatus.emit(f'{len(out):,}개 결과 (전체 {total_count:,}개)')
 
             # Python 메인 윈도우의 filtered_results도 업데이트 (랜덤 프롬프트용)
@@ -944,9 +1009,7 @@ class VueBridge(QObject):
         mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp'}.get(ext, 'image/png')
         return f"data:{mime};base64,{base64.b64encode(data).decode()}"
 
-    @pyqtSlot(result=str)
-    def getUpscalers(self) -> str:
-        """API에서 업스케일러 목록 반환"""
+    def _load_upscalers_json(self) -> str:
         try:
             from backends import get_backend
             backend = get_backend()
@@ -958,6 +1021,16 @@ class VueBridge(QObject):
         except Exception:
             pass
         return json.dumps([])
+
+    @pyqtSlot(result=str)
+    def getUpscalers(self) -> str:
+        """하위호환 동기 API. 신규 Vue 코드는 requestUpscalers를 사용한다."""
+        return self._load_upscalers_json()
+
+    @pyqtSlot()
+    def requestUpscalers(self):
+        """업스케일러 목록을 백그라운드에서 조회한다."""
+        self._run_async_lookup('upscalers', self._load_upscalers_json, self.upscalersReady)
 
     @pyqtSlot(str, str, result=str)
     def saveImageExif(self, filepath: str, new_params: str) -> str:
@@ -1253,29 +1326,34 @@ class VueBridge(QObject):
         except Exception:
             return json.dumps({})
 
-    @pyqtSlot(str, result=str)
-    def ollamaListModels(self, base_url: str = '') -> str:
-        """Ollama 모델 목록 반환.
-
-        실패해도 빈 리스트 — Vue에서 toast로 사용자에게 안내.
-        """
+    def _load_ollama_models_json(self, base_url: str = '') -> str:
         try:
             from core.ollama_client import OllamaClient
             url = base_url.strip() if base_url.strip() else 'http://localhost:11434'
             client = OllamaClient(base_url=url)
             models = client.list_models()
-            if not models:
-                # 연결은 되지만 모델 없음 — 디버깅 출력
-                import requests
-                try:
-                    r = requests.get(f"{url}/api/tags", timeout=3)
-                    print(f"[Ollama] {url}/api/tags status={r.status_code}, body={r.text[:200]}")
-                except Exception as e:
-                    print(f"[Ollama] 연결 자체 실패: {e}")
             return json.dumps(models)
         except Exception as e:
             print(f"[Ollama] ollamaListModels 오류: {e}")
             return json.dumps([])
+
+    @pyqtSlot(str, result=str)
+    def ollamaListModels(self, base_url: str = '') -> str:
+        """하위호환 동기 API. 신규 Vue 코드는 requestOllamaModels를 사용한다."""
+        return self._load_ollama_models_json(base_url)
+
+    @pyqtSlot(str)
+    def requestOllamaModels(self, base_url: str = ''):
+        """Ollama 모델 목록을 백그라운드에서 조회한다."""
+        url = base_url.strip() if base_url.strip() else 'http://localhost:11434'
+
+        def _load():
+            return json.dumps({
+                'url': url,
+                'models': json.loads(self._load_ollama_models_json(url)),
+            })
+
+        self._run_async_lookup(f'ollama-models:{url}', _load, self.ollamaModelsReady)
 
     @pyqtSlot(result=str)
     def getRandomResolutions(self) -> str:
@@ -2164,9 +2242,7 @@ class VueBridge(QObject):
             logger.warning("getTabDefaults failed: %s", e)
         return '{}'
 
-    @pyqtSlot(result=str)
-    def getADetailerModels(self) -> str:
-        """A1111 WebUI에서 ADetailer 모델 목록 반환 + proxy items 업데이트"""
+    def _load_adetailer_models_json(self) -> str:
         models = ["face_yolov8n.pt", "hand_yolov8n.pt", "person_yolov8n-seg.pt",
                    "mediapipe_face_full", "mediapipe_face_short"]
         try:
@@ -2180,12 +2256,35 @@ class VueBridge(QObject):
                     models = data if isinstance(data, list) else data.get('ad_model', [])
         except Exception:
             pass
-        # ComboBoxProxy items 업데이트 (설정 저장/로드 정합성)
+        return json.dumps(models)
+
+    @pyqtSlot(str)
+    def _apply_adetailer_models_json(self, models_json: str):
+        """worker 결과를 GUI 스레드에서 proxy 목록에 반영한다."""
+        try:
+            models = json.loads(models_json)
+        except Exception:
+            return
         for wid in ('_ad_s1_model', '_ad_s2_model'):
             proxy = self._proxies.get(wid)
             if proxy and hasattr(proxy, 'addItems'):
                 proxy.addItems(models)
-        return json.dumps(models)
+
+    @pyqtSlot(result=str)
+    def getADetailerModels(self) -> str:
+        """하위호환 동기 API. 신규 Vue 코드는 requestADetailerModels를 사용한다."""
+        models_json = self._load_adetailer_models_json()
+        self._apply_adetailer_models_json(models_json)
+        return models_json
+
+    @pyqtSlot()
+    def requestADetailerModels(self):
+        """ADetailer 모델 목록을 백그라운드에서 조회한다."""
+        self._run_async_lookup(
+            'adetailer-models',
+            self._load_adetailer_models_json,
+            self.adetailerModelsReady,
+        )
 
     @pyqtSlot(result=str)
     def getYoloModelLabel(self) -> str:

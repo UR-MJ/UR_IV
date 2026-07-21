@@ -416,16 +416,33 @@ const captionUrl = () => window.localStorage.getItem('ollamaUrl') || 'http://loc
 function saveCaptionModel() { window.localStorage.setItem('ollamaCaptionModel', captionModel.value) }
 async function loadCaptionModels() {
   const backend: any = await getBackend()
-  if (!backend.ollamaListModels) return
-  backend.ollamaListModels(captionUrl(), (json: string) => {
-    try {
-      const models = JSON.parse(json)
-      if (Array.isArray(models)) {
-        ollamaModels.value = models
-        if (!captionModel.value && models.length) { captionModel.value = models[0]; saveCaptionModel() }
-      }
-    } catch {}
-  })
+  if (backend.requestOllamaModels) {
+    backend.requestOllamaModels(captionUrl())
+  } else if (backend.ollamaListModels) {
+    backend.ollamaListModels(captionUrl(), applyCaptionModels)
+  }
+}
+function applyCaptionModels(json: string) {
+  try {
+    const payload = JSON.parse(json)
+    const models = Array.isArray(payload) ? payload : payload.models
+    if (!Array.isArray(models)) return
+    if (!Array.isArray(payload) && payload.url && payload.url !== captionUrl()) return
+    ollamaModels.value = models
+    if (!captionModel.value && models.length) { captionModel.value = models[0]; saveCaptionModel() }
+  } catch {}
+}
+function applyUpscalers(json: string) {
+  try {
+    const list = JSON.parse(json)
+    if (list.length) { upscalers.value = list; upscaler.value = list[0] }
+  } catch {}
+}
+function applyADetailerModels(json: string) {
+  try {
+    const models = JSON.parse(json)
+    if (models.length) { adModelItems.value = models; adModel.value = models[0] }
+  } catch {}
 }
 function saveCaptionPrompt() { window.localStorage.setItem('captionPrompt', captionPrompt.value) }
 function clearCaption() { captionItems.value = [] }
@@ -651,30 +668,22 @@ withDefaults(defineProps<{ initialAdPath?: string }>(), { initialAdPath: '' })
 watch(subTab, (v) => { if (v === 'caption') loadCaptionModels() })
 
 onMounted(async () => {
+  onBackendEvent('ollamaModelsReady', applyCaptionModels)
+  onBackendEvent('upscalersReady', applyUpscalers)
+  onBackendEvent('adetailerModelsReady', applyADetailerModels)
+
   const backend: any = await getBackend()
 
   // 캡션 모델 드롭다운 — UI 시작 시 자동 새로고침
   loadCaptionModels()
 
   // 업스케일러 로드
-  if (backend.getUpscalers) {
-    backend.getUpscalers((json: string) => {
-      try {
-        const list = JSON.parse(json)
-        if (list.length) { upscalers.value = list; upscaler.value = list[0] }
-      } catch {}
-    })
-  }
+  if (backend.requestUpscalers) backend.requestUpscalers()
+  else if (backend.getUpscalers) backend.getUpscalers(applyUpscalers)
 
   // AD 모델 로드
-  if (backend.getADetailerModels) {
-    backend.getADetailerModels((json: string) => {
-      try {
-        const models = JSON.parse(json)
-        if (models.length) { adModelItems.value = models; adModel.value = models[0] }
-      } catch {}
-    })
-  }
+  if (backend.requestADetailerModels) backend.requestADetailerModels()
+  else if (backend.getADetailerModels) backend.getADetailerModels(applyADetailerModels)
 
   // 파일 선택 이벤트
   onBackendEvent('batchFilesSelected', (json: string) => {

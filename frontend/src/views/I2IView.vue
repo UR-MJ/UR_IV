@@ -102,7 +102,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
-import { getBackend, onBackendEvent } from '../bridge.js'
+import { onBackendEvent } from '../bridge.js'
 import CustomSelect from '../components/CustomSelect.vue'
 
 const isDragging = ref(false)
@@ -144,15 +144,9 @@ function loadFile(file: File) {
 
 // 경로로 직접 이미지 로드 (History/Gallery에서 전송 시)
 async function loadFromPath(path: string) {
-  imagePath.value = path
-  const backend: any = await getBackend()
-  if (backend.loadImageBase64) {
-    backend.loadImageBase64(path, (b64: string) => {
-      if (b64) imageSrc.value = b64
-    })
-  } else {
-    imageSrc.value = 'file:///' + path
-  }
+  const normalized = path.replace(/\\/g, '/')
+  imagePath.value = normalized
+  imageSrc.value = 'file:///' + normalized
 }
 
 onMounted(() => {
@@ -162,7 +156,7 @@ onMounted(() => {
 
 function generate() {
   requestAction('generate_i2i', {
-    image: imageSrc.value,
+    image: imagePath.value ? '' : imageSrc.value,
     image_path: imagePath.value,
     prompt: prompt.value,
     negative_prompt: negPrompt.value,

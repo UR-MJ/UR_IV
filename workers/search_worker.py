@@ -18,10 +18,10 @@ class PandasSearchWorker(QThread):
 
     # 검색에 필요한 컬럼만 로드 (메모리 절약)
     # image_width/height 추가 — 자동(PARQUET) 해상도 + Search 결과 해상도 표기용.
-    # 파일에 컬럼 없으면 read_parquet(columns=) 가 실패하고 전체 로드로 폴백되므로 안전.
+    # 파일별 스키마와 교집합만 읽고, 없는 컬럼은 로드 후 기본값으로 보충한다.
     # 'rating'을 반드시 포함 — 빠지면 2026_06처럼 모든 컬럼이 존재하는 슬림
     # 데이터셋에서 columns= subset이 성공하면서 rating을 안 실어 RATING이 '?'가 됨.
-    # (2025/2026은 meta/해상도 컬럼이 없어 columns=가 실패→전체 로드→rating 우연히 보존.)
+    # 세대별 meta/metadata 차이는 _load_data에서 정규화한다.
     REQUIRED_COLUMNS = ['rating', 'copyright', 'character', 'artist', 'general', 'meta',
                         'image_width', 'image_height']
 
@@ -235,10 +235,20 @@ class PandasSearchWorker(QThread):
             if os.path.exists(path):
                 self.status_update.emit(f"📂 '{rating}' 등급 데이터 로딩 중...")
                 try:
-                    try:
-                        df = pd.read_parquet(path, columns=self.REQUIRED_COLUMNS)
-                    except Exception:
-                        df = pd.read_parquet(path)
+                    # 데이터셋 세대별로 meta/metadata 및 해상도 컬럼 유무가 다르다.
+                    # columns= 호출 실패를 전체 컬럼 로드로 처리하면 0.4~0.8GB 파일에서
+                    # score/fav_count 등 불필요한 컬럼까지 읽게 되므로 스키마 교집합만 로드한다.
+                    import pyarrow.parquet as pq
+                    schema_names = set(pq.ParquetFile(path).schema.names)
+                    columns = [c for c in self.REQUIRED_COLUMNS if c in schema_names]
+                    if 'meta' not in schema_names and 'metadata' in schema_names:
+                        columns.append('metadata')
+                    df = pd.read_parquet(path, columns=columns)
+                    if 'metadata' in df.columns and 'meta' not in df.columns:
+                        df.rename(columns={'metadata': 'meta'}, inplace=True)
+                    for col in self.REQUIRED_COLUMNS:
+                        if col not in df.columns:
+                            df[col] = None if col in ('image_width', 'image_height') else ''
                     dfs.append(df)
                 except Exception as e:
                     self.status_update.emit(f"⚠️ 파일 로드 실패 ({rating}): {e}")

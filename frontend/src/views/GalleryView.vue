@@ -367,19 +367,27 @@ async function loadImages(forceRefresh = false) {
 
   isLoading.value = true
   const backend: any = await getBackend()
-  if (backend.getGalleryImages) {
+  if (backend.requestGalleryImages) {
+    backend.requestGalleryImages(currentFolder.value)
+  } else if (backend.getGalleryImages) {
     backend.getGalleryImages(currentFolder.value, (json: string) => {
       try {
-        const list = JSON.parse(json)
-        images.value = list
-        // 캐시 저장
-        _cache.set(cacheKey, { images: list, timestamp: Date.now() })
+        applyGalleryImages(currentFolder.value, JSON.parse(json))
       } catch {}
       isLoading.value = false
     })
   } else {
     isLoading.value = false
   }
+}
+
+function applyGalleryImages(folder: string, list: unknown) {
+  if (folder !== currentFolder.value || !Array.isArray(list)) return
+  images.value = list as string[]
+  visibleCount.value = Math.min(Math.max(40, visibleCount.value), Math.max(40, images.value.length))
+  const cacheKey = folder || '__default__'
+  _cache.set(cacheKey, { images: images.value, timestamp: Date.now() })
+  isLoading.value = false
 }
 
 function sortImages() {
@@ -441,6 +449,12 @@ const hideMenu = () => ctxMenu.value.show = false
 
 onMounted(async () => {
   document.addEventListener('click', hideMenu)
+  _galleryImagesUnsub = onBackendEvent('galleryImagesReady', (json: string) => {
+    try {
+      const payload = JSON.parse(json)
+      applyGalleryImages(payload.folder || '', payload.files)
+    } catch {}
+  })
   // 마지막 폴더 경로 로드 후 이미지 로드
   const bk: any = await getBackend()
   if (bk.getLastGalleryFolder) {
@@ -455,10 +469,12 @@ onMounted(async () => {
 })
 // onBackendEvent disconnect 핸들 — unmount 시 정리
 let _galleryFolderUnsub: (() => void) | null = null
+let _galleryImagesUnsub: (() => void) | null = null
 onUnmounted(() => {
   document.removeEventListener('click', hideMenu)
   if (_showMetaTimer) clearInterval(_showMetaTimer)
   if (_galleryFolderUnsub) _galleryFolderUnsub()
+  if (_galleryImagesUnsub) _galleryImagesUnsub()
 })
 </script>
 

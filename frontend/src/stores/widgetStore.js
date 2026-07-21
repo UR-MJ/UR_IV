@@ -1,7 +1,7 @@
 /**
  * 위젯 상태 저장소 — Python 프록시와 실시간 2방향 동기화
  */
-import { reactive, watch } from 'vue'
+import { reactive } from 'vue'
 
 /** @type {{ values: Record<string, any>, properties: Record<string, Record<string, any>> }} */
 const state = reactive({
@@ -10,6 +10,38 @@ const state = reactive({
 })
 
 let _backend = null
+let _applyingFromBackend = false
+const _prevSnapshot = Object.create(null)
+
+// Vue에서 발생한 키 단위 변경만 Python으로 전송한다.
+// reactive 객체 전체를 deep-watch하면 입력 한 글자마다 모든 위젯을 순회하고,
+// Python에서 받은 초기값까지 다시 echo하게 된다.
+const widgetValues = new Proxy(state.values, {
+  set(target, id, val) {
+    if (target[id] === val) return true
+    target[id] = val
+    if (!_applyingFromBackend && _backend) {
+      const strVal = String(val)
+      if (_prevSnapshot[id] !== strVal) {
+        _prevSnapshot[id] = strVal
+        _backend.onWidgetChanged(String(id), strVal)
+      }
+    }
+    return true
+  },
+})
+
+function applyBackendValues(data) {
+  _applyingFromBackend = true
+  try {
+    for (const [id, val] of Object.entries(data || {})) {
+      _prevSnapshot[id] = String(val)
+      state.values[id] = val
+    }
+  } finally {
+    _applyingFromBackend = false
+  }
+}
 
 /**
  * 브릿지 연결
@@ -19,9 +51,7 @@ export function connectStore(backend) {
 
   // 1. Python -> Vue: 개별 값 수신
   backend.widgetValueChanged.connect((id, val) => {
-    if (state.values[id] !== val) {
-      state.values[id] = val
-    }
+    if (state.values[id] !== val) applyBackendValues({ [id]: val })
   })
 
   // 2. Python -> Vue: 속성 수신
@@ -38,7 +68,7 @@ export function connectStore(backend) {
   backend.batchUpdate.connect((json) => {
     try {
       const data = JSON.parse(json)
-      Object.assign(state.values, data)
+      applyBackendValues(data)
     } catch (e) { console.error('[Store] Batch Error:', e) }
   })
 
@@ -46,32 +76,16 @@ export function connectStore(backend) {
   backend.getAllWidgetValues((json) => {
     try {
       const data = JSON.parse(json)
-      Object.assign(state.values, data)
+      applyBackendValues(data)
     } catch (e) { console.error('[Store] Init Error:', e) }
   })
 }
 
-/**
- * [중요] Vue -> Python: 최적화된 동기화 엔진
- * 변경된 값만 Python 백엔드에 전송 (이전 값과 비교)
- */
-let _prevSnapshot = {}
-watch(() => state.values, (newVals) => {
-  if (!_backend) return
-  for (const [id, val] of Object.entries(newVals)) {
-    const strVal = String(val)
-    if (_prevSnapshot[id] !== strVal) {
-      _prevSnapshot[id] = strVal
-      _backend.onWidgetChanged(id, strVal)
-    }
-  }
-}, { deep: true })
-
 export function getValue(id) { return state.values[id] ?? '' }
 export function getProperty(id, prop, def = '') { return state.properties[id]?.[prop] ?? def }
 
-// 명시적 값 설정 (watch가 감지함)
-export function setValue(id, val) { state.values[id] = val }
+// 명시적 값 설정 (Proxy가 키 단위로 감지함)
+export function setValue(id, val) { widgetValues[id] = val }
 
 // 액션 요청
 /**
@@ -91,7 +105,7 @@ export function requestAction(action, payload = {}) {
  */
 export function useWidgetStore() {
   return {
-    widgets: state.values,
+    widgets: widgetValues,
     getProperty: (id, prop, def = '') => state.properties[id]?.[prop] ?? def,
     getValue,
     setValue,

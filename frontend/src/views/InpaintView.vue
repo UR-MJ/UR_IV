@@ -91,7 +91,8 @@
         </div>
         <template v-else>
           <canvas ref="imgRef" class="cv" :style="cvStyle"></canvas>
-          <canvas ref="maskRef" class="cv mask" :style="cvStyle"
+          <canvas ref="maskRef" class="cv mask" :style="cvStyle"></canvas>
+          <canvas ref="overlayRef" class="cv overlay" :style="cvStyle"
             @mousedown="onDown" @mousemove="onMove" @mouseup="onUp"
             @mouseleave="onUp" @wheel.prevent="onWheel" @dblclick="onDblClick"
             @contextmenu.prevent></canvas>
@@ -110,6 +111,7 @@ import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from '../components/CustomSelect.vue'
 
 interface Point { x: number; y: number }
+interface DirtyRect { x1: number; y1: number; x2: number; y2: number }
 
 // ── State ──
 const isDragging = ref(false)
@@ -118,6 +120,7 @@ const imagePath = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const imgRef = ref<HTMLCanvasElement | null>(null)
 const maskRef = ref<HTMLCanvasElement | null>(null)
+const overlayRef = ref<HTMLCanvasElement | null>(null)
 const brushSize = ref(40)
 const prompt = ref('')
 const denoising = ref(0.75)
@@ -148,8 +151,12 @@ const imgW = ref(0), imgH = ref(0)
 const zoom = ref(1), panX = ref(0), panY = ref(0)
 const hasMask = ref(false)
 
-let iCtx: CanvasRenderingContext2D | null = null, mCtx: CanvasRenderingContext2D | null = null, srcImg: HTMLImageElement | null = null
+let iCtx: CanvasRenderingContext2D | null = null
+let mCtx: CanvasRenderingContext2D | null = null
+let oCtx: CanvasRenderingContext2D | null = null
+let srcImg: HTMLImageElement | null = null
 let maskData: Uint8Array | null = null
+let maskImageData: ImageData | null = null
 let drawing = false, panning = false
 let startX = 0, startY = 0, lastX = -1, lastY = -1
 let panSX = 0, panSY = 0
@@ -179,9 +186,11 @@ function loadFile(file: File) {
   if ((file as any).path) imagePath.value = (file as any).path.replace(/\\/g, '/')
 }
 async function loadFromPath(path: string) {
-  imagePath.value = path
-  const bk: any = await getBackend()
-  if (bk.loadImageBase64) bk.loadImageBase64(path, (b64: string) => { if (b64) { imageSrc.value = b64; initCanvas(b64) } })
+  const normalized = path.replace(/\\/g, '/')
+  imagePath.value = normalized
+  const localUrl = 'file:///' + normalized
+  imageSrc.value = localUrl
+  initCanvas(localUrl)
 }
 
 function initCanvas(src: string) {
@@ -195,7 +204,11 @@ function initCanvas(src: string) {
     const mc = maskRef.value; if (!mc) return
     mc.width = img.naturalWidth; mc.height = img.naturalHeight
     mCtx = mc.getContext('2d'); mCtx!.clearRect(0, 0, mc.width, mc.height)
+    const oc = overlayRef.value; if (!oc) return
+    oc.width = img.naturalWidth; oc.height = img.naturalHeight
+    oCtx = oc.getContext('2d'); oCtx!.clearRect(0, 0, oc.width, oc.height)
     maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
+    maskImageData = mCtx!.createImageData(img.naturalWidth, img.naturalHeight)
     hasMask.value = false; undoStack = []; redoStack = []
   }
   img.src = src
@@ -203,9 +216,9 @@ function initCanvas(src: string) {
 
 // ── 좌표 ──
 function getPos(e: MouseEvent): Point {
-  if (!maskRef.value) return { x: 0, y: 0 }
-  const r = maskRef.value.getBoundingClientRect()
-  return { x: (e.clientX - r.left) / r.width * maskRef.value.width, y: (e.clientY - r.top) / r.height * maskRef.value.height }
+  if (!overlayRef.value) return { x: 0, y: 0 }
+  const r = overlayRef.value.getBoundingClientRect()
+  return { x: (e.clientX - r.left) / r.width * overlayRef.value.width, y: (e.clientY - r.top) / r.height * overlayRef.value.height }
 }
 
 // ── 마우스 이벤트 ──
@@ -218,9 +231,9 @@ function onDown(e: MouseEvent) {
   const p = getPos(e); startX = p.x; startY = p.y; lastX = p.x; lastY = p.y
 
   if (currentTool.value === 'lasso') { const sp = magneticLasso.value ? snapToEdge(p.x, p.y) : p; lassoPoints = [{ x: sp.x, y: sp.y }] }
-  else if (currentTool.value === 'brush') { paintCircle(p.x, p.y); render() }
+  else if (currentTool.value === 'brush') { paintCircle(p.x, p.y); renderDirty(circleBounds(p.x, p.y)) }
   else if (currentTool.value === 'eraser') {
-    if (eraserMode.value === 'brush') { eraseCircle(p.x, p.y); render() }
+    if (eraserMode.value === 'brush') { eraseCircle(p.x, p.y); renderDirty(circleBounds(p.x, p.y)) }
     else { lassoPoints = eraserMode.value === 'lasso' ? [{ x: p.x, y: p.y }] : [] }
   }
 }
@@ -228,34 +241,35 @@ function onDown(e: MouseEvent) {
 function onMove(e: MouseEvent) {
   if (panning) { panX.value = e.clientX - panSX; panY.value = e.clientY - panSY; return }
   const p = getPos(e)
-  // 커서 표시
-  if (!drawing && mCtx && (currentTool.value === 'brush' || currentTool.value === 'eraser')) {
-    render()
-    const col = currentTool.value === 'eraser' ? 'rgba(248,113,113,0.5)' : 'rgba(226,179,64,0.5)'
-    mCtx.strokeStyle = col; mCtx.lineWidth = 2
-    mCtx.beginPath(); mCtx.arc(p.x, p.y, brushSize.value, 0, Math.PI * 2); mCtx.stroke()
+  if (!drawing) {
+    clearOverlay()
+    if (oCtx && (currentTool.value === 'brush' || currentTool.value === 'eraser')) {
+      const col = currentTool.value === 'eraser' ? 'rgba(248,113,113,0.5)' : 'rgba(226,179,64,0.5)'
+      oCtx.strokeStyle = col; oCtx.lineWidth = 2
+      oCtx.beginPath(); oCtx.arc(p.x, p.y, brushSize.value, 0, Math.PI * 2); oCtx.stroke()
+    }
+    return
   }
-  if (!drawing) return
 
   if (currentTool.value === 'box') {
-    render()
-    if (mCtx) { mCtx.strokeStyle = '#E2B340'; mCtx.lineWidth = 2; mCtx.setLineDash([6,4]); mCtx.strokeRect(startX, startY, p.x-startX, p.y-startY); mCtx.setLineDash([]) }
+    clearOverlay()
+    if (oCtx) { oCtx.strokeStyle = '#E2B340'; oCtx.lineWidth = 2; oCtx.setLineDash([6,4]); oCtx.strokeRect(startX, startY, p.x-startX, p.y-startY); oCtx.setLineDash([]) }
   } else if (currentTool.value === 'lasso') {
     const sp = magneticLasso.value ? snapToEdge(p.x, p.y) : p
-    lassoPoints.push({ x: sp.x, y: sp.y }); render()
-    if (mCtx && lassoPoints.length > 1) {
-      mCtx.strokeStyle = magneticLasso.value ? '#60a5fa' : '#E2B340'; mCtx.lineWidth = 2; mCtx.setLineDash([4,3])
-      mCtx.beginPath(); mCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y)
-      for (let i = 1; i < lassoPoints.length; i++) mCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y)
-      mCtx.closePath(); mCtx.stroke(); mCtx.setLineDash([])
-      mCtx.fillStyle = 'rgba(226,179,64,0.1)'; mCtx.fill()
+    lassoPoints.push({ x: sp.x, y: sp.y }); clearOverlay()
+    if (oCtx && lassoPoints.length > 1) {
+      oCtx.strokeStyle = magneticLasso.value ? '#60a5fa' : '#E2B340'; oCtx.lineWidth = 2; oCtx.setLineDash([4,3])
+      oCtx.beginPath(); oCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y)
+      for (let i = 1; i < lassoPoints.length; i++) oCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y)
+      oCtx.closePath(); oCtx.stroke(); oCtx.setLineDash([])
+      oCtx.fillStyle = 'rgba(226,179,64,0.1)'; oCtx.fill()
     }
   } else if (currentTool.value === 'brush') {
-    paintLine(lastX, lastY, p.x, p.y); lastX = p.x; lastY = p.y; render()
+    paintLine(lastX, lastY, p.x, p.y); renderDirty(lineBounds(lastX, lastY, p.x, p.y)); lastX = p.x; lastY = p.y
   } else if (currentTool.value === 'eraser') {
-    if (eraserMode.value === 'brush') { eraseLine(lastX, lastY, p.x, p.y); lastX = p.x; lastY = p.y; render() }
-    else if (eraserMode.value === 'box') { render(); if (mCtx) { mCtx.strokeStyle = '#f87171'; mCtx.lineWidth = 2; mCtx.setLineDash([6,4]); mCtx.strokeRect(startX, startY, p.x-startX, p.y-startY); mCtx.setLineDash([]) } }
-    else if (eraserMode.value === 'lasso') { lassoPoints.push({ x: p.x, y: p.y }); render(); if (mCtx && lassoPoints.length > 1) { mCtx.strokeStyle = '#f87171'; mCtx.lineWidth = 2; mCtx.beginPath(); mCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y); for (let i = 1; i < lassoPoints.length; i++) mCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y); mCtx.closePath(); mCtx.stroke() } }
+    if (eraserMode.value === 'brush') { eraseLine(lastX, lastY, p.x, p.y); renderDirty(lineBounds(lastX, lastY, p.x, p.y)); lastX = p.x; lastY = p.y }
+    else if (eraserMode.value === 'box') { clearOverlay(); if (oCtx) { oCtx.strokeStyle = '#f87171'; oCtx.lineWidth = 2; oCtx.setLineDash([6,4]); oCtx.strokeRect(startX, startY, p.x-startX, p.y-startY); oCtx.setLineDash([]) } }
+    else if (eraserMode.value === 'lasso') { lassoPoints.push({ x: p.x, y: p.y }); clearOverlay(); if (oCtx && lassoPoints.length > 1) { oCtx.strokeStyle = '#f87171'; oCtx.lineWidth = 2; oCtx.beginPath(); oCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y); for (let i = 1; i < lassoPoints.length; i++) oCtx.lineTo(lassoPoints[i].x, lassoPoints[i].y); oCtx.closePath(); oCtx.stroke() } }
   }
 }
 
@@ -265,13 +279,15 @@ function onUp(e: MouseEvent) {
   // FIX: drawing=false 를 좌표/도구 완성 처리 후로 이동 — 그래야 box/lasso 완성 시점에
   // 다른 핸들러가 짧게 끼어들어 좌표를 더럽히는 것을 막을 수 있음.
   const p = getPos(e)
-  if (currentTool.value === 'box') { fillRect(Math.min(startX,p.x), Math.min(startY,p.y), Math.max(startX,p.x), Math.max(startY,p.y)) }
-  else if (currentTool.value === 'lasso') { if (lassoPoints.length > 2) fillPoly(lassoPoints); lassoPoints = [] }
+  let dirty: DirtyRect | null = null
+  if (currentTool.value === 'box') { dirty = rectBounds(startX, startY, p.x, p.y); fillRect(dirty.x1, dirty.y1, dirty.x2, dirty.y2) }
+  else if (currentTool.value === 'lasso') { if (lassoPoints.length > 2) { dirty = pointsBounds(lassoPoints); fillPoly(lassoPoints) }; lassoPoints = [] }
   else if (currentTool.value === 'eraser') {
-    if (eraserMode.value === 'box') { eraseRect(Math.min(startX,p.x), Math.min(startY,p.y), Math.max(startX,p.x), Math.max(startY,p.y)) }
-    else if (eraserMode.value === 'lasso') { if (lassoPoints.length > 2) erasePoly(lassoPoints); lassoPoints = [] }
+    if (eraserMode.value === 'box') { dirty = rectBounds(startX, startY, p.x, p.y); eraseRect(dirty.x1, dirty.y1, dirty.x2, dirty.y2) }
+    else if (eraserMode.value === 'lasso') { if (lassoPoints.length > 2) { dirty = pointsBounds(lassoPoints); erasePoly(lassoPoints) }; lassoPoints = [] }
   }
-  render(); updateHasMask()
+  if (dirty) renderDirty(dirty)
+  clearOverlay(); updateHasMask()
   drawing = false  // 모든 처리 완료 후에만 false
 }
 
@@ -288,13 +304,38 @@ function fillPoly(pts: Point[]) { if(!maskData||!srcImg||pts.length<3)return;con
 function erasePoly(pts: Point[]) { if(!maskData||!srcImg||pts.length<3)return;const w=srcImg.naturalWidth,h=srcImg.naturalHeight;let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of pts){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)};for(let y=Math.max(0,Math.floor(minY));y<Math.min(h,Math.ceil(maxY));y++)for(let x=Math.max(0,Math.floor(minX));x<Math.min(w,Math.ceil(maxX));x++)if(pip(x,y,pts))maskData[y*w+x]=0 }
 function pip(x: number,y: number,poly: Point[]){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)inside=!inside};return inside}
 
-function render() {
-  if (!mCtx || !maskData || !srcImg) return
+function rectBounds(x1: number, y1: number, x2: number, y2: number): DirtyRect {
+  return { x1: Math.min(x1, x2), y1: Math.min(y1, y2), x2: Math.max(x1, x2), y2: Math.max(y1, y2) }
+}
+function circleBounds(x: number, y: number): DirtyRect {
+  const r = brushSize.value + 2
+  return { x1: x-r, y1: y-r, x2: x+r, y2: y+r }
+}
+function lineBounds(x1: number, y1: number, x2: number, y2: number): DirtyRect {
+  const r = brushSize.value + 2
+  return { x1: Math.min(x1,x2)-r, y1: Math.min(y1,y2)-r, x2: Math.max(x1,x2)+r, y2: Math.max(y1,y2)+r }
+}
+function pointsBounds(pts: Point[]): DirtyRect {
+  let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity
+  for (const p of pts) { x1=Math.min(x1,p.x); y1=Math.min(y1,p.y); x2=Math.max(x2,p.x); y2=Math.max(y2,p.y) }
+  return { x1, y1, x2, y2 }
+}
+function clearOverlay() {
+  if (oCtx && srcImg) oCtx.clearRect(0, 0, srcImg.naturalWidth, srcImg.naturalHeight)
+}
+function renderDirty(rect?: DirtyRect) {
+  if (!mCtx || !maskData || !maskImageData || !srcImg) return
   const w = srcImg.naturalWidth, h = srcImg.naturalHeight
-  mCtx.clearRect(0, 0, w, h)
-  const id = mCtx.createImageData(w, h)
-  for (let i = 0; i < maskData.length; i++) { if (maskData[i] > 0) { id.data[i*4]=226;id.data[i*4+1]=179;id.data[i*4+2]=64;id.data[i*4+3]=100 } }
-  mCtx.putImageData(id, 0, 0)
+  const x1 = Math.max(0, Math.floor(rect?.x1 ?? 0)), y1 = Math.max(0, Math.floor(rect?.y1 ?? 0))
+  const x2 = Math.min(w, Math.ceil(rect?.x2 ?? w)), y2 = Math.min(h, Math.ceil(rect?.y2 ?? h))
+  if (x2 <= x1 || y2 <= y1) return
+  const rgba = maskImageData.data
+  for (let y=y1; y<y2; y++) for (let x=x1; x<x2; x++) {
+    const i = y*w+x, p = i*4
+    if (maskData[i] > 0) { rgba[p]=226; rgba[p+1]=179; rgba[p+2]=64; rgba[p+3]=100 }
+    else { rgba[p]=0; rgba[p+1]=0; rgba[p+2]=0; rgba[p+3]=0 }
+  }
+  mCtx.putImageData(maskImageData, 0, 0, x1, y1, x2-x1, y2-y1)
 }
 
 // 자석 올가미
@@ -329,9 +370,9 @@ function snapToEdge(x: number, y: number): Point {
 
 function updateHasMask() { hasMask.value = maskData ? maskData.some(v => v > 0) : false }
 function saveUndo() { if (maskData) { undoStack.push(new Uint8Array(maskData)); if (undoStack.length > 10) undoStack.shift(); redoStack = [] } }
-function clearMask() { if (maskData) { saveUndo(); maskData.fill(0) }; hasMask.value = false; render() }
-function undoMask() { if (!undoStack.length || !maskData) return; redoStack.push(new Uint8Array(maskData)); maskData.set(undoStack.pop()!); updateHasMask(); render() }
-function redoMask() { if (!redoStack.length || !maskData) return; undoStack.push(new Uint8Array(maskData)); maskData.set(redoStack.pop()!); updateHasMask(); render() }
+function clearMask() { if (maskData) { saveUndo(); maskData.fill(0) }; hasMask.value = false; renderDirty() }
+function undoMask() { if (!undoStack.length || !maskData) return; redoStack.push(new Uint8Array(maskData)); maskData.set(undoStack.pop()!); updateHasMask(); renderDirty() }
+function redoMask() { if (!redoStack.length || !maskData) return; undoStack.push(new Uint8Array(maskData)); maskData.set(redoStack.pop()!); updateHasMask(); renderDirty() }
 
 function getMaskBase64() {
   if (!maskData || !srcImg) return ''
@@ -343,7 +384,7 @@ function getMaskBase64() {
 }
 
 function generate() {
-  requestAction('generate_inpaint', { image: imageSrc.value, image_path: imagePath.value, mask: getMaskBase64(), prompt: prompt.value, denoising: denoising.value, mask_content: maskContent.value, inpaint_area: inpaintArea.value })
+  requestAction('generate_inpaint', { image: imagePath.value ? '' : imageSrc.value, image_path: imagePath.value, mask: getMaskBase64(), prompt: prompt.value, denoising: denoising.value, mask_content: maskContent.value, inpaint_area: inpaintArea.value })
 }
 
 onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFromPath(path)) })
@@ -380,6 +421,7 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
 .drop-empty h2 { color: var(--text-muted); letter-spacing: 4px; }
 .drop-empty p { color: #484848; font-size: 12px; }
 .cv { position: absolute; max-width: 85%; max-height: 85%; }
-.cv.mask { pointer-events: auto; }
+.cv.mask { pointer-events: none; }
+.cv.overlay { pointer-events: auto; }
 .cv-info { position: absolute; bottom: 8px; right: 12px; color: #585858; font-size: 10px; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; pointer-events: none; }
 </style>
