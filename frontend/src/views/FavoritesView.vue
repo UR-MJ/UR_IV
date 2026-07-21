@@ -45,7 +45,7 @@
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
         >
-          <img :src="'file:///' + img" loading="lazy" />
+          <img :src="mediaUrl(img)" loading="lazy" />
           <div class="card-hover-actions">
             <button class="tiny-btn" @click.stop="removeFav(img)" title="즐겨찾기 제거">⭐</button>
             <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)" title="복사">📋</button>
@@ -73,7 +73,7 @@
           </div>
           <div class="viewer-body">
             <div class="viewer-img">
-              <img :src="'file:///' + viewerData.path" />
+              <img :src="mediaUrl(viewerData.path)" />
             </div>
             <div class="viewer-info">
               <div class="vi-size">{{ viewerData.size }}</div>
@@ -153,6 +153,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
+import { mediaUrl } from '../utils/media.js'
 
 interface ViewerData {
   filename?: string
@@ -337,7 +338,7 @@ async function copySection(text: string, label: string) {
 onMounted(() => {
   document.addEventListener('click', hideMenu)
   _thumbOff = onBackendEvent('thumbnailReady', (json: string) => {
-    try { const d = JSON.parse(json); thumbCache[d.path] = d.thumb || ('file:///' + d.path) } catch {}
+    try { const d = JSON.parse(json); thumbCache[d.path] = d.thumb || mediaUrl(d.path) } catch {}
   })
   loadFavorites()
 })

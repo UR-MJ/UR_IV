@@ -138,6 +138,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
+import { mediaUrl } from '../utils/media.js'
 import EditorCanvas from '../components/editor/EditorCanvas.vue'
 import MosaicPanel from '../components/editor/MosaicPanel.vue'
 import ColorPanel from '../components/editor/ColorPanel.vue'
@@ -244,12 +245,12 @@ function loadImage(path: string) {
   imagePath.value = path
   initialImagePath.value = path
   isDirty.value = false
-  imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
+  imageDisplay.value = mediaUrl(path, true)
   canvasRef.value?.clearSelection(true)   // 새 이미지: stale 마스크 + undo/redo 스택 초기화
   _pushRecentFile(path)
   const img = new Image()
   img.onload = () => { imgWidth.value = img.naturalWidth; imgHeight.value = img.naturalHeight }
-  img.src = 'file:///' + path
+  img.src = mediaUrl(path)
   // 파일 정보 조회 (포맷/용량)
   _loadFileInfo(path)
 }
@@ -285,10 +286,10 @@ function pushState(path: string, clearMask = true) {
   imagePath.value = path
   isDirty.value = (path !== initialImagePath.value)
   // 타임스탬프 없이 경로만 변경 → watch에서 zoom/rotation 유지됨
-  imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
+  imageDisplay.value = mediaUrl(path, true)
   const img = new Image()
   img.onload = () => { imgWidth.value = img.naturalWidth; imgHeight.value = img.naturalHeight }
-  img.src = 'file:///' + path
+  img.src = mediaUrl(path)
   if (clearMask) canvasRef.value?.clearSelection(true)   // 이미지 작업 후: 마스크 히스토리도 리셋
 }
 
@@ -297,14 +298,14 @@ function doUndo() {
   redoStack.value.push(undoStack.value.pop() as string)
   const path = undoStack.value[undoStack.value.length - 1]
   imagePath.value = path
-  imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
+  imageDisplay.value = mediaUrl(path, true)
 }
 function doRedo() {
   if (redoStack.value.length === 0) return
   const path = redoStack.value.pop() as string
   undoStack.value.push(path)
   imagePath.value = path
-  imageDisplay.value = 'file:///' + path + '?t=' + Date.now()
+  imageDisplay.value = mediaUrl(path, true)
 }
 // 통합 undo/redo — 마스킹이 있으면 마스킹 먼저, 없으면 이미지 작업. (버튼·Ctrl+Z/Y 공용)
 function onUndo() { if (canvasRef.value?.undoMask()) return; doUndo() }

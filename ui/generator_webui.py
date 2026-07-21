@@ -403,6 +403,7 @@ class WebUIMixin:
                 self.save_settings()
             self.load_webui_info()
         elif result == 'skipped':
+            self._backend_connected = False  # 폴링 안 함 (백엔드 버튼으로 연결 시 재개)
             self.viewer_label.setText(
                 "백엔드에 연결되지 않았습니다.\n\n"
                 "하단 도구 바의 '백엔드' 버튼으로 연결하세요."
@@ -541,7 +542,8 @@ class WebUIMixin:
         if get_backend_type() == BackendType.COMFYUI:
             self._auto_select_workflow_model(models)
 
-        # UI 활성화
+        # UI 활성화 — 백엔드가 실제로 응답함 → 연결됨 표시(VRAM 폴링/LoRA 프리로드 재개)
+        self._backend_connected = True
         self.btn_generate.setEnabled(True)
         self.viewer_label.setText(f"✅ {backend_name} 연결 완료!\n생성 버튼을 눌러 시작하세요.")
         self.show_status(
@@ -565,6 +567,7 @@ class WebUIMixin:
 
     def on_webui_info_error(self, error_msg):
         """서버 정보 로드 실패"""
+        self._backend_connected = False  # 폴링 중단 (다음 연결 성공 시 재개)
         backend_name = "ComfyUI" if get_backend_type() == BackendType.COMFYUI else "WebUI"
         api_url = get_backend().api_url
 

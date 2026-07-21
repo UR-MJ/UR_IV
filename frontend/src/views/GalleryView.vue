@@ -45,7 +45,7 @@
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
         >
-          <img :src="'file:///' + img" loading="lazy" />
+          <img :src="mediaUrl(img)" loading="lazy" />
           <div class="card-hover-actions">
             <button class="tiny-btn" @click.stop="quickAction('add_favorite', img)">⭐</button>
             <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)">📋</button>
@@ -86,7 +86,7 @@
           </div>
           <div class="large-view-body">
             <div class="large-img-area">
-              <img :src="'file:///' + largeView.path + '?t=' + Date.now()" />
+              <img :src="mediaUrl(largeView.path, true)" />
             </div>
             <div class="large-exif">
               <div class="meta-row"><span>SIZE</span><p>{{ largeView.size }}</p></div>
@@ -118,7 +118,7 @@
         <div class="exif-close" @click="exifData = null">➔</div>
         <div class="exif-content">
           <div class="exif-preview" @click="largeView = exifData">
-            <img :src="'file:///' + exifData.path" />
+            <img :src="mediaUrl(exifData.path)" />
             <div class="click-hint">클릭하여 확대</div>
           </div>
           <div class="exif-meta">
@@ -183,6 +183,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
+import { mediaUrl } from '../utils/media.js'
 
 import { computed, nextTick } from 'vue'
 

@@ -1366,6 +1366,22 @@ class VueBridge(QObject):
             pass
         return json.dumps([])
 
+    @pyqtSlot()
+    def requestInitialConfig(self):
+        """웹 모드: 브라우저가 연결·핸드셰이크 완료된 뒤 호출 → 시작 설정을 (재)emit.
+
+        시작 설정(condRules/uiPrefs/globalWeights/tabDefaults)은 startup에 1회만
+        push되는데, 웹 모드는 그 시점에 아직 브라우저(WebSocket)가 연결 전이라 emit이
+        유실된다. 연결 직후 프론트가 이 슬롯을 호출하면 같은 설정을 다시 emit하여
+        sticky 이벤트로 전달된다. (창 모드는 호출 안 함 — 임베드 Vue는 항상 연결됨.
+        호출돼도 idempotent하므로 무해.)"""
+        try:
+            gen = self.parent()
+            if gen and hasattr(gen, '_load_saved_configs'):
+                gen._load_saved_configs()
+        except Exception as e:
+            print(f"[Config] requestInitialConfig 실패: {e}")
+
     @pyqtSlot(result=str)
     def getGenStats(self) -> str:
         """생성 통계 요약 반환"""

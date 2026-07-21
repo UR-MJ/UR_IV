@@ -35,6 +35,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
+import { mediaUrl } from '../utils/media.js'
 
 const props = withDefaults(defineProps<{
   imageUrl?: string
@@ -57,7 +58,11 @@ watch(() => props.imageUrl, () => {
   imageNonce.value = Date.now()
 })
 
-const imageSrc = computed(() => props.imageUrl ? `file:///${props.imageUrl}?t=${imageNonce.value}` : '')
+const imageSrc = computed(() => {
+  if (!props.imageUrl) return ''
+  const base = mediaUrl(props.imageUrl)
+  return base + (base.includes('?') ? '&' : '?') + 't=' + imageNonce.value
+})
 
 const progressPct = computed(() => {
   const m = props.status?.match(/(\d+)\/(\d+)/)

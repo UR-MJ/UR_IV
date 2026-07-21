@@ -1,7 +1,16 @@
 /**
  * QWebChannel 브릿지 — Python(PyQt6) ↔ Vue 통신
+ *
+ * 두 가지 transport를 지원한다 (같은 vue_bridge 객체 / 같은 계약):
+ *  1) Qt 임베드 모드(run_gui.bat) — QWebEngineView 안. 동일 프로세스 직통선
+ *     `window.qt.webChannelTransport`. qwebchannel.js는 Qt가 qrc로 주입.
+ *  2) 웹 모드(run_WEB_gui.bat) — 일반 브라우저. WebSocket(`ws://host:port`)을
+ *     transport로 사용. qwebchannel.js는 npm `qwebchannel` 패키지에서 import.
+ * 두 모드 모두 `channel.objects.backend`로 동일하게 귀결되므로 이후 코드는 동일.
  */
 import { connectStore } from './stores/widgetStore.js'
+// 웹 모드용 QWebChannel 구현 (Qt 모드는 qrc 주입본 window.QWebChannel을 그대로 씀)
+import { QWebChannel as QWebChannelWS } from 'qwebchannel'
 
 let _backend = null
 let _resolveReady = null
@@ -47,36 +56,83 @@ function waitForQWebChannel(maxWait = 5000) {
 }
 
 /**
- * QWebChannel 초기화
+ * 공통 마무리 — transport 종류와 무관하게 backend 확보 후 동일 처리
+ */
+function _bindBackend(backend, resolve) {
+  console.log('[bridge] backend ready', backend ? Object.keys(backend).length + ' members' : '(null)')
+  _backend = backend
+  _installStickyCaches(_backend)
+  connectStore(_backend)
+  _resolveReady(_backend)
+  resolve(_backend)
+}
+
+/**
+ * 웹 모드 — WebSocket transport로 연결.
+ * WS URL은 Python 정적 서버가 index.html에 주입한 `window.__AISTUDIO_WS_PORT__`로 조립한다.
+ * host는 location.hostname을 써서 LAN(폰/타 PC) 원격 접속에서도 올바른 주소가 된다.
+ */
+function _initWebSocketBridge(resolve) {
+  const port = window.__AISTUDIO_WS_PORT__
+  const wsUrl = window.__AISTUDIO_WS_URL__ || `ws://${location.hostname}:${port}`
+  console.log('[bridge] web mode — connecting WebSocket', wsUrl)
+
+  const connect = () => {
+    const socket = new WebSocket(wsUrl)
+    socket.onopen = () => {
+      console.log('[bridge] WebSocket open — handshaking QWebChannel')
+      new QWebChannelWS(socket, (channel) => {
+        const backend = channel.objects.backend
+        _bindBackend(backend, resolve)
+        // 웹 모드: 핸드셰이크 완료(=시그널 구독 완료) 후 시작 설정을 Python에 재요청.
+        // startup의 1회 push는 브라우저 연결 전이라 유실되므로 여기서 pull한다.
+        // sticky 캐시는 _bindBackend에서 이미 연결돼 있어 늦은 컴포넌트도 받는다.
+        try { backend.requestInitialConfig && backend.requestInitialConfig() } catch (e) {}
+      })
+    }
+    socket.onclose = () => {
+      // 백엔드 재시작/끊김 시 자동 재연결 (페이지 새로고침 없이 복구)
+      if (_backend) console.warn('[bridge] WebSocket closed — retrying in 1.5s')
+      setTimeout(connect, 1500)
+    }
+    socket.onerror = () => { try { socket.close() } catch {} }
+  }
+  connect()
+}
+
+/**
+ * QWebChannel 초기화 — transport 자동 감지
  */
 export async function initBridge() {
-  const available = await waitForQWebChannel()
+  // 1) 웹 모드: 서버가 주입한 값은 문서 파싱 시 이미 존재하므로 Qt transport를
+  //    기다리지 않고 즉시 WebSocket으로 연결한다. (일반 브라우저의 5초 지연 방지)
+  if (window.__AISTUDIO_WS_PORT__ || window.__AISTUDIO_WS_URL__) {
+    return new Promise((resolve) => _initWebSocketBridge(resolve))
+  }
 
-  if (available) {
+  // 2) Qt 임베드 모드: 동일 프로세스 transport가 존재
+  const qtAvailable = await waitForQWebChannel()
+  if (qtAvailable) {
     return new Promise((resolve) => {
       new window.QWebChannel(window.qt.webChannelTransport, (channel) => {
-        _backend = channel.objects.backend
-        _installStickyCaches(_backend)
-        connectStore(_backend)
-        _resolveReady(_backend)
-        resolve(_backend)
+        _bindBackend(channel.objects.backend, resolve)
       })
     })
-  } else {
-    // 개발 모드 — 목 객체
-    console.log('[bridge] QWebChannel not available, using mock')
-    _backend = {
-      onWidgetChanged: (id, v) => console.log(`[mock] widget ${id} = ${v}`),
-      onAction: (a, p) => console.log(`[mock] action ${a}`, p),
-      onTabSwitch: (t) => console.log(`[mock] tab ${t}`),
-      getAllWidgetValues: (cb) => cb('{}'),
-      getSettings: (cb) => cb('{}'),
-      _mock: true,
-    }
-    connectStore(_backend)
-    _resolveReady(_backend)
-    return _backend
   }
+
+  // 3) 개발 모드 — 목 객체 (vite dev 서버 등, 백엔드 없음)
+  console.log('[bridge] no transport — using mock')
+  _backend = {
+    onWidgetChanged: (id, v) => console.log(`[mock] widget ${id} = ${v}`),
+    onAction: (a, p) => console.log(`[mock] action ${a}`, p),
+    onTabSwitch: (t) => console.log(`[mock] tab ${t}`),
+    getAllWidgetValues: (cb) => cb('{}'),
+    getSettings: (cb) => cb('{}'),
+    _mock: true,
+  }
+  connectStore(_backend)
+  _resolveReady(_backend)
+  return _backend
 }
 
 /**

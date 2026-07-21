@@ -103,6 +103,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { onBackendEvent } from '../bridge.js'
+import { mediaUrl } from '../utils/media.js'
 import CustomSelect from '../components/CustomSelect.vue'
 
 const isDragging = ref(false)
@@ -146,7 +147,7 @@ function loadFile(file: File) {
 async function loadFromPath(path: string) {
   const normalized = path.replace(/\\/g, '/')
   imagePath.value = normalized
-  imageSrc.value = 'file:///' + normalized
+  imageSrc.value = mediaUrl(normalized)
 }
 
 onMounted(() => {
