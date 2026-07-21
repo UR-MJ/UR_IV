@@ -1,7 +1,11 @@
 """ANIMA 해상도 가드 테스트 — 고해상도 모드에서 1536² 면적캡이 도는지.
 (이번에 고친 '고해상도인데 2048×2048로 나가던' 버그의 회귀 방지)"""
 import unittest
-from core.resolution_guard import apply_anima_resolution, ANIMA_MAX_AREA
+from core.resolution_guard import (
+    ANIMA_MAX_AREA,
+    apply_anima_resolution,
+    normalize_anima_guard_prefs,
+)
 
 
 class TestAnimaResolution(unittest.TestCase):
@@ -51,6 +55,36 @@ class TestAnimaResolution(unittest.TestCase):
     def test_big_square_auto_capped_to_1536(self):
         # 2048×2048 자동해상도 → 면적캡으로 1536×1536
         self.assertEqual(apply_anima_resolution(2048, 2048, auto_res=True), (1536, 1536))
+
+    def test_custom_area_limit(self):
+        self.assertEqual(
+            apply_anima_resolution(2048, 2048, auto_res=True,
+                                   max_area=1024 * 1024),
+            (1024, 1024),
+        )
+
+    def test_custom_side_limit(self):
+        w, h = apply_anima_resolution(
+            3000, 500, auto_res=True, max_area=4096 * 4096, max_side=1024)
+        self.assertLessEqual(max(w, h), 1024)
+        self.assertAlmostEqual(w / h, 6.0, delta=0.3)
+
+    def test_disabled_guard_keeps_highres_scaling_without_cap(self):
+        self.assertEqual(
+            apply_anima_resolution(1536, 1536, 2.0, enabled=False),
+            (3072, 3072),
+        )
+
+    def test_guard_prefs_are_normalized(self):
+        self.assertEqual(normalize_anima_guard_prefs({
+            'animaGuardEnabled': 'false',
+            'animaGuardMaxAreaSide': 1501,
+            'animaGuardMaxSide': 99999,
+        }), {
+            'animaGuardEnabled': False,
+            'animaGuardMaxAreaSide': 1496,
+            'animaGuardMaxSide': 8192,
+        })
 
 
 if __name__ == "__main__":

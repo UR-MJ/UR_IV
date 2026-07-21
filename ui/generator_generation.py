@@ -189,17 +189,28 @@ class GenerationMixin:
             width = _widget_int(self.width_input, 1024)
             height = _widget_int(self.height_input, 1024)
 
-        # 고해상도/자동해상도 + ANIMA 면적캡(1536²) — 순수 함수로 분리.
+        # 고해상도/자동해상도 + 설정 가능한 ANIMA 면적/한변 캡 — 순수 함수로 분리.
         # 동작/테스트: core/resolution_guard.py, tests/test_resolution_guard.py
         hr_factor = getattr(self, '_high_res_factor', 1.0) or 1.0
         _auto_res = bool(getattr(self, 'auto_res_check', None)
                          and self.auto_res_check.isChecked())
-        from core.resolution_guard import apply_anima_resolution, ANIMA_MAX_AREA
+        from core.resolution_guard import (
+            ANIMA_MAX_AREA, ANIMA_MAX_SIDE, apply_anima_resolution,
+        )
+        _guard_enabled = bool(getattr(self, '_anima_guard_enabled', True))
+        _guard_area = int(getattr(self, '_anima_guard_max_area', ANIMA_MAX_AREA))
+        _guard_side = int(getattr(self, '_anima_guard_max_side', ANIMA_MAX_SIDE))
         _bw, _bh = width, height
-        width, height = apply_anima_resolution(_bw, _bh, hr_factor, _auto_res)
+        width, height = apply_anima_resolution(
+            _bw, _bh, hr_factor, _auto_res,
+            max_area=_guard_area, max_side=_guard_side,
+            enabled=_guard_enabled,
+        )
         if (width, height) != (_bw, _bh):
+            _guard_desc = (f"area≤{_guard_area:,}, side≤{_guard_side}"
+                           if _guard_enabled else "OFF")
             print(f"[HighRes] base {_bw}x{_bh} (hr={hr_factor}, auto={_auto_res}) "
-                  f"→ {width}x{height} ({width * height:,}px ≤ ANIMA {ANIMA_MAX_AREA:,})")
+                  f"→ {width}x{height} (Anima Guard {_guard_desc})")
         
         combined_neg_prompt = self.neg_prompt_text.toPlainText().strip()
 

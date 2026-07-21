@@ -180,7 +180,48 @@
           </div>
         </div>
 
-        <!-- 6. 기본값 설정 (탭별) -->
+        <!-- 6. Anima Guard -->
+        <div v-show="currentTab === 'guard'" class="section-fade">
+          <div class="hint-banner">
+            자동 해상도와 고해상도 배율 적용 시 이미지 비율을 유지하면서 최종 크기를 제한합니다.
+            값은 SD 호환을 위해 저장할 때 8배수로 정렬됩니다.
+          </div>
+          <div class="glass-card">
+            <label>ANIMA RESOLUTION GUARD</label>
+            <div class="toggle-grid">
+              <div class="toggle-row">
+                <span>해상도 제한 활성화</span>
+                <ToggleSwitch :model-value="animaGuardEnabled"
+                  @update:model-value="animaGuardEnabled = $event; saveAnimaGuardSettings()" />
+              </div>
+            </div>
+            <div class="defaults-grid mt-16" :class="{ 'guard-fields-disabled': !animaGuardEnabled }">
+              <div class="def-field">
+                <span>최대 총 면적 기준 (정사각형 한 변)</span>
+                <input type="number" min="256" max="8192" step="8"
+                  v-model.number="animaGuardMaxAreaSide" :disabled="!animaGuardEnabled"
+                  @change="saveAnimaGuardSettings" />
+              </div>
+              <div class="def-field">
+                <span>긴 한 변 최대값 (px)</span>
+                <input type="number" min="256" max="8192" step="8"
+                  v-model.number="animaGuardMaxSide" :disabled="!animaGuardEnabled"
+                  @change="saveAnimaGuardSettings" />
+              </div>
+            </div>
+            <div class="info-row mt-16">
+              <span class="desc">현재 총 픽셀 한도</span>
+              <span class="val-badge">{{ animaGuardMaxAreaSide }} × {{ animaGuardMaxAreaSide }} · {{ animaGuardMegapixels }} MP</span>
+            </div>
+            <div class="info-row mt-12">
+              <span class="desc">긴 변 한도</span>
+              <span class="val-badge">{{ animaGuardMaxSide }} px</span>
+            </div>
+            <button class="btn-pill mt-16" @click="resetAnimaGuardSettings">RESET SAFE DEFAULTS</button>
+          </div>
+        </div>
+
+        <!-- 7. 기본값 설정 (탭별) -->
         <div v-show="currentTab === 'defaults'" class="section-fade">
           <!-- UI 크기 조절 -->
           <div class="glass-card mt-16">
@@ -258,7 +299,7 @@
           </div>
         </div>
 
-        <!-- 7. AI Assist (Ollama) -->
+        <!-- 8. AI Assist (Ollama) -->
         <div v-show="currentTab === 'ollama'" class="section-fade">
           <div class="glass-card">
             <label>OLLAMA CONFIGURATION</label>
@@ -356,6 +397,7 @@ const subTabs: SubTab[] = [
   { id: 'prompt',    label: 'LOGIC',     icon: '📝', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
   { id: 'tabs',      label: 'WORKSPACE', icon: '🗂️', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
   { id: 'shortcuts', label: 'HOTKEYS',   icon: '⌨️', keywords: 'hotkeys shortcuts 단축키 키보드 ctrl shift z y s g' },
+  { id: 'guard',     label: 'GUARD',     icon: '🛡️', keywords: 'anima guard 가드 자동 해상도 제한 최대 면적 픽셀 긴 변 resolution cap vram oom' },
   { id: 'defaults',  label: 'DEFAULTS',  icon: '🎛️', keywords: 'defaults 기본값 t2i i2i inpaint 해상도 steps cfg sampler 시드' },
   { id: 'ollama',    label: 'AI ASSIST', icon: '🧠', keywords: 'ollama ai assist 어시스트 자동완성 번역' },
 ]
@@ -389,6 +431,36 @@ const defaultBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'tr
 const galleryMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
 const autoAddCopyright = ref(window.localStorage.getItem('autoAddCopyright') !== 'false')   // ③ 기본 on
 const historyJumpModifier = ref(window.localStorage.getItem('historyJumpModifier') || 'shiftKey')
+const animaGuardEnabled = ref(true)
+const animaGuardMaxAreaSide = ref(1536)
+const animaGuardMaxSide = ref(2048)
+const animaGuardMegapixels = computed(() =>
+  ((animaGuardMaxAreaSide.value * animaGuardMaxAreaSide.value) / 1_000_000).toFixed(2)
+)
+
+function normalizeGuardDimension(value: unknown, fallback: number) {
+  const parsed = Number(value)
+  const finite = Number.isFinite(parsed) ? Math.trunc(parsed) : fallback
+  return Math.floor(Math.max(256, Math.min(8192, finite)) / 8) * 8
+}
+
+function saveAnimaGuardSettings() {
+  animaGuardMaxAreaSide.value = normalizeGuardDimension(animaGuardMaxAreaSide.value, 1536)
+  animaGuardMaxSide.value = normalizeGuardDimension(animaGuardMaxSide.value, 2048)
+  requestAction('save_ui_prefs', {
+    animaGuardEnabled: animaGuardEnabled.value,
+    animaGuardMaxAreaSide: animaGuardMaxAreaSide.value,
+    animaGuardMaxSide: animaGuardMaxSide.value,
+  })
+}
+
+function resetAnimaGuardSettings() {
+  animaGuardEnabled.value = true
+  animaGuardMaxAreaSide.value = 1536
+  animaGuardMaxSide.value = 2048
+  saveAnimaGuardSettings()
+  requestAction('show_toast', { type: 'success', msg: 'Anima Guard가 안전 기본값으로 초기화되었습니다' })
+}
 
 function saveCopyrightPref() {
   window.localStorage.setItem('autoAddCopyright', String(autoAddCopyright.value))
@@ -406,6 +478,27 @@ const wStore = useWidgetStore()
 const samplerList = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
 const schedulerList = computed(() => wStore.getProperty('scheduler_combo', 'items') || [])
 
+function applyUiPrefs(prefs: any) {
+  if (!prefs || typeof prefs !== 'object') return
+  if (typeof prefs.tagBlockMode === 'boolean') { defaultBlockMode.value = prefs.tagBlockMode; window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode)) }
+  if (typeof prefs.cleanDuplicates === 'boolean') cleanDuplicates.value = prefs.cleanDuplicates
+  if (typeof prefs.cleanSpaces === 'boolean') cleanSpaces.value = prefs.cleanSpaces
+  if (typeof prefs.cleanUnderscore === 'boolean') cleanUnderscore.value = prefs.cleanUnderscore
+  if (typeof prefs.galleryShowMetadata === 'boolean') { galleryMetadata.value = prefs.galleryShowMetadata; window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata)) }
+  if (typeof prefs.autoAddCopyright === 'boolean') { autoAddCopyright.value = prefs.autoAddCopyright; window.localStorage.setItem('autoAddCopyright', String(prefs.autoAddCopyright)) }
+  if (typeof prefs.animaGuardEnabled === 'boolean') animaGuardEnabled.value = prefs.animaGuardEnabled
+  animaGuardMaxAreaSide.value = normalizeGuardDimension(prefs.animaGuardMaxAreaSide, 1536)
+  animaGuardMaxSide.value = normalizeGuardDimension(prefs.animaGuardMaxSide, 2048)
+  if (Array.isArray(prefs.tabOrder) && prefs.tabOrder.length > 0) {
+    tabOrder.value = [...prefs.tabOrder]
+    window.localStorage.setItem('tabOrder', JSON.stringify(prefs.tabOrder))
+  }
+  // Ollama 설정 복원
+  if (prefs.ollamaUrl) { ollamaUrl.value = prefs.ollamaUrl; window.localStorage.setItem('ollamaUrl', prefs.ollamaUrl) }
+  if (prefs.ollamaModel) { ollamaModel.value = prefs.ollamaModel; window.localStorage.setItem('ollamaModel', prefs.ollamaModel) }
+  if (typeof prefs.ollamaUnloadOnGen === 'boolean') { ollamaUnloadOnGen.value = prefs.ollamaUnloadOnGen; window.localStorage.setItem('ollamaUnloadOnGen', String(prefs.ollamaUnloadOnGen)) }
+}
+
 // UI prefs 로드 시 동기화
 import { onBackendEvent, getBackend } from '../bridge.js'
 onMounted(async () => {
@@ -418,24 +511,14 @@ onMounted(async () => {
       try { const d = JSON.parse(json); Object.assign(defaults, d) } catch {}
     })
   }
+  // SettingsView는 지연 로드되므로 시작 시 1회 emit된 이벤트를 놓쳐도 파일에서 능동 복원.
+  if (bk.getUiPrefs) {
+    bk.getUiPrefs((json: string) => {
+      try { applyUiPrefs(JSON.parse(json)) } catch {}
+    })
+  }
   onBackendEvent('uiPrefsLoaded', (json: string) => {
-    try {
-      const prefs = JSON.parse(json)
-      if (typeof prefs.tagBlockMode === 'boolean') { defaultBlockMode.value = prefs.tagBlockMode; window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode)) }
-      if (typeof prefs.cleanDuplicates === 'boolean') cleanDuplicates.value = prefs.cleanDuplicates
-      if (typeof prefs.cleanSpaces === 'boolean') cleanSpaces.value = prefs.cleanSpaces
-      if (typeof prefs.cleanUnderscore === 'boolean') cleanUnderscore.value = prefs.cleanUnderscore
-      if (typeof prefs.galleryShowMetadata === 'boolean') { galleryMetadata.value = prefs.galleryShowMetadata; window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata)) }
-      if (typeof prefs.autoAddCopyright === 'boolean') { autoAddCopyright.value = prefs.autoAddCopyright; window.localStorage.setItem('autoAddCopyright', String(prefs.autoAddCopyright)) }
-      if (Array.isArray(prefs.tabOrder) && prefs.tabOrder.length > 0) {
-        tabOrder.value = [...prefs.tabOrder]
-        window.localStorage.setItem('tabOrder', JSON.stringify(prefs.tabOrder))
-      }
-      // Ollama 설정 복원
-      if (prefs.ollamaUrl) { ollamaUrl.value = prefs.ollamaUrl; window.localStorage.setItem('ollamaUrl', prefs.ollamaUrl) }
-      if (prefs.ollamaModel) { ollamaModel.value = prefs.ollamaModel; window.localStorage.setItem('ollamaModel', prefs.ollamaModel) }
-      if (typeof prefs.ollamaUnloadOnGen === 'boolean') { ollamaUnloadOnGen.value = prefs.ollamaUnloadOnGen; window.localStorage.setItem('ollamaUnloadOnGen', String(prefs.ollamaUnloadOnGen)) }
-    } catch {}
+    try { applyUiPrefs(JSON.parse(json)) } catch {}
   })
 })
 function setBlockMode() {
@@ -488,6 +571,9 @@ const act = (name: string) => {
       galleryShowMetadata: galleryMetadata.value,
       autoAddCopyright: autoAddCopyright.value,
       tabOrder: tabOrder.value,
+      animaGuardEnabled: animaGuardEnabled.value,
+      animaGuardMaxAreaSide: animaGuardMaxAreaSide.value,
+      animaGuardMaxSide: animaGuardMaxSide.value,
       // Ollama
       ollamaUrl: ollamaUrl.value,
       ollamaModel: ollamaModel.value,
@@ -748,6 +834,7 @@ kbd {
 .def-field { display: flex; flex-direction: column; gap: 3px; }
 .def-field-wide { display: flex; flex-direction: column; gap: 6px; }
 .def-field-wide span { font-size: 11px; color: var(--text-secondary); font-weight: 700; }
+.guard-fields-disabled { opacity: 0.45; }
 .w-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
 
 /* UI 크기 프리셋 버튼 */

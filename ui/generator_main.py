@@ -1082,10 +1082,15 @@ class GeneratorMainUI(
                         prefs.pop(legacy_key, None)
                         payload.pop(legacy_key, None)
                     prefs.update(payload)
+                    # Anima Guard 값은 파일에 쓰기 전에 안전 범위/8배수로 정규화.
+                    from core.resolution_guard import normalize_anima_guard_prefs
+                    prefs.update(normalize_anima_guard_prefs(prefs))
                     save_ui_prefs(prefs_path, prefs)
                     # FIX: Vue의 LOGIC 토글을 prompt_cleaner에 즉시 적용
                     # (이전에는 저장만 되고 효과 없었음)
                     self._apply_ui_prefs_to_cleaner(prefs)
+                    # 실행 중인 자동화도 다음 생성부터 새 제한값을 사용.
+                    self._apply_anima_guard_prefs(prefs)
                     # 재전송 하지 않음 — uiPrefsLoaded는 앱 시작 시에만 emit
                     # 재전송하면 watch → save → emit → watch 무한 루프 발생
                 except Exception as e:
@@ -1271,6 +1276,7 @@ class GeneratorMainUI(
         """ui_prefs.json(단일 소스)에서 런타임 상태를 직접 복원.
         Vue가 set_rating_filter / set_high_res_factor 를 아직 안 보낸 시점(예: 재시작 직후
         자동화 즉시 시작)에도 올바른 rating 필터/고해상도 배율로 동작하도록 한다."""
+        self._apply_anima_guard_prefs(prefs)
         try:
             rf = prefs.get('ratingFilter')
             if isinstance(rf, list) and len(rf) == 4:
@@ -1278,6 +1284,7 @@ class GeneratorMainUI(
                 self._rating_filter = {keys[i] for i, on in enumerate(rf) if on}
         except Exception:
             pass
+
         try:
             if prefs.get('highResEnabled'):
                 factor = float(prefs.get('highResFactor', 1.5) or 1.5)
@@ -1301,6 +1308,19 @@ class GeneratorMainUI(
                         pass
         except Exception:
             pass
+
+    def _apply_anima_guard_prefs(self, prefs: dict):
+        """Anima Guard 설정을 생성 경로가 읽는 런타임 값으로 반영."""
+        try:
+            from core.resolution_guard import normalize_anima_guard_prefs
+            guard = normalize_anima_guard_prefs(prefs)
+            area_side = guard['animaGuardMaxAreaSide']
+            self._anima_guard_enabled = guard['animaGuardEnabled']
+            self._anima_guard_max_area_side = area_side
+            self._anima_guard_max_area = area_side * area_side
+            self._anima_guard_max_side = guard['animaGuardMaxSide']
+        except Exception as e:
+            print(f"[AnimaGuard] 설정 적용 실패, 기본값 유지: {e}")
 
     def _migrate_legacy_lora_stack(self, prefs: dict, prefs_path: str):
         """LoRA 스택 단일 소스(ui_prefs.loraStack) 통합 — ui_prefs에 loraStack이 없고
