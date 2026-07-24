@@ -71,52 +71,26 @@ class WebUIBackend(AbstractBackend):
 
     @staticmethod
     def _build_sam3_script_state(settings: Dict) -> Dict:
-        detect_prompt = str(settings.get('sam3_prompt', 'face') or 'face').strip() or 'face'
-        return {
-            "sam3_enable": True,
-            "enabled": True,
-            "sam3_mode": settings.get('sam3_mode', 'Inpaint'),
-            "sam3_mask_mode": settings.get('sam3_mask_mode', 'Individual'),
-            "sam3_prompt": detect_prompt,
-            "sam3_exclude_prompt": settings.get('sam3_exclude_prompt', ''),
-            "sam3_inpaint_prompt": settings.get('sam3_inpaint_prompt', settings.get('prompt', '')),
-            "sam3_negative_prompt": settings.get('sam3_negative_prompt', settings.get('negative_prompt', '')),
-            "sam3_threshold": float(settings.get('sam3_threshold', 0.4)),
-            "sam3_mask_dilation": int(settings.get('sam3_mask_dilation', 0)),
-            "sam3_mask_hull": bool(settings.get('sam3_mask_hull', False)),
-            "sam3_mask_outline_px": int(settings.get('sam3_mask_outline_px', 0)),
-            "sam3_checkpoint": settings.get('sam3_checkpoint', 'sam3.pt'),
-            "sam3_device": settings.get('sam3_device', 'cuda'),
-            "sam3_mask_blur": int(settings.get('sam3_mask_blur', 4)),
-            "sam3_denoising_strength": float(settings.get('sam3_denoising_strength', settings.get('denoising_strength', 0.4))),
-            "sam3_inpainting_fill": settings.get('sam3_inpainting_fill', 'original'),
-            "sam3_inpaint_only_masked": bool(settings.get('sam3_inpaint_only_masked', True)),
-            "sam3_inpaint_only_masked_padding": int(settings.get('sam3_inpaint_only_masked_padding', 32)),
-            "sam3_use_inpaint_width_height": bool(settings.get('sam3_use_inpaint_width_height', False)),
-            "sam3_inpaint_width": int(settings.get('sam3_inpaint_width', 512)),
-            "sam3_inpaint_height": int(settings.get('sam3_inpaint_height', 512)),
-            "sam3_use_steps": bool(settings.get('sam3_use_steps', False)),
-            "sam3_steps": int(settings.get('sam3_steps', 28)),
-            "sam3_use_cfg_scale": bool(settings.get('sam3_use_cfg_scale', False)),
-            "sam3_cfg_scale": float(settings.get('sam3_cfg_scale', 7.0)),
-            "sam3_use_sampler": bool(settings.get('sam3_use_sampler', False)),
-            "sam3_sampler": settings.get('sam3_sampler', 'Use same sampler'),
-            "sam3_use_scheduler": bool(settings.get('sam3_use_scheduler', False)),
-            "sam3_scheduler": settings.get('sam3_scheduler', 'Use same scheduler'),
-            "sam3_use_seed": bool(settings.get('sam3_use_seed', False)),
-            "sam3_seed": int(settings.get('sam3_seed', -1)),
-            "sam3_use_noise_multiplier": bool(settings.get('sam3_use_noise_multiplier', False)),
-            "sam3_noise_multiplier": float(settings.get('sam3_noise_multiplier', 1.0)),
-            "sam3_restore_face": bool(settings.get('sam3_restore_face', False)),
-            "sam3_preview_overlay": bool(settings.get('sam3_preview_overlay', False)),
-            "sam3_save_artifacts": bool(settings.get('sam3_save_artifacts', True)),
-            # ★ 핵심: 검출 직후 SAM3(~3.5GB)를 VRAM에서 내림.
-            # sam-extra UI 기본값은 True지만 API 경로 _xyz_or("sam3_unload_after", False)
-            # 라서 우리가 명시 안 보내면 False로 처리 → 인페인트 내내 SAM3 상주 →
-            # ANIMA(~8GB)+SAM3(3.5GB)+Forge(~3GB) > 16GB → OOM/lowvram.
-            # 한 사이클 내 재로딩 0회, 다음 검출 때만 ~3-5s 추가.
-            "sam3_unload_after": bool(settings.get('sam3_unload_after', True)),
-        }
+        """SAM3 alwayson state — core/sam3_args로 일원화 (t2i 경로와 동일 로직).
+
+        예전에는 이 함수와 ui/generator_generation.py에 거의 같은 dict가 복사돼 있어
+        한쪽만 고치면 t2i와 배치 결과가 갈렸다. 기본값·범위·ControlNet 필드는 전부
+        core/sam3_args.SAM3_SPEC 한 곳에서 관리한다.
+
+        ★ sam3_unload_after: 확장 UI 기본은 True지만 API 경로는 `_xyz_or(..., False)`라
+          명시하지 않으면 인페인트 내내 SAM3(~3.5GB)가 상주해 16GB GPU에서 OOM 난다.
+          SAM3_SPEC의 기본값이 True이므로 명시 전송된다.
+        """
+        from core import sam3_args
+        # 예전 호출자가 denoising_strength만 넘기던 경우 호환
+        if 'sam3_denoising_strength' not in settings and 'denoising_strength' in settings:
+            settings = dict(settings)
+            settings['sam3_denoising_strength'] = settings['denoising_strength']
+        return sam3_args.build_state(
+            settings,
+            prompt=str(settings.get('prompt', '') or ''),
+            negative_prompt=str(settings.get('negative_prompt', '') or ''),
+        )
 
     def _run_img2img_postprocess(self, image_b64: str, payload: Dict) -> str:
         response = requests.post(
@@ -128,6 +102,33 @@ class WebUIBackend(AbstractBackend):
         if 'images' in r and r['images']:
             return r['images'][-1]
         raise RuntimeError("img2img 후처리 API 응답에 이미지가 없습니다.")
+
+    def get_lora_manager_url(self) -> Dict:
+        """sam-extra의 임베드된 LoRA Manager 주소를 얻는다.
+
+        확장이 Forge FastAPI에 등록해 둔 라우트(`sam3ext/lora_manager_core.py`):
+            GET /sam3-lora/spawn  → {"url", "port", "status", "message"}
+        서버가 안 떠 있으면 이 호출이 띄운다(lazy spawn). 확장이 없으면 404 → 안내 메시지.
+
+        반환: {'url': str, 'status': str, 'message': str}
+        """
+        try:
+            r = requests.get(f'{self.api_url}/sam3-lora/spawn',
+                             headers=_HEADERS, timeout=20)
+            if r.status_code == 404:
+                return {'url': '', 'status': 'missing',
+                        'message': 'sam-extra 확장의 LoRA Manager를 찾을 수 없습니다 '
+                                   '(확장 미설치이거나 v0.9.0 미만)'}
+            r.raise_for_status()
+            data = r.json()
+            return {
+                'url': str(data.get('url') or ''),
+                'status': str(data.get('status') or ''),
+                'message': str(data.get('message') or ''),
+            }
+        except Exception as e:
+            logger.warning("LoRA Manager URL 조회 실패: %s", e)
+            return {'url': '', 'status': 'error', 'message': str(e)}
 
     def get_backend_type(self) -> str:
         return "webui"
@@ -472,14 +473,107 @@ class WebUIBackend(AbstractBackend):
         payload["alwayson_scripts"]["ADetailer"] = {"args": adetailer_args}
         return self._run_img2img_postprocess(image_b64, payload)
 
-    def sam3(self, image_b64: str, settings: Dict) -> str:
-        """img2img + SAM3 확장으로 마스킹/인페인트"""
-        sam3_state = self._build_sam3_script_state(settings)
-        payload = self._build_postprocess_payload(
-            image_b64,
-            settings,
-            prompt=sam3_state.get('sam3_inpaint_prompt', '') or settings.get('prompt', ''),
-            negative_prompt=sam3_state.get('sam3_negative_prompt', '') or settings.get('negative_prompt', ''),
+    def refine(self, image_b64: str, settings: Dict) -> str:
+        """SAM3 Refine — 기존 이미지를 Target/Replacement로 재손질.
+
+        sam-extra 워크플로 2를 앱에서 구현한 것. 확장의 Refine 패널은 Gradio 전용이라
+        HTTP로 부를 수 없어서, 같은 결과가 나오도록 여기서 payload를 만든다.
+
+        `sam3()` 와의 차이 (이게 핵심):
+          · sam3()는 `_build_postprocess_payload`를 쓰는데 denoising_strength가 0.1로
+            고정돼 **이미지 전체가 한 번 재확산**된다. Refine은 마스크 영역만 건드려야
+            하므로 부모 i2i는 denoise 0으로 통과시키고 SAM3 인페인트만 일하게 한다.
+          · steps/cfg/sampler/seed를 명시해 Forge 현재 UI 값에 좌우되지 않게 한다.
+        """
+        from core.refine_prompt import build_refine_prompts
+
+        prompts = build_refine_prompts(
+            main_prompt=settings.get('main_prompt', ''),
+            main_negative=settings.get('main_negative', ''),
+            target=settings.get('target', ''),
+            replacement=settings.get('replacement', ''),
+            negative=settings.get('negative', ''),
+            inherit_main=bool(settings.get('inherit_main', True)),
+            inherit_negative=bool(settings.get('inherit_negative', True)),
         )
-        payload["alwayson_scripts"]["SAM3 Mask"] = {"args": [sam3_state]}
+
+        sam3_settings = dict(settings)
+        sam3_settings['sam3_prompt'] = settings.get('target') or 'face'
+        sam3_settings['sam3_inpaint_prompt'] = prompts['prompt']
+        sam3_settings['sam3_negative_prompt'] = prompts['negative_prompt']
+        sam3_settings['sam3_mode'] = 'Inpaint'
+        sam3_state = self._build_sam3_script_state(sam3_settings)
+
+        image_bytes = base64.b64decode(image_b64)
+        with Image.open(io.BytesIO(image_bytes)) as init_image:
+            init_width, init_height = init_image.size
+
+        payload = {
+            "init_images": [image_b64],
+            "prompt": prompts['prompt'],
+            "negative_prompt": prompts['negative_prompt'],
+            # 부모 i2i는 아무것도 바꾸지 않게 — 실제 작업은 SAM3 인페인트 패스가 한다
+            "denoising_strength": 0.0,
+            "resize_mode": 0,
+            "width": init_width,
+            "height": init_height,
+            "steps": int(settings.get('steps', 28)),
+            "cfg_scale": float(settings.get('cfg_scale', 7.0)),
+            "seed": int(settings.get('seed', -1)),
+            "send_images": True,
+            "save_images": False,
+            "alwayson_scripts": {"SAM3 Mask": {"args": [sam3_state]}},
+        }
+        sampler = str(settings.get('sampler') or '').strip()
+        if sampler and sampler != 'Use same sampler':
+            payload["sampler_name"] = sampler
+        scheduler = str(settings.get('scheduler') or '').strip()
+        if scheduler and scheduler != 'Use same scheduler':
+            payload["scheduler"] = scheduler
+
+        logger.info("Refine: target=%r → prompt=%r", settings.get('target'), prompts['prompt'])
+        return self._run_img2img_postprocess(image_b64, payload)
+
+    def sam3(self, image_b64: str, settings: Dict) -> str:
+        """img2img + SAM3 확장으로 마스킹/인페인트 (배치/단독 실행 경로).
+
+        예전에는 `_build_postprocess_payload`를 썼는데 거기 기본 denoising_strength가
+        0.1이라 **이미지 전체가 한 번 재확산**됐다. Forge의 SAM3는 마스크 영역만
+        건드리므로 결과가 달라지고, 전역 디테일 드리프트 + 낭비되는 시간까지 붙었다.
+        `_postprocess_base_payload`를 채우는 호출자도 없어 steps/cfg/sampler가 전부
+        Forge 현재 UI 값에 좌우돼 재현도 안 됐다.
+
+        이제 부모 i2i는 denoise 0으로 통과시키고, 실제 작업은 SAM3 인페인트 패스가
+        전담한다. 샘플링 파라미터도 명시 전송한다.
+        """
+        sam3_state = self._build_sam3_script_state(settings)
+
+        image_bytes = base64.b64decode(image_b64)
+        with Image.open(io.BytesIO(image_bytes)) as init_image:
+            init_width, init_height = init_image.size
+
+        prompt = sam3_state.get('sam3_inpaint_prompt', '') or settings.get('prompt', '')
+        negative = sam3_state.get('sam3_negative_prompt', '') or settings.get('negative_prompt', '')
+
+        payload = {
+            "init_images": [image_b64],
+            "prompt": prompt,
+            "negative_prompt": negative,
+            "denoising_strength": 0.0,
+            "resize_mode": 0,
+            "width": init_width,
+            "height": init_height,
+            "steps": int(settings.get('steps', 28)),
+            "cfg_scale": float(settings.get('cfg_scale', 7.0)),
+            "seed": int(settings.get('seed', -1)),
+            "send_images": True,
+            "save_images": False,
+            "alwayson_scripts": {"SAM3 Mask": {"args": [sam3_state]}},
+        }
+        sampler = str(settings.get('sampler') or '').strip()
+        if sampler and sampler != 'Use same sampler':
+            payload["sampler_name"] = sampler
+        scheduler = str(settings.get('scheduler') or '').strip()
+        if scheduler and scheduler != 'Use same scheduler':
+            payload["scheduler"] = scheduler
         return self._run_img2img_postprocess(image_b64, payload)

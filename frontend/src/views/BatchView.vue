@@ -211,8 +211,16 @@
             <div v-else class="exif-prompt-hint">각 이미지의 EXIF에서 Positive/Negative를 자동으로 읽어 사용합니다</div>
           </div>
           <div class="ad-param">
+            <label>Exclude Prompt (보호할 영역)</label>
+            <input type="text" v-model="sam3ExcludePrompt" placeholder="face, eyes, hand" />
+          </div>
+          <div class="ad-param">
             <label>Negative Prompt</label>
             <input type="text" v-model="sam3NegativePrompt" placeholder="(선택사항)" />
+          </div>
+          <div class="ad-param">
+            <label>Mode</label>
+            <CustomSelect v-model="sam3Mode" :options="['Inpaint', 'Mask only']" placeholder="Inpaint" />
           </div>
           <div class="ad-param">
             <label>Mask Mode</label>
@@ -235,11 +243,45 @@
             <input type="number" v-model.number="sam3Padding" min="0" />
           </div>
           <div class="ad-param">
+            <label>Mask Dilation (px)</label>
+            <input type="number" v-model.number="sam3MaskDilation" min="0" />
+          </div>
+          <div class="ad-param">
+            <label>Outline expand (px)</label>
+            <input type="number" v-model.number="sam3MaskOutline" min="0" />
+          </div>
+          <div class="ad-param">
+            <label>Inpainting fill</label>
+            <CustomSelect v-model="sam3Fill"
+              :options="['fill', 'original', 'latent noise', 'latent nothing']" placeholder="original" />
+          </div>
+          <div class="ad-param">
+            <label>Steps</label>
+            <input type="number" v-model.number="sam3Steps" min="1" />
+          </div>
+          <div class="ad-param">
+            <label>CFG</label>
+            <input type="number" v-model.number="sam3Cfg" step="0.5" min="0" />
+          </div>
+          <div class="ad-param">
+            <label>Seed (-1 = 랜덤)</label>
+            <input type="number" v-model.number="sam3Seed" />
+          </div>
+          <div class="ad-param">
             <label>Checkpoint</label>
             <input type="text" v-model="sam3Checkpoint" placeholder="sam3.pt" />
           </div>
+          <div class="ad-param">
+            <label>Device</label>
+            <CustomSelect v-model="sam3Device" :options="['cuda', 'auto', 'cpu']" placeholder="cuda" />
+          </div>
+          <label class="ad-toggle"><input type="checkbox" v-model="sam3MaskHull" /><span>Convex Hull (머리카락 감싸기)</span></label>
+          <label class="ad-toggle"><input type="checkbox" v-model="sam3OnlyMasked" /><span>마스크된 영역만</span></label>
+          <label class="ad-toggle"><input type="checkbox" v-model="sam3RestoreFace" /><span>Restore face</span></label>
           <label class="ad-toggle"><input type="checkbox" v-model="sam3PreviewOverlay" /><span>Overlay Preview</span></label>
           <label class="ad-toggle"><input type="checkbox" v-model="sam3SaveArtifacts" /><span>Artifacts 저장</span></label>
+          <label class="ad-toggle" title="검출 직후 SAM3(~3.5GB) VRAM 회수 — 16GB GPU 권장">
+            <input type="checkbox" v-model="sam3UnloadAfter" /><span>검출 후 SAM3 VRAM 해제</span></label>
         </div>
 
         <div class="ad-progress" v-if="sam3Processing">
@@ -599,6 +641,20 @@ const sam3Padding = ref(32)
 const sam3Checkpoint = ref('sam3.pt')
 const sam3PreviewOverlay = ref(false)
 const sam3SaveArtifacts = ref(true)
+// t2i 패널과 동일 수준으로 노출 (예전엔 배치에 없어 확장 기본값으로만 돌았음)
+const sam3Mode = ref('Inpaint')
+const sam3ExcludePrompt = ref('')
+const sam3MaskDilation = ref(0)
+const sam3MaskHull = ref(false)
+const sam3MaskOutline = ref(0)
+const sam3Device = ref('cuda')
+const sam3Fill = ref('original')
+const sam3OnlyMasked = ref(true)
+const sam3Steps = ref(28)
+const sam3Cfg = ref(7)
+const sam3Seed = ref(-1)
+const sam3RestoreFace = ref(false)
+const sam3UnloadAfter = ref(true)
 const sam3CurrentIdx = ref(-1)
 const sam3Preview = ref('')
 const sam3Before = ref('')
@@ -623,23 +679,44 @@ function previewSam3File(i: number) {
 
 function _sam3Settings() {
   return {
-    sam3_mode: 'Inpaint',
+    sam3_mode: sam3Mode.value,
     sam3_mask_mode: sam3MaskMode.value,
     sam3_prompt: sam3Prompt.value || 'face',
+    // 예전엔 배치 경로에 exclude/dilation/hull/outline/device 입력이 없어
+    // 확장 기본값으로만 돌았다 — t2i 패널과 같은 수준으로 노출한다
+    sam3_exclude_prompt: sam3ExcludePrompt.value,
     sam3_inpaint_prompt: sam3UseExifPrompt.value ? '' : sam3InpaintPrompt.value,
     sam3_negative_prompt: sam3NegativePrompt.value,
     sam3_threshold: sam3Threshold.value,
+    sam3_mask_dilation: sam3MaskDilation.value,
+    sam3_mask_hull: sam3MaskHull.value,
+    sam3_mask_outline_px: sam3MaskOutline.value,
     sam3_checkpoint: sam3Checkpoint.value || 'sam3.pt',
+    sam3_device: sam3Device.value,
     sam3_mask_blur: sam3MaskBlur.value,
     sam3_denoising_strength: sam3Denoise.value,
-    sam3_inpaint_only_masked: true,
+    sam3_inpainting_fill: sam3Fill.value,
+    sam3_inpaint_only_masked: sam3OnlyMasked.value,
     sam3_inpaint_only_masked_padding: sam3Padding.value,
     sam3_use_inpaint_width_height: false,
     sam3_inpaint_width: 1024,
     sam3_inpaint_height: 1024,
+    sam3_use_steps: true,
+    sam3_steps: sam3Steps.value,
+    sam3_use_cfg_scale: true,
+    sam3_cfg_scale: sam3Cfg.value,
+    sam3_use_seed: sam3Seed.value !== -1,
+    sam3_seed: sam3Seed.value,
+    sam3_restore_face: sam3RestoreFace.value,
     sam3_preview_overlay: sam3PreviewOverlay.value,
     sam3_save_artifacts: sam3SaveArtifacts.value,
+    // 16GB GPU에서 인페인트 OOM 방지 — 확장 API 기본값이 False라 명시 전송 필수
+    sam3_unload_after: sam3UnloadAfter.value,
     use_exif_prompt: sam3UseExifPrompt.value,
+    // 부모 i2i 샘플링 파라미터 (Forge 현재 UI 값에 좌우되지 않게)
+    steps: sam3Steps.value,
+    cfg_scale: sam3Cfg.value,
+    seed: sam3Seed.value,
   }
 }
 

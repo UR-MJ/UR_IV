@@ -4,11 +4,30 @@
       <div class="lm-header">
         <div>
           <h3>LoRA 매니저</h3>
-          <span class="lm-sub">설치된 LoRA를 검색해서 스택에 추가합니다</span>
+          <span class="lm-sub">
+            {{ extMode ? 'sam-extra 임베드 매니저 (civitai 다운로드 · 메타데이터 · 레시피)'
+                       : '설치된 LoRA를 검색해서 스택에 추가합니다' }}
+          </span>
         </div>
-        <button class="lm-close" @click="close">✕</button>
+        <div class="lm-head-actions">
+          <button class="lm-modetab" :class="{ active: !extMode }" @click="extMode = false">간편</button>
+          <button class="lm-modetab" :class="{ active: extMode }" @click="openExtManager">확장 매니저</button>
+          <button class="lm-close" @click="close">✕</button>
+        </div>
       </div>
 
+      <!-- sam-extra 임베드 LoRA Manager (워크플로 4) -->
+      <div v-if="extMode" class="lm-ext">
+        <div v-if="extLoading" class="lm-empty">LoRA Manager 서버를 여는 중…</div>
+        <div v-else-if="extError" class="lm-empty lm-error">
+          {{ extError }}
+          <button class="lm-refresh mt-8" @click="openExtManager">다시 시도</button>
+        </div>
+        <iframe v-else-if="extUrl" :src="extUrl" class="lm-iframe"
+          referrerpolicy="no-referrer" />
+      </div>
+
+      <template v-else>
       <div class="lm-searchbar">
         <input ref="searchEl" v-model="query" class="lm-search" placeholder="LoRA 이름 검색..." />
         <button class="lm-refresh" @click="load('force')" :disabled="loading" title="목록 다시 스캔">{{ loading ? '…' : '🔄' }}</button>
@@ -44,13 +63,14 @@
         <div class="lm-foot-spacer"></div>
         <button class="lm-done" @click="close">닫기</button>
       </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getBackend } from '../bridge.js'
+import { getBackend, onBackendEvent } from '../bridge.js'
 
 interface LoraItem { name: string; triggerWords: string[]; _w?: number; [k: string]: any }
 
@@ -64,6 +84,45 @@ const query = ref('')
 const loading = ref(false)
 const batchText = ref('')
 const searchEl = ref<HTMLInputElement | null>(null)
+
+// ── sam-extra 임베드 LoRA Manager (워크플로 4) ──────────────────────────────
+// 확장이 Forge FastAPI에 등록한 /sam3-lora/spawn 이 aiohttp 서버를 lazy spawn 하고
+// URL을 돌려준다. 그 URL을 iframe으로 띄우면 civitai 다운로드·메타데이터 편집·
+// 트리거워드·레시피가 그대로 들어온다 — 앱에서 새로 만들 게 없다.
+const extMode = ref(false)
+const extUrl = ref('')
+const extLoading = ref(false)
+const extError = ref('')
+
+async function openExtManager() {
+  extMode.value = true
+  if (extUrl.value) return          // 이미 열어둔 서버 재사용
+  extLoading.value = true
+  extError.value = ''
+  try {
+    const backend: any = await getBackend()
+    if (!backend?.requestLoraManagerUrl) {
+      extError.value = 'LoRA Manager 임베드를 지원하지 않는 백엔드입니다'
+      extLoading.value = false
+      return
+    }
+    backend.requestLoraManagerUrl()
+  } catch (e) {
+    extError.value = String(e)
+    extLoading.value = false
+  }
+}
+
+function onExtUrlReady(json: string) {
+  extLoading.value = false
+  try {
+    const r = JSON.parse(json)
+    if (r.url) { extUrl.value = r.url; extError.value = '' }
+    else extError.value = r.message || 'LoRA Manager를 열 수 없습니다'
+  } catch {
+    extError.value = 'LoRA Manager 응답을 해석하지 못했습니다'
+  }
+}
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -104,6 +163,7 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { e.stopPropagation()
 
 onMounted(() => {
   window.addEventListener('keydown', onKey, true)
+  onBackendEvent('loraManagerUrlReady', onExtUrlReady)
   load()
   if (searchEl.value) searchEl.value.focus()
 })
@@ -118,6 +178,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .lm-sub { font-size: 11px; color: var(--text-muted); }
 .lm-close { width: 30px; height: 30px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); cursor: pointer; }
 .lm-close:hover { color: var(--text-primary); border-color: var(--accent); }
+.lm-head-actions { display: flex; align-items: center; gap: 6px; }
+.lm-modetab {
+  height: 30px; padding: 0 12px; font-size: 10px; font-weight: 800;
+  background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: var(--radius-base); color: var(--text-muted); cursor: pointer;
+}
+.lm-modetab:hover { color: var(--text-primary); }
+.lm-modetab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.lm-ext { flex: 1; display: flex; min-height: 0; }
+.lm-iframe { flex: 1; width: 100%; height: 100%; border: none; background: #fff; }
+.lm-error { color: #f87171; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.mt-8 { margin-top: 8px; }
 .lm-searchbar { display: flex; gap: 8px; padding: 12px 20px; }
 .lm-search { flex: 1; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-base); padding: 9px 12px; color: var(--text-primary); font-size: 13px; }
 .lm-search:focus { outline: none; border-color: var(--accent); }

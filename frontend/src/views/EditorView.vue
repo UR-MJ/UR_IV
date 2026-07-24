@@ -43,6 +43,7 @@
             <MosaicPanel v-show="activeTab === 0"
               :model-label="modelLabel"
               :detect-status="detectStatus"
+              :perspective-active="perspectiveActive"
               @tool-changed="onToolChanged"
               @effect-apply="applyEffect"
               @add-model="openModelDialog"
@@ -52,7 +53,9 @@
               @cancel-selection="canvasRef?.clearSelection()"
               @crop="doCrop"
               @resize="doResize"
-              @perspective="doOp('perspective')"
+              @perspective-start="onStartPerspective"
+              @perspective-confirm="onConfirmPerspective"
+              @perspective-cancel="onCancelPerspective"
               @rotate="op => doOp('rotate_' + op)"
               @flip="op => doOp('flip_' + (op === 'horizontal' ? 'h' : 'v'))"
               @remove-bg="params => doOp('remove_bg', params)"
@@ -75,11 +78,17 @@
             />
             <DrawPanel v-show="activeTab === 4" ref="drawPanelRef"
               @tool-changed="currentTool = $event"
-              @flatten="doOp('flatten')"
+              @flatten-layer="applyFlatten"
             />
-            <MovePanel v-show="activeTab === 5"
-              @start-move="doOp('start_move')"
-              @confirm="doOp('confirm_move')" @cancel="doOp('cancel_move')"
+            <MovePanel v-show="activeTab === 5" ref="movePanelRef"
+              :status-text="moveStatusText"
+              :can-undo="undoStack.length > 1"
+              @start-move="onStartMove"
+              @confirm-move="onConfirmMove"
+              @cancel-move="onCancelMove"
+              @undo-move="onUndo"
+              @rotation-changed="v => moveRotation = v"
+              @scale-changed="v => moveScale = v"
             />
           </div>
         </div>
@@ -97,6 +106,7 @@
           :bar-width="barWidth"
           :bar-height="barHeight"
           @selection-changed="onSelectionChanged"
+          @restore-ready="commitRestore"
         />
       </div>
     </template>
@@ -182,9 +192,18 @@ const barWidth = ref(40)
 const barHeight = ref(15)
 const canvasRef = ref<any>(null)
 const drawPanelRef = ref<any>(null)
+const movePanelRef = ref<any>(null)
 const selection = ref<any>(null)
 const modelLabel = ref('No Model Loaded')
 const detectStatus = ref('')
+
+// 마스크 영역 이동(MovePanel) 상태 — 드래그 미리보기는 캔버스가, 확정은 백엔드가 한다
+const moveStatusText = ref('마스킹을 먼저 해주세요')
+const moveRotation = ref(0)
+const moveScale = ref(100)
+const moveFillColor = ref('black')
+// 드로잉 레이어 불투명도 (병합 시 사용)
+const drawLayerOpacity = ref(100)
 
 const undoStack = ref<string[]>([])
 const redoStack = ref<string[]>([])
@@ -371,7 +390,9 @@ function onEditorResult(json: string) {
       canvasRef.value?.loadMaskFromBase64(result.mask_base64)
       detectStatus.value = `${result.detect_count || 0}개 감지됨`
     } else if (result.error) {
+      // 콘솔에만 찍으면 사용자는 '무반응'으로 느낀다 — 토스트로 올린다
       console.error('[Editor] error:', result.error)
+      requestAction('show_toast', { type: 'error', msg: result.error })
       if (result.operation === 'auto_censor' || result.operation === 'auto_detect') {
         detectStatus.value = result.error
       }
@@ -421,14 +442,46 @@ function onParamsChanged(params: any) {
   if (params.barH) barHeight.value = params.barH
 }
 
+// ── 모자이크 지우개 커밋 ──
+// 지우개는 화면 캔버스만 되돌린다(저장은 파일 경로 기반이라 그대로 두면 결과가 사라짐).
+// 효과 적용 직전 이미지 경로를 pristinePath로 들고 있다가, 그 파일에서 픽셀을 되가져온다.
+const pristinePath = ref('')
+async function commitRestore() {
+  const maskB64 = canvasRef.value?.getRestoreMaskBase64?.()
+  if (!maskB64) return
+  if (!pristinePath.value) {
+    // 되돌릴 '적용 전' 이미지가 없다 — 화면만 되돌아간 상태이므로 사용자에게 알린다
+    requestAction('show_toast', {
+      type: 'info', msg: '되돌릴 이전 상태가 없습니다 (효과를 먼저 적용하세요)',
+    })
+    canvasRef.value?.clearRestoreMask?.()
+    return
+  }
+  canvasRef.value?.keepPristineForNextLoad?.()
+  doOp('restore', {
+    mask_base64: maskB64,
+    source_path: pristinePath.value.replace('file:///', ''),
+  })
+  canvasRef.value?.clearRestoreMask?.()
+}
+
 function applyEffect(effectData: any) {
   const sel = canvasRef.value?.getSelection()
   const effectMap: Record<string, string> = { 0: 'mosaic', 1: 'censor_bar', 2: 'blur' }
   const op = effectMap[effectData.effect] ?? 'mosaic'
-  if (sel) {
-    // 마스크 기반 처리
-    doOpWithMask(op, { ...effectData, selection: sel })
+  if (!sel) {
+    // 예전엔 조용히 return 해서 "APPLY를 눌렀는데 아무 일도 안 남"이었다
+    requestAction('show_toast', {
+      type: 'warning',
+      msg: '적용할 영역이 없습니다 — 브러시/올가미/박스로 먼저 마스킹하세요',
+    })
+    return
   }
+  // 효과 적용 전 상태를 기억해 둔다 — 모자이크 지우개가 이 픽셀을 되살린다.
+  // pristine 스냅샷도 이번 교체에 한해 유지해야 지우개가 '적용 전' 그림을 본다.
+  pristinePath.value = imagePath.value
+  canvasRef.value?.keepPristineForNextLoad?.()
+  doOpWithMask(op, { ...effectData, selection: sel })
 }
 
 async function openModelDialog() {
@@ -456,6 +509,10 @@ async function runAutoCensor(params: any) {
   if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
     payload.exclude_prompt = String(params.excludePrompt).trim()
   }
+  // SAM3는 텍스트 기반 세그멘터 — detect prompt가 있으면 YOLO 없이도 단독 실행된다
+  if (samModel === 'sam3' && params?.detectPrompt && String(params.detectPrompt).trim()) {
+    payload.detect_prompt = String(params.detectPrompt).trim()
+  }
   // 결과는 editorResult 이벤트로 도착 — 콜백은 즉시 거절만 처리 + job_id 캡처
   backend.editorProcess(cleanPath, 'auto_censor', JSON.stringify(payload), (json: string) => {
     try {
@@ -479,6 +536,10 @@ async function runAutoDetect(params: any) {
   if (samModel === 'sam3' && params?.excludePrompt && String(params.excludePrompt).trim()) {
     payload.exclude_prompt = String(params.excludePrompt).trim()
   }
+  // SAM3는 텍스트 기반 세그멘터 — detect prompt가 있으면 YOLO 없이도 단독 실행된다
+  if (samModel === 'sam3' && params?.detectPrompt && String(params.detectPrompt).trim()) {
+    payload.detect_prompt = String(params.detectPrompt).trim()
+  }
   // 결과(mask_base64)는 editorResult 이벤트로 도착 — 콜백은 즉시 거절만 처리 + job_id 캡처
   backend.editorProcess(cleanPath, 'auto_detect', JSON.stringify(payload), (json: string) => {
     try {
@@ -493,6 +554,36 @@ function doCrop() {
   const sel = canvasRef.value?.getSelection()
   if (sel) doOp('crop', { selection: sel })
 }
+
+// ── 원근 보정 ──
+// 꼭짓점 4개를 드래그해 '원본에서 직사각형이어야 할 영역'을 지정하면
+// 백엔드(core/editor_ops.perspective)가 그 사다리꼴을 정직사각형으로 편다.
+// 출력 크기는 넘기지 않는다 — 백엔드가 대변 길이 최댓값으로 추론한다.
+const perspectiveActive = ref(false)
+function onStartPerspective() {
+  if (!imagePath.value) return
+  perspectiveActive.value = true
+  currentTool.value = 'perspective'
+  canvasRef.value?.beginPerspective?.()
+  requestAction('show_toast', {
+    type: 'info', msg: '꼭짓점 4개를 펴고 싶은 사각형 모서리에 맞춘 뒤 "적용"을 누르세요',
+  })
+}
+function onConfirmPerspective() {
+  const corners = canvasRef.value?.endPerspective?.()
+  perspectiveActive.value = false
+  currentTool.value = 'box'
+  if (!corners) {
+    requestAction('show_toast', { type: 'warning', msg: '꼭짓점 정보가 없습니다' })
+    return
+  }
+  doOp('perspective', { corners })
+}
+function onCancelPerspective() {
+  canvasRef.value?.cancelPerspective?.()
+  perspectiveActive.value = false
+  currentTool.value = 'box'
+}
 function doResize(params?: any) { doOp('resize', params) }
 function applyAdj(adj: any) { doOp('color_adjust', adj) }
 // previewAdj / previewAdvAdj — 미구현 빈 함수였음. 실시간 프리뷰는 향후 구현 예정 (TODO).
@@ -500,8 +591,63 @@ function applyAdj(adj: any) { doOp('color_adjust', adj) }
 function previewAdj(_adj: any) { /* TODO: 실시간 색감 프리뷰 (마스크 영역만 임시 렌더) */ }
 function resetAdj() { /* ColorPanel이 자체적으로 처리 — 백엔드 액션 없음 */ }
 function previewAdvAdj(_adj: any) { /* TODO: Advanced 색감 실시간 프리뷰 */ }
-function applyFilter(filter: any) { doOp(filter.name || filter.type, filter) }
+// ColorPanel은 { filter, strength }를 보낸다. 예전 `filter.name || filter.type`은
+// 둘 다 없어서 operation이 undefined로 나갔고, 백엔드는 모든 분기를 통과해
+// 원본을 그대로 재저장했다 (= 필터 프리셋 전부 무반응).
+function applyFilter(payload: any) {
+  if (!payload?.filter) return
+  doOp('filter', { filter: payload.filter, strength: payload.strength ?? 100 })
+}
 function applyAdvAdj(adj: any) { doOp('adv_color', adj) }
+
+// ── 드로잉 레이어 병합 ──
+// DrawPanel이 emit하는 이름은 'flatten-layer'인데 예전에는 '@flatten'에 물려 있어
+// 버튼이 아예 아무것도 안 했다. 오버레이 캔버스를 base64로 실어 보낸다.
+async function applyFlatten() {
+  const overlay = drawPanelRef.value?.getOverlayBase64?.()
+    ?? canvasRef.value?.getDrawOverlayBase64?.()
+  if (!overlay) {
+    requestAction('show_toast', { type: 'info', msg: '병합할 드로잉이 없습니다' })
+    return
+  }
+  doOp('flatten', { overlay_base64: overlay, opacity: drawLayerOpacity.value })
+}
+
+// ── 마스크 영역 이동 (MovePanel) ──
+// MovePanel은 'confirm-move'/'cancel-move'를 emit하는데 예전에는 '@confirm'/'@cancel'에
+// 물려 있어 전부 죽어 있었다. 게다가 백엔드에 start/confirm/cancel_move 핸들러가 없었다.
+// 이제 이동은 캔버스에서 드래그로 미리보기하고, 확정할 때 한 번만 백엔드 move_region을 부른다.
+function onStartMove(payload: any) {
+  if (!canvasRef.value?.getSelection()) {
+    requestAction('show_toast', { type: 'warning', msg: '이동할 영역을 먼저 마스킹하세요' })
+    movePanelRef.value?.setMovingState?.(false)
+    return
+  }
+  moveFillColor.value = payload?.fillColor || 'black'
+  moveRotation.value = payload?.rotation ?? 0
+  moveScale.value = payload?.scale ?? 100
+  currentTool.value = 'move'
+  canvasRef.value?.beginMove?.()
+  moveStatusText.value = '영역을 드래그해 옮긴 뒤 "확정"을 누르세요'
+}
+
+function onConfirmMove(payload: any) {
+  const offset = canvasRef.value?.endMove?.() || { dx: 0, dy: 0 }
+  currentTool.value = 'box'
+  moveStatusText.value = '마스킹을 먼저 해주세요'
+  doOpWithMask('move_region', {
+    dx: offset.dx, dy: offset.dy,
+    rotation: payload?.rotation ?? moveRotation.value,
+    scale: payload?.scale ?? moveScale.value,
+    fillColor: moveFillColor.value,
+  })
+}
+
+function onCancelMove() {
+  canvasRef.value?.cancelMove?.()
+  currentTool.value = 'box'
+  moveStatusText.value = '마스킹을 먼저 해주세요'
+}
 function applyTextWm(params: any) { doOp('text_watermark', params) }
 function applyImageWm(params: any) { doOp('image_watermark', params) }
 function loadWatermarkImage() { requestAction('editor_load_watermark_image') }
@@ -652,7 +798,16 @@ function onEditorKeyDown(e: KeyboardEvent) {
     e.preventDefault(); e.stopImmediatePropagation()
     onRedo(); return
   }
-  if (e.key === 'Escape') canvasRef.value?.clearSelection()
+  if (e.key === 'Escape') {
+    // 원근 보정 중이면 그것부터 취소 (마스크를 날리지 않게)
+    if (perspectiveActive.value) { onCancelPerspective(); return }
+    canvasRef.value?.clearSelection()
+  }
+  // 원근 보정 중 Enter = 적용
+  if (e.key === 'Enter' && perspectiveActive.value) {
+    e.preventDefault()
+    onConfirmPerspective()
+  }
 }
 
 // 자동 저장 — 5분마다 변경 있으면 임시본 기록

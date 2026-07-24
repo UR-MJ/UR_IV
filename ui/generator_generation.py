@@ -691,8 +691,27 @@ class GenerationMixin:
 
         return args if len(args) > 2 else None
 
+    def apply_alwayson_extensions(self, payload):
+        """확장 전체(NegPiP + ADetailer + SAM3 + Anima)를 payload에 적용.
+
+        t2i 뿐 아니라 **img2img / inpaint 경로에서도 쓰는 단일 진입점**이다.
+        확장의 `show()`가 `AlwaysVisible`이라 img2img에서도 그대로 동작하므로,
+        Forge Neo UI에서 i2i 탭에 SAM3/ADetailer 아코디언이 보이는 것과 결과가 같아진다.
+        (CLAUDE.md '확장기능은 Forge Neo와 동일한 alwayson_scripts 방식' 원칙)
+
+        예전에는 i2i/inpaint가 `"alwayson_scripts": {}`를 빈 채로 보내서
+        같은 설정인데도 t2i와 결과가 달랐다.
+        """
+        if not isinstance(payload, dict):
+            return payload
+        payload.setdefault("alwayson_scripts", {})
+        if hasattr(self, 'negpip_group') and self.negpip_group.isChecked():
+            payload["alwayson_scripts"].setdefault("NegPiP", {"args": [True]})
+        self._apply_postprocess_chain(payload)
+        return payload
+
     def _apply_postprocess_chain(self, payload):
-        """Forge Neo와 동일: ADetailer + SAM3 모두 alwayson_scripts로 적용"""
+        """Forge Neo와 동일: ADetailer + SAM3 + Anima Guidance 모두 alwayson_scripts로 적용"""
         payload.setdefault("alwayson_scripts", {})
 
         # ADetailer: Forge Neo와 동일하게 alwayson_scripts로 직접 적용
@@ -702,18 +721,29 @@ class GenerationMixin:
                 payload["alwayson_scripts"]["ADetailer"] = {"args": adetailer_args}
                 _logger.info("ADetailer alwayson_scripts 적용됨 (Forge Neo 방식)")
 
-        # SAM3: Forge Neo와 동일하게 alwayson_scripts로 직접 적용
+        # SAM3: Forge Neo와 동일하게 alwayson_scripts로 직접 적용.
+        # state dict 구성은 core/sam3_args로 일원화 — 배치/Refine 경로와 동일 로직.
         sam3_group = getattr(self, "sam3_group", None)
         if sam3_group is not None and sam3_group.isChecked() and hasattr(self, "_build_sam3_settings"):
             sam3_settings = self._build_sam3_settings(payload)
             if sam3_settings:
-                sam3_state = {
-                    "sam3_enable": True,
-                    "enabled": True,
-                }
-                sam3_state.update({k: v for k, v in sam3_settings.items() if k.startswith("sam3_")})
-                payload["alwayson_scripts"]["SAM3 Mask"] = {"args": [sam3_state]}
+                from core import sam3_args
+                sam3_args.apply_to_payload(payload, sam3_settings)
                 _logger.info("SAM3 alwayson_scripts 적용됨 (Forge Neo 방식)")
+
+        # Anima Guidance Suite: PAG/SEG/SLG · APG/CWM/SMC · Skimmed CFG ·
+        # DCW/DAVE/CNS · Modulation · Detail Daemon.
+        # 전부 꺼져 있으면 아무것도 넣지 않는다 (확장을 건드리지 않아야 결과가 동일).
+        try:
+            from core import anima_guidance
+            anima_settings = self._build_anima_settings()
+            anima_guidance.apply_to_payload(payload, anima_settings)
+            summary = anima_guidance.describe_active(anima_settings)
+            if summary:
+                _logger.info("Anima Guidance 적용됨: %s", summary)
+        except Exception as e:
+            # guidance는 부가 기능 — 실패해도 생성 자체는 진행되어야 한다
+            _logger.warning("Anima Guidance 적용 실패 (무시하고 생성 진행): %s", e)
 
     def _build_adetailer_slot(self, widgets):
         """ADetailer 슬롯 딕셔너리 생성 (공식 REST API 스펙 준수)
@@ -931,4 +961,28 @@ class GenerationMixin:
             # 검출 직후 SAM3(~3.5GB) VRAM 회수 — 16GB GPU 인페인트 OOM 방지.
             # UI 토글로 노출 (기본 ON). 끄면 인페인트 내내 상주 → 빠르지만 VRAM↑
             "sam3_unload_after": widgets['unload_after'].isChecked(),
+            # ── ControlNet 주입 (확장의 SAM3 > ControlNet 아코디언)
+            "sam3_cn_enable": widgets['cn_enable'].isChecked(),
+            "sam3_cn_override_external": widgets['cn_override_external'].isChecked(),
+            "sam3_cn_model": _txt(widgets['cn_model'], 'None') or 'None',
+            "sam3_cn_module": _txt(widgets['cn_module'], 'inpaint_only') or 'inpaint_only',
+            "sam3_cn_weight": _float(widgets['cn_weight'], 1.0),
+            "sam3_cn_guidance_start": _float(widgets['cn_guidance_start'], 0.0),
+            "sam3_cn_guidance_end": _float(widgets['cn_guidance_end'], 1.0),
+            "sam3_cn_pixel_perfect": widgets['cn_pixel_perfect'].isChecked(),
+            "sam3_cn_control_mode": _txt(widgets['cn_control_mode'], 'Balanced') or 'Balanced',
+            "sam3_cn_resize_mode": (_txt(widgets['cn_resize_mode'], 'Crop and Resize')
+                                    or 'Crop and Resize'),
+            "sam3_cn_processor_res": _int(widgets['cn_processor_res'], 512),
+            "sam3_cn_threshold_a": _float(widgets['cn_threshold_a'], -1.0),
+            "sam3_cn_threshold_b": _float(widgets['cn_threshold_b'], -1.0),
         }
+
+    def _build_anima_settings(self) -> dict:
+        """Anima Guidance Suite 설정 dict — 프록시 값을 그대로 모은다.
+
+        타입 강제/범위 클램프는 core/anima_guidance.build_args가 담당하므로
+        여기서는 문자열 원본만 넘긴다 (변환을 두 군데서 하면 어긋난다).
+        """
+        widgets = getattr(self, 'anima_guidance_widgets', None) or {}
+        return {key: _widget_text(proxy, '') for key, proxy in widgets.items()}

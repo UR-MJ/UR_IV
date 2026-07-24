@@ -20,8 +20,12 @@ from PyQt6.QtGui import QPixmap, QFont
 from PIL import Image
 
 from config import OUTPUT_DIR, WEBUI_API_URL
+from utils.app_logger import get_logger
 from workers.generation_worker import Img2ImgFlowWorker
 from utils.theme_manager import get_theme_manager, get_color
+
+
+logger = get_logger('i2i')
 
 
 class Img2ImgTab(QWidget):
@@ -35,6 +39,17 @@ class Img2ImgTab(QWidget):
         self.gen_worker = None
         self.setAcceptDrops(True)
         self._setup_ui()
+
+    def _apply_extensions(self, payload):
+        """메인 창의 확장 설정(NegPiP/ADetailer/SAM3/Anima)을 payload에 반영."""
+        mw = self.main_window
+        if mw is None or not hasattr(mw, 'apply_alwayson_extensions'):
+            return
+        try:
+            mw.apply_alwayson_extensions(payload)
+        except Exception as e:
+            # 확장 적용 실패가 i2i 생성 자체를 막으면 안 된다
+            logger.warning("I2I 확장 적용 실패 (확장 없이 진행): %s", e)
 
     def _setup_ui(self):
         main_layout = QHBoxLayout(self)
@@ -370,6 +385,11 @@ class Img2ImgTab(QWidget):
             "save_images": True,
             "alwayson_scripts": {},
         }
+
+        # 확장(NegPiP/ADetailer/SAM3/Anima Guidance) — Forge Neo와 동일하게
+        # img2img에도 alwayson_scripts로 적용. 확장 show()가 AlwaysVisible이라
+        # i2i에서도 그대로 동작한다.
+        self._apply_extensions(payload)
 
         # 모델
         model_name = ""

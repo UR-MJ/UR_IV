@@ -13,6 +13,12 @@ from core.path_safety import safe_input_path as _normalize_vue_path  # noqa: F40
 
 logger = logging.getLogger(__name__)
 
+# 편집 임시본 보존 개수. EditorView의 MAX_UNDO(30)보다 넉넉해야 undo 히스토리가
+# 참조하는 파일이 지워지지 않는다.
+_EDITOR_TEMP_KEEP = 60
+# 썸네일 캐시 상한 — 넘으면 오래된 것부터 정리 (언제든 재생성 가능한 캐시)
+_THUMB_CACHE_MAX_BYTES = 300 * 1024 * 1024
+
 
 class VueBridge(QObject):
     """Vue 프론트엔드와 통신하는 중앙 브릿지"""
@@ -53,6 +59,10 @@ class VueBridge(QObject):
     adetailerProgress = pyqtSignal(int, int) # (current, total)
     sam3Result = pyqtSignal(str)            # JSON {before, after, output_path} or {error}
     sam3Progress = pyqtSignal(int, int)     # (current, total)
+    # Refine (sam-extra 워크플로 2) — JSON {before, after, prompt, negative_prompt} or {error}
+    refineResult = pyqtSignal(str)
+    # sam-extra 임베드 LoRA Manager 주소 — JSON {url, status, message}
+    loraManagerUrlReady = pyqtSignal(str)
     eventSearchProgress = pyqtSignal(int, int) # (current, total)
     automationStatus = pyqtSignal(str)        # JSON {running, count, waiting}
     automationSettingsLoaded = pyqtSignal(str)  # JSON {mode, limit, repeat, delay, allowDupes, maxRetries} — PR 9 mode-aware
@@ -265,9 +275,16 @@ class VueBridge(QObject):
             import cv2
             import numpy as np
 
-            img = cv2.imread(clean_path)
+            # IMREAD_UNCHANGED — 기본 IMREAD_COLOR는 알파를 버린다.
+            # 그래서 '배경 제거' 후 아무 편집이나 하면 투명도가 죽고 배경이 검게 됐다.
+            img = cv2.imread(clean_path, cv2.IMREAD_UNCHANGED)
             if img is None:
                 return json.dumps({'error': '이미지를 읽을 수 없습니다 (OpenCV)'})
+            # 채널 정규화: 흑백 → BGR. BGRA는 그대로 두고 각 연산이 알파를 보존한다.
+            if img.ndim == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            elif img.ndim == 3 and img.shape[2] == 2:
+                img = cv2.cvtColor(img[:, :, 0], cv2.COLOR_GRAY2BGR)
 
             # ── 마스크 처리 (base64 PNG → numpy) ──
             mask = None
@@ -298,25 +315,24 @@ class VueBridge(QObject):
 
             # ── 마스크 기반 효과 (정밀 적용) ──
             def _apply_effect_with_mask(src, effect_mask, effect_type, strength_val):
-                """마스크 영역에만 효과 적용"""
-                result = src.copy()
+                """마스크 영역에만 효과 적용. BGR/BGRA 모두 대응(알파 보존)."""
+                from core.editor_ops import split_alpha, merge_alpha
+                base, alpha_ch = split_alpha(src)
+                result = base.copy()
+                sel = effect_mask > 127
                 if effect_type == 'mosaic':
                     s = max(2, strength_val)
-                    h_i, w_i = src.shape[:2]
-                    small = cv2.resize(src, (max(1, w_i // s), max(1, h_i // s)))
+                    h_i, w_i = base.shape[:2]
+                    small = cv2.resize(base, (max(1, w_i // s), max(1, h_i // s)))
                     mosaic = cv2.resize(small, (w_i, h_i), interpolation=cv2.INTER_NEAREST)
-                    alpha = (effect_mask > 127).astype(np.float32)
-                    alpha3 = np.stack([alpha] * 3, axis=-1)
-                    result = (mosaic * alpha3 + src * (1 - alpha3)).astype(np.uint8)
+                    result[sel] = mosaic[sel]
                 elif effect_type == 'censor_bar':
-                    result[effect_mask > 127] = 0
+                    result[sel] = 0
                 elif effect_type == 'blur':
                     k = max(1, strength_val) | 1
-                    blurred = cv2.GaussianBlur(src, (k, k), 0)
-                    alpha = (effect_mask > 127).astype(np.float32)
-                    alpha3 = np.stack([alpha] * 3, axis=-1)
-                    result = (blurred * alpha3 + src * (1 - alpha3)).astype(np.uint8)
-                return result
+                    blurred = cv2.GaussianBlur(base, (k, k), 0)
+                    result[sel] = blurred[sel]
+                return merge_alpha(result, alpha_ch)
 
             if operation in ('mosaic', 'censor_bar', 'blur'):
                 strength_val = int(params.get('strength', 15))
@@ -342,10 +358,17 @@ class VueBridge(QObject):
                 try:
                     from tabs.editor.mosaic_panel import _load_yolo_model_paths, _is_sam_file
                     model_paths = _load_yolo_model_paths()
-                    if not model_paths:
-                        return json.dumps({'error': 'YOLO 모델을 먼저 추가하세요 (+ADD .PT)'})
+                    sam_choice = str(params.get('sam_model', 'auto')).lower()
+                    detect_prompt = str(params.get('detect_prompt') or '').strip()
+
+                    # SAM3는 '텍스트 프롬프트' 세그멘터다. 예전에는 YOLO 모델이 없으면
+                    # 여기서 바로 에러를 냈고, YOLO 박스가 0개면 SAM3를 아예 건너뛰어서
+                    # 사용자가 SAM3를 골라도 텍스트만으로는 절대 쓸 수 없었다.
+                    sam3_standalone = (sam_choice == 'sam3' and bool(detect_prompt))
+                    if not model_paths and not sam3_standalone:
+                        return json.dumps({'error': 'YOLO 모델을 먼저 추가하세요 (+ADD .PT) '
+                                                    '— 또는 SAM3를 선택하고 Detect Prompt를 입력하세요'})
                     conf = float(params.get('confidence', 0.25))
-                    from ultralytics import YOLO
                     h_img, w_img = img.shape[:2]
                     combined_mask = np.zeros((h_img, w_img), dtype=np.uint8)
                     detect_count = 0
@@ -362,7 +385,16 @@ class VueBridge(QObject):
                             print(f"[YOLO] Skip SAM model (not a detector): {os.path.basename(mp)}")
                             continue
                         try:
-                            model = YOLO(mp)
+                            # 유휴 캐시 — 예전에는 클릭마다 루프 안에서 새로 로딩했다
+                            # (모델 3개면 클릭 1회에 3회 로딩)
+                            from core.model_cache import YOLO_CACHE
+
+                            def _load_yolo(path):
+                                from ultralytics import YOLO
+                                print(f"[YOLO] Loading {os.path.basename(path)}...")
+                                return YOLO(path)
+
+                            model = YOLO_CACHE.get(mp, _load_yolo)
                         except Exception as me:
                             print(f"[YOLO] Model load failed: {mp} — {me}")
                             failed.append((os.path.basename(mp), str(me)))
@@ -395,7 +427,7 @@ class VueBridge(QObject):
                                             combined_mask[by1:by2, bx1:bx2] = 255
                                             detect_count += 1
 
-                    if not loaded_names:
+                    if not loaded_names and not sam3_standalone:
                         # 등록된 모든 모델이 실패한 경우 명확한 에러
                         msg = '; '.join(f'{os.path.basename(n)}: {e}' for n, e in failed) or '모든 YOLO 모델 로드 실패'
                         try:
@@ -416,9 +448,9 @@ class VueBridge(QObject):
 
                     print(f"[YOLO] Loaded {loaded_names} → {detect_count} regions, {len(yolo_boxes)} boxes, seg_mask={has_seg_mask}")
 
-                    # SAM 정밀 마스킹 — 사용자가 모델 선택 가능
-                    sam_choice = str(params.get('sam_model', 'auto')).lower()
-                    if yolo_boxes and sam_choice != 'off':
+                    # SAM 정밀 마스킹 — 사용자가 모델 선택 가능.
+                    # SAM3 + detect prompt면 YOLO 박스가 없어도 단독으로 돈다.
+                    if (yolo_boxes or sam3_standalone) and sam_choice != 'off':
                         try:
                             from core.sam_refiner import refine_boxes_with_sam, find_sam_model
                             from tabs.editor.mosaic_panel import get_editor_models_dir
@@ -436,6 +468,8 @@ class VueBridge(QObject):
                                 excl_prompt = str(excl_prompt).strip() if excl_prompt else None
                                 if excl_prompt and sam_type == 'sam3':
                                     print(f"[SAM3] exclude prompt requested: '{excl_prompt}'")
+                                if detect_prompt and sam_type == 'sam3':
+                                    print(f"[SAM3] detect prompt: '{detect_prompt}'")
                                 # 사용자 알림 콜백 — SAM3 exclude 안전장치 발동 시 토스트로 전달
                                 def _sam_notify(level, message):
                                     try:
@@ -446,6 +480,7 @@ class VueBridge(QObject):
                                     img, yolo_boxes, models_dir,
                                     sam_model_path=sam_path, sam_type=sam_type,
                                     yolo_model_paths=model_paths,
+                                    text_prompt=(detect_prompt or None),
                                     exclude_prompt=excl_prompt,
                                     notify=_sam_notify,
                                 )
@@ -581,26 +616,127 @@ class VueBridge(QObject):
                     return json.dumps({'error': f'배경 제거 실패: {e}'})
             
             elif operation == 'color_adjust':
+                from core.editor_ops import split_alpha, merge_alpha
+                _bgr, _alpha = split_alpha(img)
                 b_val = params.get('brightness', 0)
                 c_val = params.get('contrast', 0)
                 s_val = params.get('saturation', 0)
-                if b_val != 0: img = cv2.convertScaleAbs(img, alpha=1, beta=b_val)
+                if b_val != 0: _bgr = cv2.convertScaleAbs(_bgr, alpha=1, beta=b_val)
                 if c_val != 0:
                     factor = (100 + c_val) / 100.0
-                    img = cv2.convertScaleAbs(img, alpha=factor, beta=0)
+                    _bgr = cv2.convertScaleAbs(_bgr, alpha=factor, beta=0)
                 if s_val != 0:
-                    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
+                    hsv = cv2.cvtColor(_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
                     hsv[:,:,1] *= (100 + s_val) / 100.0
                     hsv[:,:,1] = np.clip(hsv[:,:,1], 0, 255)
-                    img = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+                    _bgr = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+                img = merge_alpha(_bgr, _alpha)
 
-            # 결과 저장
-            import time, random as rnd
+            # ── 아래는 예전에 핸들러가 아예 없어서 '원본 재저장 = 무반응'이던 작업들 ──
+            elif operation == 'auto_correct':
+                from core.editor_ops import auto_correct
+                img = auto_correct(img)
+
+            elif operation == 'adv_color':
+                from core.editor_ops import adv_color
+                img = adv_color(
+                    img,
+                    black_point=params.get('blackPoint', 0),
+                    white_point=params.get('whitePoint', 255),
+                    gamma=params.get('gamma', 1.0),
+                    temperature=params.get('temperature', 0),
+                    tint=params.get('tint', 0),
+                )
+
+            elif operation == 'filter':
+                from core.editor_ops import apply_filter
+                try:
+                    img = apply_filter(img, params.get('filter'),
+                                       float(params.get('strength', 100)) / 100.0)
+                except ValueError as fe:
+                    return json.dumps({'error': str(fe)})
+
+            elif operation == 'move_region':
+                from core.editor_ops import move_region
+                if mask is None:
+                    return json.dumps({'error': '이동할 영역을 먼저 마스킹하세요'})
+                img = move_region(
+                    img, mask,
+                    dx=float(params.get('dx', 0)), dy=float(params.get('dy', 0)),
+                    rotation=float(params.get('rotation', 0)),
+                    scale=float(params.get('scale', 100)),
+                    fill_color=str(params.get('fillColor', 'black')),
+                )
+
+            elif operation == 'perspective':
+                from core.editor_ops import perspective as _perspective
+                corners = params.get('corners')
+                if not corners:
+                    return json.dumps({'error': '원근 보정: 꼭짓점 4개가 필요합니다'})
+                try:
+                    img = _perspective(img, corners,
+                                       width=params.get('width'), height=params.get('height'))
+                except ValueError as pe:
+                    return json.dumps({'error': str(pe)})
+
+            elif operation == 'restore':
+                # 모자이크 지우개 — 효과 적용 '전' 이미지에서 마스크 영역 픽셀을 되가져온다.
+                # 예전에는 프론트 캔버스에만 그려서 저장에 전혀 반영되지 않았다.
+                if mask is None:
+                    return json.dumps({'error': '복원할 영역이 없습니다'})
+                src_path = _normalize_vue_path(params.get('source_path') or '')
+                if not src_path or not os.path.exists(src_path):
+                    return json.dumps({'error': '복원 원본 이미지를 찾을 수 없습니다'})
+                src_img = cv2.imread(src_path, cv2.IMREAD_UNCHANGED)
+                if src_img is None:
+                    return json.dumps({'error': '복원 원본 이미지를 읽을 수 없습니다'})
+                if src_img.ndim == 2:
+                    src_img = cv2.cvtColor(src_img, cv2.COLOR_GRAY2BGR)
+                if src_img.shape[:2] != img.shape[:2]:
+                    return json.dumps({'error': '복원 원본과 크기가 달라 되돌릴 수 없습니다'})
+                # 채널 수를 맞춘 뒤 마스크 영역만 교체
+                if src_img.shape[2] != img.shape[2]:
+                    if img.shape[2] == 4 and src_img.shape[2] == 3:
+                        src_img = cv2.cvtColor(src_img, cv2.COLOR_BGR2BGRA)
+                    elif img.shape[2] == 3 and src_img.shape[2] == 4:
+                        src_img = src_img[:, :, :3]
+                img[mask > 127] = src_img[mask > 127]
+
+            elif operation == 'flatten':
+                from core.editor_ops import flatten as _flatten
+                overlay = None
+                overlay_b64 = params.get('overlay_base64')
+                if overlay_b64:
+                    import base64 as _b64
+                    _raw = overlay_b64.split(',', 1)[-1]
+                    _buf = np.frombuffer(_b64.b64decode(_raw), dtype=np.uint8)
+                    overlay = cv2.imdecode(_buf, cv2.IMREAD_UNCHANGED)
+                if overlay is None:
+                    return json.dumps({'error': '병합할 드로잉 레이어가 없습니다'})
+                img = _flatten(img, overlay, float(params.get('opacity', 100)) / 100.0)
+
+            else:
+                # 예전에는 모르는 op가 모든 elif를 통과해 원본을 그대로 다시 저장했다.
+                # 사용자에겐 '눌렀는데 아무 일도 안 남 + undo 스택만 늘어남'이었다.
+                return json.dumps({'error': f'지원하지 않는 편집 작업: {operation}'})
+
+            # 결과 저장 — uuid4로 파일명 충돌 제거.
+            # (예전 f"edited_{int(time.time())}_{randint(100,999)}"는 같은 초에 1/900 확률로
+            #  충돌해 직전 편집본을 덮어썼다.)
+            import uuid
             out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'image_cache', 'editor_temp')
             os.makedirs(out_dir, exist_ok=True)
-            out_path = os.path.join(out_dir, f"edited_{int(time.time())}_{rnd.randint(100,999)}.png")
-            cv2.imwrite(out_path, img)
-                
+            out_path = os.path.join(out_dir, f"edited_{uuid.uuid4().hex}.png")
+            if not cv2.imwrite(out_path, img):
+                return json.dumps({'error': '편집 결과 저장 실패 (디스크 공간/권한 확인)'})
+
+            # 세션 임시본이 무한 누적되지 않게 정리 (실측 115개 256MB까지 쌓여 있었음)
+            try:
+                from core.cache_cleanup import prune_editor_temp
+                prune_editor_temp(out_dir, keep=_EDITOR_TEMP_KEEP)
+            except Exception:
+                pass
+
             return json.dumps({'path': out_path.replace('\\', '/'), 'width': img.shape[1], 'height': img.shape[0]})
         except Exception as e:
             from core.error_handler import handle_error
@@ -661,6 +797,25 @@ class VueBridge(QObject):
         except Exception:
             return '[]'
 
+    @pyqtSlot()
+    def requestLoraManagerUrl(self):
+        """sam-extra 임베드 LoRA Manager 주소 조회 (백그라운드 — 서버를 띄우느라 몇 초 걸림)."""
+        def _lookup():
+            try:
+                from backends import get_backend
+                backend = get_backend()
+                if not backend or not hasattr(backend, 'get_lora_manager_url'):
+                    return json.dumps({
+                        'url': '', 'status': 'unsupported',
+                        'message': '이 백엔드는 LoRA Manager 임베드를 지원하지 않습니다 '
+                                   '(Forge Neo + sam-extra 필요)',
+                    })
+                return json.dumps(backend.get_lora_manager_url())
+            except Exception as e:
+                return json.dumps({'url': '', 'status': 'error', 'message': str(e)})
+
+        self._run_async_lookup('lora_manager_url', _lookup, self.loraManagerUrlReady)
+
     @pyqtSlot(str)
     def requestGalleryImages(self, folder: str):
         """폴더 스캔/정렬을 백그라운드에서 수행해 GUI 멈춤을 방지한다."""
@@ -698,18 +853,23 @@ class VueBridge(QObject):
 
         def _work():
             import hashlib
+            from core.cache_cleanup import ensure_shard_dir, shard_path
             base = os.path.dirname(os.path.dirname(__file__))
             thumb_dir = os.path.join(base, 'image_cache', 'thumbs')
             try:
                 os.makedirs(thumb_dir, exist_ok=True)
             except Exception:
                 return
+            self._migrate_thumb_cache_once(thumb_dir)
             for p in paths:
                 thumb_url = ''
                 try:
                     norm = os.path.normpath(p)
                     h = hashlib.sha1(f"{norm}@{width}".encode('utf-8')).hexdigest()
-                    tp = os.path.join(thumb_dir, f"{h}.jpg")
+                    # sha1 앞 2자리로 샤딩 — 평면 디렉터리에 10만 개가 쌓이면
+                    # NTFS 조회 자체가 느려진다 (실측 96,641개)
+                    tp = shard_path(thumb_dir, h, '.jpg')
+                    ensure_shard_dir(tp)
                     if not os.path.exists(tp):
                         if os.path.exists(p):
                             from PIL import Image, ImageOps
@@ -730,6 +890,26 @@ class VueBridge(QObject):
                 except Exception:
                     pass
         threading.Thread(target=_work, daemon=True).start()
+
+    def _migrate_thumb_cache_once(self, thumb_dir: str):
+        """평면 thumbs/ → 샤딩 구조 이관 + 용량 상한 정리. 프로세스당 1회.
+
+        이관은 5000개씩 끊어서 하므로 앱이 멈추지 않는다. 남은 건 다음 실행에서
+        이어서 처리된다(썸네일은 언제든 재생성 가능하므로 중간에 끊겨도 안전).
+        """
+        if getattr(self, '_thumb_cache_migrated', False):
+            return
+        self._thumb_cache_migrated = True
+        try:
+            from core.cache_cleanup import migrate_flat_to_sharded, prune_thumbs
+            moved = migrate_flat_to_sharded(thumb_dir)
+            if moved:
+                logger.info("썸네일 캐시 샤딩 이관: %d개", moved)
+            removed = prune_thumbs(thumb_dir, _THUMB_CACHE_MAX_BYTES)
+            if removed:
+                logger.info("썸네일 캐시 정리: %d개 삭제", removed)
+        except Exception as e:
+            logger.warning("썸네일 캐시 정리 실패 (무시): %s", e)
 
     searchResultsReady = pyqtSignal(str)   # JSON results
     queueUpdated = pyqtSignal(str)         # JSON queue state

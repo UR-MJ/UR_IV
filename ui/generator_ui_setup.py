@@ -474,6 +474,21 @@ class UISetupMixin:
             'sampler_container': type('WProxy', (), {
                 'setVisible': lambda s, v: None, 'hide': lambda s: None, 'show': lambda s: None,
             })(),
+            # ── ControlNet 주입 (Forge 확장의 SAM3 > ControlNet 아코디언과 1:1)
+            # sam3_mode == 'Inpaint' + sd_forge_controlnet 로드 시에만 실제로 동작.
+            'cn_enable': CheckBoxProxy(b, '_sam3_cn_enable'),
+            'cn_override_external': CheckBoxProxy(b, '_sam3_cn_override_external'),
+            'cn_model': ComboBoxProxy(b, '_sam3_cn_model'),
+            'cn_module': ComboBoxProxy(b, '_sam3_cn_module'),
+            'cn_weight': SliderProxy(b, '_sam3_cn_weight', multiplier=100),
+            'cn_guidance_start': SliderProxy(b, '_sam3_cn_guidance_start', multiplier=100),
+            'cn_guidance_end': SliderProxy(b, '_sam3_cn_guidance_end', multiplier=100),
+            'cn_pixel_perfect': CheckBoxProxy(b, '_sam3_cn_pixel_perfect'),
+            'cn_control_mode': ComboBoxProxy(b, '_sam3_cn_control_mode'),
+            'cn_resize_mode': ComboBoxProxy(b, '_sam3_cn_resize_mode'),
+            'cn_processor_res': LineEditProxy(b, '_sam3_cn_processor_res'),
+            'cn_threshold_a': LineEditProxy(b, '_sam3_cn_threshold_a'),
+            'cn_threshold_b': LineEditProxy(b, '_sam3_cn_threshold_b'),
         }
         self.sam3_widgets['threshold'].setText('0.40')
         self.sam3_widgets['mask_dilation'].setText('0')
@@ -492,6 +507,22 @@ class UISetupMixin:
         # 16GB GPU 권장 기본값 (Forge 확장 v0.6.1+ 디폴트와 동일)
         self.sam3_widgets['inpaint_only_masked'].setChecked(True)
         self.sam3_widgets['unload_after'].setChecked(True)
+        # ControlNet 기본값 — 확장 Sam3Args 디폴트와 동일
+        self.sam3_widgets['cn_model'].setText('None')
+        self.sam3_widgets['cn_module'].setText('inpaint_only')
+        self.sam3_widgets['cn_weight'].setText('1.0')
+        self.sam3_widgets['cn_guidance_start'].setText('0.0')
+        self.sam3_widgets['cn_guidance_end'].setText('1.0')
+        self.sam3_widgets['cn_control_mode'].setText('Balanced')
+        self.sam3_widgets['cn_resize_mode'].setText('Crop and Resize')
+        self.sam3_widgets['cn_processor_res'].setText('512')
+        self.sam3_widgets['cn_threshold_a'].setText('-1')
+        self.sam3_widgets['cn_threshold_b'].setText('-1')
+        self.sam3_widgets['cn_pixel_perfect'].setChecked(True)
+
+        # ── Anima Guidance Suite (PAG/SEG/SLG · APG/CWM/SMC · Skimmed · DCW/DAVE/CNS
+        #    · Detail Daemon · Modulation). 위치 인자 계약은 core/anima_guidance.py 참조.
+        self.anima_guidance_widgets = self._init_anima_guidance_proxies(b)
 
         # 제거 옵션
         self.chk_remove_artist = CheckBoxProxy(b, 'chk_remove_artist')
@@ -504,6 +535,32 @@ class UISetupMixin:
 
         # lock
         self.btn_lock_artist = CheckBoxProxy(b, 'btn_lock_artist')
+
+    def _init_anima_guidance_proxies(self, b):
+        """Anima Guidance Suite 프록시 — core/anima_guidance.py 스펙에서 자동 생성.
+
+        키가 76개(56+7+13)라 하나씩 손으로 나열하면 스펙과 어긋나기 쉽다. 스펙을
+        단일 출처로 삼아 루프로 만든다. 값은 Vue에서 전부 문자열로 오고
+        (`'true'`/`'0.75'`), 타입 강제는 core 쪽 `build_args`가 담당하므로
+        프록시는 LineEditProxy 하나로 통일한다.
+
+        widget_id = '_' + 스펙 키 (예: '_guid_enabled', '_dd_preset')
+        """
+        from ui.widget_proxies import LineEditProxy
+        from core.anima_guidance import SPECS
+
+        widgets = {}
+        for spec in SPECS.values():
+            for key, _kind, default, _extra in spec:
+                proxy = LineEditProxy(b, f'_{key}')
+                # 기본값을 문자열로 심어 둔다 — Vue가 아직 값을 안 보냈어도
+                # 생성이 확장 기본값과 동일하게 나가야 하므로.
+                if isinstance(default, bool):
+                    proxy.setText('true' if default else 'false')
+                else:
+                    proxy.setText(str(default))
+                widgets[key] = proxy
+        return widgets
 
     def _init_button_proxies(self):
         """하단 도구바 버튼 프록시 초기화"""

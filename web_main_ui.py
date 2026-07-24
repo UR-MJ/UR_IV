@@ -118,6 +118,8 @@ _WEB_METHODS = frozenset({
     "requestADetailerModels", "getYoloModelLabel", "refreshYoloModels",
     "getTagSuggestions", "generateXYZCombinations", "captionImage",
     "startCaptionBatch", "loadCaption", "saveCaption", "getImageExif",
+    # sam-extra 임베드 LoRA Manager 주소 조회 (워크플로 4)
+    "requestLoraManagerUrl",
 })
 
 _WEB_SIGNALS = frozenset({
@@ -134,6 +136,8 @@ _WEB_SIGNALS = frozenset({
     "automationStatus", "automationSettingsLoaded", "instantWildcardsList",
     "promptOrderLoaded", "workflowProfilesList", "widgetValueChanged",
     "widgetPropertyChanged", "batchUpdate", "tabChanged", "vramUpdated",
+    # SAM3 Refine (sam-extra 워크플로 2) + 임베드 LoRA Manager (워크플로 4)
+    "refineResult", "loraManagerUrlReady",
 })
 
 
