@@ -23,8 +23,12 @@ from PyQt6.QtGui import (
 from PIL import Image
 
 from config import OUTPUT_DIR
+from utils.app_logger import get_logger
 from workers.generation_worker import Img2ImgFlowWorker
 from utils.theme_manager import get_color
+
+
+logger = get_logger('inpaint')
 
 
 class MaskCanvas(QLabel):
@@ -215,6 +219,21 @@ class InpaintTab(QWidget):
         self.gen_worker = None
         self.setAcceptDrops(True)
         self._setup_ui()
+
+    def _apply_extensions(self, payload):
+        """메인 창의 확장 설정(NegPiP/ADetailer/SAM3/Anima)을 payload에 반영.
+
+        수동 마스크 인페인트 위에 SAM3가 얹히면 '사람이 칠한 영역 → 인페인트 →
+        SAM3가 얼굴 재손질' 순서로 도는데, 이는 Forge Neo UI에서 i2i 탭의
+        SAM3 아코디언을 켠 것과 동일한 동작이다.
+        """
+        mw = self.main_window
+        if mw is None or not hasattr(mw, 'apply_alwayson_extensions'):
+            return
+        try:
+            mw.apply_alwayson_extensions(payload)
+        except Exception as e:
+            logger.warning("Inpaint 확장 적용 실패 (확장 없이 진행): %s", e)
 
     def _setup_ui(self):
         main_layout = QHBoxLayout(self)
@@ -624,6 +643,9 @@ class InpaintTab(QWidget):
             "save_images": True,
             "alwayson_scripts": {},
         }
+
+        # 확장(NegPiP/ADetailer/SAM3/Anima Guidance) — Forge Neo와 동일하게 적용
+        self._apply_extensions(payload)
 
         model_name = ""
         if self.main_window and hasattr(self.main_window, 'model_combo'):

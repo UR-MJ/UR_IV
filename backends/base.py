@@ -73,6 +73,16 @@ class AbstractBackend(ABC):
         """SAM3 처리. base64 결과 반환"""
         ...
 
+    def refine(self, image_b64: str, settings: Dict) -> str:
+        """SAM3 Refine (Target/Replacement 재손질). base64 결과 반환.
+
+        기본 구현은 미지원 — Forge SAM3 확장이 있는 백엔드만 구현한다.
+        """
+        raise NotImplementedError(
+            "이 백엔드는 SAM3 Refine을 지원하지 않습니다.\n"
+            "Forge Neo WebUI 백엔드에서 사용하세요."
+        )
+
     def interrupt(self):
         """진행 중 생성을 서버 측에서 중단 (best-effort).
         취소 플래그만으로는 이미 보낸 HTTP 요청이 끝까지 돌므로,

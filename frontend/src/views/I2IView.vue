@@ -1,5 +1,25 @@
 <template>
-  <div class="i2i-workspace">
+  <div class="i2i-root">
+    <!-- 하위 탭: img2img / Refine -->
+    <div class="sub-tabs">
+      <button class="sub-tab" :class="{ active: subTab === 'i2i' }" @click="subTab = 'i2i'">
+        IMG2IMG
+      </button>
+      <button class="sub-tab" :class="{ active: subTab === 'refine' }" @click="subTab = 'refine'">
+        SAM3 REFINE
+      </button>
+    </div>
+
+    <RefinePanel v-if="subTab === 'refine'" ref="refineRef"
+      :image-path="imagePath"
+      :sampler-options="samplerOptions"
+      :scheduler-options="schedulerOptions"
+      :checkpoint-options="checkpointOptions"
+      @pick-image="triggerFileInput"
+      @image-changed="p => imagePath = p"
+    />
+
+  <div class="i2i-workspace" v-show="subTab === 'i2i'">
     <!-- Left Sidebar: Settings -->
     <aside class="sidebar">
       <div class="sidebar-scroll">
@@ -97,14 +117,30 @@
       <input ref="fileInput" type="file" accept="image/*" hidden @change="handleFileSelect" />
     </section>
   </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { requestAction } from '../stores/widgetStore.js'
+import { ref, computed, watch, onMounted } from 'vue'
+import { requestAction, getProperty } from '../stores/widgetStore.js'
 import { onBackendEvent } from '../bridge.js'
 import { mediaUrl } from '../utils/media.js'
 import CustomSelect from '../components/CustomSelect.vue'
+import RefinePanel from '../components/RefinePanel.vue'
+
+// 하위 탭 — 마지막 선택을 기억한다
+const subTab = ref(localStorage.getItem('i2i.subTab') || 'i2i')
+watch(subTab, (v) => { try { localStorage.setItem('i2i.subTab', v) } catch {} })
+const refineRef = ref<any>(null)
+
+// Refine 패널 드롭다운 — t2i가 쓰는 것과 같은 위젯 property를 읽는다.
+// (전용 이벤트를 새로 만들면 브리지 계약이 어긋난다 — tests/test_bridge_contract.py)
+const samplerOptions = computed(
+  () => ['Use same sampler', ...(getProperty('sampler_combo', 'items') || [])])
+const schedulerOptions = computed(
+  () => ['Use same scheduler', ...(getProperty('scheduler_combo', 'items') || [])])
+const checkpointOptions = computed(
+  () => getProperty('_sam3_checkpoint', 'items') || ['sam3.pt'])
 
 const isDragging = ref(false)
 const imageSrc = ref('')
@@ -151,8 +187,16 @@ async function loadFromPath(path: string) {
 }
 
 onMounted(() => {
-  // History/Gallery에서 send_to_i2i 시 이미지 로드
-  onBackendEvent('i2iImageLoaded', (path: string) => loadFromPath(path))
+  // History/Gallery에서 send_to_i2i 시 이미지 로드 — 현재 하위 탭 쪽으로 보낸다
+  onBackendEvent('i2iImageLoaded', (path: string) => {
+    loadFromPath(path)
+    if (subTab.value === 'refine') refineRef.value?.setImage?.(path)
+  })
+})
+
+// Refine 탭으로 넘어갈 때 현재 이미지를 물려준다
+watch(subTab, (v) => {
+  if (v === 'refine' && imagePath.value) refineRef.value?.setImage?.(imagePath.value)
 })
 
 function generate() {
@@ -173,6 +217,21 @@ function generate() {
 </script>
 
 <style scoped>
+.i2i-root { height: 100%; display: flex; flex-direction: column; background: var(--bg-primary); min-height: 0; }
+.sub-tabs {
+  display: flex; gap: 4px; padding: 8px 12px 0;
+  background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sub-tab {
+  padding: 8px 18px; font-size: 10px; font-weight: 800; letter-spacing: 1px;
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: var(--text-muted); cursor: pointer; transition: var(--transition);
+}
+.sub-tab:hover { color: var(--text-primary); }
+.sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.i2i-root > :not(.sub-tabs) { flex: 1; min-height: 0; }
+
 .i2i-workspace { height: 100%; display: flex; background: var(--bg-primary); }
 
 /* Sidebar */

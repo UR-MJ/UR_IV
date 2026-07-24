@@ -56,6 +56,21 @@
           <span class="label">{{ m.label }}</span>
         </button>
       </div>
+      <!-- SAM3 전용: 검출 프롬프트 (SAM3는 텍스트 기반 세그멘터) -->
+      <div v-if="samModel === 'sam3'" class="sam3-exclude mt-8">
+        <label class="sub-label" style="margin-bottom:4px;">
+          Detect Prompt
+          <span class="hint" :title="'마스킹할 대상을 영어로 입력 (예: face, hand)\n입력하면 YOLO 모델 없이 SAM3 단독으로 검출합니다.\n비우면 YOLO 모델 파일명에서 자동 유추합니다.'">ⓘ</span>
+        </label>
+        <input
+          type="text"
+          v-model="samDetectPrompt"
+          class="exclude-input"
+          placeholder="face, hand  (비우면 YOLO 필요)"
+          spellcheck="false"
+          autocomplete="off"
+        />
+      </div>
       <!-- SAM3 전용: 제외 프롬프트 (마스크에서 빼고 싶은 영역) -->
       <div v-if="samModel === 'sam3'" class="sam3-exclude mt-8">
         <label class="sub-label" style="margin-bottom:4px;">
@@ -72,8 +87,8 @@
         />
       </div>
       <div class="btn-row mt-12">
-        <button class="action-btn primary" @click="$emit('auto-censor', { confidence: detectConf, samModel, excludePrompt: samExcludePrompt })">AUTO CENSOR</button>
-        <button class="action-btn" @click="$emit('auto-detect', { confidence: detectConf, samModel, excludePrompt: samExcludePrompt })">MASK ONLY</button>
+        <button class="action-btn primary" @click="$emit('auto-censor', detectPayload())">AUTO CENSOR</button>
+        <button class="action-btn" @click="$emit('auto-detect', detectPayload())">MASK ONLY</button>
       </div>
     </div>
 
@@ -179,6 +194,18 @@
         <button class="action-btn" @click="$emit('crop')">CROP</button>
         <button class="action-btn" @click="$emit('resize')">RESIZE</button>
       </div>
+      <!-- 원근 보정 — 꼭짓점 4개를 드래그해 기울어진 사각형을 정면으로 편다 -->
+      <div class="btn-row mt-8" v-if="!perspectiveActive">
+        <button class="action-btn" @click="$emit('perspective-start')"
+          title="기울어져 찍힌 사각형(액자·표지판·문서)을 정면처럼 펴줍니다">▱ 원근 보정</button>
+      </div>
+      <template v-else>
+        <p class="persp-hint">꼭짓점 4개를 펴고 싶은 사각형의 모서리에 맞춘 뒤 적용하세요.</p>
+        <div class="btn-row mt-8">
+          <button class="action-btn primary" @click="$emit('perspective-confirm')">적용</button>
+          <button class="action-btn" @click="$emit('perspective-cancel')">취소</button>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -189,6 +216,12 @@ import { ref, watch } from 'vue'
 interface Tool { id: number; label: string; icon: string }
 interface Effect { id: number; label: string }
 interface SamModelOption { id: string; label: string; tip: string }
+interface DetectPayload {
+  confidence: number
+  samModel: string
+  detectPrompt: string
+  excludePrompt: string
+}
 
 const emit = defineEmits<{
   'tool-changed': [payload: { tool: number; size: number }]
@@ -197,20 +230,26 @@ const emit = defineEmits<{
   'cancel-selection': []
   'crop': []
   'resize': []
-  'perspective': []
+  'perspective-start': []
+  'perspective-confirm': []
+  'perspective-cancel': []
   'rotate': [dir: string]
   'flip': [dir: string]
   'remove-bg': [payload: { quality: string }]
   'add-model': []
   'clear-models': []
-  'auto-censor': [payload: { confidence: number; samModel: string; excludePrompt: string }]
-  'auto-detect': [payload: { confidence: number; samModel: string; excludePrompt: string }]
+  'auto-censor': [payload: DetectPayload]
+  'auto-detect': [payload: DetectPayload]
   'params-changed': [payload: { toolSize: number; strength: number; stampSpacing: number; barW: number; barH: number; stampShape: string }]
   'eraser-mode-changed': [mode: string]
   'eraser-restore-changed': [val: boolean]
   'magnetic-changed': [val: boolean]
 }>()
-const props = withDefaults(defineProps<{ modelLabel?: string; detectStatus?: string }>(), { modelLabel: 'No Model Loaded', detectStatus: '' })
+const props = withDefaults(defineProps<{
+  modelLabel?: string
+  detectStatus?: string
+  perspectiveActive?: boolean
+}>(), { modelLabel: 'No Model Loaded', detectStatus: '', perspectiveActive: false })
 
 const tools: Tool[] = [
   { id: 0, label: 'RECT', icon: '⬚' },
@@ -245,6 +284,16 @@ try {
 } catch {}
 watch(samModel, (v) => { try { localStorage.setItem('editor.samModel', v) } catch {} })
 
+// SAM3 전용 검출 프롬프트 — SAM3는 텍스트 기반 세그멘터라 이게 본체다.
+// 예전에는 입력란이 없어서 YOLO 모델 파일명에서 유추한 단어만 쓸 수 있었고,
+// YOLO 모델이 없으면 SAM3를 아예 실행할 수 없었다.
+const samDetectPrompt = ref('')
+try {
+  const savedDet = localStorage.getItem('editor.samDetectPrompt')
+  if (typeof savedDet === 'string') samDetectPrompt.value = savedDet
+} catch {}
+watch(samDetectPrompt, (v) => { try { localStorage.setItem('editor.samDetectPrompt', v || '') } catch {} })
+
 // SAM3 전용 제외 프롬프트 (예: 'face' — 얼굴 영역을 마스크에서 빼기)
 const samExcludePrompt = ref('')
 try {
@@ -252,6 +301,15 @@ try {
   if (typeof savedEx === 'string') samExcludePrompt.value = savedEx
 } catch {}
 watch(samExcludePrompt, (v) => { try { localStorage.setItem('editor.samExcludePrompt', v || '') } catch {} })
+
+function detectPayload(): DetectPayload {
+  return {
+    confidence: detectConf.value,
+    samModel: samModel.value,
+    detectPrompt: samModel.value === 'sam3' ? samDetectPrompt.value.trim() : '',
+    excludePrompt: samModel.value === 'sam3' ? samExcludePrompt.value.trim() : '',
+  }
+}
 const eraserMode = ref('brush')
 const eraserRestore = ref(false)
 const magneticLasso = ref(false)
@@ -349,6 +407,11 @@ watch([toolSize, strength, stampSpacing, stampShapeLocal, barW, barH, selectedEf
 }
 
 .btn-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.persp-hint {
+  margin-top: 8px; font-size: 10px; line-height: 1.5;
+  color: var(--accent); background: var(--accent-dim);
+  padding: 6px 8px; border-radius: 6px;
+}
 
 .sam3-exclude { display: flex; flex-direction: column; }
 .sam3-exclude .hint {

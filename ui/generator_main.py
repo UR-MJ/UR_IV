@@ -410,6 +410,8 @@ class GeneratorMainUI(
                 self._run_sam3_single(payload)
             elif action == 'run_sam3_batch':
                 self._run_sam3_batch(payload)
+            elif action == 'run_refine':
+                self._run_refine(payload)
             elif action == 'open_ad_files':
                 paths, _ = QFileDialog.getOpenFileNames(self, "ADetailer 이미지 선택", "",
                     "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)")
@@ -2177,6 +2179,35 @@ class GeneratorMainUI(
             lambda: self.vue_bridge.showNotification.emit('success', f'SAM3 배치 완료 ({len(paths)}장)'))
         self._sam3_batch_worker.start()
         self.vue_bridge.showNotification.emit('info', f'SAM3 배치 시작 ({len(paths)}장)')
+
+    def _run_refine(self, payload):
+        """SAM3 Refine — 기존 이미지를 Target/Replacement로 재손질 (sam-extra 워크플로 2).
+
+        메인 프롬프트를 안 보냈으면 현재 t2i 프롬프트를 상속시킨다
+        (확장 Refine 패널의 'Inherit main t2i prompt' 기본 ON과 동일).
+        """
+        from workers.refine_worker import RefineWorker
+        path = payload.get('path', '')
+        settings = dict(payload.get('settings', {}))
+        if not path:
+            self.vue_bridge.showNotification.emit('error', 'Refine: 이미지 경로가 없습니다')
+            return
+
+        if not settings.get('main_prompt') and hasattr(self, 'total_prompt_display'):
+            try:
+                settings['main_prompt'] = self.total_prompt_display.toPlainText()
+            except Exception:
+                pass
+        if not settings.get('main_negative') and hasattr(self, 'neg_prompt_text'):
+            try:
+                settings['main_negative'] = self.neg_prompt_text.toPlainText()
+            except Exception:
+                pass
+
+        self._refine_worker = RefineWorker(path, settings, self)
+        self._refine_worker.finished.connect(lambda r: self.vue_bridge.refineResult.emit(r))
+        self._refine_worker.start()
+        self.vue_bridge.showNotification.emit('info', 'Refine 처리 중...')
 
     # ── DEFAULTS 탭 (Vue) → 위젯 적용 ──────────────────────
     def _apply_tab_defaults_to_empty_widgets(self, defaults: dict, first_run: bool = False) -> None:

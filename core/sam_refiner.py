@@ -171,17 +171,16 @@ def refine_boxes_with_sam(image: np.ndarray, boxes: list, models_dir: str,
 
     try:
         if sam_type == 'sam3':
-            # SAM3 분기는 try/finally로 감싸 모든 return 경로에서 VRAM 회수
-            # (앱 프로세스에서 SAM3 번들 ~3.5GB 상주 방지)
-            try:
-                return _refine_with_sam3(
-                    image, boxes, sam_model_path, combined_mask,
-                    text_prompt=(text_prompt or _build_sam3_prompt(yolo_model_paths or [])),
-                    exclude_prompt=exclude_prompt,
-                    notify=notify,
-                )
-            finally:
-                _unload_sam3_bundle()
+            # 예전에는 여기서 try/finally로 매번 _unload_sam3_bundle()을 불러
+            # 바로 위의 _SAM3_BUNDLE_CACHE를 무력화했다 → 클릭마다 3.45GB 재로딩(수십 초).
+            # 이제는 유휴 캐시(core/model_cache.SAM3_CACHE)가 관리한다:
+            # 연속 작업은 캐시 히트, 90초 손 떼면 VRAM 자동 반납.
+            return _refine_with_sam3(
+                image, boxes, sam_model_path, combined_mask,
+                text_prompt=(text_prompt or _build_sam3_prompt(yolo_model_paths or [])),
+                exclude_prompt=exclude_prompt,
+                notify=notify,
+            )
         if sam_type == 'fast_sam':
             return _refine_with_fastsam(image, boxes, sam_model_path, combined_mask)
         return _refine_with_sam(image, boxes, sam_model_path, sam_type, combined_mask)
@@ -300,28 +299,17 @@ def _refine_with_fastsam(image: np.ndarray, boxes: list,
 # Forge SAM3 확장과 동일한 sam3 패키지를 사용.
 # 필요: pip install sam3 timm einops huggingface_hub iopath
 
-_SAM3_BUNDLE_CACHE = {}  # checkpoint_path → (model, processor, device)
 _SAM3_BPE_PATH = None
 
 
 def _unload_sam3_bundle():
-    """앱 프로세스에서 SAM3 번들(~3.5GB)을 내리고 VRAM 반납.
-    refine_boxes_with_sam의 try/finally에서 호출되어
-    모든 return 경로에서 메모리 회수를 보장.
+    """SAM3 번들(~3.5GB)을 즉시 내리고 VRAM 반납.
+
+    평상시에는 core/model_cache.SAM3_CACHE가 유휴 90초 후 알아서 내린다.
+    이 함수는 '지금 당장 VRAM이 필요할 때'(예: 생성 시작 직전) 쓰는 수동 스위치다.
     """
-    import gc
-    _SAM3_BUNDLE_CACHE.clear()
-    gc.collect()
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            try:
-                torch.cuda.ipc_collect()
-            except Exception:
-                pass
-    except Exception:
-        pass
+    from core.model_cache import SAM3_CACHE
+    SAM3_CACHE.clear()
 
 
 def _find_sam3_bpe_vocab() -> str:
@@ -392,18 +380,19 @@ def _refine_with_sam3(image: np.ndarray, boxes: list, model_path: str,
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     cache_key = f"{model_path}|{device}"
 
-    if cache_key in _SAM3_BUNDLE_CACHE:
-        sam3_model, processor = _SAM3_BUNDLE_CACHE[cache_key]
-    else:
+    def _load_bundle(_key):
         print(f"[SAM3] Loading model: {os.path.basename(model_path)} on {device}...")
-        sam3_model = build_sam3_image_model(
+        model = build_sam3_image_model(
             bpe_path=bpe_path,
             device=device,
             checkpoint_path=model_path,
             load_from_HF=False,
         )
-        processor = Sam3Processor(sam3_model, device=device)
-        _SAM3_BUNDLE_CACHE[cache_key] = (sam3_model, processor)
+        return (model, Sam3Processor(model, device=device))
+
+    # 유휴 캐시 — 연속 검출은 히트, 손 떼고 90초 지나면 VRAM 반납
+    from core.model_cache import SAM3_CACHE
+    sam3_model, processor = SAM3_CACHE.get(cache_key, _load_bundle)
 
     processor.set_confidence_threshold(0.5)
 

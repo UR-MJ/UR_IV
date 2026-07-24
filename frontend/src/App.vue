@@ -437,6 +437,10 @@
               </details>
             </details>
 
+            <!-- Anima Guidance Suite — SAM3와 완전히 분리된 독립 기능.
+                 인자 계약(위치 기반 56/7/13개)은 core/anima_guidance.py 참조. -->
+            <AnimaGuidancePanel :widgets="storeWidgets" />
+
             <!-- NegPiP 상시 적용 / 조건부 프롬프트는 STUDIO TOOLS '조건부' 모달로 이동 -->
 
             <!-- LoRA Stack -->
@@ -1047,6 +1051,7 @@ import CharFeatureOverrideModal from './components/CharFeatureOverrideModal.vue'
 import LoraManagerModal from './components/LoraManagerModal.vue'
 import CondPromptModal from './components/CondPromptModal.vue'
 import ToggleSwitch from './components/ToggleSwitch.vue'
+import AnimaGuidancePanel from './components/AnimaGuidancePanel.vue'
 import { loadCondRules, condEnabled } from './composables/condRules.js'
 import { uiModals, closeCharPresetModal, openAbTestModal, closeAbTestModal,
          openCharOverrideModal, closeCharOverrideModal } from './composables/uiModals.js'
