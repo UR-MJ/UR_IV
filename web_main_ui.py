@@ -101,6 +101,8 @@ _WEB_METHODS = frozenset({
     "editorProcess", "getLastGalleryFolder", "getGalleryImages",
     "requestGalleryImages", "getFavorites", "generateThumbnails",
     "searchDanbooru", "loadLastSearchResults", "loadFullResults", "getUiPrefs",
+    "getForgeModelPaths", "selectForgeModelDirectory", "saveForgeModelPaths",
+    "resetForgeModelPaths", "refreshForgeModelPaths",
     "getUpscalers", "requestUpscalers", "saveImageExif", "renameFile",
     "getEdgeMap", "ollamaEnhance", "convertPromptToNl", "editorPasteImage",
     "editorAutoSave", "editorCheckAutoSave", "editorClearAutoSave", "getFileInfo",

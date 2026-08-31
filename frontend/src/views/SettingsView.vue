@@ -56,7 +56,62 @@
           </div>
         </div>
 
-        <!-- 3. Prompt Logic -->
+        <!-- 3. Forge Neo model directories -->
+        <div v-show="currentTab === 'forge'" class="section-fade">
+          <div class="hint-banner forge-hint">
+            이 설정은 Image viewer가 VAE·TE를 직접 찾고 Forge 파일 구성을 확인할 때 사용합니다.
+            Checkpoint와 LoRA 선택 목록은 실행 중인 Forge API가 기준이므로, 다른 폴더를 지정했다면
+            Forge 시작 옵션(<code>--ckpt-dirs</code>, <code>--lora-dirs</code>,
+            <code>--vae-dirs</code>, <code>--text-encoder-dirs</code>)에도 같은 폴더를 등록한 뒤
+            Forge에서 목록을 새로고침하세요.
+          </div>
+          <div class="glass-card">
+            <div class="forge-card-heading">
+              <label>FORGE NEO MODEL DIRECTORIES</label>
+              <span v-if="forgeBusy" class="forge-scanning">SCANNING…</span>
+            </div>
+            <div class="forge-path-list">
+              <div v-for="field in forgePathFields" :key="field.key" class="forge-path-row">
+                <div class="forge-path-label">
+                  <span>{{ field.label }}</span>
+                  <small>{{ field.description }}</small>
+                </div>
+                <div class="forge-path-control">
+                  <input
+                    v-model="forgePaths[field.key]"
+                    :class="{ invalid: !!forgeErrors[field.key] }"
+                    :disabled="forgeEnvironmentLocked[field.key] || forgeBusy"
+                    :placeholder="forgeDefaults[field.key]"
+                    spellcheck="false"
+                    @input="forgeErrors[field.key] = ''"
+                  />
+                  <button
+                    class="btn-pill compact"
+                    :disabled="forgeEnvironmentLocked[field.key] || forgeBusy || !forgeCanBrowse"
+                    :title="forgeCanBrowse ? '폴더 선택' : '웹 모드에서는 경로를 직접 입력하세요'"
+                    @click="browseForgePath(field.key)"
+                  >BROWSE</button>
+                </div>
+                <div class="forge-path-meta">
+                  <span :class="forgeEntries[field.key].exists ? 'path-ok' : 'path-missing'">
+                    {{ forgeEntries[field.key].exists ? '● 폴더 확인됨' : '● 폴더 없음' }}
+                  </span>
+                  <span>{{ forgeEntries[field.key].count.toLocaleString() }} files</span>
+                  <span v-if="forgeEnvironmentLocked[field.key]" class="env-lock">ENV OVERRIDE</span>
+                  <span v-if="forgeErrors[field.key]" class="path-error">{{ forgeErrors[field.key] }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="forge-actions mt-16">
+              <button class="btn-pill primary" :disabled="forgeBusy" @click="saveForgePaths">SAVE PATHS</button>
+              <button class="btn-pill" :disabled="forgeBusy" @click="refreshForgePaths">RESCAN</button>
+              <button class="btn-pill" :disabled="forgeBusy" @click="resetForgePaths">RESET AUTO</button>
+            </div>
+            <div v-if="forgeStatus" class="forge-status mt-12">{{ forgeStatus }}</div>
+          </div>
+        </div>
+
+        <!-- 4. Prompt Logic -->
         <div v-show="currentTab === 'prompt'" class="section-fade">
           <div class="glass-card">
             <label>PROMPT AUTOMATION</label>
@@ -387,6 +442,13 @@ interface SubTab {
   keywords: string
 }
 
+type ForgePathKey = 'checkpoint_dir' | 'lora_dir' | 'vae_dir' | 'text_encoder_dir'
+
+interface ForgePathEntry {
+  exists: boolean
+  count: number
+}
+
 // 템플릿 인라인 핸들러(82·146행)가 window.localStorage를 참조 — 셋업 스코프에 노출
 const window = globalThis.window
 
@@ -394,6 +456,7 @@ const subTabs: SubTab[] = [
   // keywords: 사용자 검색 시 라벨 외에도 매칭할 한/영 키워드들
   { id: 'general',   label: 'GENERAL',   icon: '⚙️', keywords: 'general 일반 시스템 코어 버전' },
   { id: 'api',       label: 'NETWORK',   icon: '🌐', keywords: 'network api 네트워크 webui comfy url 백엔드 연결' },
+  { id: 'forge',     label: 'FORGE',     icon: '🧩', keywords: 'forge neo checkpoint model lora vae te text encoder 경로 폴더 모델 로라' },
   { id: 'prompt',    label: 'LOGIC',     icon: '📝', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
   { id: 'tabs',      label: 'WORKSPACE', icon: '🗂️', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
   { id: 'shortcuts', label: 'HOTKEYS',   icon: '⌨️', keywords: 'hotkeys shortcuts 단축키 키보드 ctrl shift z y s g' },
@@ -424,6 +487,33 @@ function focusSearch() {
 }
 const webuiUrl = ref('http://127.0.0.1:7860')
 const comfyUrl = ref('http://127.0.0.1:8188')
+const forgePathFields: Array<{ key: ForgePathKey; label: string; description: string }> = [
+  { key: 'checkpoint_dir', label: 'CHECKPOINT / MODEL', description: 'Stable-diffusion 모델 폴더' },
+  { key: 'lora_dir', label: 'LORA', description: 'LoRA 가중치 폴더' },
+  { key: 'vae_dir', label: 'VAE', description: 'VAE 모듈 폴더' },
+  { key: 'text_encoder_dir', label: 'TEXT ENCODER (TE)', description: 'CLIP / T5 등 TE 모듈 폴더' },
+]
+const forgePaths = reactive<Record<ForgePathKey, string>>({
+  checkpoint_dir: '', lora_dir: '', vae_dir: '', text_encoder_dir: '',
+})
+const forgeDefaults = reactive<Record<ForgePathKey, string>>({
+  checkpoint_dir: '', lora_dir: '', vae_dir: '', text_encoder_dir: '',
+})
+const forgeEntries = reactive<Record<ForgePathKey, ForgePathEntry>>({
+  checkpoint_dir: { exists: false, count: 0 },
+  lora_dir: { exists: false, count: 0 },
+  vae_dir: { exists: false, count: 0 },
+  text_encoder_dir: { exists: false, count: 0 },
+})
+const forgeEnvironmentLocked = reactive<Record<ForgePathKey, boolean>>({
+  checkpoint_dir: false, lora_dir: false, vae_dir: false, text_encoder_dir: false,
+})
+const forgeErrors = reactive<Record<ForgePathKey, string>>({
+  checkpoint_dir: '', lora_dir: '', vae_dir: '', text_encoder_dir: '',
+})
+const forgeBusy = ref(false)
+const forgeCanBrowse = ref(false)
+const forgeStatus = ref('')
 const cleanDuplicates = ref(true)
 const cleanSpaces = ref(true)
 const cleanUnderscore = ref(true)
@@ -499,6 +589,125 @@ function applyUiPrefs(prefs: any) {
   if (typeof prefs.ollamaUnloadOnGen === 'boolean') { ollamaUnloadOnGen.value = prefs.ollamaUnloadOnGen; window.localStorage.setItem('ollamaUnloadOnGen', String(prefs.ollamaUnloadOnGen)) }
 }
 
+function parseForgePayload(raw: unknown): any {
+  if (typeof raw === 'string') return JSON.parse(raw || '{}')
+  return raw || {}
+}
+
+function applyForgePathState(payload: any) {
+  if (!payload?.ok) {
+    const details = payload?.errors && typeof payload.errors === 'object' ? payload.errors : {}
+    for (const field of forgePathFields) forgeErrors[field.key] = String(details[field.key] || '')
+    throw new Error(payload?.error || 'Forge 경로 정보를 불러오지 못했습니다')
+  }
+  for (const field of forgePathFields) {
+    const key = field.key
+    forgePaths[key] = String(payload.paths?.[key] || '')
+    forgeDefaults[key] = String(payload.defaults?.[key] || '')
+    forgeEnvironmentLocked[key] = Boolean(payload.environmentLocked?.[key])
+    forgeEntries[key].exists = Boolean(payload.entries?.[key]?.exists)
+    forgeEntries[key].count = Number(payload.entries?.[key]?.count || 0)
+    forgeErrors[key] = ''
+  }
+  const total = forgePathFields.reduce((sum, field) => sum + forgeEntries[field.key].count, 0)
+  forgeStatus.value = `${total.toLocaleString()}개 파일을 로컬 경로에서 확인했습니다.`
+}
+
+async function callForgeBridge(method: string, ...args: unknown[]): Promise<any> {
+  const backend: any = await getBackend()
+  const fn = backend?.[method]
+  if (typeof fn !== 'function') throw new Error(`백엔드가 ${method} 기능을 지원하지 않습니다`)
+  return new Promise((resolve, reject) => {
+    try {
+      fn(...args, (raw: unknown) => {
+        try { resolve(parseForgePayload(raw)) }
+        catch (error) { reject(error) }
+      })
+    } catch (error) {
+      reject(error)
+    }
+  })
+}
+
+function showForgeError(error: unknown) {
+  const msg = error instanceof Error ? error.message : String(error)
+  forgeStatus.value = msg
+  requestAction('show_toast', { type: 'error', msg })
+}
+
+async function loadForgePaths(backend?: any) {
+  const bk = backend || await getBackend()
+  forgeCanBrowse.value = !((window as any).__AISTUDIO_WS_PORT__ || (window as any).__AISTUDIO_WS_URL__)
+    && typeof bk?.selectForgeModelDirectory === 'function'
+  if (typeof bk?.getForgeModelPaths !== 'function') return
+  forgeBusy.value = true
+  try {
+    const payload = await new Promise<any>((resolve, reject) => {
+      bk.getForgeModelPaths((raw: unknown) => {
+        try { resolve(parseForgePayload(raw)) }
+        catch (error) { reject(error) }
+      })
+    })
+    applyForgePathState(payload)
+  } catch (error) {
+    showForgeError(error)
+  } finally {
+    forgeBusy.value = false
+  }
+}
+
+async function browseForgePath(key: ForgePathKey) {
+  forgeBusy.value = true
+  try {
+    const payload = await callForgeBridge('selectForgeModelDirectory', key)
+    if (payload?.cancelled) return
+    if (!payload?.ok) throw new Error(payload?.error || '폴더를 선택하지 못했습니다')
+    forgePaths[key] = String(payload.path || '')
+    forgeErrors[key] = ''
+  } catch (error) {
+    showForgeError(error)
+  } finally {
+    forgeBusy.value = false
+  }
+}
+
+async function saveForgePaths() {
+  forgeBusy.value = true
+  try {
+    const payload = await callForgeBridge('saveForgeModelPaths', JSON.stringify({ ...forgePaths }))
+    applyForgePathState(payload)
+  } catch (error) {
+    showForgeError(error)
+  } finally {
+    forgeBusy.value = false
+  }
+}
+
+async function refreshForgePaths() {
+  forgeBusy.value = true
+  try {
+    const payload = await callForgeBridge('refreshForgeModelPaths')
+    applyForgePathState(payload)
+    requestAction('show_toast', { type: 'success', msg: 'Forge 모델 폴더를 다시 스캔했습니다' })
+  } catch (error) {
+    showForgeError(error)
+  } finally {
+    forgeBusy.value = false
+  }
+}
+
+async function resetForgePaths() {
+  forgeBusy.value = true
+  try {
+    const payload = await callForgeBridge('resetForgeModelPaths')
+    applyForgePathState(payload)
+  } catch (error) {
+    showForgeError(error)
+  } finally {
+    forgeBusy.value = false
+  }
+}
+
 // UI prefs 로드 시 동기화
 import { onBackendEvent, getBackend } from '../bridge.js'
 onMounted(async () => {
@@ -506,6 +715,7 @@ onMounted(async () => {
   autoLoadOllamaModels()   // AI Assistant 모델 목록 시작 시 자동 로드
   // defaults 로드
   const bk: any = await getBackend()
+  await loadForgePaths(bk)
   if (bk.getTabDefaults) {
     bk.getTabDefaults((json: string) => {
       try { const d = JSON.parse(json); Object.assign(defaults, d) } catch {}
@@ -756,6 +966,39 @@ function handleOllamaModels(json: string) {
 .input-unit { position: relative; }
 .unit-label { position: absolute; left: 12px; top: -8px; background: var(--bg-primary); padding: 0 6px; font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; }
 
+/* Forge model directories */
+.forge-hint code {
+  padding: 1px 5px; border-radius: 4px; background: var(--bg-button);
+  color: var(--accent); font-family: 'Consolas', monospace; font-size: 10px;
+}
+.forge-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.forge-scanning { color: var(--accent); font-size: 9px; font-weight: 900; letter-spacing: 1px; }
+.forge-path-list { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
+.forge-path-row {
+  padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-base);
+  background: var(--bg-input);
+}
+.forge-path-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.forge-path-label > span { color: var(--text-primary); font-size: 11px; font-weight: 900; letter-spacing: .7px; }
+.forge-path-label small { color: var(--text-muted); font-size: 10px; text-align: right; }
+.forge-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.forge-path-control input {
+  min-width: 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--bg-primary); color: var(--text-primary); outline: none;
+  font-family: 'Consolas', monospace; font-size: 11px;
+}
+.forge-path-control input:focus { border-color: var(--accent); }
+.forge-path-control input.invalid { border-color: #f87171; box-shadow: 0 0 0 1px rgba(248,113,113,.15); }
+.forge-path-control input:disabled { opacity: .62; cursor: not-allowed; }
+.btn-pill.compact { min-width: 74px; padding: 7px 11px; font-size: 9px; }
+.forge-path-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 7px; color: var(--text-muted); font-size: 9px; }
+.path-ok { color: #4ade80; }
+.path-missing, .path-error { color: #f87171; }
+.path-error { width: 100%; }
+.env-lock { padding: 2px 6px; border-radius: 4px; background: rgba(96,165,250,.12); color: #60a5fa; font-weight: 800; }
+.forge-actions { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 10px; }
+.forge-status { color: var(--text-muted); font-size: 10px; line-height: 1.5; }
+
 .toggle-grid { display: flex; flex-direction: column; gap: 8px; }
 .toggle-row {
   display: flex; justify-content: space-between; align-items: center;
@@ -873,4 +1116,12 @@ kbd {
 .rec-desc { font-size: 11px; color: var(--text-muted); text-align: right; }
 .rec-note { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
 .rec-note code { background: var(--bg-button); padding: 2px 8px; border-radius: 4px; font-size: 11px; color: var(--accent); }
+
+@media (max-width: 820px) {
+  .settings-nav { width: 190px; }
+  .settings-body { padding: 24px; }
+  .forge-path-label { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .forge-path-label small { text-align: left; }
+  .forge-actions { grid-template-columns: 1fr; }
+}
 </style>

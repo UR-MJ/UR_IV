@@ -1222,6 +1222,129 @@ class VueBridge(QObject):
             print(f"[UIPrefs] getUiPrefs failed: {e}")
             return '{}'
 
+    def _refresh_forge_module_widgets(self) -> None:
+        """저장된 Forge VAE/TE 경로를 현재 프록시 목록에 즉시 반영."""
+        try:
+            from core.forge_modules import list_te_files, list_vae_files
+
+            vae_files = list_vae_files()
+            vae_proxy = self._proxies.get('vae_main_combo')
+            if vae_proxy is not None and hasattr(vae_proxy, 'addItems'):
+                current = vae_proxy.currentText() if hasattr(vae_proxy, 'currentText') else ''
+                merged = ['Use checkpoint default']
+                # Settings 경로를 다시 스캔하는 흐름에서는 빈 폴더도 의도된 결과다.
+                # 이전 로컬/API 목록을 섞으면 제거된 모듈이 계속 전송될 수 있으므로 교체한다.
+                for name in vae_files:
+                    if name and name not in ('Use same VAE', 'Use checkpoint default') and name not in merged:
+                        merged.append(name)
+                vae_proxy.clear()
+                vae_proxy.addItems(merged)
+                selected = current if current in merged else merged[0]
+                if hasattr(vae_proxy, 'setCurrentText'):
+                    vae_proxy.setCurrentText(selected)
+                # addItems()가 index 0을 자동 선택해도 값 signal은 보내지 않으므로
+                # 제거된 이전 VAE가 Vue 상태에 남지 않게 선택값을 명시 동기화한다.
+                self.pushWidgetValue('vae_main_combo', selected)
+
+            te_files = list_te_files()
+            self.pushWidgetProperty('te_main_input', 'items', te_files)
+            te_proxy = self._proxies.get('te_main_input')
+            if te_proxy is not None and hasattr(te_proxy, 'text') and hasattr(te_proxy, 'setText'):
+                current_te = [
+                    item.strip() for item in (te_proxy.text() or '').split(',')
+                    if item.strip()
+                ]
+                available = set(te_files)
+                valid_te = [item for item in current_te if item in available]
+                if valid_te != current_te:
+                    te_proxy.setText(', '.join(valid_te))
+
+            # 다음 LoRA Manager 열기/새로고침 때 Forge API 목록을 다시 받는다.
+            from widgets.lora_manager import LoraManagerDialog
+            LoraManagerDialog._lora_cache = []
+        except Exception as exc:
+            logger.warning("Forge module widget refresh failed: %s", exc)
+
+    @pyqtSlot(result=str)
+    def getForgeModelPaths(self) -> str:
+        """Forge 체크포인트/LoRA/VAE/TE 디렉터리와 스캔 상태 반환."""
+        try:
+            from core.forge_modules import get_forge_path_state
+            return json.dumps({'ok': True, **get_forge_path_state()}, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+
+    @pyqtSlot(str, result=str)
+    def selectForgeModelDirectory(self, key: str) -> str:
+        """Settings의 BROWSE 버튼용 네이티브 폴더 선택기."""
+        try:
+            from pathlib import Path
+            from PyQt6.QtWidgets import QFileDialog
+            from core.forge_modules import FORGE_PATH_KEYS, get_forge_paths
+
+            if key not in FORGE_PATH_KEYS:
+                raise ValueError(f'지원하지 않는 Forge 경로 키: {key}')
+            current = get_forge_paths()[key]
+            start = current
+            while not start.is_dir() and start.parent != start:
+                start = start.parent
+            if not start.is_dir():
+                start = Path.home()
+            selected = QFileDialog.getExistingDirectory(
+                self.parent(),
+                'Forge Neo 모델 폴더 선택',
+                str(start),
+            )
+            if not selected:
+                return json.dumps({'ok': False, 'cancelled': True}, ensure_ascii=False)
+            return json.dumps({'ok': True, 'key': key, 'path': selected}, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+
+    @pyqtSlot(str, result=str)
+    def saveForgeModelPaths(self, payload_json: str) -> str:
+        """네 Forge 모델 디렉터리를 전체 검증 후 원자적으로 저장."""
+        try:
+            from core.forge_modules import get_forge_path_state, save_forge_paths
+
+            payload = json.loads(payload_json) if isinstance(payload_json, str) else payload_json
+            save_forge_paths(payload)
+            self._refresh_forge_module_widgets()
+            self.showNotification.emit('success', 'Forge Neo 모델 경로를 저장했습니다')
+            return json.dumps({'ok': True, **get_forge_path_state()}, ensure_ascii=False)
+        except Exception as exc:
+            errors = getattr(exc, 'errors', None)
+            message = str(exc)
+            self.showNotification.emit('error', f'Forge 경로 저장 실패: {message}')
+            return json.dumps(
+                {'ok': False, 'error': message, 'errors': errors or {}},
+                ensure_ascii=False,
+            )
+
+    @pyqtSlot(result=str)
+    def resetForgeModelPaths(self) -> str:
+        """사용자 지정값을 지우고 자동 감지/default 경로로 복귀."""
+        try:
+            from core.forge_modules import get_forge_path_state, reset_forge_paths
+
+            reset_forge_paths()
+            self._refresh_forge_module_widgets()
+            self.showNotification.emit('success', 'Forge Neo 경로를 자동 감지 기본값으로 되돌렸습니다')
+            return json.dumps({'ok': True, **get_forge_path_state()}, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+
+    @pyqtSlot(result=str)
+    def refreshForgeModelPaths(self) -> str:
+        """저장된 경로를 다시 스캔하고 VAE/TE 목록을 갱신."""
+        try:
+            from core.forge_modules import get_forge_path_state
+
+            self._refresh_forge_module_widgets()
+            return json.dumps({'ok': True, **get_forge_path_state()}, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+
     @pyqtSlot(str, result=str)
     def loadImageBase64(self, filepath: str) -> str:
         """이미지를 base64로 반환"""
