@@ -1,6 +1,7 @@
 # backends/comfyui_backend.py
 """ComfyUI 백엔드 구현"""
 import json
+import mimetypes
 import uuid
 import random
 import requests
@@ -8,13 +9,28 @@ import websocket
 from typing import Dict, List, Optional, Tuple
 
 from backends.base import (
-    AbstractBackend, BackendInfo, GenerationResult, ProgressCallback
+    AbstractBackend, BackendInfo, GenerationResult, MediaArtifact,
+    ProgressCallback,
 )
+from backends.comfyui_progress import ProgressTracker
 
 import config
 from utils.app_logger import get_logger
 
 _logger = get_logger('comfyui')
+
+_MEDIA_OUTPUT_FIELDS = {
+    'images': 'image',
+    'animated': 'animated',
+    'gifs': 'animated',
+    'videos': 'video',
+    'audio': 'audio',
+    'files': None,
+}
+_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff'}
+_ANIMATED_EXTENSIONS = {'.gif', '.apng'}
+_VIDEO_EXTENSIONS = {'.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v'}
+_AUDIO_EXTENSIONS = {'.wav', '.mp3', '.ogg', '.flac', '.m4a', '.aac', '.opus'}
 
 
 def analyze_workflow(file_path: str) -> dict:
@@ -634,8 +650,12 @@ class ComfyUIBackend(AbstractBackend):
             _logger.info(f"프롬프트 등록 완료: {prompt_id}")
             self._current_prompt_id = prompt_id   # interrupt()의 큐 삭제용
 
-            # 결과 대기
-            return self._wait_for_result(ws, prompt_id, progress_callback)
+            # 결과 대기. 워크플로우 전체를 아는 순수 tracker가 노드별 이벤트를
+            # 기존 3인자 progress callback 형식의 단조 증가 퍼센트로 변환한다.
+            tracker = ProgressTracker(workflow)
+            return self._wait_for_result(
+                ws, prompt_id, progress_callback, tracker=tracker
+            )
 
         except requests.exceptions.RequestException as e:
             _logger.error(f"API 요청 실패: {e}")
@@ -654,9 +674,11 @@ class ComfyUIBackend(AbstractBackend):
                     pass
 
     def _wait_for_result(self, ws, prompt_id: str,
-                         progress_callback: Optional[ProgressCallback]) -> GenerationResult:
+                         progress_callback: Optional[ProgressCallback],
+                         tracker: Optional[ProgressTracker] = None) -> GenerationResult:
         """WebSocket 메시지를 수신하며 결과 대기"""
         _logger.info(f"결과 대기 중... (prompt_id={prompt_id})")
+        tracker = tracker or ProgressTracker({})
 
         while True:
             msg = ws.recv()
@@ -665,17 +687,29 @@ class ComfyUIBackend(AbstractBackend):
 
             data = json.loads(msg)
             msg_type = data.get('type', '')
+            event_data = data.get('data', {})
+
+            # status는 전역 큐 이벤트지만 실행 이벤트는 prompt_id가 붙는다.
+            # 같은 client websocket에 섞인 다른 작업의 이벤트는 무시한다.
+            event_prompt_id = (
+                event_data.get('prompt_id')
+                if isinstance(event_data, dict) else None
+            )
+            if event_prompt_id and event_prompt_id != prompt_id:
+                continue
+
+            progress_update = tracker.consume(data)
+            if progress_update is not None and progress_callback:
+                progress_callback(
+                    progress_update.step, progress_update.total, None
+                )
 
             if msg_type == 'status':
                 # 큐 상태 업데이트
                 continue
 
             elif msg_type == 'progress':
-                d = data.get('data', {})
-                if progress_callback:
-                    step = d.get('value', 0)
-                    total = d.get('max', 0)
-                    progress_callback(step, total, None)
+                continue
 
             elif msg_type == 'executing':
                 d = data.get('data', {})
@@ -702,16 +736,53 @@ class ComfyUIBackend(AbstractBackend):
                 # 캐시된 노드 알림
                 continue
 
-        # 결과 이미지 가져오기
-        return self._fetch_result_image(prompt_id)
+        # 히스토리의 모든 미디어 결과 가져오기
+        return self._fetch_result_artifacts(prompt_id)
 
-    def _fetch_result_image(self, prompt_id: str) -> GenerationResult:
-        """히스토리에서 결과 이미지 다운로드"""
-        _logger.info(f"결과 이미지 다운로드 중... (prompt_id={prompt_id})")
+    @staticmethod
+    def _media_kind(output_field: str, filename: str,
+                    mime: Optional[str] = None) -> Optional[str]:
+        """Infer a stable artifact kind from Comfy's field and file metadata."""
+        extension = '.' + filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        if mime:
+            clean_mime = mime.split(';', 1)[0].strip().lower()
+            if clean_mime.startswith('video/'):
+                return 'video'
+            if clean_mime.startswith('audio/'):
+                return 'audio'
+            if clean_mime in ('image/gif', 'image/apng'):
+                return 'animated'
 
-        history = requests.get(
+        if extension in _VIDEO_EXTENSIONS:
+            return 'video'
+        if extension in _AUDIO_EXTENSIONS:
+            return 'audio'
+        if extension in _ANIMATED_EXTENSIONS:
+            return 'animated'
+        if output_field in ('animated', 'gifs'):
+            return 'animated'
+        if extension in _IMAGE_EXTENSIONS:
+            return 'image'
+        return _MEDIA_OUTPUT_FIELDS.get(output_field)
+
+    @staticmethod
+    def _response_mime(response, filename: str) -> Optional[str]:
+        headers = getattr(response, 'headers', {}) or {}
+        content_type = headers.get('Content-Type') or headers.get('content-type')
+        if content_type:
+            return content_type.split(';', 1)[0].strip().lower()
+        guessed, _encoding = mimetypes.guess_type(filename)
+        return guessed
+
+    def _fetch_result_artifacts(self, prompt_id: str) -> GenerationResult:
+        """Download every image, animation, video, and audio history output."""
+        _logger.info(f"결과 미디어 다운로드 중... (prompt_id={prompt_id})")
+
+        history_response = requests.get(
             f'{self.api_url}/history/{prompt_id}', timeout=10
-        ).json()
+        )
+        history_response.raise_for_status()
+        history = history_response.json()
 
         prompt_history = history.get(prompt_id, {})
         outputs = prompt_history.get('outputs', {})
@@ -721,47 +792,166 @@ class ComfyUIBackend(AbstractBackend):
             return GenerationResult(
                 success=False,
                 error="ComfyUI 히스토리에서 출력을 찾을 수 없습니다.\n"
-                      "워크플로우에 SaveImage 노드가 있는지 확인하세요."
+                      "워크플로우에 미디어 저장 노드가 있는지 확인하세요."
             )
 
-        # SaveImage / PreviewImage 노드 출력에서 이미지 찾기
-        for node_id, node_output in outputs.items():
-            images = node_output.get('images', [])
-            if images:
-                img_info = images[0]
-                _logger.info(f"이미지 다운로드: {img_info['filename']}")
+        artifacts: List[MediaArtifact] = []
+        seen: set = set()
+        failed_downloads: List[str] = []
 
-                img_response = requests.get(
-                    f'{self.api_url}/view',
-                    params={
-                        'filename': img_info['filename'],
-                        'subfolder': img_info.get('subfolder', ''),
-                        'type': img_info.get('type', 'output'),
-                    },
-                    timeout=30
-                )
-                img_response.raise_for_status()
+        for raw_node_id, node_output in outputs.items():
+            if not isinstance(node_output, dict):
+                continue
+            node_id = str(raw_node_id)
+            # Known Comfy fields are handled explicitly by ``_media_kind``;
+            # custom nodes with a different field name still work when their
+            # file extension identifies a supported media type.
+            for raw_output_field, raw_items in node_output.items():
+                if not isinstance(raw_items, list):
+                    continue
+                output_field = str(raw_output_field)
+                for item in raw_items:
+                    if not isinstance(item, dict):
+                        continue
+                    filename = str(item.get('filename', '')).strip()
+                    if not filename:
+                        continue
+                    initial_kind = self._media_kind(output_field, filename)
+                    if initial_kind is None:
+                        continue
 
-                gen_info = {
-                    'prompt_id': prompt_id,
-                    'filename': img_info['filename'],
-                }
+                    subfolder = str(item.get('subfolder', ''))
+                    storage_type = str(item.get('type', 'output'))
+                    identity = (storage_type, subfolder, filename)
+                    if identity in seen:
+                        continue
+                    seen.add(identity)
 
-                _logger.info("이미지 수신 완료")
-                return GenerationResult(
-                    success=True,
-                    image_data=img_response.content,
-                    info=gen_info
-                )
+                    try:
+                        media_response = requests.get(
+                            f'{self.api_url}/view',
+                            params={
+                                'filename': filename,
+                                'subfolder': subfolder,
+                                'type': storage_type,
+                            },
+                            timeout=60,
+                        )
+                        media_response.raise_for_status()
+                    except requests.exceptions.RequestException as exc:
+                        _logger.warning(f"미디어 다운로드 실패 ({filename}): {exc}")
+                        failed_downloads.append(filename)
+                        continue
 
-        _logger.error("출력 노드에 이미지 없음")
+                    mime = self._response_mime(media_response, filename)
+                    kind = self._media_kind(output_field, filename, mime) or initial_kind
+                    metadata = {
+                        key: value for key, value in item.items()
+                        if key != 'filename'
+                    }
+                    metadata.update({
+                        'node_id': node_id,
+                        'output_field': output_field,
+                        'subfolder': subfolder,
+                        'storage_type': storage_type,
+                    })
+                    artifacts.append(MediaArtifact(
+                        kind=kind,
+                        data=media_response.content,
+                        filename=filename,
+                        mime=mime,
+                        metadata=metadata,
+                    ))
+
+        if not artifacts:
+            _logger.error("출력 노드에 지원되는 미디어 없음")
+            detail = ""
+            if failed_downloads:
+                detail = "\n다운로드 실패: " + ", ".join(failed_downloads)
+            return GenerationResult(
+                success=False,
+                error="ComfyUI 출력에서 지원되는 미디어를 찾을 수 없습니다.\n"
+                      "이미지, 애니메이션, 영상 또는 오디오 저장 노드를 확인하세요."
+                      + detail,
+            )
+
+        primary = next(
+            (artifact for artifact in artifacts if artifact.kind == 'image'),
+            None,
+        ) or next(
+            (artifact for artifact in artifacts if artifact.kind == 'animated'),
+            None,
+        )
+        gen_info = {
+            'prompt_id': prompt_id,
+            'filename': primary.filename if primary else artifacts[0].filename,
+            'artifact_count': len(artifacts),
+            'artifact_filenames': [artifact.filename for artifact in artifacts],
+        }
+        if failed_downloads:
+            gen_info['artifact_download_errors'] = failed_downloads
+
+        _logger.info(f"미디어 {len(artifacts)}개 수신 완료")
         return GenerationResult(
-            success=False,
-            error="ComfyUI 출력에서 이미지를 찾을 수 없습니다.\n"
-                  "워크플로우에 SaveImage 또는 PreviewImage 노드가 있는지 확인하세요."
+            success=True,
+            image_data=primary.data if primary else None,
+            info=gen_info,
+            artifacts=artifacts,
         )
 
+    def _fetch_result_image(self, prompt_id: str) -> GenerationResult:
+        """이전 private 호출부 호환용 별칭."""
+        return self._fetch_result_artifacts(prompt_id)
+
     # ── 공개 API ──
+
+    def run_workflow(self, workflow: Dict,
+                     progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
+        """Run an already prepared API-format workflow.
+
+        Model-specific workflow packs can use this seam without depending on
+        websocket, history, progress, or media-download implementation details.
+        """
+        if not isinstance(workflow, dict) or not any(
+            isinstance(node, dict) and node.get('class_type')
+            for node in workflow.values()
+        ):
+            return GenerationResult(
+                success=False,
+                error="ComfyUI API 형식의 워크플로우가 필요합니다.",
+            )
+        return self._queue_and_wait(workflow, progress_callback)
+
+    def upload_media(self, data: bytes, filename: str,
+                     mime: str = 'application/octet-stream',
+                     overwrite: bool = True) -> str:
+        """Upload one input artifact and return its ComfyUI input name."""
+        clean_filename = str(filename or '').strip()
+        if (
+            not clean_filename
+            or clean_filename in ('.', '..')
+            or '/' in clean_filename
+            or '\\' in clean_filename
+        ):
+            raise ValueError("filename은 경로가 아닌 안전한 파일명이어야 합니다.")
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise TypeError("data는 bytes 계열이어야 합니다.")
+
+        response = requests.post(
+            f'{self.api_url}/upload/image',
+            files={'image': (clean_filename, bytes(data), mime)},
+            data={'overwrite': 'true' if overwrite else 'false'},
+            timeout=60,
+        )
+        response.raise_for_status()
+        result = response.json()
+        stored_name = str(result.get('name', '')).strip()
+        if not stored_name:
+            raise RuntimeError("업로드 응답에 파일명이 없습니다.")
+        subfolder = str(result.get('subfolder', '')).strip('/\\')
+        remote_name = f"{subfolder}/{stored_name}" if subfolder else stored_name
+        _logger.info(f"미디어 업로드 완료: {remote_name}")
+        return remote_name
 
     def txt2img(self, model_name: str, payload: Dict,
                 progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
@@ -811,20 +1001,7 @@ class ComfyUIBackend(AbstractBackend):
         """ComfyUI에 이미지 업로드 → 파일명 반환"""
         import base64
         image_bytes = base64.b64decode(image_b64)
-
-        resp = requests.post(
-            f'{self.api_url}/upload/image',
-            files={'image': ('input.png', image_bytes, 'image/png')},
-            data={'overwrite': 'true'},
-            timeout=30
-        )
-        resp.raise_for_status()
-        result = resp.json()
-        filename = result.get('name', '')
-        if not filename:
-            raise RuntimeError("업로드 응답에 파일명이 없습니다.")
-        _logger.info(f"이미지 업로드 완료: {filename}")
-        return filename
+        return self.upload_media(image_bytes, 'input.png', 'image/png')
 
     def _find_load_image_node(self, workflow: dict) -> Optional[str]:
         """LoadImage 노드 ID 찾기"""

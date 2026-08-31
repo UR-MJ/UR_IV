@@ -19,6 +19,45 @@ _EDITOR_TEMP_KEEP = 60
 # 썸네일 캐시 상한 — 넘으면 오래된 것부터 정리 (언제든 재생성 가능한 캐시)
 _THUMB_CACHE_MAX_BYTES = 300 * 1024 * 1024
 
+# Gallery는 Creator Studio가 생성하는 정지 이미지, 애니메이션, 영상, 오디오를
+# 같은 목록에서 다룬다. 확장자 판정은 한곳에 두어 동기/비동기 API가 어긋나지 않게 한다.
+_GALLERY_MEDIA_EXTS = frozenset({
+    # still / animated image
+    '.png', '.jpg', '.jpeg', '.webp', '.gif', '.apng', '.bmp', '.tif', '.tiff', '.avif',
+    # video
+    '.mp4', '.webm', '.mov', '.mkv', '.m4v', '.avi', '.ogv',
+    # audio
+    '.wav', '.mp3', '.ogg', '.flac', '.m4a', '.aac', '.opus',
+})
+
+
+def _scan_gallery_media(target: str, recursive_roots=()) -> list[str]:
+    """지원 미디어를 수정 시각 내림차순으로 반환하는 순수 스캔 경계."""
+    entries = []
+
+    def collect(folder: str) -> None:
+        try:
+            with os.scandir(folder) as scan:
+                for entry in scan:
+                    if not entry.is_file() or os.path.splitext(entry.name)[1].lower() not in _GALLERY_MEDIA_EXTS:
+                        continue
+                    try:
+                        mtime = entry.stat().st_mtime
+                    except OSError:
+                        mtime = 0
+                    entries.append((mtime, entry.path.replace('\\', '/')))
+        except OSError:
+            return
+
+    collect(target)
+    for recursive_root in recursive_roots:
+        if not os.path.isdir(recursive_root):
+            continue
+        for folder, _dirs, _files in os.walk(recursive_root):
+            collect(folder)
+    entries.sort(key=lambda item: item[0], reverse=True)
+    return [path for _, path in entries]
+
 
 class VueBridge(QObject):
     """Vue 프론트엔드와 통신하는 중앙 브릿지"""
@@ -70,6 +109,15 @@ class VueBridge(QObject):
     promptOrderLoaded = pyqtSignal(str)         # JSON [{key, label}] — 사용자 지정 섹션 순서
     workflowProfilesList = pyqtSignal(str)      # JSON [{name, created_at, model, vae}]
     eventImportResults = pyqtSignal(str)      # JSON event list
+
+    # Creator Studio — 모든 payload는 JSON 문자열 하나로 유지해 Qt/WebSocket
+    # transport가 동일한 interface를 사용한다.
+    creatorStateChanged = pyqtSignal(str)
+    creatorProgress = pyqtSignal(str)
+    creatorResult = pyqtSignal(str)
+    creatorMediaSelected = pyqtSignal(str)
+    comicStoryboardReady = pyqtSignal(str)
+    comicDocumentChanged = pyqtSignal(str)
 
     # 위젯 값/속성 동기화 (Python → Vue)
     widgetValueChanged = pyqtSignal(str, str)       # (widget_id, value)
@@ -767,27 +815,24 @@ class VueBridge(QObject):
             f.write(folder)
 
     def _gallery_images_payload(self, folder: str) -> str:
-        """scandir의 stat 캐시를 이용해 날짜순 이미지 목록을 만든다."""
+        """scandir의 stat 캐시를 이용해 날짜순 미디어 목록을 만든다."""
         import os
         from config import OUTPUT_DIR
         target = folder if folder else OUTPUT_DIR
         if not os.path.isdir(target):
             return json.dumps({'folder': folder, 'files': []})
-        exts = ('.png', '.jpg', '.jpeg', '.webp')
-        entries = []
         try:
-            with os.scandir(target) as scan:
-                for entry in scan:
-                    if entry.is_file() and entry.name.lower().endswith(exts):
-                        try:
-                            mtime = entry.stat().st_mtime
-                        except OSError:
-                            mtime = 0
-                        entries.append((mtime, entry.path.replace('\\', '/')))
-            entries.sort(key=lambda item: item[0], reverse=True)
+            creator_root = os.path.join(target, 'creator')
+            recursive_roots = (
+                (creator_root,)
+                if os.path.normcase(os.path.abspath(target)) == os.path.normcase(os.path.abspath(OUTPUT_DIR))
+                else ()
+            )
+            files = _scan_gallery_media(target, recursive_roots)
         except Exception as e:
             logger.warning("getGalleryImages failed (%s): %s", target, e)
-        return json.dumps({'folder': folder, 'files': [path for _, path in entries]})
+            files = []
+        return json.dumps({'folder': folder, 'files': files})
 
     @pyqtSlot(str, result=str)
     def getGalleryImages(self, folder: str) -> str:

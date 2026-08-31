@@ -18,12 +18,48 @@ class BackendInfo:
 
 
 @dataclass
+class MediaArtifact:
+    """백엔드가 생성한 하나의 미디어 결과.
+
+    ``data``와 ``path`` 중 적어도 하나를 채우는 것이 생산자 측 계약이다.
+    ``kind``는 현재 ``image``, ``animated``, ``video``, ``audio``를 사용한다.
+    원격 백엔드의 저장소 정보는 로컬 경로로 오인되지 않도록 ``metadata``에
+    보존한다.
+    """
+    kind: str
+    data: Optional[bytes] = None
+    path: Optional[str] = None
+    filename: Optional[str] = None
+    mime: Optional[str] = None
+    metadata: Dict = field(default_factory=dict)
+
+
+@dataclass
 class GenerationResult:
-    """통합 생성 결과"""
+    """통합 생성 결과.
+
+    ``image_data``는 기존 이미지 호출부를 위한 첫 정적/애니메이션 이미지
+    호환 필드다. 새 호출부는 모든 결과가 보존되는 ``artifacts``를 사용한다.
+    """
     success: bool
     image_data: Optional[bytes] = None
     info: Dict = field(default_factory=dict)
     error: Optional[str] = None
+    artifacts: List[MediaArtifact] = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.image_data is not None:
+            return
+        primary = next(
+            (
+                artifact for artifact in self.artifacts
+                if artifact.kind in ("image", "animated")
+                and artifact.data is not None
+            ),
+            None,
+        )
+        if primary is not None:
+            self.image_data = primary.data
 
 
 # progress_callback 타입: (step: int, total_steps: int, preview_bytes: Optional[bytes]) -> None

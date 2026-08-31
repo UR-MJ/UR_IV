@@ -32,6 +32,7 @@ from ui.generator_actions import ActionsMixin
 from ui.generator_gallery import GalleryMixin
 from ui.generator_webui import WebUIMixin
 from ui.generator_search import SearchMixin
+from ui.creator_actions import CreatorActionsMixin
 from widgets.queue_panel import QueuePanel
 from widgets.queue_manager import QueueManager
 from utils.prompt_cleaner import get_prompt_cleaner
@@ -50,7 +51,8 @@ class GeneratorMainUI(
     ActionsMixin,
     GalleryMixin,
     WebUIMixin,
-    SearchMixin
+    SearchMixin,
+    CreatorActionsMixin,
 ):
     _IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.webp', '.bmp')
 
@@ -176,6 +178,11 @@ class GeneratorMainUI(
     def _handle_vue_action(self, action: str, payload: dict):
         """[중요] Vue에서 날아온 모든 액션을 분석하고 백엔드 로직에 주입"""
         print(f"[Bridge] Action Received: {action} | Payload: {json.dumps(payload)[:100]}...")
+
+        # Creator Studio는 별도 deep module에서 처리한다. 이 seam을 먼저
+        # 통과시켜 아래의 거대한 레거시 문자열 라우터를 더 키우지 않는다.
+        if self._handle_creator_action(action, payload):
+            return
         
         try:
             # 1. 워크스페이스 제어

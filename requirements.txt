@@ -27,6 +27,9 @@ Pillow>=11.0.0
 opencv-python>=4.12.0
 numpy>=2.2.0
 
+# Creator 영상/오디오 디코딩 및 Living Comic MP4 출력
+av>=16.0.0
+
 # 파일 시스템
 send2trash>=1.8.3
 

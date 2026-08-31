@@ -8,6 +8,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from backends import get_backend
 from core.error_handler import sanitize_for_ui
+from core.resource_coordinator import get_generation_coordinator
 
 logger = logging.getLogger(__name__)
 
@@ -132,22 +133,25 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
                 self.finished.emit("생성 취소됨", {'cancelled': True})
                 return
 
-            result = backend.txt2img(self.model_name, payload, progress_callback=on_progress)
+            with get_generation_coordinator().reserve(
+                "txt2img", unload_llm=False, timeout=0
+            ):
+                result = backend.txt2img(self.model_name, payload, progress_callback=on_progress)
 
-            # 취소 후 도착한 결과(interrupt의 부분 이미지 포함)는 성공으로 emit하지 않음
-            # — 디스크 저장/히스토리/성공 통계/자동화 계속으로 이어지던 버그 방지
-            if self.is_cancelled:
-                self.finished.emit("생성 취소됨", {'cancelled': True})
-                return
+                # 취소 후 도착한 결과(interrupt의 부분 이미지 포함)는 성공으로 emit하지 않음
+                # — 디스크 저장/히스토리/성공 통계/자동화 계속으로 이어지던 버그 방지
+                if self.is_cancelled:
+                    self.finished.emit("생성 취소됨", {'cancelled': True})
+                    return
 
-            if not result.success:
-                self.finished.emit(result.error, {})
-                return
+                if not result.success:
+                    self.finished.emit(result.error, {})
+                    return
 
-            final_image, pp_errors = _run_postprocess_chain(
-                backend, result.image_data, postprocess_chain,
-                cancelled_cb=lambda: self.is_cancelled,
-            )
+                final_image, pp_errors = _run_postprocess_chain(
+                    backend, result.image_data, postprocess_chain,
+                    cancelled_cb=lambda: self.is_cancelled,
+                )
             if self.is_cancelled:
                 self.finished.emit("생성 취소됨", {'cancelled': True})
                 return
@@ -191,20 +195,23 @@ class Img2ImgFlowWorker(QThread, _CancellableMixin):
                 self.finished.emit("생성 취소됨", {'cancelled': True})
                 return
 
-            result = backend.img2img(self.model_name, payload, progress_callback=on_progress)
+            with get_generation_coordinator().reserve(
+                "img2img", unload_llm=False, timeout=0
+            ):
+                result = backend.img2img(self.model_name, payload, progress_callback=on_progress)
 
-            if self.is_cancelled:
-                self.finished.emit("생성 취소됨", {'cancelled': True})
-                return
+                if self.is_cancelled:
+                    self.finished.emit("생성 취소됨", {'cancelled': True})
+                    return
 
-            if not result.success:
-                self.finished.emit(result.error, {})
-                return
+                if not result.success:
+                    self.finished.emit(result.error, {})
+                    return
 
-            final_image, pp_errors = _run_postprocess_chain(
-                backend, result.image_data, postprocess_chain,
-                cancelled_cb=lambda: self.is_cancelled,
-            )
+                final_image, pp_errors = _run_postprocess_chain(
+                    backend, result.image_data, postprocess_chain,
+                    cancelled_cb=lambda: self.is_cancelled,
+                )
             if self.is_cancelled:
                 self.finished.emit("생성 취소됨", {'cancelled': True})
                 return

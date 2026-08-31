@@ -45,10 +45,20 @@
           @click="viewImage(img)"
           @contextmenu.prevent="showMenu($event, img)"
         >
-          <img :src="thumbnailUrl(img, thumbSize * thumbPixelRatio)" loading="lazy" />
+          <video v-if="isVideo(img)" class="gallery-media" :src="mediaUrl(img)"
+            muted preload="metadata" playsinline />
+          <div v-else-if="isAudio(img)" class="audio-card">
+            <span class="audio-icon">♫</span>
+            <span class="audio-name">{{ filenameOf(img) }}</span>
+            <audio :src="mediaUrl(img)" controls preload="metadata" @click.stop />
+          </div>
+          <img v-else :src="cardImageUrl(img)" loading="lazy" />
+          <span v-if="mediaKind(img) !== 'image' || isAnimated(img)" class="media-kind-badge">
+            {{ mediaLabel(img) }}
+          </span>
           <div class="card-hover-actions">
             <button class="tiny-btn" @click.stop="quickAction('add_favorite', img)">⭐</button>
-            <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)">📋</button>
+            <button v-if="isImage(img)" class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)">📋</button>
           </div>
         </div>
       </div>
@@ -61,9 +71,9 @@
         <p>Loading...</p>
       </div>
       <div v-else-if="images.length === 0" class="empty-placeholder">
-        <div class="icon">🖼️</div>
+        <div class="icon">🎞️</div>
         <h2>GALLERY IS EMPTY</h2>
-        <p>No images found in the current directory</p>
+        <p>No supported media found in the current directory</p>
       </div>
     </section>
 
@@ -75,21 +85,25 @@
             <span class="large-filename">{{ largeView.filename }}</span>
             <div class="large-actions">
               <button class="lv-btn" @click="editFilename">✏️ 이름 변경</button>
-              <button class="lv-btn save" @click="saveExif">💾 EXIF 저장</button>
-              <button class="lv-btn" @click="action('send_to_i2i', { path: largeView.path })">I2I</button>
-              <button class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
-              <button class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn save" @click="saveExif">💾 EXIF 저장</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_i2i', { path: largeView.path })">I2I</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
               <button class="lv-btn" @click="quickAction('add_favorite', largeView.path)">⭐ FAV</button>
-              <button class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
               <button class="lv-close" @click="closeLargeView">✕</button>
             </div>
           </div>
           <div class="large-view-body">
             <div class="large-img-area">
-              <img :src="mediaUrl(largeView.path, true)" />
+              <video v-if="isVideo(largeView.path)" :src="mediaUrl(largeView.path)" controls autoplay playsinline />
+              <audio v-else-if="isAudio(largeView.path)" :src="mediaUrl(largeView.path)" controls autoplay />
+              <img v-else :src="mediaUrl(largeView.path, true)" />
             </div>
             <div class="large-exif">
+              <div class="meta-row"><span>TYPE</span><p>{{ largeView.mediaType || mediaLabel(largeView.path) }}</p></div>
               <div class="meta-row"><span>SIZE</span><p>{{ largeView.size }}</p></div>
+              <div class="meta-row path-row"><span>PATH</span><p>{{ largeView.path }}</p></div>
               <div v-if="largeView.prompt" class="meta-block">
                 <label>PROMPT</label>
                 <div class="code-box editable" contenteditable @blur="onExifEdit($event, 'prompt')">{{ largeView.prompt }}</div>
@@ -118,12 +132,18 @@
         <div class="exif-close" @click="exifData = null">➔</div>
         <div class="exif-content">
           <div class="exif-preview" @click="largeView = exifData">
-            <img :src="mediaUrl(exifData.path)" />
+            <video v-if="isVideo(exifData.path)" :src="mediaUrl(exifData.path)" muted preload="metadata" playsinline />
+            <div v-else-if="isAudio(exifData.path)" class="sidebar-audio-preview">
+              <span>♫</span>
+              <audio :src="mediaUrl(exifData.path)" controls preload="metadata" @click.stop />
+            </div>
+            <img v-else :src="mediaUrl(exifData.path)" />
             <div class="click-hint">클릭하여 확대</div>
           </div>
           <div class="exif-meta">
             <h3>METADATA</h3>
             <div class="meta-row"><span>FILE</span><p>{{ exifData.filename }}</p></div>
+            <div class="meta-row"><span>TYPE</span><p>{{ exifData.mediaType || mediaLabel(exifData.path) }}</p></div>
             <div class="meta-row"><span>SIZE</span><p>{{ exifData.size }}</p></div>
 
             <div v-if="exifData.prompt" class="meta-block">
@@ -150,7 +170,7 @@
               <div class="code-box params">{{ sidebarParams }}</div>
             </div>
           </div>
-          <div class="exif-footer">
+          <div v-if="isImage(exifData.path)" class="exif-footer">
             <button class="main-apply-btn" @click="sendExifToT2I">USE PROMPT IN T2I</button>
             <div class="grid-2 mt-8">
               <button class="mini-action" @click="action('send_to_i2i', { path: exifData.path })">I2I</button>
@@ -165,13 +185,13 @@
     <transition name="pop">
       <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
         <div class="ctx-item" @click="ctx('add_favorite')">⭐ ADD TO FAVORITES</div>
-        <div class="ctx-item" @click="ctx('gallery_load_exif')">📋 INSPECT EXIF</div>
-        <div class="ctx-item" @click="ctx('send_to_i2i')">🖼️ SEND TO I2I</div>
-        <div class="ctx-item" @click="ctx('send_to_inpaint')">🎨 SEND TO INPAINT</div>
-        <div class="ctx-item" @click="ctx('send_to_editor')">✏️ SEND TO EDITOR</div>
-        <div class="ctx-item" @click="sendToCompare('before')">🔍 COMPARE (BEFORE)</div>
-        <div class="ctx-item" @click="sendToCompare('after')">🔍 COMPARE (AFTER)</div>
-        <div class="ctx-item" @click="ctxAdetailer">🎯 ADETAILER</div>
+        <div class="ctx-item" @click="ctx('gallery_load_exif')">📋 INSPECT MEDIA</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_i2i')">🖼️ SEND TO I2I</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_inpaint')">🎨 SEND TO INPAINT</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_editor')">✏️ SEND TO EDITOR</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('before')">🔍 COMPARE (BEFORE)</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('after')">🔍 COMPARE (AFTER)</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctxAdetailer">🎯 ADETAILER</div>
         <div class="ctx-separator"></div>
         <div class="ctx-item delete" @click="ctx('delete_image')">🗑️ DELETE FOREVER</div>
       </div>
@@ -180,7 +200,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onActivated, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import { mediaUrl, thumbnailUrl } from '../utils/media.js'
@@ -199,6 +219,7 @@ interface ExifParams {
 interface ExifData {
   path: string
   filename: string
+  mediaType?: string
   size?: string
   prompt?: string
   negative?: string
@@ -220,6 +241,40 @@ interface CacheEntry {
 const images = ref<string[]>([])
 const currentFolder = ref('')
 const visibleCount = ref(40)
+
+type MediaKind = 'image' | 'video' | 'audio'
+const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'mkv', 'm4v', 'avi', 'ogv'])
+const AUDIO_EXTENSIONS = new Set(['wav', 'mp3', 'ogg', 'flac', 'm4a', 'aac', 'opus'])
+const ANIMATED_EXTENSIONS = new Set(['gif', 'apng', 'webp'])
+
+function mediaExtension(path: string): string {
+  const clean = String(path || '').split(/[?#]/, 1)[0]
+  const filename = clean.replace(/\\/g, '/').split('/').pop() || ''
+  const dot = filename.lastIndexOf('.')
+  return dot >= 0 ? filename.slice(dot + 1).toLowerCase() : ''
+}
+
+function mediaKind(path: string): MediaKind {
+  const ext = mediaExtension(path)
+  if (VIDEO_EXTENSIONS.has(ext)) return 'video'
+  if (AUDIO_EXTENSIONS.has(ext)) return 'audio'
+  return 'image'
+}
+
+const isVideo = (path: string) => mediaKind(path) === 'video'
+const isAudio = (path: string) => mediaKind(path) === 'audio'
+const isImage = (path: string) => mediaKind(path) === 'image'
+const isAnimated = (path: string) => ANIMATED_EXTENSIONS.has(mediaExtension(path))
+const filenameOf = (path: string) => String(path || '').replace(/\\/g, '/').split('/').pop() || path
+const mediaLabel = (path: string) => {
+  const kind = mediaKind(path)
+  if (kind === 'video') return 'VIDEO'
+  if (kind === 'audio') return 'AUDIO'
+  return isAnimated(path) ? 'ANIMATED' : 'IMAGE'
+}
+const cardImageUrl = (path: string) => isAnimated(path)
+  ? mediaUrl(path)
+  : thumbnailUrl(path, thumbSize.value * thumbPixelRatio)
 
 // 썸네일 크기 — localStorage 영속, 100~380px
 const thumbSize = ref(parseInt(window.localStorage.getItem('gallery_thumb_size') || '200'))
@@ -260,7 +315,11 @@ async function runExifSearch() {
   exifSearching.value = true
 
   const backend: any = await getBackend()
-  const toCheck = images.value.filter(img => !(img in exifCache.value))
+  // 비이미지는 Pillow EXIF 슬롯에 보내지 않는다. 파일명/미디어 유형만 검색한다.
+  for (const media of images.value.filter(img => !isImage(img))) {
+    exifCache.value[media] = `${filenameOf(media)} ${mediaLabel(media)}`.toLowerCase()
+  }
+  const toCheck = images.value.filter(img => isImage(img) && !(img in exifCache.value))
 
   // 캐시에 없는 이미지의 EXIF 로드
   let loaded = 0
@@ -418,21 +477,41 @@ function closeLargeView() {
 
 const openFolder = () => requestAction('gallery_open_folder')
 const viewImage = async (path: string) => {
+  const basic: ExifData = {
+    path,
+    filename: filenameOf(path),
+    mediaType: mediaLabel(path),
+    size: '—',
+  }
+  if (!isImage(path)) {
+    largeView.value = basic
+    exifData.value = basic
+    return
+  }
   const backend: any = await getBackend()
-  if (backend.getImageExif) backend.getImageExif(path, (json: string) => {
+  if (!backend.getImageExif) {
+    largeView.value = basic
+    exifData.value = basic
+    return
+  }
+  backend.getImageExif(path, (json: string) => {
     try {
       const d = JSON.parse(json)
-      largeView.value = d  // 확대 뷰
-      exifData.value = d   // 사이드바 데이터 (showMetadata로 표시 여부 제어)
-    } catch {}
+      const data = d?.error ? basic : { ...basic, ...d, mediaType: basic.mediaType }
+      largeView.value = data  // 확대 뷰
+      exifData.value = data   // 사이드바 데이터 (showMetadata로 표시 여부 제어)
+    } catch {
+      largeView.value = basic
+      exifData.value = basic
+    }
   })
 }
 
 function showMenu(e: MouseEvent, path: string) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
 function ctx(actionName: string) {
   const path = ctxMenu.value.path
-  requestAction(actionName, { path })
   if (actionName === 'gallery_load_exif') viewImage(path)
+  else requestAction(actionName, { path })
   // 삭제 시 즉시 목록에서 제거 (스크롤 유지)
   if (actionName === 'delete_image') {
     images.value = images.value.filter(img => img !== path)
@@ -469,6 +548,7 @@ onMounted(async () => {
   }
   _galleryFolderUnsub = onBackendEvent('galleryFolderLoaded', (f: string) => { currentFolder.value = f; visibleCount.value = 40; loadImages(true) })
 })
+onActivated(() => loadImages(true))
 // onBackendEvent disconnect 핸들 — unmount 시 정리
 let _galleryFolderUnsub: (() => void) | null = null
 let _galleryImagesUnsub: (() => void) | null = null
@@ -534,9 +614,15 @@ onUnmounted(() => {
   overflow: hidden; border: 1px solid var(--border); position: relative;
   cursor: pointer; transition: var(--transition); background: var(--bg-card);
 }
-.gallery-card img { width: 100%; display: block; transition: var(--transition); }
+.gallery-card img, .gallery-card > video { width: 100%; display: block; transition: var(--transition); }
+.gallery-card > video { min-height: 120px; max-height: 320px; object-fit: contain; background: #050505; }
 .gallery-card:hover { transform: translateY(-4px); border-color: var(--text-muted); }
-.gallery-card:hover img { filter: brightness(0.7); }
+.gallery-card:hover img, .gallery-card:hover > video { filter: brightness(0.7); }
+.audio-card { min-height: 128px; padding: 20px 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(145deg, #151b22, #0b0d11); }
+.audio-icon { font-size: 34px; color: var(--accent); }
+.audio-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 10px; color: var(--text-muted); }
+.audio-card audio { width: 100%; height: 32px; }
+.media-kind-badge { position: absolute; left: 8px; top: 8px; padding: 3px 7px; border-radius: 999px; background: rgba(0,0,0,0.72); color: #fff; font-size: 8px; font-weight: 900; letter-spacing: 0.8px; pointer-events: none; }
 
 .card-hover-actions {
   position: absolute; top: 10px; right: 10px; display: flex; gap: 6px;
@@ -557,13 +643,17 @@ onUnmounted(() => {
 
 .exif-content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
 .exif-preview { width: 100%; aspect-ratio: 1; overflow: hidden; }
-.exif-preview img { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.exif-preview img, .exif-preview video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.sidebar-audio-preview { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: #07090c; color: var(--accent); font-size: 42px; }
+.sidebar-audio-preview audio { width: 85%; }
 
 .exif-meta { padding: 24px; }
 .exif-meta h3 { font-size: 12px; letter-spacing: 4px; color: var(--text-muted); margin-bottom: 20px; }
 .meta-row { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .meta-row span { font-size: 10px; font-weight: 900; color: var(--text-muted); }
 .meta-row p { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.meta-row.path-row { align-items: flex-start; }
+.meta-row.path-row p { max-width: 250px; word-break: break-all; text-align: right; font-size: 10px; }
 
 .meta-block label { font-size: 10px; font-weight: 900; color: var(--accent); margin-bottom: 8px; }
 .code-box { background: var(--bg-input); padding: 12px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 11px; line-height: 1.6; color: var(--text-secondary); word-break: break-all; }
@@ -596,7 +686,8 @@ onUnmounted(() => {
 .lv-close { background: none; border: none; color: #f87171; font-size: 18px; cursor: pointer; padding: 0 8px; }
 .large-view-body { flex: 1; display: flex; overflow: hidden; }
 .large-img-area { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; padding: 16px; }
-.large-img-area img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.large-img-area img, .large-img-area video { max-width: 100%; max-height: 100%; object-fit: contain; }
+.large-img-area audio { width: min(620px, 90%); }
 .large-exif { width: 340px; overflow-y: auto; padding: 16px; border-left: 1px solid var(--border); }
 .code-box.params { color: #94a3b8; font-size: 10px; }
 .code-box.editable { cursor: text; border: 1px solid transparent; }

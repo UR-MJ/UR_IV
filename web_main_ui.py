@@ -136,6 +136,8 @@ _WEB_SIGNALS = frozenset({
     "automationStatus", "automationSettingsLoaded", "instantWildcardsList",
     "promptOrderLoaded", "workflowProfilesList", "widgetValueChanged",
     "widgetPropertyChanged", "batchUpdate", "tabChanged", "vramUpdated",
+    "creatorStateChanged", "creatorProgress", "creatorResult",
+    "creatorMediaSelected", "comicStoryboardReady", "comicDocumentChanged",
     # SAM3 Refine (sam-extra 워크플로 2) + 임베드 LoRA Manager (워크플로 4)
     "refineResult", "loraManagerUrlReady",
 })

@@ -15,6 +15,7 @@ const PngInfoView = () => import('./views/PngInfoView.vue')
 const FavoritesView = () => import('./views/FavoritesView.vue')
 const SettingsView = () => import('./views/SettingsView.vue')
 const EditorView = () => import('./views/EditorView.vue')
+const CreatorStudioView = () => import('./views/CreatorStudioView.vue')
 
 const routes = [
   { path: '/', name: 't2i', component: ImageViewer, meta: { title: 'T2I' } },
@@ -29,6 +30,7 @@ const routes = [
   { path: '/fav', name: 'fav', component: FavoritesView, meta: { title: 'Favorites' } },
   { path: '/settings', name: 'settings', component: SettingsView, meta: { title: 'Settings' } },
   { path: '/editor', name: 'editor', component: EditorView, meta: { title: 'Editor' } },
+  { path: '/creator', name: 'creator', component: CreatorStudioView, meta: { title: 'Creator' } },
 ]
 
 const router = createRouter({
