@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard', 'Inter', system-ui, sans-serif; }
+    a { color: #E2B340; } a:hover { color: #FACC15; }
+    .lbl { color: #8A8A8A; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+    .chip { height: 30px; border-radius: 8px; background: #1E1E1E; border: 1px solid #363636; color: #B8B8B8; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 5px; }
+    .chip.on { background: rgba(250,204,21,.1); border-color: #FACC15; color: #FACC15; }
+    .fld { height: 34px; background: #181818; border: 1px solid #363636; border-radius: 8px; }
+  </style>
+</helmet>
+
+<div style="width: 1180px; height: 700px; background: #050505; color: #E8E8E8; display: flex; flex-direction: column; overflow: hidden;">
+  <div style="height: 36px; display: flex; align-items: center; gap: 18px; padding: 0 16px; background: #0D0D0D; border-bottom: 1px solid #363636; font-size: 12px; color: #8A8A8A; flex-shrink: 0;">
+    <span style="color: #050505; background: #FACC15; padding: 4px 12px; border-radius: 999px; font-weight: 700;">Inpaint</span>
+    <span>T2I</span><span>I2I</span><span>Event Gen</span><span>Search</span><span>Gallery</span>
+  </div>
+
+  <div style="flex: 1; display: flex; min-height: 0;">
+    <!-- 프롬프트 패널 280 -->
+    <div style="width: 280px; flex-shrink: 0; background: #0D0D0D; border-right: 1px solid #2E2E2E; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+      <div class="lbl">FINAL OUTPUT PROMPT</div>
+      <div style="height: 54px; background: #181818; border: 1px solid #363636; border-radius: 8px;"></div>
+      <div style="display: flex; gap: 6px;">
+        <div class="chip" style="flex:1">OPTIMIZE</div><div class="chip" style="flex:1">분류</div>
+      </div>
+      <div style="color:#f87171; font-size:12px; font-weight:700;">NEGATIVE</div>
+      <div class="lbl" style="margin-top:4px">CHARACTER &amp; MODEL</div>
+      <div class="fld"></div><div class="fld"></div><div class="fld"></div><div class="fld"></div>
+      <div style="flex:1"></div>
+      <div style="height: 42px; background: #FACC15; border-radius: 8px; color: #000; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center;">GENERATE IMAGE</div>
+    </div>
+
+    <!-- 인페인트 컨트롤 열 — 좁다 -->
+    <div style="width: 172px; flex-shrink: 0; background: #0D0D0D; border-right: 1px solid #2E2E2E; padding: 10px; display: flex; flex-direction: column; gap: 10px; position: relative;">
+      <div class="lbl">Source Image</div>
+      <div style="height: 74px; border: 1px dashed #363636; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #585858; font-size: 11px;">DROP OR CLICK</div>
+      <div class="lbl">Selection Tool</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+        <div class="chip">RECT</div><div class="chip">LASSO</div>
+        <div class="chip on">BRUSH</div><div class="chip">ERASER</div>
+      </div>
+      <div class="lbl">Brush Size</div>
+      <div style="height: 4px; background: #2A2A2A; border-radius: 2px; position: relative;"><div style="position:absolute;left:0;top:0;height:4px;width:35%;background:#E2B340;border-radius:2px"></div></div>
+      <div class="lbl">Denoising</div>
+      <div style="height: 4px; background: #2A2A2A; border-radius: 2px; position: relative;"><div style="position:absolute;left:0;top:0;height:4px;width:75%;background:#E2B340;border-radius:2px"></div></div>
+      <div class="lbl">Override Prompt</div>
+      <div style="height: 54px; background: #181818; border: 1px solid #363636; border-radius: 8px;"></div>
+      <div class="lbl">Mask Settings</div>
+      <div class="fld"></div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px;">
+        <div class="chip" style="font-size:11px">CLEAR</div><div class="chip" style="font-size:11px">UNDO</div><div class="chip" style="font-size:11px">REDO</div>
+      </div>
+      <div style="height: 38px; background: #E2B340; border-radius: 8px; color: #000; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;">START INPAINTING</div>
+    </div>
+
+    <!-- 캔버스 -->
+    <div style="flex: 1; background: #111; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: #585858;">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#585858" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4.5-1L19 8.5 15.5 5 5 15.5z"/><path d="M14.5 6l3.5 3.5"/></svg>
+      <div style="font-size: 20px; letter-spacing: 3px; color: #787878;">MASK EDITOR</div>
+      <div style="font-size: 12px;">Drop image or click to start</div>
+    </div>
+
+    <div style="width: 138px; flex-shrink: 0; background: #0D0D0D; border-left: 1px solid #2E2E2E; padding: 10px;">
+      <div class="lbl">HISTORY</div>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 292px; top: 60px; display: flex; flex-direction: column; gap: 6px;">
+    <div style="background: rgba(248,113,113,.12); border: 1px solid #f87171; border-radius: 6px; padding: 6px 10px; color: #f87171; font-size: 12px; font-weight: 700;">가운데 열이 172px — 서로 다른 6가지가 한 줄에 쌓여 있다</div>
+    <div style="background: rgba(248,113,113,.12); border: 1px solid #f87171; border-radius: 6px; padding: 6px 10px; color: #f87171; font-size: 12px; font-weight: 700;">도구·이미지·값·실행이 위계 없이 섞임</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

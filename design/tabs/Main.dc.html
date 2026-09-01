@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard', 'Inter', system-ui, sans-serif; }
+    a { color: #E2B340; } a:hover { color: #FACC15; }
+    .tab { padding: 6px 12px; border-radius: 999px; color: #8A8A8A; font-size: 12px; white-space: nowrap; }
+    .tab.on { background: #FACC15; color: #050505; font-weight: 700; }
+    .cap { color: #8A8A8A; font-size: 12px; }
+    .note { color: #B8B8B8; font-size: 12px; line-height: 1.6; }
+  </style>
+</helmet>
+
+<div style="width: 1180px; height: 700px; background: #050505; color: #E8E8E8; padding: 24px; overflow: hidden; display: flex; flex-direction: column; gap: 20px;">
+
+  <div>
+    <div style="font-size: 17px; font-weight: 600; margin-bottom: 4px;">상단 네비게이션 — 탭 13개</div>
+    <div class="note" style="max-width: 900px;">
+      모든 화면 위에 늘 떠 있다. 지금은 13개가 한 줄에 평면으로 놓여 있어 자주 쓰는 것과
+      가끔 쓰는 것이 같은 무게다. 창을 좁히면 줄바꿈되거나 잘린다.
+    </div>
+  </div>
+
+  <!-- 현재 -->
+  <div>
+    <div class="cap" style="margin-bottom: 6px;">현재</div>
+    <div style="background: #0D0D0D; border: 1px solid #2E2E2E; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+      <span class="tab on">T2I</span><span class="tab">I2I</span><span class="tab">Inpaint</span>
+      <span class="tab">Event Gen</span><span class="tab">Search</span><span class="tab">Batch / Upscale</span>
+      <span class="tab">Gallery</span><span class="tab">XYZ Plot</span><span class="tab">PNG Info</span>
+      <span class="tab">Favorites</span><span class="tab">Settings</span><span class="tab">Editor</span><span class="tab">Creator</span>
+    </div>
+  </div>
+
+  <!-- A안 -->
+  <div>
+    <div class="cap" style="margin-bottom: 6px;">A안 — 하는 일로 묶고 구분선을 넣는다 (탭 수는 그대로)</div>
+    <div style="background: #0D0D0D; border: 1px solid #2E2E2E; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+      <span style="color:#585858;font-size:11px;font-weight:700;letter-spacing:.5px;padding:0 6px 0 2px">만들기</span>
+      <span class="tab on">T2I</span><span class="tab">I2I</span><span class="tab">Inpaint</span><span class="tab">Event Gen</span><span class="tab">Creator</span>
+      <span style="width:1px;height:20px;background:#2E2E2E;margin:0 8px"></span>
+      <span style="color:#585858;font-size:11px;font-weight:700;letter-spacing:.5px;padding:0 6px 0 2px">고치기</span>
+      <span class="tab">Editor</span><span class="tab">Batch / Upscale</span><span class="tab">XYZ Plot</span>
+      <span style="width:1px;height:20px;background:#2E2E2E;margin:0 8px"></span>
+      <span style="color:#585858;font-size:11px;font-weight:700;letter-spacing:.5px;padding:0 6px 0 2px">찾기</span>
+      <span class="tab">Gallery</span><span class="tab">Favorites</span><span class="tab">Search</span><span class="tab">PNG Info</span>
+      <span style="flex:1"></span>
+      <span class="tab" style="border:1px solid #2E2E2E">Settings</span>
+    </div>
+    <div class="note" style="margin-top: 6px;">한 번도 숨기지 않는다 — 위치를 외운 손이 안 헤맨다. 대신 폭을 더 먹는다.</div>
+  </div>
+
+  <!-- B안 -->
+  <div>
+    <div class="cap" style="margin-bottom: 6px;">B안 — 자주 쓰는 것만 남기고 나머지는 더보기로</div>
+    <div style="background: #0D0D0D; border: 1px solid #2E2E2E; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 4px;">
+      <span class="tab on">T2I</span><span class="tab">I2I</span><span class="tab">Inpaint</span>
+      <span class="tab">Editor</span><span class="tab">Gallery</span><span class="tab">Search</span>
+      <span style="width:1px;height:20px;background:#2E2E2E;margin:0 8px"></span>
+      <span class="tab" style="border:1px solid #2E2E2E;display:inline-flex;align-items:center;gap:6px">
+        더보기
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></svg>
+      </span>
+      <span style="flex:1"></span>
+      <span class="tab" style="border:1px solid #2E2E2E">Settings</span>
+    </div>
+    <div class="note" style="margin-top: 6px;">
+      줄이 짧아지고 좁은 창에서도 안 깨진다. 대신 Event Gen · Batch · XYZ · PNG Info ·
+      Favorites · Creator 가 한 번 더 눌러야 나온다 — 무엇을 자주 쓰는지 정해야 성립한다.
+    </div>
+  </div>
+
+  <!-- C안 -->
+  <div>
+    <div class="cap" style="margin-bottom: 6px;">C안 — 그대로 둔다 (이번 정리로 글자·간격만 맞춤)</div>
+    <div style="background: #0D0D0D; border: 1px solid #2E2E2E; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+      <span class="tab on">T2I</span><span class="tab">I2I</span><span class="tab">Inpaint</span>
+      <span class="tab">Event Gen</span><span class="tab">Search</span><span class="tab">Batch / Upscale</span>
+      <span class="tab">Gallery</span><span class="tab">XYZ Plot</span><span class="tab">PNG Info</span>
+      <span class="tab">Favorites</span><span class="tab">Settings</span><span class="tab">Editor</span><span class="tab">Creator</span>
+    </div>
+    <div class="note" style="margin-top: 6px;">
+      13개가 1280px 에 들어가기는 한다. 손에 익은 위치가 안 바뀌는 게 가장 큰 장점이고,
+      바꾸지 않는 것도 선택지다.
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
