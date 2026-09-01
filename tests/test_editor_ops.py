@@ -325,5 +325,60 @@ class TestFlatten(unittest.TestCase):
         self.assertEqual(out.shape[:2], (64, 48))
 
 
+@unittest.skipUnless(_HAS_CV2, 'cv2 필요')
+class HealTests(unittest.TestCase):
+    """복원 브러시 — 칠한 자리를 주변 픽셀로 메운다.
+
+    프론트는 마스크를 PNG 로 보낸다. `cv2.inpaint` 는 8UC1 만 받으므로 채널을
+    줄이는 단계가 필요하고, 그걸 빼먹으면 조용히 예외가 나 '무반응'이 된다.
+    """
+
+    def _blot(self):
+        """가운데에 튀는 얼룩을 넣은 이미지와 그 자리를 가리키는 마스크."""
+        img = _sample_bgr(48, 48)
+        img[20:28, 20:28] = (0, 0, 255)
+        mask = np.zeros((48, 48), dtype=np.uint8)
+        mask[20:28, 20:28] = 255
+        return img, mask
+
+    def test_marked_area_changes_and_rest_does_not(self):
+        img, mask = self._blot()
+        out = editor_ops.heal(img, mask, radius=3)
+        self.assertFalse(np.array_equal(out[20:28, 20:28], img[20:28, 20:28]),
+                         '칠한 자리가 그대로다 — inpaint 가 돌지 않았다')
+        np.testing.assert_array_equal(out[:15, :15], img[:15, :15])
+
+    def test_png_shaped_mask_is_reduced_to_one_channel(self):
+        """프론트가 보내는 것은 3~4채널 PNG 다. 그대로 넘기면 cv2 가 거부한다."""
+        img, mask = self._blot()
+        gray = editor_ops.heal(img, mask)
+        for channels in (3, 4):
+            stacked = np.dstack([mask] * channels)
+            if channels == 4:
+                stacked[:, :, 3] = 255
+            np.testing.assert_array_equal(editor_ops.heal(img, stacked), gray)
+
+    def test_mask_of_different_size_is_matched_without_interpolation(self):
+        """보간으로 줄이면 마스크 가장자리에 중간값이 생겨 칠하지 않은 곳까지 지운다."""
+        img = _sample_bgr(48, 48)
+        mask = np.zeros((24, 24), dtype=np.uint8)
+        mask[10:14, 10:14] = 255
+        out = editor_ops.heal(img, mask)
+        self.assertEqual(out.shape, img.shape)
+        np.testing.assert_array_equal(out[:8, :8], img[:8, :8])
+
+    def test_empty_mask_returns_original(self):
+        img = _sample_bgr(32, 32)
+        np.testing.assert_array_equal(editor_ops.heal(img, np.zeros((32, 32), np.uint8)), img)
+        np.testing.assert_array_equal(editor_ops.heal(img, None), img)
+
+    def test_alpha_is_preserved(self):
+        img, mask = self._blot()
+        rgba = np.dstack([img, np.full((48, 48), 123, dtype=np.uint8)])
+        out = editor_ops.heal(rgba, mask)
+        self.assertEqual(out.shape[2], 4)
+        self.assertTrue(np.all(out[:, :, 3] == 123))
+
+
 if __name__ == '__main__':
     unittest.main()

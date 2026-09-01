@@ -6,7 +6,23 @@
     @dblclick="onDblClick"
   >
     <canvas ref="canvasEl" :style="canvasStyle" />
+    <canvas ref="drawCanvasEl" :style="drawLayerStyle" class="draw-layer" />
     <canvas ref="maskCanvasEl" :style="canvasStyle" class="mask-overlay" />
+
+    <!-- 텍스트 도구: 클릭한 자리에서 바로 입력받는다. 별도 다이얼로그를 띄우면
+         어디에 찍힐지 보이지 않아 위치를 짐작해야 한다. -->
+    <div v-if="textAnchor" class="text-entry" :style="textEntryStyle">
+      <input
+        ref="textInputEl"
+        v-model="textDraft"
+        class="text-entry-input"
+        placeholder="텍스트 입력 후 Enter"
+        @keydown.enter.stop.prevent="confirmText"
+        @keydown.esc.stop.prevent="dismissText"
+        @blur="confirmText"
+      />
+    </div>
+
     <div class="canvas-info">
       {{ imgWidth }} × {{ imgHeight }}
       <template v-if="hasMask"> | 마스크 활성</template>
@@ -16,7 +32,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useDrawLayer, type DrawParams } from '../../composables/useDrawLayer'
+import { isDrawTool } from '../../utils/drawTools'
 
 interface Point { x: number; y: number }
 interface SelectionBounds { x: number; y: number; w: number; h: number }
@@ -33,6 +51,10 @@ const props = withDefaults(defineProps<{
   barHeight?: number
   magneticLasso?: boolean
   snapRadius?: number
+  /** DrawPanel 이 보내는 그리기 파라미터 (도구·색·크기·투명도·채우기) */
+  drawParams?: DrawParams
+  /** 드로잉 레이어 표시 투명도 0~100. 병합 전까지는 화면에만 반영된다. */
+  layerOpacity?: number
 }>(), {
   imageSrc: '',
   tool: 'box',
@@ -45,6 +67,10 @@ const props = withDefaults(defineProps<{
   barHeight: 15,
   magneticLasso: false,
   snapRadius: 12,
+  drawParams: () => ({
+    tool: 'pen', color: '#000000', size: 3, opacity: 1, filled: false, gradientEnd: '#000000',
+  }),
+  layerOpacity: 100,
 })
 
 const emit = defineEmits<{
@@ -52,11 +78,16 @@ const emit = defineEmits<{
   'mask-changed': [arg: any]
   // 모자이크 지우개 스트로크가 끝났다 — 부모가 백엔드에 커밋해야 파일에 반영된다
   'restore-ready': []
+  // 스포이트가 집은 색 — 부모가 DrawPanel 의 현재 색으로 되돌려 준다
+  'color-picked': [hex: string]
 }>()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
+const drawCanvasEl = ref<HTMLCanvasElement | null>(null)
 const maskCanvasEl = ref<HTMLCanvasElement | null>(null)
+const textInputEl = ref<HTMLInputElement | null>(null)
+const textDraft = ref('')
 const imgWidth = ref(0)
 const imgHeight = ref(0)
 const zoom = ref(1)
@@ -155,6 +186,74 @@ const canvasStyle = computed(() => {
     cursor,
   }
 })
+
+// ── 드로잉 레이어 ──────────────────────────────────────────────────────────
+// 원본 위에 겹치는 별도 캔버스. 병합(flatten)하기 전까지 원본 픽셀은 그대로다.
+const drawLayer = useDrawLayer({
+  baseCanvas: () => canvasEl.value,
+  visibleCanvas: () => drawCanvasEl.value,
+  params: () => props.drawParams,
+  onColorPicked: (hex) => emit('color-picked', hex),
+})
+const { textAnchor } = drawLayer
+
+const drawLayerStyle = computed(() => ({
+  ...canvasStyle.value,
+  opacity: String(Math.max(0, Math.min(100, props.layerOpacity)) / 100),
+  // 포인터는 컨테이너가 받는다 — 레이어가 가로채면 마스크 도구가 죽는다
+  pointerEvents: 'none' as const,
+}))
+
+/** 이미지 좌표 → 컨테이너 안의 화면 좌표. `getImagePos` 의 역변환. */
+function imageToContainer(x: number, y: number): Point {
+  const c = canvasEl.value
+  const container = containerRef.value
+  if (!c || !container) return { x: 0, y: 0 }
+  const rect = c.getBoundingClientRect()
+  const box = container.getBoundingClientRect()
+  const baseScale = (c.clientWidth || 1) / (c.width || 1)
+  const total = baseScale * (zoom.value || 1)
+  const lx = x - c.width / 2
+  const ly = y - c.height / 2
+  const phi = rotation.value * Math.PI / 180
+  const cos = Math.cos(phi), sin = Math.sin(phi)
+  const sx = (lx * cos - ly * sin) * total
+  const sy = (lx * sin + ly * cos) * total
+  return {
+    x: rect.left + rect.width / 2 + sx - box.left,
+    y: rect.top + rect.height / 2 + sy - box.top,
+  }
+}
+
+const textEntryStyle = computed(() => {
+  const anchor = textAnchor.value
+  if (!anchor) return { display: 'none' }
+  const p = imageToContainer(anchor.x, anchor.y)
+  return { left: `${Math.round(p.x)}px`, top: `${Math.round(p.y)}px` }
+})
+
+watch(textAnchor, (anchor) => {
+  if (anchor) textDraft.value = ''
+})
+
+/** 텍스트 입력칸에 포커스를 준다. 호출 시점이 중요해서 함수로 뺐다 — 아래 설명 참고. */
+function focusTextEntry() {
+  nextTick(() => textInputEl.value?.focus())
+}
+
+function confirmText() {
+  if (!textAnchor.value) return
+  drawLayer.commitText(textDraft.value)
+  textDraft.value = ''
+}
+
+function dismissText() {
+  drawLayer.cancelText()
+  textDraft.value = ''
+}
+
+// 레이어 투명도는 CSS 로만 반영한다 — 픽셀을 다시 그릴 필요가 없다.
+watch(() => props.layerOpacity, () => drawLayer.render())
 
 // ── 이미지 로드 (zoom/rotation 보존 옵션) ──
 function loadNewImage(src: string, preserveTransform = false) {
@@ -388,6 +487,14 @@ function drawAll() {
     maskImageData = null
     markDirtyAll()
     flushMaskOverlay()
+  }
+  // 이미지 크기가 바뀌면 레이어도 다시 잡는다. 크기가 같으면 그린 것을 지키기 위해
+  // 건드리지 않는다 — 색보정 프리뷰도 여기를 지나가기 때문이다.
+  if (drawCanvasEl.value
+      && (drawCanvasEl.value.width !== c.width || drawCanvasEl.value.height !== c.height)) {
+    drawLayer.resize(c.width, c.height)
+  } else {
+    drawLayer.render()
   }
 }
 
@@ -681,10 +788,19 @@ function onMouseDown(e: PointerEvent) {
   // pointerleave 가 떠서 스트로크가 그 자리에서 끊겼다
   try { (e.currentTarget as Element)?.setPointerCapture?.(e.pointerId) } catch {}
 
-  if (e.altKey || e.button === 1) {
+  // 알트+드래그는 화면 이동이지만, 클론 스탬프는 알트+클릭으로 복제 원점을 잡는다.
+  // 그리기 도구를 쓰는 동안에는 도구가 먼저다 (가운데 버튼 이동은 그대로 둔다).
+  if ((e.altKey && !isDrawTool(props.tool)) || e.button === 1) {
     panning = true
     panStartX = e.clientX - panX.value
     panStartY = e.clientY - panY.value
+    return
+  }
+
+  // ── 드로잉 레이어 도구 ──
+  if (isDrawTool(props.tool) && e.button === 0) {
+    const pos = getImagePos(e)
+    drawLayer.begin(pos.x, pos.y, e)
     return
   }
   // 원근 보정 모드 — 꼭짓점만 잡고 마스킹은 하지 않는다
@@ -768,6 +884,13 @@ function onMouseMoveWrap(e: PointerEvent) {
 }
 
 function onMouseMove(e: PointerEvent) {
+  // 그리기 도구가 잡고 있는 동안에는 마스크/선택 처리로 내려보내지 않는다.
+  // (가운데 버튼 화면 이동은 위에서 이미 panning 을 세웠으므로 그대로 통과한다)
+  if (!panning && isDrawTool(props.tool)) {
+    const pos = getImagePos(e)
+    drawLayer.move(pos.x, pos.y)
+    return
+  }
   if (panning) {
     panX.value = e.clientX - panStartX
     panY.value = e.clientY - panStartY
@@ -843,6 +966,13 @@ function onMouseMove(e: PointerEvent) {
 function onMouseUp(e: PointerEvent) {
   try { (e.currentTarget as Element)?.releasePointerCapture?.(e.pointerId) } catch {}
   if (panning) { panning = false; return }
+  if (isDrawTool(props.tool)) {
+    drawLayer.end()
+    // 텍스트 입력칸 포커스는 포인터 조작이 **끝난 뒤**에 준다. pointerdown 직후에 주면
+    // 이어지는 pointerup 이 포커스를 body 로 걷어가고, 그 blur 가 입력칸을 즉시 닫는다.
+    if (textAnchor.value) focusTextEntry()
+    return
+  }
   if (perspectiveActive) {
     drawing = false
     perspectiveDragIdx = -1
@@ -1325,6 +1455,15 @@ defineExpose({
   beginMove, endMove, cancelMove,
   // 원근 보정
   beginPerspective, endPerspective, cancelPerspective,
+  // 드로잉 레이어 — 병합·복원 브러시·되돌리기
+  getDrawOverlayBase64: drawLayer.getOverlayBase64,
+  getHealMaskBase64: drawLayer.getHealMaskBase64,
+  clearDrawLayer: drawLayer.clear,
+  clearHealMask: drawLayer.clearHeal,
+  undoDrawStroke: drawLayer.undo,
+  drawUndoCount: drawLayer.undoCount,
+  hasDrawContent: drawLayer.hasContent,
+  hasHealMask: drawLayer.hasHeal,
 })
 
 onMounted(() => {
@@ -1347,6 +1486,23 @@ onBeforeUnmount(() => {
    baseScale(=clientWidth/width)이 실측값을 읽으므로 좌표 변환은 그대로 성립한다. */
 canvas { max-width: 100%; max-height: 100%; position: absolute; }
 .mask-overlay { pointer-events: none; }
+.draw-layer { pointer-events: none; }
+/* 텍스트 도구 입력칸 — 찍힐 자리에 그대로 뜬다 */
+.text-entry {
+  position: absolute;
+  z-index: 3;
+  transform: translateY(-2px);
+}
+.text-entry-input {
+  min-width: 160px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  border: 1px solid var(--edge, #666);
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
 .canvas-info {
   position: absolute; bottom: 8px; right: 12px;
   color: #585858; font-size: 11px;

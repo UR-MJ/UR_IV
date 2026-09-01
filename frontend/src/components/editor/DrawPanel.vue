@@ -92,6 +92,14 @@
       <span class="slider-value">{{ layerOpacity }}</span>
     </div>
 
+    <!-- 레이어는 병합 전까지 원본을 건드리지 않는다. 그래서 되돌리기·지우기가
+         이미지 undo 스택과 별개로 필요하다 — 없으면 획 하나 잘못 그었을 때
+         이미지를 다시 여는 것 말고는 방법이 없다. -->
+    <div class="layer-btn-row">
+      <button class="secondary-btn flex-1" @click="$emit('undo-stroke')">↩ 획 되돌리기</button>
+      <button class="secondary-btn flex-1" @click="$emit('clear-layer')">레이어 지우기</button>
+    </div>
+
     <button class="secondary-btn full-width" @click="$emit('flatten-layer')">레이어 병합</button>
   </div>
 </template>
@@ -121,6 +129,8 @@ const emit = defineEmits<{
   'pick-gradient-end-color': []
   'heal-apply': []
   'flatten-layer': []
+  'undo-stroke': []
+  'clear-layer': []
   'layer-opacity-changed': [value: number]
 }>()
 
@@ -341,6 +351,15 @@ defineExpose({ setColor })
 }
 .secondary-btn.full-width {
   width: 100%;
+}
+
+.layer-btn-row {
+  display: flex;
+  gap: 6px;
+}
+.layer-btn-row .flex-1 {
+  flex: 1;
+  min-width: 0;
 }
 
 .heal-apply-btn {

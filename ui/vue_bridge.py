@@ -1291,6 +1291,7 @@ class VueBridge(QObject):
                     gamma=params.get('gamma', 1.0),
                     temperature=params.get('temperature', 0),
                     tint=params.get('tint', 0),
+                    curves=params.get('curves'),
                 )
 
             elif operation == 'filter':
@@ -1346,6 +1347,19 @@ class VueBridge(QObject):
                     elif img.shape[2] == 3 and src_img.shape[2] == 4:
                         src_img = src_img[:, :, :3]
                 img[mask > 127] = src_img[mask > 127]
+
+            elif operation == 'heal':
+                from core.editor_ops import heal as _heal
+                heal_b64 = params.get('mask_base64')
+                if not heal_b64:
+                    return json.dumps({'error': '복원할 자리를 먼저 칠하세요'})
+                import base64 as _b64
+                _raw = heal_b64.split(',', 1)[-1]
+                _buf = np.frombuffer(_b64.b64decode(_raw), dtype=np.uint8)
+                heal_mask = cv2.imdecode(_buf, cv2.IMREAD_UNCHANGED)
+                if heal_mask is None:
+                    return json.dumps({'error': '복원 마스크를 읽지 못했습니다'})
+                img = _heal(img, heal_mask, int(params.get('radius', 3)))
 
             elif operation == 'flatten':
                 from core.editor_ops import flatten as _flatten

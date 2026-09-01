@@ -128,6 +128,82 @@ class ComponentEmitContractTests(unittest.TestCase):
                 "DrawPanel 의 tool-changed 페이로드는 객체다 — 핸들러에서 .tool 을 꺼내 쓸 것.",
             )
 
+    def test_histogram_receives_live_image_source(self):
+        """히스토그램·커브는 부모가 내려주는 값으로 산다.
+
+        배선이 끊겨도 예외가 나지 않는다 — 그냥 빈 상자가 된다. 이 프로젝트에서
+        제일 자주 났던 실패 방식이라(보이는데 아무 일도 안 함) 정적으로 잡는다.
+        `active` 는 숨은 탭에서 계산을 멈추는 스위치라 같이 확인한다.
+        """
+        editor = (SRC / "views" / "EditorView.vue").read_text(encoding="utf-8")
+        panel_tags = _open_tags(editor, "AdvancedColorPanel")
+        self.assertTrue(panel_tags, "EditorView 가 AdvancedColorPanel 을 쓰지 않는다")
+        for body in panel_tags:
+            self.assertRegex(
+                body, r":src\s*=", "AdvancedColorPanel 에 :src 가 없으면 히스토그램은 빈 상자다."
+            )
+            self.assertRegex(
+                body, r":active\s*=", "AdvancedColorPanel 에 :active 가 없으면 숨은 탭에서도 계산한다."
+            )
+
+        panel = (SRC / "components" / "editor" / "AdvancedColorPanel.vue").read_text(
+            encoding="utf-8"
+        )
+        expected = {
+            # 히스토그램은 계산하지 않는다 — 패널이 useImageHistogram 결과를 나눠 준다
+            "HistogramChart": (":hists", ":has-data", ":black-point", ":white-point"),
+            # 커브 편집기는 같은 분포를 배경으로 깔고, 편집 결과를 change 로 돌려준다
+            "CurvesEditor": (":curves", ":hists", ":has-data"),
+        }
+        for component, attrs in expected.items():
+            tags = _open_tags(panel, component)
+            self.assertTrue(tags, f"AdvancedColorPanel 이 {component} 를 쓰지 않는다")
+            for body in tags:
+                for attr in attrs:
+                    self.assertIn(attr, body, f"{component} 에 {attr} 가 전달되지 않는다.")
+
+    def test_draw_layer_is_wired_to_the_canvas(self):
+        """그리기 파라미터가 캔버스까지 내려가야 도구 10개가 산다.
+
+        빠져도 예외는 없다 — 기본값(검은 펜 3px)으로 조용히 그려져서, 색·크기·
+        투명도 슬라이더가 전부 무반응인 것처럼 보인다.
+        """
+        editor = (SRC / "views" / "EditorView.vue").read_text(encoding="utf-8")
+        canvas_tags = _open_tags(editor, "EditorCanvas")
+        self.assertTrue(canvas_tags, "EditorView 가 EditorCanvas 를 쓰지 않는다")
+        for body in canvas_tags:
+            for attr in (":draw-params", ":layer-opacity"):
+                self.assertIn(attr, body, f"EditorCanvas 에 {attr} 가 전달되지 않는다.")
+
+    def test_draw_layer_is_cleared_when_the_image_changes(self):
+        """회전·자르기·병합 뒤에도 레이어가 남으면 안 맞는 그림이 얹힌 채로 보인다."""
+        editor = (SRC / "views" / "EditorView.vue").read_text(encoding="utf-8")
+        self.assertRegex(
+            editor,
+            r"watch\(imagePath,[^\n]*clearDrawLayer",
+            "확정 이미지가 바뀔 때 드로잉 레이어를 비우지 않는다.",
+        )
+
+    def test_curve_payload_reaches_the_backend(self):
+        """커브는 adv_color 페이로드에 실려야 백엔드가 적용한다.
+
+        패널이 curves 를 담아도 EditorView 의 중립 판정이 커브를 안 보면,
+        슬라이더가 전부 기본값일 때 커브만 만진 프리뷰가 통째로 걷힌다.
+        """
+        panel = (SRC / "components" / "editor" / "AdvancedColorPanel.vue").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("curves: curves.value", panel, "adv_color 페이로드에 curves 가 없다.")
+
+        editor = (SRC / "views" / "EditorView.vue").read_text(encoding="utf-8")
+        preview = re.search(r"function previewAdvAdj\(.*?\n\}", editor, re.S)
+        self.assertIsNotNone(preview, "previewAdvAdj 를 찾지 못했다")
+        self.assertIn(
+            "isIdentity(adj.curves)",
+            preview.group(0),
+            "중립 판정이 커브를 보지 않는다 — 커브만 만지면 프리뷰가 안 나간다.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

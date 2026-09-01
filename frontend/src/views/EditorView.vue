@@ -72,6 +72,7 @@
               @auto-correct="doOp('auto_correct')"
             />
             <AdvancedColorPanel v-show="activeTab === 2"
+              :src="canvasSrc" :active="activeTab === 2"
               @preview="previewAdvAdj" @apply="applyAdvAdj" @reset="resetAdj"
             />
             <WatermarkPanel v-show="activeTab === 3"
@@ -92,6 +93,8 @@
               @layer-opacity-changed="v => drawLayerOpacity = v"
               @heal-apply="applyHeal"
               @flatten-layer="applyFlatten"
+              @undo-stroke="undoDrawStroke"
+              @clear-layer="clearDrawLayer"
             />
             <MovePanel v-show="activeTab === 5" ref="movePanelRef"
               :status-text="moveStatusText"
@@ -120,8 +123,11 @@
           :stamp-shape="stampShape"
           :bar-width="barWidth"
           :bar-height="barHeight"
+          :draw-params="canvasDrawParams"
+          :layer-opacity="drawLayerOpacity"
           @selection-changed="onSelectionChanged"
           @restore-ready="commitRestore"
+          @color-picked="onEyedropperColor"
         />
       </div>
     </template>
@@ -164,6 +170,7 @@ import { ref, computed, watch, onMounted, onUnmounted, onActivated, onDeactivate
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { mediaUrl } from '../utils/media.js'
+import { isIdentity } from '../utils/curves'
 import EditorCanvas from '../components/editor/EditorCanvas.vue'
 import MosaicPanel from '../components/editor/MosaicPanel.vue'
 import ColorPanel from '../components/editor/ColorPanel.vue'
@@ -233,6 +240,8 @@ const wmClamp = ref(true)          // 워터마크 '이미지 영역 내 제한'
 const wmImagePath = ref('')        // 이미지 워터마크로 고른 파일 경로
 const wmTextColor = ref('#FFFFFF') // 텍스트 워터마크 색 (WatermarkPanel의 textColor prop)
 const drawGradientEnd = ref('#000000')  // 그라디언트 끝 색 (DrawPanel의 gradientEndColor prop)
+// 캔버스로 내려보내는 최종 그리기 파라미터 — 끝 색은 따로 관리되므로 여기서 합친다
+const canvasDrawParams = computed(() => ({ ...drawParams.value, gradientEnd: drawGradientEnd.value }))
 
 const undoStack = ref<string[]>([])
 const redoStack = ref<string[]>([])
@@ -681,8 +690,10 @@ function previewAdj(adj: any) {
   schedulePreview('color_adjust', adj)
 }
 function previewAdvAdj(adj: any) {
+  // 커브도 함께 봐야 한다 — 슬라이더가 전부 중립이어도 커브만 건드린 경우가 있다.
   const neutral = !adj || (!adj.blackPoint && (adj.whitePoint ?? 255) === 255
-    && Math.abs((adj.gamma ?? 1) - 1) < 1e-6 && !adj.temperature && !adj.tint)
+    && Math.abs((adj.gamma ?? 1) - 1) < 1e-6 && !adj.temperature && !adj.tint
+    && isIdentity(adj.curves))
   if (neutral) { clearPreview(); return }
   schedulePreview('adv_color', adj)
 }
@@ -714,14 +725,19 @@ function applyAdvAdj(adj: any) { doOp('adv_color', adj) }
 // DrawPanel이 emit하는 이름은 'flatten-layer'인데 예전에는 '@flatten'에 물려 있어
 // 버튼이 아예 아무것도 안 했다. 오버레이 캔버스를 base64로 실어 보낸다.
 async function applyFlatten() {
-  const overlay = drawPanelRef.value?.getOverlayBase64?.()
-    ?? canvasRef.value?.getDrawOverlayBase64?.()
+  const overlay = canvasRef.value?.getDrawOverlayBase64?.()
   if (!overlay) {
     requestAction('show_toast', { type: 'info', msg: '병합할 드로잉이 없습니다' })
     return
   }
   doOp('flatten', { overlay_base64: overlay, opacity: drawLayerOpacity.value })
+  // 레이어 비우기는 imagePath 감시가 맡는다 — 병합 결과가 새 경로로 돌아오면 지워진다.
+  // 여기서 미리 지우면 백엔드가 실패했을 때 그린 게 통째로 날아간다.
 }
+
+// 확정 이미지가 바뀌면(병합·회전·자르기·undo 등) 드로잉 레이어는 더 이상 맞지 않는다.
+// 예: 회전 후에도 레이어가 남아 있으면 안 돌아간 그림이 돌아간 이미지 위에 얹힌다.
+watch(imagePath, () => canvasRef.value?.clearDrawLayer?.())
 
 // ── 마스크 영역 이동 (MovePanel) ──
 // MovePanel은 'confirm-move'/'cancel-move'를 emit하는데 예전에는 '@confirm'/'@cancel'에
@@ -801,10 +817,32 @@ function onSendInpaint(_payload: any) {
   requestAction('send_to_inpaint', { path: imagePath.value })
 }
 
-// 복원 브러시(heal)는 드로잉 레이어가 있어야 성립한다 — 레이어 구현 전까지는
-// 사용자에게 조용히 실패하지 않고 이유를 알린다.
+// 복원 브러시 — 칠한 자리를 주변 픽셀로 메운다(백엔드 inpaint).
+// 레이어에 그리는 다른 도구와 달리 원본을 고치는 작업이라 확정 연산으로 나간다.
 function applyHeal() {
-  requestAction('show_toast', { type: 'info', msg: '복원 브러시는 드로잉 레이어 구현 후 활성화됩니다' })
+  const mask = canvasRef.value?.getHealMaskBase64?.()
+  if (!mask) {
+    requestAction('show_toast', { type: 'info', msg: '복원할 자리를 먼저 칠하세요' })
+    return
+  }
+  doOp('heal', { mask_base64: mask, radius: Math.max(1, Math.round(drawParams.value.size / 2)) })
+  canvasRef.value?.clearHealMask?.()
+}
+
+/** 스포이트가 집은 색을 현재 색으로 되돌린다 — 패널 표시도 같이 맞춘다. */
+function onEyedropperColor(hex: string) {
+  drawParams.value = { ...drawParams.value, color: hex }
+  drawPanelRef.value?.setColor?.(hex)
+}
+
+function undoDrawStroke() {
+  if (!canvasRef.value?.undoDrawStroke?.()) {
+    requestAction('show_toast', { type: 'info', msg: '되돌릴 획이 없습니다' })
+  }
+}
+
+function clearDrawLayer() {
+  canvasRef.value?.clearDrawLayer?.()
 }
 function onSelectionChanged(sel: any) { selection.value = sel }
 

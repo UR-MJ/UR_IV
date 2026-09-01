@@ -87,14 +87,23 @@ def auto_correct(bgr: np.ndarray) -> np.ndarray:
 
 @_preserve_alpha
 def adv_color(bgr: np.ndarray, black_point=0, white_point=255,
-              gamma=1.0, temperature=0, tint=0) -> np.ndarray:
-    """레벨(흑/백점) + 감마 + 색온도/틴트.
+              gamma=1.0, temperature=0, tint=0, curves=None) -> np.ndarray:
+    """커브 + 레벨(흑/백점) + 감마 + 색온도/틴트.
 
     black_point/white_point: 0~255 입력 레벨
     gamma: >1 밝게, <1 어둡게 (패널이 slider/10으로 보냄)
     temperature: -100~100 (+ = 따뜻/주황, - = 차갑/파랑)
     tint: -100~100 (+ = 마젠타, - = 초록)
+    curves: {'rgb'|'r'|'g'|'b': [[x, y], ...]} 0~1 제어점. None 이면 건너뛴다.
+
+    적용 순서는 PyQt 판(`tabs/editor/advanced_color_panel._build_adjusted`)과 같다 —
+    커브 → 레벨/감마 → 색온도. 순서가 바뀌면 같은 설정이 다른 그림을 낸다.
     """
+    if curves:
+        from core.curves import apply_curves, is_identity
+        if not is_identity(curves):
+            bgr = apply_curves(bgr, curves)
+
     black = max(0.0, min(254.0, float(black_point)))
     white = max(black + 1.0, min(255.0, float(white_point)))
     gamma = float(gamma)
@@ -250,6 +259,27 @@ def _fill_hole(bgr: np.ndarray, mask: np.ndarray, fill_color: str) -> np.ndarray
     else:
         out = cv2.inpaint(out, (mask > 127).astype(np.uint8), 3, cv2.INPAINT_TELEA)
     return out
+
+
+@_preserve_alpha
+def heal(bgr: np.ndarray, mask: np.ndarray, radius: int = 3) -> np.ndarray:
+    """복원 브러시 — 마스크로 칠한 자리를 주변 픽셀로 메운다.
+
+    `cv2.inpaint` 는 8UC1 마스크만 받는다. 프론트가 보내는 것은 PNG 라 3~4채널로
+    디코딩되므로 여기서 단일 채널로 줄인다. 크기가 다르면 최근접으로 맞춘다 —
+    보간하면 마스크 가장자리에 중간값이 생겨 칠하지 않은 곳까지 지워진다.
+    """
+    if mask is None:
+        return bgr
+    if mask.ndim == 3:
+        mask = mask[:, :, 0] if mask.shape[2] < 4 else cv2.cvtColor(mask, cv2.COLOR_BGRA2GRAY)
+    h, w = bgr.shape[:2]
+    if mask.shape[:2] != (h, w):
+        mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+    binary = (mask > 127).astype(np.uint8)
+    if not np.any(binary):
+        return bgr
+    return cv2.inpaint(bgr, binary, max(1, int(radius)), cv2.INPAINT_TELEA)
 
 
 def move_region(img: np.ndarray, mask: np.ndarray, dx: float = 0, dy: float = 0,
