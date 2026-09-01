@@ -32,12 +32,17 @@ import { ICONS, FILLED } from '../icons'
 
 const props = withDefaults(defineProps<{
   name: string
-  /** px. 본문 13px 옆에서는 16이 광학적으로 맞는다. */
+  /**
+   * 기본값이 em 인 이유: 이모지는 글자였기 때문에 크기를 `font-size` 로 키우는
+   * CSS 가 곳곳에 있다(`.drop-icon { font-size: 48px }` 등). px 로 고정하면 그런
+   * 규칙이 전부 죽어 큰 장식 아이콘이 16px 로 쪼그라든다. em 이면 그대로 산다.
+   * 1.15em 은 본문 13px 옆에서 15px — 선 아이콘이 글자와 광학적으로 맞는 크기다.
+   */
   size?: number | string
-  /** 선 두께. 작은 크기(12~14px)에서는 1.7 정도가 또렷하다. */
+  /** 선 두께(viewBox 단위라 크기와 무관하게 일정하다). */
   strokeWidth?: number | string
 }>(), {
-  size: 16,
+  size: '1.15em',
   strokeWidth: 1.6,
 })
 

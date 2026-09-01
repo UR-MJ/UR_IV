@@ -71,7 +71,7 @@
         <p>Loading...</p>
       </div>
       <div v-else-if="images.length === 0" class="empty-placeholder">
-        <div class="icon"><Icon name="video" size="30" /></div>
+        <div class="icon"><Icon name="video" /></div>
         <h2>GALLERY IS EMPTY</h2>
         <p>No supported media found in the current directory</p>
       </div>

@@ -35,7 +35,7 @@
       <!-- 우측: 썸네일 그리드 -->
       <div class="ad-compare">
         <div v-if="batchFiles.length === 0" class="grid-empty">
-          <div class="grid-empty-ico"><Icon name="package" size="34" /></div>
+          <div class="grid-empty-ico"><Icon name="package" /></div>
           <div class="grid-empty-title">이미지를 드래그하여 추가</div>
           <div class="grid-empty-sub">여러 장을 한꺼번에 처리할 수 있습니다</div>
         </div>
