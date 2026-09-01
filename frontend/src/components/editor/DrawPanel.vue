@@ -1,21 +1,11 @@
 <template>
   <div class="draw-panel">
-    <!-- Tool Selection -->
-    <div class="section-header">그리기 도구</div>
-
-    <div class="tool-group">
-      <button
-        v-for="tool in drawTools"
-        :key="tool.id"
-        class="tool-btn"
-        :class="{ active: selectedTool === tool.id }"
-        @click="selectTool(tool.id)"
-      >
-        {{ tool.label }}
-      </button>
+    <!-- 도구 목록은 캔버스 옆 세로 툴바가 맡는다. 여기 두면 전폭 버튼 10개가
+         세로 360px 를 먹고, 도구를 고르려고 이 탭까지 와야 했다. -->
+    <div class="dp-head">
+      <span class="dp-title">{{ currentToolLabel }}</span>
+      <span class="dp-key">{{ currentToolKey }}</span>
     </div>
-
-    <div class="divider" />
 
     <!-- Color Palette -->
     <div class="section-subheader">색상</div>
@@ -106,6 +96,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { toolById } from '../../utils/editorTools'
 
 interface DrawTool {
   id: number
@@ -169,11 +160,8 @@ const isFilled = ref(false)
 const layerOpacity = ref(100)
 
 const currentToolName = computed(() => toolNameMap[selectedTool.value] || 'pen')
-
-function selectTool(id: number) {
-  selectedTool.value = id
-  emitToolChanged()
-}
+const currentToolLabel = computed(() => toolById(currentToolName.value)?.label ?? '그리기')
+const currentToolKey = computed(() => toolById(currentToolName.value)?.shortcut ?? '')
 
 function onPaletteClick(color: string) {
   currentColor.value = color
@@ -201,7 +189,7 @@ function emitParamsChanged() {
   })
 }
 
-watch([brushSize, brushOpacity, isFilled], () => {
+watch([brushSize, brushOpacity, isFilled, selectedTool], () => {
   emitParamsChanged()
 })
 
@@ -233,11 +221,27 @@ defineExpose({ setColor, setTool })
   font-size: 13px;
 }
 
-.section-header {
-  color: #585858;
-  font-size: 18px;
-  font-weight: bold;
-  padding: 2px;
+.dp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 2px 0 var(--sp-1);
+}
+.dp-title {
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+}
+.dp-key {
+  min-width: 18px;
+  padding: 1px 5px;
+  background: var(--bg-button);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  text-align: center;
 }
 
 .section-subheader {

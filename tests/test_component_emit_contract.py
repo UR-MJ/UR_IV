@@ -22,7 +22,6 @@ SRC = pathlib.Path(__file__).resolve().parents[1] / "frontend" / "src"
 # 구현되면 여기서 지운다. 여기 없는 미바인딩이 생기면 테스트가 실패한다.
 PENDING: dict[tuple[str, str], str] = {
     ("EditorCanvas", "mask-changed"): "선언만 있고 emit 하는 곳이 없는 죽은 선언 — 정리 대상",
-    ("MosaicPanel", "effect-changed"): "같은 페이로드가 effect-apply 에 포함돼 전달됨 (중복)",
 }
 
 
@@ -58,11 +57,33 @@ def _open_tags(text: str, component: str) -> list[str]:
         index = cursor + 1
 
 
+def _strip_nested(text: str) -> str:
+    """중첩된 `{...}` 안을 지운다.
+
+    페이로드 타입을 여러 줄로 쓰면(`[payload: {\\n  toolSize: number\\n}]`) 그 안의
+    필드명이 줄 첫머리에 오고, 이름 정규식이 그걸 emit 이름으로 읽는다.
+    실제로 `MaskToolOptions.tool-size` 라는 없는 emit 이 잡혔다.
+    """
+    out, depth = [], 0
+    for ch in text:
+        if ch == "{":
+            depth += 1
+            continue
+        if ch == "}":
+            depth = max(0, depth - 1)
+            continue
+        if depth == 0:
+            out.append(ch)
+    return "".join(out)
+
+
 def _declared_emits(text: str) -> set[str]:
-    block = re.search(r"defineEmits<\{(.*?)\}>\(\)", text, re.S)
+    block = re.search(r"defineEmits<\{(.*?)\n\}>\(\)", text, re.S)
+    if not block:
+        block = re.search(r"defineEmits<\{(.*?)\}>\(\)", text, re.S)
     if not block:
         return set()
-    names = re.findall(r"^\s*'?([A-Za-z][\w-]*)'?\s*:", block.group(1), re.M)
+    names = re.findall(r"^\s*'?([A-Za-z][\w-]*)'?\s*:", _strip_nested(block.group(1)), re.M)
     return {_kebab(n) for n in names}
 
 

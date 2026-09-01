@@ -1,0 +1,254 @@
+/* 에디터 사이드 패널의 공용 컨트롤 스타일.
+ *
+ * MosaicPanel 한 덩어리를 도구 옵션 / 효과 / 변형 셋으로 쪼개면서, 세 곳이 같이 쓰는
+ * 칩·슬라이더·버튼 스타일을 여기로 뺐다. 컴포넌트마다 복사하면 하나 고칠 때 세 번
+ * 고쳐야 하고, 실제로 한 곳만 고쳐서 어긋나기 시작한다.
+ *
+ * 전역이지만 `.editor-panel` 아래로만 적용된다 — `.chip-btn` 같은 흔한 이름이
+ * 다른 화면에 새지 않게.
+ *
+ * 옮기면서 글자·타격 크기를 교정했다. 진단에서 모자이크 탭 텍스트 41개 중 40개가
+ * 11px 이하였고, 컨트롤 상당수가 28px 미만이었다. 버튼 글자는 12px 이상,
+ * 11px 은 라벨에만 쓴다.
+ */
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  color: var(--text-primary);
+}
+
+.editor-panel label {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-bold);
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: var(--sp-1);
+}
+
+.editor-panel .control-group { display: flex; flex-direction: column; }
+.editor-panel .mt-8 { margin-top: var(--sp-2); }
+.editor-panel .mt-12 { margin-top: var(--sp-3); }
+.editor-panel .sub-label {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-bold);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-1);
+}
+
+/* ── 칩 ── */
+.editor-panel .chip-grid,
+.editor-panel .chip-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.editor-panel .chip-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.editor-panel .chip-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-1); }
+
+.editor-panel .chip-btn {
+  height: 34px;
+  background: var(--bg-button);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  color: var(--text-secondary);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.editor-panel .chip-btn:hover { border-color: var(--edge); color: var(--text-primary); }
+.editor-panel .chip-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.editor-panel .chip-btn.restore.active { background: rgba(251, 146, 60, 0.1); border-color: #fb923c; color: #fb923c; }
+.editor-panel .chip-btn.magnet.active { background: rgba(96, 165, 250, 0.1); border-color: #60a5fa; color: #60a5fa; }
+
+/* ── 상자 ── */
+.editor-panel .glass-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: var(--sp-3);
+}
+.editor-panel .header-with-action { display: flex; justify-content: space-between; align-items: center; }
+.editor-panel .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #333; }
+.editor-panel .status-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.editor-panel .model-info {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 버튼 ── */
+.editor-panel .btn-row { display: flex; gap: 6px; }
+.editor-panel .btn-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-1); }
+
+.editor-panel .ghost-btn {
+  flex: 1;
+  height: 30px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-base);
+  color: var(--text-secondary);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+.editor-panel .ghost-btn:hover { border-color: var(--edge); color: var(--text-primary); }
+
+.editor-panel .action-btn {
+  flex: 1;
+  height: 34px;
+  background: var(--bg-button);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  color: var(--text-primary);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.editor-panel .action-btn:hover { border-color: var(--edge); }
+.editor-panel .action-btn.primary { background: var(--accent); color: #000; border: none; }
+.editor-panel .action-btn.on { border-color: var(--accent); color: var(--accent); }
+
+.editor-panel .mini-btn {
+  height: 34px;
+  background: var(--bg-button);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.editor-panel .mini-btn:hover { border-color: var(--edge); color: var(--text-primary); }
+
+.editor-panel .main-apply-btn {
+  width: 100%;
+  height: 42px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-base);
+  color: #000;
+  font-weight: 900;
+  font-size: var(--fs-body);
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.editor-panel .main-apply-btn:hover { background: var(--accent-hover); }
+
+.editor-panel .secondary-btn {
+  width: 100%;
+  height: 34px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  color: var(--text-secondary);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+.editor-panel .secondary-btn:hover { border-color: var(--edge); color: var(--text-primary); }
+
+/* ── 슬라이더 ── */
+.editor-panel .slider-box { display: flex; flex-direction: column; gap: var(--sp-1); }
+.editor-panel .slider-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-meta);
+  color: var(--text-secondary);
+}
+.editor-panel .modern-slider {
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--bg-input);
+  border-radius: 2px;
+  outline: none;
+  accent-color: var(--accent);
+}
+
+/* ── 입력 ── */
+.editor-panel .exclude-input,
+.editor-panel .resize-in {
+  height: 32px;
+  box-sizing: border-box;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  color: var(--text-primary);
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-meta);
+  font-family: inherit;
+}
+.editor-panel .exclude-input { width: 100%; }
+.editor-panel .exclude-input:focus,
+.editor-panel .resize-in:focus { border-color: var(--edge); }
+
+.editor-panel .hint {
+  display: inline-block;
+  margin-left: var(--sp-1);
+  opacity: 0.6;
+  font-size: var(--fs-label);
+  cursor: help;
+}
+
+/* ── 안내 ── */
+.editor-panel .persp-hint {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 6px var(--sp-2);
+  border-radius: var(--radius-base);
+}
+
+/* ── 리사이즈 인라인 입력 ── */
+.editor-panel .resize-box {
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-base);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.editor-panel .resize-cur { font-size: var(--fs-label); color: var(--text-muted); }
+.editor-panel .resize-row { display: flex; align-items: center; gap: var(--sp-2); }
+.editor-panel .resize-l {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.editor-panel .resize-in { flex: 1; min-width: 0; }
+.editor-panel .resize-x { color: var(--text-muted); }
+.editor-panel .resize-lock {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-meta);
+  color: var(--text-secondary);
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: var(--fw-normal);
+}

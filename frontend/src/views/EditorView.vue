@@ -33,83 +33,115 @@
         <!-- 캔버스 도구 툴바 — 도구를 고르려고 탭을 옮기지 않아도 되게 -->
         <EditorToolbar :model-value="currentTool" @select="selectTool" />
 
-        <!-- 좌측: 서브탭 패널 — 너비는 localStorage 영속 -->
+        <!-- 좌측: 패널 — 너비는 localStorage 영속 -->
         <div class="side-panel" :style="{ width: sidePanelWidth + 'px' }">
+          <!-- 도구 옵션 — 툴바에서 고른 도구를 따라간다. 탭과 무관하게 항상 위에 있어서
+               도구를 바꿔도 설정을 찾아다닐 필요가 없다. -->
+          <MaskToolOptions v-if="toolKind === 'mask'"
+            :tool="currentTool"
+            @params-changed="onParamsChanged"
+            @eraser-mode-changed="m => eraserMode = m"
+            @eraser-restore-changed="v => eraserRestore = v"
+            @magnetic-changed="onMagneticChanged"
+          />
+          <DrawPanel v-else-if="toolKind === 'draw'" ref="drawPanelRef"
+            :gradient-end-color="drawGradientEnd"
+            @tool-changed="onDrawToolChanged"
+            @params-changed="onDrawToolChanged"
+            @color-changed="p => drawParams.color = p.color"
+            @pick-custom-color="() => pickColor('draw')"
+            @pick-gradient-end-color="() => pickColor('gradient')"
+            @layer-opacity-changed="v => drawLayerOpacity = v"
+            @heal-apply="applyHeal"
+            @flatten-layer="applyFlatten"
+            @undo-stroke="undoDrawStroke"
+            @clear-layer="clearDrawLayer"
+          />
+
           <div class="tab-buttons">
             <button v-for="(tab, i) in tabs" :key="i"
               class="tab-btn" :class="{ active: activeTab === i }"
               @click="switchTab(i)"
-            >{{ tab.icon }} {{ tab.label }}</button>
+            >{{ tab.label }}</button>
           </div>
+
           <div class="tab-content">
-            <MosaicPanel v-show="activeTab === 0" ref="mosaicPanelRef"
-              :img-width="imgWidth" :img-height="imgHeight" :crop-pending="cropPending"
-              :model-label="modelLabel"
-              :detect-status="detectStatus"
-              :perspective-active="perspectiveActive"
-              @tool-changed="onToolChanged"
-              @effect-apply="applyEffect"
-              @add-model="openModelDialog"
-              @clear-models="clearModels"
-              @auto-censor="runAutoCensor"
-              @auto-detect="runAutoDetect"
-              @cancel-selection="canvasRef?.clearSelection()"
-              @crop="doCrop" @crop-confirm="confirmCrop" @crop-cancel="cancelCrop"
-              @resize="doResize"
-              @perspective-start="onStartPerspective"
-              @perspective-confirm="onConfirmPerspective"
-              @perspective-cancel="onCancelPerspective"
-              @rotate="op => doOp('rotate_' + op)"
-              @flip="op => doOp('flip_' + (op === 'horizontal' ? 'h' : 'v'))"
-              @remove-bg="params => doOp('remove_bg', params)"
-              @params-changed="onParamsChanged"
-              @eraser-mode-changed="m => eraserMode = m"
-              @eraser-restore-changed="v => eraserRestore = v"
-              @magnetic-changed="onMagneticChanged"
-            />
-            <ColorPanel v-show="activeTab === 1"
-              @adjustment-changed="previewAdj" @apply="applyAdj"
-              @reset="resetAdj" @filter-apply="applyFilter"
-              @filter-preview="previewFilter" @filter-cancel="clearPreview"
-              @auto-correct="doOp('auto_correct')"
-            />
-            <AdvancedColorPanel v-show="activeTab === 2"
-              :src="canvasSrc" :active="activeTab === 2"
-              @preview="previewAdvAdj" @apply="applyAdvAdj" @reset="resetAdj"
-            />
-            <WatermarkPanel v-show="activeTab === 3"
-              @apply-text="applyTextWm" @apply-image="applyImageWm"
-              @load-watermark-image="loadWatermarkImage"
-              :text-color="wmTextColor"
-              @preview="previewWatermark" @preview-clear="clearPreview"
-              @pick-text-color="() => pickColor('wmText')"
-              @clamp-changed="v => wmClamp = v"
-            />
-            <DrawPanel v-show="activeTab === 4" ref="drawPanelRef"
-              :gradient-end-color="drawGradientEnd"
-              @tool-changed="onDrawToolChanged"
-              @params-changed="onDrawToolChanged"
-              @color-changed="p => drawParams.color = p.color"
-              @pick-custom-color="() => pickColor('draw')"
-              @pick-gradient-end-color="() => pickColor('gradient')"
-              @layer-opacity-changed="v => drawLayerOpacity = v"
-              @heal-apply="applyHeal"
-              @flatten-layer="applyFlatten"
-              @undo-stroke="undoDrawStroke"
-              @clear-layer="clearDrawLayer"
-            />
-            <MovePanel v-show="activeTab === 5" ref="movePanelRef"
-              :status-text="moveStatusText"
-              :can-inpaint="canInpaint"
-              @send-inpaint="onSendInpaint"
-              :can-undo="undoStack.length > 1"
-              @start-move="onStartMove"
-              @confirm-move="onConfirmMove"
-              @cancel-move="onCancelMove"
-              @undo-move="onUndo"
-              @rotation-changed="v => moveRotation = v"
-              @scale-changed="v => moveScale = v"
-            />
+            <!-- 보정 -->
+            <div v-show="activeTab === 0" class="editor-panel tab-stack">
+              <PanelSection title="밝기 · 대비 · 필터" storage-key="basicColor">
+                <ColorPanel
+                  @adjustment-changed="previewAdj" @apply="applyAdj"
+                  @reset="resetAdj" @filter-apply="applyFilter"
+                  @filter-preview="previewFilter" @filter-cancel="clearPreview"
+                  @auto-correct="doOp('auto_correct')"
+                />
+              </PanelSection>
+              <PanelSection title="히스토그램 · 레벨 · 커브" storage-key="advColor" :default-open="false">
+                <AdvancedColorPanel
+                  :src="canvasSrc" :active="activeTab === 0"
+                  @preview="previewAdvAdj" @apply="applyAdvAdj" @reset="resetAdj"
+                />
+              </PanelSection>
+            </div>
+
+            <!-- 효과 -->
+            <div v-show="activeTab === 1" class="tab-stack">
+              <EffectPanel
+                :model-label="modelLabel"
+                :detect-status="detectStatus"
+                @effect-apply="applyEffect"
+                @cancel-selection="canvasRef?.clearSelection()"
+                @add-model="openModelDialog"
+                @clear-models="clearModels"
+                @auto-censor="runAutoCensor"
+                @auto-detect="runAutoDetect"
+                @remove-bg="params => doOp('remove_bg', params)"
+              />
+              <div class="editor-panel">
+                <PanelSection title="워터마크" storage-key="watermark" :default-open="false">
+                  <WatermarkPanel
+                    @apply-text="applyTextWm" @apply-image="applyImageWm"
+                    @load-watermark-image="loadWatermarkImage"
+                    :text-color="wmTextColor"
+                    @preview="previewWatermark" @preview-clear="clearPreview"
+                    @pick-text-color="() => pickColor('wmText')"
+                    @clamp-changed="v => wmClamp = v"
+                  />
+                </PanelSection>
+              </div>
+            </div>
+
+            <!-- 변형 -->
+            <div v-show="activeTab === 2" class="tab-stack">
+              <TransformPanel
+                :img-width="imgWidth" :img-height="imgHeight"
+                :crop-pending="cropPending"
+                :perspective-active="perspectiveActive"
+                @crop="doCrop" @crop-confirm="confirmCrop" @crop-cancel="cancelCrop"
+                @resize="doResize"
+                @perspective-start="onStartPerspective"
+                @perspective-confirm="onConfirmPerspective"
+                @perspective-cancel="onCancelPerspective"
+                @rotate="op => doOp('rotate_' + op)"
+                @flip="op => doOp('flip_' + (op === 'horizontal' ? 'h' : 'v'))"
+              />
+              <div class="editor-panel">
+                <PanelSection title="선택 영역 이동" storage-key="move" :default-open="false">
+                  <MovePanel ref="movePanelRef"
+                    :status-text="moveStatusText"
+                    :can-inpaint="canInpaint"
+                    @send-inpaint="onSendInpaint"
+                    :can-undo="undoStack.length > 1"
+                    @start-move="onStartMove"
+                    @confirm-move="onConfirmMove"
+                    @cancel-move="onCancelMove"
+                    @undo-move="onUndo"
+                    @rotation-changed="v => moveRotation = v"
+                    @scale-changed="v => moveScale = v"
+                  />
+                </PanelSection>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -174,12 +206,15 @@ import { getBackend, onBackendEvent } from '../bridge.js'
 import { mediaUrl } from '../utils/media.js'
 import { isIdentity } from '../utils/curves'
 import EditorCanvas from '../components/editor/EditorCanvas.vue'
-import MosaicPanel from '../components/editor/MosaicPanel.vue'
 import ColorPanel from '../components/editor/ColorPanel.vue'
 import AdvancedColorPanel from '../components/editor/AdvancedColorPanel.vue'
 import WatermarkPanel from '../components/editor/WatermarkPanel.vue'
 import DrawPanel from '../components/editor/DrawPanel.vue'
 import MovePanel from '../components/editor/MovePanel.vue'
+import MaskToolOptions from '../components/editor/MaskToolOptions.vue'
+import EffectPanel from '../components/editor/EffectPanel.vue'
+import TransformPanel from '../components/editor/TransformPanel.vue'
+import PanelSection from '../components/editor/PanelSection.vue'
 import EditorToolbar from '../components/editor/EditorToolbar.vue'
 import { toolById, toolByKey } from '../utils/editorTools'
 
@@ -195,7 +230,8 @@ watch(imageDisplay, () => { previewSrc.value = '' })
 const imgWidth = ref(0)
 const imgHeight = ref(0)
 // 마지막 사용 탭 영속화 (localStorage)
-const activeTab = ref(parseInt(window.localStorage.getItem('editorActiveTab') || '0'))
+// 탭이 6개였을 때 저장된 값(0~5)이 남아 있을 수 있다 — 범위 밖이면 첫 탭으로
+const activeTab = ref(Math.min(2, Math.max(0, parseInt(window.localStorage.getItem('editorActiveTab') || '0') || 0)))
 // 파일 정보 (포맷/용량)
 const fileSize = ref(0)
 const fileFormat = ref('')
@@ -224,7 +260,6 @@ const barWidth = ref(40)
 const barHeight = ref(15)
 const canvasRef = ref<any>(null)
 const drawPanelRef = ref<any>(null)
-const mosaicPanelRef = ref<any>(null)
 const movePanelRef = ref<any>(null)
 const selection = ref<any>(null)
 const modelLabel = ref('No Model Loaded')
@@ -246,18 +281,20 @@ const wmImagePath = ref('')        // 이미지 워터마크로 고른 파일 �
 const wmTextColor = ref('#FFFFFF') // 텍스트 워터마크 색 (WatermarkPanel의 textColor prop)
 const drawGradientEnd = ref('#000000')  // 그라디언트 끝 색 (DrawPanel의 gradientEndColor prop)
 // 캔버스로 내려보내는 최종 그리기 파라미터 — 끝 색은 따로 관리되므로 여기서 합친다
+/** 지금 고른 도구가 마스크 계열인지 그리기 계열인지 — 패널 위쪽 도구 옵션을 가른다. */
+const toolKind = computed(() => toolById(currentTool.value)?.kind ?? 'mask')
 const canvasDrawParams = computed(() => ({ ...drawParams.value, gradientEnd: drawGradientEnd.value }))
 
 const undoStack = ref<string[]>([])
 const redoStack = ref<string[]>([])
 
+// 탭 6개(모자이크·색감·고급색감·워터마크·그리기·이동)를 3개로 합쳤다.
+// 도구는 세로 툴바로 빠졌고, 남은 것은 '값을 넣고 적용하는 것' 뿐이라
+// 무엇에 적용하는지로 묶인다: 색이냐 · 선택 영역이냐 · 이미지 전체냐.
 const tabs = [
-  { icon: '🔲', label: '모자이크' },
-  { icon: '🎨', label: '색감' },
-  { icon: '🔧', label: '고급색감' },
-  { icon: '💧', label: '워터마크' },
-  { icon: '✏️', label: '그리기' },
-  { icon: '✂️', label: '이동' },
+  { label: '보정' },
+  { label: '효과' },
+  { label: '변형' },
 ]
 
 // 파일명 / 확장자 / 정보 표시용 computed
@@ -453,31 +490,19 @@ function onEditorResult(json: string) {
   } catch (e) { console.error('[Editor] parse error:', e) }
 }
 
-function onToolChanged(data: any) {
-  const id = typeof data === 'object' ? data.tool : data
-  const toolMap: Record<string, string> = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser', 4: 'stamp' }
-  currentTool.value = toolMap[id] ?? 'box'
-  if (typeof data === 'object' && data.size) brushSize.value = data.size
-}
 
 // ── 세로 툴바 ──
-// 도구를 고르면 (1) 캔버스 모드를 바꾸고 (2) 그 도구의 옵션이 있는 탭을 연다.
-// 패널이 다른 탭을 보여주고 있으면 "골랐는데 설정이 어디 갔지"가 되기 때문이다.
-const TOOL_TAB: Record<string, number> = { mask: 0, draw: 4 }
-
+// 도구를 고르면 캔버스 모드를 바꾼다. 옵션은 탭 위 '도구 옵션' 자리에 있으므로
+// 탭을 갈아탈 필요가 없다 — 그게 툴바를 뺀 이유다.
 function selectTool(id: string) {
   const tool = toolById(id)
   if (!tool) return
   clearPreview()
   currentTool.value = id
-  const tab = TOOL_TAB[tool.kind]
-  if (tab !== undefined && activeTab.value !== tab) activeTab.value = tab
   if (tool.kind === 'draw') {
     // 캔버스가 보는 값과 패널 하이라이트를 함께 맞춘다 — 한쪽만 바꾸면 서로 다른 도구를 가리킨다
     drawParams.value = { ...drawParams.value, tool: id }
     drawPanelRef.value?.setTool?.(id)
-  } else {
-    mosaicPanelRef.value?.setTool?.(id)
   }
 }
 
@@ -1173,14 +1198,18 @@ onUnmounted(() => {
   width: 280px; flex-shrink: 0; background: #0D0D0D;
   display: flex; flex-direction: column; overflow: hidden;
 }
-.tab-buttons { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; background: #0A0A0A; flex-shrink: 0; }
+/* 탭이 6개에서 3개가 되어 한 줄에 들어간다. 글자 10px 은 진단에서 지적된 크기라
+   12px 로 올리고 높이도 타격 가능한 32px 로 준다. */
+.tab-buttons { display: flex; gap: var(--sp-1); padding: var(--sp-2); background: #0A0A0A; flex-shrink: 0; }
 .tab-btn {
-  padding: 5px 8px; background: #131313; border: none; border-radius: 4px;
-  color: #585858; font-size: 10px; cursor: pointer; white-space: nowrap;
+  flex: 1; height: 32px; background: #131313; border: none; border-radius: var(--radius-base);
+  color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-medium);
+  cursor: pointer; white-space: nowrap;
 }
 .tab-btn:hover { background: #1A1A1A; color: #E8E8E8; }
 .tab-btn.active { background: #1A1A1A; color: #E2B340; }
 .tab-content { flex: 1; overflow-y: auto; overflow-x: hidden; }
+.tab-stack { display: flex; flex-direction: column; }
 
 .drop-area {
   flex: 1; display: flex; flex-direction: column;
