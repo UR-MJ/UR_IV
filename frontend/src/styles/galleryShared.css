@@ -1,0 +1,424 @@
+/* Gallery · Favorites 공용 스타일.
+ *
+ * 두 뷰는 하는 일이 달라 컴포넌트를 합치지 않았지만(Gallery 709줄 / Favorites 492줄,
+ * 겹치지 않는 규칙이 각각 28·54개), 카드 그리드·툴바·EXIF 사이드바·큰 보기·컨텍스트
+ * 메뉴는 완전히 같은 CSS 를 각자 들고 있었다. 실제로 크기 규격을 맞출 때 같은 수정을
+ * 두 파일에 네 번씩 했고, 언젠가 한쪽만 고쳐져 갈라진다.
+ *
+ * 두 뷰의 루트가 모두 `.gallery-workspace` 이고 오버레이·메뉴도 그 안에 있어서
+ * 전역이되 이 아래로만 적용된다 — `.icon-btn` `.control-group` 같은 흔한 이름이
+ * 다른 화면(에디터 패널 등)에 새지 않는다.
+ */
+
+.gallery-workspace {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+.gallery-workspace .gallery-toolbar {
+  height: 54px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.gallery-workspace .control-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gallery-workspace .icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: var(--radius-base);
+}
+.gallery-workspace .sort-chips {
+  display: flex;
+  gap: 4px;
+}
+.gallery-workspace .mini-chip {
+  height: 28px;
+  padding: 0 12px;
+  background: var(--bg-button);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+.gallery-workspace .mini-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.gallery-workspace .count-badge {
+  font-size: var(--fs-label);
+  font-weight: 900;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.gallery-workspace .search-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 12px;
+}
+.gallery-workspace .search-input {
+  width: 180px;
+  height: 30px;
+  padding: 0 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-size: var(--fs-meta);
+}
+.gallery-workspace .search-input:focus {
+  border-color: var(--accent);
+}
+.gallery-workspace .search-go {
+  height: 30px;
+  padding: 0 14px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-pill);
+  color: #000;
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+.gallery-workspace .search-go:disabled {
+  opacity: 0.4;
+}
+.gallery-workspace .search-clear {
+  background: none;
+  border: none;
+  color: #f87171;
+  cursor: pointer;
+  font-size: 14px;
+}
+.gallery-workspace .gallery-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.gallery-workspace .masonry-grid {
+  columns: auto 200px;
+  column-gap: 12px;
+}
+.gallery-workspace .thumb-size-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+}
+.gallery-workspace .thumb-icon-small {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+}
+.gallery-workspace .thumb-icon-large {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.gallery-workspace .thumb-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 90px;
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.gallery-workspace .thumb-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.gallery-workspace .thumb-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+}
+.gallery-workspace .thumb-size-val {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+}
+.gallery-workspace .gallery-card {
+  break-inside: avoid;
+  margin-bottom: 12px;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  transition: var(--transition);
+  background: var(--bg-card);
+}
+.gallery-workspace .gallery-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--text-muted);
+}
+.gallery-workspace .card-hover-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: var(--transition);
+}
+.gallery-workspace .gallery-card:hover .card-hover-actions {
+  opacity: 1;
+}
+.gallery-workspace .tiny-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gallery-workspace .tiny-btn:hover {
+  background: var(--accent);
+  color: black;
+}
+.gallery-workspace .exif-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  box-shadow: -20px 0 50px rgba(0,0,0,0.5);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+.gallery-workspace .exif-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.gallery-workspace .exif-meta {
+  padding: 24px;
+}
+.gallery-workspace .exif-meta h3 {
+  font-size: 12px;
+  letter-spacing: 4px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+.gallery-workspace .meta-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.gallery-workspace .meta-row span {
+  font-size: var(--fs-label);
+  font-weight: 900;
+  color: var(--text-muted);
+}
+.gallery-workspace .exif-footer {
+  padding: 20px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+}
+.gallery-workspace .main-apply-btn {
+  width: 100%;
+  height: 46px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-pill);
+  color: #000;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.gallery-workspace .modern-ctx-menu {
+  position: fixed;
+  background: #181818;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 6px;
+  z-index: 1000;
+  min-width: 200px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.8);
+}
+.gallery-workspace .ctx-item {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #909090;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.gallery-workspace .ctx-item:hover {
+  background: #252525;
+  color: #FFF;
+}
+.gallery-workspace .large-view-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gallery-workspace .large-view-panel {
+  width: 90%;
+  height: 90%;
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.gallery-workspace .large-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.gallery-workspace .large-filename {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.gallery-workspace .large-actions {
+  display: flex;
+  gap: 4px;
+}
+.gallery-workspace .lv-btn {
+  padding: 5px 12px;
+  background: var(--bg-button);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  cursor: pointer;
+}
+.gallery-workspace .lv-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+.gallery-workspace .lv-btn.accent {
+  background: var(--accent);
+  color: #000;
+  border: none;
+}
+.gallery-workspace .lv-close {
+  background: none;
+  border: none;
+  color: #f87171;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 8px;
+}
+.gallery-workspace .large-view-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+.gallery-workspace .large-img-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+  padding: 16px;
+}
+.gallery-workspace .large-exif {
+  width: 340px;
+  overflow-y: auto;
+  padding: 16px;
+  border-left: 1px solid var(--border);
+}
+.gallery-workspace .code-box.params {
+  color: #94a3b8;
+  font-size: var(--fs-label);
+}
+.gallery-workspace .click-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  background: rgba(0,0,0,0.6);
+  padding: 2px 8px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: 0.2s;
+}
+.gallery-workspace .exif-preview:hover .click-hint {
+  opacity: 1;
+}
+.gallery-workspace .mt-8 {
+  margin-top: 8px;
+}
+.gallery-workspace .load-more-info {
+  text-align: center;
+  padding: 8px;
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+}
+.gallery-workspace .fade-enter-active, .gallery-workspace .fade-leave-active {
+  transition: opacity 0.2s;
+}
+.gallery-workspace .fade-enter-from, .gallery-workspace .fade-leave-to {
+  opacity: 0;
+}
+.gallery-workspace .slide-enter-active, .gallery-workspace .slide-leave-active {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.gallery-workspace .slide-enter-from, .gallery-workspace .slide-leave-to {
+  transform: translateX(100%);
+}
+
+/* Gallery 템플릿도 쓰는데 Favorites 에만 있던 규칙들.
+ * Gallery 의 빈 화면은 그래서 가운데 정렬도 여백도 없이 왼쪽 위에 붙어 있었다. */
+.gallery-workspace .ctx-separator { height: 1px; background: #222; margin: 4px 0; }
+.gallery-workspace .empty-placeholder { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+.gallery-workspace .empty-placeholder .icon { font-size: 48px; }
+.gallery-workspace .empty-placeholder h2 { font-size: 16px; letter-spacing: 3px; margin: 12px 0 6px; color: var(--text-secondary); }
+.gallery-workspace .empty-placeholder p { font-size: 12px; }
+.gallery-workspace .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.gallery-workspace .mt-12 { margin-top: 12px; }
+.gallery-workspace .sep { width: 1px; height: 20px; background: var(--border); }
+.gallery-workspace .spacer { flex: 1; }

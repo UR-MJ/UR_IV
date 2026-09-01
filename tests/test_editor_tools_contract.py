@@ -90,6 +90,53 @@ class ToolRegistryTests(unittest.TestCase):
             text, r"<EditorToolbar[^>]*@select=", "툴바의 선택이 아무데도 연결되지 않았다"
         )
 
+    def test_inpaint_reuses_the_same_toolbar_and_registry(self):
+        """Inpaint 도 같은 툴바·같은 도구 id·같은 단축키를 쓴다.
+
+        두 탭에서 같은 도구가 다르게 생기거나 다른 키로 잡히면 손이 헷갈린다.
+        """
+        registry = REGISTRY.read_text(encoding="utf-8")
+        self.assertIn("export const INPAINT_TOOLS", registry)
+
+        view = (SRC / "views" / "InpaintView.vue").read_text(encoding="utf-8")
+        self.assertIn("<EditorToolbar", view, "Inpaint 가 세로 툴바를 쓰지 않는다")
+        self.assertIn(':tools="INPAINT_TOOLS"', view, "Inpaint 가 자기 도구 목록을 넘기지 않는다")
+        self.assertIn("toolByKey(", view, "Inpaint 에 도구 단축키가 없다 — 툴팁이 키를 보여주는데 안 먹으면 거짓말이다")
+
+    def test_effect_preview_is_wired(self):
+        """효과는 '적용해야만 결과를 아는' 마지막 자리였다 — 프리뷰를 붙였다.
+
+        백엔드가 마스크 있는 요청을 프리뷰에서 제외하면 프론트 배선이 있어도 조용히 죽는다.
+        """
+        panel = (SRC / "components" / "editor" / "EffectPanel.vue").read_text(encoding="utf-8")
+        self.assertIn("'effect-preview'", panel)
+
+        view = (SRC / "views" / "EditorView.vue").read_text(encoding="utf-8")
+        self.assertRegex(view, r"<EffectPanel[^>]*@effect-preview=", "효과 프리뷰가 부모에 연결되지 않았다")
+        self.assertIn("scheduleMaskPreview", view, "마스크를 실은 프리뷰 경로가 없다")
+
+        bridge = (pathlib.Path(__file__).resolve().parents[1] / "ui" / "vue_bridge.py").read_text(encoding="utf-8")
+        self.assertNotRegex(
+            bridge,
+            r"is_preview\s*=\s*bool\(params\.get\('preview'\)\)\s*and\s*not\s*params\.get\('mask_base64'\)",
+            "백엔드가 마스크 있는 프리뷰를 다시 막고 있다 — 마스크는 바로 아래에서 이미 리사이즈된다",
+        )
+
+    def test_selection_dependent_actions_are_gated(self):
+        """자르기·영역 이동은 선택 영역이 있어야 성립한다.
+
+        예전에는 빈 상태로도 눌렸고, 자르기만 토스트를 띄우고 나머지는 조용했다.
+        """
+        view = (SRC / "views" / "EditorView.vue").read_text(encoding="utf-8")
+        self.assertIn("const hasSelection = computed", view)
+        for component in ("TransformPanel", "MovePanel"):
+            # 여는 태그 안에 :has-selection 이 있는지 — 태그가 여러 줄이라 DOTALL 로 본다
+            self.assertRegex(
+                view,
+                r"<" + component + r"\b[^>]*?:has-selection=",
+                f"{component} 에 선택 여부가 전달되지 않는다",
+            )
+
     def test_draw_tool_selection_syncs_canvas_and_panel(self):
         """캔버스가 보는 값과 패널 하이라이트를 함께 바꿔야 둘이 같은 도구를 가리킨다."""
         text = EDITOR_VIEW.read_text(encoding="utf-8")

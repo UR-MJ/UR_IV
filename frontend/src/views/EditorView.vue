@@ -90,6 +90,7 @@
                 :model-label="modelLabel"
                 :detect-status="detectStatus"
                 @effect-apply="applyEffect"
+                @effect-preview="previewEffect"
                 @cancel-selection="canvasRef?.clearSelection()"
                 @add-model="openModelDialog"
                 @clear-models="clearModels"
@@ -117,6 +118,7 @@
                 :img-width="imgWidth" :img-height="imgHeight"
                 :crop-pending="cropPending"
                 :perspective-active="perspectiveActive"
+                :has-selection="hasSelection"
                 @crop="doCrop" @crop-confirm="confirmCrop" @crop-cancel="cancelCrop"
                 @resize="doResize"
                 @perspective-start="onStartPerspective"
@@ -130,6 +132,7 @@
                   <MovePanel ref="movePanelRef"
                     :status-text="moveStatusText"
                     :can-inpaint="canInpaint"
+                    :has-selection="hasSelection"
                     @send-inpaint="onSendInpaint"
                     :can-undo="undoStack.length > 1"
                     @start-move="onStartMove"
@@ -564,6 +567,15 @@ async function commitRestore() {
   canvasRef.value?.clearRestoreMask?.()
 }
 
+const EFFECT_OPS: Record<string, string> = { 0: 'mosaic', 1: 'censor_bar', 2: 'blur' }
+
+/** 효과 프리뷰 — 칠한 마스크가 있어야 보여줄 게 있다. */
+function previewEffect(effectData: any) {
+  if (!canvasRef.value?.getMaskBase64?.()) { clearPreview(); return }
+  const op = EFFECT_OPS[effectData?.effect] ?? 'mosaic'
+  scheduleMaskPreview(op, effectData)
+}
+
 function applyEffect(effectData: any) {
   const sel = canvasRef.value?.getSelection()
   const effectMap: Record<string, string> = { 0: 'mosaic', 1: 'censor_bar', 2: 'blur' }
@@ -725,6 +737,20 @@ function schedulePreview(operation: string, params: any) {
 // 이걸 안 하면: 적용 클릭 → 패널이 adjustment-changed 도 함께 emit → 120ms 뒤
 // 프리뷰가 한 번 더 나가고, 그게 적용보다 늦게 도착해 job_id 가 더 커서 가드도
 // 통과하며 화면을 축소본으로 되돌린다(실제로 있었던 증상).
+/**
+ * 마스크가 필요한 작업의 프리뷰. `schedulePreview` 와 갈라놓은 이유는 이쪽만
+ * 마스크 base64 를 함께 실어야 하기 때문이다(그쪽은 `doOp`, 이쪽은 `doOpWithMask`).
+ */
+function scheduleMaskPreview(operation: string, params: any) {
+  if (!imagePath.value) return
+  if (_previewTimer) clearTimeout(_previewTimer)
+  _previewTimer = setTimeout(() => {
+    _previewForPath = imagePath.value
+    doOpWithMask(operation, { ...params, preview: true })
+  }, 120)
+}
+
+// 대기 중인 프리뷰만 취소한다(화면은 그대로) — 확정 작업을 보낼 때 쓴다.
 function cancelPendingPreview() {
   if (_previewTimer) { clearTimeout(_previewTimer); _previewTimer = null }
 }
@@ -896,6 +922,8 @@ function clearDrawLayer() {
   canvasRef.value?.clearDrawLayer?.()
 }
 function onSelectionChanged(sel: any) { selection.value = sel }
+/** 자르기·영역 이동은 선택 영역이 있어야 성립한다 — 버튼을 막는 조건. */
+const hasSelection = computed(() => !!selection.value)
 
 // MovePanel 인페인트 버튼 활성 조건. canInpaint prop 자체가 전달되지 않아
 // 기본값 false 로 영구 비활성이었다. 이 버튼은 이미지를 Inpaint 탭으로 넘기는

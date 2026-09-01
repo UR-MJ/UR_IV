@@ -1,9 +1,9 @@
 <template>
   <div class="editor-toolbar" role="toolbar" aria-label="에디터 도구">
-    <template v-for="(kind, gi) in TOOL_GROUPS" :key="kind">
+    <template v-for="(group, gi) in groups" :key="gi">
       <div v-if="gi > 0" class="tb-rule" />
       <button
-        v-for="tool in toolsOfKind(kind)"
+        v-for="tool in group"
         :key="tool.id"
         type="button"
         class="tb-btn"
@@ -42,13 +42,22 @@
  * 아이콘만 있으므로 이름을 알 방법이 필요하다 — 호버하면 이름·단축키·한 줄 설명이 뜬다.
  * `title` 속성은 쓰지 않는다: 뜨기까지 1초 넘게 걸리고, 위치와 모양을 정할 수 없다.
  */
-import { ref } from 'vue'
-import { TOOL_GROUPS, toolsOfKind, type EditorTool } from '../../utils/editorTools'
+import { computed, ref } from 'vue'
+import { EDITOR_TOOLS, TOOL_GROUPS, type EditorTool } from '../../utils/editorTools'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   /** 현재 선택된 도구 id (`EditorCanvas` 의 props.tool 과 같은 문자열) */
   modelValue?: string
-}>()
+  /** 보여줄 도구 목록. 기본은 에디터 전체 — Inpaint 는 마스크 도구만 넘긴다. */
+  tools?: EditorTool[]
+}>(), { tools: () => EDITOR_TOOLS })
+
+/** 넘어온 목록에 실제로 있는 묶음만, 원래 순서대로. */
+const groups = computed(() =>
+  TOOL_GROUPS
+    .map((kind) => props.tools.filter((t) => t.kind === kind))
+    .filter((list) => list.length > 0),
+)
 
 defineEmits<{
   select: [id: string]

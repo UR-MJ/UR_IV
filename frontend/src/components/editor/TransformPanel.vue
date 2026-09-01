@@ -10,9 +10,18 @@
     </PanelSection>
 
     <PanelSection title="자르기" storage-key="crop" :badge="cropPending">
-      <button class="action-btn" :class="{ on: !!cropPending }" @click="$emit('crop')">
+      <!-- 선택 영역이 없으면 눌러도 토스트만 뜨고 끝난다 — 애초에 막고 이유를 적는다 -->
+      <button
+        class="action-btn" :class="{ on: !!cropPending }"
+        :disabled="!hasSelection && !cropPending"
+        :title="hasSelection || cropPending ? '선택 영역 밖을 잘라냅니다' : '먼저 캔버스에서 남길 영역을 선택하세요'"
+        @click="$emit('crop')"
+      >
         <Icon name="crop" /> 선택 영역으로 자르기
       </button>
+      <p v-if="!hasSelection && !cropPending" class="need-hint">
+        선택 도구(M · L)로 남길 영역을 먼저 지정하세요
+      </p>
       <!-- 무엇이 얼마로 잘리는지 보여주고 확정을 받는다 — 예전에는 확인 없이 바로 잘랐다 -->
       <div v-if="cropPending" class="resize-box">
         <div class="resize-cur">자르기 결과 {{ cropPending }}</div>
@@ -78,7 +87,9 @@ const props = withDefaults(defineProps<{
   /** 자를 결과 크기 문구. 값이 있으면 확인 UI 가 뜬다. */
   cropPending?: string
   perspectiveActive?: boolean
-}>(), { imgWidth: 0, imgHeight: 0, cropPending: '', perspectiveActive: false })
+  /** 캔버스에 선택 영역이 잡혀 있는지 — 자르기는 이게 없으면 할 일이 없다 */
+  hasSelection?: boolean
+}>(), { imgWidth: 0, imgHeight: 0, cropPending: '', perspectiveActive: false, hasSelection: false })
 
 const emit = defineEmits<{
   crop: []

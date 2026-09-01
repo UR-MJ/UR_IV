@@ -105,6 +105,8 @@ defineProps<{
 
 const emit = defineEmits<{
   'effect-apply': [payload: { effect: number; strength: number }]
+  /** 값이 바뀔 때마다 — 부모가 디바운스해서 축소본 결과를 받아 온다 */
+  'effect-preview': [payload: { effect: number; strength: number }]
   'cancel-selection': []
   'add-model': []
   'clear-models': []
@@ -160,6 +162,11 @@ function detectPayload(): DetectPayload {
 function onApply() {
   emit('effect-apply', { effect: selectedEffect.value, strength: strength.value })
 }
+
+// 효과는 여태 '적용해야만 결과를 아는' 유일한 자리였다 — 색보정처럼 미리 보여준다.
+watch([selectedEffect, strength], () => {
+  emit('effect-preview', { effect: selectedEffect.value, strength: strength.value })
+})
 </script>
 
 <style scoped>

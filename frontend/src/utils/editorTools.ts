@@ -55,6 +55,16 @@ export const EDITOR_TOOLS: EditorTool[] = [
  */
 export const TOOL_GROUPS: ToolKind[] = ['mask', 'draw']
 
+/**
+ * Inpaint 탭이 쓰는 도구 — 마스크를 칠하는 넷.
+ *
+ * 에디터와 같은 id·아이콘·단축키를 쓴다. 두 탭에서 같은 도구가 다르게 생기거나
+ * 다른 키로 잡히면 손이 헷갈린다. 스탬프는 인페인트에 없다(효과 반복이 없으므로).
+ */
+export const INPAINT_TOOLS: EditorTool[] = EDITOR_TOOLS.filter(
+  (t) => ['box', 'lasso', 'brush', 'eraser'].includes(t.id),
+)
+
 const BY_ID = new Map(EDITOR_TOOLS.map((t) => [t.id, t]))
 const BY_SHORTCUT = new Map(EDITOR_TOOLS.map((t) => [t.shortcut, t]))
 

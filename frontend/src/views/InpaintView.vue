@@ -1,5 +1,9 @@
 <template>
   <div class="inpaint-workspace">
+    <!-- 마스크 도구 — 에디터와 같은 세로 툴바를 쓴다. 두 탭에서 같은 도구가
+         다르게 생기거나 다른 키로 잡히면 손이 헷갈린다. -->
+    <EditorToolbar :model-value="currentTool" :tools="INPAINT_TOOLS" @select="currentTool = $event" />
+
     <!-- Left Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-scroll">
@@ -11,15 +15,10 @@
           </div>
         </div>
 
-        <!-- 도구 선택 -->
-        <div class="glass-card">
-          <label>Selection Tool</label>
-          <div class="tool-grid">
-            <button v-for="t in tools" :key="t.id" class="tool-chip"
-              :class="{ active: currentTool === t.id }" @click="currentTool = t.id">
-              {{ t.icon }} {{ t.label }}
-            </button>
-          </div>
+        <!-- 고른 도구의 이름 — 아이콘만 있는 툴바를 보완한다 -->
+        <div class="tool-head">
+          <span class="tool-name">{{ currentToolLabel }}</span>
+          <span class="tool-key">{{ currentToolKey }}</span>
         </div>
 
         <!-- 올가미 모드 -->
@@ -105,7 +104,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import EditorToolbar from '../components/editor/EditorToolbar.vue'
+import { INPAINT_TOOLS, toolById, toolByKey } from '../utils/editorTools'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from '../components/CustomSelect.vue'
@@ -140,12 +141,23 @@ const inpaintAreaLabel = computed({
   get: () => inpaintAreas[inpaintArea.value] || inpaintAreas[0],
   set: (v: string) => { inpaintArea.value = inpaintAreas.indexOf(v) }
 })
-const tools = [
-  { id: 'box', icon: '⬚', label: 'RECT' },
-  { id: 'lasso', icon: '➰', label: 'LASSO' },
-  { id: 'brush', icon: '🖌', label: 'BRUSH' },
-  { id: 'eraser', icon: '⌫', label: 'ERASER' },
-]
+const currentToolLabel = computed(() => toolById(currentTool.value)?.label ?? '도구')
+const currentToolKey = computed(() => toolById(currentTool.value)?.shortcut ?? '')
+
+/**
+ * 도구 단축키 (M·L·B·E). 에디터와 같은 키를 쓴다.
+ * 입력 중에는 절대 가로채지 않는다 — 프롬프트에 'b' 를 치는 순간 도구가 바뀌면 못 쓴다.
+ */
+function onInpaintKeyDown(e: KeyboardEvent) {
+  const el = document.activeElement as HTMLElement | null
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+  const tool = toolByKey(e.key, { ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey })
+  if (!tool || !INPAINT_TOOLS.some((t) => t.id === tool.id)) return
+  e.preventDefault()
+  currentTool.value = tool.id
+}
+onMounted(() => document.addEventListener('keydown', onInpaintKeyDown))
+onUnmounted(() => document.removeEventListener('keydown', onInpaintKeyDown))
 
 const imgW = ref(0), imgH = ref(0)
 const zoom = ref(1), panX = ref(0), panY = ref(0)
@@ -395,6 +407,15 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
 .sidebar { width: 280px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); }
 .sidebar-scroll { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .sidebar-footer { padding: 10px; background: var(--bg-card); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+/* 아이콘만 있는 툴바를 보완하는 이름표 — 지금 무슨 도구인지 글자로도 알려준다 */
+.tool-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 2px 2px 4px; }
+.tool-name { color: var(--text-primary); font-size: var(--fs-body); font-weight: var(--fw-medium); }
+.tool-key {
+  min-width: 18px; padding: 1px 5px; text-align: center;
+  background: var(--bg-button); border: 1px solid var(--rule); border-radius: 3px;
+  color: var(--text-muted); font-size: var(--fs-label);
+}
+
 .glass-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px; }
 .source-thumb { height: 100px; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
 .source-thumb img { width: 100%; height: 100%; object-fit: contain; }

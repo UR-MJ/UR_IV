@@ -34,14 +34,18 @@
       이동 되돌리기
     </button>
 
-    <!-- Start Move -->
+    <!-- Start Move — 옮길 영역이 없으면 눌러도 아무 일이 없다. 막고 이유를 적는다. -->
     <button
       class="accent-btn"
-      :disabled="isMoving"
+      :disabled="isMoving || !hasSelection"
+      :title="hasSelection ? '선택한 영역을 잘라 옮깁니다' : '먼저 캔버스에서 옮길 영역을 선택하세요'"
       @click="onStartMove"
     >
       이동 시작
     </button>
+    <p v-if="!hasSelection && !isMoving" class="need-hint">
+      선택 도구(M · L · B)로 옮길 영역을 먼저 지정하세요
+    </p>
 
     <!-- Confirm / Cancel -->
     <div class="btn-row">
@@ -125,10 +129,13 @@ const props = withDefaults(defineProps<{
   statusText?: string
   canUndo?: boolean
   canInpaint?: boolean
+  /** 캔버스에 옮길 영역이 잡혀 있는지 */
+  hasSelection?: boolean
 }>(), {
   statusText: '마스킹을 먼저 해주세요',
   canUndo: false,
   canInpaint: false,
+  hasSelection: false,
 })
 
 const isMoving = ref(false)
@@ -184,6 +191,15 @@ defineExpose({ setMovingState })
 </script>
 
 <style scoped>
+/* 비활성 버튼만 두면 "고장났나" 로 읽힌다 — 무엇을 먼저 해야 하는지 붙여 준다 */
+.need-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  line-height: 1.45;
+}
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
 .move-panel {
   display: flex;
   flex-direction: column;

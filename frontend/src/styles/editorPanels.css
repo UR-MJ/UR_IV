@@ -252,3 +252,21 @@
   letter-spacing: 0;
   font-weight: var(--fw-normal);
 }
+
+/* ── 왜 못 누르는지 알려주는 안내 ──
+   비활성 버튼만 두면 "고장났나" 로 읽힌다. 무엇을 먼저 해야 하는지 붙여 준다. */
+.editor-panel .need-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  line-height: 1.45;
+}
+
+.editor-panel button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.editor-panel button:disabled:hover {
+  border-color: var(--border);
+  color: inherit;
+}
