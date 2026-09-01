@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "qwebchannel": "^6.2.0",
@@ -18,6 +20,7 @@
     "@vitejs/plugin-vue": "^6.0.5",
     "typescript": "^6.0.3",
     "vite": "^8.0.4",
+    "vitest": "^4.1.11",
     "vue-tsc": "^3.3.3"
   }
 }
