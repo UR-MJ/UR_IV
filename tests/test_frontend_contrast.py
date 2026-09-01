@@ -54,9 +54,12 @@ class FrontendContrastTests(unittest.TestCase):
             ANIMA_PANEL,
             r":deep\(\.csel-display\)\s*\{[^}]*font-size\s*:\s*11px",
         )
+        # 타입 스케일의 하한은 `--fs-label`(11px)이다. 예전에는 10px 리터럴이었는데
+        # 탭 전체 규격 정리에서 11px 로 올렸다 — 이 검사의 뜻(Anima 패널은 조밀한
+        # 라벨 크기를 쓴다)은 그대로고, 값만 토큰으로 옮겼다.
         self.assertRegex(
             ANIMA_PANEL,
-            r"\.ext-note\s*\{[^}]*font-size\s*:\s*10px",
+            r"\.ext-note\s*\{[^}]*font-size\s*:\s*var\(--fs-label\)",
         )
 
     def test_anima_panel_exposes_forge_import_action(self) -> None:
