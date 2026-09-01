@@ -3046,37 +3046,54 @@ class VueBridge(QObject):
             # tags_db에서 모든 태그 수집
             if not hasattr(self, '_all_tags_set'):
                 self._all_tags_set = set()
-                import os
-                tags_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tags_db')
-                # clothes_list.txt
-                for txt_file in ['clothes_list.txt', 'characteristic_list.txt']:
-                    fp = os.path.join(tags_db, txt_file)
-                    if os.path.exists(fp):
-                        with open(fp, 'r', encoding='utf-8') as f:
-                            for line in f:
-                                t = line.strip().lower()
-                                if t: self._all_tags_set.add(t)
-                # parquet 파일들
+                from core.tag_database import TagAsset, get_tag_database
+                database = get_tag_database()
+                # 명시적으로 등록된 소형 태그 목록(선별 + 확장)
+                for asset in (
+                    TagAsset.CLOTHING_TAGS_CURATED,
+                    TagAsset.CLOTHING_TAGS_EXTENDED,
+                    TagAsset.APPEARANCE_TAGS_CURATED,
+                    TagAsset.APPEARANCE_TAGS_EXTENDED,
+                    TagAsset.COLOR_TERMS_CURATED,
+                    TagAsset.COLOR_TERMS_EXTENDED,
+                ):
+                    try:
+                        self._all_tags_set.update(
+                            line.lower().replace(' ', '_')
+                            for line in database.read_lines(asset)
+                        )
+                    except Exception as e:
+                        logger.debug("tag lexicon read failed (%s): %s", asset.value, e)
+                # 기존 KR_tags.parquet 첫 열 스캔이 제공하던 Search 일반 태그.
                 try:
-                    import pandas as pd
-                    for fn in os.listdir(tags_db):
-                        if fn.endswith('.parquet'):
-                            try:
-                                df = pd.read_parquet(os.path.join(tags_db, fn))
-                                col = df.columns[0] if len(df.columns) > 0 else None
-                                if col:
-                                    for v in df[col].dropna():
-                                        self._all_tags_set.add(str(v).strip().lower())
-                            except Exception as e:
-                                logger.debug("parquet read failed (%s): %s", fn, e)
+                    catalog = database.read_parquet(
+                        TagAsset.KOREAN_TAG_CATALOG,
+                        columns=['tag'],
+                    )
+                    self._all_tags_set.update(
+                        str(tag).strip().lower().replace(' ', '_')
+                        for tag in catalog['tag'].dropna()
+                        if str(tag).strip()
+                    )
                 except Exception as e:
-                    logger.warning("tags_db scan failed: %s", e)
+                    logger.warning("Korean tag catalog scan failed: %s", e)
+                # 통합 Wiki 그룹의 실제 tag 열만 수집
+                try:
+                    self._all_tags_set.update(
+                        tag.lower().replace(' ', '_')
+                        for tag in database.all_group_tags()
+                    )
+                except Exception as e:
+                    logger.warning("tag group scan failed: %s", e)
                 # TagClassifier의 tag_to_category
                 try:
                     from core.tag_classifier import TagClassifier
                     if not hasattr(self, '_tag_classifier'):
                         self._tag_classifier = TagClassifier()
-                    self._all_tags_set.update(self._tag_classifier.tag_to_category.keys())
+                    self._all_tags_set.update(
+                        tag.lower().replace(' ', '_')
+                        for tag in self._tag_classifier.tag_to_category
+                    )
                 except Exception as e:
                     logger.debug("TagClassifier categories load failed: %s", e)
                 # character/copyright/artist 사전도 추가
@@ -3085,9 +3102,9 @@ class VueBridge(QObject):
                     if not hasattr(self, '_tag_classifier'):
                         self._tag_classifier = TagClassifier()
                     tc = self._tag_classifier
-                    if hasattr(tc, 'characters'): self._all_tags_set.update(t.lower() for t in tc.characters)
-                    if hasattr(tc, 'copyrights'): self._all_tags_set.update(t.lower() for t in tc.copyrights)
-                    if hasattr(tc, 'artists'): self._all_tags_set.update(t.lower() for t in tc.artists)
+                    if hasattr(tc, 'characters'): self._all_tags_set.update(t.lower().replace(' ', '_') for t in tc.characters)
+                    if hasattr(tc, 'copyrights'): self._all_tags_set.update(t.lower().replace(' ', '_') for t in tc.copyrights)
+                    if hasattr(tc, 'artists'): self._all_tags_set.update(t.lower().replace(' ', '_') for t in tc.artists)
                 except Exception as e:
                     logger.debug("TagClassifier name dicts load failed: %s", e)
                 print(f"[Exclude] Tag DB loaded: {len(self._all_tags_set)} tags")
@@ -3174,24 +3191,21 @@ class VueBridge(QObject):
 
     @pyqtSlot(str, result=str)
     def getCharacterInsight(self, character: str) -> str:
-        """캐릭터 공식 설정(description) 반환 (JSONL 기반)"""
+        """캐릭터 대표 프롬프트 태그를 정식 Parquet 자산에서 반환."""
         try:
-            import os
-            jsonl_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'danbooru_character_description_full.jsonl')
-            if not os.path.exists(jsonl_path):
-                return json.dumps({'error': 'JSONL not found'})
             # 캐시
             if not hasattr(self, '_char_desc_cache'):
+                from core.tag_database import TagAsset, get_tag_database
                 self._char_desc_cache = {}
-                with open(jsonl_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        try:
-                            d = json.loads(line)
-                            name = d.get('character', '').lower().strip()
-                            desc = d.get('description', '')
-                            if name and desc:
-                                self._char_desc_cache[name] = desc
-                        except: continue
+                frame = get_tag_database().read_parquet(
+                    TagAsset.CHARACTER_PROMPT_TAGS,
+                    columns=['character', 'description'],
+                )
+                for name, desc in frame.itertuples(index=False, name=None):
+                    normalized = str(name or '').lower().strip()
+                    description = str(desc or '')
+                    if normalized and description:
+                        self._char_desc_cache[normalized] = description
                 print(f"[CharInsight] Loaded {len(self._char_desc_cache)} characters")
             # 검색
             char_lower = character.lower().strip().replace(' ', '_')
@@ -3224,29 +3238,27 @@ class VueBridge(QObject):
             except Exception:
                 pass
 
-            # fallback: clothes_list.txt 기반 간이 분류
+            # fallback: 정식 태그 자산 기반 간이 분류
             if not hasattr(self, '_fallback_clothes'):
                 self._fallback_clothes = set()
                 self._fallback_sexual = set()
-                import os
-                tags_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tags_db')
-                # clothes_list.txt
-                cl_path = os.path.join(tags_db, 'clothes_list.txt')
-                if os.path.exists(cl_path):
-                    with open(cl_path, 'r', encoding='utf-8') as f:
-                        self._fallback_clothes = {line.strip().lower() for line in f if line.strip()}
-                # sexual keywords from known parquet names
-                for fn in ['sex_acts.parquet', 'nudity.parquet', 'pussy.parquet', 'sexual_positions.parquet', 'sexual_attire.parquet', 'sex_objects.parquet']:
-                    fp = os.path.join(tags_db, fn)
-                    if os.path.exists(fp):
-                        try:
-                            import pandas as pd
-                            df = pd.read_parquet(fp)
-                            col = df.columns[0] if len(df.columns) > 0 else None
-                            if col:
-                                self._fallback_sexual.update(df[col].str.lower().tolist())
-                        except Exception:
-                            pass
+                try:
+                    from core.tag_database import TagAsset, get_tag_database
+                    database = get_tag_database()
+                    self._fallback_clothes = {
+                        line.lower().replace(' ', '_')
+                        for line in database.read_lines(TagAsset.CLOTHING_TAGS_CURATED)
+                    }
+                    groups = database.load_tag_groups()
+                    for group_name in (
+                        'sex_acts', 'nudity', 'pussy', 'sexual_positions',
+                        'sexual_attire', 'sex_objects',
+                    ):
+                        self._fallback_sexual.update(
+                            tag.lower() for tag in groups.get(group_name, set())
+                        )
+                except Exception as e:
+                    logger.debug("tag classification fallback load failed: %s", e)
 
             for tag in tags:
                 t = tag.strip().lower().replace(' ', '_')

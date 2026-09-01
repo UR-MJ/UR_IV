@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "assets": {
+    "autocomplete_catalog": {
+      "path": "autocomplete/danbooru_autocomplete_catalog.csv",
+      "format": "csv",
+      "description": "Danbooru 태그, 유형, 사용 횟수, 별칭을 담은 자동완성 카탈로그",
+      "columns": ["tag", "category", "count", "aliases"],
+      "header": false
+    },
+    "korean_tag_catalog": {
+      "path": "catalogs/korean_tag_catalog.parquet",
+      "format": "parquet",
+      "description": "한국어 분류와 설명이 포함된 태그 카탈로그",
+      "columns": ["tag", "count", "category", "desc", "keywords"]
+    },
+    "rating_counts": {
+      "path": "catalogs/danbooru_rating_counts.json",
+      "format": "json",
+      "description": "태그별 Danbooru g/s/q/e 등급 사용 횟수"
+    },
+    "character_profiles": {
+      "path": "characters/character_profiles.json",
+      "format": "json",
+      "description": "캐릭터별 핵심 외형, 성별, 작품, 게시물 수"
+    },
+    "character_features": {
+      "path": "characters/character_features.parquet",
+      "format": "parquet",
+      "description": "캐릭터별 전체 외형·의상 특징과 게시물 수",
+      "columns": ["character", "features", "post_count"]
+    },
+    "character_prompt_tags": {
+      "path": "characters/character_prompt_tags.parquet",
+      "format": "parquet",
+      "description": "Character Insight에 사용하는 캐릭터별 대표 프롬프트 태그",
+      "columns": ["character", "description"]
+    },
+    "curated_character_series": {
+      "path": "characters/curated_female_character_series.json",
+      "format": "json",
+      "description": "별칭이 포함된 수동 검토 여성 캐릭터→작품 보조 매핑"
+    },
+    "extended_character_series": {
+      "path": "characters/danbooru_character_series.parquet",
+      "format": "parquet",
+      "description": "Danbooru에서 추출한 확장 캐릭터→작품 보조 매핑",
+      "columns": ["character", "copyright", "post_count", "first_seen"]
+    },
+    "tag_groups": {
+      "path": "taxonomy/danbooru_tag_groups.parquet",
+      "format": "parquet",
+      "description": "정리·중복 제거된 Danbooru Wiki 태그 그룹",
+      "columns": ["group", "tag"]
+    },
+    "tag_implications": {
+      "path": "taxonomy/danbooru_active_tag_implications.parquet",
+      "format": "parquet",
+      "description": "활성 상태의 Danbooru 태그 포함 관계",
+      "columns": ["antecedent", "consequent"]
+    },
+    "clothing_regions": {
+      "path": "taxonomy/clothing_region_map.json",
+      "format": "json",
+      "description": "의류 태그→착용 부위 매핑"
+    },
+    "expression_tags": {
+      "path": "taxonomy/expression_tags.json",
+      "format": "json",
+      "description": "표정 태그 분류표"
+    },
+    "location_tags": {
+      "path": "taxonomy/location_tags.json",
+      "format": "json",
+      "description": "장소 태그 분류표"
+    },
+    "meta_tags": {
+      "path": "taxonomy/meta_tags.json",
+      "format": "json",
+      "description": "메타 태그 분류표"
+    },
+    "object_tags": {
+      "path": "taxonomy/object_tags.json",
+      "format": "json",
+      "description": "사물 태그 분류표"
+    },
+    "pose_action_tags": {
+      "path": "taxonomy/pose_action_tags.json",
+      "format": "json",
+      "description": "포즈·동작 태그 분류표"
+    },
+    "appearance_tags_curated": {
+      "path": "lexicons/appearance_tags_curated.txt",
+      "format": "text",
+      "description": "기존 동작 호환용 수동 선별 외형 태그"
+    },
+    "appearance_tags_extended": {
+      "path": "lexicons/appearance_tags_extended.txt",
+      "format": "text",
+      "description": "NAIA 기반 확장 외형 태그"
+    },
+    "clothing_tags_curated": {
+      "path": "lexicons/clothing_tags_curated.txt",
+      "format": "text",
+      "description": "기존 동작 호환용 수동 선별 의류 태그"
+    },
+    "clothing_tags_extended": {
+      "path": "lexicons/clothing_tags_extended.txt",
+      "format": "text",
+      "description": "NAIA 기반 확장 의류 태그"
+    },
+    "color_terms_curated": {
+      "path": "lexicons/color_terms_curated.txt",
+      "format": "text",
+      "description": "기존 동작 호환용 수동 선별 색상 용어"
+    },
+    "color_terms_extended": {
+      "path": "lexicons/color_terms_extended.txt",
+      "format": "text",
+      "description": "NAIA 기반 확장 색상·패턴 용어"
+    }
+  }
+}

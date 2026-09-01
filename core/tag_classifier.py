@@ -1,431 +1,424 @@
-# core/tag_classifier.py
-"""
-태그 분류 및 필터링 유틸리티
-"""
-import os
-import re
-import pandas as pd
-from pathlib import Path
+"""Tag classification and filtering backed by the consolidated tag database."""
 
-TAGS_DB_PATH = Path(__file__).parent.parent / "tags_db"
+from __future__ import annotations
+
+from collections import deque
+from typing import Iterable
+
+from core.tag_database import TagAsset, TagDatabase, get_tag_database
+
+
+_CATEGORY_MAPPING = {
+    "body_parts": {
+        "body_parts", "ass", "breasts_tags", "hair", "hair_color",
+        "hair_styles", "eyes_tags", "ears_tags", "hands", "legs", "feet",
+        "shoulders", "neck_and_neckwear", "skin_color", "skin_folds", "bra",
+    },
+    "clothing": {
+        "clothes_list", "dress", "attire", "shirt", "pants", "legwear",
+        "sleeves", "headwear", "eyewear", "handwear", "covering", "mask",
+        "fashion_style", "patterns", "embellishment", "panties", "sexual_attire",
+        "piercings",
+    },
+    "pose": {
+        "posture", "gestures", "sexual_positions", "dances",
+        "verbs_and_gerunds",
+    },
+    "expression": {"face_tags"},
+    "composition": {"focus_tags", "image_composition", "scan"},
+    "background": {
+        "backgrounds", "locations", "real_world_locations",
+        "holidays_and_celebrations", "history",
+    },
+    "effect": {
+        "lighting", "censorship", "metatags", "visual_novel_games", "year_tags", "water",
+        "fire", "flowers", "symbols",
+    },
+    "objects": {
+        "audio_tags", "food_tags", "weapons", "technology", "video_game",
+        "board_games", "fighting_games", "platform_games", "role-playing_games",
+        "shooter_games", "text", "prints", "tail", "wings", "cards", "sports",
+    },
+    "character_trait": {
+        "characteristic_list", "family_relationships", "groups", "jobs", "subjective",
+        "legendary_creatures", "people", "companies_and_brand_names",
+    },
+    "animals": {"birds", "cats", "dogs"},
+    "art_style": {
+        "fine_art_parody", "drawing_software", "japanese_dialects",
+        "artistic_license", "phrases", "pixiv_projects",
+    },
+    "sexual": {
+        "sex_acts", "sex_objects", "nudity", "pussy", "sexual_attire",
+        "sexual_positions", "simulated_sex_acts",
+    },
+    "color": {"colors", "hair_color", "skin_color"},
+}
+
+_MIXED_GROUPS = {
+    "ass": ("body_parts", "pose", "composition"),
+    "breasts_tags": ("body_parts", "pose"),
+    "pussy": ("body_parts", "sexual"),
+    "metatags": ("effect", "composition"),
+}
+
+_CATEGORY_PRIORITY = (
+    "sexual", "body_parts", "clothing", "pose", "expression",
+    "character_trait", "composition", "background", "effect", "objects",
+    "animals", "art_style", "color",
+)
+
+_DEFAULT_CENSORSHIP = {
+    "censored", "mosaic censoring", "bar censoring", "blur censor",
+    "light censoring", "novelty censoring", "heart censor", "steam censor",
+    "convenient censoring", "censored nipples", "censored pussy",
+    "censored penis", "mosaic_censoring", "bar_censoring", "light_censoring",
+}
+
+
+def _tag_key(tag: object) -> str:
+    """Return the comparison form used by groups and implications."""
+    return (
+        str(tag or "")
+        .strip()
+        .lower()
+        .replace(r"\(", "(")
+        .replace(r"\)", ")")
+        .replace("_", " ")
+    )
+
+
+def _group_key(group: object) -> str:
+    value = str(group or "").strip().lower()
+    if value.startswith("tag_group:"):
+        value = value.split(":", 1)[1]
+    if value.endswith(".parquet"):
+        value = value[:-8]
+    return value.replace(" ", "_")
+
+
+def _variants(tag: object) -> set[str]:
+    raw = str(tag or "").strip().lower()
+    unescaped = raw.replace(r"\(", "(").replace(r"\)", ")")
+    spaced = unescaped.replace("_", " ")
+    underscored = unescaped.replace(" ", "_")
+    escaped = unescaped.replace("(", r"\(").replace(")", r"\)")
+    return {value for value in (raw, unescaped, spaced, underscored, escaped) if value}
+
+
+def _variant_set(tags: Iterable[object]) -> set[str]:
+    result: set[str] = set()
+    for tag in tags:
+        result.update(_variants(tag))
+    return result
+
+
+def _lower_set(tags: Iterable[object]) -> set[str]:
+    return {str(tag).strip().lower() for tag in tags if str(tag).strip()}
 
 
 class TagClassifier:
-    def __init__(self):
-        # 기본 태그 세트
-        self.characters = set()
-        self.copyrights = set()
-        self.artists = set()
-        self.meta_tags = set()
-        self.clothes = set()
-        self.characteristics = set()
-        self.colors = set()
+    """Classify prompt tags while hiding tag-asset layout from callers."""
 
-        # Wiki 그룹
-        self.wiki_groups = {}
-        self.tag_to_category = {}
+    def __init__(self, database: TagDatabase | None = None):
+        self._use_shared_tag_data = database is None
+        self._database = database or get_tag_database()
 
-        # 특수 태그
-        self.censorship_tags = set()
-        self.text_tags = set()
+        # Public sets retained for existing removal/filter callers.
+        self.characters: set[str] = set()
+        self.copyrights: set[str] = set()
+        self.artists: set[str] = set()
+        self.meta_tags: set[str] = set()
+        self.clothes: set[str] = set()
+        self.characteristics: set[str] = set()
+        self.colors: set[str] = set()
 
-        # 경로 설정
-        self.tags_db_dir = str(TAGS_DB_PATH)
+        self.wiki_groups: dict[str, set[str]] = {}
+        self.tag_to_category: dict[str, list[dict[str, str]]] = {}
+        self.censorship_tags: set[str] = set()
+        self.text_tags: set[str] = set()
 
-        # TagData에서 태그 세트 로드 (parquet 기반)
+        # Kept for compatibility with diagnostics that display the former folder.
+        try:
+            self.tags_db_dir = str(self._database.path(TagAsset.TAG_GROUPS).parent)
+        except Exception:
+            self.tags_db_dir = ""
+
+        self._implications: dict[str, set[str]] = {}
         self._load_from_tag_data()
+        self._load_manifest_meta_tags()
         self._load_text_files()
         self._load_wiki_groups()
         self._load_special_tags()
-    
+
     def _load_from_tag_data(self):
-        """TagData(parquet)에서 태그 세트 로드"""
+        """Load the optimized Danbooru catalog, with curated database fallbacks."""
+        if self._use_shared_tag_data:
+            try:
+                from contextlib import redirect_stdout
+                from io import StringIO
+                from utils.tag_data import get_tag_data
+
+                # TagData's legacy emoji logging can fail under a CP949 console.
+                # The classifier emits an ASCII summary below instead.
+                with redirect_stdout(StringIO()):
+                    tag_data = get_tag_data()
+                if tag_data.is_loaded:
+                    self.characters = _lower_set(tag_data.character_set)
+                    self.copyrights = _lower_set(tag_data.copyright_set)
+                    self.artists = _lower_set(tag_data.artist_set)
+                    self.meta_tags = _lower_set(tag_data.meta_set)
+                    print(
+                        f"[TagClassifier] TagData: characters={len(self.characters):,}, "
+                        f"copyrights={len(self.copyrights):,}, artists={len(self.artists):,}, "
+                        f"meta={len(self.meta_tags):,}"
+                    )
+                    return
+            except Exception as exc:
+                print(f"[TagClassifier] TagData load failed: {exc}")
+
+        self._load_curated_name_fallbacks()
+
+    def _load_curated_name_fallbacks(self) -> None:
+        """Recover high-confidence names without treating broad catalogs as groups."""
+        characters: list[object] = []
+        copyrights: list[object] = []
         try:
-            from utils.tag_data import get_tag_data
-            td = get_tag_data()
-            if td.is_loaded:
-                self.characters = td.character_set.copy()
-                self.copyrights = td.copyright_set.copy()
-                self.artists = td.artist_set.copy()
-                self.meta_tags = td.meta_set.copy()
-                print(f"✅ TagData 연동: 캐릭터={len(self.characters):,}, "
-                      f"작품={len(self.copyrights):,}, "
-                      f"작가={len(self.artists):,}, "
-                      f"메타={len(self.meta_tags):,}")
-                return
-        except Exception as e:
-            print(f"⚠️ TagData 연동 실패, dict 파일로 폴백: {e}")
+            profiles = self._database.read_json(TagAsset.CHARACTER_PROFILES)
+            if isinstance(profiles, list):
+                for entry in profiles:
+                    if not isinstance(entry, dict):
+                        continue
+                    characters.append(entry.get("tag", ""))
+                    copyrights.append(entry.get("copyright", ""))
+        except Exception as exc:
+            print(f"[TagClassifier] character profile fallback failed: {exc}")
 
-        # 폴백: 기존 Python dict 파일에서 로드
-        self._load_all_python_dicts_fallback()
-
-    def _load_all_python_dicts_fallback(self):
-        """폴백: 딕셔너리 파일에서 태그 로드"""
-        for name in ["character_dictionary.py", "danbooru_character.py"]:
-            char_path = TAGS_DB_PATH / name
-            if char_path.exists():
-                self.characters = self._load_python_dict_keys(char_path)
-                print(f"✅ 캐릭터(폴백): {name} → {len(self.characters)}개 로드")
-                break
-
-        for name in ["copyright_dictionary.py", "copyright_list_reformatted.py"]:
-            copy_path = TAGS_DB_PATH / name
-            if copy_path.exists():
-                self.copyrights = self._load_python_dict_keys(copy_path)
-                print(f"✅ 작품(폴백): {name} → {len(self.copyrights)}개 로드")
-                break
-
-        artist_path = TAGS_DB_PATH / "artist_dictionary.py"
-        if artist_path.exists():
-            self.artists = self._load_python_dict_keys(artist_path)
-            print(f"✅ 작가(폴백): → {len(self.artists)}개 로드")
-
-    def _load_python_dict_keys(self, filepath):
-        """Python 파일에서 dict 키 또는 list 항목을 로드"""
-        import ast
-        import re
-        tags = set()
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read()
+            curated = self._database.read_json(TagAsset.CURATED_CHARACTER_SERIES)
+            if isinstance(curated, dict):
+                for series, groups in curated.items():
+                    if str(series).startswith("_") or not isinstance(groups, dict):
+                        continue
+                    copyrights.append(series)
+                    for gender in ("girl", "boy", "other"):
+                        for character in groups.get(gender) or []:
+                            if isinstance(character, dict):
+                                characters.append(character.get("name", ""))
+                                characters.extend(character.get("aliases") or [])
+        except Exception as exc:
+            print(f"[TagClassifier] curated series fallback failed: {exc}")
 
-            # '변수명 = {..}' 또는 '변수명 = [..]' 패턴에서 리터럴 추출
-            match = re.search(r'=\s*(\{.*\}|\[.*\])', content, re.DOTALL)
-            if not match:
-                return tags
+        try:
+            extended = self._database.read_parquet(
+                TagAsset.EXTENDED_CHARACTER_SERIES,
+                columns=["character", "copyright"],
+            )
+            characters.extend(extended["character"].dropna().tolist())
+            copyrights.extend(extended["copyright"].dropna().tolist())
+        except Exception as exc:
+            print(f"[TagClassifier] extended series fallback failed: {exc}")
 
-            data = ast.literal_eval(match.group(1))
+        self.characters = _lower_set(characters)
+        self.copyrights = _lower_set(copyrights)
+        print(
+            f"[TagClassifier] Curated name fallback: characters={len(self.characters):,}, "
+            f"copyrights={len(self.copyrights):,}"
+        )
 
+    def _load_manifest_meta_tags(self) -> None:
+        """Augment TagData with the curated UI meta-tag catalog."""
+        try:
+            data = self._database.read_json(TagAsset.META_TAGS)
             if isinstance(data, dict):
-                for k in data.keys():
-                    tag = str(k).lower().strip()
-                    if tag:
-                        tags.add(tag)
-            elif isinstance(data, (list, tuple)):
-                for item in data:
-                    tag = str(item).lower().strip()
-                    if tag:
-                        tags.add(tag)
-        except Exception as e:
-            print(f"⚠️ {filepath} 로드 실패: {e}")
+                self.meta_tags.update(_lower_set(data.get("tags") or []))
+        except Exception as exc:
+            print(f"[TagClassifier] meta tag catalog load failed: {exc}")
 
-        return tags
-    
     def _load_text_files(self):
-        """텍스트 파일 로드"""
-        clothes_path = TAGS_DB_PATH / "clothes_list.txt"
-        if clothes_path.exists():
-            self.clothes = self._load_text_file(clothes_path)
-        
-        char_path = TAGS_DB_PATH / "characteristic_list.txt"
-        if char_path.exists():
-            self.characteristics = self._load_text_file(char_path)
-        
-        color_path = TAGS_DB_PATH / "color.txt"
-        if color_path.exists():
-            self.colors = self._load_text_file(color_path)
-    
-    def _load_text_file(self, filepath):
-        """텍스트 파일에서 라인별로 로드"""
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                lines = [line.strip().lower() for line in f if line.strip()]
-            return set(lines)
-        except Exception as e:
-            print(f"⚠️ 파일 로드 실패 {filepath}: {e}")
-            return set()
-    
-    def _load_special_tags(self):
-        """검열/텍스트 태그 로드"""
-        # censorship
-        censor_path = TAGS_DB_PATH / "censorship.parquet"
-        if censor_path.exists():
-            try:
-                try:
-                    df = pd.read_parquet(censor_path, columns=['name'])
-                except Exception:
-                    df = pd.read_parquet(censor_path)
-                if 'name' in df.columns:
-                    self.censorship_tags = set(df['name'].str.lower().tolist())
-                elif 'tag' in df.columns:
-                    self.censorship_tags = set(df['tag'].str.lower().tolist())
-                elif len(df.columns) > 0:
-                    self.censorship_tags = set(str(t).lower() for t in df.iloc[:, 0] if pd.notna(t))
-            except Exception as e:
-                print(f"⚠️ censorship.parquet 로드 실패: {e}")
-        
-        # 기본 검열 태그 추가
-        default_censorship = {
-            'censored', 'mosaic censoring', 'bar censoring', 
-            'blur censor', 'light censoring', 'novelty censoring',
-            'heart censor', 'steam censor', 'convenient censoring',
-            'censored nipples', 'censored pussy', 'censored penis',
-            'mosaic_censoring', 'bar_censoring', 'light_censoring'
-        }
-        self.censorship_tags.update(default_censorship)
-        print(f"✅ censorship 태그: {len(self.censorship_tags)}개 로드")
-        
-        # text
-        text_path = TAGS_DB_PATH / "text.parquet"
-        if text_path.exists():
-            try:
-                try:
-                    df = pd.read_parquet(text_path, columns=['name'])
-                except Exception:
-                    df = pd.read_parquet(text_path)
-                if 'name' in df.columns:
-                    self.text_tags = set(df['name'].str.lower().tolist())
-                elif 'tag' in df.columns:
-                    self.text_tags = set(df['tag'].str.lower().tolist())
-                elif len(df.columns) > 0:
-                    self.text_tags = set(str(t).lower() for t in df.iloc[:, 0] if pd.notna(t))
-            except Exception as e:
-                print(f"⚠️ text.parquet 로드 실패: {e}")
-        print(f"✅ text 태그: {len(self.text_tags)}개 로드")
-    
-    def _load_wiki_groups(self):
-        """Wiki tag groups 로드"""
-        if not os.path.exists(self.tags_db_dir):
-            print(f"⚠️ tags_db 폴더 없음: {self.tags_db_dir}")
-            return
-        
-        category_mapping = {
-            "body_parts": ["body_parts", "ass", "breasts_tags", "hair", "hair_color", 
-                          "hair_styles", "eyes_tags", "face_tags", "ears_tags", 
-                          "hands", "legs", "feet", "shoulders", "neck_and_neckwear",
-                          "skin_color", "skin_folds", "bra"],
-            "clothing": ["clothes_list", "dress", "attire", "shirt", "pants", 
-                        "legwear", "sleeves", "headwear", "eyewear", "handwear",
-                        "covering", "fashion_style", "patterns", "embellishment",
-                        "panties", "sexual_attire"],
-            "pose": ["posture", "gestures", "sexual_positions", "dances"],
-            "expression": ["face_tags"],
-            "composition": ["focus_tags", "image_composition", "scan"],
-            "background": ["backgrounds", "locations", "real_world_locations",
-                          "holidays_and_celebrations", "history"],
-            "effect": ["lighting", "censorship", "metatags", "visual_novel_games",
-                      "water", "fire", "flowers", "symbols"],
-            "objects": ["audio_tags", "food_tags", "weapons", "technology",
-                       "video_game", "board_games", "fighting_games", 
-                       "platform_games", "role-playing_games", "shooter_games",
-                       "text", "prints", "tail", "wings"],
-            "character_trait": ["characteristic_list", "family_relationships", "groups",
-                               "jobs", "legendary_creatures", "people", "companies_and_brand_names"],
-            "animals": ["birds", "cats", "dogs"],
-            "art_style": ["fine_art_parody", "drawing_software", "japanese_dialects",
-                         "artistic_license", "phrases"],
-            "sexual": ["sex_acts", "sex_objects", "nudity", "pussy",
-                      "sexual_attire", "sexual_positions", "simulated_sex_acts"],
-            "color": ["colors", "hair_color", "skin_color"]
-        }
-        
-        mixed_files = {
-            "ass": ["body_parts", "pose", "composition"],
-            "breasts_tags": ["body_parts", "pose"],
-            "pussy": ["body_parts", "sexual"],
-            "metatags": ["effect", "composition"],
-        }
-        
-        try:
-            parquet_files = [f for f in os.listdir(self.tags_db_dir) if f.endswith('.parquet')]
-        except Exception as e:
-            print(f"⚠️ 폴더 읽기 실패: {e}")
-            return
-        
-        print(f"📦 Wiki groups 로드 중... ({len(parquet_files)}개 파일)")
-        
-        for filename in parquet_files:
-            filepath = os.path.join(self.tags_db_dir, filename)
-            group_name = filename.replace('.parquet', '')
-            
-            try:
-                try:
-                    df = pd.read_parquet(filepath, columns=['tag'])
-                except Exception:
-                    try:
-                        df = pd.read_parquet(filepath, columns=['name'])
-                    except Exception:
-                        df = pd.read_parquet(filepath)
+        """Load the small curated lists used as high-confidence fallbacks."""
+        self.clothes = self._read_lines(TagAsset.CLOTHING_TAGS_CURATED)
+        self.characteristics = self._read_lines(TagAsset.APPEARANCE_TAGS_CURATED)
+        self.colors = self._read_lines(TagAsset.COLOR_TERMS_CURATED)
 
-                if 'tag' in df.columns:
-                    tags = df['tag'].tolist()
-                elif 'name' in df.columns:
-                    tags = df['name'].tolist()
-                elif len(df.columns) > 0:
-                    tags = df.iloc[:, 0].tolist()
-                else:
-                    continue
-                
-                self.wiki_groups[group_name] = set(str(t).lower() for t in tags if pd.notna(t))
-                
-                if group_name in mixed_files:
-                    categories = mixed_files[group_name]
-                else:
-                    categories = [self._find_category(group_name, category_mapping)]
-                
-                for tag in self.wiki_groups[group_name]:
-                    if tag not in self.tag_to_category:
-                        self.tag_to_category[tag] = []
-                    for cat in categories:
-                        self.tag_to_category[tag].append({'group': group_name, 'category': cat})
-                
-            except Exception as e:
-                print(f"⚠️ 파일 로드 실패 {filename}: {e}")
-        
-        print(f"✅ {len(self.wiki_groups)}개 그룹, {len(self.tag_to_category)}개 태그 로드 완료")
-    
-    def _find_category(self, group_name, category_mapping):
-        """그룹명을 카테고리로 매핑"""
-        group_lower = group_name.lower()
-        for category, keywords in category_mapping.items():
-            if group_lower in keywords:
+    def _read_lines(self, asset: TagAsset) -> set[str]:
+        try:
+            return _lower_set(self._database.read_lines(asset))
+        except Exception as exc:
+            print(f"[TagClassifier] {asset.value} load failed: {exc}")
+            return set()
+
+    def _load_wiki_groups(self):
+        """Load only the consolidated group asset, never unrelated parquet catalogs."""
+        try:
+            groups = self._database.load_tag_groups()
+        except Exception as exc:
+            print(f"[TagClassifier] tag groups load failed: {exc}")
+            groups = {}
+
+        for raw_group, raw_tags in groups.items():
+            group = _group_key(raw_group)
+            if not group:
+                continue
+            tags = _lower_set(raw_tags)
+            if not tags:
+                continue
+            self.wiki_groups.setdefault(group, set()).update(tags)
+            categories = _MIXED_GROUPS.get(group, (self._find_category(group),))
+            for tag in tags:
+                entries = self.tag_to_category.setdefault(tag, [])
+                for category in categories:
+                    entry = {"group": group, "category": category}
+                    if entry not in entries:
+                        entries.append(entry)
+
+        try:
+            raw_implications = self._database.load_active_implications()
+        except Exception as exc:
+            print(f"[TagClassifier] tag implications load failed: {exc}")
+            raw_implications = {}
+        normalized_implications: dict[str, set[str]] = {}
+        for raw_antecedent, raw_consequences in raw_implications.items():
+            antecedent = _tag_key(raw_antecedent)
+            consequences = {_tag_key(value) for value in raw_consequences if _tag_key(value)}
+            if antecedent and consequences:
+                normalized_implications.setdefault(antecedent, set()).update(consequences)
+        self._implications = normalized_implications
+        print(
+            f"[TagClassifier] {len(self.wiki_groups)} tag groups, "
+            f"{len(self.tag_to_category)} indexed forms loaded"
+        )
+
+    @staticmethod
+    def _find_category(group_name: str) -> str:
+        for category, groups in _CATEGORY_MAPPING.items():
+            if group_name in groups:
                 return category
         return "general"
-    
+
+    def _load_special_tags(self):
+        """Derive censorship/text filters from the consolidated group asset."""
+        self.censorship_tags = set(self.wiki_groups.get("censorship", set()))
+        self.censorship_tags.update(_variant_set(_DEFAULT_CENSORSHIP))
+        self.text_tags = set(self.wiki_groups.get("text", set()))
+        print(f"[TagClassifier] censorship tags: {len(self.censorship_tags)}")
+        print(f"[TagClassifier] text tags: {len(self.text_tags)}")
+
     def filter_tags(self, tags_list, remove_censorship=False, remove_text=False):
-        """태그 필터링"""
+        """Filter tags while preserving their original spelling and order."""
         result = []
         for tag in tags_list:
-            tag_lower = tag.lower()
-            if remove_censorship and tag_lower in self.censorship_tags:
+            if remove_censorship and self.is_censorship_tag(tag):
                 continue
-            if remove_text and tag_lower in self.text_tags:
+            if remove_text and self.is_text_tag(tag):
                 continue
             result.append(tag)
         return result
-    
-    def is_censorship_tag(self, tag):
-        """검열 관련 태그인지 확인"""
-        tag_lower = tag.lower().strip()
-        
-        # 직접 매칭
-        if tag_lower in self.censorship_tags:
-            return True
-        
-        # 띄어쓰기 <-> 언더스코어 변환 매칭
-        tag_underscore = tag_lower.replace(' ', '_')
-        tag_space = tag_lower.replace('_', ' ')
-        
-        if tag_underscore in self.censorship_tags:
-            return True
-        if tag_space in self.censorship_tags:
-            return True
-        
-        return False
 
+    def is_censorship_tag(self, tag):
+        return any(value in self.censorship_tags for value in _variants(tag))
 
     def is_text_tag(self, tag):
-        """텍스트 태그인지 확인"""
-        tag_lower = tag.lower().strip()
-        
-        # 직접 매칭
-        if tag_lower in self.text_tags:
-            return True
-        
-        # 띄어쓰기 <-> 언더스코어 변환 매칭
-        tag_underscore = tag_lower.replace(' ', '_')
-        tag_space = tag_lower.replace('_', ' ')
-        
-        if tag_underscore in self.text_tags:
-            return True
-        if tag_space in self.text_tags:
-            return True
-        
-        return False
-        
+        return any(value in self.text_tags for value in _variants(tag))
+
     def is_meta_tag(self, tag: str) -> bool:
-        """메타 태그인지 확인 (parquet 773개 + art_style 분류)"""
-        tag_lower = tag.lower().strip()
-        tag_space = tag_lower.replace('_', ' ')
-        tag_under = tag_lower.replace(' ', '_')
-
-        if tag_lower in self.meta_tags or tag_space in self.meta_tags or tag_under in self.meta_tags:
+        if any(value in self.meta_tags for value in _variants(tag)):
             return True
+        return "art_style" in self._categories_for_tag(tag)
 
-        # art_style도 메타로 취급
-        if tag_lower in self.tag_to_category:
-            groups_info = self.tag_to_category[tag_lower]
-            if any(info['category'] == 'art_style' for info in groups_info):
-                return True
+    def _tag_variants(self, tag: str) -> list[str]:
+        """Compatibility helper returning space/underscore/parenthesis forms."""
+        return list(_variants(tag))
 
-        return False
+    def _direct_categories(self, tag: object) -> list[str]:
+        categories: list[str] = []
+        for variant in _variants(tag):
+            for info in self.tag_to_category.get(variant, []):
+                category = info.get("category", "general")
+                if category not in categories:
+                    categories.append(category)
+        return categories
 
-    def _tag_variants(self, tag: str) -> list:
-        """태그의 모든 변형 생성 (공백/언더스코어, 이스케이프 괄호)"""
-        tag_clean = tag.strip().lower()
-        variants = {tag_clean}
-        variants.add(tag_clean.replace('_', ' '))
-        variants.add(tag_clean.replace(' ', '_'))
-        variants.add(tag_clean.replace(r'\(', '(').replace(r'\)', ')'))
-        variants.add(tag_clean.replace('(', r'\(').replace(')', r'\)'))
-        # 언더스코어→공백 + 이스케이프 해제 조합
-        tag_space = tag_clean.replace('_', ' ')
-        variants.add(tag_space.replace(r'\(', '(').replace(r'\)', ')'))
-        return list(variants)
+    def _categories_for_tag(self, tag: object) -> list[str]:
+        """Find direct or nearest implied categories without crossing cycles."""
+        direct = [category for category in self._direct_categories(tag) if category != "general"]
+        if direct:
+            return direct
+
+        start = _tag_key(tag)
+        if not start:
+            return []
+        seen = {start}
+        frontier = deque(self._implications.get(start, set()))
+        while frontier:
+            level_size = len(frontier)
+            inherited: list[str] = []
+            next_level: set[str] = set()
+            for _ in range(level_size):
+                parent = frontier.popleft()
+                if parent in seen:
+                    continue
+                seen.add(parent)
+                for category in self._direct_categories(parent):
+                    if category == "general":
+                        continue
+                    if category not in inherited:
+                        inherited.append(category)
+                next_level.update(self._implications.get(parent, set()) - seen)
+            if inherited:
+                return inherited
+            frontier.extend(sorted(next_level))
+        return []
 
     def classify_tag(self, tag):
-        """태그 분류"""
-        tag_clean = tag.strip().lower()
-        variants = self._tag_variants(tag)
-
-        if any(v in self.characters for v in variants):
+        """Classify a tag, accepting both Danbooru underscores and display spaces."""
+        variants = _variants(tag)
+        if any(value in self.characters for value in variants):
             return "character"
-        if any(v in self.copyrights for v in variants):
+        if any(value in self.copyrights for value in variants):
             return "copyright"
-        if any(v in self.artists for v in variants):
+        if any(value in self.artists for value in variants):
             return "artist"
-        
-        if tag_clean in self.tag_to_category:
-            groups_info = self.tag_to_category[tag_clean]
-            all_categories = [info['category'] for info in groups_info]
-            priority = ["sexual", "body_parts", "clothing", "pose", "expression",
-                       "character_trait", "composition", "background", "effect",
-                       "objects", "animals", "art_style", "color"]
-            for cat in priority:
-                if cat in all_categories:
-                    return cat
-            return all_categories[0] if all_categories else "general"
-        
-        if tag_clean in self.clothes:
+
+        categories = self._categories_for_tag(tag)
+        for category in _CATEGORY_PRIORITY:
+            if category in categories:
+                return category
+        if categories:
+            return categories[0]
+
+        if variants & self.clothes:
             return "clothing"
-        if tag_clean in self.characteristics:
+        if variants & self.characteristics:
             return "character_trait"
-        
-        words = tag_clean.split()
-        if any(word in self.colors for word in words):
+
+        words = set(_tag_key(tag).split())
+        normalized_colors = {_tag_key(color) for color in self.colors}
+        if words & normalized_colors:
             return "color"
-        
         return "general"
-    
+
     def classify_tags_for_event(self, tags_list):
-        """이벤트 생성용 특화 분류"""
+        """Classify tags into the event-generation buckets used by the UI."""
         classified = {
             "count": [], "character": [], "copyright": [], "costume": [],
             "appearance": [], "expression": [], "action": [], "background": [],
-            "composition": [], "effect": [], "objects": [], "general": []
+            "composition": [], "effect": [], "objects": [], "general": [],
         }
-        
         count_tags = {
-            "1boy", "2boys", "3boys", "4boys", "5boys", "6+boys", 
+            "1boy", "2boys", "3boys", "4boys", "5boys", "6+boys",
             "1girl", "2girls", "3girls", "4girls", "5girls", "6+girls",
-            "1other", "2others", "3others", "4others", "5others", "6+others"
+            "1other", "2others", "3others", "4others", "5others", "6+others",
         }
-        
+        mapping = {
+            "character": "character", "copyright": "copyright", "clothing": "costume",
+            "body_parts": "appearance", "expression": "expression", "pose": "action",
+            "background": "background", "composition": "composition", "effect": "effect",
+            "objects": "objects",
+        }
         for tag in tags_list:
-            tag_lower = tag.lower()
-            if tag_lower in count_tags:
+            if _tag_key(tag).replace(" ", "_") in count_tags:
                 classified["count"].append(tag)
                 continue
-            
-            category = self.classify_tag(tag)
-            mapping = {
-                "character": "character", "copyright": "copyright",
-                "clothing": "costume", "body_parts": "appearance",
-                "expression": "expression", "pose": "action",
-                "background": "background", "composition": "composition",
-                "effect": "effect", "objects": "objects"
-            }
-            key = mapping.get(category, "general")
-            classified[key].append(tag)
-        
+            classified[mapping.get(self.classify_tag(tag), "general")].append(tag)
         return classified

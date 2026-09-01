@@ -1,6 +1,6 @@
 # tools/refresh_character_tags.py
 # -*- coding: utf-8 -*-
-"""danbooru 라이브 태그로 tags_db/characterization.json 의 외견(core_tags)을 일괄 교정/갱신.
+"""Danbooru 라이브 태그로 정식 캐릭터 프로필의 외견(core_tags)을 교정·갱신.
 
 동시성(ThreadPool) + 전역 레이트 리미터로 danbooru 10 req/s 천장 바로 아래를 채워
 순차 방식(~14시간) 대비 약 10배 빠르게 처리. 중단(Ctrl+C)/재개 가능.
@@ -18,8 +18,8 @@
   python tools/refresh_character_tags.py --login NAME --api-key KEY   # 인증(권장)
   python tools/refresh_character_tags.py --dry-run            # 저장 안 함(테스트/측정용)
 
-중단해도 진행도가 _refresh_progress.json 에 저장되어, 다시 실행하면 이어서 진행.
-원본은 characterization.json.refresh_bak 으로 1회 백업됩니다.
+중단해도 진행도와 1회 백업은 ``user_data/tag_refresh/``에 저장되어 다시 실행하면
+이어집니다. 런타임 부산물을 ``tags_db`` 안에 섞지 않습니다.
 """
 import argparse
 import json
@@ -35,9 +35,12 @@ import requests
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE)
-CHAR_JSON = os.path.join(BASE, "tags_db", "characterization.json")
-PROGRESS = os.path.join(BASE, "tags_db", "_refresh_progress.json")
-BACKUP = CHAR_JSON + ".refresh_bak"
+from core.tag_database import TagAsset, get_tag_database
+
+CHAR_JSON = str(get_tag_database().path(TagAsset.CHARACTER_PROFILES))
+STATE_DIR = os.path.join(BASE, "user_data", "tag_refresh")
+PROGRESS = os.path.join(STATE_DIR, "progress.json")
+BACKUP = os.path.join(STATE_DIR, "character_profiles.original.json")
 HDR = {"User-Agent": "UR_IV/1.0 character tag refresh (personal)"}
 SESSION = requests.Session()
 SESSION.headers.update(HDR)
@@ -197,6 +200,7 @@ def fetch_features(tag, keep, limiter, auth, method):
 def _save(data, done, dry):
     if dry:
         return
+    os.makedirs(STATE_DIR, exist_ok=True)
     tmp = CHAR_JSON + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
@@ -226,6 +230,7 @@ def main():
         data = json.load(f)
     if not args.dry_run and not os.path.exists(BACKUP):
         import shutil
+        os.makedirs(STATE_DIR, exist_ok=True)
         shutil.copy2(CHAR_JSON, BACKUP)
         print(f"백업: {BACKUP}")
 

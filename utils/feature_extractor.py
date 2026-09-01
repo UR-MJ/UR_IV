@@ -1,11 +1,12 @@
 # utils/feature_extractor.py
 """
-프롬프트에서 캐릭터 특징 추출
-tags_db의 parquet 파일 활용
+프롬프트에서 캐릭터 특징 추출.
+TagDatabase의 통합 그룹 카탈로그와 선별 용어를 활용한다.
 """
-import os
 from pathlib import Path
-from typing import List, Set, Optional
+from typing import List, Set
+
+from core.tag_database import TagAsset, TagDatabase, get_tag_database
 
 
 class FeatureExtractor:
@@ -18,9 +19,10 @@ class FeatureExtractor:
     }
     
     def __init__(self, tags_db_path: str = None):
-        self.tags_db_path = Path(tags_db_path) if tags_db_path else self._find_tags_db_path()
+        self.database = TagDatabase(Path(tags_db_path)) if tags_db_path else get_tag_database()
+        self.tags_db_path = self.database.root
         
-        # 색상 목록 (color.txt에서 로드)
+        # 수동 선별 색상 목록
         self.colors: Set[str] = set()
         
         # 카테고리별 태그
@@ -36,26 +38,12 @@ class FeatureExtractor:
         self._load_parquet_files()
         self._generate_color_combinations()
     
-    def _find_tags_db_path(self) -> Path:
-        """tags_db 경로 찾기"""
-        candidates = [
-            Path(__file__).parent.parent / "tags_db",
-            Path("tags_db"),
-            Path("../tags_db"),
-        ]
-        
-        for path in candidates:
-            if path.exists():
-                return path
-        
-        return Path("tags_db")
-    
     def _load_colors(self):
-        """color.txt에서 색상 로드"""
-        color_file = self.tags_db_path / "color.txt"
+        """수동 선별 색상 용어를 로드."""
+        color_file = self.database.path(TagAsset.COLOR_TERMS_CURATED)
         
         if not color_file.exists():
-            print(f"⚠️ color.txt not found: {color_file}")
+            print(f"[FeatureExtractor] curated color terms not found: {color_file}")
             # 기본 색상
             self.colors = {
                 'red', 'blue', 'green', 'yellow', 'purple', 'pink',
@@ -71,16 +59,16 @@ class FeatureExtractor:
                     color = line.strip().lower()
                     if color:
                         self.colors.add(color)
-            print(f"✅ color.txt: {len(self.colors)}개 색상 로드")
+            print(f"[FeatureExtractor] curated color terms loaded: {len(self.colors)}")
         except Exception as e:
-            print(f"❌ color.txt 로드 실패: {e}")
+            print(f"[FeatureExtractor] curated color term load failed: {e}")
     
     def _load_characteristics(self):
-        """characteristic_list.txt 로드"""
-        char_file = self.tags_db_path / "characteristic_list.txt"
+        """수동 선별 외형 태그를 로드."""
+        char_file = self.database.path(TagAsset.APPEARANCE_TAGS_CURATED)
         
         if not char_file.exists():
-            print(f"⚠️ characteristic_list.txt not found")
+            print("[FeatureExtractor] curated appearance tags not found")
             return
         
         try:
@@ -89,72 +77,40 @@ class FeatureExtractor:
                     tag = line.strip().lower()
                     if tag:
                         self.all_characteristics.add(tag)
-            print(f"✅ characteristic_list.txt: {len(self.all_characteristics)}개 로드")
+            print(
+                f"[FeatureExtractor] curated appearance tags loaded: "
+                f"{len(self.all_characteristics)}"
+            )
         except Exception as e:
-            print(f"❌ characteristic_list.txt 로드 실패: {e}")
+            print(f"[FeatureExtractor] curated appearance tag load failed: {e}")
     
     def _load_parquet_files(self):
-        """parquet 파일들 로드"""
+        """통합 Wiki 그룹 카탈로그에서 외형 관련 그룹을 로드."""
         try:
-            import pandas as pd
-        except ImportError:
-            print("⚠️ pandas가 없어 parquet 로드 불가")
+            groups = self.database.load_tag_groups()
+        except Exception as e:
+            print(f"[FeatureExtractor] tag group load failed: {e}")
             return
-        
-        # 로드할 파일 매핑
-        file_mapping = {
-            'hair_styles': ['hair_styles.parquet', 'hair.parquet'],
-            'hair_color': ['hair_color.parquet'],
-            'eye_tags': ['eyes_tags.parquet'],
-            'special': [
-                'ears_tags.parquet', 'tail.parquet', 'wings.parquet',
-                'body_parts.parquet',
-            ],
-            # colors.parquet는 제외 (배경/테마용)
-        }
-        
-        for category, filenames in file_mapping.items():
-            for filename in filenames:
-                file_path = self.tags_db_path / filename
-                if file_path.exists():
-                    try:
-                        df = pd.read_parquet(file_path)
-                        tags = self._extract_tags_from_df(df)
-                        
-                        if category == 'hair_styles':
-                            self.hair_styles.update(tags)
-                        elif category == 'hair_color':
-                            self.hair_colors.update(tags)
-                        elif category == 'eye_tags':
-                            # eyes_tags에서 색 관련만 추출
-                            for tag in tags:
-                                if 'eyes' in tag:
-                                    self.eye_colors.add(tag)
-                        elif category == 'special':
-                            self.special_features.update(tags)
-                        
-                        self.all_characteristics.update(tags)
-                    except Exception as e:
-                        print(f"⚠️ {filename} 로드 실패: {e}")
-        
-        print(f"✅ parquet 로드 완료 - "
-              f"머리스타일: {len(self.hair_styles)}, "
-              f"눈: {len(self.eye_colors)}, "
-              f"특수: {len(self.special_features)}")
+
+        self.hair_styles.update(groups.get("hair_styles", set()))
+        self.hair_styles.update(groups.get("hair", set()))
+        self.hair_colors.update(groups.get("hair_color", set()))
+        self.eye_colors.update(
+            tag for tag in groups.get("eyes_tags", set()) if "eyes" in tag
+        )
+        for group_name in ("ears_tags", "tail", "wings", "body_parts"):
+            self.special_features.update(groups.get(group_name, set()))
+
+        self.all_characteristics.update(self.hair_styles)
+        self.all_characteristics.update(self.hair_colors)
+        self.all_characteristics.update(self.eye_colors)
+        self.all_characteristics.update(self.special_features)
+
+        print(
+            f"[FeatureExtractor] groups loaded: hair_styles={len(self.hair_styles)}, "
+            f"eyes={len(self.eye_colors)}, special={len(self.special_features)}"
+        )
               
-    def _extract_tags_from_df(self, df) -> Set[str]:
-        """DataFrame에서 태그 추출"""
-        tags = set()
-        tag_columns = ['tag', 'tags', 'name', 'Tag', 'Name', 'tag_name']
-        
-        for col in tag_columns:
-            if col in df.columns:
-                values = df[col].dropna().astype(str).str.lower().tolist()
-                tags.update(values)
-                break
-        
-        return tags
-    
     def _generate_color_combinations(self):
         """색상 + hair/eyes 조합 생성"""
         for color in self.colors:
@@ -166,7 +122,10 @@ class FeatureExtractor:
             self.eye_colors.add(eyes_tag)
             self.all_characteristics.add(eyes_tag)
         
-        print(f"✅ 색상 조합 생성 - 머리색: {len(self.hair_colors)}, 눈색: {len(self.eye_colors)}")
+        print(
+            f"[FeatureExtractor] color combinations: hair={len(self.hair_colors)}, "
+            f"eyes={len(self.eye_colors)}"
+        )
     
     def extract_features(self, prompt: str, max_count: int = 3) -> List[str]:
         """프롬프트에서 특징 추출"""
@@ -226,4 +185,4 @@ def get_feature_extractor() -> FeatureExtractor:
     global _extractor_instance
     if _extractor_instance is None:
         _extractor_instance = FeatureExtractor()
-    return _extractor_instance              
+    return _extractor_instance

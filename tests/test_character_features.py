@@ -32,7 +32,7 @@ class TestCoreClassifier(unittest.TestCase):
 
 class TestAuxClassifier(unittest.TestCase):
     def test_listed_appearance_is_aux(self):
-        # characteristic_list.txt 에 있는 외형 특성 → 보조
+        # 수동 선별 외형 목록에 있는 특성 → 보조
         for t in ["ahoge", "twintails", "long hair"]:
             self.assertTrue(is_aux_feature_tag(t), t)
 

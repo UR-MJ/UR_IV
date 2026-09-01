@@ -53,9 +53,6 @@ config/last_search_results.json
 config/last_full_results.json
 config/last_deck.json
 Editor_models/yolo_config.json
-tags_db/_refresh_progress.json
-tags_db/*.refresh_bak
-
 # User outputs
 save/
 ex/
@@ -63,7 +60,7 @@ generated_images/
 
 # Large data files
 *.parquet
-!tags_db/*.parquet
+!tags_db/**/*.parquet
 *.sqlite
 
 # Model files
@@ -84,15 +81,16 @@ ex/
 # Archives
 *.zip
 
-# Danbooru wiki data
+# Raw Danbooru wiki/export workspaces (runtime data lives in tags_db/)
 danbooru wiki/
+danbooru_wiki/
 
 # Windows
 nul
 
-# 생성되는 런타임 데이터 — danbooru_character.csv에서 생성, character_features.py가 경로로 로드.
-#   옮기거나 지우면 캐릭터 '전체 특징' 로딩이 깨짐. 로컬 유지(필요 시 수동 커밋해 다른 PC에 배포).
+# Legacy generated sources. Runtime-ready replacements live under tags_db/characters/.
 /danbooru_character.py
+/danbooru_character_description_full.jsonl
 
 # 개인 디버그/스크래치 (참조 안 되는 일회성 파일들을 한데 모음)
 /scratch/

@@ -13,6 +13,8 @@ import csv
 from pathlib import Path
 from typing import List
 
+from core.tag_database import TagAsset, TagDatabase, get_tag_database
+
 
 # 카테고리 우선순위 — 작을수록 먼저 노출
 CATEGORY_PRIORITY = {
@@ -27,7 +29,8 @@ class TagCompleter:
     """태그 자동완성 — 카테고리별 분리 인덱스로 우선순위 보장."""
 
     def __init__(self, tags_db_path: str = None):
-        self.tags_db_path = Path(tags_db_path) if tags_db_path else self._find_tags_db_path()
+        self.database = TagDatabase(Path(tags_db_path)) if tags_db_path else get_tag_database()
+        self.tags_db_path = self.database.root
         # 카테고리별 정렬된 (lower_key, original_tag) 리스트
         self._cat_indices: dict[str, list[tuple[str, str]]] = {
             k: [] for k in CATEGORY_PRIORITY
@@ -46,17 +49,6 @@ class TagCompleter:
         self._load_tags()
         self._build_indices()
 
-    def _find_tags_db_path(self) -> Path:
-        candidates = [
-            Path(__file__).parent.parent / "tags_db",
-            Path("tags_db"),
-            Path("../tags_db"),
-        ]
-        for path in candidates:
-            if path.exists():
-                return path
-        return Path("tags_db")
-
     # ────────────────────────────────────────
     # 로드
     # ────────────────────────────────────────
@@ -64,8 +56,13 @@ class TagCompleter:
     def _load_tags(self):
         """TagData에서 4개 카테고리 모두 로드. 실패 시 CSV 폴백."""
         try:
+            from contextlib import redirect_stdout
+            from io import StringIO
             from utils.tag_data import get_tag_data
-            td = get_tag_data()
+            # Legacy TagData logs contain emoji that can raise under a CP949
+            # console before the actual catalog has a chance to load.
+            with redirect_stdout(StringIO()):
+                td = get_tag_data()
             if td.is_loaded:
                 self._counts = getattr(td, 'tag_counts', {}) or {}
                 counts: dict[str, int] = {}
@@ -81,19 +78,17 @@ class TagCompleter:
                     counts[cat] = len(tags)
                 if any(counts.values()):
                     parts = ", ".join(f"{k}={v:,}" for k, v in counts.items())
-                    print(f"✅ TagCompleter: TagData 4-카테고리 로드 ({parts})")
+                    print(f"[TagCompleter] TagData categories loaded ({parts})")
                     self._load_aliases_from_csv()
                     return
         except Exception as e:
-            print(f"⚠️ TagData 로드 실패, CSV 폴백: {e}")
+            print(f"[TagCompleter] TagData load failed; using CSV fallback: {e}")
 
-        # 폴백: auto_tags.csv (general 단일 카테고리로)
+        # 폴백: 정식 자동완성 카탈로그 (general 단일 카테고리로)
         self._load_from_csv_fallback()
 
     def _load_aliases_from_csv(self):
-        csv_file = self.tags_db_path / "auto_tags.csv"
-        if not csv_file.exists():
-            csv_file = self.tags_db_path / "auto tags.csv"
+        csv_file = self.database.path(TagAsset.AUTOCOMPLETE_CATALOG)
         if not csv_file.exists():
             return
         try:
@@ -108,17 +103,15 @@ class TagCompleter:
                         for alias in aliases:
                             self.alias_map[alias.lower()] = tag_name
             if self.alias_map:
-                print(f"✅ TagCompleter: {len(self.alias_map):,}개 별칭 로드")
+                print(f"[TagCompleter] aliases loaded: {len(self.alias_map):,}")
         except Exception:
             pass
 
     def _load_from_csv_fallback(self):
-        """auto_tags.csv 폴백 — general에만 채움."""
-        csv_file = self.tags_db_path / "auto_tags.csv"
+        """Danbooru 자동완성 카탈로그 폴백 — general에만 채움."""
+        csv_file = self.database.path(TagAsset.AUTOCOMPLETE_CATALOG)
         if not csv_file.exists():
-            csv_file = self.tags_db_path / "auto tags.csv"
-        if not csv_file.exists():
-            print(f"⚠️ auto_tags.csv not found: {csv_file}")
+            print(f"[TagCompleter] autocomplete catalog not found: {csv_file}")
             return
         try:
             with open(csv_file, "r", encoding="utf-8") as f:
@@ -137,9 +130,12 @@ class TagCompleter:
                         aliases = [a.strip() for a in row[3].split(",") if a.strip()]
                         for alias in aliases:
                             self.alias_map[alias.lower()] = tag_name
-            print(f"✅ TagCompleter(CSV): {len(self._cat_indices['general']):,}개 태그")
+            print(
+                f"[TagCompleter] CSV tags loaded: "
+                f"{len(self._cat_indices['general']):,}"
+            )
         except Exception as e:
-            print(f"❌ auto_tags.csv 로드 실패: {e}")
+            print(f"[TagCompleter] autocomplete catalog load failed: {e}")
 
     def _build_indices(self):
         """카테고리별로 정렬 + lower_keys 분리 (bisect용)."""

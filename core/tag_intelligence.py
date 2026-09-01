@@ -1,21 +1,14 @@
 # core/tag_intelligence.py
-"""NAIA 데이터 기반 태그 인텔리전스 — 분류 / 노이즈 필터 / NSFW 판별.
+"""Tag intelligence for classification, noise filtering, and NSFW signals.
 
-데이터 (tags_db/):
-  - KR_tags.parquet                       : tag, count, category("패션 > 헤어스타일" 등), keywords
-  - danbooru_tag_counts_by_rating.json    : {tag: [g, s, q, e]} + _meta.total_posts
-  - naia_clothes_list.txt (11k)           : 의류 태그 사전
-  - naia_characteristic_list.txt          : 외견 특징 태그 사전
-  - naia_color.txt                        : 색상/패턴 단어
-  - clothing_regions.json                 : 의류 → 부위(region) 매핑
-  - copyright_groups.json                 : copyright(시리즈) → 캐릭터 (역인덱스: 캐릭터→시리즈)
-  - expression_tags.json / location_tags.json / pose_action_tags.json
-    / object_tags.json / meta_tags.json   : 카테고리 사전 (분리 토글용)
-
-지연 로딩 + 싱글턴. 모든 조회는 정규화(소문자 + 언더스코어→공백) 기준.
+The module intentionally knows stable :class:`TagAsset` identifiers rather
+than filenames.  Data remains lazy-loaded and all lookups use the same
+lowercase, underscore-to-space comparison form.
 """
-import os
-import json
+
+from __future__ import annotations
+
+from core.tag_database import TagAsset, TagDatabase, get_tag_database
 
 
 def _norm(t: str) -> str:
@@ -23,13 +16,13 @@ def _norm(t: str) -> str:
 
 
 # danbooru 실태그는 아니지만 프롬프트에서 흔히 쓰는 품질/메타 태그 (노이즈 필터에서 보존)
-_PROMPT_ALLOW = {
+_PROMPT_ALLOW = {_norm(tag) for tag in {
     "masterpiece", "best quality", "high quality", "normal quality", "low quality",
     "worst quality", "amazing quality", "great quality", "good quality", "high resolution",
     "very aesthetic", "aesthetic", "very awa", "newest", "recent", "oldest", "early", "mid",
     "ultra-detailed", "ultra detailed", "highly detailed", "detailed", "best aesthetic",
     "score_9", "score_8_up", "score_7_up", "source anime", "nsfw", "sfw",
-}
+}}
 
 # 의류 부위(region) → 한국어 라벨 (UI 그룹 표시용)
 REGION_LABELS = {
@@ -45,7 +38,8 @@ REGION_LABELS = {
 
 
 class TagIntelligence:
-    def __init__(self):
+    def __init__(self, database: TagDatabase | None = None):
+        self._database = database or get_tag_database()
         self._loaded = False
         self._cat: dict[str, str] = {}     # norm → category 문자열
         self._count: dict[str, int] = {}   # norm → 빈도
@@ -53,6 +47,12 @@ class TagIntelligence:
         self._clothes: set[str] = set()
         self._charac: set[str] = set()
         self._colors: set[str] = set()
+        self._clothes_curated: set[str] = set()
+        self._clothes_extended: set[str] = set()
+        self._charac_curated: set[str] = set()
+        self._charac_extended: set[str] = set()
+        self._colors_curated: set[str] = set()
+        self._colors_extended: set[str] = set()
         self._totals = None
         # 신규: region / copyright / 카테고리 사전
         self._regions: dict[str, str] = {}      # norm 의류태그 → REGION 키
@@ -64,129 +64,174 @@ class TagIntelligence:
         self._pose: set[str] = set()
         self._object: set[str] = set()
         self._meta: set[str] = set()
+        self._group_tags: set[str] = set()
+        self._implications: dict[str, set[str]] = {}
 
-    def _base(self) -> str:
-        return os.path.join(os.path.dirname(os.path.dirname(__file__)), "tags_db")
-
-    def _load_txt(self, name: str) -> set:
-        out: set[str] = set()
+    def _load_lines(self, asset: TagAsset) -> set[str]:
         try:
-            with open(os.path.join(self._base(), name), "r", encoding="utf-8") as f:
-                for line in f:
-                    n = _norm(line)
-                    if n:
-                        out.add(n)
-        except Exception:
-            pass
-        return out
+            return {n for value in self._database.read_lines(asset) if (n := _norm(value))}
+        except Exception as exc:
+            print(f"[TagIntel] {asset.value} load failed: {exc}")
+            return set()
 
     def _ensure(self):
         if self._loaded:
             return
         self._loaded = True
-        base = self._base()
-        # 1) KR_tags.parquet — category + count
+
+        # 1) Korean category/count catalog.
         try:
-            import pandas as pd
-            df = pd.read_parquet(os.path.join(base, "KR_tags.parquet"))
+            df = self._database.read_parquet(TagAsset.KOREAN_TAG_CATALOG)
             cats = df["category"] if "category" in df.columns else [None] * len(df)
             cnts = df["count"] if "count" in df.columns else [0] * len(df)
             for tag, cat, cnt in zip(df["tag"], cats, cnts):
                 n = _norm(str(tag))
                 if not n:
                     continue
-                self._cat[n] = str(cat) if cat is not None else ""
+                self._cat[n] = str(cat) if cat is not None and cat == cat else ""
                 try:
                     self._count[n] = int(cnt)
                 except (ValueError, TypeError):
                     self._count[n] = 0
-        except Exception as e:
-            print(f"[TagIntel] KR_tags 로드 실패: {e}")
-        # 2) 레이팅 분포
+        except Exception as exc:
+            print(f"[TagIntel] Korean tag catalog load failed: {exc}")
+
+        # 2) Rating distribution.
         try:
-            with open(os.path.join(base, "danbooru_tag_counts_by_rating.json"), "r", encoding="utf-8") as f:
-                data = json.load(f)
-            self._totals = (data.get("_meta") or {}).get("total_posts")
-            for k, v in data.items():
-                if k == "_meta":
-                    continue
-                if isinstance(v, list) and len(v) == 4:
-                    self._rating[_norm(k)] = tuple(int(x) for x in v)
-        except Exception as e:
-            print(f"[TagIntel] rating 로드 실패: {e}")
-        # 3) 텍스트 사전
-        self._clothes = self._load_txt("naia_clothes_list.txt")
-        self._charac = self._load_txt("naia_characteristic_list.txt")
-        self._colors = self._load_txt("naia_color.txt")
-        # 4) 의류 region 매핑 (의류 화이트리스트도 보강)
+            data = self._database.read_json(TagAsset.RATING_COUNTS)
+            if isinstance(data, dict):
+                self._totals = (data.get("_meta") or {}).get("total_posts")
+                for key, values in data.items():
+                    if key != "_meta" and isinstance(values, list) and len(values) == 4:
+                        self._rating[_norm(key)] = tuple(int(value) for value in values)
+        except Exception as exc:
+            print(f"[TagIntel] rating counts load failed: {exc}")
+
+        # 3) Keep curated and extended lexicons distinct, then expose their union.
+        self._clothes_curated = self._load_lines(TagAsset.CLOTHING_TAGS_CURATED)
+        self._clothes_extended = self._load_lines(TagAsset.CLOTHING_TAGS_EXTENDED)
+        self._charac_curated = self._load_lines(TagAsset.APPEARANCE_TAGS_CURATED)
+        self._charac_extended = self._load_lines(TagAsset.APPEARANCE_TAGS_EXTENDED)
+        self._colors_curated = self._load_lines(TagAsset.COLOR_TERMS_CURATED)
+        self._colors_extended = self._load_lines(TagAsset.COLOR_TERMS_EXTENDED)
+        self._clothes = self._clothes_curated | self._clothes_extended
+        self._charac = self._charac_curated | self._charac_extended
+        self._colors = self._colors_curated | self._colors_extended
+
+        # 4) Clothing region mapping also acts as a high-confidence whitelist.
         try:
-            with open(os.path.join(base, "clothing_regions.json"), "r", encoding="utf-8") as f:
-                cr = json.load(f)
-            for region, tags in (cr.get("regions") or {}).items():
-                self._region_order.append(region)
-                for t in tags:
-                    n = _norm(t)
-                    if n:
-                        self._regions[n] = region
-                        self._clothes.add(n)   # 명시 의류 → high-confidence
-        except Exception as e:
-            print(f"[TagIntel] clothing_regions 로드 실패: {e}")
-        # 5) copyright 역인덱스 (캐릭터 → copyright).
-        #    1순위: characterization.json 의 copyright 필드 (단부루 원본, 정확).
-        #    2순위(폴백): copyright_groups.json 에서 '단일 소속'인 누락 캐릭터만 (크로스오버 오염 회피).
+            region_data = self._database.read_json(TagAsset.CLOTHING_REGIONS)
+            if isinstance(region_data, dict):
+                for region, tags in (region_data.get("regions") or {}).items():
+                    self._region_order.append(region)
+                    for tag in tags:
+                        n = _norm(tag)
+                        if n:
+                            self._regions[n] = region
+                            self._clothes.add(n)
+        except Exception as exc:
+            print(f"[TagIntel] clothing regions load failed: {exc}")
+
+        # 5) Character -> series, in confidence order.  Later sources only fill gaps.
+        self._load_character_series()
+
+        # 6) Category dictionaries used by split toggles.
+        self._expression = self._load_tagset(TagAsset.EXPRESSION_TAGS)
+        self._location = self._load_tagset(TagAsset.LOCATION_TAGS)
+        self._pose = self._load_tagset(TagAsset.POSE_ACTION_TAGS)
+        self._object = self._load_tagset(TagAsset.OBJECT_TAGS)
+        self._meta = self._load_tagset(TagAsset.META_TAGS)
+
+        # 7) Official Wiki group members are also known tags, even when a
+        # separate catalog snapshot does not contain them.
         try:
-            with open(os.path.join(base, "characterization.json"), "r", encoding="utf-8") as f:
-                chars = json.load(f)
-            for e in chars:
-                tag = _norm(e.get("tag") or "")
-                cp = _norm(e.get("copyright") or "")
-                if tag and cp and tag not in self._copyright:
-                    self._copyright[tag] = cp
-        except Exception as e:
-            print(f"[TagIntel] characterization(copyright) 로드 실패: {e}")
+            self._group_tags = {
+                normalized
+                for tag in self._database.all_group_tags()
+                if (normalized := _norm(tag))
+            }
+        except Exception as exc:
+            print(f"[TagIntel] tag group load failed: {exc}")
+
+        # 8) Active implications augment only explicit redundancy removal.
         try:
-            with open(os.path.join(base, "copyright_groups.json"), "r", encoding="utf-8") as f:
-                cg = json.load(f)
-            multi: dict[str, list[str]] = {}
-            for series, groups in cg.items():
-                if series.startswith("_") or not isinstance(groups, dict):
-                    continue
-                for gender in ("girl", "boy", "other"):
-                    for ch in (groups.get(gender) or []):
-                        if not isinstance(ch, dict):
-                            continue
-                        for k in [ch.get("name", "")] + list(ch.get("aliases") or []):
-                            kn = _norm(k)
-                            if not kn:
-                                continue
-                            lst = multi.setdefault(kn, [])
-                            if series not in lst:
-                                lst.append(series)
-            for kn, serieslist in multi.items():
-                if kn not in self._copyright and len(serieslist) == 1:   # 단일 소속만 신뢰
-                    self._copyright[kn] = _norm(serieslist[0])
-        except Exception as e:
-            print(f"[TagIntel] copyright_groups 로드 실패: {e}")
-        # 6) 카테고리 사전 (분리 토글용)
-        self._expression = self._load_tagset("expression_tags.json")
-        self._location = self._load_tagset("location_tags.json")
-        self._pose = self._load_tagset("pose_action_tags.json")
-        self._object = self._load_tagset("object_tags.json")
-        self._meta = self._load_tagset("meta_tags.json")
+            implication_data = self._database.load_active_implications()
+            for antecedent, consequences in implication_data.items():
+                key = _norm(antecedent)
+                values = {_norm(value) for value in consequences if _norm(value)}
+                if key and values:
+                    self._implications.setdefault(key, set()).update(values)
+        except Exception as exc:
+            print(f"[TagIntel] tag implications load failed: {exc}")
+
         print(f"[TagIntel] KR태그 {len(self._cat):,} · 레이팅 {len(self._rating):,} · "
               f"의류 {len(self._clothes):,} · 특징 {len(self._charac):,} · 색상 {len(self._colors):,} · "
               f"region {len(self._regions):,} · copyright {len(self._copyright):,} · "
               f"표정 {len(self._expression):,} · 장소 {len(self._location):,} · "
               f"포즈 {len(self._pose):,} · 사물 {len(self._object):,} · 메타 {len(self._meta):,}")
 
-    def _load_tagset(self, name: str) -> set:
+    def _load_character_series(self) -> None:
+        """Build character-series lookup using profile, curated, then extended data."""
+        try:
+            profiles = self._database.read_json(TagAsset.CHARACTER_PROFILES)
+            if isinstance(profiles, list):
+                for entry in profiles:
+                    if not isinstance(entry, dict):
+                        continue
+                    tag = _norm(entry.get("tag") or "")
+                    copyright_tag = _norm(entry.get("copyright") or "")
+                    if tag and copyright_tag and tag not in self._copyright:
+                        self._copyright[tag] = copyright_tag
+        except Exception as exc:
+            print(f"[TagIntel] character profiles load failed: {exc}")
+
+        try:
+            curated = self._database.read_json(TagAsset.CURATED_CHARACTER_SERIES)
+            candidates: dict[str, set[str]] = {}
+            if isinstance(curated, dict):
+                for series, groups in curated.items():
+                    if str(series).startswith("_") or not isinstance(groups, dict):
+                        continue
+                    normalized_series = _norm(series)
+                    for gender in ("girl", "boy", "other"):
+                        for character in groups.get(gender) or []:
+                            if not isinstance(character, dict):
+                                continue
+                            names = [character.get("name", ""), *(character.get("aliases") or [])]
+                            for name in names:
+                                key = _norm(name)
+                                if key and normalized_series:
+                                    candidates.setdefault(key, set()).add(normalized_series)
+            for key, series_values in candidates.items():
+                if key not in self._copyright and len(series_values) == 1:
+                    self._copyright[key] = next(iter(series_values))
+        except Exception as exc:
+            print(f"[TagIntel] curated character series load failed: {exc}")
+
+        try:
+            extended = self._database.read_parquet(TagAsset.EXTENDED_CHARACTER_SERIES)
+            required = {"character", "copyright"}
+            missing = required - set(extended.columns)
+            if missing:
+                raise ValueError(f"missing columns: {', '.join(sorted(missing))}")
+            for character, copyright_tag in extended[["character", "copyright"]].itertuples(
+                index=False,
+                name=None,
+            ):
+                key = _norm(character)
+                value = _norm(copyright_tag)
+                if key and value and key not in self._copyright:
+                    self._copyright[key] = value
+        except Exception as exc:
+            print(f"[TagIntel] extended character series load failed: {exc}")
+
+    def _load_tagset(self, asset: TagAsset) -> set:
         """다양한 형태(tags / modifiers / groups / categories)의 JSON에서 태그 집합 추출."""
         out: set[str] = set()
         try:
-            with open(os.path.join(self._base(), name), "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            print(f"[TagIntel] {name} 로드 실패: {e}")
+            data = self._database.read_json(asset)
+        except Exception as exc:
+            print(f"[TagIntel] {asset.value} load failed: {exc}")
             return out
 
         def _collect(v):
@@ -203,11 +248,10 @@ class TagIntelligence:
                         continue
                     _collect(x)
 
-        for key in ("tags", "modifiers", "groups", "categories"):
-            if key in data:
-                _collect(data[key])
-        if not out:   # 알려진 키가 없으면 전체 수집
-            _collect(data)
+        # Collect every data branch so new top-level buckets such as
+        # ``uncategorized`` are not silently discarded.  Metadata keys are
+        # excluded by _collect above.
+        _collect(data)
         return out
 
     # ── 분류 ──
@@ -247,8 +291,13 @@ class TagIntelligence:
     def is_known(self, tag: str) -> bool:
         self._ensure()
         n = _norm(tag)
+        if self._copyright_vals is None:
+            self._copyright_vals = set(self._copyright.values())
         return (n in _PROMPT_ALLOW or n in self._cat or n in self._rating or
-                n in self._clothes or n in self._charac)
+                n in self._clothes or n in self._charac or n in self._colors or
+                n in self._expression or n in self._location or n in self._pose or
+                n in self._object or n in self._meta or n in self._group_tags or
+                n in self._copyright or n in self._copyright_vals)
 
     def tag_freq(self, tag: str) -> int:
         self._ensure()
@@ -323,7 +372,7 @@ class TagIntelligence:
         return self._copyright.get(_norm(character), "")
 
     def is_character(self, tag: str) -> bool:
-        """characterization.json(34k)에 등록된 캐릭터 태그인지 (wiki 분류기 보강용)."""
+        """알려진 캐릭터 프로필/작품 매핑에 등록된 캐릭터 태그인지."""
         self._ensure()
         return _norm(tag) in self._copyright
 
@@ -393,20 +442,54 @@ class TagIntelligence:
         return {"rest": rest, "groups": groups}
 
     def remove_redundant_subtags(self, tags):
-        """덜 구체적인 태그 제거 — 어떤 태그 A의 단어들이 다른 '더 긴' 태그 B의 단어집합에
-        진부분집합으로 포함되면 A 제거 (더 구체적인 B만 남김).
-        예: muscular ⊂ muscular male → muscular 제거; dress ⊂ blue dress → dress 제거.
-        Returns (kept, removed)."""
+        """Remove lexical or actively-implied parent tags.
+
+        Original spelling and order are preserved.  An implication cycle never
+        removes either side solely because of that cycle.
+        """
+        self._ensure()
         items = []
         for t in tags:
-            ws = frozenset(_norm(t).split())
-            items.append((t, ws))
+            normalized = _norm(t)
+            items.append((t, normalized, frozenset(normalized.split())))
+
+        closure_cache: dict[str, set[str]] = {}
+
+        def implied_by(tag: str) -> set[str]:
+            cached = closure_cache.get(tag)
+            if cached is not None:
+                return cached
+            seen = {tag}
+            pending = list(self._implications.get(tag, set()))
+            result: set[str] = set()
+            while pending:
+                parent = pending.pop()
+                if parent in seen:
+                    continue
+                seen.add(parent)
+                result.add(parent)
+                pending.extend(self._implications.get(parent, set()) - seen)
+            closure_cache[tag] = result
+            return result
+
         kept, removed = [], []
-        for i, (t, w) in enumerate(items):
-            if not w:
+        for i, (t, normalized, words) in enumerate(items):
+            if not words:
                 kept.append(t)
                 continue
-            if any(j != i and w < w2 for j, (_t2, w2) in enumerate(items)):
+
+            lexical_parent = any(
+                j != i and words < other_words
+                for j, (_other, _other_normalized, other_words) in enumerate(items)
+            )
+            implication_parent = any(
+                j != i
+                and normalized != other_normalized
+                and normalized in implied_by(other_normalized)
+                and other_normalized not in implied_by(normalized)
+                for j, (_other, other_normalized, _other_words) in enumerate(items)
+            )
+            if lexical_parent or implication_parent:
                 removed.append(t)
             else:
                 kept.append(t)

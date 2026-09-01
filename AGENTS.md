@@ -50,6 +50,7 @@ App.vue
 | `ui/generator_actions.py` | 시그널 연결 + 액션 핸들러 |
 | `ui/widget_proxies.py` | PyQt 위젯 인터페이스 프록시 |
 | `core/tag_classifier.py` | tags_db 기반 태그 분류 |
+| `core/tag_database.py` | manifest 기반 태그 자산 경로·스키마·그룹/implication 로더 |
 | `core/ollama_client.py` | Ollama REST API 래퍼 |
 | `core/sam_refiner.py` | YOLO+SAM 정밀 마스킹 |
 | `core/edge_refiner.py` | 배경 제거 알파 매팅 |
@@ -77,6 +78,7 @@ App.vue
 | `config/global_weights.json` | 글로벌 태그 가중치 |
 | `config/gallery_last_folder.txt` | Gallery 마지막 폴더 |
 | `config/default_excludes.txt` | 기본 제외 프롬프트 (카테고리별 정리) |
+| `tags_db/manifest.json` | 태그 데이터 파일 경로·형식·필수 컬럼 단일 소스 |
 
 ---
 

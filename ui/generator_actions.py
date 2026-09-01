@@ -832,7 +832,7 @@ class ActionsMixin:
                 tokens = self._greedy_merge_words(words)
         classified = self.tag_classifier.classify_tags_for_event(tokens)
         # 분류 보강: wiki 분류기(265k)가 못 잡은 캐릭터/작품을 저장된 캐릭터 프리셋 +
-        # tag_intelligence(characterization.json 34k)로 재분류 → general(main) 누수 방지
+        # tag_intelligence(character_profiles 34k)로 재분류 → general(main) 누수 방지
         try:
             from core.tag_intelligence import get_tag_intelligence
             from utils.character_presets import list_character_presets

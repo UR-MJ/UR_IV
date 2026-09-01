@@ -1,0 +1,37 @@
+grey
+beige
+aqua
+white
+brown
+blonde
+red
+pink
+orange
+yellow
+gold
+light green
+green
+sky blue
+blue
+purple
+black
+rainbow
+two-tone
+streaked
+gradient
+split-color
+multicolored
+colored inner
+plaid
+strawberry
+polka dot
+american flag
+argyle
+camouflage
+print
+striped
+diagonal-striped
+vertical-striped
+checkered
+dark
+silver

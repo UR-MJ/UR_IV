@@ -1,36 +1,11 @@
 # utils/character_features.py
-"""캐릭터 특징 조회 유틸리티
-메인: characterization.json (핵심 특징)
-보충: danbooru_character.py (의상/추가 특징)
+"""캐릭터 특징 조회 유틸리티.
+
+메인 프로필과 보충 특징은 ``TagDatabase``가 관리하는 정식 자산에서 읽는다.
 """
-import os
 import re
-import ast
-import json
-from typing import Optional
 
-
-def _safe_load_dict_literals(py_path: str, names: tuple[str, ...]) -> dict:
-    """Python 파일의 최상위 dict-literal 할당문을 ast.literal_eval로 안전하게 로드.
-
-    exec()를 쓰지 않아 임의 코드 실행을 차단한다.
-    names에 포함된 이름(예: 'character_dict')의 할당만 반환한다.
-    """
-    with open(py_path, "r", encoding="utf-8") as f:
-        source = f.read()
-    tree = ast.parse(source, filename=py_path)
-    out: dict = {}
-    for node in tree.body:
-        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
-            continue
-        target = node.targets[0]
-        if not isinstance(target, ast.Name) or target.id not in names:
-            continue
-        try:
-            out[target.id] = ast.literal_eval(node.value)
-        except (ValueError, SyntaxError) as e:
-            print(f"⚠️ {target.id} literal_eval 실패: {e}")
-    return out
+from core.tag_database import TagAsset, get_tag_database
 
 # ── 의상/액세서리 키워드 (word-level 매칭) ──
 # 태그를 단어로 분리한 뒤, 이 집합과 교집합이 있으면 의상으로 분류
@@ -214,31 +189,28 @@ def is_core_appearance_tag(tag: str) -> bool:
     return False
 
 
-# ── 보조 특징 (tags_db/characteristic_list.txt 등재 외형 특성) ──
+# ── 보조 특징 (수동 선별 외형 태그) ──
 _AUX_SET = None
 
 
 def _load_aux_set() -> set:
-    """characteristic_list.txt를 normalize해서 로드 (lazy, 1회)."""
+    """수동 선별 외형 태그를 normalize해서 로드 (lazy, 1회)."""
     global _AUX_SET
     if _AUX_SET is not None:
         return _AUX_SET
     _AUX_SET = set()
     try:
-        path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                            "tags_db", "characteristic_list.txt")
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                t = _norm_tag(line)
-                if t:
-                    _AUX_SET.add(t)
+        for line in get_tag_database().read_lines(TagAsset.APPEARANCE_TAGS_CURATED):
+            t = _norm_tag(line)
+            if t:
+                _AUX_SET.add(t)
     except Exception:
         pass
     return _AUX_SET
 
 
 def is_aux_feature_tag(tag: str) -> bool:
-    """보조 특징 — characteristic_list.txt에 등재된 외형 특성(ahoge, 헤어스타일, 체형, 피부 등).
+    """보조 특징 — 수동 선별 목록에 등재된 외형 특성(ahoge, 헤어스타일, 체형, 피부 등).
     (색/핵심 신체특징은 lookup_core가 먼저 가져가므로 lookup_aux에선 core 제외)"""
     return _norm_tag(tag) in _load_aux_set()
 
@@ -247,13 +219,15 @@ class CharacterFeatureLookup:
     """캐릭터 이름 → 핵심/의상 특징 분리 조회 (lazy loading, singleton)"""
 
     def __init__(self):
-        # 핵심 특징 (characterization.json)
+        self.database = get_tag_database()
+
+        # 핵심 특징 (character_profiles)
         self._core_dict: dict[str, list[str]] | None = None   # name → core_tags
         self._copyright: dict[str, str] = {}                    # name → copyright
         self._gender: dict[str, dict] = {}                      # name → {boy, girl}
         self._post_count: dict[str, int] = {}                   # name → post_count
 
-        # 전체 특징 (danbooru_character.py)
+        # 전체 특징 (character_features parquet)
         self._full_dict: dict[str, str] | None = None           # name → features_str
         self._full_count: dict[str, int] | None = None
 
@@ -266,50 +240,51 @@ class CharacterFeatureLookup:
         if self._core_dict is not None:
             return
 
-        base = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tags_db")
         self._core_dict = {}
         self._full_dict = {}
         self._full_count = {}
 
-        # 1. characterization.json 로드 (메인 — 핵심 특징)
-        json_path = os.path.join(base, "characterization.json")
-        if os.path.exists(json_path):
-            try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for entry in data:
-                    tag = entry.get("tag", "")
-                    name = tag.replace("_", " ").strip().lower()
-                    if not name:
-                        continue
-                    core_tags = [t.replace("_", " ") for t in entry.get("core_tags", [])]
-                    self._core_dict[name] = core_tags
-                    self._post_count[name] = entry.get("post_count", 0)
-                    copyright_val = entry.get("copyright", "")
-                    if copyright_val:
-                        self._copyright[name] = copyright_val.replace("_", " ")
-                    gender = entry.get("gender")
-                    if gender:
-                        self._gender[name] = gender
-                print(f"✅ characterization.json: {len(self._core_dict)}개 캐릭터 (핵심 특징)")
-            except Exception as e:
-                print(f"⚠️ characterization.json 로드 실패: {e}")
+        # 1. 캐릭터 프로필 로드 (메인 — 핵심 특징)
+        try:
+            data = self.database.read_json(TagAsset.CHARACTER_PROFILES)
+            for entry in data:
+                tag = entry.get("tag", "")
+                name = tag.replace("_", " ").strip().lower()
+                if not name:
+                    continue
+                core_tags = [t.replace("_", " ") for t in entry.get("core_tags", [])]
+                self._core_dict[name] = core_tags
+                self._post_count[name] = entry.get("post_count", 0)
+                copyright_val = entry.get("copyright", "")
+                if copyright_val:
+                    self._copyright[name] = copyright_val.replace("_", " ")
+                gender = entry.get("gender")
+                if gender:
+                    self._gender[name] = gender
+            print(f"[CharacterFeatures] profiles loaded: {len(self._core_dict):,}")
+        except Exception as e:
+            print(f"[CharacterFeatures] profile load failed: {e}")
 
-        # 2. danbooru_character.py 로드 (보충 — 의상 포함 전체)
+        # 2. 전체 특징 Parquet 로드 (보충 — 의상 포함 전체)
         self._full_norm_to_key: dict[str, str] = {}  # normalized → original key
-        py_path = os.path.join(base, "danbooru_character.py")
-        if os.path.exists(py_path):
-            try:
-                ns = _safe_load_dict_literals(py_path, ("character_dict", "character_dict_count"))
-                self._full_dict = ns.get("character_dict", {})
-                self._full_count = ns.get("character_dict_count", {})
-                # 정규화 인덱스 빌드 (O(1) 조회용)
-                for k in self._full_dict:
-                    norm = k.strip().lower().replace("_", " ")
-                    self._full_norm_to_key[norm] = k
-                print(f"✅ danbooru_character.py: {len(self._full_dict)}개 캐릭터 (전체 특징)")
-            except Exception as e:
-                print(f"⚠️ danbooru_character.py 로드 실패: {e}")
+        try:
+            frame = self.database.read_parquet(
+                TagAsset.CHARACTER_FEATURES,
+                columns=["character", "features", "post_count"],
+            )
+            for character, features, post_count in frame.itertuples(index=False, name=None):
+                key = str(character).strip()
+                if not key:
+                    continue
+                self._full_dict[key] = str(features or "")
+                try:
+                    self._full_count[key] = int(post_count or 0)
+                except (TypeError, ValueError):
+                    self._full_count[key] = 0
+                self._full_norm_to_key[key.lower().replace("_", " ")] = key
+            print(f"[CharacterFeatures] full features loaded: {len(self._full_dict):,}")
+        except Exception as e:
+            print(f"[CharacterFeatures] full feature load failed: {e}")
 
         # 3. 통합 카운트 인덱스 (정규화 키 → count)
         self._count_index: dict[str, int] = {}
@@ -351,7 +326,7 @@ class CharacterFeatureLookup:
         return None
 
     def _get_full_features_for(self, key: str) -> str:
-        """danbooru_character.py에서 전체 특징 문자열 가져오기 (O(1))"""
+        """전체 특징 Parquet에서 특징 문자열 가져오기 (O(1))."""
         if not self._full_dict:
             return ""
         # 직접 키 매칭
@@ -362,8 +337,7 @@ class CharacterFeatureLookup:
         return self._full_dict.get(orig, "") if orig else ""
 
     def _all_feature_tags(self, key: str) -> list[str]:
-        """캐릭터의 전체 특징 태그 (characterization core_tags + danbooru full, 중복 제거).
-        danbooru_character.py가 없으면 characterization core_tags만 사용한다."""
+        """프로필 핵심 태그와 전체 특징을 합쳐 중복을 제거한다."""
         tags: list[str] = []
         seen: set[str] = set()
         for t in self._core_dict.get(key, []):
@@ -399,7 +373,7 @@ class CharacterFeatureLookup:
         return (", ".join(core_tags), self._count_for(key))
 
     def lookup_aux(self, name: str) -> tuple[str, int] | None:
-        """보조 특징 — characteristic_list.txt에 등재됐고 비의상·비핵심인 외형 특성.
+        """보조 특징 — 수동 선별 목록에 등재됐고 비의상·비핵심인 외형 특성.
         헤어스타일(long/twintails/ahoge), 체형(breasts), 피부, 헤어 디테일 등."""
         self._ensure_loaded()
         key = self._resolve_key(name)
