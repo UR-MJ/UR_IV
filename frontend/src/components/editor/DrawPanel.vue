@@ -214,7 +214,13 @@ function setColor(hexColor: string) {
   currentColor.value = hexColor
 }
 
-defineExpose({ setColor })
+/** 세로 툴바에서 고른 도구를 패널 하이라이트에 반영한다 (emit 은 하지 않는다). */
+function setTool(name: string) {
+  const found = drawTools.find(t => t.name === name)
+  if (found) selectedTool.value = found.id
+}
+
+defineExpose({ setColor, setTool })
 </script>
 
 <style scoped>

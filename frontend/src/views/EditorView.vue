@@ -30,6 +30,9 @@
       </div>
 
       <div class="editor-body">
+        <!-- 캔버스 도구 툴바 — 도구를 고르려고 탭을 옮기지 않아도 되게 -->
+        <EditorToolbar :model-value="currentTool" @select="selectTool" />
+
         <!-- 좌측: 서브탭 패널 — 너비는 localStorage 영속 -->
         <div class="side-panel" :style="{ width: sidePanelWidth + 'px' }">
           <div class="tab-buttons">
@@ -39,7 +42,7 @@
             >{{ tab.icon }} {{ tab.label }}</button>
           </div>
           <div class="tab-content">
-            <MosaicPanel v-show="activeTab === 0"
+            <MosaicPanel v-show="activeTab === 0" ref="mosaicPanelRef"
               :img-width="imgWidth" :img-height="imgHeight" :crop-pending="cropPending"
               :model-label="modelLabel"
               :detect-status="detectStatus"
@@ -177,6 +180,8 @@ import AdvancedColorPanel from '../components/editor/AdvancedColorPanel.vue'
 import WatermarkPanel from '../components/editor/WatermarkPanel.vue'
 import DrawPanel from '../components/editor/DrawPanel.vue'
 import MovePanel from '../components/editor/MovePanel.vue'
+import EditorToolbar from '../components/editor/EditorToolbar.vue'
+import { toolById, toolByKey } from '../utils/editorTools'
 
 const isDragging = ref(false)
 const imagePath = ref('')
@@ -219,6 +224,7 @@ const barWidth = ref(40)
 const barHeight = ref(15)
 const canvasRef = ref<any>(null)
 const drawPanelRef = ref<any>(null)
+const mosaicPanelRef = ref<any>(null)
 const movePanelRef = ref<any>(null)
 const selection = ref<any>(null)
 const modelLabel = ref('No Model Loaded')
@@ -452,6 +458,27 @@ function onToolChanged(data: any) {
   const toolMap: Record<string, string> = { 0: 'box', 1: 'lasso', 2: 'brush', 3: 'eraser', 4: 'stamp' }
   currentTool.value = toolMap[id] ?? 'box'
   if (typeof data === 'object' && data.size) brushSize.value = data.size
+}
+
+// ── 세로 툴바 ──
+// 도구를 고르면 (1) 캔버스 모드를 바꾸고 (2) 그 도구의 옵션이 있는 탭을 연다.
+// 패널이 다른 탭을 보여주고 있으면 "골랐는데 설정이 어디 갔지"가 되기 때문이다.
+const TOOL_TAB: Record<string, number> = { mask: 0, draw: 4 }
+
+function selectTool(id: string) {
+  const tool = toolById(id)
+  if (!tool) return
+  clearPreview()
+  currentTool.value = id
+  const tab = TOOL_TAB[tool.kind]
+  if (tab !== undefined && activeTab.value !== tab) activeTab.value = tab
+  if (tool.kind === 'draw') {
+    // 캔버스가 보는 값과 패널 하이라이트를 함께 맞춘다 — 한쪽만 바꾸면 서로 다른 도구를 가리킨다
+    drawParams.value = { ...drawParams.value, tool: id }
+    drawPanelRef.value?.setTool?.(id)
+  } else {
+    mosaicPanelRef.value?.setTool?.(id)
+  }
 }
 
 // Edge map 캐시 — 같은 이미지에서 magnetic 토글 반복 시 재계산 회피
@@ -999,6 +1026,21 @@ function onEditorKeyDown(e: KeyboardEvent) {
     // 원근 보정 중이면 그것부터 취소 (마스크를 날리지 않게)
     if (perspectiveActive.value) { onCancelPerspective(); return }
     canvasRef.value?.clearSelection()
+  }
+
+  // 도구 단축키 (B=브러시, P=펜 …). 글자 하나짜리라 입력 중에는 절대 가로채면 안 된다
+  // — 프롬프트나 텍스트 도구에 'b' 를 치는 순간 도구가 바뀌면 못 쓴다.
+  const el = document.activeElement as HTMLElement | null
+  const typing = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+  // 원근 보정·영역 이동 중에는 도구를 갈아타면 진행 중인 조작이 날아간다
+  if (!typing && !perspectiveActive.value && currentTool.value !== 'move') {
+    const tool = toolByKey(e.key, { ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey })
+    if (tool) {
+      e.preventDefault()
+      selectTool(tool.id)
+      requestAction('show_toast', { type: 'info', msg: `${tool.label} (${tool.shortcut})` })
+      return
+    }
   }
   // 원근 보정 중 Enter = 적용
   if (e.key === 'Enter' && perspectiveActive.value) {

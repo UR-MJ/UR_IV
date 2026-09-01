@@ -378,6 +378,15 @@ const barW = ref(40)
 const barH = ref(15)
 
 function selectTool(id: number) { selectedTool.value = id; emit('tool-changed', { tool: id, size: toolSize.value }) }
+
+/** 세로 툴바에서 고른 도구를 패널 하이라이트에 반영한다 (emit 은 하지 않는다 — 되돌아온 값이다). */
+const TOOL_IDS: Record<string, number> = { box: 0, lasso: 1, brush: 2, eraser: 3, stamp: 4 }
+function setTool(name: string) {
+  const id = TOOL_IDS[name]
+  if (id !== undefined) selectedTool.value = id
+}
+
+defineExpose({ setTool })
 function selectEffect(id: number) { selectedEffect.value = id; emit('effect-changed', { effect: id }) }
 function setEraserMode(mode: string) { eraserMode.value = mode; emit('eraser-mode-changed', mode) }
 function onApply() { emit('effect-apply', { tool: selectedTool.value, effect: selectedEffect.value, toolSize: toolSize.value, strength: strength.value }) }

@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard', 'Inter', system-ui, sans-serif; }
+    a { color: #E2B340; } a:hover { color: #FACC15; }
+    .ico { display: block; }
+    .sechead { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 2px; }
+    .sectitle { color: #B8B8B8; font-size: 13px; font-weight: 500; flex: 1; }
+    .count { color: #8A8A8A; font-size: 11px; }
+    .chip { height: 34px; border-radius: 8px; background: #1E1E1E; border: 1px solid #363636; color: #B8B8B8; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+    .chip.on { background: rgba(250,204,21,0.1); border-color: #FACC15; color: #FACC15; }
+    .tab { height: 30px; border-radius: 6px; background: #131313; color: #8A8A8A; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; padding: 0 10px; }
+    .tab.on { background: #1A1A1A; color: #E2B340; }
+  </style>
+</helmet>
+
+<div style="width: 1180px; height: 720px; background: #050505; color: #E8E8E8; display: flex; flex-direction: column; overflow: hidden; position: relative;">
+
+  <!-- 상단 도구바 (현재와 동일) -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: #0D0D0D; border-bottom: 1px solid #363636; flex-shrink: 0;">
+    <div style="display: flex; gap: 6px;">
+      <div style="padding: 8px 16px; background: #181818; border: 1px solid rgba(250,204,21,0.1); border-radius: 6px; color: #FACC15; font-size: 12px; font-weight: 600;">열기</div>
+      <div style="padding: 8px 16px; background: #FACC15; border-radius: 6px; color: #000; font-size: 12px; font-weight: 800;">저장</div>
+      <div style="padding: 8px 16px; background: #181818; border: 1px solid #363636; border-radius: 6px; color: #909090; font-size: 12px; font-weight: 600;">다른 이름</div>
+      <div style="padding: 8px 16px; background: #181818; border: 1px solid #363636; border-radius: 6px; color: #909090; font-size: 12px; font-weight: 600;">붙여넣기</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <div style="padding: 8px 16px; background: #181818; border: 1px solid #363636; border-radius: 6px; color: #909090; font-size: 12px; font-weight: 600;">Undo (3/20)</div>
+      <div style="padding: 8px 16px; background: #181818; border: 1px solid #363636; border-radius: 6px; color: #909090; font-size: 12px; font-weight: 600;">Redo (0)</div>
+      <span style="color: #333; margin: 0 4px;">|</span>
+      <span style="color: #c8c8c8; font-size: 12px; font-weight: 600; padding: 0 8px;">2024-06-12_074512.png</span>
+      <span style="color: #585858; font-size: 11px; font-family: Consolas, monospace;">1024×1536 · PNG · 2.4MB</span>
+    </div>
+    <div style="padding: 8px 16px; background: #181818; border: 1px solid rgba(248,113,113,0.2); border-radius: 6px; color: #f87171; font-size: 12px; font-weight: 600;">닫기</div>
+  </div>
+
+  <div style="flex: 1; display: flex; min-height: 0;">
+
+    <!-- 사이드 패널 280px — 탭 6개 유지, 크기만 키움 -->
+    <div style="width: 280px; flex-shrink: 0; background: #0D0D0D; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #2E2E2E;">
+
+      <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; background: #0A0A0A; flex-shrink: 0;">
+        <div class="tab on">모자이크</div>
+        <div class="tab">색감</div>
+        <div class="tab">고급색감</div>
+        <div class="tab">워터마크</div>
+        <div class="tab">그리기</div>
+        <div class="tab">이동</div>
+      </div>
+
+      <!-- 접이식 섹션 -->
+      <div style="flex: 1; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; overflow: hidden;">
+
+        <!-- 펼친 섹션 -->
+        <div class="sechead">
+          <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></svg>
+          <span class="sectitle">선택 도구</span>
+          <span class="count">BOX</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-bottom: 4px;">
+          <div class="chip on">BOX</div>
+          <div class="chip">LASSO</div>
+          <div class="chip">BRUSH</div>
+          <div class="chip">ERASER</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; padding-bottom: 6px;">
+          <span style="color: #B0B0B0; font-size: 12px; min-width: 46px;">크기</span>
+          <div style="flex: 1; height: 4px; background: #2A2A2A; border-radius: 2px; position: relative;"><div style="position: absolute; left: 0; top: 0; height: 4px; width: 45%; background: #E2B340; border-radius: 2px;"></div><div style="position: absolute; left: 45%; top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #E2B340;"></div></div>
+          <span style="color: #E8E8E8; font-size: 12px; min-width: 24px; text-align: right;">18</span>
+        </div>
+
+        <div style="height: 1px; background: #2E2E2E;"></div>
+
+        <!-- 펼친 섹션 2 -->
+        <div class="sechead">
+          <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></svg>
+          <span class="sectitle">효과 적용</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding-bottom: 4px;">
+          <div class="chip on">모자이크</div>
+          <div class="chip">블러</div>
+          <div class="chip">검은띠</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; padding-bottom: 6px;">
+          <span style="color: #B0B0B0; font-size: 12px; min-width: 46px;">세기</span>
+          <div style="flex: 1; height: 4px; background: #2A2A2A; border-radius: 2px; position: relative;"><div style="position: absolute; left: 0; top: 0; height: 4px; width: 70%; background: #E2B340; border-radius: 2px;"></div><div style="position: absolute; left: 70%; top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #E2B340;"></div></div>
+          <span style="color: #E8E8E8; font-size: 12px; min-width: 24px; text-align: right;">70</span>
+        </div>
+
+        <div style="height: 1px; background: #2E2E2E;"></div>
+
+        <!-- 접힌 섹션들 -->
+        <div class="sechead">
+          <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6.5L15 12l-5.5 5.5"/></svg>
+          <span class="sectitle">AI 검열</span>
+          <span class="count">3</span>
+        </div>
+        <div style="height: 1px; background: #2E2E2E;"></div>
+        <div class="sechead">
+          <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6.5L15 12l-5.5 5.5"/></svg>
+          <span class="sectitle">지우개 · 스탬프</span>
+          <span class="count">7</span>
+        </div>
+        <div style="height: 1px; background: #2E2E2E;"></div>
+        <div class="sechead">
+          <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6.5L15 12l-5.5 5.5"/></svg>
+          <span class="sectitle">배경 제거</span>
+          <span class="count">4</span>
+        </div>
+        <div style="height: 1px; background: #2E2E2E;"></div>
+        <div class="sechead">
+          <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6.5L15 12l-5.5 5.5"/></svg>
+          <span class="sectitle">변형 (자르기 · 회전 · 원근)</span>
+          <span class="count">9</span>
+        </div>
+        <div style="height: 1px; background: #2E2E2E;"></div>
+
+        <div style="flex: 1;"></div>
+        <div style="display: flex; gap: 6px;">
+          <div style="flex: 2; height: 36px; background: #FACC15; border-radius: 6px; color: #000; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center;">적용</div>
+          <div style="flex: 1; height: 36px; background: #1E1E1E; border: 1px solid #363636; border-radius: 6px; color: #B8B8B8; font-size: 13px; display: flex; align-items: center; justify-content: center;">초기화</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 캔버스 -->
+    <div style="flex: 1; background: #111; display: flex; align-items: center; justify-content: center; position: relative;">
+      <div style="width: 300px; height: 450px; background: linear-gradient(160deg, #2b3550 0%, #4a3a55 55%, #6b4a52 100%); border-radius: 2px;"></div>
+      <div style="position: absolute; bottom: 8px; right: 12px; color: #585858; font-size: 11px; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px;">1024 × 1536 | 100% | 0°</div>
+    </div>
+  </div>
+
+  <!-- 효과와 한계 -->
+  <div style="position: absolute; left: 296px; top: 56px; display: flex; flex-direction: column; gap: 6px;">
+    <div style="background: rgba(74,222,128,0.12); border: 1px solid #4ade80; border-radius: 6px; padding: 6px 10px; color: #4ade80; font-size: 12px; font-weight: 700;">접었을 때 한 화면에 들어옴 (1077 → 약 430px)</div>
+    <div style="background: rgba(74,222,128,0.12); border: 1px solid #4ade80; border-radius: 6px; padding: 6px 10px; color: #4ade80; font-size: 12px; font-weight: 700;">칩 34px · 탭 12px — 타격 크기 교정</div>
+    <div style="background: rgba(226,179,64,0.12); border: 1px solid #E2B340; border-radius: 6px; padding: 6px 10px; color: #E2B340; font-size: 12px; font-weight: 700;">남는 한계 — 펜을 쓰려면 여전히 탭 이동</div>
+    <div style="background: rgba(226,179,64,0.12); border: 1px solid #E2B340; border-radius: 6px; padding: 6px 10px; color: #E2B340; font-size: 12px; font-weight: 700;">두세 섹션을 동시에 펴면 다시 스크롤</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

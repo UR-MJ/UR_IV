@@ -104,3 +104,7 @@ Desktop.ini
 *.swp
 config/session_backup.json
 config/char_global_prefs.json
+
+# 디자인 캔버스 시드 산출물 — .dc.html 소스에서 다시 만들 수 있고 2.5MB 다
+design/*.html
+!design/*.dc.html
