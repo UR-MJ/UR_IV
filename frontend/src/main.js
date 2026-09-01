@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import './style.css'
+import './styles/panels.css'
 import './styles/editorPanels.css'
 import './styles/galleryShared.css'
 import App from './App.vue'

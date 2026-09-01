@@ -306,10 +306,6 @@ function generate() {
 .sidebar-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .sidebar-footer { padding: 16px; background: var(--bg-card); border-top: 1px solid var(--border); }
 
-.glass-card {
-  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
-  border-radius: var(--radius-card); padding: 14px;
-}
 .krea-card { border-color: rgba(167,139,250,0.35); background: rgba(124,58,237,0.06); }
 .optional { margin-left: 5px; font-size: var(--fs-label); color: #a78bfa; letter-spacing: 1px; }
 .identity-thumb { aspect-ratio: 2/1; }

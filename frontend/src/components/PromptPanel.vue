@@ -1047,11 +1047,7 @@ watch(() => widgets.main_prompt_text, () => { nextTick(() => { if (mainRef.value
 </script>
 
 <style scoped>
-.prompt-panel { display: flex; flex-direction: column; gap: 12px; }
-.glass-card { background: rgba(20, 20, 20, 0.6); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px; }
-.glass-card.highlight { border-color: var(--accent-dim); background: rgba(250, 204, 21, 0.02); }
-.glass-card:hover { border-color: #333; }
-.card-header { font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+.prompt-panel { display: flex; flex-direction: column; }
 summary { list-style: none; outline: none; }
 summary::-webkit-details-marker { display: none; }
 .input-group { margin-bottom: 10px; }

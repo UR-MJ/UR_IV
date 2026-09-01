@@ -1,0 +1,70 @@
+/* 사이드 패널의 공용 섹션 스타일 — '구식' 카드를 에디터의 어휘로 맞춘다.
+ *
+ * 지금까지 패널 섹션은 `.glass-card` 였다: 테두리 + 둥근 모서리 + 배경을 가진 상자를
+ * 세로로 쌓는 방식. 다섯 파일이 각자 같은 규칙을 들고 있었고(PromptPanel · RefinePanel ·
+ * I2IView · InpaintView · SettingsView), 진단에서 "440개 중 179개(41%)에 테두리" 로
+ * 지적된 그 모습이다. 상자 안에 상자가 겹치면 무엇이 묶음이고 무엇이 내용인지 흐려진다.
+ *
+ * 에디터에서 확정한 방식은 **상자 대신 헤어라인**이다 — 배경도 테두리도 없이 아래쪽
+ * 1px 구분선 하나로 섹션을 가른다(`PanelSection.vue`). 여기서 같은 모양을 클래스 이름만
+ * 바꾸지 않고 그대로 적용해, 마크업을 안 건드리고도 다섯 화면이 함께 바뀐다.
+ *
+ * SettingsView 의 `.glass-card` 는 사이드 패널 섹션이 아니라 **넓은 본문의 콘텐츠 카드**라
+ * 성격이 다르다. 그쪽은 자기 scoped 정의가 있어 (특이도상) 이 규칙에 안 걸린다.
+ */
+
+.glass-card {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  padding: var(--sp-3) 0 var(--sp-4);
+}
+
+/* 마지막 섹션 아래 구분선은 허공을 가른다 */
+.glass-card:last-child {
+  border-bottom: none;
+  padding-bottom: var(--sp-2);
+}
+
+/* 강조 섹션(최종 프롬프트 등)은 테두리로 감싸는 대신 왼쪽에 얇은 표시만 남긴다 —
+   상자를 하나 더 그리지 않으면서 "여기가 중심" 을 말할 수 있다. */
+.glass-card.highlight {
+  background: transparent;
+  border-left: 2px solid var(--accent);
+  padding-left: var(--sp-3);
+}
+.glass-card:hover { border-color: var(--rule); }
+
+/* 섹션 제목 — 전각 대문자 + 자간은 읽기 어렵고 옛날 느낌을 만든다.
+   에디터의 제목과 같은 크기·굵기·색으로 맞춘다. */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+.card-header:hover { color: var(--text-primary); }
+
+/* details 로 접는 섹션의 제목에는 화살표를 붙인다 — 접힌다는 걸 알 방법이 필요하다 */
+details > summary.card-header::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--text-muted);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  margin-right: var(--sp-1);
+  transition: transform 0.15s ease-out;
+  flex-shrink: 0;
+}
+details[open] > summary.card-header::before {
+  transform: rotate(90deg);
+}

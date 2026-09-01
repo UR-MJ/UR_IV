@@ -405,7 +405,7 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
 <style scoped>
 .inpaint-workspace { height: 100%; display: flex; background: var(--bg-primary); }
 .sidebar { width: 280px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); }
-.sidebar-scroll { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.sidebar-scroll { flex: 1; overflow-y: auto; padding: 0 10px; display: flex; flex-direction: column; }
 .sidebar-footer { padding: 10px; background: var(--bg-card); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 /* 아이콘만 있는 툴바를 보완하는 이름표 — 지금 무슨 도구인지 글자로도 알려준다 */
 .tool-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 2px 2px 4px; }
@@ -416,7 +416,6 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
   color: var(--text-muted); font-size: var(--fs-label);
 }
 
-.glass-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px; }
 .source-thumb { height: 100px; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
 .source-thumb img { width: 100%; height: 100%; object-fit: contain; }
 .upload-hint { color: var(--text-muted); font-size: var(--fs-label); font-weight: 700; }

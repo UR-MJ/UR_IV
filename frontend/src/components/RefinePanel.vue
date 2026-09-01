@@ -366,11 +366,6 @@ defineExpose({ setImage })
 .sidebar-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .sidebar-footer { padding: 16px; background: var(--bg-card); border-top: 1px solid var(--border); }
 
-.glass-card {
-  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
-  border-radius: var(--radius-card); padding: 14px;
-}
-.card-header { cursor: pointer; font-size: 11px; font-weight: 800; color: var(--text-secondary); }
 .glass-card label { display: block; font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); margin-bottom: 4px; }
 .glass-card label.accent { color: var(--accent); }
 .glass-card label.danger { color: #f87171; }
