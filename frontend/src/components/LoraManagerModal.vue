@@ -12,7 +12,7 @@
         <div class="lm-head-actions">
           <button class="lm-modetab" :class="{ active: !extMode }" @click="extMode = false">간편</button>
           <button class="lm-modetab" :class="{ active: extMode }" @click="openExtManager">확장 매니저</button>
-          <button class="lm-close" @click="close">✕</button>
+          <button class="lm-close" @click="close"><Icon name="close" /></button>
         </div>
       </div>
 
@@ -30,7 +30,7 @@
       <template v-else>
       <div class="lm-searchbar">
         <input ref="searchEl" v-model="query" class="lm-search" placeholder="LoRA 이름 검색..." />
-        <button class="lm-refresh" @click="load('force')" :disabled="loading" title="목록 다시 스캔">{{ loading ? '…' : '🔄' }}</button>
+        <button class="lm-refresh" @click="load('force')" :disabled="loading" title="목록 다시 스캔"><Icon v-if="!loading" name="refresh" /><template v-else>…</template></button>
       </div>
 
       <div class="lm-list">

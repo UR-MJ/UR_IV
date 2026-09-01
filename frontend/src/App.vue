@@ -18,7 +18,7 @@
                 :options="profileNames"
                 :placeholder="profileNames.length === 0 ? '(저장된 프로파일 없음)' : '선택하여 적용...'" />
               <button class="profile-mini-btn" @click="saveCurrentAsProfile" title="현재 세팅을 새 프로파일로 저장">+</button>
-              <button class="profile-mini-btn" @click="showProfileManager = true; loadWorkflowProfilesList()" title="프로파일 관리 (삭제/이름변경)">⚙</button>
+              <button class="profile-mini-btn" @click="showProfileManager = true; loadWorkflowProfilesList()" title="프로파일 관리 (삭제/이름변경)"><Icon name="settings" /></button>
             </div>
           </div>
 
@@ -41,9 +41,9 @@
         <div class="gen-footer">
           <div class="gen-actions">
             <button class="action-btn" :class="{ active: autoMode }" @click="autoMode = !autoMode; action('toggle_automation', { checked: autoMode })">
-              {{ autoMode ? '🔄 AUTO ON' : '⏸ AUTO OFF' }}
+              <Icon :name="autoMode ? 'refresh' : 'pause'" /> {{ autoMode ? 'AUTO ON' : 'AUTO OFF' }}
             </button>
-            <button class="action-btn highlight" @click="action('random_prompt')">🎲 RANDOM</button>
+            <button class="action-btn highlight" @click="action('random_prompt')"><Icon name="dice" /> RANDOM</button>
           </div>
           <!-- 자동화 설정 (AUTO ON일 때만) -->
           <div class="auto-settings" v-if="autoMode">
@@ -70,8 +70,8 @@
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
             <label class="auto-check"><input type="checkbox" v-model="autoSettings.autoResetDeck" /><span title="덱을 다 쓰면 자동으로 다시 채워 계속(모두 1회씩 뽑은 뒤 재셔플 — 무한·공평)">덱 소진 시 초기화</span></label>
             <div class="auto-deck-pre" v-if="deckTotal > 0 && !isAutomating">
-              <span>🎴 덱 <strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용<template v-if="deckAllowDup"> (중복·무한)</template></span>
-              <button class="deck-reset-btn" @click="resetDeck" title="덱을 가득 다시 채움 (사용 0으로 초기화)">↻ 덱 초기화</button>
+              <span><Icon name="cards" /> 덱 <strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용<template v-if="deckAllowDup"> (중복·무한)</template></span>
+              <button class="deck-reset-btn" @click="resetDeck" title="덱을 가득 다시 채움 (사용 0으로 초기화)"><Icon name="rotate-cw" /> 덱 초기화</button>
             </div>
           </div>
           <!-- 자동화 상태 표시 -->
@@ -80,13 +80,12 @@
               <span class="auto-pulse"></span>
               <span>자동화 진행 중 — {{ autoGenCount }}장 완료</span>
             </div>
-            <div class="auto-status-sub deck-status" v-if="deckTotal > 0">
-              🎴 덱
+            <div class="auto-status-sub deck-status" v-if="deckTotal > 0"><Icon name="cards" /> 덱
               <template v-if="deckAllowDup">{{ deckTotal }}개 (중복 허용 · 무한)</template>
               <template v-else><strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용</template>
             </div>
             <div class="auto-status-sub auto-wait" v-if="autoWaiting && waitTotalMs > 0">
-              <div class="wait-row"><span>⏳ 다음 생성까지 {{ waitSec }}s</span><span class="wait-pct">{{ Math.round(waitPct) }}%</span></div>
+              <div class="wait-row"><span><Icon name="hourglass" /> 다음 생성까지 {{ waitSec }}s</span><span class="wait-pct">{{ Math.round(waitPct) }}%</span></div>
               <div class="wait-bar"><div class="wait-fill" :style="{ width: waitPct + '%' }"></div></div>
             </div>
             <div class="auto-status-sub" v-else-if="autoWaiting">대기 중...</div>
@@ -97,9 +96,11 @@
           </label>
           <div class="generate-row">
             <button class="btn-generate" :class="{ automating: isAutomating, converting: nlConverting }" @click="doGenerate" :disabled="(isGenerating && !isAutomating) || nlConverting">
-              {{ nlConverting ? '🅣→🅝 자연어 변환 중…' : isAutomating ? '⏹ STOP AUTOMATION' : isGenerating ? 'GENERATING...' : autoMode ? '▶ START AUTOMATION' : 'GENERATE IMAGE' }}
+              <Icon v-if="isAutomating" name="stop" /><Icon
+                v-else-if="autoMode && !isGenerating && !nlConverting" name="play" />
+              {{ nlConverting ? '🅣→🅝 자연어 변환 중…' : isAutomating ? 'STOP AUTOMATION' : isGenerating ? 'GENERATING...' : autoMode ? 'START AUTOMATION' : 'GENERATE IMAGE' }}
             </button>
-            <button v-if="isGenerating && !isAutomating" class="btn-cancel" @click="cancelGeneration" title="생성 취소">✕</button>
+            <button v-if="isGenerating && !isAutomating" class="btn-cancel" @click="cancelGeneration" title="생성 취소"><Icon name="close" /></button>
           </div>
           <div class="gen-eta" v-if="isGenerating && genEta">{{ genEta }}</div>
         </div>
@@ -108,7 +109,7 @@
       <!-- 반달 화살표 (좌측 패널 옆, 항상 표시) -->
       <div class="half-moon" v-if="showLeftPanel" @click="showExtendPanel = !showExtendPanel"
         :class="{ open: showExtendPanel }">
-        <span>{{ showExtendPanel ? '◀' : '▶' }}</span>
+        <span><Icon :name="showExtendPanel ? 'chevron-left' : 'chevron-right'" /></span>
       </div>
 
       <!-- Extended Panel backdrop (외부 클릭 시 닫기) -->
@@ -120,7 +121,7 @@
         <aside class="extend-overlay" v-if="showExtendPanel && showLeftPanel" @click.stop>
           <div class="extend-header">
             <h3>ADVANCED SETTINGS</h3>
-            <button class="close-btn" @click="showExtendPanel = false" title="닫기 (ESC)">✕</button>
+            <button class="close-btn" @click="showExtendPanel = false" title="닫기 (ESC)"><Icon name="close" /></button>
           </div>
           <div class="extend-scroll" v-scroll-memory="'extendPanel'">
             <!-- Parameters (기본) -->
@@ -132,7 +133,7 @@
                   <input type="number" v-model="storeWidgets.width_input" />
                   <span>×</span>
                   <input type="number" v-model="storeWidgets.height_input" />
-                  <button class="ext-mini-btn" @click="action('swap_resolution')">↔</button>
+                  <button class="ext-mini-btn" @click="action('swap_resolution')"><Icon name="arrows-horizontal" /></button>
                 </div>
                 <div class="ext-res-opts">
                   <label class="ext-check-sm"><ToggleSwitch v-model="randomResEnabled" size="sm" /><span>랜덤</span></label>
@@ -140,7 +141,7 @@
                   <label class="ext-check-sm hr-toggle" :class="{ active: highResEnabled }"
                     title="입력 해상도 × 배율로 처음부터 더 크게 생성 (hires.fix와 다른 단일 패스)&#10;&#10;⚠ SAM3 자동 검열과 동시 사용 시 VRAM OOM 위험&#10;⚠ 16GB GPU + 1.5× + SAM3 = inpaint 단계에서 메모리 부족&#10;⚠ 모델 학습 해상도(보통 1024±)를 크게 넘으면 이중 캐릭터/왜곡 가능&#10;&#10;권장: 1.5× 단독 사용 또는 SAM3 단독 사용 (둘 중 하나)">
                     <ToggleSwitch v-model="highResEnabled" size="sm" />
-                    <span>고해상도 {{ highResFactor.toFixed(2) }}×<span v-if="highResEnabled" class="hr-warn">⚠</span></span>
+                    <span>고해상도 {{ highResFactor.toFixed(2) }}×<span v-if="highResEnabled" class="hr-warn"><Icon name="alert" /></span></span>
                   </label>
                 </div>
                 <!-- 고해상도 미리보기 + 배율 슬라이더 -->
@@ -155,8 +156,7 @@
                     실제 생성: <strong>{{ hrActualW }}×{{ hrActualH }}</strong>
                     <span class="hr-note">(8 배수 정렬)</span>
                   </div>
-                  <div class="hr-warn-banner">
-                    ⚠ SAM3·ADetailer 등 후처리 동시 사용 시 VRAM OOM 위험.
+                  <div class="hr-warn-banner"><Icon name="alert" /> SAM3·ADetailer 등 후처리 동시 사용 시 VRAM OOM 위험.
                     16GB GPU + 1.5× = 한계.
                   </div>
                 </div>
@@ -166,7 +166,7 @@
                     <div v-for="(r, i) in randomResList" :key="i" class="rand-res-item">
                       <span class="rand-res-val">{{ r[0] }}×{{ r[1] }}</span>
                       <span class="rand-res-desc">{{ r[2] }}</span>
-                      <button class="rand-res-del" @click="removeRandomRes(i)">✕</button>
+                      <button class="rand-res-del" @click="removeRandomRes(i)"><Icon name="close" /></button>
                     </div>
                     <div v-if="!randomResList.length" class="rand-res-empty">해상도를 추가하세요</div>
                   </div>
@@ -245,7 +245,7 @@
                 <label class="ext-check-row"><ToggleSwitch v-model="autoRemoveCharFeatures" size="sm" /><span title="closed eyes 있으면 눈색 특징 생략, 머리 길이 충돌 시 생략">특징 auto remove</span></label>
               </div>
               <div v-if="autoRemoveCharFeatures" class="char-ovr-row">
-                <button class="char-ovr-btn" @click="openCharOverrideModal()">⚙ override 설정 (머리길이 / 눈색)</button>
+                <button class="char-ovr-btn" @click="openCharOverrideModal()"><Icon name="settings" /> override 설정 (머리길이 / 눈색)</button>
               </div>
             </details>
 
@@ -471,7 +471,7 @@
                 <input type="range" min="-100" max="200" v-model.number="lora.weight" class="lora-slider" />
                 <input type="number" class="lora-weight-input" :value="(lora.weight / 100).toFixed(2)" step="0.05" min="-1" max="3"
                   title="가중치 직접 입력" @change="lora.weight = Math.round((parseFloat(($event.target as HTMLInputElement).value) || 0) * 100)" @mousedown.stop />
-                <button class="lora-remove" @click="loraStack.splice(i, 1)">✕</button>
+                <button class="lora-remove" @click="loraStack.splice(i, 1)"><Icon name="close" /></button>
               </div>
               </template>
               <div class="lora-drop-marker" v-if="loraDragIdx >= 0 && loraDropIdx === loraStack.length && loraStack.length !== loraDragIdx + 1"></div>
@@ -485,7 +485,7 @@
                   <option v-for="n in loraSetNames" :key="n" :value="n">{{ n }}</option>
                 </select>
                 <button class="lora-tool-btn" @click="loadLoraSet" :disabled="!loraSetSel" title="선택 세트를 스택에 적용">적용</button>
-                <button class="lora-tool-btn" @click="deleteLoraSet" :disabled="!loraSetSel" title="세트 삭제">✕</button>
+                <button class="lora-tool-btn" @click="deleteLoraSet" :disabled="!loraSetSel" title="세트 삭제"><Icon name="close" /></button>
               </div>
             </div>
           </div>
@@ -534,7 +534,7 @@
           <h3>HISTORY</h3>
           <span class="count-badge">{{ historyImages.length }}</span>
         </div>
-        <button class="hist-nav-btn" @click="histPage = Math.max(0, histPage - 1)" :disabled="histPage <= 0">▲</button>
+        <button class="hist-nav-btn" @click="histPage = Math.max(0, histPage - 1)" :disabled="histPage <= 0"><Icon name="chevron-up" /></button>
         <div class="hist-scroll" v-scroll-memory="'history'">
           <div v-for="img in visibleHistory" :key="img" class="hist-card"
             @click="selectHistoryImage(img)"
@@ -545,23 +545,23 @@
             <img :key="historyImageSrc(img)" :src="historyImageSrc(img)" loading="lazy" />
           </div>
         </div>
-        <button class="hist-nav-btn" @click="histPage++" :disabled="(histPage + 1) * histPerPage >= historyImages.length">▼</button>
+        <button class="hist-nav-btn" @click="histPage++" :disabled="(histPage + 1) * histPerPage >= historyImages.length"><Icon name="chevron-down" /></button>
 
         <transition name="pop">
           <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="ctxMenuStyle">
-            <div class="ctx-item" @click="ctxAddFavorite">⭐ ADD TO FAVORITES</div>
-            <div class="ctx-item" @click="ctxSendI2I">🖼️ SEND TO I2I</div>
-            <div class="ctx-item" @click="ctxSendInpaint">🎨 SEND TO INPAINT</div>
-            <div class="ctx-item" @click="ctxSendEditor">✏️ SEND TO EDITOR</div>
-            <div class="ctx-item" @click="ctxCompare('before')">🔍 COMPARE (BEFORE)</div>
-            <div class="ctx-item" @click="ctxCompare('after')">🔍 COMPARE (AFTER)</div>
-            <div class="ctx-item" @click="ctxRunAdetailer">🎯 ADETAILER</div>
+            <div class="ctx-item" @click="ctxAddFavorite"><Icon name="star" /> ADD TO FAVORITES</div>
+            <div class="ctx-item" @click="ctxSendI2I"><Icon name="image" /> SEND TO I2I</div>
+            <div class="ctx-item" @click="ctxSendInpaint"><Icon name="palette" /> SEND TO INPAINT</div>
+            <div class="ctx-item" @click="ctxSendEditor"><Icon name="pencil" /> SEND TO EDITOR</div>
+            <div class="ctx-item" @click="ctxCompare('before')"><Icon name="search" /> COMPARE (BEFORE)</div>
+            <div class="ctx-item" @click="ctxCompare('after')"><Icon name="search" /> COMPARE (AFTER)</div>
+            <div class="ctx-item" @click="ctxRunAdetailer"><Icon name="target" /> ADETAILER</div>
             <div class="ctx-separator"></div>
-            <div class="ctx-item" @click="ctxPullPrompt">📥 프롬프트 당겨오기</div>
-            <div class="ctx-item" @click="ctxAddToQueue">➕ 다음 큐에 추가</div>
+            <div class="ctx-item" @click="ctxPullPrompt"><Icon name="download" /> 프롬프트 당겨오기</div>
+            <div class="ctx-item" @click="ctxAddToQueue"><Icon name="plus" /> 다음 큐에 추가</div>
             <div class="ctx-separator"></div>
-            <div class="ctx-item" @click="ctxCopyPath">📋 COPY PATH</div>
-            <div class="ctx-item delete" @click="ctxDelete">🗑️ DELETE</div>
+            <div class="ctx-item" @click="ctxCopyPath"><Icon name="clipboard" /> COPY PATH</div>
+            <div class="ctx-item delete" @click="ctxDelete"><Icon name="trash" /> DELETE</div>
           </div>
         </transition>
       </aside>
@@ -578,8 +578,8 @@
       <div class="vram-fill" :style="{ width: vramInfo.pct + '%' }" :class="vramClass"></div>
       <span class="vram-text">
         VRAM {{ vramInfo.used }}GB / {{ vramInfo.total }}GB ({{ vramInfo.pct }}%)
-        <span v-if="vramClass === 'critical'" class="vram-warn">⚠ 위험</span>
-        <span v-else-if="vramClass === 'warn'" class="vram-warn">▲ 주의</span>
+        <span v-if="vramClass === 'critical'" class="vram-warn"><Icon name="alert" /> 위험</span>
+        <span v-else-if="vramClass === 'warn'" class="vram-warn"><Icon name="chevron-up" /> 주의</span>
       </span>
     </div>
 
@@ -589,7 +589,7 @@
         <div class="pm-modal">
           <div class="pm-header">
             <h3>PRESET MANAGER</h3>
-            <button class="close-btn" @click="showPresetManager = false">✕</button>
+            <button class="close-btn" @click="showPresetManager = false"><Icon name="close" /></button>
           </div>
           <div class="pm-body">
             <div class="pm-list">
@@ -610,10 +610,10 @@
             </div>
           </div>
           <div class="pm-footer">
-            <button class="pm-btn" @click="loadSelectedPreset" :disabled="!selectedPreset">📂 LOAD</button>
-            <button class="pm-btn" @click="deleteSelectedPreset" :disabled="!selectedPreset">🗑 DELETE</button>
+            <button class="pm-btn" @click="loadSelectedPreset" :disabled="!selectedPreset"><Icon name="folder-open" /> LOAD</button>
+            <button class="pm-btn" @click="deleteSelectedPreset" :disabled="!selectedPreset"><Icon name="trash" /> DELETE</button>
             <div class="pm-spacer"></div>
-            <button class="pm-btn accent" @click="saveNewPreset">💾 SAVE CURRENT</button>
+            <button class="pm-btn accent" @click="saveNewPreset"><Icon name="save" /> SAVE CURRENT</button>
           </div>
         </div>
       </div>
@@ -628,7 +628,7 @@
 
     <!-- 세션 복구 배너 (크래시/OOM 후) -->
     <div v-if="sessionRestore" class="session-restore">
-      <span class="sr-msg">⏮ 이전 세션의 작업이 남아 있습니다. 복원할까요?</span>
+      <span class="sr-msg"><Icon name="history" /> 이전 세션의 작업이 남아 있습니다. 복원할까요?</span>
       <button class="sr-apply" @click="applySessionRestore">복원</button>
       <button class="sr-dismiss" @click="dismissSessionRestore">닫기</button>
     </div>
@@ -640,19 +640,19 @@
           <div class="wm-header">
             <h3>GLOBAL TAG WEIGHTS</h3>
             <span class="wm-desc">등록된 태그는 어디서든 자동으로 지정 가중치가 적용됩니다</span>
-            <button class="close-btn" @click="showWeightManager = false">✕</button>
+            <button class="close-btn" @click="showWeightManager = false"><Icon name="close" /></button>
           </div>
           <div class="wm-body">
             <div v-for="(w, i) in globalWeights" :key="w.tag || i" class="wm-row">
               <input v-model="w.tag" placeholder="태그명..." class="wm-tag-input" />
               <input type="range" min="50" max="200" v-model.number="w.weight" class="wm-slider" />
               <span class="wm-val">{{ (w.weight / 100).toFixed(2) }}</span>
-              <button class="wm-rm" @click="globalWeights.splice(i, 1)">✕</button>
+              <button class="wm-rm" @click="globalWeights.splice(i, 1)"><Icon name="close" /></button>
             </div>
             <button class="wm-add" @click="globalWeights.push({ tag: '', weight: 100 })">+ ADD TAG WEIGHT</button>
           </div>
           <div class="wm-footer">
-            <button class="wm-save" @click="saveGlobalWeights">💾 SAVE</button>
+            <button class="wm-save" @click="saveGlobalWeights"><Icon name="save" /> SAVE</button>
           </div>
         </div>
       </div>
@@ -666,7 +666,7 @@
             <h3>WILDCARD MANAGER</h3>
             <span class="wc-path">wildcards/</span>
             <button class="wc-new-btn" @click="createNewWildcard">+ NEW</button>
-            <button class="close-btn" @click="showWcManager = false">✕</button>
+            <button class="close-btn" @click="showWcManager = false"><Icon name="close" /></button>
           </div>
           <div class="wc-modal-body">
             <!-- 파일 목록 -->
@@ -675,7 +675,7 @@
                 :class="{ active: selectedWc === wc.name }" @click="selectWildcard(wc.name)">
                 <span class="wc-fname" @dblclick.stop="renameWildcard(wc.name)">{{ wc.name }}</span>
                 <span class="wc-file-count">{{ wc.tags.length }}</span>
-                <button class="wc-del" @click.stop="deleteWildcard(wc.name)">✕</button>
+                <button class="wc-del" @click.stop="deleteWildcard(wc.name)"><Icon name="close" /></button>
               </div>
             </div>
             <!-- 편집 영역 -->
@@ -692,7 +692,7 @@
                   <div v-for="(line, li) in wcEditLines" :key="li" class="wc-block-row">
                     <span class="wc-block-idx">{{ li + 1 }}</span>
                     <input v-model="wcEditLines[li]" class="wc-block-input" @keydown.enter="addWcLine(li)" />
-                    <button class="wc-block-rm" @click="wcEditLines.splice(li, 1)">✕</button>
+                    <button class="wc-block-rm" @click="wcEditLines.splice(li, 1)"><Icon name="close" /></button>
                   </div>
                   <button class="wc-add-line" @click="wcEditLines.push('')">+ 줄 추가</button>
                 </div>
@@ -701,7 +701,7 @@
                   <CustomSelect v-model="wcInsertTarget" :options="['main', 'prefix', 'suffix', 'clipboard']" placeholder="삽입 위치" class="wc-insert-sel" />
                   <button class="wc-use-btn" @click="useWcSyntax">USE</button>
                   <div class="wc-spacer"></div>
-                  <button class="wc-save-btn" @click="saveCurrentWildcard">💾 SAVE</button>
+                  <button class="wc-save-btn" @click="saveCurrentWildcard"><Icon name="save" /> SAVE</button>
                 </div>
               </template>
               <div v-else class="wc-empty">좌측에서 와일드카드를 선택하거나 NEW를 클릭하세요</div>
@@ -718,7 +718,7 @@
           <div class="wc-modal-header">
             <h3>워크플로우 프로파일</h3>
             <span class="wc-path">config/profiles/*.json</span>
-            <button class="close-btn" @click="showProfileManager = false">✕</button>
+            <button class="close-btn" @click="showProfileManager = false"><Icon name="close" /></button>
           </div>
           <div class="order-modal-body">
             <div v-if="workflowProfiles.length === 0" class="wc-empty" style="padding: 20px;">
@@ -731,9 +731,9 @@
                   <div class="profile-name">{{ prof.name }}</div>
                   <div class="profile-meta">{{ prof.model || '모델 미지정' }}{{ prof.vae ? ' · VAE: ' + prof.vae : '' }}</div>
                 </div>
-                <button class="order-btn" @click="loadWorkflowProfile(prof.name)" title="적용">▶</button>
-                <button class="order-btn" @click="renameWorkflowProfile(prof.name)" title="이름 변경">✏</button>
-                <button class="order-btn" @click="deleteWorkflowProfile(prof.name)" title="삭제" style="color: #f87171;">✕</button>
+                <button class="order-btn" @click="loadWorkflowProfile(prof.name)" title="적용"><Icon name="play" /></button>
+                <button class="order-btn" @click="renameWorkflowProfile(prof.name)" title="이름 변경"><Icon name="pencil" /></button>
+                <button class="order-btn" @click="deleteWorkflowProfile(prof.name)" title="삭제" style="color: #f87171;"><Icon name="close" /></button>
               </div>
             </div>
             <div class="order-actions">
@@ -753,15 +753,15 @@
           <div class="wc-modal-header">
             <h3>프롬프트 섹션 순서</h3>
             <span class="wc-path">생성 시 합쳐지는 순서를 ↑/↓로 조정. 저장 시 즉시 반영</span>
-            <button class="close-btn" @click="showOrderManager = false">✕</button>
+            <button class="close-btn" @click="showOrderManager = false"><Icon name="close" /></button>
           </div>
           <div class="order-modal-body">
             <div class="order-list">
               <div v-for="(sec, i) in promptOrderList" :key="sec.key" class="order-item">
                 <span class="order-num">{{ i + 1 }}</span>
                 <span class="order-label">{{ sec.label }}</span>
-                <button class="order-btn" :disabled="i === 0" @click="moveOrderUp(i)" title="위로">↑</button>
-                <button class="order-btn" :disabled="i === promptOrderList.length - 1" @click="moveOrderDown(i)" title="아래로">↓</button>
+                <button class="order-btn" :disabled="i === 0" @click="moveOrderUp(i)" title="위로"><Icon name="arrow-up" /></button>
+                <button class="order-btn" :disabled="i === promptOrderList.length - 1" @click="moveOrderDown(i)" title="아래로"><Icon name="arrow-down" /></button>
               </div>
             </div>
             <div class="order-preview">
@@ -769,10 +769,10 @@
               <code class="order-preview-text">{{ promptOrderList.map(s => s.label).join(' → ') }}</code>
             </div>
             <div class="order-actions">
-              <button class="order-reset" @click="resetPromptOrder">↺ 기본값 복원</button>
+              <button class="order-reset" @click="resetPromptOrder"><Icon name="rotate-ccw" /> 기본값 복원</button>
               <div style="flex: 1;"></div>
               <button class="order-cancel" @click="showOrderManager = false">취소</button>
-              <button class="order-save" @click="saveOrderAndClose">💾 저장 & 적용</button>
+              <button class="order-save" @click="saveOrderAndClose"><Icon name="save" /> 저장 & 적용</button>
             </div>
           </div>
         </div>
@@ -787,7 +787,7 @@
             <h3>INSTANT WILDCARD MANAGER</h3>
             <span class="wc-path">save/instant_wildcards.json &nbsp;·&nbsp; 문법: <code>$$name$$</code></span>
             <button class="wc-new-btn" @click="createNewInstantWc">+ NEW</button>
-            <button class="close-btn" @click="showInstantWcManager = false">✕</button>
+            <button class="close-btn" @click="showInstantWcManager = false"><Icon name="close" /></button>
           </div>
           <div class="wc-modal-body">
             <!-- 이름 목록 -->
@@ -796,7 +796,7 @@
                 :class="{ active: selectedInstantWc === iw.name }" @click="selectInstantWc(iw.name)">
                 <span class="wc-fname">{{ iw.name }}</span>
                 <span class="wc-file-count">{{ iw.lines.length }}</span>
-                <button class="wc-del" @click.stop="deleteInstantWc(iw.name)">✕</button>
+                <button class="wc-del" @click.stop="deleteInstantWc(iw.name)"><Icon name="close" /></button>
               </div>
               <div v-if="instantWildcards.length === 0" class="wc-empty" style="padding: 12px; font-size: 11px;">
                 와일드카드가 없습니다. + NEW로 추가하세요.
@@ -816,15 +816,14 @@
                     <input v-model="iwEditLines[li]" class="wc-block-input"
                       :placeholder="li === 0 ? '예: happy 또는 {100}:happy (가중치)' : ''"
                       @keydown.enter="iwEditLines.push('')" />
-                    <button class="wc-block-rm" @click="iwEditLines.splice(li, 1)">✕</button>
+                    <button class="wc-block-rm" @click="iwEditLines.splice(li, 1)"><Icon name="close" /></button>
                   </div>
                   <button class="wc-add-line" @click="iwEditLines.push('')">+ 줄 추가</button>
                 </div>
                 <div class="wc-bottom-bar">
-                  <span style="font-size: 11px; color: var(--text-muted); margin-right: auto;">
-                    💡 <b>$$name$$</b>을 프롬프트에 넣으면 생성 시 라인 중 하나를 뽑아 치환합니다.
+                  <span style="font-size: 11px; color: var(--text-muted); margin-right: auto;"><Icon name="bulb" /><b>$$name$$</b>을 프롬프트에 넣으면 생성 시 라인 중 하나를 뽑아 치환합니다.
                   </span>
-                  <button class="wc-save-btn" @click="saveCurrentInstantWc">💾 SAVE</button>
+                  <button class="wc-save-btn" @click="saveCurrentInstantWc"><Icon name="save" /> SAVE</button>
                 </div>
               </template>
               <div v-else class="wc-empty">좌측에서 선택하거나 NEW를 클릭하세요</div>
@@ -916,8 +915,7 @@
 
     <!-- Global Toast Notifications -->
     <!-- 알림 벨 + 히스토리 패널 -->
-    <button class="notif-bell" @click.stop="toggleNotifPanel" title="알림 기록">
-      🔔<span v-if="unread > 0" class="notif-badge">{{ unread > 9 ? '9+' : unread }}</span>
+    <button class="notif-bell" @click.stop="toggleNotifPanel" title="알림 기록"><Icon name="bell" /><span v-if="unread > 0" class="notif-badge">{{ unread > 9 ? '9+' : unread }}</span>
     </button>
     <div v-if="showNotifPanel" class="notif-overlay" @click="showNotifPanel = false"></div>
     <transition name="fade">
@@ -928,7 +926,7 @@
         </div>
         <div class="notif-list">
           <div v-for="n in toastHistory" :key="n.id" class="notif-item" :class="n.type">
-            <span class="notif-ico">{{ n.type === 'error' ? '⚠' : n.type === 'success' ? '✓' : n.type === 'warning' ? '⚠' : 'ℹ' }}</span>
+            <span class="notif-ico"><Icon :name="n.type === 'error' || n.type === 'warning' ? 'alert' : n.type === 'success' ? 'check' : 'info'" /></span>
             <span class="notif-msg">{{ n.msg }}</span>
             <span class="notif-time">{{ relTime(n.ts) }}</span>
           </div>
@@ -946,10 +944,10 @@
         </button>
         <transition-group name="toast" tag="div" class="toast-stack">
           <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">
-            <span class="toast-icon">{{ t.type === 'error' ? '⚠' : t.type === 'success' ? '✓' : 'ℹ' }}</span>
+            <span class="toast-icon"><Icon :name="t.type === 'error' ? 'alert' : t.type === 'success' ? 'check' : 'info'" /></span>
             <span class="toast-msg">{{ t.msg }}</span>
             <span v-if="t.count > 1" class="toast-count">×{{ t.count }}</span>
-            <button class="toast-close" @click.stop="removeToast(t.id)" title="닫기">✕</button>
+            <button class="toast-close" @click.stop="removeToast(t.id)" title="닫기"><Icon name="close" /></button>
           </div>
         </transition-group>
       </div>

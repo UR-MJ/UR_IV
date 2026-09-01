@@ -158,8 +158,8 @@
         <div class="divider" />
         <label class="field wide"><span>DOCUMENT TITLE</span><input v-model="comicDoc.title" type="text" /></label>
         <div class="toolbar-row">
-          <button class="tool-button" :disabled="!canUndo" title="Undo" @click="undo">↶ UNDO</button>
-          <button class="tool-button" :disabled="!canRedo" title="Redo" @click="redo">↷ REDO</button>
+          <button class="tool-button" :disabled="!canUndo" title="Undo" @click="undo"><Icon name="undo" /> UNDO</button>
+          <button class="tool-button" :disabled="!canRedo" title="Redo" @click="redo"><Icon name="redo" /> REDO</button>
           <span class="save-state">{{ saveStatus }}</span>
         </div>
         <span class="field-caption">LAYOUT</span>

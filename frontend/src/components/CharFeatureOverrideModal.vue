@@ -6,7 +6,7 @@
           <h3>특징 override</h3>
           <span class="ovr-sub">auto remove 시, 선택한 카테고리는 덱 태그를 제거하고 캐릭터 특징으로 강제 교체합니다</span>
         </div>
-        <button class="ovr-close" @click="close">✕</button>
+        <button class="ovr-close" @click="close"><Icon name="close" /></button>
       </div>
 
       <div class="ovr-body">

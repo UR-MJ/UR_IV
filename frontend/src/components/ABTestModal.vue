@@ -6,7 +6,7 @@
           <h3>A/B 프롬프트 테스트</h3>
           <span class="abt-sub">동일한 시드로 두 프롬프트를 생성하여 비교합니다 (대기열에 추가)</span>
         </div>
-        <button class="abt-close" @click="close">✕</button>
+        <button class="abt-close" @click="close"><Icon name="close" /></button>
       </div>
 
       <div class="abt-body">
@@ -33,7 +33,7 @@
       <div class="abt-footer">
         <span class="abt-status">{{ status }}</span>
         <div class="abt-spacer"></div>
-        <button class="abt-run" @click="run">▶ 대기열에 추가</button>
+        <button class="abt-run" @click="run"><Icon name="play" /> 대기열에 추가</button>
         <button class="abt-cancel" @click="close">취소</button>
       </div>
     </div>

@@ -36,7 +36,7 @@
         :disabled="channelIsIdentity"
         title="이 채널의 커브만 대각선으로 되돌린다"
         @click="resetChannel"
-      >↩ {{ activeOption.label }} 초기화</button>
+      ><Icon name="undo" size="12" /> {{ activeOption.label }} 초기화</button>
     </div>
   </div>
 </template>

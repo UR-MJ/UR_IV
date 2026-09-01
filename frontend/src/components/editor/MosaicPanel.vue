@@ -96,11 +96,9 @@
     <div class="control-group" v-if="selectedTool === 1">
       <label>Lasso Mode</label>
       <div class="chip-grid-2">
-        <button class="chip-btn" :class="{ active: !magneticLasso }" @click="magneticLasso = false; emit('magnetic-changed', false)">
-          ➰ FREE
+        <button class="chip-btn" :class="{ active: !magneticLasso }" @click="magneticLasso = false; emit('magnetic-changed', false)"><Icon name="loop" /> FREE
         </button>
-        <button class="chip-btn magnet" :class="{ active: magneticLasso }" @click="magneticLasso = true; emit('magnetic-changed', true)">
-          🧲 MAGNETIC
+        <button class="chip-btn magnet" :class="{ active: magneticLasso }" @click="magneticLasso = true; emit('magnetic-changed', true)"><Icon name="magnet" /> MAGNETIC
         </button>
       </div>
     </div>
@@ -109,9 +107,9 @@
     <div class="control-group" v-if="selectedTool === 4">
       <label>Stamp Shape</label>
       <div class="chip-grid-3">
-        <button class="chip-btn" :class="{ active: stampShapeLocal === 'circle' }" @click="stampShapeLocal = 'circle'">⬤ CIRCLE</button>
-        <button class="chip-btn" :class="{ active: stampShapeLocal === 'bar' }" @click="stampShapeLocal = 'bar'">▬ BAR</button>
-        <button class="chip-btn" :class="{ active: stampShapeLocal === 'rect' }" @click="stampShapeLocal = 'rect'">⬜ RECT</button>
+        <button class="chip-btn" :class="{ active: stampShapeLocal === 'circle' }" @click="stampShapeLocal = 'circle'"><Icon name="circle" /> CIRCLE</button>
+        <button class="chip-btn" :class="{ active: stampShapeLocal === 'bar' }" @click="stampShapeLocal = 'bar'"><Icon name="bar" /> BAR</button>
+        <button class="chip-btn" :class="{ active: stampShapeLocal === 'rect' }" @click="stampShapeLocal = 'rect'"><Icon name="square" /> RECT</button>
       </div>
       <div class="slider-box mt-8">
         <div class="slider-header"><span>간격 (px)</span><span>{{ stampSpacing }}</span></div>
@@ -124,10 +122,10 @@
       <label>Eraser Type</label>
       <div class="chip-grid-2">
         <button class="chip-btn" :class="{ active: !eraserRestore }" @click="eraserRestore = false; emit('eraser-restore-changed', false)">
-          <span class="icon">🧹</span> MASK ERASER
+          <span class="icon"><Icon name="wand" /></span> MASK ERASER
         </button>
         <button class="chip-btn restore" :class="{ active: eraserRestore }" @click="eraserRestore = true; emit('eraser-restore-changed', true)">
-          <span class="icon">✨</span> MOSAIC ERASER
+          <span class="icon"><Icon name="sparkles" /></span> MOSAIC ERASER
         </button>
       </div>
       <label class="mt-8" v-if="!eraserRestore">Shape Mode</label>
@@ -165,7 +163,7 @@
     <!-- Section 5: Major Actions (Sticky Bottom feel) -->
     <div class="footer-actions mt-auto">
       <button class="main-apply-btn" @click="onApply">
-        <span class="icon">✨</span> APPLY CHANGES (ENTER)
+        <span class="icon"><Icon name="sparkles" /></span> APPLY CHANGES (ENTER)
       </button>
       <button class="secondary-btn mt-8" @click="$emit('cancel-selection')">CANCEL SELECTION (ESC)</button>
     </div>
@@ -174,20 +172,20 @@
     <div class="control-group mt-12">
       <label>BACKGROUND REMOVAL</label>
       <div class="chip-grid-3">
-        <button class="chip-btn" :class="{ active: bgQuality === 'fast' }" @click="bgQuality = 'fast'">⚡ FAST</button>
-        <button class="chip-btn" :class="{ active: bgQuality === 'balanced' }" @click="bgQuality = 'balanced'">⚖️ BALANCED</button>
-        <button class="chip-btn" :class="{ active: bgQuality === 'quality' }" @click="bgQuality = 'quality'">💎 QUALITY</button>
+        <button class="chip-btn" :class="{ active: bgQuality === 'fast' }" @click="bgQuality = 'fast'"><Icon name="zap" /> FAST</button>
+        <button class="chip-btn" :class="{ active: bgQuality === 'balanced' }" @click="bgQuality = 'balanced'">BALANCED</button>
+        <button class="chip-btn" :class="{ active: bgQuality === 'quality' }" @click="bgQuality = 'quality'">QUALITY</button>
       </div>
-      <button class="main-apply-btn mt-8" @click="$emit('remove-bg', { quality: bgQuality })">🎨 REMOVE BACKGROUND</button>
+      <button class="main-apply-btn mt-8" @click="$emit('remove-bg', { quality: bgQuality })"><Icon name="palette" /> REMOVE BACKGROUND</button>
     </div>
 
     <!-- Section 7: Transformations -->
     <div class="control-group mt-12">
       <label>Transform</label>
       <div class="btn-grid-4">
-        <button class="mini-btn" @click="$emit('rotate', 'ccw')" title="Rotate CCW">↺</button>
-        <button class="mini-btn" @click="$emit('rotate', 'cw')" title="Rotate CW">↻</button>
-        <button class="mini-btn" @click="$emit('flip', 'horizontal')" title="Flip Horizontal">↔</button>
+        <button class="mini-btn" @click="$emit('rotate', 'ccw')" title="Rotate CCW"><Icon name="rotate-ccw" /></button>
+        <button class="mini-btn" @click="$emit('rotate', 'cw')" title="Rotate CW"><Icon name="rotate-cw" /></button>
+        <button class="mini-btn" @click="$emit('flip', 'horizontal')" title="Flip Horizontal"><Icon name="arrows-horizontal" /></button>
         <button class="mini-btn" @click="$emit('flip', 'vertical')" title="Flip Vertical">↕</button>
       </div>
       <div class="btn-row mt-8">
@@ -227,7 +225,7 @@
       <!-- 원근 보정 — 꼭짓점 4개를 드래그해 기울어진 사각형을 정면으로 편다 -->
       <div class="btn-row mt-8" v-if="!perspectiveActive">
         <button class="action-btn" @click="$emit('perspective-start')"
-          title="기울어져 찍힌 사각형(액자·표지판·문서)을 정면처럼 펴줍니다">▱ 원근 보정</button>
+          title="기울어져 찍힌 사각형(액자·표지판·문서)을 정면처럼 펴줍니다"><Icon name="crop" /> 원근 보정</button>
       </div>
       <template v-else>
         <p class="persp-hint">꼭짓점 4개를 펴고 싶은 사각형의 모서리에 맞춘 뒤 적용하세요.</p>

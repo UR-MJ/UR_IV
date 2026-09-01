@@ -3,7 +3,7 @@
     <!-- Top Filter & Action Bar -->
     <header class="gallery-toolbar">
       <div class="folder-info" @click="openFolder">
-        <span class="icon">📁</span>
+        <span class="icon"><Icon name="folder" /></span>
         <span class="path">{{ currentFolder || 'Select Output Folder' }}</span>
       </div>
       
@@ -11,14 +11,14 @@
 
       <!-- EXIF 검색 -->
       <div class="search-box">
-        <input v-model="exifSearch" placeholder="🔍 EXIF 검색..." class="search-input"
+        <input v-model="exifSearch" placeholder="EXIF 검색..." class="search-input"
           @keydown.enter="runExifSearch" />
         <button class="search-go" @click="runExifSearch" :disabled="exifSearching">{{ exifSearching ? '...' : 'GO' }}</button>
-        <button class="search-clear" v-if="exifFiltered" @click="clearExifSearch">✕</button>
+        <button class="search-clear" v-if="exifFiltered" @click="clearExifSearch"><Icon name="close" /></button>
       </div>
 
       <div class="control-group">
-        <button class="icon-btn" @click="loadImages(true)" title="Refresh">🔄</button>
+        <button class="icon-btn" @click="loadImages(true)" title="Refresh"><Icon name="refresh" /></button>
         <div class="sep"></div>
         <div class="sort-chips">
           <button v-for="s in sortOptions" :key="s.val"
@@ -48,7 +48,7 @@
           <video v-if="isVideo(img)" class="gallery-media" :src="mediaUrl(img)"
             muted preload="metadata" playsinline />
           <div v-else-if="isAudio(img)" class="audio-card">
-            <span class="audio-icon">♫</span>
+            <span class="audio-icon"><Icon name="music" /></span>
             <span class="audio-name">{{ filenameOf(img) }}</span>
             <audio :src="mediaUrl(img)" controls preload="metadata" @click.stop />
           </div>
@@ -57,8 +57,8 @@
             {{ mediaLabel(img) }}
           </span>
           <div class="card-hover-actions">
-            <button class="tiny-btn" @click.stop="quickAction('add_favorite', img)">⭐</button>
-            <button v-if="isImage(img)" class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)">📋</button>
+            <button class="tiny-btn" @click.stop="quickAction('add_favorite', img)"><Icon name="star" /></button>
+            <button v-if="isImage(img)" class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)"><Icon name="clipboard" /></button>
           </div>
         </div>
       </div>
@@ -71,7 +71,7 @@
         <p>Loading...</p>
       </div>
       <div v-else-if="images.length === 0" class="empty-placeholder">
-        <div class="icon">🎞️</div>
+        <div class="icon"><Icon name="video" size="30" /></div>
         <h2>GALLERY IS EMPTY</h2>
         <p>No supported media found in the current directory</p>
       </div>
@@ -84,14 +84,14 @@
           <div class="large-view-header">
             <span class="large-filename">{{ largeView.filename }}</span>
             <div class="large-actions">
-              <button class="lv-btn" @click="editFilename">✏️ 이름 변경</button>
-              <button v-if="isImage(largeView.path)" class="lv-btn save" @click="saveExif">💾 EXIF 저장</button>
+              <button class="lv-btn" @click="editFilename"><Icon name="pencil" /> 이름 변경</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn save" @click="saveExif"><Icon name="save" /> EXIF 저장</button>
               <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_i2i', { path: largeView.path })">I2I</button>
               <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
               <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
-              <button class="lv-btn" @click="quickAction('add_favorite', largeView.path)">⭐ FAV</button>
+              <button class="lv-btn" @click="quickAction('add_favorite', largeView.path)"><Icon name="star" /> FAV</button>
               <button v-if="isImage(largeView.path)" class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
-              <button class="lv-close" @click="closeLargeView">✕</button>
+              <button class="lv-close" @click="closeLargeView"><Icon name="close" /></button>
             </div>
           </div>
           <div class="large-view-body">
@@ -129,12 +129,12 @@
     <!-- Slide-out EXIF Panel (간단 사이드바 — 하위호환) -->
     <transition name="slide">
       <aside v-if="exifData && !largeView && showMetadata" class="exif-sidebar">
-        <div class="exif-close" @click="exifData = null">➔</div>
+        <div class="exif-close" @click="exifData = null"><Icon name="arrow-right" /></div>
         <div class="exif-content">
           <div class="exif-preview" @click="largeView = exifData">
             <video v-if="isVideo(exifData.path)" :src="mediaUrl(exifData.path)" muted preload="metadata" playsinline />
             <div v-else-if="isAudio(exifData.path)" class="sidebar-audio-preview">
-              <span>♫</span>
+              <span><Icon name="music" /></span>
               <audio :src="mediaUrl(exifData.path)" controls preload="metadata" @click.stop />
             </div>
             <img v-else :src="mediaUrl(exifData.path)" />
@@ -184,16 +184,16 @@
     <!-- Context Menu -->
     <transition name="pop">
       <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
-        <div class="ctx-item" @click="ctx('add_favorite')">⭐ ADD TO FAVORITES</div>
-        <div class="ctx-item" @click="ctx('gallery_load_exif')">📋 INSPECT MEDIA</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_i2i')">🖼️ SEND TO I2I</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_inpaint')">🎨 SEND TO INPAINT</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_editor')">✏️ SEND TO EDITOR</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('before')">🔍 COMPARE (BEFORE)</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('after')">🔍 COMPARE (AFTER)</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctxAdetailer">🎯 ADETAILER</div>
+        <div class="ctx-item" @click="ctx('add_favorite')"><Icon name="star" /> ADD TO FAVORITES</div>
+        <div class="ctx-item" @click="ctx('gallery_load_exif')"><Icon name="clipboard" /> INSPECT MEDIA</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_i2i')"><Icon name="image" /> SEND TO I2I</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_inpaint')"><Icon name="palette" /> SEND TO INPAINT</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_editor')"><Icon name="pencil" /> SEND TO EDITOR</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('before')"><Icon name="search" /> COMPARE (BEFORE)</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('after')"><Icon name="search" /> COMPARE (AFTER)</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctxAdetailer"><Icon name="target" /> ADETAILER</div>
         <div class="ctx-separator"></div>
-        <div class="ctx-item delete" @click="ctx('delete_image')">🗑️ DELETE FOREVER</div>
+        <div class="ctx-item delete" @click="ctx('delete_image')"><Icon name="trash" /> DELETE FOREVER</div>
       </div>
     </transition>
   </div>

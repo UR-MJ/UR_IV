@@ -35,7 +35,7 @@
       <!-- 우측: 썸네일 그리드 -->
       <div class="ad-compare">
         <div v-if="batchFiles.length === 0" class="grid-empty">
-          <div class="grid-empty-ico">📦</div>
+          <div class="grid-empty-ico"><Icon name="package" size="34" /></div>
           <div class="grid-empty-title">이미지를 드래그하여 추가</div>
           <div class="grid-empty-sub">여러 장을 한꺼번에 처리할 수 있습니다</div>
         </div>
@@ -74,7 +74,7 @@
       <!-- 우측: 썸네일 그리드 -->
       <div class="ad-compare">
         <div v-if="upscaleFiles.length === 0" class="grid-empty">
-          <div class="grid-empty-ico">🔍</div>
+          <div class="grid-empty-ico"><Icon name="search" /></div>
           <div class="grid-empty-title">업스케일할 이미지를 드래그</div>
           <div class="grid-empty-sub">2~4배 해상도 향상</div>
         </div>
@@ -105,7 +105,7 @@
               :class="{ active: adCurrentIdx === i, done: adResults[i] }"
               @click="previewAdFile(i)">
               <span>{{ basename(f) }}</span>
-              <span v-if="adResults[i]" class="done-badge">✓</span>
+              <span v-if="adResults[i]" class="done-badge"><Icon name="check" /></span>
               <button class="rm-btn" @click.stop="adFiles.splice(i, 1)">×</button>
             </div>
           </div>
@@ -192,7 +192,7 @@
               :class="{ active: sam3CurrentIdx === i, done: sam3Results[i] }"
               @click="previewSam3File(i)">
               <span>{{ basename(f) }}</span>
-              <span v-if="sam3Results[i]" class="done-badge">✓</span>
+              <span v-if="sam3Results[i]" class="done-badge"><Icon name="check" /></span>
               <button class="rm-btn" @click.stop="sam3Files.splice(i, 1)">×</button>
             </div>
           </div>
@@ -330,7 +330,7 @@
           <CustomSelect v-if="ollamaModels.length" v-model="captionModel" :options="ollamaModels"
             placeholder="모델 선택..." @update:modelValue="saveCaptionModel" />
           <input v-else class="s-input" v-model="captionModel" @change="saveCaptionModel" placeholder="모델 로딩 중..." />
-          <button class="cap-refresh" @click="loadCaptionModels" title="모델 목록 새로고침">🔄</button>
+          <button class="cap-refresh" @click="loadCaptionModels" title="모델 목록 새로고침"><Icon name="refresh" /></button>
         </div>
         <label class="s-label">프롬프트</label>
         <textarea class="s-textarea" v-model="captionPrompt" @change="saveCaptionPrompt" rows="4"></textarea>
@@ -341,12 +341,12 @@
         <label class="s-label">저장 위치</label>
         <div class="cap-outdir">
           <span class="cap-outdir-path" :title="captionOutDir || '이미지와 같은 폴더'">{{ captionOutDir || '이미지와 같은 폴더 (.txt 사이드카)' }}</span>
-          <button class="cap-refresh" @click="action('caption_pick_outdir')" title="저장 폴더 선택">📁</button>
-          <button v-if="captionOutDir" class="cap-refresh" @click="clearCaptionOutDir" title="기본값(이미지 옆)으로">↺</button>
+          <button class="cap-refresh" @click="action('caption_pick_outdir')" title="저장 폴더 선택"><Icon name="folder" /></button>
+          <button v-if="captionOutDir" class="cap-refresh" @click="clearCaptionOutDir" title="기본값(이미지 옆)으로"><Icon name="rotate-ccw" /></button>
         </div>
         <div class="cap-pick">
-          <button class="link-btn" @click="action('caption_pick_files')">📄 파일 선택</button>
-          <button class="link-btn" @click="action('caption_pick_folder')">📁 폴더 선택</button>
+          <button class="link-btn" @click="action('caption_pick_files')"><Icon name="file" /> 파일 선택</button>
+          <button class="link-btn" @click="action('caption_pick_folder')"><Icon name="folder" /> 폴더 선택</button>
         </div>
         <div class="file-count" v-if="captionItems.length">{{ captionItems.length }}개 이미지</div>
         <button class="btn-start" @click="captionAll" :disabled="!captionItems.length || captionRunning">
@@ -356,7 +356,7 @@
       </div>
       <div class="ad-compare">
         <div v-if="!captionItems.length" class="grid-empty">
-          <div class="grid-empty-ico">🏷️</div>
+          <div class="grid-empty-ico"><Icon name="tag" /></div>
           <div class="grid-empty-title">파일 또는 폴더를 선택하세요</div>
           <div class="grid-empty-sub">Ollama 비전 모델로 캡션을 만들고 이미지 옆에 .txt로 저장합니다</div>
         </div>
@@ -370,8 +370,8 @@
               </div>
               <textarea class="cap-text" v-model="it.caption" placeholder="캡션 (편집 가능)..." rows="3"></textarea>
               <div class="cap-actions">
-                <button class="cap-btn" @click="captionSingle(it)" :disabled="captionRunning">🏷 캡션</button>
-                <button class="cap-btn" @click="saveCaptionItem(it)">💾 저장</button>
+                <button class="cap-btn" @click="captionSingle(it)" :disabled="captionRunning"><Icon name="tag" /> 캡션</button>
+                <button class="cap-btn" @click="saveCaptionItem(it)"><Icon name="save" /> 저장</button>
                 <button class="cap-btn t2i" @click="sendCaptionToT2I(it)" :disabled="!it.caption" title="이 캡션을 T2I 메인 프롬프트에 추가하고 이동">→ T2I</button>
               </div>
             </div>

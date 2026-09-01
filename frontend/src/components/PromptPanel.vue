@@ -11,23 +11,23 @@
       <textarea v-else ref="totalPromptRef" v-model="widgets.total_prompt_display"
         class="total-prompt auto-grow" placeholder="최종 프롬프트" @input="autoGrow($event.target)"></textarea>
       <div class="prompt-actions">
-        <button class="optimize-btn" @click="optimizePrompt">🧹 OPTIMIZE</button>
-        <button class="optimize-btn" @click="toggleSeparate" title="표정/배경/포즈/사물/메타 태그를 분류해서 제거하거나 추출">🏷 분류</button>
+        <button class="optimize-btn" @click="optimizePrompt"><Icon name="wand" /> OPTIMIZE</button>
+        <button class="optimize-btn" @click="toggleSeparate" title="표정/배경/포즈/사물/메타 태그를 분류해서 제거하거나 추출"><Icon name="tag" /> 분류</button>
         <span class="opt-result" v-if="optResult">{{ optResult }}</span>
       </div>
       <!-- 🧹 OPTIMIZE before/after 미리보기 → [적용] 클릭 시 반영 -->
       <div class="opt-preview" v-if="optPreview">
         <div class="opt-prev-head">
-          <span>🧹 OPTIMIZE 미리보기</span>
+          <span><Icon name="wand" /> OPTIMIZE 미리보기</span>
           <span class="opt-prev-stat">중복 {{ optPreview.removed }}개 제거 · {{ optPreview.tagCount }}개 태그</span>
         </div>
         <div class="opt-prev-cols">
           <div class="opt-prev-col"><label>BEFORE</label><div class="opt-prev-text before">{{ optPreview.before }}</div></div>
           <div class="opt-prev-col"><label>AFTER</label><div class="opt-prev-text after">{{ optPreview.after }}</div></div>
         </div>
-        <div class="opt-prev-conf" v-if="optPreview.conflicts.length">⚠ 충돌: <span v-for="c in optPreview.conflicts" :key="c.group">{{ c.group }}({{ c.tags.join('/') }}) </span></div>
+        <div class="opt-prev-conf" v-if="optPreview.conflicts.length"><Icon name="alert" /> 충돌: <span v-for="c in optPreview.conflicts" :key="c.group">{{ c.group }}({{ c.tags.join('/') }}) </span></div>
         <div class="opt-prev-btns">
-          <button class="opt-apply" @click="applyOptimize">✓ 적용</button>
+          <button class="opt-apply" @click="applyOptimize"><Icon name="check" /> 적용</button>
           <button class="opt-cancel" @click="cancelOptimize">취소</button>
         </div>
       </div>
@@ -41,18 +41,18 @@
           </button>
         </div>
         <div class="sep-actions">
-          <button class="sep-act remove" @click="applySeparate('remove')">🗑 선택 제거</button>
-          <button class="sep-act extract" @click="applySeparate('extract')">✂ 선택만 남기기</button>
+          <button class="sep-act remove" @click="applySeparate('remove')"><Icon name="trash" /> 선택 제거</button>
+          <button class="sep-act extract" @click="applySeparate('extract')"><Icon name="scissors" /> 선택만 남기기</button>
           <span class="sep-hint" v-if="sepResult">{{ sepResult }}</span>
         </div>
       </div>
       <div class="conflicts" v-if="promptConflicts.length > 0">
-        <div v-for="c in promptConflicts" :key="c.group" class="conflict-item">⚠ {{ c.group }}: {{ c.tags.join(', ') }}</div>
+        <div v-for="c in promptConflicts" :key="c.group" class="conflict-item"><Icon name="alert" /> {{ c.group }}: {{ c.tags.join(', ') }}</div>
       </div>
       <details class="neg-section">
         <summary class="danger-label neg-toggle">
-          NEGATIVE ▾
-          <button class="ai-btn neg-ai" @click.prevent.stop="runSmartNegative()" :disabled="ollamaLoading" title="AI 네거티브 자동 생성">🤖</button>
+          NEGATIVE <Icon name="chevron-down" size="12" />
+          <button class="ai-btn neg-ai" @click.prevent.stop="runSmartNegative()" :disabled="ollamaLoading" title="AI 네거티브 자동 생성"><Icon name="cpu" /></button>
         </summary>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.neg_prompt_text" :color-fn="() => 'neg'" class="neg" placeholder="네거티브 추가..." />
         <textarea v-else ref="negRef" v-model="widgets.neg_prompt_text" class="neg-prompt auto-grow" placeholder="Negative prompt..." @input="autoGrow($event.target)"></textarea>
@@ -77,7 +77,7 @@
           @input="onFieldInput($event, 'character_input')" @keydown="onFieldKey($event, 'character_input')" @blur="loadCharTags" />
         <div class="char-insight" v-if="charInsight.tags.length > 0">
           <div class="insight-header">
-            <span class="insight-label">📖 Official Tags</span>
+            <span class="insight-label"><Icon name="book" /> Official Tags</span>
             <button class="insight-apply" @click="applyOfficialTags">APPLY ALL</button>
           </div>
           <div class="insight-tags">
@@ -100,7 +100,7 @@
       <div class="input-group">
         <div class="row label-row">
           <label>Artist <span v-if="sectionTokens.artist" class="tk-badge" :class="tokenBadgeClass(sectionTokens.artist)">{{ sectionTokens.artist }}t</span></label>
-          <button class="lock-btn" :class="{ locked: artistLocked }" @click="toggleArtistLock">{{ artistLocked ? '🔒' : '🔓' }}</button>
+          <button class="lock-btn" :class="{ locked: artistLocked }" @click="toggleArtistLock"><Icon :name="artistLocked ? 'lock' : 'unlock'" /></button>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.artist_input" :color-fn="() => ''" placeholder="작가..." />
         <textarea v-else ref="artistRef" v-model="widgets.artist_input" class="auto-grow" placeholder="Artist tags..." @input="autoGrow($event.target)"></textarea>
@@ -145,8 +145,8 @@
       <summary class="card-header">
         <span>PROMPT BLOCKS</span>
         <span class="undo-btns" @click.stop>
-          <button class="undo-btn" :disabled="undoStack.length < 2" @click="performUndo" title="실행 취소 (Ctrl+Z)">↶</button>
-          <button class="undo-btn" :disabled="redoStack.length === 0" @click="performRedo" title="다시 실행 (Ctrl+Y)">↷</button>
+          <button class="undo-btn" :disabled="undoStack.length < 2" @click="performUndo" title="실행 취소 (Ctrl+Z)"><Icon name="undo" /></button>
+          <button class="undo-btn" :disabled="redoStack.length === 0" @click="performRedo" title="다시 실행 (Ctrl+Y)"><Icon name="redo" /></button>
         </span>
       </summary>
       <div class="input-group autocomplete-wrap">
@@ -155,7 +155,7 @@
           <div class="ai-btns">
             <!-- 태그형 출력 AI -->
             <div class="ai-menu-wrap">
-              <button class="ai-btn ai-menu-btn" @click.stop="toggleAiMenu('tag')" :disabled="ollamaLoading" title="태그를 만드는 AI">✨ 태그 AI ▾</button>
+              <button class="ai-btn ai-menu-btn" @click.stop="toggleAiMenu('tag')" :disabled="ollamaLoading" title="태그를 만드는 AI"><Icon name="sparkles" /> 태그 AI <Icon name="chevron-down" size="12" /></button>
               <div class="ai-menu" v-if="aiMenu === 'tag'">
                 <button @click="runAi('expand')">태그 확장 <em>연관 태그 추가</em></button>
                 <button @click="runAi('suggest')">유사 태그 <em>비슷한 태그 추천</em></button>
@@ -164,7 +164,7 @@
             </div>
             <!-- 자연어형 출력 AI -->
             <div class="ai-menu-wrap">
-              <button class="ai-btn ai-menu-btn" @click.stop="toggleAiMenu('nl')" :disabled="ollamaLoading" title="자연어/문장을 만드는 AI">💬 자연어 AI ▾</button>
+              <button class="ai-btn ai-menu-btn" @click.stop="toggleAiMenu('nl')" :disabled="ollamaLoading" title="자연어/문장을 만드는 AI"><Icon name="message" /> 자연어 AI <Icon name="chevron-down" size="12" /></button>
               <div class="ai-menu" v-if="aiMenu === 'nl'">
                 <button @click="runAi('nl_caption')">자연어 캡션 <em>태그 → 영어 문장</em></button>
                 <button @click="openNlInput('nl_scene')">영문 장면묘사 <em>키워드 → 장면</em></button>
@@ -178,16 +178,16 @@
         <div class="nl-input-row" v-if="showNlInput">
           <input v-model="nlPrompt" ref="nlInputRef" :placeholder="pendingNlMode === 'nl2tags' ? '자연어 설명을 입력...' : '키워드를 입력...'" @keydown.enter="runPendingNl()" class="nl-input" />
           <button class="ai-btn go" @click="runPendingNl()" :disabled="ollamaLoading">실행</button>
-          <button class="ai-btn" @click="showNlInput = false" title="닫기">✕</button>
+          <button class="ai-btn" @click="showNlInput = false" title="닫기"><Icon name="close" /></button>
         </div>
-        <div class="ai-loading" v-if="ollamaLoading">🤖 AI 처리 중...</div>
+        <div class="ai-loading" v-if="ollamaLoading"><Icon name="cpu" /> AI 처리 중...</div>
         <div class="nl-result" v-if="nlResult">
           <textarea :value="nlResult" readonly class="nl-result-text" rows="4"></textarea>
           <div class="nl-result-btns">
             <button class="ai-btn go" @click="copyNlResult" title="복사">복사</button>
             <button class="ai-btn go" @click="useNlAsMain" title="메인 프롬프트에 넣기">메인에 넣기</button>
-            <button v-if="nlRes" class="ai-btn go" @click="applyNlRes" :title="`추천 해상도 ${nlRes.w}×${nlRes.h} 적용`">📐 {{ nlRes.w }}×{{ nlRes.h }}</button>
-            <button class="ai-btn" @click="nlResult = ''; nlRes = null" title="닫기">✕</button>
+            <button v-if="nlRes" class="ai-btn go" @click="applyNlRes" :title="`추천 해상도 ${nlRes.w}×${nlRes.h} 적용`"><Icon name="crop" /> {{ nlRes.w }}×{{ nlRes.h }}</button>
+            <button class="ai-btn" @click="nlResult = ''; nlRes = null" title="닫기"><Icon name="close" /></button>
           </div>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.main_prompt_text" :color-fn="blockColorClass" placeholder="태그 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
@@ -209,8 +209,7 @@
       </div>
       <details class="input-group exclude-section">
         <summary class="exclude-toggle">EXCLUDE (LOCAL)
-          <span v-if="excludeRuleCount" class="excl-badge">{{ excludeRuleCount }}</span> ▾
-          <button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true">🔍 MANAGER</button></summary>
+          <span v-if="excludeRuleCount" class="excl-badge">{{ excludeRuleCount }}</span><Icon name="chevron-down" /><button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true"><Icon name="search" /> MANAGER</button></summary>
         <div class="exclude-help">
           <span>단어 → 포함하는 모든 태그 제외 (short → short hair, very short hair)</span>
           <span>*단어 → 완전 일치만 제외 (*blue hair → blue hair만)</span>
@@ -234,12 +233,12 @@
           <div class="em-header">
             <h3>EXCLUDE MANAGER</h3>
             <span class="em-desc">제외 규칙별 매칭 태그 미리보기</span>
-            <button class="close-btn" @click="showExcludeManager = false">✕</button>
+            <button class="close-btn" @click="showExcludeManager = false"><Icon name="close" /></button>
           </div>
           <div class="em-body">
             <!-- 좌측: 규칙 목록 + 추가 -->
             <div class="em-rules">
-              <input v-model="exRuleSearch" class="em-search" placeholder="🔍 규칙 검색..." />
+              <input v-model="exRuleSearch" class="em-search" placeholder="규칙 검색..." />
               <div v-for="item in filteredExRules" :key="item.i" class="em-rule-item"
                 :class="[excludeColorFn(item.rule), { active: selectedExRule === item.i }]"
                 @click="selectedExRule = item.i; loadExcludeMatches(item.rule)">
@@ -250,7 +249,7 @@
                 <!-- 표시 모드 -->
                 <span v-else class="em-rule-text" @dblclick.stop="startEditExRule(item.i)">{{ item.rule }}</span>
                 <span class="em-match-count">{{ excludeMatches[item.rule]?.length || '...' }}</span>
-                <button class="em-rule-rm" @click.stop="removeExcludeRule(item.i)">✕</button>
+                <button class="em-rule-rm" @click.stop="removeExcludeRule(item.i)"><Icon name="close" /></button>
               </div>
               <div v-if="excludeRules.length === 0" class="em-empty-sm">제외 규칙 없음</div>
               <div v-else-if="filteredExRules.length === 0" class="em-empty-sm">검색 결과 없음</div>

@@ -2,7 +2,7 @@
   <div class="search-view">
     <!-- 검색 결과 0건: 안내 + 메인으로 돌아가기 -->
     <div v-if="results.length === 0 && !searching && hasSearched" class="no-results">
-      <div class="nr-icon">🔍</div>
+      <div class="nr-icon"><Icon name="search" /></div>
       <h2>검색 결과가 없습니다</h2>
       <p class="nr-hint">
         조건을 조금 더 느슨하게 하거나, <strong class="nr-accent">∪ OR 모드</strong>로 전환해보세요.<br>
@@ -26,7 +26,7 @@
     <!-- 검색 전: 중앙 검색 폼 -->
     <div v-else-if="results.length === 0 && !searching" class="welcome">
       <div class="ws-header">
-        <div class="ws-icon">🔍</div>
+        <div class="ws-icon"><Icon name="search" /></div>
         <h1>TAG EXPLORER</h1>
         <p>Danbooru 데이터베이스에서 프롬프트를 검색합니다</p>
       </div>
@@ -58,7 +58,7 @@
 
         <!-- Exclude (접이식) -->
         <details class="form-section exclude-section" open>
-          <summary class="exclude-toggle">Exclude Tags ▾</summary>
+          <summary class="exclude-toggle">Exclude Tags <Icon name="chevron-down" size="12" /></summary>
           <div class="form-row">
             <div class="form-field"><label class="danger">Character</label><input v-model="fields[1].exclude" placeholder="제외..." @keydown.enter="search" /></div>
             <div class="form-field"><label class="danger">Copyright</label><input v-model="fields[0].exclude" placeholder="제외..." @keydown.enter="search" /></div>
@@ -117,9 +117,9 @@
             </button>
           </div>
           <div class="io-row">
-            <button class="io-btn" @click="importResults">📤 IMPORT .parquet</button>
+            <button class="io-btn" @click="importResults"><Icon name="upload" /> IMPORT .parquet</button>
           </div>
-          <button class="go-btn" @click="search" :disabled="searching">🚀 RUN SEARCH</button>
+          <button class="go-btn" @click="search" :disabled="searching"><Icon name="rocket" /> RUN SEARCH</button>
         </div>
       </div>
 
@@ -138,8 +138,8 @@
       <!-- 이전 검색 결과 있으면 바로 보기/랜덤 뽑기 -->
       <div class="prev-results" v-if="lastResults.length > 0">
         <span class="prev-label">이전 검색 결과 {{ lastResults.length }}건</span>
-        <button class="prev-btn" @click="restoreLastResults">📋 목록 보기</button>
-        <button class="prev-btn gold" @click="restoreAndRandom">🎲 랜덤 뽑기</button>
+        <button class="prev-btn" @click="restoreLastResults"><Icon name="clipboard" /> 목록 보기</button>
+        <button class="prev-btn gold" @click="restoreAndRandom"><Icon name="dice" /> 랜덤 뽑기</button>
       </div>
     </div>
 
@@ -168,17 +168,17 @@
       <!-- 상단 바 -->
       <div class="result-bar">
         <div class="bar-left">
-          <button class="bar-btn" @click="viewMode = 'single'" :class="{ active: viewMode === 'single' }">📄 Single</button>
-          <button class="bar-btn" @click="viewMode = 'list'" :class="{ active: viewMode === 'list' }">📋 List</button>
+          <button class="bar-btn" @click="viewMode = 'single'" :class="{ active: viewMode === 'single' }"><Icon name="file" /> Single</button>
+          <button class="bar-btn" @click="viewMode = 'list'" :class="{ active: viewMode === 'list' }"><Icon name="clipboard" /> List</button>
           <span class="bar-sep">|</span>
-          <button class="bar-btn" @click="prevResult" :disabled="previewIdx <= 0">◀</button>
+          <button class="bar-btn" @click="prevResult" :disabled="previewIdx <= 0"><Icon name="chevron-left" /></button>
           <span class="bar-idx"><b>{{ previewIdx + 1 }}</b>/{{ filteredResults.length }}</span>
-          <button class="bar-btn" @click="nextResult" :disabled="previewIdx >= filteredResults.length - 1">▶</button>
-          <button class="bar-btn gold" @click="randomResult">🎲 Random</button>
+          <button class="bar-btn" @click="nextResult" :disabled="previewIdx >= filteredResults.length - 1"><Icon name="play" /></button>
+          <button class="bar-btn gold" @click="randomResult"><Icon name="dice" /> Random</button>
         </div>
         <div class="bar-right">
-          <button class="bar-btn parquet" @click="exportResults">📥 EXPORT .parquet</button>
-          <button class="bar-btn" @click="newSearch">🔍 새 검색</button>
+          <button class="bar-btn parquet" @click="exportResults"><Icon name="download" /> EXPORT .parquet</button>
+          <button class="bar-btn" @click="newSearch"><Icon name="search" /> 새 검색</button>
         </div>
       </div>
       <!-- 심층검색 바 + 분기 -->
@@ -193,11 +193,11 @@
           <button v-for="(fh, fi) in filterHistory" :key="fi" class="branch-btn"
             @click="restoreBranch(fi)">{{ fh.label }} ({{ fh.count }})</button>
         </template>
-        <button class="bar-btn" @click="resetDeepSearch" v-if="isFiltered">✕ RESET</button>
+        <button class="bar-btn" @click="resetDeepSearch" v-if="isFiltered"><Icon name="close" /> RESET</button>
         <button class="bar-btn filter-btn" :class="{ active: hasActiveFilters }" @click="showFilterManager = true">
-          🔽 FILTER{{ hasActiveFilters ? ` (${activeFilterCount})` : '' }}
+          <Icon name="filter" /> FILTER{{ hasActiveFilters ? ` (${activeFilterCount})` : '' }}
         </button>
-        <button v-if="hasActiveFilters" class="bar-btn" @click="clearAllFilters">✕ 필터 해제</button>
+        <button v-if="hasActiveFilters" class="bar-btn" @click="clearAllFilters"><Icon name="close" /> 필터 해제</button>
         <span class="bar-count">{{ filteredResults.length }} / {{ results.length }}</span>
       </div>
 
@@ -235,7 +235,7 @@
           <div class="detail-actions">
             <button class="primary-btn" @click="applyResult">USE AS PROMPT</button>
             <button class="secondary-btn" @click="addToQueue">ADD TO QUEUE</button>
-            <button class="secondary-btn" @click="randomResult">🎲 NEXT RANDOM</button>
+            <button class="secondary-btn" @click="randomResult"><Icon name="dice" /> NEXT RANDOM</button>
           </div>
         </div>
       </div>
@@ -257,14 +257,14 @@
             <button class="sort-dir-btn" v-if="sortBy !== 'default' && sortBy !== 'random'"
               @click="sortDir = sortDir === 'asc' ? 'desc' : 'asc'"
               :title="sortDir === 'asc' ? '오름차순 → 클릭 시 내림차순' : '내림차순 → 클릭 시 오름차순'">
-              {{ sortDir === 'asc' ? '↑' : '↓' }}
+              <Icon :name="sortDir === 'asc' ? 'arrow-up' : 'arrow-down'" size="12" />
             </button>
           </div>
           <div class="list-pager" v-if="totalPages > 1">
             <button class="page-btn" @click="gotoPage(0)" :disabled="currentPage === 0">≪</button>
-            <button class="page-btn" @click="gotoPage(currentPage - 1)" :disabled="currentPage === 0">◀</button>
+            <button class="page-btn" @click="gotoPage(currentPage - 1)" :disabled="currentPage === 0"><Icon name="chevron-left" /></button>
             <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }} ({{ sortedResults.length }})</span>
-            <button class="page-btn" @click="gotoPage(currentPage + 1)" :disabled="currentPage >= totalPages - 1">▶</button>
+            <button class="page-btn" @click="gotoPage(currentPage + 1)" :disabled="currentPage >= totalPages - 1"><Icon name="play" /></button>
             <button class="page-btn" @click="gotoPage(totalPages - 1)" :disabled="currentPage >= totalPages - 1">≫</button>
           </div>
         </div>
@@ -292,7 +292,7 @@
           <div class="fm-modal">
             <div class="fm-header">
               <h3>FILTER MANAGER</h3>
-              <button class="close-btn" @click="showFilterManager = false">✕</button>
+              <button class="close-btn" @click="showFilterManager = false"><Icon name="close" /></button>
             </div>
             <div class="fm-body">
               <!-- Rating -->

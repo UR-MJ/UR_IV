@@ -7,7 +7,7 @@
           <h3>캐릭터 특징 프리셋</h3>
           <span class="cpm-sub">캐릭터를 검색하고 특징 태그를 선택해 프롬프트에 삽입합니다</span>
         </div>
-        <button class="cpm-close" @click="close">✕</button>
+        <button class="cpm-close" @click="close"><Icon name="close" /></button>
       </div>
 
       <!-- Search -->
@@ -15,7 +15,7 @@
         <input ref="searchEl" v-model="query" class="cpm-search"
           placeholder="캐릭터 이름 검색 (예: hatsune miku, remilia scarlet)" @input="onQuery" />
         <button class="cpm-deck-btn" :class="{ active: deckOnly }" @click="toggleDeckOnly"
-          title="현재 프롬프트 덱에 등장하는 캐릭터만 표시">🎴 덱 캐릭터만</button>
+          title="현재 프롬프트 덱에 등장하는 캐릭터만 표시"><Icon name="cards" /> 덱 캐릭터만</button>
       </div>
 
       <!-- Body -->
@@ -26,7 +26,7 @@
           <div class="cpm-list">
             <div v-for="r in displayResults" :key="r.key" class="cpm-item"
               :class="{ active: selectedChar === r.key }" @click="selectChar(r.key)">
-              <span class="cpm-item-name">{{ r.hasPreset ? '★ ' : '' }}{{ r.key }}</span>
+              <span class="cpm-item-name"><Icon v-if="r.hasPreset" name="star" size="13" /> {{ r.key }}</span>
               <span v-if="r.count" class="cpm-item-count">{{ r.count.toLocaleString() }}</span>
             </div>
             <div v-if="displayResults.length === 0" class="cpm-empty">{{ emptyMsg }}</div>
@@ -47,7 +47,7 @@
             <div v-if="copyright" class="cpm-copyrow">
               <button class="cpm-copychip" :class="{ off: !addCopyright }" @click="addCopyright = !addCopyright"
                 title="캐릭터 적용 시 copyright(시리즈) 태그를 함께 추가합니다">
-                📚 {{ copyright }}<span class="cpm-copytag">{{ addCopyright ? '함께 추가' : '제외' }}</span>
+                <Icon name="book" /> {{ copyright }}<span class="cpm-copytag">{{ addCopyright ? '함께 추가' : '제외' }}</span>
               </button>
             </div>
 
@@ -56,14 +56,14 @@
               <button class="cpm-sel" @click="selectAll">전체 선택</button>
               <button class="cpm-sel" @click="deselectAll">전체 해제</button>
               <button class="cpm-sel warn" @click="excludeCostume" title="glasses/bow/eyewear 등 복장 태그 선택 해제">복장 제외</button>
-              <button class="cpm-sel db" @click="fetchDanbooru" :disabled="dbLoading" title="danbooru에서 실제 태그 가져오기 (로컬 DB가 틀리거나 없을 때)">{{ dbLoading ? '…' : '🌐 danbooru' }}</button>
+              <button class="cpm-sel db" @click="fetchDanbooru" :disabled="dbLoading" title="danbooru에서 실제 태그 가져오기 (로컬 DB가 틀리거나 없을 때)"><Icon v-if="!dbLoading" name="globe" /> {{ dbLoading ? '…' : 'danbooru' }}</button>
             </div>
 
             <!-- Tag chips (scroll) -->
             <div class="cpm-tagscroll">
               <!-- 전역(모든 캐릭터) 설정 -->
               <div class="cpm-global" v-if="selectedChar">
-                <div class="cpm-global-head">🌐 전역 — 모든 캐릭터에 적용</div>
+                <div class="cpm-global-head"><Icon name="globe" /> 전역 — 모든 캐릭터에 적용</div>
                 <div class="cpm-global-cats">
                   <span class="cpm-global-sub">카테고리</span>
                   <button v-for="c in CAT_LIST" :key="c.key" class="cpm-gcat" :class="{ off: !globalCatOn[c.key] }"
@@ -75,7 +75,7 @@
                   <span class="cpm-global-sub">단어 OFF</span>
                   <input v-model="newGlobalWord" @keydown.enter="addGlobalWord" placeholder="전역 제외 단어 (Enter)" class="cpm-gword-in" />
                   <button class="cpm-gword-add" @click="addGlobalWord" title="추가">＋</button>
-                  <button v-for="w in globalWordOff" :key="w" class="cpm-gword-chip" @click="removeGlobalWord(w)" title="클릭하여 해제">{{ w }} ✕</button>
+                  <button v-for="w in globalWordOff" :key="w" class="cpm-gword-chip" @click="removeGlobalWord(w)" title="클릭하여 해제">{{ w }} <Icon name="close" size="11" /></button>
                 </div>
               </div>
               <div class="cpm-section-label core">핵심 특징 ({{ coreTags.length }})</div>
@@ -101,7 +101,7 @@
                 <div class="cpm-section-label costume">
                   의상 · 추가 특징 ({{ costumeTags.length }})
                   <button class="cpm-regiontoggle" @click="groupByRegion = !groupByRegion"
-                    :title="groupByRegion ? '부위별 그룹 끄기' : '부위별 그룹 켜기'">{{ groupByRegion ? '👕 부위별' : '☰ 평면' }}</button>
+                    :title="groupByRegion ? '부위별 그룹 끄기' : '부위별 그룹 켜기'">{{ groupByRegion ? '부위별' : '평면' }}</button>
                 </div>
                 <!-- 부위(region)별 그룹 -->
                 <template v-if="groupByRegion">
@@ -149,8 +149,8 @@
 
             <!-- Preset save/delete -->
             <div class="cpm-presetrow">
-              <button class="cpm-psave" @click="savePreset">💾 프리셋 저장</button>
-              <button class="cpm-pdel" @click="deletePreset">🗑 프리셋 삭제</button>
+              <button class="cpm-psave" @click="savePreset"><Icon name="save" /> 프리셋 저장</button>
+              <button class="cpm-pdel" @click="deletePreset"><Icon name="trash" /> 프리셋 삭제</button>
             </div>
 
             <!-- Conditional rules (collapsible) -->
@@ -176,7 +176,7 @@
                   </select>
                   <input :value="rule.tags.join(', ')" class="cpm-r-tags" placeholder="대상 태그 (쉼표)"
                     @input="rule.tags = ($event.target as HTMLInputElement).value.split(',').map((s: string) => s.trim()).filter(Boolean)" />
-                  <button class="cpm-r-del" @click="condRules.splice(i, 1)">✕</button>
+                  <button class="cpm-r-del" @click="condRules.splice(i, 1)"><Icon name="close" /></button>
                 </div>
                 <button class="cpm-r-add" @click="addRule">+ 규칙 추가</button>
               </div>

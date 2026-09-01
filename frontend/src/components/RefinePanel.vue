@@ -92,7 +92,7 @@
           <label class="mt-12">Seed (−1 = 랜덤)</label>
           <div class="seed-row">
             <input v-model="seed" type="text" class="seed-input" placeholder="-1" />
-            <button class="seed-btn" @click="seed = '-1'" title="랜덤으로 초기화">🎲</button>
+            <button class="seed-btn" @click="seed = '-1'" title="랜덤으로 초기화"><Icon name="dice" /></button>
           </div>
           <label class="mt-12">SAM3 Checkpoint</label>
           <CustomSelect v-model="checkpoint" :options="checkpointOptions" placeholder="sam3.pt" />
@@ -140,7 +140,7 @@
 
       <div class="sidebar-footer">
         <button class="btn-generate primary" @click="run" :disabled="!imagePath || busy">
-          {{ busy ? 'REFINING…' : (!imagePath ? 'SELECT IMAGE FIRST' : '▶ REFINE') }}
+          <Icon v-if="!busy && imagePath" name="play" /> {{ busy ? 'REFINING…' : (!imagePath ? 'SELECT IMAGE FIRST' : 'REFINE') }}
         </button>
       </div>
     </aside>
@@ -157,7 +157,7 @@
           <div class="pane-title accent">AFTER</div>
           <img v-if="resultSrc" :src="resultSrc" class="pane-img" />
           <div v-else class="pane-empty">{{ busy ? '처리 중…' : '아직 결과가 없습니다' }}</div>
-          <button v-if="resultSrc" class="chain-btn" @click="chain">↻ 이 결과로 이어서 Refine</button>
+          <button v-if="resultSrc" class="chain-btn" @click="chain"><Icon name="rotate-cw" /> 이 결과로 이어서 Refine</button>
         </div>
       </div>
 

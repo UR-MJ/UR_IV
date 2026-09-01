@@ -59,8 +59,7 @@
       <div v-else>
         <div class="result-actions">
           <span class="result-count">결과 {{ resultImages.length }}장</span>
-          <button class="btn-export" @click="exportCSV" title="축값 + 경로 + 라벨을 CSV로 저장">
-            📊 CSV 내보내기
+          <button class="btn-export" @click="exportCSV" title="축값 + 경로 + 라벨을 CSV로 저장"><Icon name="layers" /> CSV 내보내기
           </button>
         </div>
         <div class="result-grid">

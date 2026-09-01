@@ -10,7 +10,7 @@
           <ToggleSwitch v-model="condEnabled" />
           <span>{{ condEnabled ? 'ON' : 'OFF' }}</span>
         </div>
-        <button class="cp-close" @click="close">✕</button>
+        <button class="cp-close" @click="close"><Icon name="close" /></button>
       </div>
 
       <div class="cp-optbar">
@@ -32,7 +32,7 @@
                 <span class="cp-kw">IF</span>
                 <input v-model="rule.condition" placeholder="조건 태그 (쉼표=모두 AND)" class="cp-input" />
                 <select v-model="rule.exists" class="cp-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
-                <button class="cp-rm" @click="removeCondRule('pos', ri)">✕</button>
+                <button class="cp-rm" @click="removeCondRule('pos', ri)"><Icon name="close" /></button>
               </div>
               <div class="cp-row">
                 <span class="cp-kw">→</span>
@@ -54,7 +54,7 @@
                 <span class="cp-kw">IF</span>
                 <input v-model="rule.condition" placeholder="조건 태그 (쉼표=모두 AND)" class="cp-input" />
                 <select v-model="rule.exists" class="cp-sel"><option :value="true">있으면</option><option :value="false">없으면</option></select>
-                <button class="cp-rm" @click="removeCondRule('neg', ri)">✕</button>
+                <button class="cp-rm" @click="removeCondRule('neg', ri)"><Icon name="close" /></button>
               </div>
               <div class="cp-row">
                 <span class="cp-kw">→</span>
@@ -69,7 +69,7 @@
       </div>
 
       <div class="cp-footer">
-        <span class="cp-autosave">💾 자동 저장됨</span>
+        <span class="cp-autosave"><Icon name="save" /> 자동 저장됨</span>
         <div class="cp-spacer"></div>
         <button class="cp-save" @click="saveCondRules">즉시 저장</button>
         <button class="cp-done" @click="close">닫기</button>

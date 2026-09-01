@@ -6,7 +6,7 @@
     <img class="compare-img before" :src="beforeSrc" @load="onImgLoad" />
     <img class="compare-img after" :src="afterSrc" :style="{ clipPath: clipStyle }" />
     <div class="slider-line" :style="{ left: position + '%' }">
-      <div class="slider-handle">◀▶</div>
+      <div class="slider-handle"><Icon name="arrows-horizontal" size="14" /></div>
     </div>
     <div class="compare-label before-label">BEFORE</div>
     <div class="compare-label after-label">AFTER</div>

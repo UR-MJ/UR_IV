@@ -13,7 +13,7 @@
       @keydown="onTriggerKeydown"
     >
       <span class="csel-text">{{ displayText }}</span>
-      <span class="csel-arrow" aria-hidden="true">▾</span>
+      <span class="csel-arrow" aria-hidden="true"><Icon name="chevron-down" /></span>
     </button>
     <div :id="listboxId" class="csel-dropdown" role="listbox" v-if="isOpen">
       <template v-if="normalizedGroups.length">

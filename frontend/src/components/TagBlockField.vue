@@ -5,7 +5,7 @@
       class="tbf-clear-all"
       @click.stop="clearAllBlocks"
       :title="`블록 ${blocks.length}개 모두 비우기 (Ctrl+Z로 복구 가능)`">
-      <span class="tbf-clear-x">✕</span>
+      <span class="tbf-clear-x"><Icon name="close" /></span>
     </button>
     <div class="tbf-blocks" @dragover.prevent="onDragOver" @drop="onDrop" @dragleave="dropIdx = -1">
       <template v-for="(tb, ti) in blocks" :key="ti">
@@ -22,7 +22,7 @@
           @dblclick="toggleBlock(ti)"
           @contextmenu.prevent="removeBlock(ti)"
           @dragstart="onDragStart(ti)" @dragend="draggingFrom = -1">
-          <span class="wc-ico" v-if="isWc(tb.text)">🎲</span>
+          <span class="wc-ico" v-if="isWc(tb.text)"><Icon name="dice" /></span>
           <span class="tbf-text">{{ tb.text }}</span>
         </button>
       </template>

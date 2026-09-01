@@ -35,12 +35,12 @@
           v-if="clipping.shadow >= CLIP_MIN"
           class="clip clip-shadow"
           title="순검정(0)에 몰려 그림자 계조가 사라진 픽셀 비율"
-        >▼ {{ percent(clipping.shadow) }}</span>
+        ><Icon name="chevron-down" /> {{ percent(clipping.shadow) }}</span>
         <span
           v-if="clipping.highlight >= CLIP_MIN"
           class="clip clip-highlight"
           title="순백(255)에 몰려 하이라이트 계조가 사라진 픽셀 비율"
-        >▲ {{ percent(clipping.highlight) }}</span>
+        ><Icon name="chevron-up" /> {{ percent(clipping.highlight) }}</span>
         <span v-if="levelsActive" class="foot-levels">레벨 {{ blackPoint }}–{{ whitePoint }}</span>
       </template>
       <button

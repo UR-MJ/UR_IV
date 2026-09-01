@@ -8,8 +8,8 @@
       <span class="qp-ico">≣</span>
       <span class="qp-label">QUEUE</span>
       <span class="qp-count" v-if="items.length">{{ items.length }}</span>
-      <span class="qp-run" v-if="isRunning && !isPaused" title="실행 중">▶</span>
-      <span class="qp-run paused" v-else-if="isPaused" title="일시정지">⏸</span>
+      <span class="qp-run" v-if="isRunning && !isPaused" title="실행 중"><Icon name="play" /></span>
+      <span class="qp-run paused" v-else-if="isPaused" title="일시정지"><Icon name="pause" /></span>
     </button>
 
     <!-- 우측 슬라이드 드로어 — 세로 리스트라 항목이 안 찌그러짐 -->
@@ -22,22 +22,21 @@
           <span class="title">
             QUEUE
             <span class="count-badge" v-if="items.length">{{ items.length }}</span>
-            <span class="running-badge" v-if="isRunning && !isPaused">▶ RUNNING</span>
-            <span class="paused-badge" v-if="isPaused">⏸ PAUSED</span>
+            <span class="running-badge" v-if="isRunning && !isPaused"><Icon name="play" /> RUNNING</span>
+            <span class="paused-badge" v-if="isPaused"><Icon name="pause" /> PAUSED</span>
             <span class="selected-badge" v-if="selectedIds.size > 0">{{ selectedIds.size }} 선택됨</span>
           </span>
-          <button class="qd-x" @click="drawerOpen = false" title="닫기 (Esc)">✕</button>
+          <button class="qd-x" @click="drawerOpen = false" title="닫기 (Esc)"><Icon name="close" /></button>
         </div>
 
         <div class="qd-actions">
-          <button class="btn" @click="startQueue" v-if="items.length && !isRunning">▶ 시작</button>
-          <button class="btn" @click="pauseQueue" v-if="isRunning && !isPaused" title="일시정지">⏸ 일시정지</button>
-          <button class="btn primary" @click="resumeQueue" v-if="isPaused" title="재개">▶ 재개</button>
-          <button class="btn danger" @click="stopQueue" v-if="isRunning">⏹ 중지</button>
-          <button class="btn danger" @click="removeSelected" v-if="selectedIds.size > 0" title="선택한 항목 삭제">
-            🗑 선택삭제 ({{ selectedIds.size }})
+          <button class="btn" @click="startQueue" v-if="items.length && !isRunning"><Icon name="play" /> 시작</button>
+          <button class="btn" @click="pauseQueue" v-if="isRunning && !isPaused" title="일시정지"><Icon name="pause" /> 일시정지</button>
+          <button class="btn primary" @click="resumeQueue" v-if="isPaused" title="재개"><Icon name="play" /> 재개</button>
+          <button class="btn danger" @click="stopQueue" v-if="isRunning"><Icon name="stop" /> 중지</button>
+          <button class="btn danger" @click="removeSelected" v-if="selectedIds.size > 0" title="선택한 항목 삭제"><Icon name="trash" /> 선택삭제 ({{ selectedIds.size }})
           </button>
-          <button class="btn" @click="clearAll" v-if="items.length && !isRunning && selectedIds.size === 0">🗑 전체</button>
+          <button class="btn" @click="clearAll" v-if="items.length && !isRunning && selectedIds.size === 0"><Icon name="trash" /> 전체</button>
         </div>
 
         <div class="queue-progress" v-if="isRunning">
@@ -58,9 +57,9 @@
             @click="onItemClick($event, item, i)"
             :title="(item.prompt || 'No prompt').toString().substring(0, 200)">
             <span class="q-row-st">
-              <template v-if="i === currentIdx && isRunning && !isPaused">⏳</template>
-              <template v-else-if="i === currentIdx && isPaused">⏸</template>
-              <template v-else-if="item._done">✅</template>
+              <template v-if="i === currentIdx && isRunning && !isPaused"><Icon name="hourglass" /></template>
+              <template v-else-if="i === currentIdx && isPaused"><Icon name="pause" /></template>
+              <template v-else-if="item._done"><Icon name="check" /></template>
               <template v-else>{{ i + 1 }}</template>
             </span>
             <span class="q-row-body">
@@ -68,10 +67,10 @@
               <span class="q-row-neg" v-if="item.negative_prompt">⊘ {{ item.negative_prompt.toString().slice(0, 60) }}</span>
             </span>
             <span class="q-row-tools" @click.stop>
-              <button class="qr-btn" @click="moveItem(item, 'up')" :disabled="!canMoveUp(i)" title="위로">▲</button>
-              <button class="qr-btn" @click="moveItem(item, 'down')" :disabled="!canMoveDown(i)" title="아래로">▼</button>
-              <button class="qr-btn" @click="openEdit(item, i)" title="편집">✎</button>
-              <button class="qr-btn danger" @click="removeItem(item, i)" title="삭제">🗑</button>
+              <button class="qr-btn" @click="moveItem(item, 'up')" :disabled="!canMoveUp(i)" title="위로"><Icon name="chevron-up" /></button>
+              <button class="qr-btn" @click="moveItem(item, 'down')" :disabled="!canMoveDown(i)" title="아래로"><Icon name="chevron-down" /></button>
+              <button class="qr-btn" @click="openEdit(item, i)" title="편집"><Icon name="pencil" /></button>
+              <button class="qr-btn danger" @click="removeItem(item, i)" title="삭제"><Icon name="trash" /></button>
             </span>
           </div>
         </div>
@@ -87,19 +86,19 @@
       <div class="qe-modal">
         <div class="qe-head">
           <h3>큐{{ editIdx + 1 }} 편집</h3>
-          <button class="qe-x" @click="closeEdit">✕</button>
+          <button class="qe-x" @click="closeEdit"><Icon name="close" /></button>
         </div>
         <label class="qe-label">프롬프트</label>
         <textarea v-model="editPrompt" class="qe-text" rows="6" placeholder="프롬프트..."></textarea>
         <label class="qe-label">네거티브</label>
         <textarea v-model="editNeg" class="qe-text" rows="3" placeholder="네거티브..."></textarea>
         <div class="qe-foot">
-          <button class="qe-btn" @click="moveEdit('up')" :disabled="editIdx <= 0">▲ 위로</button>
-          <button class="qe-btn" @click="moveEdit('down')" :disabled="editIdx >= items.length - 1">▼ 아래로</button>
-          <button class="qe-btn danger" @click="deleteEdit">🗑 삭제</button>
+          <button class="qe-btn" @click="moveEdit('up')" :disabled="editIdx <= 0"><Icon name="chevron-up" /> 위로</button>
+          <button class="qe-btn" @click="moveEdit('down')" :disabled="editIdx >= items.length - 1"><Icon name="chevron-down" /> 아래로</button>
+          <button class="qe-btn danger" @click="deleteEdit"><Icon name="trash" /> 삭제</button>
           <div class="qe-sp"></div>
           <button class="qe-btn" @click="closeEdit">취소</button>
-          <button class="qe-btn primary" @click="saveEdit">💾 저장</button>
+          <button class="qe-btn primary" @click="saveEdit"><Icon name="save" /> 저장</button>
         </div>
       </div>
     </div>

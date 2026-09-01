@@ -78,7 +78,7 @@
       :class="{ active: isFilled }"
       @click="isFilled = !isFilled"
     >
-      {{ isFilled ? '■ 채우기 ON' : '□ 채우기 OFF' }}
+      <Icon name="square" /> {{ isFilled ? '채우기 ON' : '채우기 OFF' }}
     </button>
 
     <div class="divider" />
@@ -96,7 +96,7 @@
          이미지 undo 스택과 별개로 필요하다 — 없으면 획 하나 잘못 그었을 때
          이미지를 다시 여는 것 말고는 방법이 없다. -->
     <div class="layer-btn-row">
-      <button class="secondary-btn flex-1" @click="$emit('undo-stroke')">↩ 획 되돌리기</button>
+      <button class="secondary-btn flex-1" @click="$emit('undo-stroke')"><Icon name="undo" /> 획 되돌리기</button>
       <button class="secondary-btn flex-1" @click="$emit('clear-layer')">레이어 지우기</button>
     </div>
 

@@ -26,8 +26,8 @@
         <div class="glass-card" v-if="currentTool === 'lasso'">
           <label>Lasso Mode</label>
           <div class="tool-grid small">
-            <button class="tool-chip" :class="{ active: !magneticLasso }" @click="magneticLasso = false">➰ FREE</button>
-            <button class="tool-chip magnet" :class="{ active: magneticLasso }" @click="enableMagnetic">🧲 MAGNETIC</button>
+            <button class="tool-chip" :class="{ active: !magneticLasso }" @click="magneticLasso = false"><Icon name="loop" /> FREE</button>
+            <button class="tool-chip magnet" :class="{ active: magneticLasso }" @click="enableMagnetic"><Icon name="magnet" /> MAGNETIC</button>
           </div>
         </div>
 
@@ -85,7 +85,7 @@
       <div class="canvas-wrap" @dragover.prevent="isDragging = true" @dragleave="isDragging = false"
         @drop.prevent="handleDrop" :class="{ dragging: isDragging }">
         <div v-if="!imageSrc" class="drop-empty" @click="triggerFileInput">
-          <div class="drop-icon">✎</div>
+          <div class="drop-icon"><Icon name="pencil" /></div>
           <h2>MASK EDITOR</h2>
           <p>Drop image or click to start</p>
         </div>

@@ -3,7 +3,7 @@
     <!-- Top Filter & Action Bar -->
     <header class="gallery-toolbar">
       <div class="folder-info no-click">
-        <span class="icon">⭐</span>
+        <span class="icon"><Icon name="star" /></span>
         <span class="path">FAVORITES</span>
       </div>
 
@@ -11,14 +11,14 @@
 
       <!-- EXIF 검색 -->
       <div class="search-box">
-        <input v-model="exifSearch" placeholder="🔍 EXIF 검색..." class="search-input"
+        <input v-model="exifSearch" placeholder="EXIF 검색..." class="search-input"
           @keydown.enter="runExifSearch" />
         <button class="search-go" @click="runExifSearch" :disabled="exifSearching">{{ exifSearching ? '...' : 'GO' }}</button>
-        <button class="search-clear" v-if="exifFiltered" @click="clearExifSearch">✕</button>
+        <button class="search-clear" v-if="exifFiltered" @click="clearExifSearch"><Icon name="close" /></button>
       </div>
 
       <div class="control-group">
-        <button class="icon-btn" @click="loadFavorites" title="Refresh">🔄</button>
+        <button class="icon-btn" @click="loadFavorites" title="Refresh"><Icon name="refresh" /></button>
         <div class="sep"></div>
         <div class="sort-chips">
           <button v-for="s in sortOptions" :key="s.val"
@@ -47,8 +47,8 @@
         >
           <img :src="thumbnailUrl(img, thumbSize * thumbPixelRatio)" loading="lazy" />
           <div class="card-hover-actions">
-            <button class="tiny-btn" @click.stop="removeFav(img)" title="즐겨찾기 제거">⭐</button>
-            <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)" title="복사">📋</button>
+            <button class="tiny-btn" @click.stop="removeFav(img)" title="즐겨찾기 제거"><Icon name="star" /></button>
+            <button class="tiny-btn" @click.stop="quickAction('copy_to_clipboard', img)" title="복사"><Icon name="clipboard" /></button>
           </div>
         </div>
       </div>
@@ -57,7 +57,7 @@
       </div>
 
       <div v-if="images.length === 0" class="empty-placeholder">
-        <div class="icon">⭐</div>
+        <div class="icon"><Icon name="star" /></div>
         <h2>NO FAVORITES</h2>
         <p>아직 즐겨찾기한 이미지가 없습니다</p>
       </div>
@@ -69,7 +69,7 @@
         <div class="viewer-panel">
           <div class="viewer-header">
             <span>{{ viewerData.filename }}</span>
-            <button class="viewer-close" @click="viewerData = null">✕</button>
+            <button class="viewer-close" @click="viewerData = null"><Icon name="close" /></button>
           </div>
           <div class="viewer-body">
             <div class="viewer-img">
@@ -80,28 +80,28 @@
               <div v-if="viewerData.prompt" class="vi-section">
                 <div class="vi-head"><label>PROMPT</label></div>
                 <div class="vi-pre-wrap">
-                  <button class="vi-copy-float" @click="copySection(viewerData.prompt, 'Prompt')" title="Prompt 복사">📋</button>
+                  <button class="vi-copy-float" @click="copySection(viewerData.prompt, 'Prompt')" title="Prompt 복사"><Icon name="clipboard" /></button>
                   <pre>{{ viewerData.prompt }}</pre>
                 </div>
               </div>
               <div v-if="viewerData.negative" class="vi-section">
                 <div class="vi-head"><label class="neg">NEGATIVE</label></div>
                 <div class="vi-pre-wrap">
-                  <button class="vi-copy-float" @click="copySection(viewerData.negative, 'Negative')" title="Negative 복사">📋</button>
+                  <button class="vi-copy-float" @click="copySection(viewerData.negative, 'Negative')" title="Negative 복사"><Icon name="clipboard" /></button>
                   <pre>{{ viewerData.negative }}</pre>
                 </div>
               </div>
               <div v-if="viewerData.raw && !viewerData.prompt" class="vi-section">
                 <div class="vi-head"><label>RAW</label></div>
                 <div class="vi-pre-wrap">
-                  <button class="vi-copy-float" @click="copySection(viewerData.raw, 'Raw')" title="Raw 복사">📋</button>
+                  <button class="vi-copy-float" @click="copySection(viewerData.raw, 'Raw')" title="Raw 복사"><Icon name="clipboard" /></button>
                   <pre>{{ viewerData.raw }}</pre>
                 </div>
               </div>
               <div v-if="viewerParams" class="vi-section">
                 <div class="vi-head"><label>PARAMETERS</label></div>
                 <div class="vi-pre-wrap">
-                  <button class="vi-copy-float" @click="copySection(viewerParams, 'Parameters')" title="Parameters 복사">📋</button>
+                  <button class="vi-copy-float" @click="copySection(viewerParams, 'Parameters')" title="Parameters 복사"><Icon name="clipboard" /></button>
                   <pre>{{ viewerParams }}</pre>
                 </div>
               </div>
@@ -109,19 +109,19 @@
                 <label class="vi-actions-label">SEND TO</label>
                 <div class="vi-send-grid">
                   <button class="send-card primary" @click="action('gallery_send_exif_to_t2i', { exif: viewerData.raw, path: viewerData.path })" title="EXIF + 이미지를 T2I 탭에 전송">
-                    <span class="send-ico">📤</span>
+                    <span class="send-ico"><Icon name="upload" /></span>
                     <span class="send-name">T2I</span>
                   </button>
                   <button class="send-card" @click="action('send_to_i2i', { path: viewerData.path })" title="I2I 탭으로">
-                    <span class="send-ico">🖼️</span>
+                    <span class="send-ico"><Icon name="image" /></span>
                     <span class="send-name">I2I</span>
                   </button>
                   <button class="send-card" @click="action('send_to_inpaint', { path: viewerData.path })" title="Inpaint 탭으로">
-                    <span class="send-ico">✂️</span>
+                    <span class="send-ico"><Icon name="scissors" /></span>
                     <span class="send-name">Inpaint</span>
                   </button>
                   <button class="send-card" @click="action('send_to_editor', { path: viewerData.path })" title="Editor 탭으로">
-                    <span class="send-ico">🎨</span>
+                    <span class="send-ico"><Icon name="palette" /></span>
                     <span class="send-name">Editor</span>
                   </button>
                 </div>
@@ -135,15 +135,15 @@
     <!-- Context Menu -->
     <transition name="pop">
       <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="ctxMenuStyle">
-        <div class="ctx-item" @click="ctx('gallery_load_exif')">📋 INSPECT EXIF</div>
-        <div class="ctx-item" @click="ctx('send_to_i2i')">🖼️ SEND TO I2I</div>
-        <div class="ctx-item" @click="ctx('send_to_inpaint')">🎨 SEND TO INPAINT</div>
-        <div class="ctx-item" @click="ctx('send_to_editor')">✏️ SEND TO EDITOR</div>
-        <div class="ctx-item" @click="ctx('copy_to_clipboard')">📋 COPY</div>
-        <div class="ctx-item" @click="sendToCompare('before')">🔍 COMPARE (BEFORE)</div>
-        <div class="ctx-item" @click="sendToCompare('after')">🔍 COMPARE (AFTER)</div>
+        <div class="ctx-item" @click="ctx('gallery_load_exif')"><Icon name="clipboard" /> INSPECT EXIF</div>
+        <div class="ctx-item" @click="ctx('send_to_i2i')"><Icon name="image" /> SEND TO I2I</div>
+        <div class="ctx-item" @click="ctx('send_to_inpaint')"><Icon name="palette" /> SEND TO INPAINT</div>
+        <div class="ctx-item" @click="ctx('send_to_editor')"><Icon name="pencil" /> SEND TO EDITOR</div>
+        <div class="ctx-item" @click="ctx('copy_to_clipboard')"><Icon name="clipboard" /> COPY</div>
+        <div class="ctx-item" @click="sendToCompare('before')"><Icon name="search" /> COMPARE (BEFORE)</div>
+        <div class="ctx-item" @click="sendToCompare('after')"><Icon name="search" /> COMPARE (AFTER)</div>
         <div class="ctx-separator"></div>
-        <div class="ctx-item unfav" @click="ctxRemoveFav">⭐ REMOVE FROM FAVORITES</div>
+        <div class="ctx-item unfav" @click="ctxRemoveFav"><Icon name="star" /> REMOVE FROM FAVORITES</div>
       </div>
     </transition>
   </div>

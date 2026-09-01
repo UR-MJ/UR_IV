@@ -332,8 +332,7 @@
 
     <div class="ag-actions">
       <button class="ag-import" @click="importFromForge"
-        title="현재 Forge API의 /sdapi/v1/script-info가 공개하는 Anima 설정을 가져옵니다. Forge 브라우저에서 아직 적용되지 않은 입력값은 Forge 버전에 따라 포함되지 않을 수 있습니다.">
-        ↻ Forge에서 가져오기
+        title="현재 Forge API의 /sdapi/v1/script-info가 공개하는 Anima 설정을 가져옵니다. Forge 브라우저에서 아직 적용되지 않은 입력값은 Forge 버전에 따라 포함되지 않을 수 있습니다."><Icon name="rotate-cw" /> Forge에서 가져오기
       </button>
       <button class="ag-reset" @click="resetAll" title="Anima Guidance 전체를 확장 기본값으로">전체 초기화</button>
     </div>

@@ -113,7 +113,7 @@
             <label>Seed (−1 = 랜덤)</label>
             <div class="seed-row">
               <input v-model="seed" type="text" class="seed-input" placeholder="-1" />
-              <button class="seed-btn" @click="seed = '-1'" title="랜덤으로 초기화">🎲</button>
+              <button class="seed-btn" @click="seed = '-1'" title="랜덤으로 초기화"><Icon name="dice" /></button>
             </div>
           </div>
         </details>

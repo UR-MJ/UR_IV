@@ -4,29 +4,28 @@
       <!-- 상단 도구바 -->
       <div class="top-bar">
         <div class="bar-group">
-          <button class="bar-btn accent" @click="openFile" title="Ctrl+O">📂 열기</button>
-          <button class="bar-btn save" @click="saveImage" title="Ctrl+S">💾 저장</button>
-          <button class="bar-btn" @click="saveAsImage" title="Ctrl+Shift+S">💾→ 다른 이름</button>
-          <button class="bar-btn" @click="pasteFromClipboard" title="Ctrl+V">📋 붙여넣기</button>
+          <button class="bar-btn accent" @click="openFile" title="Ctrl+O"><Icon name="folder-open" /> 열기</button>
+          <button class="bar-btn save" @click="saveImage" title="Ctrl+S"><Icon name="save" /> 저장</button>
+          <button class="bar-btn" @click="saveAsImage" title="Ctrl+Shift+S"><Icon name="save" /> 다른 이름</button>
+          <button class="bar-btn" @click="pasteFromClipboard" title="Ctrl+V"><Icon name="clipboard" /> 붙여넣기</button>
         </div>
         <div class="bar-group center">
           <button class="bar-btn" @click="onUndo" :disabled="undoStack.length <= 1 && !canvasRef?.maskUndoCount" title="Ctrl+Z (마스킹 우선)">
-            ↩ Undo <span class="bar-counter">({{ Math.max(0, undoStack.length - 1) }}/{{ MAX_UNDO }})</span>
+            <Icon name="undo" /> Undo <span class="bar-counter">({{ Math.max(0, undoStack.length - 1) }}/{{ MAX_UNDO }})</span>
           </button>
           <button class="bar-btn" @click="onRedo" :disabled="redoStack.length === 0 && !canvasRef?.maskRedoCount" title="Ctrl+Y (마스킹 우선)">
-            ↪ Redo <span class="bar-counter">({{ redoStack.length }})</span>
+            <Icon name="redo" /> Redo <span class="bar-counter">({{ redoStack.length }})</span>
           </button>
           <span class="bar-sep">|</span>
           <span class="bar-filename" :title="imagePath">
             <span v-if="isDirty" class="dirty-mark">●</span>{{ baseName }}
           </span>
           <span class="bar-info">{{ imgWidth }}×{{ imgHeight }}{{ fileInfoExtra }}</span>
-          <span v-if="autoSaveAgoText" class="bar-info autosave" :title="`마지막 자동저장: ${new Date(lastAutoSaveAt).toLocaleTimeString()}`">
-            💾 {{ autoSaveAgoText }}
+          <span v-if="autoSaveAgoText" class="bar-info autosave" :title="`마지막 자동저장: ${new Date(lastAutoSaveAt).toLocaleTimeString()}`"><Icon name="save" /> {{ autoSaveAgoText }}
           </span>
         </div>
         <div class="bar-group">
-          <button class="bar-btn danger" @click="confirmClose">✕ 닫기</button>
+          <button class="bar-btn danger" @click="confirmClose"><Icon name="close" /> 닫기</button>
         </div>
       </div>
 
@@ -134,12 +133,12 @@
 
     <template v-else>
       <div class="drop-area" :class="{ dragging: isDragging }">
-        <div class="drop-icon">🎨</div>
+        <div class="drop-icon"><Icon name="palette" /></div>
         <h2>Image Editor</h2>
         <p>이미지를 드래그앤드롭하거나 파일을 선택하세요</p>
         <div class="drop-actions">
-          <button class="open-btn" @click="openFile">📂 파일 선택</button>
-          <button class="open-btn secondary" @click="pasteFromClipboard">📋 클립보드</button>
+          <button class="open-btn" @click="openFile"><Icon name="folder-open" /> 파일 선택</button>
+          <button class="open-btn secondary" @click="pasteFromClipboard"><Icon name="clipboard" /> 클립보드</button>
         </div>
         <div class="drop-shortcuts">
           <kbd>Ctrl+O</kbd> 열기 &nbsp; <kbd>Ctrl+V</kbd> 붙여넣기

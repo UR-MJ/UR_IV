@@ -15,7 +15,7 @@
             </div>
           </div>
           <template v-else>
-            <div class="placeholder-icon">🖼️</div>
+            <div class="placeholder-icon"><Icon name="image" /></div>
             <div class="placeholder-text">{{ status || '이미지를 생성하세요' }}</div>
             <div class="placeholder-sub">좌측에서 프롬프트를 입력하고 생성 버튼을 클릭하세요</div>
           </template>
@@ -27,7 +27,7 @@
     <div class="info-bar" v-if="imageUrl">
       <span class="info-item">해상도 {{ resolution }}</span>
       <span class="info-item">시드 {{ seed }}</span>
-      <button class="explore-btn" @click="exploreSeed" v-if="seed">🔍 EXPLORE SEED</button>
+      <button class="explore-btn" @click="exploreSeed" v-if="seed"><Icon name="search" /> EXPLORE SEED</button>
     </div>
   </div>
 </template>

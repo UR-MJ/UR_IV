@@ -2,8 +2,8 @@
   <div class="pnginfo-view">
     <!-- 상단 서브탭 -->
     <div class="sub-tabs">
-      <button class="sub-tab" :class="{ active: subTab === 'info' }" @click="subTab = 'info'">📄 PNG Info</button>
-      <button class="sub-tab" :class="{ active: subTab === 'compare' }" @click="subTab = 'compare'">🔍 Compare</button>
+      <button class="sub-tab" :class="{ active: subTab === 'info' }" @click="subTab = 'info'"><Icon name="file" /> PNG Info</button>
+      <button class="sub-tab" :class="{ active: subTab === 'compare' }" @click="subTab = 'compare'"><Icon name="search" /> Compare</button>
     </div>
 
     <!-- PNG Info 탭 -->
@@ -11,36 +11,36 @@
       <div class="image-area" @dragover.prevent @drop.prevent="onDrop" @dblclick="openFile">
         <img v-if="imagePath" :src="mediaUrl(imagePath)" class="preview-img" />
         <div v-else class="drop-hint">
-          <div class="icon">📄</div>
+          <div class="icon"><Icon name="file" /></div>
           <div>이미지를 드래그하거나 더블클릭</div>
         </div>
       </div>
       <div class="info-panel">
         <div class="info-header">
           <h3>PNG Info</h3>
-          <button class="btn" @click="openFile">📂 열기</button>
-          <button class="btn" @click="copyAll" v-if="exif.raw">📋 복사</button>
-          <button class="btn" @click="sendToCompare" v-if="imagePath">🔍 비교로</button>
+          <button class="btn" @click="openFile"><Icon name="folder-open" /> 열기</button>
+          <button class="btn" @click="copyAll" v-if="exif.raw"><Icon name="clipboard" /> 복사</button>
+          <button class="btn" @click="sendToCompare" v-if="imagePath"><Icon name="search" /> 비교로</button>
         </div>
         <div class="info-body" v-if="exif.raw">
           <div v-if="exif.prompt" class="section">
             <div class="section-head">
               <label>Prompt</label>
-              <button class="copy-btn" @click="copySection(exif.prompt, 'Prompt')" title="Prompt 복사">📋</button>
+              <button class="copy-btn" @click="copySection(exif.prompt, 'Prompt')" title="Prompt 복사"><Icon name="clipboard" /></button>
             </div>
             <pre>{{ exif.prompt }}</pre>
           </div>
           <div v-if="exif.negative" class="section">
             <div class="section-head">
               <label>Negative</label>
-              <button class="copy-btn" @click="copySection(exif.negative, 'Negative')" title="Negative 복사">📋</button>
+              <button class="copy-btn" @click="copySection(exif.negative, 'Negative')" title="Negative 복사"><Icon name="clipboard" /></button>
             </div>
             <pre>{{ exif.negative }}</pre>
           </div>
           <div v-if="exif.params" class="section params-section">
             <div class="section-head">
               <label>Parameters</label>
-              <button class="copy-btn" @click="copySection(exif.params_line || JSON.stringify(exif.params, null, 2), 'Parameters')" title="Parameters 복사">📋</button>
+              <button class="copy-btn" @click="copySection(exif.params_line || JSON.stringify(exif.params, null, 2), 'Parameters')" title="Parameters 복사"><Icon name="clipboard" /></button>
             </div>
             <div class="params-grid">
               <div class="param-line" v-if="exif.params.generation"><span class="pl">GEN</span><span>{{ exif.params.generation }}</span></div>
@@ -54,14 +54,14 @@
           <div v-else-if="exif.params_line" class="section">
             <div class="section-head">
               <label>Parameters</label>
-              <button class="copy-btn" @click="copySection(exif.params_line, 'Parameters')" title="Parameters 복사">📋</button>
+              <button class="copy-btn" @click="copySection(exif.params_line, 'Parameters')" title="Parameters 복사"><Icon name="clipboard" /></button>
             </div>
             <pre>{{ exif.params_line }}</pre>
           </div>
           <div v-if="!exif.prompt" class="section">
             <div class="section-head">
               <label>Raw</label>
-              <button class="copy-btn" @click="copySection(exif.raw, 'Raw')" title="Raw 복사">📋</button>
+              <button class="copy-btn" @click="copySection(exif.raw, 'Raw')" title="Raw 복사"><Icon name="clipboard" /></button>
             </div>
             <pre>{{ exif.raw }}</pre>
           </div>
@@ -69,27 +69,27 @@
             <label class="action-label">SEND TO</label>
             <div class="send-grid">
               <button class="send-card primary" @click="sendPrompt" title="현재 프롬프트를 T2I 탭으로 전송">
-                <span class="send-ico">📤</span>
+                <span class="send-ico"><Icon name="upload" /></span>
                 <span class="send-name">T2I 전송</span>
               </button>
               <button class="send-card" @click="sendGenerate" title="현재 EXIF로 즉시 생성">
-                <span class="send-ico">⚡</span>
+                <span class="send-ico"><Icon name="zap" /></span>
                 <span class="send-name">즉시 생성</span>
               </button>
               <button class="send-card" @click="action('send_to_i2i', { path: imagePath })" title="I2I 탭으로 전송">
-                <span class="send-ico">🖼️</span>
+                <span class="send-ico"><Icon name="image" /></span>
                 <span class="send-name">I2I</span>
               </button>
               <button class="send-card" @click="action('send_to_inpaint', { path: imagePath })" title="Inpaint 탭으로 전송">
-                <span class="send-ico">✂️</span>
+                <span class="send-ico"><Icon name="scissors" /></span>
                 <span class="send-name">Inpaint</span>
               </button>
               <button class="send-card" @click="action('send_to_editor', { path: imagePath })" title="Editor 탭으로 전송">
-                <span class="send-ico">🎨</span>
+                <span class="send-ico"><Icon name="palette" /></span>
                 <span class="send-name">Editor</span>
               </button>
               <button class="send-card star" @click="action('add_favorite', { path: imagePath })" title="즐겨찾기에 추가">
-                <span class="send-ico">⭐</span>
+                <span class="send-ico"><Icon name="star" /></span>
                 <span class="send-name">즐겨찾기</span>
               </button>
             </div>
@@ -104,12 +104,12 @@
       <div class="compare-controls">
         <div class="cmp-slot">
           <span class="cmp-label">BEFORE</span>
-          <button class="btn" @click="loadCompareImage('before')">📂 열기</button>
+          <button class="btn" @click="loadCompareImage('before')"><Icon name="folder-open" /> 열기</button>
           <span class="cmp-name">{{ beforeName || '없음' }}</span>
         </div>
         <div class="cmp-slot">
           <span class="cmp-label">AFTER</span>
-          <button class="btn" @click="loadCompareImage('after')">📂 열기</button>
+          <button class="btn" @click="loadCompareImage('after')"><Icon name="folder-open" /> 열기</button>
           <span class="cmp-name">{{ afterName || '없음' }}</span>
         </div>
       </div>
@@ -119,7 +119,7 @@
           :after-src="mediaUrl(compareAfter)"
         />
         <div v-else class="compare-hint">
-          <div class="icon">🔍</div>
+          <div class="icon"><Icon name="search" /></div>
           <p>두 이미지를 선택하면 비교 슬라이더가 표시됩니다</p>
           <p class="sub">우클릭 메뉴의 "비교로 보내기"로도 이미지를 추가할 수 있습니다</p>
         </div>
@@ -162,9 +162,9 @@
         <label>Speed</label>
         <CustomSelect v-model="gifDurationStr" :options="['Fast', 'Normal', 'Slow']" placeholder="Speed" />
         <button class="gif-btn" @click="exportGif" :disabled="gifExporting">
-          {{ gifExporting ? 'Exporting...' : '🎬 Export GIF' }}
+          <Icon v-if="!gifExporting" name="video" /> {{ gifExporting ? 'Exporting...' : 'Export GIF' }}
         </button>
-        <a v-if="gifResult" :href="mediaUrl(gifResult)" class="gif-link" target="_blank">📥 {{ gifResult.split('/').pop() }}</a>
+        <a v-if="gifResult" :href="mediaUrl(gifResult)" class="gif-link" target="_blank"><Icon name="download" /> {{ gifResult.split('/').pop() }}</a>
       </div>
     </div>
   </div>

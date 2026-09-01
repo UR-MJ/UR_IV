@@ -3,7 +3,7 @@
     <!-- 검색 전: 중앙 검색 폼 -->
     <div v-if="events.length === 0 && !searching" class="welcome">
       <div class="ws-header">
-        <div class="ws-icon">🎬</div>
+        <div class="ws-icon"><Icon name="video" /></div>
         <h1>EVENT GENERATOR</h1>
         <p>Danbooru 데이터베이스에서 이벤트 시퀀스를 검색합니다</p>
       </div>
@@ -34,7 +34,7 @@
 
         <!-- Exclude -->
         <details class="form-section exclude-section" open>
-          <summary class="exclude-toggle">Exclude Tags ▾</summary>
+          <summary class="exclude-toggle">Exclude Tags <Icon name="chevron-down" size="12" /></summary>
           <div class="form-row">
             <div class="form-field"><label class="danger">Tags</label><input v-model="excludeTags" placeholder="제외 태그..." @keydown.enter="searchEvents" /></div>
           </div>
@@ -65,9 +65,9 @@
             <label><input type="checkbox" v-model="fixSeed" />시드 고정</label>
             <label><input type="checkbox" v-model="useT2ISettings" />T2I 설정</label>
           </div>
-          <button class="go-btn" @click="searchEvents" :disabled="searching">🚀 RUN SEARCH</button>
+          <button class="go-btn" @click="searchEvents" :disabled="searching"><Icon name="rocket" /> RUN SEARCH</button>
           <div class="io-row">
-            <button class="io-btn" @click="importEvents">📥 IMPORT .parquet</button>
+            <button class="io-btn" @click="importEvents"><Icon name="download" /> IMPORT .parquet</button>
           </div>
         </div>
       </div>
@@ -96,8 +96,8 @@
         <button class="bar-btn back" @click="events = []; steps = []; selectedIdx = -1">← BACK</button>
         <span class="bar-count">{{ events.length }} EVENTS</span>
         <div class="bar-spacer"></div>
-        <button class="bar-btn" @click="exportEvents">📤 EXPORT</button>
-        <button class="bar-btn" @click="importEvents">📥 IMPORT</button>
+        <button class="bar-btn" @click="exportEvents"><Icon name="upload" /> EXPORT</button>
+        <button class="bar-btn" @click="importEvents"><Icon name="download" /> IMPORT</button>
       </div>
 
       <div class="result-body">
@@ -114,7 +114,7 @@
         <!-- 우측: 스텝 상세 -->
         <section class="eg-main">
           <div v-if="steps.length === 0" class="eg-empty">
-            <div class="eg-empty-icon">🎬</div>
+            <div class="eg-empty-icon"><Icon name="video" /></div>
             <h2>EVENT SEQUENCE</h2>
             <p>이벤트를 선택하면 스텝이 표시됩니다</p>
           </div>
@@ -158,7 +158,7 @@
                   <span class="step-no">Step {{ i + 1 }}</span>
                   <span class="step-badge" :class="i === 0 ? 'parent' : 'child'">{{ i === 0 ? 'PARENT' : 'CHILD' }}</span>
                   <span class="step-char" v-if="currentEvent?.character && i === 0">{{ currentEvent.character }}</span>
-                  <button class="step-send" @click.stop="sendStepToT2I(step)" title="T2I로 전송">📤</button>
+                  <button class="step-send" @click.stop="sendStepToT2I(step)" title="T2I로 전송"><Icon name="upload" /></button>
                 </div>
                 <div class="step-diff" v-if="i > 0 && (step.added?.length || step.removed?.length)">
                   <span v-for="t in (step.added || [])" :key="'a'+t" class="diff-tag add">+ {{ t }}</span>
