@@ -71,32 +71,30 @@
       <Icon name="square" /> {{ isFilled ? '채우기 ON' : '채우기 OFF' }}
     </button>
 
-    <div class="divider" />
-
-    <!-- Layer -->
-    <div class="section-subheader">레이어</div>
-
-    <div class="slider-group">
-      <label class="slider-label">레이어 투명도</label>
-      <input type="range" :min="0" :max="100" v-model.number="layerOpacity" class="slider" />
-      <span class="slider-value">{{ layerOpacity }}</span>
-    </div>
-
-    <!-- 레이어는 병합 전까지 원본을 건드리지 않는다. 그래서 되돌리기·지우기가
-         이미지 undo 스택과 별개로 필요하다 — 없으면 획 하나 잘못 그었을 때
-         이미지를 다시 여는 것 말고는 방법이 없다. -->
-    <div class="layer-btn-row">
-      <button class="secondary-btn flex-1" @click="$emit('undo-stroke')"><Icon name="undo" /> 획 되돌리기</button>
-      <button class="secondary-btn flex-1" @click="$emit('clear-layer')">레이어 지우기</button>
-    </div>
-
-    <button class="secondary-btn full-width" @click="$emit('flatten-layer')">레이어 병합</button>
+    <!-- 레이어 조작은 '지금 그리는 설정' 이 아니라 다 그린 뒤에 하는 일이다.
+         펼쳐 두면 도구 옵션이 270px 를 먹어 아래 탭 내용이 눌린다 — 기본 접힘. -->
+    <PanelSection title="레이어" storage-key="drawLayer" :default-open="false">
+      <div class="slider-group">
+        <label class="slider-label">투명도</label>
+        <input type="range" :min="0" :max="100" v-model.number="layerOpacity" class="slider" />
+        <span class="slider-value">{{ layerOpacity }}</span>
+      </div>
+      <!-- 레이어는 병합 전까지 원본을 건드리지 않는다. 그래서 되돌리기·지우기가
+           이미지 undo 스택과 별개로 필요하다 — 없으면 획 하나 잘못 그었을 때
+           이미지를 다시 여는 것 말고는 방법이 없다. -->
+      <div class="layer-btn-row">
+        <button class="secondary-btn flex-1" @click="$emit('undo-stroke')"><Icon name="undo" /> 획 되돌리기</button>
+        <button class="secondary-btn flex-1" @click="$emit('clear-layer')">레이어 지우기</button>
+      </div>
+      <button class="secondary-btn full-width" @click="$emit('flatten-layer')">레이어 병합</button>
+    </PanelSection>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { toolById } from '../../utils/editorTools'
+import PanelSection from './PanelSection.vue'
 
 interface DrawTool {
   id: number
