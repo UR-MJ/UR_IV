@@ -113,7 +113,20 @@ class EventDataLoader:
 
         if dfs:
             self.df = pd.concat(dfs, ignore_index=True)
-            print(f"✅ 총 {len(self.df)}개 로드 (원본 {total_before}개 중)")
+
+            # 최신 Event 샤드는 단일 등급만 선택해도 그래프가
+            # 완결되도록, child가 참조하는 다른 등급의 parent를 각 샤드에
+            # 복제해 둔다. 여러 등급을 함께 로드하면 같은 parent가 중복될
+            # 수 있으므로 id를 기준으로 한 번만 남겨 인덱스를 안정화한다.
+            duplicate_count = int(self.df.duplicated(subset=['id']).sum())
+            if duplicate_count:
+                self.df = self.df.drop_duplicates(subset=['id'], keep='first').reset_index(drop=True)
+
+            duplicate_note = f", 중복 parent {duplicate_count}개 제거" if duplicate_count else ""
+            print(
+                f"✅ 총 {len(self.df)}개 로드 "
+                f"(원본 {total_before}개 중{duplicate_note})"
+            )
             self._build_parent_child_index(
                 progress_callback=lambda msg: progress_callback(0, 0, msg) if progress_callback else None
             )

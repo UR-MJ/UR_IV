@@ -1,0 +1,140 @@
+{
+  "artifacts": {
+    "autocomplete/danbooru_autocomplete_catalog.csv": {
+      "path": "autocomplete/danbooru_autocomplete_catalog.csv",
+      "rows": 201077,
+      "schema": [
+        "tag",
+        "category",
+        "count",
+        "aliases"
+      ],
+      "sha256": "75cf63fce5a2c058ab6e97eed79831fd704382369d26c786c96552cca0112c53",
+      "size_bytes": 5567894
+    },
+    "taxonomy/danbooru_active_tag_aliases.parquet": {
+      "path": "taxonomy/danbooru_active_tag_aliases.parquet",
+      "rows": 40917,
+      "schema": [
+        "alias",
+        "canonical"
+      ],
+      "sha256": "ff7c2a498468b35a9bb0b8b86f38057769dbedc77dff182ce0653ea5525bd7c1",
+      "size_bytes": 752383
+    },
+    "taxonomy/danbooru_active_tag_implications.parquet": {
+      "path": "taxonomy/danbooru_active_tag_implications.parquet",
+      "rows": 45674,
+      "schema": [
+        "antecedent",
+        "consequent"
+      ],
+      "sha256": "8e0634a671168deae303b7c6c6cb272575ca393e79f0a71391537a2799bd8407",
+      "size_bytes": 567903
+    }
+  },
+  "fetched_at": "2026-09-01T22:42:57Z",
+  "format_version": 1,
+  "generated_by": "tools/refresh_danbooru_tag_assets.py 1.0.0",
+  "merge": {
+    "active_alias_rows_removed": 6,
+    "ambiguous_source_aliases_resolved": 4,
+    "daily_only_tags_added": 8,
+    "daily_tags": 123953,
+    "official_aliases": 40917,
+    "output_tags": 201077,
+    "pyu_tags": 186860,
+    "synthesised_canonicals": 14212
+  },
+  "sources": {
+    "daily_counts": {
+      "etag": "W/\"d116c886687b8324f368481233c3b374a029ca94\"",
+      "kind": "url",
+      "last_modified": null,
+      "requested": "https://huggingface.co/datasets/HDiffusion/historical-danbooru-tag-counts/resolve/867933fe1f92cb7e804b96b693d659c58800ac09/danbooru-2026-09-01.csv",
+      "resolved": "https://huggingface.co/api/resolve-cache/datasets/HDiffusion/historical-danbooru-tag-counts/867933fe1f92cb7e804b96b693d659c58800ac09/danbooru-2026-09-01.csv?%2Fdatasets%2FHDiffusion%2Fhistorical-danbooru-tag-counts%2Fresolve%2F867933fe1f92cb7e804b96b693d659c58800ac09%2Fdanbooru-2026-09-01.csv=&etag=%22d116c886687b8324f368481233c3b374a029ca94%22",
+      "rows": 123953,
+      "sha256": "47efe3c933d919967df0f0f1e725cad70219dfa703e86cf2902aa9b11b0e2543",
+      "size_bytes": 3434655,
+      "unique_tags": 123953
+    },
+    "official_active_aliases": {
+      "canonical_sha256": "2f84fb39efb38f034efb30684f439c6e629dc31ea46c984623afe36d290f0799",
+      "filter": "status=active",
+      "latest_updated_at": "2026-09-01T16:58:39.685-04:00",
+      "pages": 42,
+      "pagination": "id_desc page=b<minimum_id>",
+      "requested_page_limit": 1000,
+      "rows": 40917,
+      "url": "https://shima.donmai.us/tag_aliases.json"
+    },
+    "official_active_implications": {
+      "canonical_sha256": "0247daa7e820a53fdb47c0326ffe56a82b4006bbb52254d561698c14b6afb795",
+      "filter": "status=active",
+      "latest_updated_at": "2026-09-01T17:40:57.172-04:00",
+      "pages": 47,
+      "pagination": "id_desc page=b<minimum_id>",
+      "requested_page_limit": 1000,
+      "rows": 45674,
+      "url": "https://shima.donmai.us/tag_implications.json"
+    },
+    "pyu_csv": {
+      "etag": "W/\"119d8f21a5ff720c7526340ec2ecf0abd6386469e4d630133e4d5ccfe4e82cd5\"",
+      "kind": "url",
+      "last_modified": null,
+      "requested": "https://raw.githubusercontent.com/PYU224/tagdb-updater/b5da8f0141de06cbda3df864ef8afee66131052b/dist/danbooru.csv",
+      "resolved": "https://raw.githubusercontent.com/PYU224/tagdb-updater/b5da8f0141de06cbda3df864ef8afee66131052b/dist/danbooru.csv",
+      "rows": 186860,
+      "sha256": "e995e54f957acebdeee5a5fd26f4ab49ec5b4342b06450af0b3af0474f501c4a",
+      "size_bytes": 4900347,
+      "unique_tags": 186860
+    },
+    "pyu_meta": {
+      "document": {
+        "by_category": {
+          "artists": 50000,
+          "characters": 80000,
+          "copyrights": 19672,
+          "general": 36591,
+          "meta": 597
+        },
+        "generated_at": "2026-08-31T09:47:02Z",
+        "ja_source_counts": {
+          "csv": 46002,
+          "none": 59256,
+          "wiki": 81602
+        },
+        "tag_count_total": 186860,
+        "translated_by_category": {
+          "artists": 29168,
+          "characters": 57675,
+          "copyrights": 15045,
+          "general": 25368,
+          "meta": 348
+        },
+        "translated_count_total": 127604,
+        "translated_ratio": 0.6829,
+        "translation_sources": [
+          {
+            "entries": 427,
+            "newly_added": 427,
+            "source": "https://raw.githubusercontent.com/boorutan/booru-japanese-tag/main/danbooru-jp.csv"
+          },
+          {
+            "entries": 99993,
+            "newly_added": 99566,
+            "source": "https://raw.githubusercontent.com/boorutan/booru-japanese-tag/main/danbooru-machine-jp.csv"
+          }
+        ],
+        "wiki_other_names_used": true
+      },
+      "etag": "W/\"d8172ac418765d1bf0bbea3b7c45d3c1a7bb3eca41e154e1fcd903d76cb1f2c1\"",
+      "kind": "url",
+      "last_modified": null,
+      "requested": "https://raw.githubusercontent.com/PYU224/tagdb-updater/b5da8f0141de06cbda3df864ef8afee66131052b/dist/meta.json",
+      "resolved": "https://raw.githubusercontent.com/PYU224/tagdb-updater/b5da8f0141de06cbda3df864ef8afee66131052b/dist/meta.json",
+      "sha256": "65e22df79885242e49ddbf95e4b1647ff4fbe756dad3936815f6045af7d16647",
+      "size_bytes": 902
+    }
+  }
+}

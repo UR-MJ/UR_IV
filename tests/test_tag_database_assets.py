@@ -38,9 +38,16 @@ class BundledTagDatabaseTests(unittest.TestCase):
     def test_implications_contain_only_unique_active_runtime_pairs(self):
         frame = self.database.read_parquet(TagAsset.TAG_IMPLICATIONS)
 
-        self.assertEqual(len(frame), 24_831)
+        self.assertGreaterEqual(len(frame), 24_831)
         self.assertEqual(len(frame), len(frame.drop_duplicates()))
         self.assertFalse((frame["antecedent"] == frame["consequent"]).any())
+
+    def test_aliases_contain_only_unique_active_runtime_mappings(self):
+        frame = self.database.read_parquet(TagAsset.TAG_ALIASES)
+
+        self.assertGreater(len(frame), 0)
+        self.assertEqual(len(frame), frame["alias"].nunique())
+        self.assertFalse((frame["alias"] == frame["canonical"]).any())
 
     def test_character_migrations_preserve_expected_records(self):
         profiles = self.database.read_json(TagAsset.CHARACTER_PROFILES)

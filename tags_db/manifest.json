@@ -59,6 +59,17 @@
       "description": "활성 상태의 Danbooru 태그 포함 관계",
       "columns": ["antecedent", "consequent"]
     },
+    "tag_aliases": {
+      "path": "taxonomy/danbooru_active_tag_aliases.parquet",
+      "format": "parquet",
+      "description": "활성 상태의 Danbooru 별칭에서 정식 태그로의 매핑",
+      "columns": ["alias", "canonical"]
+    },
+    "source_metadata": {
+      "path": "catalogs/danbooru_source_metadata.json",
+      "format": "json",
+      "description": "Danbooru 파생 자산의 출처, 갱신 시각, 행 수와 해시"
+    },
     "clothing_regions": {
       "path": "taxonomy/clothing_region_map.json",
       "format": "json",

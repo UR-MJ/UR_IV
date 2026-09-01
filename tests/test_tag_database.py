@@ -109,7 +109,7 @@ class TagDatabaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expected format"):
             database.read_lines(TagAsset.OBJECT_TAGS)
 
-    def test_loads_group_and_implication_indexes(self):
+    def test_loads_group_implication_and_alias_indexes(self):
         pd.DataFrame(
             {
                 "group": ["hair", "hair", "hair", "pose", None, ""],
@@ -122,6 +122,12 @@ class TagDatabaseTests(unittest.TestCase):
                 "consequent": ["happy", "mouth", "smile", "happy", "ignored"],
             }
         ).to_parquet(self.root / "implications.parquet", index=False)
+        pd.DataFrame(
+            {
+                "alias": [" old name ", "second_alias", None, ""],
+                "canonical": ["canonical_tag", " second_tag ", "ignored", "ignored"],
+            }
+        ).to_parquet(self.root / "aliases.parquet", index=False)
         self.write_manifest(
             {
                 TagAsset.TAG_GROUPS.value: self.descriptor(
@@ -131,6 +137,11 @@ class TagDatabaseTests(unittest.TestCase):
                     "implications.parquet",
                     "parquet",
                     columns=["antecedent", "consequent"],
+                ),
+                TagAsset.TAG_ALIASES.value: self.descriptor(
+                    "aliases.parquet",
+                    "parquet",
+                    columns=["alias", "canonical"],
                 ),
             }
         )
@@ -151,6 +162,13 @@ class TagDatabaseTests(unittest.TestCase):
             },
         )
         self.assertEqual(
+            database.load_tag_aliases(),
+            {
+                "old name": "canonical_tag",
+                "second_alias": "second_tag",
+            },
+        )
+        self.assertEqual(
             database.all_group_tags(),
             {"long_hair", "short_hair", "standing"},
         )
@@ -161,6 +179,9 @@ class TagDatabaseTests(unittest.TestCase):
         )
         pd.DataFrame({"antecedent": ["wink"], "consequent": ["one_eye_closed"]}).to_parquet(
             self.root / "implications.parquet", index=False
+        )
+        pd.DataFrame({"alias": ["old_name"], "canonical": ["new_name"]}).to_parquet(
+            self.root / "aliases.parquet", index=False
         )
         (self.root / "generic.json").write_text("{}", encoding="utf-8")
 
@@ -176,6 +197,11 @@ class TagDatabaseTests(unittest.TestCase):
             "parquet",
             columns=["antecedent", "consequent"],
         )
+        assets[TagAsset.TAG_ALIASES.value] = self.descriptor(
+            "aliases.parquet",
+            "parquet",
+            columns=["alias", "canonical"],
+        )
         self.write_manifest(assets)
 
         self.assertEqual(TagDatabase(self.root).validate_assets(), [])
@@ -184,10 +210,16 @@ class TagDatabaseTests(unittest.TestCase):
         pd.DataFrame({"wrong": ["value"]}).to_parquet(
             self.root / "groups.parquet", index=False
         )
+        pd.DataFrame({"alias": ["old_name"], "wrong": ["new_name"]}).to_parquet(
+            self.root / "aliases.parquet", index=False
+        )
         self.write_manifest(
             {
                 TagAsset.TAG_GROUPS.value: self.descriptor(
                     "groups.parquet", "parquet", columns=["group", "tag"]
+                ),
+                TagAsset.TAG_ALIASES.value: self.descriptor(
+                    "aliases.parquet", "parquet", columns=["alias", "canonical"]
                 ),
                 TagAsset.META_TAGS.value: {
                     "path": "missing.json",
@@ -208,6 +240,9 @@ class TagDatabaseTests(unittest.TestCase):
         self.assertTrue(any("file does not exist" in error for error in errors))
         self.assertTrue(
             any("tag_groups: missing columns" in error for error in errors)
+        )
+        self.assertTrue(
+            any("tag_aliases: missing columns" in error for error in errors)
         )
 
     def test_validate_assets_returns_manifest_error_instead_of_raising(self):

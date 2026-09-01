@@ -413,12 +413,12 @@ const hasSearched = ref(false)
 const lastQuerySummary = ref('')
 
 // 데이터셋 — 단일 선택. 값이 곧 parquet prefix (danbooru_{값}_{rating}.parquet)
-//   2025 / 2026(기존 풀) / 2026_06(슬림: 해상도·score 포함)
-const AVAILABLE_YEARS = ['2026_06', '2026', '2025']
-const datasetYear = ref(localStorage.getItem('search.datasetYear') || '2026_06')
-if (!AVAILABLE_YEARS.includes(datasetYear.value)) datasetYear.value = '2026_06'
+// 최신 릴리스가 로컬에 없으면 Python worker가 이전 호환 릴리스로 안전하게 폴백한다.
+const AVAILABLE_YEARS = ['2026_07', '2026_06', '2026', '2025']
+const datasetYear = ref(localStorage.getItem('search.datasetYear') || '2026_07')
+if (!AVAILABLE_YEARS.includes(datasetYear.value)) datasetYear.value = '2026_07'
 watch(datasetYear, (v) => { try { localStorage.setItem('search.datasetYear', v) } catch {} })
-function yearLabel(y: string) { return y === '2026_06' ? '2026.06' : y }
+function yearLabel(y: string) { return y.replace(/^(\d{4})_(\d{2})$/, '$1.$2') }
 
 // 결과 cap — 기본 50만 (UI 부하 방지), 'unlimited' 선택 시 전체 결과 받음
 // 무제한이면 JSON 직렬화 + Vue 메모리가 무거워질 수 있음 (수 GB 가능)
@@ -559,7 +559,7 @@ async function search() {
     queries: Object.fromEntries(fields.map(f => [f.key, f.include])),
     excludes: Object.fromEntries(fields.map(f => [f.key, f.exclude])),
     combine_mode: combineMode.value,  // 'and' | 'or' — 필드 간 결합 방식
-    dataset_year: datasetYear.value,  // '2025' | '2026' — 데이터셋 년도
+    dataset_year: datasetYear.value,  // '2026_07' | '2026_06' | '2026' | '2025'
     disable_result_cap: resultCapMode.value === 'unlimited',  // true면 50만 cap 무시
   }
   // 사용자에게 보여줄 쿼리 요약 (0건 시 활용)

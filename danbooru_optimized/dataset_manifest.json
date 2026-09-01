@@ -1,0 +1,862 @@
+{
+  "artifacts": [
+    {
+      "created_by": "parquet-cpp-arrow version 25.0.1",
+      "format": "parquet",
+      "kind": "search",
+      "path": "danbooru_2026_07_g.parquet",
+      "rating_shard": "g",
+      "row_groups": 60,
+      "rows": 4227975,
+      "schema": [
+        {
+          "name": "rating",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "image_width",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_height",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "general",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "character",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "copyright",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "artist",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "meta",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "int64"
+        }
+      ],
+      "sha256": "ab9bbb075e47c066d532b794b608bd67de3c10021805f0de7490fa8883cabf62",
+      "size_bytes": 362352414
+    },
+    {
+      "created_by": "parquet-cpp-arrow version 25.0.1",
+      "format": "parquet",
+      "kind": "search",
+      "path": "danbooru_2026_07_s.parquet",
+      "rating_shard": "s",
+      "row_groups": 62,
+      "rows": 5133307,
+      "schema": [
+        {
+          "name": "rating",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "image_width",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_height",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "general",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "character",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "copyright",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "artist",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "meta",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "int64"
+        }
+      ],
+      "sha256": "a94abe27be1eefab6403ad31b3a6a4ddfed5da6bc61f629124742b02b0bd7d63",
+      "size_bytes": 411633467
+    },
+    {
+      "created_by": "parquet-cpp-arrow version 25.0.1",
+      "format": "parquet",
+      "kind": "search",
+      "path": "danbooru_2026_07_q.parquet",
+      "rating_shard": "q",
+      "row_groups": 45,
+      "rows": 1196980,
+      "schema": [
+        {
+          "name": "rating",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "image_width",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_height",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "general",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "character",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "copyright",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "artist",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "meta",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "int64"
+        }
+      ],
+      "sha256": "c57d8435a0c9d71cb28d888bfddc688acdb9bfade1a90d2d9227433cfaa725cb",
+      "size_bytes": 96147325
+    },
+    {
+      "created_by": "parquet-cpp-arrow version 25.0.1",
+      "format": "parquet",
+      "kind": "search",
+      "path": "danbooru_2026_07_e.parquet",
+      "rating_shard": "e",
+      "row_groups": 45,
+      "rows": 1182404,
+      "schema": [
+        {
+          "name": "rating",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "image_width",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_height",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "general",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "character",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "copyright",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "artist",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "meta",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "int64"
+        }
+      ],
+      "sha256": "24f2b38a8cc64632b0770677651c396fdf7a793f8beb0fd00bffff27f9e30d3c",
+      "size_bytes": 94635742
+    },
+    {
+      "ancestor_ids": 353913,
+      "child_ancestor_overlap": 11573,
+      "child_ids": 459320,
+      "contains_cross_rating_parents": true,
+      "created_by": "parquet-cpp-arrow version 25.0.1",
+      "format": "parquet",
+      "kind": "event_graph",
+      "missing_ancestor_ids": 0,
+      "path": "danbooru_sorted/danbooru_g.parquet",
+      "rating_shard": "g",
+      "row_groups": 45,
+      "rows": 801660,
+      "schema": [
+        {
+          "name": "id",
+          "nullable": false,
+          "type": "int64"
+        },
+        {
+          "name": "parent_id",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "has_children",
+          "nullable": true,
+          "type": "bool"
+        },
+        {
+          "name": "has_visible_children",
+          "nullable": true,
+          "type": "bool"
+        },
+        {
+          "name": "tag_string_general",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_character",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_copyright",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_artist",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_meta",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "rating",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "fav_count",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_width",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_height",
+          "nullable": true,
+          "type": "int64"
+        }
+      ],
+      "sha256": "011c09156cb519749f4ebd7560aa03e5132217ecc8482b57218b12b012315fdb",
+      "size_bytes": 72835088
+    },
+    {
+      "ancestor_ids": 553283,
+      "child_ancestor_overlap": 23176,
+      "child_ids": 694576,
+      "contains_cross_rating_parents": true,
+      "created_by": "parquet-cpp-arrow version 25.0.1",
+      "format": "parquet",
+      "kind": "event_graph",
+      "missing_ancestor_ids": 0,
+      "path": "danbooru_sorted/danbooru_s.parquet",
+      "rating_shard": "s",
+      "row_groups": 45,
+      "rows": 1224683,
+      "schema": [
+        {
+          "name": "id",
+          "nullable": false,
+          "type": "int64"
+        },
+        {
+          "name": "parent_id",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "has_children",
+          "nullable": true,
+          "type": "bool"
+        },
+        {
+          "name": "has_visible_children",
+          "nullable": true,
+          "type": "bool"
+        },
+        {
+          "name": "tag_string_general",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_character",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_copyright",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_artist",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_meta",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "rating",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "fav_count",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_width",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_height",
+          "nullable": true,
+          "type": "int64"
+        }
+      ],
+      "sha256": "3507a5ffbd4a75df02c9b20febec2d6d2d27578507847d60e1dac50cd4e316c4",
+      "size_bytes": 105664460
+    },
+    {
+      "ancestor_ids": 217012,
+      "child_ancestor_overlap": 9105,
+      "child_ids": 278905,
+      "contains_cross_rating_parents": true,
+      "created_by": "parquet-cpp-arrow version 25.0.1",
+      "format": "parquet",
+      "kind": "event_graph",
+      "missing_ancestor_ids": 0,
+      "path": "danbooru_sorted/danbooru_q.parquet",
+      "rating_shard": "q",
+      "row_groups": 45,
+      "rows": 486812,
+      "schema": [
+        {
+          "name": "id",
+          "nullable": false,
+          "type": "int64"
+        },
+        {
+          "name": "parent_id",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "has_children",
+          "nullable": true,
+          "type": "bool"
+        },
+        {
+          "name": "has_visible_children",
+          "nullable": true,
+          "type": "bool"
+        },
+        {
+          "name": "tag_string_general",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_character",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_copyright",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_artist",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_meta",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "rating",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "fav_count",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_width",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_height",
+          "nullable": true,
+          "type": "int64"
+        }
+      ],
+      "sha256": "2ee2528dbf8fb83569e6c662d70c2d1cbe52452f68fb0c96887686f8a36dd57e",
+      "size_bytes": 40529280
+    },
+    {
+      "ancestor_ids": 257126,
+      "child_ancestor_overlap": 14826,
+      "child_ids": 434478,
+      "contains_cross_rating_parents": true,
+      "created_by": "parquet-cpp-arrow version 25.0.1",
+      "format": "parquet",
+      "kind": "event_graph",
+      "missing_ancestor_ids": 0,
+      "path": "danbooru_sorted/danbooru_e.parquet",
+      "rating_shard": "e",
+      "row_groups": 45,
+      "rows": 676778,
+      "schema": [
+        {
+          "name": "id",
+          "nullable": false,
+          "type": "int64"
+        },
+        {
+          "name": "parent_id",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "has_children",
+          "nullable": true,
+          "type": "bool"
+        },
+        {
+          "name": "has_visible_children",
+          "nullable": true,
+          "type": "bool"
+        },
+        {
+          "name": "tag_string_general",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_character",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_copyright",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_artist",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "tag_string_meta",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "rating",
+          "nullable": true,
+          "type": "string"
+        },
+        {
+          "name": "score",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "fav_count",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_width",
+          "nullable": true,
+          "type": "int64"
+        },
+        {
+          "name": "image_height",
+          "nullable": true,
+          "type": "int64"
+        }
+      ],
+      "sha256": "42bb0b200979b7e5aa30414ebf0e3ef717067a0e19da87c278a08ad64c32a564",
+      "size_bytes": 53845204
+    }
+  ],
+  "build": {
+    "allow_missing_parents": false,
+    "batch_rows": 262144,
+    "compression": "zstd",
+    "compression_level": 6,
+    "cross_rating_parent_duplication": true,
+    "event_duplicate_rows_across_shards": 85647,
+    "event_rows_across_shards": 3189933,
+    "event_shard_rule": "children whose own rating matches the shard, plus all recursively referenced ancestors regardless of ancestor rating",
+    "event_unique_ids_across_shards": 3104286,
+    "row_group_rows": 131072
+  },
+  "command": "posts",
+  "dataset_label": "2026_07",
+  "format_version": 1,
+  "generated_at": "2026-09-01T22:36:55Z",
+  "generated_by": "tools/refresh_danbooru_data.py 1.0.0",
+  "source": {
+    "path": "posts-snapshot.parquet",
+    "resolved_columns": {
+      "artist": "tag_string_artist",
+      "character": "tag_string_character",
+      "copyright": "tag_string_copyright",
+      "fav_count": "fav_count",
+      "general": "tag_string_general",
+      "has_children": "has_children",
+      "has_visible_children": "has_visible_children",
+      "id": "id",
+      "image_height": "image_height",
+      "image_width": "image_width",
+      "meta": "tag_string_meta",
+      "parent_id": "parent_id",
+      "rating": "rating",
+      "score": "score"
+    },
+    "revision": "ebb02a630201c7b51487e45fb90b3fcf4cbedc20",
+    "rows": 11740666,
+    "schema": [
+      {
+        "name": "id",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "created_at",
+        "nullable": true,
+        "type": "timestamp[ms, tz=UTC]"
+      },
+      {
+        "name": "uploader_id",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "score",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "source",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "md5",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "last_comment_bumped_at",
+        "nullable": true,
+        "type": "timestamp[ms, tz=UTC]"
+      },
+      {
+        "name": "rating",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "image_width",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "image_height",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "tag_string",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "fav_count",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "file_ext",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "last_noted_at",
+        "nullable": true,
+        "type": "timestamp[ms, tz=UTC]"
+      },
+      {
+        "name": "parent_id",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "has_children",
+        "nullable": true,
+        "type": "bool"
+      },
+      {
+        "name": "approver_id",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "tag_count_general",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "tag_count_artist",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "tag_count_character",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "tag_count_copyright",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "file_size",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "up_score",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "down_score",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "is_pending",
+        "nullable": true,
+        "type": "bool"
+      },
+      {
+        "name": "is_flagged",
+        "nullable": true,
+        "type": "bool"
+      },
+      {
+        "name": "is_deleted",
+        "nullable": true,
+        "type": "bool"
+      },
+      {
+        "name": "tag_count",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "updated_at",
+        "nullable": true,
+        "type": "timestamp[ms, tz=UTC]"
+      },
+      {
+        "name": "is_banned",
+        "nullable": true,
+        "type": "bool"
+      },
+      {
+        "name": "pixiv_id",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "last_commented_at",
+        "nullable": true,
+        "type": "timestamp[ms, tz=UTC]"
+      },
+      {
+        "name": "has_active_children",
+        "nullable": true,
+        "type": "bool"
+      },
+      {
+        "name": "bit_flags",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "tag_count_meta",
+        "nullable": true,
+        "type": "int64"
+      },
+      {
+        "name": "has_large",
+        "nullable": true,
+        "type": "bool"
+      },
+      {
+        "name": "has_visible_children",
+        "nullable": true,
+        "type": "bool"
+      },
+      {
+        "name": "media_asset",
+        "nullable": true,
+        "type": "struct<id: int64, created_at: timestamp[ms, tz=UTC], updated_at: timestamp[ms, tz=UTC], md5: string, file_ext: string, file_size: int64, image_width: int64, image_height: int64, duration: double, status: string, file_key: string, is_public: bool, pixel_hash: string, variants: list<element: struct<type: string, url: string, width: int64, height: int64, file_ext: string>>>"
+      },
+      {
+        "name": "tag_string_general",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "tag_string_character",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "tag_string_copyright",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "tag_string_artist",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "tag_string_meta",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "file_url",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "large_file_url",
+        "nullable": true,
+        "type": "string"
+      },
+      {
+        "name": "preview_file_url",
+        "nullable": true,
+        "type": "string"
+      }
+    ],
+    "sha256": "5b6b2671dc0fa966de71af76dfd342f485f76581447cec9e26c313ba9fb1c2fd",
+    "size_bytes": 4088245636,
+    "snapshot_at": "2026-07-13T16:25:53.082Z",
+    "url": "https://huggingface.co/datasets/nyanko-devs/danbooru2026/blob/ebb02a630201c7b51487e45fb90b3fcf4cbedc20/metadata/posts-snapshot.parquet"
+  }
+}

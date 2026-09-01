@@ -31,6 +31,8 @@ class TagAsset(str, Enum):
     EXTENDED_CHARACTER_SERIES = "extended_character_series"
     TAG_GROUPS = "tag_groups"
     TAG_IMPLICATIONS = "tag_implications"
+    TAG_ALIASES = "tag_aliases"
+    SOURCE_METADATA = "source_metadata"
     CLOTHING_REGIONS = "clothing_regions"
     EXPRESSION_TAGS = "expression_tags"
     LOCATION_TAGS = "location_tags"
@@ -133,6 +135,20 @@ class TagDatabase:
             "antecedent",
             "consequent",
             TagAsset.TAG_IMPLICATIONS,
+        )
+
+    def load_tag_aliases(self) -> dict[str, str]:
+        """Return ``alias -> canonical tag`` from the active alias table."""
+
+        frame = self.read_parquet(
+            TagAsset.TAG_ALIASES,
+            columns=["alias", "canonical"],
+        )
+        return self._collect_mapping(
+            frame,
+            "alias",
+            "canonical",
+            TagAsset.TAG_ALIASES,
         )
 
     def all_group_tags(self) -> set[str]:
@@ -306,6 +322,33 @@ class TagDatabase:
             item = str(item_value).strip()
             if key and item:
                 result.setdefault(key, set()).add(item)
+        return result
+
+    @staticmethod
+    def _collect_mapping(
+        frame,
+        key_column: str,
+        value_column: str,
+        asset: TagAsset,
+    ) -> dict[str, str]:
+        import pandas as pd
+
+        missing = {key_column, value_column} - set(frame.columns)
+        if missing:
+            joined = ", ".join(sorted(missing))
+            raise ValueError(f"{asset.value}: missing columns: {joined}")
+
+        result: dict[str, str] = {}
+        for key_value, item_value in frame[[key_column, value_column]].itertuples(
+            index=False,
+            name=None,
+        ):
+            if pd.isna(key_value) or pd.isna(item_value):
+                continue
+            key = str(key_value).strip()
+            item = str(item_value).strip()
+            if key and item:
+                result[key] = item
         return result
 
 
