@@ -5,8 +5,8 @@
       <div class="nav-header">PREFERENCES</div>
       <div class="settings-search-wrap">
         <input ref="searchInputRef" v-model="settingsSearch" class="settings-search"
-          placeholder="🔍 설정 검색 (Ctrl+F)" />
-        <button v-if="settingsSearch" class="search-clear" @click="settingsSearch = ''" title="지우기">✕</button>
+          placeholder="설정 검색 (Ctrl+F)" />
+        <button v-if="settingsSearch" class="search-clear" @click="settingsSearch = ''" title="지우기"><Icon name="close" /></button>
       </div>
       <button v-for="tab in filteredSubTabs" :key="tab.id"
         class="nav-item" :class="{ active: currentTab === tab.id }"
@@ -486,6 +486,9 @@
             <code>--vae-dirs</code>, <code>--text-encoder-dirs</code>)에도 같은 폴더를 등록한 뒤
             Forge에서 목록을 새로고침하세요.
           </div>
+          <div v-if="forgeReadOnlyReason" class="hint-banner forge-readonly-warning">
+            <strong>READ ONLY</strong>{{ forgeReadOnlyReason }}
+          </div>
           <div class="glass-card">
             <div class="forge-card-heading">
               <label>FORGE NEO MODEL DIRECTORIES</label>
@@ -501,7 +504,8 @@
                   <input
                     v-model="forgePaths[field.key]"
                     :class="{ invalid: !!forgeErrors[field.key] }"
-                    :disabled="forgeEnvironmentLocked[field.key] || forgeBusy"
+                    :disabled="forgeEnvironmentLocked[field.key] || forgeBusy || !forgeCanMutate"
+                    :title="forgeEnvironmentLocked[field.key] ? '환경 변수로 고정된 경로입니다.' : forgeMutationTitle"
                     :placeholder="forgeDefaults[field.key]"
                     spellcheck="false"
                     @input="forgeErrors[field.key] = ''"
@@ -509,7 +513,7 @@
                   <button
                     class="btn-pill compact"
                     :disabled="forgeEnvironmentLocked[field.key] || forgeBusy || !forgeCanBrowse"
-                    :title="forgeCanBrowse ? '폴더 선택' : '웹 모드에서는 경로를 직접 입력하세요'"
+                    :title="forgeBrowseTitle"
                     @click="browseForgePath(field.key)"
                   >BROWSE</button>
                 </div>
@@ -524,9 +528,9 @@
               </div>
             </div>
             <div class="forge-actions mt-16">
-              <button class="btn-pill primary" :disabled="forgeBusy" @click="saveForgePaths">SAVE PATHS</button>
-              <button class="btn-pill" :disabled="forgeBusy" @click="refreshForgePaths">RESCAN</button>
-              <button class="btn-pill" :disabled="forgeBusy" @click="resetForgePaths">RESET AUTO</button>
+              <button class="btn-pill primary" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="saveForgePaths">SAVE PATHS</button>
+              <button class="btn-pill" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="refreshForgePaths">RESCAN</button>
+              <button class="btn-pill" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="resetForgePaths">RESET AUTO</button>
             </div>
             <div v-if="forgeStatus" class="forge-status mt-12">{{ forgeStatus }}</div>
           </div>
@@ -599,8 +603,7 @@
 
         <!-- 5. Shortcuts -->
         <div v-show="currentTab === 'shortcuts'" class="section-fade">
-          <div class="hint-banner">
-            ℹ️ 같은 단축키도 <strong>현재 활성 탭</strong>에 따라 동작이 달라집니다.
+          <div class="hint-banner"><Icon name="info" /> 같은 단축키도 <strong>현재 활성 탭</strong>에 따라 동작이 달라집니다.
             예: <kbd>Ctrl+Z</kbd>는 Editor 탭에서는 편집 Undo, T2I/I2I/Inpaint에서는 프롬프트 Undo.
             전역 키는 모든 탭에서 동일.
           </div>
@@ -616,7 +619,7 @@
           <div class="glass-card mt-16">
             <label>HISTORY 네비게이션</label>
             <div class="shortcut-grid">
-              <div class="s-row"><span>이전 / 다음 이미지</span><kbd>↑ ↓</kbd></div>
+              <div class="s-row"><span>이전 / 다음 이미지</span><kbd><Icon name="arrow-up" /><Icon name="arrow-down" /></kbd></div>
               <div class="s-row">
                 <span>최상단 / 최하단으로 점프 (보조키 + ↑↓)</span>
                 <select v-model="historyJumpModifier" @change="window.localStorage.setItem('historyJumpModifier', historyJumpModifier)" class="hjm-select">
@@ -649,7 +652,7 @@
             <div class="shortcut-grid">
               <div class="s-row"><span>프롬프트 Undo</span><kbd>Ctrl + Z</kbd></div>
               <div class="s-row"><span>프롬프트 Redo</span><kbd>Ctrl + Y / Ctrl + Shift + Z</kbd></div>
-              <div class="s-row"><span>자동완성 이동</span><kbd>↑ ↓</kbd></div>
+              <div class="s-row"><span>자동완성 이동</span><kbd><Icon name="arrow-up" /><Icon name="arrow-down" /></kbd></div>
               <div class="s-row"><span>자동완성 선택</span><kbd>Tab / Enter</kbd></div>
               <div class="s-row"><span>자동완성 닫기</span><kbd>Esc</kbd></div>
             </div>
@@ -839,9 +842,9 @@
           <div class="glass-card mt-16">
             <label>USAGE</label>
             <div class="shortcut-grid">
-              <div class="s-row"><span>✨ Expand Tags</span><span>기존 태그를 고품질 태그로 확장</span></div>
-              <div class="s-row"><span>💬 Natural Language</span><span>자연어 설명을 태그로 변환</span></div>
-              <div class="s-row"><span>🔄 Suggest Similar</span><span>유사하지만 다른 태그 추천</span></div>
+              <div class="s-row"><span><Icon name="sparkles" /> Expand Tags</span><span>기존 태그를 고품질 태그로 확장</span></div>
+              <div class="s-row"><span><Icon name="message" /> Natural Language</span><span>자연어 설명을 태그로 변환</span></div>
+              <div class="s-row"><span><Icon name="refresh" /> Suggest Similar</span><span>유사하지만 다른 태그 추천</span></div>
             </div>
           </div>
         </div>
@@ -853,6 +856,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
+import { getStudioClient, replyData, StudioClientError, type StudioClient } from '../studio/client'
 import CustomSelect from '../components/CustomSelect.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 
@@ -936,6 +940,12 @@ interface GenerationApiJob {
 
 // 템플릿 인라인 핸들러(82·146행)가 window.localStorage를 참조 — 셋업 스코프에 노출
 const window = globalThis.window
+let settingsStudioClient: StudioClient | null = null
+
+async function studioClient(): Promise<StudioClient> {
+  if (!settingsStudioClient) settingsStudioClient = await getStudioClient()
+  return settingsStudioClient
+}
 
 const subTabs: SubTab[] = [
   // keywords: 사용자 검색 시 라벨 외에도 매칭할 한/영 키워드들
@@ -1081,22 +1091,6 @@ function applyGenerationApiState(raw: unknown) {
   generationApiLoaded.value = true
 }
 
-async function callGenerationApiBridge(method: string, ...args: unknown[]): Promise<any> {
-  const backend: any = await getBackend()
-  const fn = backend?.[method]
-  if (typeof fn !== 'function') throw new Error(`백엔드가 ${method} 기능을 지원하지 않습니다.`)
-  return new Promise((resolve, reject) => {
-    try {
-      fn(...args, (raw: unknown) => {
-        try { resolve(parseGenerationApiPayload(raw)) }
-        catch (error) { reject(error) }
-      })
-    } catch (error) {
-      reject(error)
-    }
-  })
-}
-
 function showGenerationApiError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   generationApiStatus.value = message
@@ -1104,24 +1098,19 @@ function showGenerationApiError(error: unknown) {
   requestAction('show_toast', { type: 'error', msg: message })
 }
 
-async function loadGenerationApiState(backend?: any) {
-  const bk: any = backend || await getBackend()
-  generationApiBridgeAvailable.value = typeof bk?.getGenerationApiState === 'function'
-    && typeof bk?.runGenerationApiOperation === 'function'
-  if (typeof bk?.getGenerationApiState !== 'function') {
+async function loadGenerationApiState() {
+  const studio = await studioClient()
+  generationApiBridgeAvailable.value = studio.supports('generation_api.snapshot')
+    && studio.supports('generation_api.execute')
+  if (!studio.supports('generation_api.snapshot')) {
     generationApiLoaded.value = true
     generationApiNativeOperations.value = false
     return
   }
   generationApiLoading.value = true
   try {
-    const payload = await new Promise<any>((resolve, reject) => {
-      bk.getGenerationApiState((raw: unknown) => {
-        try { resolve(parseGenerationApiPayload(raw)) }
-        catch (error) { reject(error) }
-      })
-    })
-    applyGenerationApiState(payload)
+    const reply = await studio.invoke('generation_api.snapshot', {})
+    applyGenerationApiState(replyData(reply))
   } catch (error) {
     generationApiLoaded.value = true
     showGenerationApiError(error)
@@ -1135,7 +1124,9 @@ async function runGenerationApiAction(action: string, payload: Record<string, un
   generationApiBusy.value = true
   generationApiStatus.value = `${action.replace(/_/g, ' ')} 요청 중…`
   try {
-    const result = await callGenerationApiBridge('runGenerationApiOperation', action, JSON.stringify(payload))
+    const studio = await studioClient()
+    const reply = await studio.invoke('generation_api.execute', { action, payload })
+    const result: any = replyData(reply)
     if (result.ok === false || result.accepted === false) throw new Error(String(result.error || '작업이 거부되었습니다.'))
     // A very fast worker can emit completed before the slot callback returns.
     // Do not overwrite that terminal message with a stale "started" message.
@@ -1229,17 +1220,28 @@ function testGenerationApiTarget(target: GenerationApiTarget) {
 function handleGenerationApiEvent(raw: unknown) {
   try {
     const event = parseGenerationApiPayload(raw)
-    if (event.type === 'started') {
+    const eventType = String(event.type || '').toLowerCase()
+    if (event.snapshot) applyGenerationApiState(event.snapshot)
+    if (eventType === 'reconciled') {
+      // Cursor 만료 뒤 bootstrap으로 되맞춘 상태다. 완료/실패 토스트 없이
+      // 놓친 terminal event 때문에 남아 있던 busy 표시만 정리한다.
+      generationApiBusy.value = false
+      generationApiOperationId.value = ''
+      return
+    }
+    if (['accepted', 'started', 'progress'].includes(eventType)) {
       generationApiBusy.value = true
       generationApiOperationId.value = String(event.operationId || '')
       generationApiStatus.value = String(event.message || '작업을 시작했습니다…')
       return
     }
-    if (event.snapshot) applyGenerationApiState(event.snapshot)
     generationApiBusy.value = false
     generationApiOperationId.value = ''
-    const ok = event.type === 'completed' && event.ok !== false
-    const message = String(event.message || (ok ? '작업이 완료되었습니다.' : event.error || '작업에 실패했습니다.'))
+    const ok = eventType === 'completed' && event.ok !== false
+    const errorMessage = event.error && typeof event.error === 'object'
+      ? event.error.message
+      : event.error
+    const message = String(event.message || (ok ? '작업이 완료되었습니다.' : errorMessage || '작업에 실패했습니다.'))
     generationApiStatus.value = message
     requestAction('show_toast', { type: ok ? 'success' : 'error', msg: message })
   } catch (error) {
@@ -1346,6 +1348,18 @@ const forgeErrors = reactive<Record<ForgePathKey, string>>({
 })
 const forgeBusy = ref(false)
 const forgeCanBrowse = ref(false)
+const forgeCanMutate = ref(false)
+const forgeReadOnlyReason = computed(() => {
+  if (generationApiWebMode) return '웹 모드에서는 로컬 모델 폴더를 확인할 수만 있고 변경할 수 없습니다.'
+  if (!forgeCanMutate.value) return '현재 연결은 Forge 모델 폴더 변경 기능을 제공하지 않습니다.'
+  return ''
+})
+const forgeMutationTitle = computed(() => forgeReadOnlyReason.value || 'Forge 모델 폴더 변경')
+const forgeBrowseTitle = computed(() => {
+  if (forgeCanBrowse.value) return '폴더 선택'
+  if (generationApiWebMode) return forgeReadOnlyReason.value
+  return '현재 연결은 네이티브 폴더 선택 기능을 제공하지 않습니다.'
+})
 const forgeStatus = ref('')
 const cleanDuplicates = ref(true)
 const cleanSpaces = ref(true)
@@ -1565,22 +1579,6 @@ function applyRuntimeSnapshot(raw: unknown) {
   runtimeLoaded.value = true
 }
 
-async function callRuntimeBridge(method: string, ...args: unknown[]): Promise<any> {
-  const backend: any = await getBackend()
-  const fn = backend?.[method]
-  if (typeof fn !== 'function') throw new Error(`백엔드가 ${method} 기능을 지원하지 않습니다`)
-  return new Promise((resolve, reject) => {
-    try {
-      fn(...args, (raw: unknown) => {
-        try { resolve(parseRuntimePayload(raw)) }
-        catch (error) { reject(error) }
-      })
-    } catch (error) {
-      reject(error)
-    }
-  })
-}
-
 function showRuntimeError(error: unknown, engineId?: RuntimeEngineId) {
   const message = error instanceof Error ? error.message : String(error)
   runtimeStatus.value = message
@@ -1591,24 +1589,19 @@ function showRuntimeError(error: unknown, engineId?: RuntimeEngineId) {
   requestAction('show_toast', { type: 'error', msg: message })
 }
 
-async function loadBackendRuntimeState(backend?: any) {
-  const bk = backend || await getBackend()
-  runtimeBridgeAvailable.value = typeof bk?.getBackendRuntimeState === 'function'
-    && typeof bk?.runBackendRuntimeOperation === 'function'
-  if (typeof bk?.getBackendRuntimeState !== 'function') {
+async function loadBackendRuntimeState() {
+  const studio = await studioClient()
+  runtimeBridgeAvailable.value = studio.supports('runtime.snapshot')
+    && studio.supports('runtime.execute')
+  if (!studio.supports('runtime.snapshot')) {
     runtimeNativeOperations.value = false
     runtimeLoaded.value = true
     return
   }
   runtimeLoading.value = true
   try {
-    const payload = await new Promise<any>((resolve, reject) => {
-      bk.getBackendRuntimeState((raw: unknown) => {
-        try { resolve(parseRuntimePayload(raw)) }
-        catch (error) { reject(error) }
-      })
-    })
-    applyRuntimeSnapshot(payload)
+    const reply = await studio.invoke('runtime.snapshot', {})
+    applyRuntimeSnapshot(replyData(reply))
   } catch (error) {
     runtimeLoaded.value = true
     showRuntimeError(error)
@@ -1671,16 +1664,20 @@ async function runRuntimeOperation(
   engine.message = ''
   runtimeStatus.value = `${engine.name}: ${action.replace(/_/g, ' ')} 요청 중…`
   try {
-    const result = await callRuntimeBridge(
-      'runBackendRuntimeOperation', engineId, action, JSON.stringify(payload),
-    )
+    const studio = await studioClient()
+    const reply = await studio.invoke('runtime.execute', { engine: engineId, action, payload })
+    const result: any = replyData(reply)
     if (result.ok === false || result.accepted === false) {
       throw new Error(result.error || result.message || '런타임 작업이 거부되었습니다')
     }
-    if (result.state) applyRuntimeEngineState(engineId, result.state)
-    runtimeStatus.value = String(result.message || `${engine.name}: 작업이 접수되었습니다.`)
-    requestAction('show_toast', { type: 'info', msg: runtimeStatus.value })
-    await loadBackendRuntimeState()
+    // accepted event 뒤 worker가 즉시 끝나면 terminal event가 invoke 응답보다
+    // 먼저 올 수 있다. 그 결과를 낡은 "접수" 상태로 다시 덮지 않는다.
+    if (engine.busy) {
+      if (result.state) applyRuntimeEngineState(engineId, result.state)
+      runtimeStatus.value = String(result.message || `${engine.name}: 작업이 접수되었습니다.`)
+      requestAction('show_toast', { type: 'info', msg: runtimeStatus.value })
+      await loadBackendRuntimeState()
+    }
     return true
   } catch (error) {
     showRuntimeError(error, engineId)
@@ -1695,7 +1692,9 @@ async function setRuntimeAutoStart(engineId: RuntimeEngineId, autoStart: boolean
 async function browseRuntimeInstallDirectory(engineId: RuntimeEngineId) {
   if (runtimeMutationDisabled(engineId)) return
   try {
-    const result = await callRuntimeBridge('selectBackendInstallDirectory', engineId)
+    const studio = await studioClient()
+    const reply = await studio.invoke('native.pick_directory', { purpose: 'runtime_install', engine: engineId })
+    const result: any = replyData(reply)
     if (result.cancelled) return
     if (result.ok === false) throw new Error(result.error || '기존 설치 폴더를 선택하지 못했습니다')
     const path = String(result.path || result.directory || '')
@@ -1728,7 +1727,9 @@ async function setPrimaryModelEngine(engineId: RuntimeEngineId) {
 async function browseRuntimeExtensionDirectory(engineId: RuntimeEngineId) {
   if (runtimeMutationDisabled(engineId)) return
   try {
-    const result = await callRuntimeBridge('selectBackendExtensionDirectory', engineId)
+    const studio = await studioClient()
+    const reply = await studio.invoke('native.pick_directory', { purpose: 'runtime_extension', engine: engineId })
+    const result: any = replyData(reply)
     if (result.cancelled) return
     if (result.ok === false) throw new Error(result.error || '확장 폴더를 선택하지 못했습니다')
     const path = String(result.path || result.directory || '')
@@ -1770,13 +1771,17 @@ function handleBackendRuntimeEvent(raw: unknown) {
     const eventType = String(payload.type || payload.event || '').toLowerCase()
     if (payload.snapshot || payload.engines || payload.runtimes) applyRuntimeSnapshot(payload)
     else if (engineId && payload.state) applyRuntimeEngineState(engineId, payload.state)
-    else if (engineId && ['started', 'start', 'progress'].includes(eventType)) {
-      // Event envelopes contain only operation metadata.  Treating them as a
-      // complete engine state would temporarily erase linked/model paths.
+    if (engineId && ['accepted', 'started', 'start', 'progress'].includes(eventType)) {
+      // A started snapshot is captured immediately before manager.execute()
+      // marks the engine busy.  Lifecycle state therefore wins over that one
+      // field while every other snapshot field remains authoritative.
       runtimeEngines[engineId].busy = true
     }
 
-    const message = String(payload.message || payload.error || '')
+    const rawError = payload.error && typeof payload.error === 'object'
+      ? payload.error.message
+      : payload.error
+    const message = String(payload.message || rawError || '')
     if (message) {
       runtimeStatus.value = message
       if (engineId) runtimeEngines[engineId].message = message
@@ -1794,13 +1799,55 @@ function handleBackendRuntimeEvent(raw: unknown) {
   }
 }
 
+async function loadStudioBootstrap(studio: StudioClient): Promise<boolean> {
+  if (!studio.supports('sync.bootstrap')) return false
+
+  forgeBusy.value = true
+  runtimeLoading.value = true
+  generationApiLoading.value = true
+  try {
+    const reply = await studio.invoke('sync.bootstrap', {})
+    const data: any = replyData(reply)
+    applyForgePathState(data.modelPaths)
+    applyRuntimeSnapshot(data.runtime)
+    applyGenerationApiState(data.generationApi)
+    forgeCanBrowse.value = !generationApiWebMode && studio.supports('native.pick_directory')
+    forgeCanMutate.value = !generationApiWebMode
+      && studio.supports('model_paths.save')
+      && studio.supports('model_paths.reset')
+      && studio.supports('model_paths.refresh')
+    runtimeBridgeAvailable.value = studio.supports('runtime.snapshot')
+      && studio.supports('runtime.execute')
+    generationApiBridgeAvailable.value = studio.supports('generation_api.snapshot')
+      && studio.supports('generation_api.execute')
+    return true
+  } catch (error) {
+    console.warn('[studio] bootstrap failed; retrying individual snapshots', error)
+    return false
+  } finally {
+    forgeBusy.value = false
+    runtimeLoading.value = false
+    generationApiLoading.value = false
+  }
+}
+
+function handleModelPathsEvent(raw: unknown) {
+  try {
+    const payload = parseForgePayload(raw)
+    const state = payload?.snapshot && typeof payload.snapshot === 'object' ? payload.snapshot : payload
+    if (state?.paths || state?.entries || state?.ok === false) applyForgePathState(state)
+  } catch (error) {
+    showForgeError(error)
+  }
+}
+
 function parseForgePayload(raw: unknown): any {
   if (typeof raw === 'string') return JSON.parse(raw || '{}')
   return raw || {}
 }
 
 function applyForgePathState(payload: any) {
-  if (!payload?.ok) {
+  if (payload?.ok === false || (!payload?.paths && !payload?.entries)) {
     const details = payload?.errors && typeof payload.errors === 'object' ? payload.errors : {}
     for (const field of forgePathFields) forgeErrors[field.key] = String(details[field.key] || '')
     throw new Error(payload?.error || 'Forge 경로 정보를 불러오지 못했습니다')
@@ -1818,42 +1865,31 @@ function applyForgePathState(payload: any) {
   forgeStatus.value = `${total.toLocaleString()}개 파일을 로컬 경로에서 확인했습니다.`
 }
 
-async function callForgeBridge(method: string, ...args: unknown[]): Promise<any> {
-  const backend: any = await getBackend()
-  const fn = backend?.[method]
-  if (typeof fn !== 'function') throw new Error(`백엔드가 ${method} 기능을 지원하지 않습니다`)
-  return new Promise((resolve, reject) => {
-    try {
-      fn(...args, (raw: unknown) => {
-        try { resolve(parseForgePayload(raw)) }
-        catch (error) { reject(error) }
-      })
-    } catch (error) {
-      reject(error)
-    }
-  })
-}
-
 function showForgeError(error: unknown) {
+  const fieldErrors = error instanceof StudioClientError ? error.fields : undefined
+  if (fieldErrors) {
+    for (const field of forgePathFields) {
+      forgeErrors[field.key] = String(fieldErrors[field.key] || '')
+    }
+  }
   const msg = error instanceof Error ? error.message : String(error)
   forgeStatus.value = msg
   requestAction('show_toast', { type: 'error', msg })
 }
 
-async function loadForgePaths(backend?: any) {
-  const bk = backend || await getBackend()
+async function loadForgePaths() {
+  const studio = await studioClient()
   forgeCanBrowse.value = !((window as any).__AISTUDIO_WS_PORT__ || (window as any).__AISTUDIO_WS_URL__)
-    && typeof bk?.selectForgeModelDirectory === 'function'
-  if (typeof bk?.getForgeModelPaths !== 'function') return
+    && studio.supports('native.pick_directory')
+  forgeCanMutate.value = !generationApiWebMode
+    && studio.supports('model_paths.save')
+    && studio.supports('model_paths.reset')
+    && studio.supports('model_paths.refresh')
+  if (!studio.supports('model_paths.snapshot')) return
   forgeBusy.value = true
   try {
-    const payload = await new Promise<any>((resolve, reject) => {
-      bk.getForgeModelPaths((raw: unknown) => {
-        try { resolve(parseForgePayload(raw)) }
-        catch (error) { reject(error) }
-      })
-    })
-    applyForgePathState(payload)
+    const reply = await studio.invoke('model_paths.snapshot', {})
+    applyForgePathState(replyData(reply))
   } catch (error) {
     showForgeError(error)
   } finally {
@@ -1862,11 +1898,14 @@ async function loadForgePaths(backend?: any) {
 }
 
 async function browseForgePath(key: ForgePathKey) {
+  if (!forgeCanBrowse.value) return
   forgeBusy.value = true
   try {
-    const payload = await callForgeBridge('selectForgeModelDirectory', key)
+    const studio = await studioClient()
+    const reply = await studio.invoke('native.pick_directory', { purpose: 'model_path', key })
+    const payload: any = replyData(reply)
     if (payload?.cancelled) return
-    if (!payload?.ok) throw new Error(payload?.error || '폴더를 선택하지 못했습니다')
+    if (payload?.ok === false) throw new Error(payload?.error || '폴더를 선택하지 못했습니다')
     forgePaths[key] = String(payload.path || '')
     forgeErrors[key] = ''
   } catch (error) {
@@ -1877,10 +1916,12 @@ async function browseForgePath(key: ForgePathKey) {
 }
 
 async function saveForgePaths() {
+  if (!forgeCanMutate.value) return
   forgeBusy.value = true
   try {
-    const payload = await callForgeBridge('saveForgeModelPaths', JSON.stringify({ ...forgePaths }))
-    applyForgePathState(payload)
+    const studio = await studioClient()
+    const reply = await studio.invoke('model_paths.save', { paths: { ...forgePaths } })
+    applyForgePathState(replyData(reply))
   } catch (error) {
     showForgeError(error)
   } finally {
@@ -1889,10 +1930,12 @@ async function saveForgePaths() {
 }
 
 async function refreshForgePaths() {
+  if (!forgeCanMutate.value) return
   forgeBusy.value = true
   try {
-    const payload = await callForgeBridge('refreshForgeModelPaths')
-    applyForgePathState(payload)
+    const studio = await studioClient()
+    const reply = await studio.invoke('model_paths.refresh', {})
+    applyForgePathState(replyData(reply))
     requestAction('show_toast', { type: 'success', msg: 'Forge 모델 폴더를 다시 스캔했습니다' })
   } catch (error) {
     showForgeError(error)
@@ -1902,10 +1945,12 @@ async function refreshForgePaths() {
 }
 
 async function resetForgePaths() {
+  if (!forgeCanMutate.value) return
   forgeBusy.value = true
   try {
-    const payload = await callForgeBridge('resetForgeModelPaths')
-    applyForgePathState(payload)
+    const studio = await studioClient()
+    const reply = await studio.invoke('model_paths.reset', {})
+    applyForgePathState(replyData(reply))
   } catch (error) {
     showForgeError(error)
   } finally {
@@ -1917,14 +1962,64 @@ async function resetForgePaths() {
 import { onBackendEvent, getBackend } from '../bridge.js'
 let disconnectBackendRuntimeEvent: (() => void) | null = null
 let disconnectGenerationApiEvent: (() => void) | null = null
+let disconnectModelPathsEvent: (() => void) | null = null
+let disconnectOllamaModelsEvent: (() => void) | null = null
+let disconnectUiPrefsEvent: (() => void) | null = null
+let settingsDisposed = false
 onMounted(async () => {
-  onBackendEvent('ollamaModelsReady', handleOllamaModels)
-  disconnectBackendRuntimeEvent = onBackendEvent('backendRuntimeEvent', handleBackendRuntimeEvent)
-  disconnectGenerationApiEvent = onBackendEvent('generationApiEvent', handleGenerationApiEvent)
+  settingsDisposed = false
+  disconnectOllamaModelsEvent = onBackendEvent('ollamaModelsReady', handleOllamaModels)
+  let studio: StudioClient
+  try {
+    studio = await studioClient()
+  } catch (error) {
+    if (!settingsDisposed) {
+      const message = error instanceof Error ? error.message : String(error)
+      forgeStatus.value = message
+      runtimeStatus.value = message
+      generationApiStatus.value = message
+      runtimeLoaded.value = true
+      generationApiLoaded.value = true
+      requestAction('show_toast', { type: 'error', msg: `설정 연결 실패: ${message}` })
+    }
+    return
+  }
+  if (settingsDisposed) return
+  disconnectBackendRuntimeEvent = studio.subscribe('runtime', event => handleBackendRuntimeEvent({
+    ...(event.data && typeof event.data === 'object' ? event.data as Record<string, unknown> : {}),
+    ...(event.data && typeof event.data === 'object'
+      && (event.data as Record<string, unknown>).update
+      && typeof (event.data as Record<string, unknown>).update === 'object'
+      ? (event.data as Record<string, any>).update as Record<string, unknown>
+      : {}),
+    message: event.data && typeof event.data === 'object'
+      ? (event.data as Record<string, any>).message
+        ?? (event.data as Record<string, any>).update?.message
+        ?? (event.data as Record<string, any>).result?.message
+      : undefined,
+    type: event.type,
+    operationId: event.jobId,
+  }))
+  disconnectGenerationApiEvent = studio.subscribe('generation_api', event => handleGenerationApiEvent({
+    ...(event.data && typeof event.data === 'object' ? event.data as Record<string, unknown> : {}),
+    message: event.data && typeof event.data === 'object'
+      ? (event.data as Record<string, any>).message
+        ?? (event.data as Record<string, any>).result?.message
+      : undefined,
+    type: event.type,
+    operationId: event.jobId,
+  }))
+  disconnectModelPathsEvent = studio.subscribe('model_paths', event => handleModelPathsEvent(event.data))
   autoLoadOllamaModels()   // AI Assistant 모델 목록 시작 시 자동 로드
   // defaults 로드
   const bk: any = await getBackend()
-  await Promise.all([loadForgePaths(bk), loadBackendRuntimeState(bk), loadGenerationApiState(bk)])
+  if (settingsDisposed) return
+  const bootstrapped = await loadStudioBootstrap(studio)
+  if (settingsDisposed) return
+  if (!bootstrapped) {
+    await Promise.all([loadForgePaths(), loadBackendRuntimeState(), loadGenerationApiState()])
+    if (settingsDisposed) return
+  }
   if (bk.getTabDefaults) {
     bk.getTabDefaults((json: string) => {
       try { const d = JSON.parse(json); Object.assign(defaults, d) } catch {}
@@ -1936,15 +2031,22 @@ onMounted(async () => {
       try { applyUiPrefs(JSON.parse(json)) } catch {}
     })
   }
-  onBackendEvent('uiPrefsLoaded', (json: string) => {
+  disconnectUiPrefsEvent = onBackendEvent('uiPrefsLoaded', (json: string) => {
     try { applyUiPrefs(JSON.parse(json)) } catch {}
   })
 })
 onUnmounted(() => {
+  settingsDisposed = true
   disconnectBackendRuntimeEvent?.()
   disconnectBackendRuntimeEvent = null
   disconnectGenerationApiEvent?.()
   disconnectGenerationApiEvent = null
+  disconnectModelPathsEvent?.()
+  disconnectModelPathsEvent = null
+  disconnectOllamaModelsEvent?.()
+  disconnectOllamaModelsEvent = null
+  disconnectUiPrefsEvent?.()
+  disconnectUiPrefsEvent = null
 })
 function setBlockMode() {
   window.localStorage.setItem('tagBlockMode', String(defaultBlockMode.value))
@@ -2409,6 +2511,8 @@ function handleOllamaModels(json: string) {
   padding: 1px 5px; border-radius: 4px; background: var(--bg-button);
   color: var(--accent); font-family: 'Consolas', monospace; font-size: 10px;
 }
+.forge-readonly-warning { margin-top: 10px; border-color: rgba(245,158,11,.28); }
+.forge-readonly-warning strong { color: #fbbf24; margin-right: 5px; }
 .forge-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .forge-scanning { color: var(--accent); font-size: 9px; font-weight: 900; letter-spacing: 1px; }
 .forge-path-list { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }

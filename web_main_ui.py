@@ -46,6 +46,9 @@ from PyQt6.QtWebChannel import QWebChannel, QWebChannelAbstractTransport
 from PyQt6.QtWebSockets import QWebSocketServer, QWebSocketProtocol
 from PyQt6.QtNetwork import QHostAddress
 
+from core.studio_application import CallContext
+from ui.studio_qwebchannel import StudioQWebChannelAdapter
+
 # ── 포트 설정 (환경변수로 덮어쓰기 가능) ──
 HTTP_PORT = int(os.environ.get("AISTUDIO_HTTP_PORT", "7800"))
 WS_PORT = int(os.environ.get("AISTUDIO_WS_PORT", "7801"))
@@ -101,14 +104,8 @@ _WEB_METHODS = frozenset({
     "editorProcess", "getLastGalleryFolder", "getGalleryImages",
     "requestGalleryImages", "getFavorites", "generateThumbnails",
     "searchDanbooru", "loadLastSearchResults", "loadFullResults", "getUiPrefs",
-    "getForgeModelPaths", "selectForgeModelDirectory", "saveForgeModelPaths",
-    "resetForgeModelPaths", "refreshForgeModelPaths",
-    # facade 계약에는 보이지만 두 mutator는 VueBridge가 parent.web_mode를 먼저
-    # 확인해 항상 거부한다. 이를 명시적으로 노출해야 프론트 슬롯 계약 검사도
-    # 유지하면서 LAN WebChannel이 로컬 process/filesystem을 바꾸지 못한다.
-    "getBackendRuntimeState", "runBackendRuntimeOperation",
-    "getGenerationApiState", "runGenerationApiOperation",
-    "selectBackendExtensionDirectory", "selectBackendInstallDirectory",
+    # Backend runtime, generation API, model-path 설정은 redaction과 native
+    # capability 검사를 한곳에서 강제하는 ``studio`` 객체로만 공개한다.
     "getUpscalers", "requestUpscalers", "saveImageExif", "renameFile",
     "getEdgeMap", "ollamaEnhance", "convertPromptToNl", "editorPasteImage",
     "editorAutoSave", "editorCheckAutoSave", "editorClearAutoSave", "getFileInfo",
@@ -146,7 +143,6 @@ _WEB_SIGNALS = frozenset({
     "widgetPropertyChanged", "batchUpdate", "tabChanged", "vramUpdated",
     "creatorStateChanged", "creatorProgress", "creatorResult",
     "creatorMediaSelected", "comicStoryboardReady", "comicDocumentChanged",
-    "backendRuntimeEvent", "generationApiEvent",
     # SAM3 Refine (sam-extra 워크플로 2) + 임베드 LoRA Manager (워크플로 4)
     "refineResult", "loraManagerUrlReady",
     "editorWatermarkImageLoaded",
@@ -638,7 +634,20 @@ def main():
     # WebChannel + WebSocket 서버 — 네트워크에는 허용 목록 façade만 공개
     channel = QWebChannel()
     web_bridge = WebBridgeFacade(window.vue_bridge, channel)
+    web_studio_transport = StudioQWebChannelAdapter(
+        window.studio_application,
+        CallContext(
+            principal_id="web-ui",
+            transport="qwebchannel-websocket",
+            capabilities=frozenset(),
+        ),
+        channel,
+    )
     channel.registerObject("backend", web_bridge)
+    channel.registerObject("studio", web_studio_transport)
+    # QWebChannel owns the QObject too, but explicit Python references make the
+    # lifetime contract clear and prevent wrapper collection during long jobs.
+    window.web_studio_transport = web_studio_transport
     web_server = WebChannelServer(channel, BIND_HOST, WS_PORT)
 
     # HTTP 정적 서버 + 브라우저 오픈

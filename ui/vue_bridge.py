@@ -1889,9 +1889,18 @@ class VueBridge(QObject):
         except Exception as exc:
             logger.warning("Forge module widget refresh failed: %s", exc)
 
+    @staticmethod
+    def _forge_model_paths_web_denial() -> str:
+        return json.dumps({
+            'ok': False,
+            'error': '웹 모드에서는 로컬 Forge 모델 경로에 접근할 수 없습니다.',
+        }, ensure_ascii=False)
+
     @pyqtSlot(result=str)
     def getForgeModelPaths(self) -> str:
         """Forge 체크포인트/LoRA/VAE/TE 디렉터리와 스캔 상태 반환."""
+        if self._backend_runtime_is_web_mode():
+            return self._forge_model_paths_web_denial()
         try:
             from core.forge_modules import get_forge_path_state
             return json.dumps({'ok': True, **get_forge_path_state()}, ensure_ascii=False)
@@ -1901,6 +1910,8 @@ class VueBridge(QObject):
     @pyqtSlot(str, result=str)
     def selectForgeModelDirectory(self, key: str) -> str:
         """Settings의 BROWSE 버튼용 네이티브 폴더 선택기."""
+        if self._backend_runtime_is_web_mode():
+            return self._forge_model_paths_web_denial()
         try:
             from pathlib import Path
             from PyQt6.QtWidgets import QFileDialog
@@ -1928,6 +1939,8 @@ class VueBridge(QObject):
     @pyqtSlot(str, result=str)
     def saveForgeModelPaths(self, payload_json: str) -> str:
         """네 Forge 모델 디렉터리를 전체 검증 후 원자적으로 저장."""
+        if self._backend_runtime_is_web_mode():
+            return self._forge_model_paths_web_denial()
         try:
             from core.forge_modules import get_forge_path_state, save_forge_paths
 
@@ -1948,6 +1961,8 @@ class VueBridge(QObject):
     @pyqtSlot(result=str)
     def resetForgeModelPaths(self) -> str:
         """사용자 지정값을 지우고 자동 감지/default 경로로 복귀."""
+        if self._backend_runtime_is_web_mode():
+            return self._forge_model_paths_web_denial()
         try:
             from core.forge_modules import get_forge_path_state, reset_forge_paths
 
@@ -1961,6 +1976,8 @@ class VueBridge(QObject):
     @pyqtSlot(result=str)
     def refreshForgeModelPaths(self) -> str:
         """저장된 경로를 다시 스캔하고 VAE/TE 목록을 갱신."""
+        if self._backend_runtime_is_web_mode():
+            return self._forge_model_paths_web_denial()
         try:
             from core.forge_modules import get_forge_path_state
 

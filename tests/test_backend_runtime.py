@@ -1111,11 +1111,28 @@ class BackendRuntimeLaunchTests(BackendRuntimeTestCase):
         stopped = fresh_manager.execute("forge", "stop")
 
         self.assertTrue(stopped["ok"])
+        self.assertFalse(stopped["stopped"])
+        self.assertFalse(stopped["owned"])
         self.assertEqual(owned_process.terminate_calls, 0)
         self.assertIsNone(owned_process.poll())
 
-        self.manager.execute("forge", "stop")
+        owned_stop = self.manager.execute("forge", "stop")
+        self.assertTrue(owned_stop["stopped"])
+        self.assertTrue(owned_stop["owned"])
         self.assertEqual(owned_process.terminate_calls, 1)
+
+    def test_stop_reports_an_already_exited_owned_process_as_owned(self):
+        self.manager.execute("forge", "install")
+        self.manager.execute("forge", "start")
+        owned_process = self.adapter.start_calls[-1]["process"]
+        owned_process.running = False
+        owned_process.returncode = 1
+
+        stopped = self.manager.execute("forge", "stop")
+
+        self.assertTrue(stopped["stopped"])
+        self.assertTrue(stopped["owned"])
+        self.assertEqual(owned_process.terminate_calls, 0)
 
     def test_port_collision_uses_and_persists_next_private_port(self):
         self.manager.execute("forge", "install")

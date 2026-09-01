@@ -37,6 +37,23 @@ class UISetupMixin:
         import os
 
         self.vue_bridge = VueBridge(self)
+        from core.studio_application import CallContext, StudioApplication
+        from ui.studio_qwebchannel import DesktopNativeHost, StudioQWebChannelAdapter
+
+        # 새 transport-neutral Interface는 기존 VueBridge와 나란히 제공한다.
+        # legacy 프론트는 계속 ``backend``를 사용하고, 이행된 호출부만
+        # ``studio``의 단일 invoke/event 계약을 사용한다.
+        self.studio_native_host = DesktopNativeHost(self, self.vue_bridge)
+        self.studio_application = StudioApplication(host=self.studio_native_host)
+        self.studio_transport = StudioQWebChannelAdapter(
+            self.studio_application,
+            CallContext(
+                principal_id="desktop-ui",
+                transport="qwebchannel",
+                capabilities=frozenset({"native"}),
+            ),
+            self,
+        )
 
         class _DebugPage(QWebEnginePage):
             def javaScriptConsoleMessage(self, level, message, line, source):
@@ -74,7 +91,9 @@ class UISetupMixin:
 
         channel = QWebChannel(page)
         channel.registerObject('backend', self.vue_bridge)
+        channel.registerObject('studio', self.studio_transport)
         page.setWebChannel(channel)
+        self.web_channel = channel
 
         qwc = QWebEngineScript()
         qwc.setName("qwebchannel")

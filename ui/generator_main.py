@@ -43,6 +43,14 @@ from utils.atomic_json import atomic_write_json
 from core.file_naming import sanitize_filename
 
 
+def _same_api_endpoint(left: object, right: object) -> bool:
+    """Compare configured backend endpoints without conflating backend types."""
+
+    first = str(left or '').strip().rstrip('/').casefold()
+    second = str(right or '').strip().rstrip('/').casefold()
+    return bool(first and second and first == second)
+
+
 class GeneratorMainUI(
     GeneratorBase,
     UISetupMixin,
@@ -1410,7 +1418,29 @@ class GeneratorMainUI(
                 if getattr(self, '_backend_connected', False):
                     QTimer.singleShot(0, self.load_webui_info)
 
-            if bool(event.get('activate')) and action in {'start', 'use'}:
+            should_activate = bool(event.get('activate')) and action in {'start', 'use'}
+            if should_activate and action == 'start':
+                # START may replace the opposite app-owned runtime, but the app
+                # can still be connected to an unrelated user.bat/external URL.
+                # Only follow that replacement when the current connection is
+                # the exact managed endpoint that was stopped. USE remains an
+                # explicit request to switch regardless of the current URL.
+                result = event.get('result') if isinstance(event.get('result'), dict) else {}
+                replaced_engine = str(result.get('replacedEngine') or '')
+                if replaced_engine:
+                    snapshot = event.get('snapshot') if isinstance(event.get('snapshot'), dict) else {}
+                    engines = snapshot.get('engines') if isinstance(snapshot.get('engines'), dict) else {}
+                    replaced_state = engines.get(replaced_engine)
+                    replaced_state = replaced_state if isinstance(replaced_state, dict) else {}
+                    replaced_url = str(replaced_state.get('apiUrl') or '')
+                    try:
+                        from backends import get_backend
+                        current_url = str(getattr(get_backend(), 'api_url', '') or '')
+                    except Exception:
+                        current_url = ''
+                    should_activate = _same_api_endpoint(current_url, replaced_url)
+
+            if should_activate:
                 result = event.get('result') if isinstance(event.get('result'), dict) else {}
                 state = event.get('state') if isinstance(event.get('state'), dict) else {}
                 url = str(
@@ -1461,12 +1491,23 @@ class GeneratorMainUI(
 
             if action == 'stop':
                 try:
-                    from backends import BackendType, get_backend_type
+                    from backends import BackendType, get_backend, get_backend_type
 
                     stopped_type = (
                         BackendType.WEBUI if engine == 'forge' else BackendType.COMFYUI
                     )
-                    if get_backend_type() == stopped_type:
+                    result = event.get('result') if isinstance(event.get('result'), dict) else {}
+                    state = event.get('state') if isinstance(event.get('state'), dict) else {}
+                    stopped_url = str(
+                        result.get('apiUrl') or result.get('url') or state.get('apiUrl') or ''
+                    )
+                    current_url = str(getattr(get_backend(), 'api_url', '') or '')
+                    if (
+                        result.get('stopped') is True
+                        and result.get('owned') is True
+                        and get_backend_type() == stopped_type
+                        and _same_api_endpoint(current_url, stopped_url)
+                    ):
                         self._backend_connected = False
                         self.btn_generate.setEnabled(False)
                         self.viewer_label.setText(

@@ -4,9 +4,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from PyQt6.QtCore import QObject
+
 from core import forge_modules
 from ui.vue_bridge import VueBridge
 from ui.widget_proxies import ComboBoxProxy, LineEditProxy
+
+
+class _WebParent(QObject):
+    def __init__(self):
+        super().__init__()
+        self.web_mode = True
 
 
 class TestForgePathsBridge(unittest.TestCase):
@@ -62,6 +70,50 @@ class TestForgePathsBridge(unittest.TestCase):
         response = json.loads(VueBridge().selectForgeModelDirectory("not-a-forge-key"))
         self.assertFalse(response["ok"])
         self.assertIn("지원하지 않는", response["error"])
+
+    def test_web_mode_rejects_all_legacy_model_path_slots_without_side_effects(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = root / "forge_model_paths.json"
+            original_root = root / "original"
+            replacement_root = root / "replacement"
+            original_root.mkdir()
+            replacement_root.mkdir()
+            original = self._payload(original_root)
+            replacement = self._payload(replacement_root)
+            forge_modules.save_forge_paths(original, config_path=config, environ={})
+            original_config = config.read_bytes()
+            parent = _WebParent()
+            bridge = VueBridge(parent)
+
+            with (
+                patch.object(forge_modules, "FORGE_PATHS_FILE", config),
+                patch(
+                    "PyQt6.QtWidgets.QFileDialog.getExistingDirectory",
+                    return_value=str(root / "picked"),
+                ) as picker,
+                patch.object(bridge, "_refresh_forge_module_widgets") as refresh,
+            ):
+                replies = {
+                    "get": json.loads(bridge.getForgeModelPaths()),
+                    "select": json.loads(
+                        bridge.selectForgeModelDirectory("checkpoint_dir")
+                    ),
+                    "save": json.loads(
+                        bridge.saveForgeModelPaths(json.dumps(replacement))
+                    ),
+                    "reset": json.loads(bridge.resetForgeModelPaths()),
+                    "refresh": json.loads(bridge.refreshForgeModelPaths()),
+                }
+
+            for name, reply in replies.items():
+                self.assertFalse(reply["ok"], name)
+                self.assertIn("웹 모드", reply["error"], name)
+                self.assertNotIn("paths", reply, name)
+            self.assertTrue(config.exists())
+            self.assertEqual(config.read_bytes(), original_config)
+            picker.assert_not_called()
+            refresh.assert_not_called()
 
     def test_refresh_replaces_removed_vae_selection_with_default(self):
         bridge = VueBridge()

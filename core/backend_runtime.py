@@ -2421,9 +2421,17 @@ class BackendRuntimeManager:
             owned = self._processes.pop(engine, None)
             self._healthy[engine] = False
         if owned is None or owned.process.poll() is not None:
+            was_owned = owned is not None
             if owned is not None:
                 self._close_process_log(owned.process)
-            return {"message": f"{ENGINE_DEFINITIONS[engine].name}가 이미 중지되어 있습니다"}
+            return {
+                "message": f"{ENGINE_DEFINITIONS[engine].name}가 이미 중지되어 있습니다",
+                # A dead handle created by this manager still identifies the
+                # endpoint as app-owned.  A fresh manager has no handle at all
+                # and must not disturb an external user.bat process/UI.
+                "stopped": was_owned,
+                "owned": was_owned,
+            }
 
         self._progress(on_progress, engine, "stop", "stopping", "앱이 시작한 프로세스를 종료합니다", 40)
         process = owned.process
@@ -2472,7 +2480,11 @@ class BackendRuntimeManager:
                 retryable=True,
                 details={"pid": process.pid, "logPath": str(owned.log_path)},
             )
-        return {"message": f"{ENGINE_DEFINITIONS[engine].name}를 중지했습니다"}
+        return {
+            "message": f"{ENGINE_DEFINITIONS[engine].name}를 중지했습니다",
+            "stopped": True,
+            "owned": True,
+        }
 
     def stop_all_owned(self, on_progress: ProgressCallback | None = None) -> None:
         """Stop only backend/command handles created by this manager instance."""

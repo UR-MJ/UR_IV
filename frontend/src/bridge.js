@@ -6,17 +6,23 @@
  *     `window.qt.webChannelTransport`. qwebchannel.js는 Qt가 qrc로 주입.
  *  2) 웹 모드(run_WEB_gui.bat) — 일반 브라우저. WebSocket(`ws://host:port`)을
  *     transport로 사용. qwebchannel.js는 npm `qwebchannel` 패키지에서 import.
- * 두 모드 모두 `channel.objects.backend`로 동일하게 귀결되므로 이후 코드는 동일.
+ * 두 모드 모두 `channel.objects.backend`로 기존 계약을 유지하고,
+ * v1 명령 계약이 있는 백엔드는 `channel.objects.studio`도 같이 공개한다.
  */
 import { connectStore } from './stores/widgetStore.js'
 // 웹 모드용 QWebChannel 구현 (Qt 모드는 qrc 주입본 window.QWebChannel을 그대로 씀)
 import { QWebChannel as QWebChannelWS } from 'qwebchannel'
+import { ResumableStudioTransport } from './studio/resumableTransport.js'
 
 let _backend = null
 let _storeDisconnect = null
 const _backendWaiters = []
 const _subscriptions = new Map()
 const _signalBindings = new Map()
+let _studio = null
+let _studioDiscoveryComplete = false
+const _studioWaiters = []
+const _resumableStudio = new ResumableStudioTransport()
 
 // startup에 1회만 emit되는 설정 이벤트 — 늦게 마운트된(라우터 전환) 컴포넌트도
 // 마지막 페이로드를 받도록 "sticky"로 캐싱했다가 신규 구독자에게 즉시 재생한다.
@@ -41,9 +47,20 @@ const _backendProxy = new Proxy({}, {
   getOwnPropertyDescriptor() { return { enumerable: true, configurable: true } },
 })
 
+// 이 proxy는 재연결 뒤에도 동일한 객체를 유지한다. StudioClient가 확인한
+// 마지막 event seq를 기억하고 새 raw QWebChannel 객체에 resume(cursor)를
+// 호출하므로 WebSocket 단절 동안 journal에 쌓인 이벤트도 복구된다.
+const _studioProxy = _resumableStudio.proxy
+
 function _resolveBackendWaiters() {
   while (_backendWaiters.length) {
     try { _backendWaiters.shift()(_backendProxy) } catch {}
+  }
+}
+
+function _resolveStudioWaiters(value) {
+  while (_studioWaiters.length) {
+    try { _studioWaiters.shift()(value) } catch {}
   }
 }
 
@@ -58,6 +75,20 @@ function _createSignalShim() {
       }
     },
   }
+}
+
+function _detachStudio() {
+  _resumableStudio.detach()
+  _studio = null
+  _studioDiscoveryComplete = false
+}
+
+function _bindStudio(studio) {
+  _detachStudio()
+  _studio = studio || null
+  _studioDiscoveryComplete = true
+  _resumableStudio.bind(_studio)
+  _resolveStudioWaiters(_studio ? _studioProxy : null)
 }
 
 /** 허용 목록 WebBridgeFacade를 기존 backend 계약 모양으로 어댑트한다. */
@@ -141,6 +172,7 @@ function _detachBackend(backend) {
   }
   try { backend._dispose?.() } catch {}
   _backend = null
+  _detachStudio()
 }
 
 function _requestInitialConfig(backend) {
@@ -183,10 +215,11 @@ function waitForQWebChannel(maxWait = 5000) {
 /**
  * 공통 마무리 — transport 종류와 무관하게 backend 확보 후 동일 처리
  */
-function _bindBackend(backend) {
+function _bindBackend(backend, studio = null) {
   if (_backend && _backend !== backend) _detachBackend(_backend)
   console.log('[bridge] backend ready', backend ? Object.keys(backend).length + ' members' : '(null)')
   _backend = backend
+  _bindStudio(studio)
   _storeDisconnect = connectStore(_backend)
   const eventNames = new Set([...STICKY_EVENTS, ..._subscriptions.keys()])
   for (const name of eventNames) _ensureSignalBinding(name)
@@ -224,7 +257,7 @@ function _initWebSocketBridge() {
           try {
             const backend = _adaptWebFacade(facade, JSON.parse(json || '{}'))
             activeBackend = backend
-            _bindBackend(backend)
+            _bindBackend(backend, channel.objects.studio || null)
             _requestInitialConfig(backend)
             retryDelay = 1000
           } catch (e) {
@@ -267,7 +300,7 @@ export async function initBridge() {
   if (qtAvailable) {
     return new Promise((resolve) => {
       new window.QWebChannel(window.qt.webChannelTransport, (channel) => {
-        _bindBackend(channel.objects.backend)
+        _bindBackend(channel.objects.backend, channel.objects.studio || null)
         resolve(_backendProxy)
       })
     })
@@ -283,7 +316,7 @@ export async function initBridge() {
     getSettings: (cb) => cb('{}'),
     _mock: true,
   }
-  _bindBackend(_backend)
+  _bindBackend(_backend, null)
   return _backendProxy
 }
 
@@ -293,6 +326,17 @@ export async function initBridge() {
 export async function getBackend() {
   if (_backend) return _backendProxy
   return new Promise(resolve => _backendWaiters.push(resolve))
+}
+
+/**
+ * v1 Studio transport를 반환한다. 현재 Python 호스트가 studio object를
+ * 공개하지 않으면 null을 반환해 StudioClient가 기존 backend Adapter로
+ * 내려갈 수 있게 한다.
+ */
+export async function getStudioTransport() {
+  if (_studio) return _studioProxy
+  if (_studioDiscoveryComplete) return null
+  return new Promise(resolve => _studioWaiters.push(resolve))
 }
 
 /**

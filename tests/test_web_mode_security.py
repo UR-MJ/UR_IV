@@ -178,6 +178,27 @@ class TestWebModeSecurity(unittest.TestCase):
         self.assertIn("getInitialConfig", capabilities["methods"])
         self.assertNotIn("requestInitialConfig", capabilities["methods"])
 
+        legacy_settings_methods = {
+            "getBackendRuntimeState",
+            "runBackendRuntimeOperation",
+            "getGenerationApiState",
+            "runGenerationApiOperation",
+            "selectBackendExtensionDirectory",
+            "selectBackendInstallDirectory",
+            "getForgeModelPaths",
+            "selectForgeModelDirectory",
+            "saveForgeModelPaths",
+            "resetForgeModelPaths",
+            "refreshForgeModelPaths",
+        }
+        self.assertTrue(
+            legacy_settings_methods.isdisjoint(capabilities["methods"]),
+            "웹은 redacted studio settings Interface만 사용해야 합니다.",
+        )
+        for method in legacy_settings_methods:
+            reply = json.loads(facade.invoke(method, "[]"))
+            self.assertFalse(reply["ok"], method)
+
         allowed = json.loads(facade.invoke("getAllWidgetValues", "[]"))
         blocked = json.loads(facade.invoke("set_action_handler", "[]"))
         self.assertTrue(allowed["ok"])
@@ -207,8 +228,26 @@ class TestWebModeSecurity(unittest.TestCase):
             if re.search(r"\." + re.escape(name) + r"\b", frontend)
             or re.search(r"[\"']" + re.escape(name) + r"[\"']", frontend)
         }
-        missing = used - web_main_ui._WEB_METHODS - {"requestInitialConfig"}
+        desktop_only = {
+            "requestInitialConfig",
+            "getBackendRuntimeState",
+            "runBackendRuntimeOperation",
+            "getGenerationApiState",
+            "runGenerationApiOperation",
+            "selectBackendExtensionDirectory",
+            "selectBackendInstallDirectory",
+            "getForgeModelPaths",
+            "selectForgeModelDirectory",
+            "saveForgeModelPaths",
+            "resetForgeModelPaths",
+            "refreshForgeModelPaths",
+        }
+        missing = used - web_main_ui._WEB_METHODS - desktop_only
         self.assertEqual(missing, set())
+        self.assertTrue(desktop_only.isdisjoint(web_main_ui._WEB_METHODS))
+        self.assertTrue({
+            "backendRuntimeEvent", "generationApiEvent",
+        }.isdisjoint(web_main_ui._WEB_SIGNALS))
         self.assertTrue(all(callable(getattr(VueBridge, name, None)) for name in web_main_ui._WEB_METHODS))
 
     def test_frontend_events_are_covered_by_web_signals(self):
