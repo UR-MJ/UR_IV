@@ -1290,6 +1290,22 @@ class GeneratorMainUI(
             return
 
         if event_type == 'completed' and bool(event.get('ok')):
+            if action in {
+                'set_install_root', 'use_managed_install',
+                'set_primary_model_engine',
+            }:
+                # Runtime topology changes invalidate both the API-backed model
+                # choices and the merged disk LoRA catalog.  Re-query on the GUI
+                # thread so Settings changes are reflected without an app restart.
+                try:
+                    from widgets.lora_manager import LoraManagerDialog
+                    LoraManagerDialog._lora_cache = []
+                    self.vue_bridge._merged_lora_cache = None
+                except Exception:
+                    pass
+                if getattr(self, '_backend_connected', False):
+                    QTimer.singleShot(0, self.load_webui_info)
+
             if bool(event.get('activate')) and action in {'start', 'use'}:
                 result = event.get('result') if isinstance(event.get('result'), dict) else {}
                 state = event.get('state') if isinstance(event.get('state'), dict) else {}

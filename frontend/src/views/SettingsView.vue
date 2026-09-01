@@ -67,6 +67,28 @@
             <strong>READ ONLY</strong> {{ runtimeReadOnlyReason }}
           </div>
 
+          <div v-if="runtimePrimaryCandidates.length" class="glass-card runtime-primary-card">
+            <div class="runtime-primary-copy">
+              <div class="runtime-eyebrow">PRIMARY MODEL LIBRARY</div>
+              <h2>공유할 메인 모델 소스</h2>
+              <p>
+                실행·연결할 <b>ACTIVE RUNTIME</b>과 모델 폴더의 기준이 되는 <b>PRIMARY MODEL LIBRARY</b>는
+                서로 다른 설정입니다. 메인 소스는 전체 모델·LoRA를 제공하고, 다른 엔진의 중복되지 않은
+                항목은 별도 UNIQUE 그룹으로 표시됩니다.
+              </p>
+            </div>
+            <div class="runtime-primary-options">
+              <button v-for="engineId in runtimePrimaryCandidates" :key="engineId"
+                class="runtime-primary-option"
+                :class="{ selected: primaryModelEngine === engineId }"
+                :disabled="runtimeMutationDisabled(engineId) || primaryModelEngine === engineId"
+                @click="setPrimaryModelEngine(engineId)">
+                <span>{{ runtimeEngines[engineId].name }}</span>
+                <strong>{{ primaryModelEngine === engineId ? 'MAIN' : 'SET AS MAIN' }}</strong>
+              </button>
+            </div>
+          </div>
+
           <div class="runtime-card-list">
             <article
               v-for="engineId in runtimeEngineOrder"
@@ -95,13 +117,31 @@
                   <span class="runtime-badge active" :class="{ on: runtimeEngines[engineId].active }">
                     {{ runtimeEngines[engineId].active ? 'ACTIVE' : 'NOT ACTIVE' }}
                   </span>
+                  <span class="runtime-badge source" :class="{ existing: runtimeEngines[engineId].sourceMode === 'existing' }">
+                    {{ runtimeEngines[engineId].sourceMode === 'existing' ? 'EXISTING' : 'MANAGED' }}
+                  </span>
+                  <span v-if="primaryModelEngine === engineId" class="runtime-badge primary-source">MODEL MAIN</span>
                 </div>
               </header>
 
               <div class="runtime-meta-grid">
                 <div class="runtime-meta runtime-meta-wide">
-                  <span>ISOLATED ROOT</span>
-                  <code :title="runtimeEngines[engineId].root">{{ runtimeEngines[engineId].root || 'Not installed' }}</code>
+                  <span>INSTALL ROOT</span>
+                  <code :title="runtimeEngines[engineId].installRoot">{{ runtimeEngines[engineId].installRoot || 'Not installed' }}</code>
+                </div>
+                <div class="runtime-meta runtime-meta-wide">
+                  <span>SOURCE ROOT</span>
+                  <code :title="runtimeEngines[engineId].sourceRoot">{{ runtimeEngines[engineId].sourceRoot || 'Not detected' }}</code>
+                </div>
+                <div class="runtime-meta runtime-meta-wide">
+                  <span>PYTHON</span>
+                  <code :title="runtimeEngines[engineId].pythonPath">{{ runtimeEngines[engineId].pythonPath || 'Not detected' }}</code>
+                </div>
+                <div class="runtime-meta runtime-meta-wide">
+                  <span>APP DATA (ISOLATED)</span>
+                  <code :title="runtimeEngines[engineId].dataRoot || runtimeEngines[engineId].root">
+                    {{ runtimeEngines[engineId].dataRoot || runtimeEngines[engineId].root || 'Not assigned' }}
+                  </code>
                 </div>
                 <div class="runtime-meta">
                   <span>API ENDPOINT</span>
@@ -117,7 +157,45 @@
                     {{ runtimeEngines[engineId].updateStatus || 'Not checked' }}
                   </strong>
                 </div>
+                <div v-if="runtimeModelPathEntries(engineId).length" class="runtime-meta runtime-meta-wide runtime-model-paths">
+                  <span>MODEL LIBRARY PATHS</span>
+                  <div v-for="entry in runtimeModelPathEntries(engineId)" :key="`${entry.kind}:${entry.path}`">
+                    <strong>{{ entry.kind }}</strong>
+                    <code :title="entry.path">{{ entry.path }}</code>
+                  </div>
+                </div>
               </div>
+
+              <section class="runtime-subsection runtime-install-source">
+                <div class="runtime-subheading">
+                  <div>
+                    <h3>EXISTING INSTALLATION</h3>
+                    <p>
+                      설치된 {{ runtimeEngines[engineId].name }} 루트를 연결하면 앱 전용 복사본을 다시 받지 않습니다.
+                      프로세스와 앱 데이터는 Image viewer가 별도로 관리합니다.
+                    </p>
+                  </div>
+                  <span v-if="runtimeInstallRootDirty[engineId]" class="runtime-unsaved">UNSAVED</span>
+                </div>
+                <div class="runtime-path-control runtime-install-path-control">
+                  <input v-model="runtimeInstallRootDrafts[engineId]" spellcheck="false"
+                    :placeholder="runtimeInstallRootPlaceholder(engineId)"
+                    :disabled="runtimeMutationDisabled(engineId)"
+                    @input="runtimeInstallRootDirty[engineId] = true" />
+                  <button class="btn-pill compact" :disabled="runtimeMutationDisabled(engineId)"
+                    :title="runtimeMutationTitle" @click="browseRuntimeInstallDirectory(engineId)">BROWSE</button>
+                  <button class="btn-pill compact primary"
+                    :disabled="runtimeMutationDisabled(engineId) || !runtimeInstallRootDrafts[engineId].trim() || (!runtimeInstallRootDirty[engineId] && runtimeEngines[engineId].sourceMode === 'existing')"
+                    :title="runtimeMutationTitle" @click="linkExistingRuntime(engineId)">LINK</button>
+                  <button class="btn-pill compact"
+                    :disabled="runtimeMutationDisabled(engineId) || runtimeEngines[engineId].sourceMode === 'managed'"
+                    :title="runtimeMutationTitle" @click="useManagedRuntime(engineId)">USE MANAGED</button>
+                </div>
+                <div v-if="runtimeEngines[engineId].sourceMode === 'existing'" class="runtime-dependency-note">
+                  연결된 외부 설치는 앱이 자동 업데이트하지 않습니다. <b>UPDATE</b>는 비활성화되며,
+                  해당 Forge/Comfy 설치의 기존 업데이트 방법을 사용해야 합니다.
+                </div>
+              </section>
 
               <div class="runtime-toggle-row">
                 <div>
@@ -195,10 +273,11 @@
                   >INSTALL</button>
                 </div>
                 <div
-                  v-if="runtimeEngines[engineId].extensionDirExternal && !runtimeEngines[engineId].installed"
+                  v-if="runtimeEngines[engineId].extensionDirExternal && !runtimeExtensionWritable(engineId)"
                   class="runtime-dependency-note"
                 >
-                  외부 폴더에는 확장 코드만 설치합니다. requirements.txt가 있으면 기존 백엔드의 Python 환경에 직접 설치해야 합니다.
+                  기존 설치의 확장 폴더는 감지했지만 아직 쓰기 권한을 부여하지 않았습니다.
+                  위에서 해당 폴더를 <b>BROWSE</b>한 뒤 <b>SAVE</b>해야 확장 설치·업데이트가 활성화됩니다.
                 </div>
 
                 <div class="runtime-extension-list">
@@ -641,6 +720,8 @@ interface ForgePathEntry {
 
 type RuntimeEngineId = 'forge' | 'comfyui'
 type RuntimeAction = 'install' | 'update' | 'check_update' | 'start' | 'stop' | 'use'
+type RuntimeConfigAction = 'set_auto_start' | 'save_extension_dir' | 'install_extension'
+  | 'set_install_root' | 'use_managed_install' | 'set_primary_model_engine'
 type RuntimeExtensionAction = 'check_extension' | 'update_extension'
 
 interface RuntimeExtensionState {
@@ -662,13 +743,21 @@ interface RuntimeEngineState {
   busy: boolean
   active: boolean
   autoStart: boolean
+  sourceMode: 'managed' | 'existing'
+  existingRoot: string
   root: string
+  installRoot: string
+  sourceRoot: string
+  pythonPath: string
+  dataRoot: string
+  modelPaths: Record<string, string[]>
   apiUrl: string
   version: string
   updateAvailable: boolean
   updateStatus: string
   extensionDir: string
   extensionDirExternal: boolean
+  extensionWritable: boolean | null
   extensions: RuntimeExtensionState[]
   message: string
 }
@@ -717,8 +806,10 @@ function createRuntimeEngine(engine: RuntimeEngineId, name: string): RuntimeEngi
   return {
     engine, name,
     installed: false, running: false, healthy: false, busy: false, active: false, autoStart: false,
-    root: '', apiUrl: '', version: '', updateAvailable: false, updateStatus: 'Not checked',
-    extensionDir: '', extensionDirExternal: false, extensions: [], message: '',
+    sourceMode: 'managed', existingRoot: '', root: '', installRoot: '', sourceRoot: '',
+    pythonPath: '', dataRoot: '', modelPaths: {}, apiUrl: '', version: '',
+    updateAvailable: false, updateStatus: 'Not checked',
+    extensionDir: '', extensionDirExternal: false, extensionWritable: null, extensions: [], message: '',
   }
 }
 
@@ -729,7 +820,10 @@ const runtimeEngines = reactive<Record<RuntimeEngineId, RuntimeEngineState>>({
 })
 const runtimeExtensionDrafts = reactive<Record<RuntimeEngineId, string>>({ forge: '', comfyui: '' })
 const runtimeExtensionFolderDirty = reactive<Record<RuntimeEngineId, boolean>>({ forge: false, comfyui: false })
+const runtimeInstallRootDrafts = reactive<Record<RuntimeEngineId, string>>({ forge: '', comfyui: '' })
+const runtimeInstallRootDirty = reactive<Record<RuntimeEngineId, boolean>>({ forge: false, comfyui: false })
 const runtimeRepoUrls = reactive<Record<RuntimeEngineId, string>>({ forge: '', comfyui: '' })
+const primaryModelEngine = ref<RuntimeEngineId | ''>('')
 const runtimeNativeOperations = ref(false)
 const runtimeBridgeAvailable = ref(false)
 const runtimeLoaded = ref(false)
@@ -746,6 +840,9 @@ const runtimeReadOnlyReason = computed(() => {
   return ''
 })
 const runtimeMutationTitle = computed(() => runtimeReadOnlyReason.value || '런타임 작업 실행')
+const runtimePrimaryCandidates = computed<RuntimeEngineId[]>(() =>
+  runtimeEngineOrder.filter(engineId => runtimeEngines[engineId].installed)
+)
 
 const forgePathFields: Array<{ key: ForgePathKey; label: string; description: string }> = [
   { key: 'checkpoint_dir', label: 'CHECKPOINT / MODEL', description: 'Stable-diffusion 모델 폴더' },
@@ -890,14 +987,34 @@ function normalizeRuntimeExtensions(raw: unknown): RuntimeExtensionState[] {
   })
 }
 
+function normalizeRuntimeModelPaths(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const paths: Record<string, string[]> = {}
+  for (const [kind, value] of Object.entries(raw as Record<string, unknown>)) {
+    const entries = Array.isArray(value) ? value : value ? [value] : []
+    paths[kind] = entries.map(path => String(path || '').trim()).filter(Boolean)
+  }
+  return paths
+}
+
+function runtimeModelPathEntries(engineId: RuntimeEngineId) {
+  return Object.entries(runtimeEngines[engineId].modelPaths).flatMap(([kind, paths]) =>
+    paths.map(path => ({ kind: kind.replace(/_/g, ' ').toUpperCase(), path }))
+  )
+}
+
 function applyRuntimeEngineState(engineId: RuntimeEngineId, raw: any) {
   if (!raw || typeof raw !== 'object') return
   const current = runtimeEngines[engineId]
   const updateAvailable = Boolean(raw.updateAvailable ?? raw.hasUpdate ?? current.updateAvailable)
   const latestVersion = String(raw.latestVersion || raw.availableVersion || '')
-  const extensionDir = String(
-    raw.extensionDir || raw.extensionDirectory || raw.extensionFolder || raw.paths?.extensionDir || ''
-  )
+  const extensionDirValue = raw.extensionDir ?? raw.extensionDirectory
+    ?? raw.extensionFolder ?? raw.paths?.extensionDir
+  const extensionDir = extensionDirValue == null ? current.extensionDir : String(extensionDirValue)
+  const sourceMode = String(raw.sourceMode || current.sourceMode).toLowerCase() === 'existing'
+    ? 'existing' as const
+    : 'managed' as const
+  const existingRoot = String(raw.existingRoot ?? current.existingRoot ?? '')
   Object.assign(current, {
     engine: engineId,
     name: String(raw.name || current.name),
@@ -907,7 +1024,16 @@ function applyRuntimeEngineState(engineId: RuntimeEngineId, raw: any) {
     busy: Boolean(raw.busy ?? current.busy),
     active: Boolean(raw.active ?? current.active),
     autoStart: Boolean(raw.autoStart ?? raw.autostart ?? current.autoStart),
-    root: String(raw.root || raw.installRoot || raw.isolatedRoot || current.root || ''),
+    sourceMode,
+    existingRoot,
+    root: String(raw.root || raw.dataRoot || raw.isolatedRoot || current.root || ''),
+    installRoot: String(raw.installRoot ?? raw.sourceRoot ?? raw.root ?? current.installRoot ?? ''),
+    sourceRoot: String(raw.sourceRoot ?? current.sourceRoot ?? ''),
+    pythonPath: String(raw.pythonPath ?? current.pythonPath ?? ''),
+    dataRoot: String(raw.dataRoot ?? raw.root ?? current.dataRoot ?? ''),
+    modelPaths: raw.modelPaths === undefined
+      ? current.modelPaths
+      : normalizeRuntimeModelPaths(raw.modelPaths),
     apiUrl: String(raw.apiUrl || raw.endpoint || raw.url || current.apiUrl || ''),
     version: String(raw.version || raw.currentVersion || current.version || ''),
     updateAvailable,
@@ -917,6 +1043,9 @@ function applyRuntimeEngineState(engineId: RuntimeEngineId, raw: any) {
     ),
     extensionDir: extensionDir || current.extensionDir,
     extensionDirExternal: Boolean(raw.extensionDirExternal ?? current.extensionDirExternal),
+    extensionWritable: typeof raw.extensionWritable === 'boolean'
+      ? raw.extensionWritable
+      : current.extensionWritable,
     extensions: normalizeRuntimeExtensions(raw.extensions ?? raw.installedExtensions ?? current.extensions),
     message: String(raw.message || raw.statusMessage || raw.error || ''),
   })
@@ -927,6 +1056,13 @@ function applyRuntimeEngineState(engineId: RuntimeEngineId, raw: any) {
   if (!runtimeExtensionFolderDirty[engineId]) {
     runtimeExtensionDrafts[engineId] = current.extensionDir
   }
+  if (existingRoot && runtimeInstallRootDirty[engineId]
+    && existingRoot.trim() === runtimeInstallRootDrafts[engineId].trim()) {
+    runtimeInstallRootDirty[engineId] = false
+  }
+  if (!runtimeInstallRootDirty[engineId]) {
+    runtimeInstallRootDrafts[engineId] = existingRoot
+  }
 }
 
 function applyRuntimeSnapshot(raw: unknown) {
@@ -935,6 +1071,8 @@ function applyRuntimeSnapshot(raw: unknown) {
   const snapshot = payload.snapshot && typeof payload.snapshot === 'object' ? payload.snapshot : payload
   if (typeof snapshot.nativeOperations === 'boolean') runtimeNativeOperations.value = snapshot.nativeOperations
   else if (typeof payload.nativeOperations === 'boolean') runtimeNativeOperations.value = payload.nativeOperations
+  const primary = normalizeRuntimeEngineId(snapshot.primaryModelEngine || payload.primaryModelEngine)
+  if (primary) primaryModelEngine.value = primary
 
   const engines = snapshot.engines || snapshot.runtimes || snapshot.instances || snapshot
   if (Array.isArray(engines)) {
@@ -1004,14 +1142,16 @@ async function loadBackendRuntimeState(backend?: any) {
 }
 
 function runtimeMutationDisabled(engineId: RuntimeEngineId) {
-  return !runtimeCanMutate.value || runtimeLoading.value || runtimeEngines[engineId].busy
+  return !runtimeCanMutate.value || runtimeLoading.value
+    || runtimeEngines[engineId].busy
+    || runtimeEngineOrder.some(candidate => runtimeEngines[candidate].busy)
 }
 
 function runtimeActionDisabled(engineId: RuntimeEngineId, action: RuntimeAction) {
   if (runtimeMutationDisabled(engineId)) return true
   const engine = runtimeEngines[engineId]
-  if (action === 'install') return engine.installed
-  if (action === 'update') return !engine.installed
+  if (action === 'install') return engine.installed || engine.sourceMode === 'existing'
+  if (action === 'update') return !engine.installed || engine.sourceMode === 'existing'
   if (action === 'start') return !engine.installed || engine.running
   if (action === 'stop') return !engine.running
   if (action === 'use') return !engine.healthy || engine.active
@@ -1024,7 +1164,14 @@ function runtimeExtensionActionDisabled(engineId: RuntimeEngineId, extension: Ru
 
 function runtimeExtensionWritable(engineId: RuntimeEngineId) {
   const engine = runtimeEngines[engineId]
+  if (typeof engine.extensionWritable === 'boolean') return engine.extensionWritable
   return engine.installed || engine.extensionDirExternal
+}
+
+function runtimeInstallRootPlaceholder(engineId: RuntimeEngineId) {
+  return engineId === 'forge'
+    ? 'C:\\sd-webui-forge-classic'
+    : 'C:\\ComfyUI 또는 ComfyUI_windows_portable'
 }
 
 function runtimeExtensionPlaceholder(engineId: RuntimeEngineId) {
@@ -1033,13 +1180,13 @@ function runtimeExtensionPlaceholder(engineId: RuntimeEngineId) {
 
 function runtimeExtensionFolderHint(engineId: RuntimeEngineId) {
   return engineId === 'forge'
-    ? 'Forge extensions 폴더. 외부 설치를 연결할 때 직접 지정할 수 있습니다.'
-    : 'ComfyUI custom_nodes 폴더. 외부 설치를 연결할 때 직접 지정할 수 있습니다.'
+    ? 'Forge extensions 폴더. 기존 설치에서는 경로를 BROWSE하고 SAVE해야 확장 쓰기를 허용합니다.'
+    : 'ComfyUI custom_nodes 폴더. 기존 설치에서는 경로를 BROWSE하고 SAVE해야 확장 쓰기를 허용합니다.'
 }
 
 async function runRuntimeOperation(
   engineId: RuntimeEngineId,
-  action: RuntimeAction | 'set_auto_start' | 'save_extension_dir' | 'install_extension' | RuntimeExtensionAction,
+  action: RuntimeAction | RuntimeConfigAction | RuntimeExtensionAction,
   payload: Record<string, unknown> = {},
 ) {
   if (runtimeMutationDisabled(engineId)) return false
@@ -1067,6 +1214,39 @@ async function runRuntimeOperation(
 
 async function setRuntimeAutoStart(engineId: RuntimeEngineId, autoStart: boolean) {
   await runRuntimeOperation(engineId, 'set_auto_start', { autoStart })
+}
+
+async function browseRuntimeInstallDirectory(engineId: RuntimeEngineId) {
+  if (runtimeMutationDisabled(engineId)) return
+  try {
+    const result = await callRuntimeBridge('selectBackendInstallDirectory', engineId)
+    if (result.cancelled) return
+    if (result.ok === false) throw new Error(result.error || '기존 설치 폴더를 선택하지 못했습니다')
+    const path = String(result.path || result.directory || '')
+    if (!path) throw new Error('선택된 설치 폴더가 없습니다')
+    runtimeInstallRootDrafts[engineId] = path
+    runtimeInstallRootDirty[engineId] = true
+  } catch (error) {
+    showRuntimeError(error, engineId)
+  }
+}
+
+async function linkExistingRuntime(engineId: RuntimeEngineId) {
+  const existingRoot = runtimeInstallRootDrafts[engineId].trim()
+  if (!existingRoot) return
+  await runRuntimeOperation(engineId, 'set_install_root', { existingRoot })
+}
+
+async function useManagedRuntime(engineId: RuntimeEngineId) {
+  const changed = await runRuntimeOperation(engineId, 'use_managed_install')
+  if (changed) {
+    runtimeInstallRootDirty[engineId] = false
+    runtimeInstallRootDrafts[engineId] = ''
+  }
+}
+
+async function setPrimaryModelEngine(engineId: RuntimeEngineId) {
+  await runRuntimeOperation(engineId, 'set_primary_model_engine', { primaryModelEngine: engineId })
 }
 
 async function browseRuntimeExtensionDirectory(engineId: RuntimeEngineId) {
@@ -1111,16 +1291,20 @@ function handleBackendRuntimeEvent(raw: unknown) {
   try {
     const payload = parseRuntimePayload(raw)
     const engineId = normalizeRuntimeEngineId(payload.engine || payload.engineId || payload.state?.engine)
+    const eventType = String(payload.type || payload.event || '').toLowerCase()
     if (payload.snapshot || payload.engines || payload.runtimes) applyRuntimeSnapshot(payload)
     else if (engineId && payload.state) applyRuntimeEngineState(engineId, payload.state)
-    else if (engineId) applyRuntimeEngineState(engineId, payload)
+    else if (engineId && ['started', 'start', 'progress'].includes(eventType)) {
+      // Event envelopes contain only operation metadata.  Treating them as a
+      // complete engine state would temporarily erase linked/model paths.
+      runtimeEngines[engineId].busy = true
+    }
 
     const message = String(payload.message || payload.error || '')
     if (message) {
       runtimeStatus.value = message
       if (engineId) runtimeEngines[engineId].message = message
     }
-    const eventType = String(payload.type || payload.event || '').toLowerCase()
     if (['complete', 'completed', 'failed', 'error', 'cancelled', 'canceled'].includes(eventType)) {
       if (engineId) runtimeEngines[engineId].busy = false
       if (engineId && ['complete', 'completed'].includes(eventType)
@@ -1528,6 +1712,27 @@ function handleOllamaModels(json: string) {
   background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.3); color: var(--text-secondary);
 }
 .runtime-readonly-warning strong { color: #fbbf24; margin-right: 5px; }
+.runtime-primary-card {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr); gap: 20px;
+  margin-bottom: 18px; border-color: rgba(96,165,250,.28);
+  background: linear-gradient(135deg, rgba(96,165,250,.08), var(--bg-card));
+}
+.runtime-primary-copy h2 { margin: 4px 0 7px; color: var(--text-primary); font-size: 17px; }
+.runtime-primary-copy p { margin: 0; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
+.runtime-primary-copy b { color: var(--text-secondary); }
+.runtime-primary-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-self: center; }
+.runtime-primary-option {
+  min-width: 0; padding: 12px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-input); color: var(--text-secondary); cursor: pointer;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+}
+.runtime-primary-option span { font-size: 11px; font-weight: 800; }
+.runtime-primary-option strong { color: var(--text-muted); font-size: 8px; letter-spacing: .8px; }
+.runtime-primary-option:hover:not(:disabled), .runtime-primary-option.selected {
+  border-color: #60a5fa; background: rgba(96,165,250,.12); color: #93c5fd;
+}
+.runtime-primary-option.selected strong { color: #60a5fa; }
+.runtime-primary-option:disabled { cursor: default; opacity: .72; }
 .runtime-card-list { display: flex; flex-direction: column; gap: 18px; }
 .runtime-card { position: relative; overflow: hidden; }
 .runtime-card::before {
@@ -1548,6 +1753,9 @@ function handleOllamaModels(json: string) {
 .runtime-badge.health.on { border-color: rgba(74,222,128,.45); background: rgba(74,222,128,.1); color: #4ade80; }
 .runtime-badge.busy.on { border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.1); color: #fbbf24; animation: runtimePulse 1.25s ease-in-out infinite; }
 .runtime-badge.active.on { border-color: color-mix(in srgb, var(--runtime-accent) 55%, transparent); background: color-mix(in srgb, var(--runtime-accent) 12%, transparent); color: var(--runtime-accent); }
+.runtime-badge.source { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.09); color: #60a5fa; }
+.runtime-badge.source.existing { border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.1); color: #fbbf24; }
+.runtime-badge.primary-source { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.1); color: #4ade80; }
 @keyframes runtimePulse { 50% { opacity: .52; } }
 .runtime-meta-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px;
@@ -1564,6 +1772,10 @@ function handleOllamaModels(json: string) {
   color: var(--text-secondary); font-family: 'Consolas', monospace; font-size: 10px; font-weight: 700;
 }
 .runtime-meta strong.update-ready { color: #fbbf24; }
+.runtime-model-paths > div { min-width: 0; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 8px; align-items: center; }
+.runtime-model-paths > div + div { margin-top: 4px; }
+.runtime-model-paths > div strong { color: var(--runtime-accent); font-size: 8px; letter-spacing: .5px; }
+.runtime-install-source b, .runtime-dependency-note b { color: var(--text-primary); }
 .runtime-toggle-row {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
   margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: var(--bg-input);
@@ -1581,6 +1793,7 @@ function handleOllamaModels(json: string) {
   color: #fbbf24; font-size: 8px; font-weight: 900; letter-spacing: .6px;
 }
 .runtime-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; }
+.runtime-install-path-control { grid-template-columns: minmax(0, 1fr) auto auto auto; }
 .runtime-repo-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .runtime-path-control input, .runtime-repo-control input {
   width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px;
@@ -1776,6 +1989,7 @@ kbd {
 @media (max-width: 820px) {
   .settings-nav { width: 190px; }
   .settings-body { padding: 24px; }
+  .runtime-primary-card { grid-template-columns: 1fr; }
   .runtime-card-header { flex-direction: column; }
   .runtime-badges { justify-content: flex-start; max-width: none; }
   .forge-path-label { align-items: flex-start; flex-direction: column; gap: 3px; }
@@ -1797,7 +2011,7 @@ kbd {
   .runtime-meta-grid { grid-template-columns: 1fr; }
   .runtime-meta-wide { grid-column: auto; }
   .runtime-toggle-row { align-items: flex-start; }
-  .runtime-path-control, .runtime-repo-control { grid-template-columns: 1fr 1fr; }
+  .runtime-path-control, .runtime-repo-control, .runtime-install-path-control { grid-template-columns: 1fr 1fr; }
   .runtime-path-control input, .runtime-repo-control input { grid-column: 1 / -1; }
   .runtime-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .runtime-extension-item { align-items: flex-start; flex-direction: column; }

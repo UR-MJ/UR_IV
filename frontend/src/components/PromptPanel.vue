@@ -112,7 +112,8 @@
       </div>
       <div v-if="!isKrea2Generation" class="input-group">
         <label>Checkpoint</label>
-        <CustomSelect v-model="widgets.model_combo" :options="modelItems" placeholder="Select model..." />
+        <CustomSelect v-model="widgets.model_combo" :options="modelItems"
+          :option-groups="modelOptionGroups" placeholder="Select model..." />
       </div>
       <div v-if="!isKrea2Generation" class="input-group">
         <label>VAE <span class="hint">(ANIMA 등 외부 VAE)</span></label>
@@ -431,6 +432,7 @@ const mainRef = ref<HTMLTextAreaElement | null>(null)
 const suffixRef = ref<HTMLTextAreaElement | null>(null)
 
 const modelItems = computed(() => store.getProperty('model_combo', 'items') || [])
+const modelOptionGroups = computed(() => store.getProperty('model_combo', 'optionGroups') || [])
 const vaeItems = computed(() => store.getProperty('vae_main_combo', 'items') || [])
 const teItems = computed(() => store.getProperty('te_main_input', 'items') || [])
 const teSelectedList = computed(() => {

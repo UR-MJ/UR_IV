@@ -308,6 +308,11 @@ class VueBridge(QObject):
             '',
         )
         active_engine = _RUNTIME_CORE_TO_ENGINE.get(active_core, '')
+        primary_core = _RUNTIME_ENGINE_TO_CORE.get(
+            str(raw.get('primaryModelEngine') or '').strip().lower(),
+            '',
+        )
+        primary_engine = _RUNTIME_CORE_TO_ENGINE.get(primary_core, '')
         with self._backend_runtime_lock:
             inflight = dict(self._backend_runtime_inflight)
 
@@ -336,8 +341,16 @@ class VueBridge(QObject):
                 'autoStart': bool(runtime.get('autoStart', False)),
                 'active': bool(runtime.get('active', active_core == core_engine)),
                 'ownership': 'managed',
+                'sourceMode': str(runtime.get('sourceMode') or 'managed'),
+                'existingRoot': str(runtime.get('existingRoot') or ''),
                 'root': str(runtime.get('root') or ''),
-                'installRoot': str(runtime.get('root') or ''),
+                'installRoot': str(
+                    runtime.get('installRoot') or runtime.get('sourceRoot') or runtime.get('root') or ''
+                ),
+                'sourceRoot': str(runtime.get('sourceRoot') or ''),
+                'pythonPath': str(runtime.get('pythonPath') or ''),
+                'dataRoot': str(runtime.get('dataRoot') or ''),
+                'modelPaths': dict(runtime.get('modelPaths') or {}),
                 'apiUrl': api_url,
                 'port': runtime.get('port'),
                 'version': version,
@@ -348,6 +361,9 @@ class VueBridge(QObject):
                 'extensionDir': extension_dir,
                 'defaultExtensionDir': str(runtime.get('defaultExtensionDir') or ''),
                 'extensionDirExternal': bool(runtime.get('extensionDirExternal', False)),
+                'extensionWritable': bool(
+                    runtime.get('extensionWritable', runtime.get('installed', False))
+                ),
                 'extensions': list(runtime.get('extensions') or []),
                 'status': 'running' if running else 'installed' if runtime.get('installed') else 'not_installed',
                 'message': str(runtime.get('message') or ''),
@@ -367,6 +383,7 @@ class VueBridge(QObject):
                 ),
             },
             'runtimeRoot': str(raw.get('runtimeRoot') or ''),
+            'primaryModelEngine': primary_engine,
             'engines': engines,
         }
 
@@ -407,6 +424,8 @@ class VueBridge(QObject):
                 'install', 'update', 'check_update', 'start', 'stop', 'use',
                 'set_auto_start', 'save_extension_dir', 'install_extension',
                 'update_extension', 'check_extension', 'check_extensions',
+                'set_install_root', 'use_managed_install',
+                'set_primary_model_engine',
             }
             if action not in allowed:
                 raise ValueError(f'지원하지 않는 runtime 작업입니다: {action}')
@@ -572,6 +591,38 @@ class VueBridge(QObject):
                 '기존 extensions 폴더 선택' if ui_engine == 'forge' else '기존 custom_nodes 폴더 선택',
                 current,
             )
+            if not selected:
+                return json.dumps({'ok': False, 'cancelled': True}, ensure_ascii=False)
+            return json.dumps({'ok': True, 'path': selected}, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
+
+    @pyqtSlot(str, result=str)
+    def selectBackendInstallDirectory(self, engine: str) -> str:
+        """Forge/Comfy 기존 설치 루트를 고르는 desktop-only 슬롯."""
+        if self._backend_runtime_is_web_mode():
+            return json.dumps({
+                'ok': False,
+                'error': '웹 모드에서는 로컬 설치 폴더를 선택할 수 없습니다.',
+            }, ensure_ascii=False)
+        try:
+            from PyQt6.QtWidgets import QFileDialog
+
+            ui_engine, _core_engine = self._backend_runtime_engine(engine)
+            state = self._backend_runtime_public_snapshot()
+            runtime = state.get('engines', {}).get(ui_engine, {})
+            current = str(
+                runtime.get('existingRoot')
+                or runtime.get('installRoot')
+                or runtime.get('sourceRoot')
+                or ''
+            )
+            title = (
+                '기존 Forge Neo 설치 폴더 선택'
+                if ui_engine == 'forge'
+                else '기존 ComfyUI 또는 portable 폴더 선택'
+            )
+            selected = QFileDialog.getExistingDirectory(self.parent(), title, current)
             if not selected:
                 return json.dumps({'ok': False, 'cancelled': True}, ensure_ascii=False)
             return json.dumps({'ok': True, 'path': selected}, ensure_ascii=False)
@@ -1574,6 +1625,7 @@ class VueBridge(QObject):
             # 다음 LoRA Manager 열기/새로고침 때 Forge API 목록을 다시 받는다.
             from widgets.lora_manager import LoraManagerDialog
             LoraManagerDialog._lora_cache = []
+            self._merged_lora_cache = None
         except Exception as exc:
             logger.warning("Forge module widget refresh failed: %s", exc)
 
@@ -2400,28 +2452,65 @@ class VueBridge(QObject):
 
     @pyqtSlot(str, result=str)
     def getLoras(self, mode: str = '') -> str:
-        """설치된 LoRA 목록 → [{name, triggerWords}]. mode='force'면 캐시 무시하고 재스캔.
-        (시작 시 프리로드된 LoraManagerDialog._lora_cache 사용 → 즉시 반환)"""
+        """활성 API 메타데이터 + 메인/보조 디스크 LoRA 카탈로그 반환.
+
+        ``_lora_cache``에는 종전과 동일하게 백엔드의 raw 응답만 보관한다.
+        출처/중복/사용 가능 여부를 합친 뷰 모델을 캐시에 덮어쓰지 않으므로
+        ``mode='force'`` 이후에도 기존 PyQt LoRA 매니저 계약이 유지된다.
+        """
         try:
+            import hashlib
+
+            from backends import get_backend_type
             from widgets.lora_manager import LoraManagerDialog
+
             loras = LoraManagerDialog._lora_cache
+            backend_type = get_backend_type()
+            backend_value = str(getattr(backend_type, 'value', backend_type) or '').casefold()
+            active_engine = 'comfyui' if backend_value == 'comfyui' else 'forge'
+
+            def cache_signature(items) -> str:
+                try:
+                    payload = json.dumps(
+                        items or [], ensure_ascii=False, sort_keys=True, default=str,
+                        separators=(',', ':'),
+                    )
+                except Exception:
+                    payload = repr(items)
+                return hashlib.sha256(payload.encode('utf-8', errors='replace')).hexdigest()
+
+            raw_signature = cache_signature(loras)
+            cached = getattr(self, '_merged_lora_cache', None)
+            if (
+                mode != 'force'
+                and isinstance(cached, dict)
+                and cached.get('activeEngine') == active_engine
+                and cached.get('rawSignature') == raw_signature
+                and isinstance(cached.get('json'), str)
+            ):
+                return cached['json']
+
             if mode == 'force' or not loras:
                 from backends import get_backend
                 b = get_backend()
                 fresh = b.get_loras() if b else []
-                if fresh:
-                    loras = fresh
-                    LoraManagerDialog._lora_cache = fresh
-            out = []
-            for l in (loras or []):
-                if isinstance(l, dict):
-                    name = l.get('name') or l.get('alias') or ''
-                    tws = l.get('trigger_words') or l.get('triggerWords') or []
-                else:
-                    name, tws = str(l), []
-                if name:
-                    out.append({"name": name, "triggerWords": list(tws)[:12]})
-            return json.dumps(out, ensure_ascii=False)
+                # 빈 응답도 유효한 최신 상태다. 이전 캐시를 남기면 삭제된 LoRA가
+                # 계속 사용 가능한 것처럼 보이므로 항상 교체한다.
+                loras = list(fresh or [])
+                LoraManagerDialog._lora_cache = loras
+                raw_signature = cache_signature(loras)
+
+            from core.model_inventory import get_model_inventory
+
+            out = get_model_inventory(active_engine=active_engine).merge_loras(loras or [])
+            encoded = json.dumps(out, ensure_ascii=False)
+            if self is not None:
+                self._merged_lora_cache = {
+                    'activeEngine': active_engine,
+                    'rawSignature': raw_signature,
+                    'json': encoded,
+                }
+            return encoded
         except Exception as e:
             return json.dumps({"error": str(e)})
 

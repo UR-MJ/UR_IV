@@ -27,6 +27,7 @@ class _Manager:
         return {
             "ok": True,
             "activeEngine": "forge",
+            "primaryModelEngine": "comfyui",
             "runtimeRoot": "C:/managed",
             "engines": {
                 "forge": {
@@ -38,7 +39,14 @@ class _Manager:
                     "owned": True,
                     "active": True,
                     "autoStart": True,
+                    "sourceMode": "existing",
+                    "existingRoot": "C:/existing/forge",
                     "root": "C:/managed/forge",
+                    "installRoot": "C:/existing/forge",
+                    "sourceRoot": "C:/existing/forge",
+                    "pythonPath": "C:/existing/forge/venv/Scripts/python.exe",
+                    "dataRoot": "C:/managed/forge/data",
+                    "modelPaths": {"loras": ["C:/existing/forge/models/Lora"]},
                     "apiUrl": "http://127.0.0.1:7860",
                     "extensionDir": "C:/existing/forge/extensions",
                     "defaultExtensionDir": "C:/managed/forge/extensions",
@@ -131,12 +139,17 @@ class BackendRuntimeBridgeTests(unittest.TestCase):
         self.assertTrue(state["ok"])
         self.assertTrue(state["nativeOperations"])
         self.assertEqual(state["active"]["engine"], "forge")
+        self.assertEqual(state["primaryModelEngine"], "comfyui")
         forge = state["engines"]["forge"]
         self.assertTrue(forge["installed"])
         self.assertTrue(forge["running"])
         self.assertTrue(forge["autoStart"])
         self.assertEqual(forge["extensionDir"], "C:/existing/forge/extensions")
         self.assertEqual(forge["version"], "abc123")
+        self.assertEqual(forge["sourceMode"], "existing")
+        self.assertEqual(forge["sourceRoot"], "C:/existing/forge")
+        self.assertTrue(forge["pythonPath"].endswith("python.exe"))
+        self.assertEqual(forge["modelPaths"]["loras"], ["C:/existing/forge/models/Lora"])
 
     def test_web_mode_allows_snapshot_but_rejects_native_mutators(self):
         manager = _Manager()
@@ -148,11 +161,13 @@ class BackendRuntimeBridgeTests(unittest.TestCase):
                 bridge.runBackendRuntimeOperation("forge", "start", "{}")
             )
             selection = json.loads(bridge.selectBackendExtensionDirectory("forge"))
+            install_selection = json.loads(bridge.selectBackendInstallDirectory("forge"))
 
         self.assertTrue(state["ok"])
         self.assertFalse(state["nativeOperations"])
         self.assertFalse(operation["accepted"])
         self.assertFalse(selection["ok"])
+        self.assertFalse(install_selection["ok"])
         self.assertEqual(manager.execute_calls, [])
 
     def test_start_is_nonblocking_and_emits_one_generic_terminal_event(self):

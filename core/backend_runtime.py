@@ -60,6 +60,26 @@ class EngineDefinition:
     entrypoint: str
 
 
+@dataclass(frozen=True)
+class RuntimeLocation:
+    """Resolved executable layout for one managed or linked installation.
+
+    ``install_root`` is the outer installation boundary selected/detected for
+    display.  ``source_root`` is the directory containing the entrypoint and
+    ``python_path`` is the interpreter used to launch it.  Linked locations are
+    only inspected; every file this module writes remains under ``runtime_root``.
+    """
+
+    install_root: Path
+    source_root: Path
+    python_path: Path
+    portable: bool = False
+
+    @property
+    def valid(self) -> bool:
+        return self.source_root.is_dir() and self.python_path.is_file()
+
+
 ENGINE_DEFINITIONS: dict[str, EngineDefinition] = {
     "forge": EngineDefinition(
         key="forge",
@@ -401,7 +421,7 @@ ProgressCallback = Callable[[dict[str, Any]], None]
 class BackendRuntimeManager:
     """Deep module owning both managed engine lifecycles behind one interface."""
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     def __init__(
         self,
@@ -433,15 +453,19 @@ class BackendRuntimeManager:
         self.runtime_root.mkdir(parents=True, exist_ok=True)
         self._state = self._load_state()
         self._cleanup_inactive_releases()
+        self._ensure_primary_model_engine()
 
     # ------------------------------------------------------------------ store
 
     def _default_engine_state(self, definition: EngineDefinition) -> dict[str, Any]:
         return {
             "release": "",
+            "sourceMode": "managed",
+            "existingRoot": "",
             "autoStart": False,
             "port": definition.preferred_port,
             "extensionDir": "",
+            "extensionDirApproved": False,
             "remoteVersion": "",
             "remoteCommit": "",
             "lastChecked": "",
@@ -460,6 +484,10 @@ class BackendRuntimeManager:
             "activeEngine": ENGINE_ALIASES.get(
                 str(raw.get("activeEngine", "") or "").casefold(), ""
             ),
+            "primaryModelEngine": ENGINE_ALIASES.get(
+                str(raw.get("primaryModelEngine", "forge") or "forge").casefold(),
+                "forge",
+            ),
             "engines": {},
         }
         for key, definition in ENGINE_DEFINITIONS.items():
@@ -471,6 +499,25 @@ class BackendRuntimeManager:
                 for field in item:
                     if field in saved:
                         item[field] = saved[field]
+            source_mode = str(item.get("sourceMode", "managed") or "managed").casefold()
+            if source_mode not in {"managed", "existing"}:
+                source_mode = "managed"
+                item["lastError"] = "유효하지 않은 설치 소스 설정을 무시했습니다"
+            item["sourceMode"] = source_mode
+            existing_root = str(item.get("existingRoot", "") or "").strip()
+            if existing_root:
+                try:
+                    item["existingRoot"] = str(
+                        self._normalise_existing_root(existing_root)
+                    )
+                except BackendRuntimeError:
+                    item["existingRoot"] = ""
+                    item["sourceMode"] = "managed"
+                    if not bool(item.get("extensionDirApproved")):
+                        item["extensionDir"] = ""
+                    item["lastError"] = "유효하지 않거나 안전하지 않은 기존 설치 설정을 무시했습니다"
+            elif source_mode == "existing":
+                item["sourceMode"] = "managed"
             try:
                 item["port"] = int(item["port"])
             except (TypeError, ValueError):
@@ -483,6 +530,11 @@ class BackendRuntimeManager:
                 item["lastError"] = "안전하지 않은 runtime release 설정을 무시했습니다"
             item["release"] = release
             extension_dir = str(item.get("extensionDir", "") or "").strip()
+            saved_has_approval = isinstance(saved, dict) and "extensionDirApproved" in saved
+            if extension_dir and not saved_has_approval:
+                # Before schema v2 every non-empty value came from the explicit
+                # save-extension-dir flow, so preserve that user's approval.
+                item["extensionDirApproved"] = True
             if extension_dir:
                 try:
                     extension_path = Path(
@@ -496,11 +548,14 @@ class BackendRuntimeManager:
                             create_managed=_is_relative_to(extension_path, self.runtime_root),
                             engine=key,
                             require_exists=False,
+                            require_writable=bool(item.get("extensionDirApproved")),
                         )
                     )
                 except BackendRuntimeError:
                     item["extensionDir"] = ""
+                    item["extensionDirApproved"] = False
                     item["lastError"] = "유효하지 않은 확장 폴더 설정을 무시했습니다"
+            item["extensionDirApproved"] = bool(item.get("extensionDirApproved"))
             item["autoStart"] = bool(item["autoStart"])
             normalised["engines"][key] = item
         forge_extension = Path(
@@ -513,6 +568,7 @@ class BackendRuntimeManager:
         )
         if self._extension_roots_overlap(forge_extension, comfy_extension):
             normalised["engines"]["comfyui"]["extensionDir"] = ""
+            normalised["engines"]["comfyui"]["extensionDirApproved"] = False
             normalised["engines"]["comfyui"]["lastError"] = (
                 "Forge와 겹치는 ComfyUI 확장 폴더 설정을 무시했습니다"
             )
@@ -564,11 +620,166 @@ class BackendRuntimeManager:
         release_id = release or str(self._state["engines"][engine].get("release", ""))
         return self._engine_root(engine) / "releases" / release_id
 
+    @staticmethod
+    def _environment_python_candidates(root: Path) -> tuple[Path, ...]:
+        """Return common venv interpreter locations without assuming host OS."""
+        return (
+            root / "venv" / "Scripts" / "python.exe",
+            root / ".venv" / "Scripts" / "python.exe",
+            root / "venv" / "bin" / "python",
+            root / ".venv" / "bin" / "python",
+        )
+
+    @staticmethod
+    def _first_file(candidates: Sequence[Path]) -> Path | None:
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate.resolve()
+        return None
+
+    def _normalise_existing_root(self, value: str | os.PathLike[str]) -> Path:
+        raw = os.path.expandvars(os.path.expanduser(str(value or "").strip()))
+        if not raw or not Path(raw).is_absolute():
+            raise BackendRuntimeError(
+                "LINKED_INSTALL_INVALID",
+                "기존 설치 폴더는 절대 경로여야 합니다",
+                stage="configure",
+            )
+        root = Path(os.path.abspath(os.path.normpath(raw))).resolve()
+        if not root.is_dir():
+            raise BackendRuntimeError(
+                "LINKED_INSTALL_INVALID",
+                "지정한 기존 설치 폴더가 존재하지 않습니다",
+                stage="configure",
+                details={"path": str(root)},
+            )
+        broad_anchors = {
+            Path(root.anchor).resolve(),
+            Path.home().resolve(),
+            PROJECT_ROOT.resolve(),
+            self.runtime_root.resolve(),
+        }
+        if root in broad_anchors:
+            raise BackendRuntimeError(
+                "LINKED_INSTALL_PATH_UNSAFE",
+                "드라이브 루트·홈·앱 루트·관리형 런타임 루트 자체는 기존 설치 폴더로 지정할 수 없습니다",
+                stage="configure",
+                details={"path": str(root)},
+            )
+        return root
+
+    def _detect_existing_install(
+        self,
+        engine: str,
+        value: str | os.PathLike[str],
+    ) -> RuntimeLocation:
+        """Resolve supported linked layouts without changing the selected tree."""
+        root = self._normalise_existing_root(value)
+        definition = ENGINE_DEFINITIONS[engine]
+
+        if engine == "forge":
+            python = self._first_file(self._environment_python_candidates(root))
+            if (root / definition.entrypoint).is_file() and python is not None:
+                return RuntimeLocation(root, root, python)
+        else:
+            # Git/venv layout: the selected directory itself contains main.py.
+            direct_python = self._first_file(self._environment_python_candidates(root))
+            if (root / definition.entrypoint).is_file() and direct_python is not None:
+                return RuntimeLocation(root, root, direct_python)
+
+            # Windows portable can be selected either at the outer bundle or at
+            # its inner ComfyUI source directory.  Both historical spellings of
+            # python_embeded are accepted.
+            portable_pairs: list[tuple[Path, Path]] = []
+            inner = root / "ComfyUI"
+            if (inner / definition.entrypoint).is_file():
+                nested_venv = self._first_file(self._environment_python_candidates(inner))
+                if nested_venv is not None:
+                    return RuntimeLocation(root, inner.resolve(), nested_venv)
+                portable_pairs.extend(
+                    (inner, root / folder / "python.exe")
+                    for folder in ("python_embeded", "python_embedded")
+                )
+            if (root / definition.entrypoint).is_file():
+                outer = root.parent
+                portable_pairs.extend(
+                    (root, outer / folder / "python.exe")
+                    for folder in ("python_embeded", "python_embedded")
+                )
+            for source, python in portable_pairs:
+                if python.is_file():
+                    install_root = source.parent if python.parent.parent == source.parent else root
+                    if python.parent.name.casefold() in {"python_embeded", "python_embedded"}:
+                        install_root = python.parent.parent
+                    return RuntimeLocation(
+                        install_root.resolve(), source.resolve(), python.resolve(), portable=True
+                    )
+
+        expected = (
+            "launch.py와 venv/.venv Python"
+            if engine == "forge"
+            else "main.py와 .venv/venv Python 또는 Windows portable Python"
+        )
+        raise BackendRuntimeError(
+            "LINKED_INSTALL_INVALID",
+            f"{definition.name} 설치 구조를 확인할 수 없습니다 ({expected})",
+            stage="configure",
+            details={"path": str(root)},
+        )
+
+    def _runtime_location(
+        self,
+        engine: str,
+        *,
+        require_valid: bool = False,
+    ) -> RuntimeLocation | None:
+        saved = self._state["engines"][engine]
+        if saved.get("sourceMode") == "existing":
+            root = str(saved.get("existingRoot", "") or "")
+            if root:
+                try:
+                    return self._detect_existing_install(engine, root)
+                except BackendRuntimeError:
+                    if require_valid:
+                        raise
+                    return None
+            if require_valid:
+                raise BackendRuntimeError(
+                    "LINKED_INSTALL_INVALID",
+                    "기존 설치 폴더가 지정되지 않았습니다",
+                    stage="start",
+                )
+            return None
+        release = str(saved.get("release", "") or "")
+        if not release:
+            return None
+        release_root = self._release_root(engine, release).resolve()
+        source = (release_root / "source").resolve()
+        python = self._venv_python((release_root / "venv").resolve()).resolve()
+        location = RuntimeLocation(release_root, source, python)
+        entrypoint = source / ENGINE_DEFINITIONS[engine].entrypoint
+        if location.valid and entrypoint.is_file():
+            return location
+        if require_valid:
+            raise BackendRuntimeError(
+                "NOT_INSTALLED", "관리형 백엔드 설치가 완전하지 않습니다", stage="start"
+            )
+        return None
+
     def _source_root(self, engine: str) -> Path:
+        location = self._runtime_location(engine)
+        if location is not None:
+            return location.source_root
         return self._release_root(engine) / "source"
 
     def _venv_root(self, engine: str) -> Path:
         return self._release_root(engine) / "venv"
+
+    def _python_path(self, engine: str) -> Path:
+        location = self._runtime_location(engine)
+        if location is not None:
+            return location.python_path
+        return self._venv_python(self._venv_root(engine))
 
     @staticmethod
     def _venv_python(venv_root: Path) -> Path:
@@ -601,6 +812,7 @@ class BackendRuntimeManager:
         create_managed: bool = False,
         engine: str | None = None,
         require_exists: bool = True,
+        require_writable: bool = True,
     ) -> Path:
         raw = os.path.expandvars(os.path.expanduser(str(value or "").strip()))
         if not raw or not Path(raw).is_absolute():
@@ -644,7 +856,7 @@ class BackendRuntimeManager:
             raise BackendRuntimeError(
                 "EXTENSION_PATH_INVALID", "지정한 경로가 폴더가 아닙니다", stage="configure"
             )
-        if not os.access(path, os.W_OK):
+        if require_writable and not os.access(path, os.W_OK):
             raise BackendRuntimeError(
                 "EXTENSION_PATH_READ_ONLY", "지정한 확장 폴더에 쓸 수 없습니다", stage="configure"
             )
@@ -664,7 +876,16 @@ class BackendRuntimeManager:
 
     def _ensure_extension_mount(self, engine: str) -> Path:
         target = self._extension_root(engine)
-        target = self._validate_extension_root(target, create_managed=True, engine=engine)
+        state = self._state["engines"][engine]
+        target = self._validate_extension_root(
+            target,
+            create_managed=_is_relative_to(target.resolve(), self.runtime_root),
+            engine=engine,
+            require_writable=bool(
+                _is_relative_to(target.resolve(), self.runtime_root)
+                or state.get("extensionDirApproved")
+            ),
+        )
         mount = self._extension_mount(engine)
         mount.parent.mkdir(parents=True, exist_ok=True)
         if mount.exists() or mount.is_symlink():
@@ -790,6 +1011,29 @@ class BackendRuntimeManager:
             commit = ""
         return (commit[:12] if commit else ""), commit, branch
 
+    @staticmethod
+    def _declared_local_version(engine: str, source: Path) -> str:
+        """Read a bounded local version declaration without importing source code."""
+        if engine != "comfyui" or not source.is_dir():
+            return ""
+        candidates = (
+            (source / "comfyui_version.py", r"(?m)^\s*__version__\s*=\s*['\"]([^'\"]+)['\"]"),
+            (source / "pyproject.toml", r"(?m)^\s*version\s*=\s*['\"]([^'\"]+)['\"]"),
+        )
+        for path, pattern in candidates:
+            try:
+                if not path.is_file() or path.stat().st_size > 256 * 1024:
+                    continue
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            match = re.search(pattern, text)
+            if match:
+                version = match.group(1).strip()
+                if re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._+-]{0,63}", version):
+                    return version
+        return ""
+
     def _git_origin_url(self, source: Path) -> str:
         git_dir = self._git_dir(source)
         if git_dir is None:
@@ -883,17 +1127,159 @@ class BackendRuntimeManager:
         safe_id = re.sub(r"[^A-Za-z0-9._-]", "_", extension_id)[:128]
         return self._engine_root(engine) / "extension_state" / f"{safe_id}.json"
 
+    def _linked_extension_root(
+        self, engine: str, location: RuntimeLocation
+    ) -> Path | None:
+        candidate = location.source_root / ENGINE_DEFINITIONS[engine].extension_folder
+        return candidate.resolve() if candidate.is_dir() else None
+
+    @staticmethod
+    def _append_existing_paths(
+        output: list[Path],
+        root: Path,
+        names: Sequence[str],
+    ) -> None:
+        if not root.is_dir():
+            return
+        try:
+            children = {
+                child.name.casefold(): child.resolve()
+                for child in root.iterdir()
+                if child.is_dir()
+            }
+        except OSError:
+            return
+        for name in names:
+            candidate = children.get(name.casefold())
+            if candidate is not None:
+                output.append(candidate)
+
+    @staticmethod
+    def _dedupe_paths(paths: Sequence[Path]) -> list[str]:
+        result: list[str] = []
+        seen: set[str] = set()
+        for path in paths:
+            try:
+                resolved = path.resolve()
+            except OSError:
+                continue
+            if not resolved.is_dir():
+                continue
+            marker = os.path.normcase(str(resolved))
+            if marker in seen:
+                continue
+            seen.add(marker)
+            result.append(str(resolved))
+        return result
+
+    def _model_paths(
+        self,
+        engine: str,
+        location: RuntimeLocation | None,
+    ) -> dict[str, list[str]]:
+        """Return this engine's own model directories, never shared imports."""
+        paths: dict[str, list[Path]] = {
+            "checkpoints": [],
+            "diffusion_models": [],
+            "loras": [],
+            "vae": [],
+            "text_encoders": [],
+        }
+        if engine == "forge":
+            # Preserve the pre-existing Settings contract and its priority.
+            try:
+                from core.forge_modules import get_forge_paths
+
+                configured = get_forge_paths()
+                mapping = {
+                    "checkpoint_dir": "checkpoints",
+                    "lora_dir": "loras",
+                    "vae_dir": "vae",
+                    "text_encoder_dir": "text_encoders",
+                }
+                for old_key, category in mapping.items():
+                    value = configured.get(old_key)
+                    if value is not None:
+                        paths[category].append(Path(value))
+            except Exception:
+                # A malformed optional legacy setting must not hide the runtime.
+                pass
+
+        model_roots: list[Path] = []
+        if location is not None:
+            model_roots.append(location.source_root / "models")
+        model_roots.append(self._data_root(engine) / "models")
+
+        for model_root in model_roots:
+            if engine == "forge":
+                self._append_existing_paths(
+                    paths["checkpoints"], model_root, ("Stable-diffusion", "checkpoints")
+                )
+                self._append_existing_paths(
+                    paths["diffusion_models"], model_root, ("diffusion_models", "unet", "UNET")
+                )
+                self._append_existing_paths(paths["loras"], model_root, ("Lora", "loras", "LoRA"))
+                self._append_existing_paths(paths["vae"], model_root, ("VAE", "vae"))
+                self._append_existing_paths(
+                    paths["text_encoders"],
+                    model_root,
+                    ("text_encoder", "text_encoders", "clip", "CLIP"),
+                )
+            else:
+                self._append_existing_paths(paths["checkpoints"], model_root, ("checkpoints",))
+                self._append_existing_paths(
+                    paths["diffusion_models"], model_root, ("diffusion_models", "unet")
+                )
+                self._append_existing_paths(paths["loras"], model_root, ("loras",))
+                self._append_existing_paths(paths["vae"], model_root, ("vae",))
+                self._append_existing_paths(
+                    paths["text_encoders"], model_root, ("text_encoders", "clip")
+                )
+        return {category: self._dedupe_paths(values) for category, values in paths.items()}
+
+    def _model_engine_order(self) -> tuple[str, ...]:
+        primary = str(self._state.get("primaryModelEngine") or "forge")
+        return (primary,) + tuple(key for key in ENGINE_DEFINITIONS if key != primary)
+
+    def _combined_model_paths(self) -> dict[str, list[str]]:
+        combined = {
+            "checkpoints": [],
+            "diffusion_models": [],
+            "loras": [],
+            "vae": [],
+            "text_encoders": [],
+        }
+        seen = {category: set() for category in combined}
+        for engine in self._model_engine_order():
+            own = self._model_paths(engine, self._runtime_location(engine))
+            for category, values in own.items():
+                for value in values:
+                    marker = os.path.normcase(str(Path(value).resolve()))
+                    if marker in seen[category]:
+                        continue
+                    seen[category].add(marker)
+                    combined[category].append(value)
+        return combined
+
     def snapshot(self) -> dict[str, Any]:
         """Return cached/local state only; never contacts GitHub or PyPI."""
         with self._state_lock:
             engines: dict[str, Any] = {}
             for key, definition in ENGINE_DEFINITIONS.items():
                 saved = self._state["engines"][key]
-                release = str(saved.get("release", "") or "")
-                source = self._source_root(key) if release else Path()
-                venv_python = self._venv_python(self._venv_root(key)) if release else Path()
-                installed = bool(release and (source / definition.entrypoint).is_file() and venv_python.is_file())
+                source_mode = str(saved.get("sourceMode", "managed") or "managed")
+                existing_root = str(saved.get("existingRoot", "") or "")
+                location = self._runtime_location(key)
+                source = location.source_root if location is not None else Path()
+                python_path = location.python_path if location is not None else Path()
+                installed = bool(
+                    location is not None
+                    and (source / definition.entrypoint).is_file()
+                    and python_path.is_file()
+                )
                 version, commit, branch = self._local_git_info(source) if installed else ("", "", "")
+                if installed and not version:
+                    version = self._declared_local_version(key, source)
                 with self._process_lock:
                     running = self._process_running(key)
                     owned_process = self._processes.get(key) if running else None
@@ -908,6 +1294,12 @@ class BackendRuntimeManager:
                     update_status = "Update available"
                 else:
                     update_status = "Up to date"
+                extension_root = self._extension_root(key)
+                extension_approved = bool(saved.get("extensionDirApproved"))
+                extension_writable = bool(
+                    (_is_relative_to(extension_root.resolve(), self.runtime_root) or extension_approved)
+                    and (not extension_root.exists() or os.access(extension_root, os.W_OK))
+                )
                 engines[key] = {
                     "engine": key,
                     "name": definition.name,
@@ -919,9 +1311,15 @@ class BackendRuntimeManager:
                     "busy": bool(self._busy.get(key)),
                     "active": self._state.get("activeEngine") == key,
                     "autoStart": bool(saved.get("autoStart")),
+                    "sourceMode": source_mode,
+                    "existingRoot": existing_root,
                     "root": str(self._engine_root(key)),
-                    "sourceRoot": str(source) if release else "",
+                    "installRoot": str(location.install_root) if location is not None else "",
+                    "sourceRoot": str(source) if location is not None else "",
+                    "pythonPath": str(python_path) if location is not None else "",
+                    "portable": bool(location is not None and location.portable),
                     "dataRoot": str(self._data_root(key)),
+                    "modelPaths": self._model_paths(key, location),
                     "apiUrl": endpoint,
                     "port": port,
                     "version": version or (commit[:12] if commit else ""),
@@ -932,9 +1330,11 @@ class BackendRuntimeManager:
                     "lastChecked": str(saved.get("lastChecked", "") or ""),
                     "updateAvailable": update_available,
                     "updateStatus": update_status,
-                    "extensionDir": str(self._extension_root(key)),
+                    "extensionDir": str(extension_root),
                     "defaultExtensionDir": str(self._default_extension_root(key)),
-                    "extensionDirExternal": self._extension_root(key) != self._default_extension_root(key).resolve(),
+                    "extensionDirExternal": extension_root != self._default_extension_root(key).resolve(),
+                    "extensionDirApproved": extension_approved,
+                    "extensionWritable": extension_writable,
                     "extensions": self._extension_state(key),
                     "message": self._last_messages.get(key) or str(saved.get("lastError", "") or ""),
                     "logPath": str(owned_process.log_path) if owned_process else "",
@@ -943,6 +1343,7 @@ class BackendRuntimeManager:
                 "ok": True,
                 "schemaVersion": self.SCHEMA_VERSION,
                 "activeEngine": self._state.get("activeEngine") or "",
+                "primaryModelEngine": self._state.get("primaryModelEngine") or "forge",
                 "runtimeRoot": str(self.runtime_root),
                 "engines": engines,
             }
@@ -955,6 +1356,58 @@ class BackendRuntimeManager:
             raise BackendRuntimeError("INVALID_PAYLOAD", "설정 payload가 객체가 아닙니다")
         with self._state_lock:
             saved = self._state["engines"][key]
+            source_change = "sourceMode" in patch or "existingRoot" in patch
+            if source_change:
+                running_engine = self._owned_running_engine()
+                if running_engine:
+                    raise BackendRuntimeError(
+                        "MODEL_TOPOLOGY_TRANSACTION_REQUIRED",
+                        "실행 중인 백엔드의 공유 모델 경로를 바꾸려면 set_install_root 또는 use_managed_install 작업을 사용하세요",
+                        stage="configure",
+                        details={"runningEngine": running_engine},
+                    )
+                source_mode = str(
+                    patch.get("sourceMode", saved.get("sourceMode", "managed"))
+                    or "managed"
+                ).casefold()
+                if source_mode not in {"managed", "existing"}:
+                    raise BackendRuntimeError(
+                        "INVALID_SOURCE_MODE", "설치 소스는 managed 또는 existing이어야 합니다"
+                    )
+                if source_mode == "existing":
+                    root_value = patch.get("existingRoot", saved.get("existingRoot", ""))
+                    location = self._detect_existing_install(key, str(root_value or ""))
+                    linked_extensions = (
+                        self._linked_extension_root(key, location)
+                        if not saved.get("extensionDirApproved")
+                        else None
+                    )
+                    if linked_extensions is not None:
+                        for other in ENGINE_DEFINITIONS:
+                            if other != key and self._extension_roots_overlap(
+                                linked_extensions, self._extension_root(other)
+                            ):
+                                raise BackendRuntimeError(
+                                    "EXTENSION_PATH_CONFLICT",
+                                    "Forge extensions와 ComfyUI custom_nodes는 서로 분리된 폴더여야 합니다",
+                                    stage="configure",
+                                )
+                    saved["sourceMode"] = "existing"
+                    saved["existingRoot"] = str(
+                        self._normalise_existing_root(str(root_value or ""))
+                    )
+                    if not saved.get("extensionDirApproved"):
+                        saved["extensionDir"] = (
+                            str(linked_extensions) if linked_extensions is not None else ""
+                        )
+                else:
+                    saved["sourceMode"] = "managed"
+                    saved["existingRoot"] = ""
+                    if not saved.get("extensionDirApproved"):
+                        saved["extensionDir"] = ""
+                saved["remoteVersion"] = ""
+                saved["remoteCommit"] = ""
+                saved["lastChecked"] = ""
             if "autoStart" in patch:
                 enabled = bool(patch.get("autoStart"))
                 saved["autoStart"] = enabled
@@ -965,7 +1418,10 @@ class BackendRuntimeManager:
             if "extensionDir" in patch:
                 value = str(patch.get("extensionDir", "") or "").strip()
                 if value:
-                    candidate = self._validate_extension_root(value, engine=key)
+                    approved = bool(patch.get("extensionDirApproved", True))
+                    candidate = self._validate_extension_root(
+                        value, engine=key, require_writable=approved
+                    )
                     for other in ENGINE_DEFINITIONS:
                         if other == key:
                             continue
@@ -977,8 +1433,12 @@ class BackendRuntimeManager:
                                 stage="configure",
                             )
                     saved["extensionDir"] = str(candidate)
+                    saved["extensionDirApproved"] = approved
                 else:
                     saved["extensionDir"] = ""
+                    saved["extensionDirApproved"] = bool(
+                        patch.get("extensionDirApproved", False)
+                    )
                     self._validate_extension_root(
                         self._default_extension_root(key), create_managed=True, engine=key
                     )
@@ -986,6 +1446,161 @@ class BackendRuntimeManager:
                 self._state["activeEngine"] = key
             self._save_state()
         return self.snapshot()
+
+    def _ensure_primary_model_engine(self, preferred: str = "") -> str:
+        """Keep primary independent from active while preferring a usable source."""
+        usable = [
+            key for key in ENGINE_DEFINITIONS
+            if self._runtime_location(key) is not None
+        ]
+        current = str(self._state.get("primaryModelEngine") or "forge")
+        if current in usable:
+            return current
+        if preferred in usable:
+            selected = preferred
+        elif usable:
+            selected = usable[0]
+        else:
+            selected = "forge"
+        if selected != current:
+            self._state["primaryModelEngine"] = selected
+            self._save_state()
+        return selected
+
+    def _owned_running_engine(self) -> str:
+        """Return the single app-owned model consumer, if one is running."""
+        return next(
+            (key for key in ENGINE_DEFINITIONS if self._process_running(key)), ""
+        )
+
+    def _restore_model_topology(
+        self,
+        changed_engine: str,
+        previous_engine_state: Mapping[str, Any],
+        previous_primary: str,
+        running_engine: str,
+        on_progress: ProgressCallback | None,
+    ) -> str:
+        """Restore saved topology and the process that consumed its model paths.
+
+        Model paths from both engines are projected into whichever owned backend
+        is running.  A rollback therefore is not complete until that same process
+        is healthy again with the restored launch specification.
+        """
+        errors: list[str] = []
+        try:
+            with self._state_lock:
+                self._state["engines"][changed_engine] = dict(previous_engine_state)
+                self._state["primaryModelEngine"] = previous_primary
+                self._save_state()
+        except Exception as exc:
+            # Keep restoring the mount/process from the already-restored in-memory
+            # state even when persistence itself is temporarily unavailable.
+            errors.append(f"state persistence: {exc}")
+        try:
+            self._ensure_extension_mount(changed_engine)
+        except Exception as exc:
+            errors.append(f"extension mount: {exc}")
+        if running_engine:
+            if self._runtime_location(running_engine) is None:
+                errors.append("previous runtime is no longer available")
+            else:
+                try:
+                    self._start(
+                        running_engine,
+                        on_progress,
+                        install_if_missing=False,
+                    )
+                except Exception as exc:
+                    errors.append(f"backend restart: {exc}")
+        return " · ".join(errors)
+
+    def _set_install_source(
+        self,
+        engine: str,
+        *,
+        source_mode: str,
+        existing_root: str = "",
+        on_progress: ProgressCallback | None,
+    ) -> dict[str, Any]:
+        if source_mode == "existing":
+            # Validate before stopping a healthy child or mutating saved state.
+            self._detect_existing_install(engine, existing_root)
+        previous_engine = dict(self._state["engines"][engine])
+        previous_primary = str(self._state.get("primaryModelEngine") or "forge")
+        running_engine = self._owned_running_engine()
+        if running_engine:
+            self._stop(running_engine, on_progress)
+        try:
+            patch: dict[str, Any] = {"sourceMode": source_mode}
+            if source_mode == "existing":
+                patch["existingRoot"] = existing_root
+            self.configure(engine, patch)
+            self._ensure_primary_model_engine(engine)
+            self._ensure_extension_mount(engine)
+            location = self._runtime_location(engine)
+            # Switching the running engine to an unavailable managed slot is an
+            # intentional stop.  An opposite running engine, however, must always
+            # be restarted because its shared model argv/config changed too.
+            if running_engine and (running_engine != engine or location is not None):
+                self._start(running_engine, on_progress, install_if_missing=False)
+        except Exception as exc:
+            rollback_error = self._restore_model_topology(
+                engine,
+                previous_engine,
+                previous_primary,
+                running_engine,
+                on_progress,
+            )
+            if rollback_error:
+                raise BackendRuntimeError(
+                    "MODEL_TOPOLOGY_ROLLBACK_FAILED",
+                    "설치 소스 적용과 이전 모델 경로/백엔드 복구가 모두 실패했습니다",
+                    stage="rollback",
+                    retryable=True,
+                    details={"reason": str(exc), "rollbackReason": rollback_error},
+                ) from exc
+            raise
+        mode_label = "기존 설치" if source_mode == "existing" else "앱 관리형 설치"
+        return {
+            "message": f"{ENGINE_DEFINITIONS[engine].name}을 {mode_label}로 전환했습니다",
+            "state": self.snapshot(),
+        }
+
+    def _set_primary_model_engine(
+        self,
+        engine: str,
+        on_progress: ProgressCallback | None,
+    ) -> dict[str, Any]:
+        if self._runtime_location(engine) is None:
+            raise BackendRuntimeError(
+                "PRIMARY_MODEL_SOURCE_UNAVAILABLE",
+                "설치되어 실행 가능한 백엔드만 메인 모델 UI로 지정할 수 있습니다",
+                stage="set_primary_model_engine",
+            )
+        previous = str(self._state.get("primaryModelEngine") or "forge")
+        if previous == engine:
+            return {"message": f"{ENGINE_DEFINITIONS[engine].name}가 이미 메인 모델 UI입니다"}
+        running_engine = next(
+            (key for key in ENGINE_DEFINITIONS if self._process_running(key)), ""
+        )
+        if running_engine:
+            self._stop(running_engine, on_progress)
+        self._state["primaryModelEngine"] = engine
+        self._save_state()
+        try:
+            if running_engine:
+                self._start(running_engine, on_progress, install_if_missing=False)
+        except Exception:
+            self._state["primaryModelEngine"] = previous
+            self._save_state()
+            if running_engine:
+                try:
+                    self._start(running_engine, on_progress, install_if_missing=False)
+                except Exception:
+                    pass
+            raise
+        return {"message": f"{ENGINE_DEFINITIONS[engine].name}를 메인 모델 UI로 지정했습니다"}
 
     # -------------------------------------------------------------- operations
 
@@ -1053,16 +1668,51 @@ class BackendRuntimeManager:
             elif action_name == "set_auto_start":
                 state = self.configure(key, {"autoStart": bool(payload.get("autoStart"))})
                 result = {"message": "자동 시작 설정을 저장했습니다", "state": state}
+            elif action_name == "set_install_root":
+                install_root = str(
+                    payload.get("existingRoot")
+                    or payload.get("installRoot")
+                    or payload.get("path")
+                    or ""
+                )
+                result = self._set_install_source(
+                    key,
+                    source_mode="existing",
+                    existing_root=install_root,
+                    on_progress=on_progress,
+                )
+            elif action_name == "use_managed_install":
+                result = self._set_install_source(
+                    key, source_mode="managed", on_progress=on_progress
+                )
+            elif action_name == "set_primary_model_engine":
+                requested = str(
+                    payload.get("primaryModelEngine")
+                    or payload.get("engine")
+                    or key
+                )
+                result = self._set_primary_model_engine(
+                    _canonical_engine(requested), on_progress
+                )
             elif action_name in {"save_extension_dir", "set_extension_dir"}:
                 was_running = self._process_running(key)
                 previous = str(self._state["engines"][key].get("extensionDir", "") or "")
+                previous_approved = bool(
+                    self._state["engines"][key].get("extensionDirApproved")
+                )
                 if was_running:
                     self._stop(key, on_progress)
                 try:
                     state = self.configure(key, {"extensionDir": payload.get("extensionDir", "")})
                     self._ensure_extension_mount(key)
                 except Exception:
-                    self.configure(key, {"extensionDir": previous})
+                    self.configure(
+                        key,
+                        {
+                            "extensionDir": previous,
+                            "extensionDirApproved": previous_approved,
+                        },
+                    )
                     try:
                         self._ensure_extension_mount(key)
                     except Exception:
@@ -1341,28 +1991,93 @@ class BackendRuntimeManager:
             )
         self._progress(on_progress, engine, action, "verify", "격리 런타임 구성을 확인했습니다", 88)
 
-    def _install(self, engine: str, on_progress: ProgressCallback | None) -> dict[str, Any]:
+    def _install(
+        self,
+        engine: str,
+        on_progress: ProgressCallback | None,
+        *,
+        restart_model_consumer: bool = True,
+    ) -> dict[str, Any]:
         current = self.snapshot()["engines"][engine]
         if current["installed"]:
             return {"message": f"{ENGINE_DEFINITIONS[engine].name}가 이미 설치되어 있습니다"}
+        if current.get("sourceMode") == "existing":
+            raise BackendRuntimeError(
+                "LINKED_INSTALL_INVALID",
+                "연결한 기존 설치를 찾을 수 없습니다. 경로를 다시 지정하거나 앱 관리형 설치로 전환하세요",
+                stage="install",
+            )
+        previous_engine = dict(self._state["engines"][engine])
+        previous_primary = str(self._state.get("primaryModelEngine") or "forge")
         release, commit = self._prepare_release(engine, on_progress)
-        with self._state_lock:
-            saved = self._state["engines"][engine]
-            saved["release"] = release
-            saved["remoteCommit"] = commit
-            saved["remoteVersion"] = commit[:12]
-            saved["lastChecked"] = _utc_now()
-            self._save_state()
-        self._ensure_extension_mount(engine)
+        running_engine = self._owned_running_engine() if restart_model_consumer else ""
+        if running_engine:
+            self._stop(running_engine, on_progress)
+        try:
+            with self._state_lock:
+                saved = self._state["engines"][engine]
+                saved["release"] = release
+                saved["remoteCommit"] = commit
+                saved["remoteVersion"] = commit[:12]
+                saved["lastChecked"] = _utc_now()
+                self._save_state()
+            self._ensure_primary_model_engine(engine)
+            self._ensure_extension_mount(engine)
+            if running_engine:
+                self._start(running_engine, on_progress, install_if_missing=False)
+        except Exception as exc:
+            rollback_error = self._restore_model_topology(
+                engine,
+                previous_engine,
+                previous_primary,
+                running_engine,
+                on_progress,
+            )
+            if rollback_error:
+                raise BackendRuntimeError(
+                    "MODEL_TOPOLOGY_ROLLBACK_FAILED",
+                    "설치 적용과 이전 모델 경로/백엔드 복구가 모두 실패했습니다",
+                    stage="rollback",
+                    retryable=True,
+                    details={"reason": str(exc), "rollbackReason": rollback_error},
+                ) from exc
+            raise
         return {"message": f"{ENGINE_DEFINITIONS[engine].name} 설치를 완료했습니다", "release": release}
 
     def _check_update(self, engine: str, on_progress: ProgressCallback | None) -> dict[str, Any]:
         definition = ENGINE_DEFINITIONS[engine]
         self._require_tools()
         self._progress(on_progress, engine, "check_update", "version_check", "원격 버전을 확인합니다", 30)
-        remote = self._remote_head(definition)
+        state = self._state["engines"][engine]
         source = self._source_root(engine)
-        local = self._capture(["git", "rev-parse", "HEAD"], cwd=source) if source.is_dir() else ""
+        if state.get("sourceMode") == "existing":
+            location = self._runtime_location(engine, require_valid=True)
+            assert location is not None
+            source = location.source_root
+            _version, local, branch = self._local_git_info(source)
+            repository = self._git_origin_url(source)
+            if not repository or not local:
+                raise BackendRuntimeError(
+                    "LINKED_VERSION_UNAVAILABLE",
+                    "기존 설치가 Git 저장소가 아니어서 원격 버전을 확인할 수 없습니다",
+                    stage="version_check",
+                )
+            branch = branch or definition.branch
+            result = self.adapter.run(
+                ["git", "ls-remote", repository, f"refs/heads/{branch}"], timeout=60
+            )
+            if result.returncode != 0 or not result.output.strip():
+                raise BackendRuntimeError(
+                    "VERSION_CHECK_FAILED",
+                    "기존 설치의 원격 버전을 확인하지 못했습니다",
+                    stage="version_check",
+                    retryable=True,
+                    details={"output": result.output[-1000:]},
+                )
+            remote = result.output.strip().split()[0]
+        else:
+            remote = self._remote_head(definition)
+            local = self._capture(["git", "rev-parse", "HEAD"], cwd=source) if source.is_dir() else ""
         with self._state_lock:
             saved = self._state["engines"][engine]
             saved["remoteCommit"] = remote
@@ -1383,35 +2098,40 @@ class BackendRuntimeManager:
 
     def _update(self, engine: str, on_progress: ProgressCallback | None) -> dict[str, Any]:
         state = self.snapshot()["engines"][engine]
+        if state.get("sourceMode") == "existing":
+            raise BackendRuntimeError(
+                "LINKED_UPDATE_UNSUPPORTED",
+                "연결한 기존 설치는 앱에서 수정하지 않습니다. 해당 설치의 업데이트 방식을 이용하세요",
+                stage="update",
+            )
         if not state["installed"]:
             return self._install(engine, on_progress)
         check = self._check_update(engine, on_progress)
         if not check["updateAvailable"]:
             return {"message": "현재 버전이 최신입니다", **check}
-        was_running = self._process_running(engine)
-        previous_release = str(self._state["engines"][engine].get("release", ""))
+        previous_engine = dict(self._state["engines"][engine])
+        previous_primary = str(self._state.get("primaryModelEngine") or "forge")
+        running_engine = self._owned_running_engine()
         release, commit = self._prepare_release(engine, on_progress)
-        if was_running:
-            self._stop(engine, on_progress)
-        with self._state_lock:
-            self._state["engines"][engine]["release"] = release
-            self._state["engines"][engine]["remoteCommit"] = commit
-            self._state["engines"][engine]["remoteVersion"] = commit[:12]
-            self._state["engines"][engine]["lastChecked"] = _utc_now()
-            self._save_state()
+        if running_engine:
+            self._stop(running_engine, on_progress)
         try:
-            if was_running:
-                self._start(engine, on_progress, install_if_missing=False)
-        except Exception as exc:
             with self._state_lock:
-                self._state["engines"][engine]["release"] = previous_release
+                self._state["engines"][engine]["release"] = release
+                self._state["engines"][engine]["remoteCommit"] = commit
+                self._state["engines"][engine]["remoteVersion"] = commit[:12]
+                self._state["engines"][engine]["lastChecked"] = _utc_now()
                 self._save_state()
-            rollback_error = ""
-            if previous_release and was_running:
-                try:
-                    self._start(engine, on_progress, install_if_missing=False)
-                except Exception as rollback_exc:
-                    rollback_error = str(rollback_exc)
+            if running_engine:
+                self._start(running_engine, on_progress, install_if_missing=False)
+        except Exception as exc:
+            rollback_error = self._restore_model_topology(
+                engine,
+                previous_engine,
+                previous_primary,
+                running_engine,
+                on_progress,
+            )
             if rollback_error:
                 raise BackendRuntimeError(
                     "ROLLBACK_FAILED",
@@ -1438,21 +2158,17 @@ class BackendRuntimeManager:
         )
 
     def _write_comfy_model_paths(self) -> Path:
-        from core.forge_modules import get_forge_paths
-
-        paths = get_forge_paths()
+        paths = self._combined_model_paths()
         output = self._data_root("comfyui") / "aistudio_extra_model_paths.yaml"
         output.parent.mkdir(parents=True, exist_ok=True)
         # JSON is a valid YAML 1.2 document and avoids adding a YAML writer dependency.
-        payload = {
-            "aistudio_shared": {
-                "base_path": "",
-                "checkpoints": str(paths["checkpoint_dir"]),
-                "loras": str(paths["lora_dir"]),
-                "vae": str(paths["vae_dir"]),
-                "text_encoders": str(paths["text_encoder_dir"]),
-            }
-        }
+        shared: dict[str, str] = {"base_path": ""}
+        shared.update({
+            category: "\n".join(values)
+            for category, values in paths.items()
+            if values
+        })
+        payload = {"aistudio_shared": shared}
         text = json.dumps(payload, ensure_ascii=False, indent=2)
         tmp = output.with_suffix(output.suffix + ".tmp")
         tmp.write_text(text, encoding="utf-8")
@@ -1461,39 +2177,62 @@ class BackendRuntimeManager:
 
     def _launch_argv(self, engine: str, port: int) -> tuple[list[str], Path, dict[str, str]]:
         definition = ENGINE_DEFINITIONS[engine]
-        source = self._source_root(engine)
-        python = self._venv_python(self._venv_root(engine))
+        location = self._runtime_location(engine, require_valid=True)
+        assert location is not None
+        source = location.source_root
+        python = location.python_path
         data = self._data_root(engine)
         data.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
         env["AISTUDIO_MANAGED_ENGINE"] = engine
         env["AISTUDIO_LAUNCH_NONCE"] = uuid.uuid4().hex
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
         if engine == "forge":
-            from core.forge_modules import get_forge_paths
-
             argv = [
                 str(python), str(source / definition.entrypoint),
                 "--api", "--api-server-stop", "--port", str(port),
                 "--data-dir", str(data), "--theme", "dark",
             ]
+            if self._state["engines"][engine].get("sourceMode") == "existing":
+                # A linked environment is used as-is.  Do not let launch.py run
+                # its implicit Git/pip preparation against the user's venv.
+                argv.append("--skip-prepare-environment")
             flag_map = {
-                "checkpoint_dir": "--ckpt-dirs",
-                "lora_dir": "--lora-dirs",
-                "vae_dir": "--vae-dirs",
-                "text_encoder_dir": "--text-encoder-dirs",
+                "checkpoints": "--ckpt-dirs",
+                "diffusion_models": "--ckpt-dirs",
+                "loras": "--lora-dirs",
+                "vae": "--vae-dirs",
+                "text_encoders": "--text-encoder-dirs",
             }
-            for key, path in get_forge_paths().items():
-                if path.is_dir():
-                    argv.extend([flag_map[key], str(path)])
+            seen: dict[str, set[str]] = {flag: set() for flag in set(flag_map.values())}
+            for source_engine in self._model_engine_order():
+                own = self._model_paths(source_engine, self._runtime_location(source_engine))
+                for category, flag in flag_map.items():
+                    for path in own[category]:
+                        marker = os.path.normcase(str(Path(path).resolve()))
+                        if marker in seen[flag]:
+                            continue
+                        seen[flag].add(marker)
+                        argv.extend([flag, path])
         else:
             extra_paths = self._write_comfy_model_paths()
-            argv = [
-                str(python), str(source / definition.entrypoint),
+            argv = [str(python)]
+            if location.portable:
+                argv.append("-s")
+            argv.append(str(source / definition.entrypoint))
+            if location.portable:
+                argv.append("--windows-standalone-build")
+            argv.extend([
                 "--listen", "127.0.0.1", "--port", str(port),
                 "--base-directory", str(data),
                 "--extra-model-paths-config", str(extra_paths),
-                "--enable-manager",
-            ]
+            ])
+            # ComfyUI-Manager can run deferred node deletion/install scripts and
+            # dependency resolution at startup.  On a linked runtime those writes
+            # would target the user's custom_nodes junction and Python environment,
+            # bypassing this manager's explicit external-folder approval boundary.
+            if self._state["engines"][engine].get("sourceMode") == "managed":
+                argv.append("--enable-manager")
         return argv, source, env
 
     def _start(
@@ -1570,7 +2309,11 @@ class BackendRuntimeManager:
                 raise BackendRuntimeError(
                     "NOT_INSTALLED", "관리형 백엔드가 설치되지 않았습니다", stage="start"
                 )
-            self._install(engine, on_progress)
+            self._install(
+                engine,
+                on_progress,
+                restart_model_consumer=False,
+            )
         if cancel.is_set():
             raise BackendRuntimeError(
                 "START_CANCELLED", "앱 종료 요청으로 백엔드 시작을 취소했습니다", stage="start"
@@ -1801,6 +2544,12 @@ class BackendRuntimeManager:
                 "관리형 백엔드를 설치하거나 기존 백엔드의 확장 폴더를 먼저 지정하세요",
                 stage="extension",
             )
+        if not state.get("extensionWritable"):
+            raise BackendRuntimeError(
+                "EXTENSION_WRITE_NOT_APPROVED",
+                "자동 탐지한 기존 설치의 확장 폴더는 읽기 전용입니다. 저장할 확장 폴더를 명시적으로 지정하세요",
+                stage="extension",
+            )
         url, name = self._validate_repository_url(str(payload.get("repoUrl") or payload.get("url") or ""))
         root = self._ensure_extension_mount(engine) if installed else self._validate_extension_root(
             self._extension_root(engine), engine=engine
@@ -1830,9 +2579,9 @@ class BackendRuntimeManager:
                 )
             requirements = staging / "requirements.txt"
             if requirements.is_file():
-                if installed:
+                if installed and state.get("sourceMode") == "managed":
                     self._pip_install(
-                        engine, self._venv_python(self._venv_root(engine)), requirements,
+                        engine, self._python_path(engine), requirements,
                         on_progress, "install_extension", 65,
                     )
                 else:
@@ -1921,6 +2670,12 @@ class BackendRuntimeManager:
                 "관리형 백엔드를 설치하거나 기존 백엔드의 확장 폴더를 먼저 지정하세요",
                 stage="extension_update",
             )
+        if not state.get("extensionWritable"):
+            raise BackendRuntimeError(
+                "EXTENSION_WRITE_NOT_APPROVED",
+                "자동 탐지한 기존 설치의 확장 폴더는 읽기 전용입니다. 저장할 확장 폴더를 명시적으로 지정하세요",
+                stage="extension_update",
+            )
         target = self._extension_by_id(engine, payload)
         if not (target / ".git").is_dir():
             raise BackendRuntimeError("EXTENSION_NOT_GIT", "Git으로 설치된 확장만 업데이트할 수 있습니다")
@@ -1949,9 +2704,9 @@ class BackendRuntimeManager:
                 )
             requirements = target / "requirements.txt"
             if requirements.is_file():
-                if installed:
+                if installed and state.get("sourceMode") == "managed":
                     self._pip_install(
-                        engine, self._venv_python(self._venv_root(engine)), requirements,
+                        engine, self._python_path(engine), requirements,
                         on_progress, "update_extension", 75,
                     )
                 else:

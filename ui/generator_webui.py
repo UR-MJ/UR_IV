@@ -542,11 +542,27 @@ class WebUIMixin:
         """서버 정보 로드 완료"""
         self._managed_runtime_startup_inflight = False
         backend_name = "ComfyUI" if get_backend_type() == BackendType.COMFYUI else "WebUI"
+        inventory_engine = "comfyui" if get_backend_type() == BackendType.COMFYUI else "forge"
 
         # 모델
         models = info.get('models', [])
         self.model_combo.clear()
         self.model_combo.addItems(models)
+        # 값은 API가 받는 raw string 그대로 유지하고, 출처 구분은 별도 property로
+        # 보낸다. 표시용 prefix를 모델명에 붙이면 실제 생성 요청이 깨진다.
+        model_inventory = None
+        try:
+            from core.model_inventory import get_model_inventory
+
+            model_inventory = get_model_inventory(active_engine=inventory_engine)
+            model_option_groups = model_inventory.option_groups('checkpoints', models)
+        except Exception as exc:
+            print(f"[Models] 통합 인벤토리 로드 실패: {exc}")
+            model_option_groups = []
+        try:
+            self.vue_bridge.pushWidgetProperty('model_combo', 'optionGroups', model_option_groups)
+        except Exception:
+            pass
 
         # 샘플러
         samplers = info.get('samplers', [])
@@ -577,13 +593,17 @@ class WebUIMixin:
             slot_widgets['vae_combo'].clear()
             slot_widgets['vae_combo'].addItems(vae_list)
 
-        # 메인 체크포인트 VAE / TE / SAM3 — Forge models 디렉토리 직접 스캔
+        # 메인 체크포인트 VAE / TE는 선택한 주 라이브러리 전체 + 보조 UI의
+        # content-unique 파일을 사용한다. SAM3는 현재 Forge 전용 경로를 유지한다.
         try:
-            from core.forge_modules import (
-                list_vae_files, list_te_files, list_sam3_checkpoints, get_forge_root
-            )
-            disk_vae = list_vae_files()
-            disk_te = list_te_files()
+            from core.forge_modules import list_sam3_checkpoints
+
+            vae_entries = model_inventory.entries('vae', backend_items=vae_list) if model_inventory else []
+            te_entries = model_inventory.entries('text_encoders') if model_inventory else []
+            disk_vae = [str(entry.get('runtimeName') or '') for entry in vae_entries]
+            disk_te = [str(entry.get('runtimeName') or '') for entry in te_entries]
+            disk_vae = [name for name in disk_vae if name]
+            disk_te = [name for name in disk_te if name]
             disk_sam3 = list_sam3_checkpoints()
         except Exception:
             disk_vae, disk_te, disk_sam3 = [], [], []
@@ -607,12 +627,12 @@ class WebUIMixin:
                 except Exception:
                     pass
 
-        # TE 파일 목록을 Vue로 전달 — te_main_input의 'items' property
-        if disk_te:
-            try:
-                self.vue_bridge.pushWidgetProperty('te_main_input', 'items', disk_te)
-            except Exception:
-                pass
+        # TE 파일 목록을 Vue로 전달 — 빈 목록도 보내야 설치/PRIMARY 전환 뒤
+        # 이전 소스의 stale 항목이 남지 않는다.
+        try:
+            self.vue_bridge.pushWidgetProperty('te_main_input', 'items', disk_te)
+        except Exception:
+            pass
 
         # Checkpoint
         checkpoints = info.get('checkpoints', ["Use same checkpoint"])
@@ -630,11 +650,34 @@ class WebUIMixin:
         # 저장된 설정 불러오기
         self.load_settings()
 
+        # load_settings()는 저장된 TE chips를 다시 주입한다. 현재 통합
+        # 인벤토리에 없는 파일은 생성 요청으로 흘러가지 않게 여기서 거른다.
+        try:
+            available_te = set(disk_te)
+            current_te = [
+                item.strip() for item in (self.te_main_input.text() or '').split(',')
+                if item.strip()
+            ]
+            valid_te = [item for item in current_te if item in available_te]
+            if valid_te != current_te:
+                self.te_main_input.setText(', '.join(valid_te))
+        except Exception:
+            pass
+
         # ComfyUI: 워크플로우의 체크포인트를 자동 선택
         if get_backend_type() == BackendType.COMFYUI:
             self._auto_select_workflow_model(models)
 
         # UI 활성화 — 백엔드가 실제로 응답함 → 연결됨 표시(VRAM 폴링/LoRA 프리로드 재개)
+        # 오프라인 상태에서 만들어진 merged LoRA 결과는 raw cache가 빈 배열인
+        # 채로도 유효해 보일 수 있다. 연결 성공 경계에서 둘 다 무효화해 다음
+        # 모달 오픈이 실제 백엔드 목록을 한 번 다시 읽게 한다.
+        try:
+            from widgets.lora_manager import LoraManagerDialog
+            LoraManagerDialog._lora_cache = []
+            self.vue_bridge._merged_lora_cache = None
+        except Exception:
+            pass
         self._backend_connected = True
         self.btn_generate.setEnabled(True)
         self.viewer_label.setText(f"✅ {backend_name} 연결 완료!\n생성 버튼을 눌러 시작하세요.")
@@ -664,6 +707,23 @@ class WebUIMixin:
         self._backend_connected = False  # 폴링 중단 (다음 연결 성공 시 재개)
         backend_name = "ComfyUI" if get_backend_type() == BackendType.COMFYUI else "WebUI"
         api_url = get_backend().api_url
+
+        # A runtime/source switch can fail after the previous backend populated
+        # its model choices.  Clear values and grouping together so stale raw
+        # names can never be sent to the newly selected backend.
+        self.btn_generate.setEnabled(False)
+        self.btn_random_prompt.setEnabled(False)
+        self.model_combo.clear()
+        self.hires_checkpoint_combo.clear()
+        self.vae_main_combo.clear()
+        for slot_widgets in [self.s1_widgets, self.s2_widgets]:
+            slot_widgets['checkpoint_combo'].clear()
+            slot_widgets['vae_combo'].clear()
+        try:
+            self.vue_bridge.pushWidgetProperty('model_combo', 'optionGroups', [])
+            self.vue_bridge.pushWidgetProperty('te_main_input', 'items', [])
+        except Exception:
+            pass
 
         self.viewer_label.setText(
             f"❌ {backend_name} 연결 실패\n\n{error_msg}\n\n"

@@ -38,16 +38,41 @@
         <div v-else-if="!filtered.length" class="lm-empty">
           {{ loras.length ? '검색 결과 없음' : '설치된 LoRA가 없습니다 (백엔드 연결 확인)' }}
         </div>
-        <div v-for="l in filtered" :key="l.name" class="lm-item">
-          <div class="lm-item-main">
-            <div class="lm-name">{{ l.name }}</div>
-            <div class="lm-triggers" v-if="l.triggerWords && l.triggerWords.length">
-              <span v-for="tw in l.triggerWords.slice(0, 8)" :key="tw" class="lm-tw">{{ tw }}</span>
-            </div>
-          </div>
-          <input type="number" v-model.number="l._w" step="0.05" min="-2" max="3" class="lm-weight" title="가중치" />
-          <button class="lm-add" @click="add(l)">+ 추가</button>
+        <div v-if="unavailableCount" class="lm-availability-note">
+          현재 실행 백엔드에서 보이지 않는 {{ unavailableCount }}개 항목은 확인만 가능하며 추가할 수 없습니다.
         </div>
+        <section v-for="section in filteredSections" :key="section.key" class="lm-section">
+          <header class="lm-section-header">
+            <div>
+              <strong>{{ section.label }}</strong>
+              <span>{{ section.description }}</span>
+            </div>
+            <span class="lm-section-count">{{ section.items.length }}</span>
+          </header>
+          <div v-for="l in section.items" :key="l.id || `${l.source || 'main'}:${l.runtimeName || l.name}`"
+            class="lm-item" :class="{ unavailable: l.backendAvailable === false }">
+            <div class="lm-item-main">
+              <div class="lm-name-row">
+                <div class="lm-name" :title="l.runtimeName || l.name">{{ l.label || l.name }}</div>
+                <span v-if="isPrimaryLora(l)" class="lm-source-badge main">MAIN</span>
+                <span v-if="l.source" class="lm-source-badge">{{ l.sourceName || sourceLabel(l.source) }}</span>
+                <span v-if="l.group && !isPrimaryLora(l)" class="lm-source-badge secondary">{{ groupLabel(l.group) }}</span>
+                <span v-if="l.nameConflict" class="lm-source-badge conflict">NAME CONFLICT</span>
+              </div>
+              <div v-if="l.backendAvailable === false" class="lm-unavailable">
+                현재 실행 백엔드에서는 이 LoRA 경로를 사용할 수 없습니다.
+              </div>
+              <div class="lm-triggers" v-if="l.triggerWords && l.triggerWords.length">
+                <span v-for="tw in l.triggerWords.slice(0, 8)" :key="tw" class="lm-tw">{{ tw }}</span>
+              </div>
+            </div>
+            <input type="number" v-model.number="l._w" step="0.05" min="-2" max="3" class="lm-weight"
+              title="가중치" :disabled="l.backendAvailable === false" />
+            <button class="lm-add" :disabled="l.backendAvailable === false"
+              :title="l.backendAvailable === false ? '현재 백엔드에서 사용할 수 없습니다' : `${l.runtimeName || l.name} 추가`"
+              @click="add(l)">+ 추가</button>
+          </div>
+        </section>
       </div>
 
       <!-- 일괄 붙여넣기 (<lora:name:weight> 텍스트) -->
@@ -72,7 +97,27 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 
-interface LoraItem { name: string; triggerWords: string[]; _w?: number; [k: string]: any }
+interface LoraItem {
+  name: string
+  label?: string
+  triggerWords: string[]
+  source?: string
+  sourceName?: string
+  group?: string
+  primary?: boolean
+  backendAvailable?: boolean
+  runtimeName?: string
+  nameConflict?: boolean
+  _w?: number
+  [k: string]: any
+}
+
+interface LoraSection {
+  key: string
+  label: string
+  description: string
+  items: LoraItem[]
+}
 
 const emit = defineEmits<{
   close: []
@@ -93,6 +138,7 @@ const extMode = ref(false)
 const extUrl = ref('')
 const extLoading = ref(false)
 const extError = ref('')
+let disconnectExtUrlReady: (() => void) | null = null
 
 async function openExtManager() {
   extMode.value = true
@@ -126,8 +172,56 @@ function onExtUrlReady(json: string) {
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
-  return q ? loras.value.filter(l => l.name.toLowerCase().includes(q)) : loras.value
+  return q ? loras.value.filter(l => [l.label, l.name, l.runtimeName, l.source, l.sourceName, l.group, ...(l.triggerWords || [])]
+    .some(value => String(value || '').toLowerCase().includes(q))) : loras.value
 })
+
+function isPrimaryLora(lora: LoraItem) {
+  const group = String(lora.group || '').toLowerCase()
+  return Boolean(lora.primary || ['main', 'primary', 'shared'].includes(group))
+}
+
+function sourceLabel(source: string) {
+  const normalized = source.toLowerCase()
+  if (normalized === 'forge') return 'FORGE NEO'
+  if (normalized === 'comfyui' || normalized === 'comfy') return 'COMFYUI'
+  return source.toUpperCase()
+}
+
+function groupLabel(group: string) {
+  const normalized = group.toLowerCase().replace(/[_-]+/g, ' ')
+  if (normalized.includes('unique') || normalized.includes('secondary')) return 'UNIQUE'
+  return group.toUpperCase()
+}
+
+const filteredSections = computed<LoraSection[]>(() => {
+  const main = filtered.value.filter(isPrimaryLora)
+  const secondary = filtered.value.filter(lora => !isPrimaryLora(lora))
+  const sections: LoraSection[] = []
+  if (main.length) {
+    sections.push({
+      key: 'main', label: 'MAIN LIBRARY',
+      description: '기본 모델 라이브러리에서 공유되는 LoRA', items: main,
+    })
+  }
+  const bySource = new Map<string, LoraItem[]>()
+  for (const lora of secondary) {
+    const source = String(lora.source || lora.group || 'secondary')
+    const entries = bySource.get(source) || []
+    entries.push(lora)
+    bySource.set(source, entries)
+  }
+  for (const [source, items] of bySource) {
+    const displaySource = items[0]?.sourceName || sourceLabel(source)
+    sections.push({
+      key: `secondary:${source}`, label: `${displaySource} UNIQUE`,
+      description: '메인 라이브러리와 중복되지 않는 백엔드 전용 LoRA', items,
+    })
+  }
+  return sections
+})
+
+const unavailableCount = computed(() => filtered.value.filter(lora => lora.backendAvailable === false).length)
 
 async function load(mode = '') {
   loading.value = true
@@ -143,7 +237,8 @@ async function load(mode = '') {
 }
 
 function add(l: LoraItem) {
-  emit('add', { name: l.name, weight: (typeof l._w === 'number' ? l._w : 1.0), triggerWords: l.triggerWords || [] })
+  if (l.backendAvailable === false) return
+  emit('add', { name: l.runtimeName || l.name, weight: (typeof l._w === 'number' ? l._w : 1.0), triggerWords: l.triggerWords || [] })
 }
 
 function applyBatch() {
@@ -163,15 +258,19 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { e.stopPropagation()
 
 onMounted(() => {
   window.addEventListener('keydown', onKey, true)
-  onBackendEvent('loraManagerUrlReady', onExtUrlReady)
+  disconnectExtUrlReady = onBackendEvent('loraManagerUrlReady', onExtUrlReady)
   load()
   if (searchEl.value) searchEl.value.focus()
 })
-onUnmounted(() => window.removeEventListener('keydown', onKey, true))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKey, true)
+  disconnectExtUrlReady?.()
+  disconnectExtUrlReady = null
+})
 </script>
 
 <style scoped>
-.lm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 2200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.lm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 3200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .lm-modal { width: min(840px, 94vw); height: min(840px, 92vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 .lm-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .lm-header h3 { font-size: 17px; font-weight: 800; color: var(--text-primary); }
@@ -197,14 +296,42 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .lm-refresh:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .lm-list { flex: 1; overflow-y: auto; padding: 4px 16px; }
 .lm-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px; }
+.lm-availability-note {
+  margin: 4px 4px 10px; padding: 8px 10px; border: 1px solid rgba(251,191,36,.28);
+  border-radius: 7px; background: rgba(251,191,36,.06); color: #d4b45f; font-size: 10px;
+}
+.lm-section { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.lm-section-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 11px; background: var(--bg-input); border-bottom: 1px solid var(--border);
+}
+.lm-section-header > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lm-section-header strong { color: var(--text-primary); font-size: 10px; letter-spacing: .8px; }
+.lm-section-header span { color: var(--text-muted); font-size: 9px; }
+.lm-section-count {
+  flex-shrink: 0; min-width: 20px; padding: 2px 6px; border-radius: 8px;
+  background: var(--bg-button); color: var(--text-secondary) !important; text-align: center; font-weight: 800;
+}
 .lm-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.lm-item:last-child { border-bottom: none; }
+.lm-item.unavailable { opacity: .58; }
 .lm-item-main { flex: 1; min-width: 0; }
-.lm-name { font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.lm-name { min-width: 0; flex: 1; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-source-badge {
+  flex-shrink: 0; padding: 2px 5px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--bg-input); color: var(--text-muted); font-size: 7px; font-weight: 900; letter-spacing: .4px;
+}
+.lm-source-badge.main { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); color: #60a5fa; }
+.lm-source-badge.secondary { border-color: rgba(34,211,238,.3); background: rgba(34,211,238,.08); color: #67e8f9; }
+.lm-source-badge.conflict { border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.1); color: #f87171; }
+.lm-unavailable { margin-top: 3px; color: #d4b45f; font-size: 9px; }
 .lm-triggers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .lm-tw { font-size: 9px; padding: 1px 6px; border-radius: 7px; background: var(--bg-button); color: var(--text-muted); }
 .lm-weight { width: 64px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 5px 6px; color: var(--text-primary); font-size: 12px; text-align: center; }
 .lm-add { background: var(--accent); color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
 .lm-add:hover { background: var(--accent-hover); }
+.lm-add:disabled, .lm-weight:disabled { opacity: .5; cursor: not-allowed; }
 .lm-batch { margin: 4px 20px; border: 1px solid var(--border); border-radius: var(--radius-base); }
 .lm-batch > summary { padding: 8px 12px; font-size: 11px; font-weight: 700; color: var(--text-secondary); cursor: pointer; }
 .lm-batch-text { width: calc(100% - 24px); margin: 0 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; color: var(--text-primary); font-size: 11px; resize: vertical; }
@@ -214,4 +341,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .lm-foot-spacer { flex: 1; }
 .lm-done { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 12px; font-weight: 700; padding: 9px 16px; cursor: pointer; }
 .lm-done:hover { color: var(--text-primary); border-color: var(--accent); }
+@media (max-width: 520px) {
+  .lm-header { align-items: flex-start; padding: 12px; }
+  .lm-head-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .lm-searchbar, .lm-footer { padding-left: 12px; padding-right: 12px; }
+  .lm-list { padding-left: 8px; padding-right: 8px; }
+  .lm-item { align-items: flex-start; flex-wrap: wrap; gap: 7px; }
+  .lm-item-main { flex: 0 0 100%; }
+  .lm-weight { margin-left: auto; }
+  .lm-batch { margin-left: 12px; margin-right: 12px; }
+}
 </style>

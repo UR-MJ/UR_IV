@@ -107,7 +107,7 @@ _WEB_METHODS = frozenset({
     # 확인해 항상 거부한다. 이를 명시적으로 노출해야 프론트 슬롯 계약 검사도
     # 유지하면서 LAN WebChannel이 로컬 process/filesystem을 바꾸지 못한다.
     "getBackendRuntimeState", "runBackendRuntimeOperation",
-    "selectBackendExtensionDirectory",
+    "selectBackendExtensionDirectory", "selectBackendInstallDirectory",
     "getUpscalers", "requestUpscalers", "saveImageExif", "renameFile",
     "getEdgeMap", "ollamaEnhance", "convertPromptToNl", "editorPasteImage",
     "editorAutoSave", "editorCheckAutoSave", "editorClearAutoSave", "getFileInfo",

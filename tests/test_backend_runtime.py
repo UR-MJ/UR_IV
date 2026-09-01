@@ -25,6 +25,31 @@ COMMIT_A = "a" * 40
 COMMIT_B = "b" * 40
 
 
+def write_local_git_repository(
+    source: Path,
+    *,
+    repository: str,
+    branch: str,
+    commit: str = COMMIT_A,
+) -> None:
+    git_dir = source / ".git"
+    (git_dir / "refs" / "heads").mkdir(parents=True, exist_ok=True)
+    (git_dir / "HEAD").write_text(f"ref: refs/heads/{branch}\n", encoding="ascii")
+    (git_dir / "refs" / "heads" / branch).write_text(
+        commit + "\n", encoding="ascii"
+    )
+    (git_dir / "config").write_text(
+        f'[remote "origin"]\n\turl = {repository}\n', encoding="utf-8"
+    )
+
+
+def write_windows_venv_python(source: Path, folder: str = ".venv") -> Path:
+    python = source / folder / "Scripts" / "python.exe"
+    python.parent.mkdir(parents=True, exist_ok=True)
+    python.write_bytes(b"linked python")
+    return python
+
+
 class LocalRuntimeAdapterTests(unittest.TestCase):
     def test_shutdown_cancels_an_owned_command_process(self):
         adapter = LocalRuntimeAdapter()
@@ -496,6 +521,408 @@ class BackendRuntimeSnapshotTests(BackendRuntimeTestCase):
         self.assertTrue(any("--branch" in call and "master" in call and COMFYUI_REPOSITORY in call for call in clone_calls))
 
 
+class BackendRuntimeLinkedInstallTests(BackendRuntimeTestCase):
+    def make_linked_forge(self) -> Path:
+        root = self.temp / "existing-forge"
+        root.mkdir()
+        (root / "launch.py").write_text("# linked forge", encoding="utf-8")
+        write_windows_venv_python(root, "venv")
+        write_local_git_repository(
+            root, repository=FORGE_REPOSITORY, branch="neo"
+        )
+        for relative in (
+            "extensions",
+            "models/Stable-diffusion",
+            "models/diffusion_models",
+            "models/Lora",
+            "models/VAE",
+            "models/text_encoder",
+        ):
+            (root / relative).mkdir(parents=True, exist_ok=True)
+        return root
+
+    def make_linked_comfy(self) -> Path:
+        root = self.temp / "existing-comfy"
+        root.mkdir()
+        (root / "main.py").write_text("# linked comfy", encoding="utf-8")
+        write_windows_venv_python(root)
+        write_local_git_repository(
+            root, repository=COMFYUI_REPOSITORY, branch="master"
+        )
+        for relative in (
+            "custom_nodes",
+            "models/checkpoints",
+            "models/diffusion_models",
+            "models/unet",
+            "models/loras",
+            "models/vae",
+            "models/text_encoders",
+            "models/clip",
+        ):
+            (root / relative).mkdir(parents=True, exist_ok=True)
+        return root
+
+    @staticmethod
+    def source_manifest(root: Path) -> dict[str, bytes]:
+        return {
+            str(path.relative_to(root)): path.read_bytes()
+            for path in root.rglob("*")
+            if path.is_file()
+        }
+
+    def test_broad_existing_install_boundaries_are_rejected(self):
+        with self.assertRaises(BackendRuntimeError) as caught:
+            self.manager.execute(
+                "forge",
+                "set_install_root",
+                {"existingRoot": str(self.runtime_root)},
+            )
+        self.assertEqual(caught.exception.code, "LINKED_INSTALL_PATH_UNSAFE")
+
+    def test_direct_configure_cannot_bypass_running_model_topology_transaction(self):
+        forge_root = self.make_linked_forge()
+        comfy_root = self.make_linked_comfy()
+        self.manager.execute(
+            "forge", "set_install_root", {"existingRoot": str(forge_root)}
+        )
+        self.manager.execute("forge", "start")
+
+        for patch_payload in (
+            {"sourceMode": "existing", "existingRoot": str(comfy_root)},
+            {"existingRoot": str(comfy_root)},
+        ):
+            with self.subTest(patch=patch_payload):
+                with self.assertRaises(BackendRuntimeError) as caught:
+                    self.manager.configure("comfyui", patch_payload)
+                self.assertEqual(
+                    caught.exception.code, "MODEL_TOPOLOGY_TRANSACTION_REQUIRED"
+                )
+                self.assertEqual(caught.exception.stage, "configure")
+                self.assertEqual(
+                    caught.exception.details.get("runningEngine"), "forge"
+                )
+
+        snapshot = self.manager.snapshot()
+        self.assertTrue(snapshot["engines"]["forge"]["running"])
+        self.assertEqual(snapshot["engines"]["comfyui"]["sourceMode"], "managed")
+        self.assertEqual(snapshot["engines"]["comfyui"]["existingRoot"], "")
+
+    def test_linked_forge_persists_exact_layout_and_starts_without_installing(self):
+        root = self.make_linked_forge()
+        before = self.source_manifest(root)
+
+        linked = self.manager.execute(
+            "forge", "set_install_root", {"existingRoot": str(root)}
+        )
+        forge = linked["snapshot"]["engines"]["forge"]
+
+        self.assertEqual(forge["sourceMode"], "existing")
+        self.assertEqual(Path(forge["existingRoot"]), root.resolve())
+        self.assertEqual(Path(forge["installRoot"]), root.resolve())
+        self.assertEqual(Path(forge["sourceRoot"]), root.resolve())
+        self.assertEqual(
+            Path(forge["pythonPath"]),
+            (root / "venv" / "Scripts" / "python.exe").resolve(),
+        )
+        self.assertFalse(forge["portable"])
+        self.assertFalse(forge["extensionDirApproved"])
+        self.assertFalse(forge["extensionWritable"])
+        self.assertEqual(Path(forge["extensionDir"]), (root / "extensions").resolve())
+        self.assertEqual(
+            forge["modelPaths"]["checkpoints"][0],
+            str(self.model_paths["checkpoint_dir"].resolve()),
+            "the existing Forge Settings override must keep first priority",
+        )
+        self.assertIn(
+            str((root / "models" / "Stable-diffusion").resolve()),
+            forge["modelPaths"]["checkpoints"],
+        )
+
+        self.adapter.calls.clear()
+        started = self.manager.execute("forge", "start")
+        start_call = self.adapter.start_calls[-1]
+        self.assertEqual(started["apiUrl"], "http://127.0.0.1:17860")
+        self.assertEqual(start_call["cwd"], root.resolve())
+        self.assertEqual(
+            Path(start_call["argv"][0]),
+            (root / "venv" / "Scripts" / "python.exe").resolve(),
+        )
+        self.assertEqual(
+            Path(start_call["argv"][start_call["argv"].index("--data-dir") + 1]),
+            self.runtime_root / "forge" / "data",
+        )
+        self.assertIn("--skip-prepare-environment", start_call["argv"])
+        forbidden_calls = [
+            call["argv"]
+            for call in self.adapter.calls
+            if call["argv"][:2] == ["git", "clone"]
+            or "pip" in call["argv"]
+            or call["argv"][1:3] == ["-m", "venv"]
+            or any(Path(part).name.casefold() == "webui-user.bat" for part in call["argv"])
+        ]
+        self.assertEqual(
+            forbidden_calls, [],
+            "linked start must not clone, create a venv, install packages or run user.bat",
+        )
+        self.manager.execute("forge", "stop")
+        self.assertEqual(self.source_manifest(root), before)
+
+        restored = self.make_manager().snapshot()["engines"]["forge"]
+        self.assertEqual(restored["sourceMode"], "existing")
+        self.assertEqual(Path(restored["sourceRoot"]), root.resolve())
+
+    def test_linked_comfy_detects_git_venv_and_both_portable_selection_levels(self):
+        direct = self.make_linked_comfy()
+        direct_before = self.source_manifest(direct)
+        linked = self.manager.execute(
+            "comfyui", "set_install_root", {"installRoot": str(direct)}
+        )
+        comfy = linked["snapshot"]["engines"]["comfyui"]
+
+        self.assertTrue(comfy["installed"])
+        self.assertFalse(comfy["portable"])
+        self.assertEqual(linked["snapshot"]["primaryModelEngine"], "comfyui")
+        self.assertEqual(linked["snapshot"]["activeEngine"], "")
+        direct_start = self.manager.execute("comfyui", "start")
+        direct_argv = self.adapter.start_calls[-1]["argv"]
+        self.assertNotIn("-s", direct_argv)
+        self.assertNotIn("--windows-standalone-build", direct_argv)
+        self.assertNotIn(
+            "--enable-manager", direct_argv,
+            "linked Comfy must not expose manager writes to the external Python/custom_nodes",
+        )
+        self.assertTrue(direct_start["ok"])
+        self.manager.execute("comfyui", "stop")
+        self.assertEqual(self.source_manifest(direct), direct_before)
+
+        outer = self.temp / "ComfyUI_windows_portable"
+        inner = outer / "ComfyUI"
+        inner.mkdir(parents=True)
+        (inner / "main.py").write_text("# portable comfy", encoding="utf-8")
+        (inner / "comfyui_version.py").write_text(
+            '__version__ = "0.31.0"\n', encoding="utf-8"
+        )
+        embedded = outer / "python_embeded" / "python.exe"
+        embedded.parent.mkdir()
+        embedded.write_bytes(b"portable python")
+        (inner / "custom_nodes").mkdir()
+        (inner / "models" / "loras").mkdir(parents=True)
+
+        self.manager.execute(
+            "comfyui", "set_install_root", {"path": str(outer)}
+        )
+        portable = self.manager.snapshot()["engines"]["comfyui"]
+        self.assertTrue(portable["portable"])
+        self.assertEqual(Path(portable["installRoot"]), outer.resolve())
+        self.assertEqual(Path(portable["sourceRoot"]), inner.resolve())
+        self.assertEqual(Path(portable["pythonPath"]), embedded.resolve())
+        self.assertEqual(portable["version"], "0.31.0")
+
+        self.manager.execute("comfyui", "start")
+        portable_argv = self.adapter.start_calls[-1]["argv"]
+        self.assertEqual(portable_argv[:3], [str(embedded.resolve()), "-s", str(inner.resolve() / "main.py")])
+        self.assertEqual(portable_argv[3], "--windows-standalone-build")
+        self.assertNotIn("--enable-manager", portable_argv)
+        self.manager.execute("comfyui", "stop")
+
+        self.manager.execute(
+            "comfyui", "set_install_root", {"existingRoot": str(inner)}
+        )
+        inner_selected = self.manager.snapshot()["engines"]["comfyui"]
+        self.assertEqual(Path(inner_selected["existingRoot"]), inner.resolve())
+        self.assertEqual(Path(inner_selected["installRoot"]), outer.resolve())
+        self.assertTrue(inner_selected["portable"])
+
+    def test_linking_inactive_source_restarts_active_backend_with_new_shared_paths(self):
+        comfy_root = self.make_linked_comfy()
+        self.manager.execute(
+            "comfyui", "set_install_root", {"existingRoot": str(comfy_root)}
+        )
+        self.manager.execute("comfyui", "start")
+        original_comfy = self.adapter.start_calls[-1]["process"]
+        forge_root = self.make_linked_forge()
+        forge_before = self.source_manifest(forge_root)
+        comfy_before = self.source_manifest(comfy_root)
+
+        self.manager.execute(
+            "forge", "set_install_root", {"existingRoot": str(forge_root)}
+        )
+
+        restarted = self.adapter.start_calls[-1]
+        self.assertEqual(original_comfy.terminate_calls, 1)
+        self.assertEqual(restarted["env"]["AISTUDIO_MANAGED_ENGINE"], "comfyui")
+        self.assertTrue(self.manager.snapshot()["engines"]["comfyui"]["running"])
+        config_path = Path(
+            restarted["argv"][restarted["argv"].index("--extra-model-paths-config") + 1]
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertIn(
+            str((forge_root / "models" / "Stable-diffusion").resolve()),
+            config["aistudio_shared"]["checkpoints"].splitlines(),
+        )
+        self.assertEqual(self.source_manifest(forge_root), forge_before)
+        self.assertEqual(self.source_manifest(comfy_root), comfy_before)
+
+    def test_linked_source_restart_failure_restores_state_and_previous_backend(self):
+        comfy_root = self.make_linked_comfy()
+        self.manager.execute(
+            "comfyui", "set_install_root", {"existingRoot": str(comfy_root)}
+        )
+        self.manager.execute("comfyui", "start")
+        original_comfy = self.adapter.start_calls[-1]["process"]
+        forge_root = self.make_linked_forge()
+        forge_before = self.source_manifest(forge_root)
+        self.adapter.start_behaviours.extend(["early_exit", "healthy"])
+
+        with self.assertRaises(BackendRuntimeError) as caught:
+            self.manager.execute(
+                "forge", "set_install_root", {"existingRoot": str(forge_root)}
+            )
+
+        self.assertEqual(caught.exception.code, "PROCESS_EXITED_EARLY")
+        snapshot = self.manager.snapshot()
+        self.assertEqual(snapshot["primaryModelEngine"], "comfyui")
+        self.assertEqual(snapshot["engines"]["forge"]["sourceMode"], "managed")
+        self.assertFalse(snapshot["engines"]["forge"]["installed"])
+        self.assertTrue(snapshot["engines"]["comfyui"]["running"])
+        self.assertTrue(snapshot["engines"]["comfyui"]["healthy"])
+        self.assertEqual(original_comfy.terminate_calls, 1)
+        self.assertEqual(len(self.adapter.start_calls), 3)
+        self.assertEqual(self.source_manifest(forge_root), forge_before)
+
+    def test_linked_check_is_read_only_and_update_is_explicitly_rejected(self):
+        root = self.make_linked_forge()
+        self.manager.execute(
+            "forge", "set_install_root", {"existingRoot": str(root)}
+        )
+        self.adapter.remote_heads[FORGE_REPOSITORY] = COMMIT_B
+        before = self.source_manifest(root)
+
+        checked = self.manager.execute("forge", "check_update")
+
+        self.assertEqual(checked["localCommit"], COMMIT_A)
+        self.assertEqual(checked["remoteCommit"], COMMIT_B)
+        self.assertTrue(checked["updateAvailable"])
+        self.assertEqual(self.source_manifest(root), before)
+        with self.assertRaises(BackendRuntimeError) as caught:
+            self.manager.execute("forge", "update")
+        self.assertEqual(caught.exception.code, "LINKED_UPDATE_UNSUPPORTED")
+        self.assertFalse(any(call["argv"][:2] == ["git", "clone"] for call in self.adapter.calls))
+        self.assertFalse(any("pip" in call["argv"] for call in self.adapter.calls))
+
+    def test_linked_comfy_reads_declared_version_without_executing_or_requiring_git(self):
+        outer = self.temp / "portable-version-only"
+        source = outer / "ComfyUI"
+        source.mkdir(parents=True)
+        (source / "main.py").write_text("# portable comfy", encoding="utf-8")
+        (source / "pyproject.toml").write_text(
+            '[project]\nname = "comfyui"\nversion = "0.30.0"\n',
+            encoding="utf-8",
+        )
+        embedded = outer / "python_embedded" / "python.exe"
+        embedded.parent.mkdir()
+        embedded.write_bytes(b"portable python")
+        (source / "custom_nodes").mkdir()
+        before = self.source_manifest(outer)
+
+        linked = self.manager.execute(
+            "comfyui", "set_install_root", {"existingRoot": str(outer)}
+        )
+
+        self.assertEqual(linked["snapshot"]["engines"]["comfyui"]["version"], "0.30.0")
+        with self.assertRaises(BackendRuntimeError) as caught:
+            self.manager.execute("comfyui", "check_update")
+        self.assertEqual(caught.exception.code, "LINKED_VERSION_UNAVAILABLE")
+        self.assertEqual(self.source_manifest(outer), before)
+
+    def test_primary_model_source_is_independent_validated_and_orders_shared_paths(self):
+        with self.assertRaises(BackendRuntimeError) as caught:
+            self.manager.execute("forge", "set_primary_model_engine")
+        self.assertEqual(caught.exception.code, "PRIMARY_MODEL_SOURCE_UNAVAILABLE")
+
+        forge_root = self.make_linked_forge()
+        comfy_root = self.make_linked_comfy()
+        self.manager.execute(
+            "forge", "set_install_root", {"existingRoot": str(forge_root)}
+        )
+        self.manager.execute(
+            "comfyui", "set_install_root", {"existingRoot": str(comfy_root)}
+        )
+        selected = self.manager.execute(
+            "comfyui", "set_primary_model_engine"
+        )
+        snapshot = selected["snapshot"]
+        self.assertEqual(snapshot["primaryModelEngine"], "comfyui")
+        self.assertEqual(snapshot["activeEngine"], "")
+        self.assertEqual(
+            set(snapshot["engines"]["comfyui"]["modelPaths"]),
+            {"checkpoints", "diffusion_models", "loras", "vae", "text_encoders"},
+        )
+
+        self.manager.execute("forge", "start")
+        forge_argv = self.adapter.start_calls[-1]["argv"]
+        checkpoint_values = [
+            forge_argv[index + 1]
+            for index, value in enumerate(forge_argv[:-1])
+            if value == "--ckpt-dirs"
+        ]
+        self.assertEqual(
+            checkpoint_values[0], str((comfy_root / "models" / "checkpoints").resolve())
+        )
+
+        self.manager.execute("comfyui", "start")
+        comfy_argv = self.adapter.start_calls[-1]["argv"]
+        config_path = Path(
+            comfy_argv[comfy_argv.index("--extra-model-paths-config") + 1]
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        shared_checkpoints = config["aistudio_shared"]["checkpoints"].splitlines()
+        self.assertEqual(
+            shared_checkpoints[0],
+            str((comfy_root / "models" / "checkpoints").resolve()),
+        )
+        self.assertIn(str(self.model_paths["checkpoint_dir"].resolve()), shared_checkpoints)
+
+    def test_auto_detected_extension_folder_is_read_only_until_explicitly_saved(self):
+        root = self.make_linked_forge()
+        self.manager.execute(
+            "forge", "set_install_root", {"existingRoot": str(root)}
+        )
+
+        with self.assertRaises(BackendRuntimeError) as caught:
+            self.manager.execute(
+                "forge",
+                "install_extension",
+                {"repoUrl": "https://github.com/example/plugin.git"},
+            )
+        self.assertEqual(caught.exception.code, "EXTENSION_WRITE_NOT_APPROVED")
+        self.assertFalse((root / "extensions" / "plugin").exists())
+
+        approved = self.manager.execute(
+            "forge",
+            "save_extension_dir",
+            {"extensionDir": str(root / "extensions")},
+        )
+        forge = approved["snapshot"]["engines"]["forge"]
+        self.assertTrue(forge["extensionDirApproved"])
+        self.assertTrue(forge["extensionWritable"])
+
+    def test_use_managed_install_clears_link_without_deleting_external_files(self):
+        root = self.make_linked_forge()
+        before = self.source_manifest(root)
+        self.manager.execute(
+            "forge", "set_install_root", {"existingRoot": str(root)}
+        )
+
+        switched = self.manager.execute("forge", "use_managed_install")
+        forge = switched["snapshot"]["engines"]["forge"]
+
+        self.assertEqual(forge["sourceMode"], "managed")
+        self.assertEqual(forge["existingRoot"], "")
+        self.assertFalse(forge["installed"])
+        self.assertEqual(self.source_manifest(root), before)
+
+
 class BackendRuntimeLaunchTests(BackendRuntimeTestCase):
     def test_forge_never_passes_bare_uv_hook_into_the_managed_venv(self):
         self.adapter.uv_path = "C:\\fake\\uv.exe"
@@ -608,8 +1035,39 @@ class BackendRuntimeLaunchTests(BackendRuntimeTestCase):
             comfy_model_config["aistudio_shared"]["checkpoints"],
             str(self.model_paths["checkpoint_dir"]),
         )
+        self.assertIn("--enable-manager", comfy_argv)
         # Starting Comfy stops only the Forge child owned by this manager.
         self.assertEqual(forge_call["process"].terminate_calls, 1)
+
+    def test_explicit_install_restarts_opposite_backend_for_model_topology(self):
+        self.manager.execute("comfyui", "install")
+        self.manager.execute("comfyui", "start")
+        original_comfy = self.adapter.start_calls[-1]["process"]
+
+        self.manager.execute("forge", "install")
+
+        self.assertEqual(original_comfy.terminate_calls, 1)
+        self.assertEqual(len(self.adapter.start_calls), 2)
+        restarted = self.adapter.start_calls[-1]
+        self.assertEqual(restarted["env"]["AISTUDIO_MANAGED_ENGINE"], "comfyui")
+        self.assertIn("--enable-manager", restarted["argv"])
+        self.assertTrue(self.manager.snapshot()["engines"]["comfyui"]["running"])
+
+    def test_start_auto_install_does_not_bounce_previous_backend_mid_switch(self):
+        self.manager.execute("forge", "install")
+        self.manager.execute("forge", "start")
+        original_forge = self.adapter.start_calls[-1]["process"]
+
+        switched = self.manager.execute("comfyui", "start")
+
+        self.assertTrue(switched["activate"])
+        self.assertEqual(original_forge.terminate_calls, 1)
+        self.assertEqual(
+            [call["env"]["AISTUDIO_MANAGED_ENGINE"] for call in self.adapter.start_calls],
+            ["forge", "comfyui"],
+            "auto-install must not restart Forge only to stop it again for the switch",
+        )
+        self.assertTrue(self.manager.snapshot()["engines"]["comfyui"]["running"])
 
     def test_failed_engine_switch_restores_the_previous_managed_backend(self):
         self.manager.execute("forge", "install")
@@ -782,6 +1240,45 @@ class BackendRuntimeLaunchTests(BackendRuntimeTestCase):
 
 
 class BackendRuntimeUpdateTests(BackendRuntimeTestCase):
+    def test_inactive_engine_update_restarts_active_backend_without_stale_model_paths(self):
+        self.manager.execute("forge", "install")
+        old_forge_source = Path(
+            self.manager.snapshot()["engines"]["forge"]["sourceRoot"]
+        )
+        old_models = old_forge_source / "models" / "Stable-diffusion"
+        old_models.mkdir(parents=True)
+        self.manager.execute("comfyui", "install")
+        self.manager.execute("comfyui", "start")
+        original_comfy = self.adapter.start_calls[-1]["process"]
+        old_config_path = Path(
+            self.adapter.start_calls[-1]["argv"][
+                self.adapter.start_calls[-1]["argv"].index("--extra-model-paths-config") + 1
+            ]
+        )
+        old_config = json.loads(old_config_path.read_text(encoding="utf-8"))
+        self.assertIn(
+            str(old_models.resolve()),
+            old_config["aistudio_shared"]["checkpoints"].splitlines(),
+        )
+        self.adapter.remote_heads[FORGE_REPOSITORY] = COMMIT_B
+
+        self.manager.execute("forge", "update")
+
+        snapshot = self.manager.snapshot()
+        self.assertEqual(snapshot["engines"]["forge"]["commit"], COMMIT_B)
+        self.assertTrue(snapshot["engines"]["comfyui"]["running"])
+        self.assertEqual(original_comfy.terminate_calls, 1)
+        self.assertEqual(len(self.adapter.start_calls), 2)
+        restarted = self.adapter.start_calls[-1]
+        new_config_path = Path(
+            restarted["argv"][restarted["argv"].index("--extra-model-paths-config") + 1]
+        )
+        new_config = json.loads(new_config_path.read_text(encoding="utf-8"))
+        self.assertNotIn(
+            str(old_models.resolve()),
+            new_config["aistudio_shared"]["checkpoints"].splitlines(),
+        )
+
     def test_failed_updated_runtime_start_rolls_back_and_restarts_previous_release(self):
         self.manager.execute("forge", "install")
         self.manager.execute("forge", "start")
