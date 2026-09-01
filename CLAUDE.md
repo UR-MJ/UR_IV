@@ -3,17 +3,18 @@
 PyQt6(백엔드) + Vue 3 SPA(프론트) 데스크탑 AI 이미지 생성기. (내부명 AI Studio Pro)
 
 ## ⚠️ 작업 전 필수 (이걸 안 지켜서 실수 많았음)
-- **모든 git / npm build 는 메인 repo `C:\Users\KMJ\Desktop\Image viewer` 에서** 한다.
+- **모든 git / npm build 는 이 파일이 있는 메인 저장소 루트에서** 한다.
   `.claude/worktrees/...` 경로에서 빌드/커밋하면 변경이 유실되거나 dist가 안 맞는다.
 - **Vue(`frontend/src/`) 수정 후엔 반드시 `cd frontend && npm run build`** — dist를 안 만들면
   앱은 옛 화면을 보여준다. `frontend_dist`도 같이 커밋.
-- **Python 수정 후엔 `python run_tests.py`** 로 회귀 검증. (자동 훅으로도 돈다.)
+- **Python 수정 후엔 `venv\Scripts\python.exe run_tests.py`** 로 회귀 검증. (자동 훅으로도 돈다.)
+  ⚠ 시스템 `python` 으로 돌리면 pandas/PIL/PyQt6 가 없어 **가짜 실패 32개**가 난다 — 반드시 venv.
 - API 키/시크릿/토큰은 절대 커밋 금지. 노출되면 재발급 안내.
 
 ## 검증 / 배포
 - `/verify` — 테스트 + py_compile + (프론트 수정 시) 빌드. **커밋 안 함**.
 - `/ship` — 검증 → 빌드 → 커밋(한국어 conventional) → 푸시.
-- 수동: `python run_tests.py` (pytest 불필요, 표준 unittest).
+- 수동: `venv\Scripts\python.exe run_tests.py` (pytest 불필요, 표준 unittest).
 
 ## 아키텍처
 - 프론트: Vue 3 SPA in QWebEngineView — `frontend/src/`
@@ -60,6 +61,9 @@ PyQt6(백엔드) + Vue 3 SPA(프론트) 데스크탑 AI 이미지 생성기. (�
   `config/session_backup.json` (gitignore 처리됨)
 
 ## 테스트
-- `tests/` (표준 unittest), 실행 `python run_tests.py`
+- `tests/` (표준 unittest), 실행 `venv\Scripts\python.exe run_tests.py` — **venv 필수**
+- `--quick` = 느린 통합 테스트 3종(`test_generation_api`/`_remote_e2e`/`test_backend_runtime`) 제외.
+  전체 12.6초 중 10.6초가 이 3개다 → PostToolUse 훅은 기본 `--quick`(2.3초)으로 돌고,
+  이들이 커버하는 소스(`run_tests.SLOW_MODULE_SOURCES`)를 고쳤을 때만 전체를 돈다.
 - 순수 로직은 Qt에서 분리해 테스트 추가 (예: `core/resolution_guard.py`)
 - 커버: 조건식 / 캐릭터 분류 / NL 누출제거 / ANIMA 해상도캡
