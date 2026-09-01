@@ -12,21 +12,21 @@
         <div class="form-section">
           <div class="form-row">
             <div class="form-field wide">
-              <label>Character</label>
+              <label>캐릭터</label>
               <input v-model="character" placeholder="e.g. hatsune_miku, raiden_shogun" @keydown.enter="searchEvents" />
             </div>
             <div class="form-field">
-              <label>Copyright</label>
+              <label>작품</label>
               <input v-model="copyright" placeholder="e.g. genshin_impact" @keydown.enter="searchEvents" />
             </div>
           </div>
           <div class="form-row">
             <div class="form-field wide">
-              <label>General Tags</label>
+              <label>일반 태그</label>
               <input v-model="prompt" placeholder="e.g. 1girl, blue_hair, sword" @keydown.enter="searchEvents" />
             </div>
             <div class="form-field">
-              <label>Artist</label>
+              <label>작가</label>
               <input v-model="artist" placeholder="Artist name..." @keydown.enter="searchEvents" />
             </div>
           </div>
@@ -34,9 +34,9 @@
 
         <!-- Exclude -->
         <details class="form-section exclude-section" open>
-          <summary class="exclude-toggle">Exclude Tags <Icon name="chevron-down" size="12" /></summary>
+          <summary class="exclude-toggle">제외 태그 <Icon name="chevron-down" size="12" /></summary>
           <div class="form-row">
-            <div class="form-field"><label class="danger">Tags</label><input v-model="excludeTags" placeholder="제외 태그..." @keydown.enter="searchEvents" /></div>
+            <div class="form-field"><label class="danger">태그</label><input v-model="excludeTags" placeholder="제외 태그..." @keydown.enter="searchEvents" /></div>
           </div>
         </details>
 
@@ -44,11 +44,11 @@
         <div class="form-section">
           <div class="form-row">
             <div class="form-field">
-              <label>Min Steps</label>
+              <label>최소 스텝</label>
               <input type="number" v-model.number="minSteps" min="1" max="50" />
             </div>
             <div class="form-field">
-              <label>Max Steps</label>
+              <label>최대 스텝</label>
               <input type="number" v-model.number="maxSteps" min="1" max="100" />
             </div>
           </div>
@@ -65,9 +65,9 @@
             <label><input type="checkbox" v-model="fixSeed" />시드 고정</label>
             <label><input type="checkbox" v-model="useT2ISettings" />T2I 설정</label>
           </div>
-          <button class="go-btn" @click="searchEvents" :disabled="searching"><Icon name="rocket" /> RUN SEARCH</button>
+          <button class="go-btn" @click="searchEvents" :disabled="searching"><Icon name="rocket" /> 검색</button>
           <div class="io-row">
-            <button class="io-btn" @click="importEvents"><Icon name="download" /> IMPORT .parquet</button>
+            <button class="io-btn" @click="importEvents"><Icon name="download" /> .parquet 가져오기</button>
           </div>
         </div>
       </div>
@@ -96,8 +96,8 @@
         <button class="bar-btn back" @click="events = []; steps = []; selectedIdx = -1">← BACK</button>
         <span class="bar-count">{{ events.length }} EVENTS</span>
         <div class="bar-spacer"></div>
-        <button class="bar-btn" @click="exportEvents"><Icon name="upload" /> EXPORT</button>
-        <button class="bar-btn" @click="importEvents"><Icon name="download" /> IMPORT</button>
+        <button class="bar-btn" @click="exportEvents"><Icon name="upload" /> 내보내기</button>
+        <button class="bar-btn" @click="importEvents"><Icon name="download" /> 가져오기</button>
       </div>
 
       <div class="result-body">
@@ -115,7 +115,7 @@
         <section class="eg-main">
           <div v-if="steps.length === 0" class="eg-empty">
             <div class="eg-empty-icon"><Icon name="video" /></div>
-            <h2>EVENT SEQUENCE</h2>
+            <h2>이벤트 시퀀스</h2>
             <p>이벤트를 선택하면 스텝이 표시됩니다</p>
           </div>
           <template v-else>
@@ -436,7 +436,7 @@ onMounted(() => {
 .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; overflow-y: auto; }
 .ws-header { text-align: center; margin-bottom: 32px; }
 .ws-icon { font-size: 48px; opacity: 0.6; margin-bottom: 8px; }
-.ws-header h1 { font-size: 18px; letter-spacing: 6px; color: var(--text-primary); margin-bottom: 6px; }
+.ws-header h1 { letter-spacing: 0.08em; font-size: 18px; letter-spacing: 0; color: var(--text-primary); margin-bottom: 6px; }
 .ws-header p { font-size: 12px; color: var(--text-muted); }
 
 .search-form { width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 12px; }
@@ -444,12 +444,12 @@ onMounted(() => {
 .form-row { display: flex; gap: 10px; }
 .form-field { flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .form-field.wide { flex: 2; }
-.form-field label { font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 0; }
+.form-field label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-bottom: 0; }
 .form-field label.danger { color: #f87171; }
 .form-field input { padding: 10px 12px; font-size: 13px; }
 
 .exclude-section { border: 1px solid rgba(248,113,113,0.1); border-radius: var(--radius-card); padding: 12px; }
-.exclude-toggle { font-size: 11px; font-weight: 800; color: #f87171; cursor: pointer; letter-spacing: 0.5px; list-style: none; }
+.exclude-toggle { font-size: 11px; font-weight: var(--fw-bold); color: #f87171; cursor: pointer; letter-spacing: 0; list-style: none; }
 .exclude-toggle::-webkit-details-marker { display: none; }
 
 .form-footer { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-top: 4px; }
@@ -457,7 +457,7 @@ onMounted(() => {
 .rating-chip {
   height: 30px; padding: 0 16px; background: var(--bg-button); border: 1px solid var(--border);
   border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold);
-  cursor: pointer; letter-spacing: 0.5px; transition: var(--transition);
+  cursor: pointer; letter-spacing: 0; transition: var(--transition);
 }
 .rating-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 
@@ -466,8 +466,8 @@ onMounted(() => {
 
 .go-btn {
   width: 100%; max-width: 400px; height: 44px; background: var(--accent); border: none;
-  border-radius: var(--radius-pill); color: #000; font-weight: 900; font-size: 12px;
-  letter-spacing: 2px; cursor: pointer; transition: var(--transition);
+  border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold); font-size: 12px;
+  letter-spacing: 0; cursor: pointer; transition: var(--transition);
 }
 .go-btn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(250,204,21,0.2); }
 .go-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
@@ -490,9 +490,9 @@ onMounted(() => {
 
 /* ── Result Bar ── */
 .result-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.bar-btn { padding: 5px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.bar-btn { padding: 5px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .bar-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
-.bar-count { font-size: var(--fs-label); color: var(--text-muted); font-weight: 800; letter-spacing: 1px; }
+.bar-count { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); letter-spacing: 0; }
 .bar-spacer { flex: 1; }
 
 /* ── Result Body ── */
@@ -505,16 +505,16 @@ onMounted(() => {
 .eg-list-item.active { background: var(--accent-dim); border-left: 3px solid var(--accent); }
 .eg-idx { color: var(--text-muted); font-family: monospace; font-size: var(--fs-label); min-width: 24px; }
 .eg-desc { flex: 1; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.eg-cnt { font-size: var(--fs-label); color: var(--accent); font-weight: 800; }
+.eg-cnt { font-size: var(--fs-label); color: var(--accent); font-weight: var(--fw-bold); }
 
 /* Main */
 .eg-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .eg-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; opacity: 0.2; }
 .eg-empty-icon { font-size: 48px; margin-bottom: 12px; }
-.eg-empty h2 { letter-spacing: 4px; }
+.eg-empty h2 { letter-spacing: 0; }
 /* Event Info */
 .eg-event-info { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: rgba(250,204,21,0.03); }
-.ei-char { font-size: 12px; font-weight: 800; color: var(--accent); }
+.ei-char { font-size: 12px; font-weight: var(--fw-bold); color: var(--accent); }
 .ei-copy { font-size: 11px; color: var(--text-muted); }
 .ei-sim { font-size: var(--fs-label); color: #4ade80; margin-left: auto; font-family: monospace; }
 
@@ -526,9 +526,9 @@ onMounted(() => {
 
 /* Step Toolbar */
 .step-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.stb { padding: 3px 10px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.stb { padding: 3px 10px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .stb:hover { color: var(--text-primary); border-color: var(--text-muted); }
-.stb-count { font-size: var(--fs-label); color: var(--accent); margin-left: auto; font-weight: 800; }
+.stb-count { font-size: var(--fs-label); color: var(--accent); margin-left: auto; font-weight: var(--fw-bold); }
 
 .step-char { font-size: var(--fs-label); color: var(--accent); background: var(--accent-dim); padding: 1px 6px; border-radius: 3px; margin-left: auto; }
 .eg-steps { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -538,8 +538,8 @@ onMounted(() => {
 .step-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .step-send { background: none; border: none; cursor: pointer; font-size: 12px; margin-left: auto; opacity: 0.4; transition: opacity 0.15s; }
 .step-send:hover { opacity: 1; }
-.step-no { font-size: 12px; font-weight: 800; color: var(--text-primary); }
-.step-badge { padding: 2px 8px; border-radius: 4px; font-size: var(--fs-label); font-weight: 900; letter-spacing: 1px; }
+.step-no { font-size: 12px; font-weight: var(--fw-bold); color: var(--text-primary); }
+.step-badge { padding: 2px 8px; border-radius: 4px; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .step-badge.parent { background: var(--accent-dim); color: var(--accent); }
 .step-badge.child { background: rgba(96,165,250,0.1); color: #60a5fa; }
 .step-diff { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -550,7 +550,7 @@ onMounted(() => {
 .eg-actions { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .eg-row { display: flex; align-items: center; gap: 6px; }
 .eg-row input { width: 60px; }
-.eg-mini { font-size: var(--fs-label); color: var(--text-muted); font-weight: 700; }
-.eg-btn { padding: 8px 16px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: 11px; font-weight: 700; cursor: pointer; }
+.eg-mini { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); }
+.eg-btn { padding: 8px 16px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; }
 .eg-btn.primary { background: var(--accent); color: #000; border: none; }
 </style>

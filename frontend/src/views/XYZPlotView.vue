@@ -192,7 +192,7 @@ function exportCSV() {
 }
 .config-panel h3 { color: #E8E8E8; font-size: 14px; margin: 0; }
 .axis-config { display: flex; flex-direction: column; gap: 4px; }
-.axis-label { color: #E2B340; font-size: 12px; font-weight: 700; }
+.axis-label { color: #E2B340; font-size: 12px; font-weight: var(--fw-bold); }
 .s-select, .s-input {
   background: #131313; border: 1px solid #222; border-radius: 4px; padding: 6px 8px;
   color: #E8E8E8; font-size: 12px; outline: none; caret-color: #E2B340;
@@ -201,10 +201,10 @@ function exportCSV() {
 .s-input::selection { background: rgba(226, 179, 64, 0.3); }
 .s-select:focus { border-color: #E2B340; }
 .combo-info { color: #787878; font-size: 12px; text-align: center; }
-.accent { color: #E2B340; font-weight: 700; }
+.accent { color: #E2B340; font-weight: var(--fw-bold); }
 .btn-gen {
   padding: 12px; background: #E2B340; border: none; border-radius: 6px;
-  color: #000; font-weight: 700; cursor: pointer;
+  color: #000; font-weight: var(--fw-bold); cursor: pointer;
 }
 .btn-gen:disabled { opacity: 0.35; cursor: not-allowed; }
 .result-area { flex: 1; overflow-y: auto; padding: 8px; }
@@ -212,10 +212,10 @@ function exportCSV() {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px 4px 12px; gap: 8px;
 }
-.result-count { font-size: 12px; color: #787878; font-weight: 700; }
+.result-count { font-size: 12px; color: #787878; font-weight: var(--fw-bold); }
 .btn-export {
   padding: 6px 14px; background: #1A1A1A; border: 1px solid #2A2A2A;
-  border-radius: 6px; color: #E2B340; font-size: 11px; font-weight: 700;
+  border-radius: 6px; color: #E2B340; font-size: 11px; font-weight: var(--fw-bold);
   cursor: pointer; transition: all 0.15s;
 }
 .btn-export:hover { background: #222; border-color: #E2B340; }
@@ -234,7 +234,7 @@ function exportCSV() {
   50% { opacity: 0.85; }
 }
 .empty-text { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.empty-title { font-size: 14px; color: var(--text-secondary); font-weight: 700; }
+.empty-title { font-size: 14px; color: var(--text-secondary); font-weight: var(--fw-bold); }
 .empty-sub { font-size: 11px; color: var(--text-muted); }
 .result-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

@@ -217,7 +217,7 @@ function resetControls() {
   border: none;
   border-radius: 4px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .accent-btn:hover {

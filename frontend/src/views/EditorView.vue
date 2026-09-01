@@ -172,7 +172,7 @@
     <template v-else>
       <div class="drop-area" :class="{ dragging: isDragging }">
         <div class="drop-icon"><Icon name="palette" /></div>
-        <h2>Image Editor</h2>
+        <h2>이미지 편집</h2>
         <p>이미지를 드래그앤드롭하거나 파일을 선택하세요</p>
         <div class="drop-actions">
           <button class="open-btn" @click="openFile"><Icon name="folder-open" /> 파일 선택</button>
@@ -1199,13 +1199,13 @@ onUnmounted(() => {
 .bar-group.center { flex: 1; justify-content: center; }
 .bar-btn {
   padding: 8px 16px; background: #181818; border: 1px solid var(--border); border-radius: 6px;
-  color: #909090; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  color: #909090; font-size: 12px; font-weight: var(--fw-bold); cursor: pointer; white-space: nowrap;
   transition: var(--transition);
 }
 .bar-btn:hover { background: #222; color: #E8E8E8; border-color: #333; }
 .bar-btn:disabled { opacity: 0.3; }
 .bar-btn.accent { border-color: var(--accent-dim); color: var(--accent); }
-.bar-btn.save { background: var(--accent); color: #000; border: none; font-weight: 800; }
+.bar-btn.save { background: var(--accent); color: #000; border: none; font-weight: var(--fw-bold); }
 .bar-btn.save:hover { background: var(--accent-hover); }
 .bar-btn.danger { color: #f87171; border-color: rgba(248,113,113,0.2); }
 .bar-sep { color: #333; margin: 0 4px; }
@@ -1213,7 +1213,7 @@ onUnmounted(() => {
 .bar-info.autosave { color: #4ade80; opacity: 0.75; }
 .bar-info.autosave:hover { opacity: 1; cursor: help; }
 .bar-filename {
-  color: #c8c8c8; font-size: 12px; font-weight: 600;
+  color: #c8c8c8; font-size: 12px; font-weight: var(--fw-bold);
   max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 0 8px;
 }
@@ -1250,7 +1250,7 @@ onUnmounted(() => {
 .drop-actions { display: flex; gap: 8px; }
 .open-btn {
   padding: 10px 24px; background: #E2B340; border: none; border-radius: 8px;
-  color: #000; font-weight: 700; font-size: 14px; cursor: pointer;
+  color: #000; font-weight: var(--fw-bold); font-size: 14px; cursor: pointer;
 }
 .open-btn.secondary { background: #2A2A2A; color: #E2B340; border: 1px solid #E2B340; }
 .drop-shortcuts { color: #585858; font-size: 11px; margin-top: 4px; }
@@ -1259,8 +1259,8 @@ onUnmounted(() => {
   font-family: Consolas, monospace; font-size: var(--fs-label); margin: 0 2px;
 }
 .recent-files { width: 100%; max-width: 540px; margin-top: 14px; }
-.recent-label { color: #787878; font-size: var(--fs-label); letter-spacing: 1px;
-  font-weight: 800; padding: 0 4px 6px; }
+.recent-label { color: #787878; font-size: var(--fs-label); letter-spacing: 0;
+  font-weight: var(--fw-bold); padding: 0 4px 6px; }
 .recent-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .recent-item {
   padding: 6px 12px; background: #1A1A1A; border: 1px solid #2A2A2A;

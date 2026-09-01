@@ -3,7 +3,7 @@
     <!-- 상단 서브탭 -->
     <div class="sub-tabs">
       <button class="sub-tab" :class="{ active: subTab === 'info' }" @click="subTab = 'info'"><Icon name="file" /> PNG Info</button>
-      <button class="sub-tab" :class="{ active: subTab === 'compare' }" @click="subTab = 'compare'"><Icon name="search" /> Compare</button>
+      <button class="sub-tab" :class="{ active: subTab === 'compare' }" @click="subTab = 'compare'"><Icon name="search" /> 비교</button>
     </div>
 
     <!-- PNG Info 탭 -->
@@ -32,7 +32,7 @@
           </div>
           <div v-if="exif.negative" class="section">
             <div class="section-head">
-              <label>Negative</label>
+              <label>네거티브</label>
               <button class="copy-btn" @click="copySection(exif.negative, 'Negative')" title="Negative 복사"><Icon name="clipboard" /></button>
             </div>
             <pre>{{ exif.negative }}</pre>
@@ -43,12 +43,12 @@
               <button class="copy-btn" @click="copySection(exif.params_line || JSON.stringify(exif.params, null, 2), 'Parameters')" title="Parameters 복사"><Icon name="clipboard" /></button>
             </div>
             <div class="params-grid">
-              <div class="param-line" v-if="exif.params.generation"><span class="pl">GEN</span><span>{{ exif.params.generation }}</span></div>
-              <div class="param-line" v-if="exif.params.core"><span class="pl">CORE</span><span>{{ exif.params.core }}</span></div>
-              <div class="param-line" v-if="exif.params.model"><span class="pl">MODEL</span><span>{{ exif.params.model }}</span></div>
-              <div class="param-line" v-if="exif.params.hires"><span class="pl">HIRES</span><span>{{ exif.params.hires }}</span></div>
-              <div class="param-line" v-if="exif.params.extensions"><span class="pl">EXT</span><span>{{ exif.params.extensions }}</span></div>
-              <div class="param-line" v-if="exif.params.other"><span class="pl">ETC</span><span>{{ exif.params.other }}</span></div>
+              <div class="param-line" v-if="exif.params.generation"><span class="pl">생성</span><span>{{ exif.params.generation }}</span></div>
+              <div class="param-line" v-if="exif.params.core"><span class="pl">기본</span><span>{{ exif.params.core }}</span></div>
+              <div class="param-line" v-if="exif.params.model"><span class="pl">모델</span><span>{{ exif.params.model }}</span></div>
+              <div class="param-line" v-if="exif.params.hires"><span class="pl">고해상도</span><span>{{ exif.params.hires }}</span></div>
+              <div class="param-line" v-if="exif.params.extensions"><span class="pl">확장</span><span>{{ exif.params.extensions }}</span></div>
+              <div class="param-line" v-if="exif.params.other"><span class="pl">기타</span><span>{{ exif.params.other }}</span></div>
             </div>
           </div>
           <div v-else-if="exif.params_line" class="section">
@@ -66,7 +66,7 @@
             <pre>{{ exif.raw }}</pre>
           </div>
           <div class="action-section">
-            <label class="action-label">SEND TO</label>
+            <label class="action-label">보내기</label>
             <div class="send-grid">
               <button class="send-card primary" @click="sendPrompt" title="현재 프롬프트를 T2I 탭으로 전송">
                 <span class="send-ico"><Icon name="upload" /></span>
@@ -103,12 +103,12 @@
     <div v-if="subTab === 'compare'" class="tab-content compare-layout">
       <div class="compare-controls">
         <div class="cmp-slot">
-          <span class="cmp-label">BEFORE</span>
+          <span class="cmp-label">이전</span>
           <button class="btn" @click="loadCompareImage('before')"><Icon name="folder-open" /> 열기</button>
           <span class="cmp-name">{{ beforeName || '없음' }}</span>
         </div>
         <div class="cmp-slot">
-          <span class="cmp-label">AFTER</span>
+          <span class="cmp-label">이후</span>
           <button class="btn" @click="loadCompareImage('after')"><Icon name="folder-open" /> 열기</button>
           <span class="cmp-name">{{ afterName || '없음' }}</span>
         </div>
@@ -127,14 +127,14 @@
       <!-- EXIF 비교 -->
       <div class="exif-diff" v-if="compareBefore && compareAfter && (beforeExif.raw || afterExif.raw)">
         <div class="diff-header">
-          <h4>PARAMETER DIFF</h4>
+          <h4>파라미터 차이</h4>
           <button class="btn" @click="showDiffOnly = !showDiffOnly">{{ showDiffOnly ? '전체 보기' : '차이만 보기' }}</button>
         </div>
         <div class="diff-table">
           <div class="diff-row header">
             <span class="diff-key">Parameter</span>
-            <span class="diff-val">BEFORE</span>
-            <span class="diff-val">AFTER</span>
+            <span class="diff-val">이전</span>
+            <span class="diff-val">이후</span>
           </div>
           <template v-for="row in paramDiffRows" :key="row.key">
             <div class="diff-row" :class="{ changed: row.changed, same: !row.changed }" v-if="!showDiffOnly || row.changed">
@@ -147,7 +147,7 @@
         <!-- 프롬프트 비교 -->
         <div class="diff-prompts" v-if="beforeExif.prompt || afterExif.prompt">
           <div class="diff-prompt-section">
-            <label>PROMPT DIFF</label>
+            <label>프롬프트 차이</label>
             <div class="diff-tags">
               <span v-for="t in promptDiff.same" :key="'s'+t" class="dtag same">{{ t }}</span>
               <span v-for="t in promptDiff.removed" :key="'r'+t" class="dtag removed">- {{ t }}</span>
@@ -158,7 +158,7 @@
       </div>
       <!-- GIF 내보내기 -->
       <div class="gif-bar" v-if="compareBefore && compareAfter">
-        <span class="gif-label">GIF Export</span>
+        <span class="gif-label">GIF 내보내기</span>
         <label>Speed</label>
         <CustomSelect v-model="gifDurationStr" :options="['Fast', 'Normal', 'Slow']" placeholder="Speed" />
         <button class="gif-btn" @click="exportGif" :disabled="gifExporting">
@@ -368,7 +368,7 @@ onUnmounted(() => {
 .sub-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .sub-tab {
   flex: 1; padding: 8px; background: transparent; border: none; border-bottom: 2px solid transparent;
-  color: var(--text-muted); font-size: 11px; font-weight: 700; cursor: pointer; text-align: center;
+  color: var(--text-muted); font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; text-align: center;
 }
 .sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .tab-content { flex: 1; overflow: hidden; }
@@ -391,7 +391,7 @@ onUnmounted(() => {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 2px; min-height: 16px;
 }
-.section-head label { color: #E2B340; font-size: 11px; font-weight: 600; margin: 0; }
+.section-head label { color: #E2B340; font-size: 11px; font-weight: var(--fw-bold); margin: 0; }
 /* 호버 시에만 보이는 복사 버튼 — 평소엔 부재감 없이 깔끔 */
 .copy-btn {
   opacity: 0; transition: opacity 0.15s, background 0.15s;
@@ -406,8 +406,8 @@ onUnmounted(() => {
 .section pre { color: #B0B0B0; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #111; padding: 6px 8px; border-radius: 4px; margin: 0; max-height: 150px; overflow-y: auto; }
 .action-section { margin-top: 16px; }
 .action-label {
-  display: block; font-size: var(--fs-label); font-weight: 900;
-  color: var(--text-muted); letter-spacing: 1.5px;
+  display: block; font-size: var(--fs-label); font-weight: var(--fw-bold);
+  color: var(--text-muted); letter-spacing: 0;
   margin-bottom: 8px;
 }
 .send-grid {
@@ -437,8 +437,8 @@ onUnmounted(() => {
 .send-card.star:hover { border-color: var(--accent); }
 .send-ico { font-size: 18px; line-height: 1; }
 .send-name {
-  font-size: var(--fs-label); font-weight: 700;
-  color: var(--text-secondary); letter-spacing: 0.3px;
+  font-size: var(--fs-label); font-weight: var(--fw-bold);
+  color: var(--text-secondary); letter-spacing: 0;
 }
 .send-card.primary .send-name { color: var(--accent); }
 .info-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #484848; font-size: 14px; }
@@ -446,13 +446,13 @@ onUnmounted(() => {
 .params-grid { background: #111; border-radius: 4px; padding: 6px 8px; }
 .param-line { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 11px; color: #B0B0B0; border-bottom: 1px solid #1a1a1a; }
 .param-line:last-child { border-bottom: none; }
-.pl { font-size: var(--fs-label); font-weight: 900; color: #E2B340; letter-spacing: 1px; min-width: 45px; flex-shrink: 0; }
+.pl { font-size: var(--fs-label); font-weight: var(--fw-bold); color: #E2B340; letter-spacing: 0; min-width: 45px; flex-shrink: 0; }
 
 /* Compare Layout */
 .compare-layout { display: flex; flex-direction: column; }
 .compare-controls { display: flex; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .cmp-slot { display: flex; align-items: center; gap: 6px; flex: 1; }
-.cmp-label { font-size: var(--fs-label); font-weight: 900; color: var(--accent); letter-spacing: 1px; }
+.cmp-label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); letter-spacing: 0; }
 .cmp-name { font-size: var(--fs-label); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .compare-area { flex: 1; position: relative; }
 .compare-hint { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; }
@@ -462,28 +462,28 @@ onUnmounted(() => {
 
 /* GIF Export */
 .gif-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
-.gif-label { font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); letter-spacing: 1px; }
+.gif-label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; }
 .gif-bar label { font-size: var(--fs-label); color: var(--text-muted); }
 .gif-bar select { padding: 3px 8px; font-size: var(--fs-label); }
-.gif-btn { padding: 5px 14px; background: var(--accent); border: none; border-radius: 6px; color: #000; font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
+.gif-btn { padding: 5px 14px; background: var(--accent); border: none; border-radius: 6px; color: #000; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .gif-btn:disabled { opacity: 0.4; }
 .gif-link { font-size: var(--fs-label); color: #60a5fa; text-decoration: none; margin-left: auto; }
 
 /* EXIF Diff */
 .exif-diff { padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; max-height: 300px; overflow-y: auto; }
 .diff-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.diff-header h4 { font-size: 11px; font-weight: 900; color: var(--text-muted); letter-spacing: 1.5px; }
+.diff-header h4 { font-size: 11px; font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; }
 .diff-table { display: flex; flex-direction: column; gap: 1px; font-family: 'Consolas', monospace; }
 .diff-row { display: grid; grid-template-columns: 140px 1fr 1fr; gap: 8px; padding: 4px 8px; border-radius: 4px; font-size: var(--fs-label); }
-.diff-row.header { font-weight: 900; color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+.diff-row.header { font-weight: var(--fw-bold); color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 0; border-bottom: 1px solid var(--border); }
 .diff-row.changed { background: rgba(248, 113, 113, 0.06); }
 .diff-row.same { opacity: 0.5; }
-.diff-key { color: var(--text-secondary); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diff-key { color: var(--text-secondary); font-weight: var(--fw-bold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .diff-val { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.diff-val.highlight { color: #f87171; font-weight: 700; }
+.diff-val.highlight { color: #f87171; font-weight: var(--fw-bold); }
 
 .diff-prompts { margin-top: 12px; }
-.diff-prompt-section label { font-size: var(--fs-label); font-weight: 900; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 6px; display: block; }
+.diff-prompt-section label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-bottom: 6px; display: block; }
 .diff-tags { display: flex; flex-wrap: wrap; gap: 3px; }
 .dtag { padding: 2px 8px; border-radius: 4px; font-size: var(--fs-label); }
 .dtag.same { background: rgba(255,255,255,0.03); color: var(--text-muted); }

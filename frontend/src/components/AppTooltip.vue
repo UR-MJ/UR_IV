@@ -156,7 +156,7 @@ onUnmounted(() => {
   color: #f8fafc;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.72);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: var(--fw-bold);
   line-height: 1.55;
   letter-spacing: normal;
   text-align: left;

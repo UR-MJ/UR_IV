@@ -24,8 +24,7 @@
   font-size: var(--fs-label);
   font-weight: var(--fw-bold);
   color: var(--text-muted);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  letter-spacing: 0;
   margin-bottom: var(--sp-1);
 }
 
@@ -142,9 +141,9 @@
   border: none;
   border-radius: var(--radius-base);
   color: #000;
-  font-weight: 900;
+  font-weight: var(--fw-bold);
   font-size: var(--fs-body);
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   cursor: pointer;
   transition: var(--transition);
   display: flex;

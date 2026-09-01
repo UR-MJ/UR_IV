@@ -291,7 +291,7 @@ function onApplyImage() {
 
 .group-box legend {
   color: #585858;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   font-size: 13px;
   padding: 0 4px;
 }
@@ -331,7 +331,7 @@ function onApplyImage() {
   border: 1px solid #2A2A2A;
   border-radius: 4px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
   color: #000;
 }
@@ -393,7 +393,7 @@ function onApplyImage() {
   cursor: pointer;
 }
 .checkbox-row.bold {
-  font-weight: bold;
+  font-weight: var(--fw-bold);
 }
 .checkbox-row input[type="checkbox"] {
   accent-color: #E2B340;
@@ -406,7 +406,7 @@ function onApplyImage() {
   border: 1px solid #2A2A2A;
   border-radius: 4px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
   width: 100%;
 }
@@ -427,7 +427,7 @@ function onApplyImage() {
   border: none;
   border-radius: 4px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
   width: 100%;
 }

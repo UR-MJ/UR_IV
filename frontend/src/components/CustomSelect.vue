@@ -22,7 +22,7 @@
           role="group" :aria-label="group.label">
           <div class="csel-group-header" role="presentation">
             <span>{{ group.label }}</span>
-            <span v-if="group.primary" class="csel-group-main">MAIN</span>
+            <span v-if="group.primary" class="csel-group-main">메인</span>
             <span v-else-if="group.source" class="csel-group-source">{{ group.source }}</span>
           </div>
           <div v-for="(opt, optionIndex) in group.options"
@@ -46,7 +46,7 @@
           @mouseenter="activeIndex = optionIndex"
           @click="select(opt)">{{ opt }}</div>
       </template>
-      <div v-if="!hasOptions" class="csel-empty">No options</div>
+      <div v-if="!hasOptions" class="csel-empty">항목 없음</div>
     </div>
   </div>
 </template>
@@ -71,7 +71,7 @@ const props = withDefaults(defineProps<{
   modelValue: '',
   options: () => [],
   optionGroups: () => [],
-  placeholder: 'Select...',
+  placeholder: '선택...',
 })
 const emit = defineEmits<{ 'update:modelValue': [value: SelectValue] }>()
 
@@ -204,16 +204,16 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
 }
 .csel-option:hover { background: var(--accent-dim); color: var(--accent); }
 .csel-option.active:not(.selected) { background: var(--accent-dim); color: var(--accent); }
-.csel-option.selected { background: var(--accent); color: #000; font-weight: 700; }
+.csel-option.selected { background: var(--accent); color: #000; font-weight: var(--fw-bold); }
 .csel-group + .csel-group { border-top: 1px solid var(--border); }
 .csel-group-header {
   position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px;
   padding: 7px 11px; background: #141414; color: var(--text-muted);
-  font-size: var(--fs-label); font-weight: 900; letter-spacing: .8px; cursor: default;
+  font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; cursor: default;
 }
 .csel-group-main, .csel-group-source {
   padding: 2px 5px; border: 1px solid rgba(96,165,250,.35); border-radius: 7px;
-  background: rgba(96,165,250,.1); color: #60a5fa; font-size: 7px; letter-spacing: .5px;
+  background: rgba(96,165,250,.1); color: #60a5fa; font-size: 7px; letter-spacing: 0;
 }
 .csel-group-source { border-color: var(--border); background: var(--bg-input); color: var(--text-muted); }
 .csel-group-option { padding-left: 17px; }

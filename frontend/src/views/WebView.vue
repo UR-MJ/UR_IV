@@ -53,7 +53,7 @@ function open(u: string) {
 .quick-links { display: flex; gap: 8px; margin-top: 12px; }
 .link-btn {
   padding: 10px 20px; background: #181818; border: none; border-radius: 6px;
-  color: #E2B340; font-size: 13px; font-weight: 600; cursor: pointer;
+  color: #E2B340; font-size: 13px; font-weight: var(--fw-bold); cursor: pointer;
 }
 .link-btn:hover { background: #222; }
 </style>

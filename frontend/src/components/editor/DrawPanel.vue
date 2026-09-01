@@ -245,7 +245,7 @@ defineExpose({ setColor, setTool })
 .section-subheader {
   color: #585858;
   font-size: 14px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   padding: 2px;
 }
 
@@ -261,7 +261,7 @@ defineExpose({ setColor, setTool })
   border-radius: 6px;
   color: #B0B0B0;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   text-align: left;
   padding: 8px 12px;
   cursor: pointer;
@@ -351,7 +351,7 @@ defineExpose({ setColor, setTool })
   border: 1px solid #2A2A2A;
   border-radius: 4px;
   font-size: 12px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .secondary-btn:hover {
@@ -377,7 +377,7 @@ defineExpose({ setColor, setTool })
   border: none;
   border-radius: 6px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .heal-apply-btn:hover {
@@ -419,7 +419,7 @@ defineExpose({ setColor, setTool })
   border: 1px solid #2A2A2A;
   border-radius: 6px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .fill-btn:hover {

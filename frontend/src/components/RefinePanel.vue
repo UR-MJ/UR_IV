@@ -4,11 +4,11 @@
     <aside class="sidebar">
       <div class="sidebar-scroll">
         <div class="glass-card">
-          <label>Source Image</label>
+          <label>원본 이미지</label>
           <div class="source-thumb" @click="$emit('pick-image')">
             <img v-if="imageSrc" :src="imageSrc" />
-            <div v-else class="upload-hint">EMPTY</div>
-            <div class="edit-overlay">CHANGE IMAGE</div>
+            <div v-else class="upload-hint">비어 있음</div>
+            <div class="edit-overlay">이미지 변경</div>
           </div>
           <p class="hint mt-8">
             갤러리/히스토리에서 이미지를 끌어오거나 클릭해서 선택하세요.
@@ -27,7 +27,7 @@
           <label class="mt-12 accent">Replacement <span class="sub">(대체할 내용)</span></label>
           <input v-model="replacement" type="text" placeholder="nude" spellcheck="false" />
 
-          <label class="mt-12 danger">Negative</label>
+          <label class="mt-12 danger">네거티브</label>
           <textarea v-model="negative" rows="2" placeholder="(선택)"></textarea>
 
           <label class="ext-check-row mt-12">
@@ -42,7 +42,7 @@
 
         <!-- 마스크 후처리 -->
         <details class="glass-card" open>
-          <summary class="card-header">MASK</summary>
+          <summary class="card-header">마스크</summary>
           <div class="grid-2 mt-12">
             <div class="input-unit"><label>Threshold</label>
               <input v-model.number="threshold" type="number" step="0.01" min="0" max="1" /></div>
@@ -65,7 +65,7 @@
 
         <!-- 인페인트 파라미터 -->
         <details class="glass-card">
-          <summary class="card-header">INPAINT</summary>
+          <summary class="card-header">인페인트</summary>
           <div class="grid-2 mt-12">
             <div class="input-unit"><label>Denoising</label>
               <input v-model.number="denoise" type="number" step="0.01" min="0" max="1" /></div>
@@ -80,7 +80,7 @@
           <CustomSelect v-model="fill"
             :options="['fill', 'original', 'latent noise', 'latent nothing']" placeholder="original" />
           <div class="grid-2 mt-12">
-            <div class="input-unit"><label>Steps</label>
+            <div class="input-unit"><label>스텝</label>
               <input v-model.number="steps" type="number" min="1" /></div>
             <div class="input-unit"><label>CFG</label>
               <input v-model.number="cfg" type="number" step="0.5" min="0" /></div>
@@ -104,7 +104,7 @@
 
         <!-- ControlNet -->
         <details class="glass-card">
-          <summary class="card-header">CONTROLNET</summary>
+          <summary class="card-header">ControlNet</summary>
           <label class="ext-check-row mt-12">
             <ToggleSwitch v-model="cnEnable" size="sm" />
             <span>Enable ControlNet (인페인트 패스에 주입)</span>
@@ -149,12 +149,12 @@
     <section class="canvas-area">
       <div class="result-grid">
         <div class="result-pane">
-          <div class="pane-title">BEFORE</div>
+          <div class="pane-title">이전</div>
           <img v-if="imageSrc" :src="imageSrc" class="pane-img" />
           <div v-else class="pane-empty">이미지를 선택하세요</div>
         </div>
         <div class="result-pane">
-          <div class="pane-title accent">AFTER</div>
+          <div class="pane-title accent">이후</div>
           <img v-if="resultSrc" :src="resultSrc" class="pane-img" />
           <div v-else class="pane-empty">{{ busy ? '처리 중…' : '아직 결과가 없습니다' }}</div>
           <button v-if="resultSrc" class="chain-btn" @click="chain"><Icon name="rotate-cw" /> 이 결과로 이어서 Refine</button>
@@ -163,8 +163,8 @@
 
       <!-- 프롬프트 수술 결과 — 의도대로 됐는지 눈으로 확인 -->
       <div v-if="lastPrompt" class="prompt-trace">
-        <div class="trace-row"><span class="trace-key">PROMPT</span><span class="trace-val">{{ lastPrompt }}</span></div>
-        <div v-if="lastNegative" class="trace-row"><span class="trace-key danger">NEG</span><span class="trace-val">{{ lastNegative }}</span></div>
+        <div class="trace-row"><span class="trace-key">프롬프트</span><span class="trace-val">{{ lastPrompt }}</span></div>
+        <div v-if="lastNegative" class="trace-row"><span class="trace-key danger">네거티브</span><span class="trace-val">{{ lastNegative }}</span></div>
       </div>
       <div v-if="errorText" class="refine-error">{{ errorText }}</div>
     </section>
@@ -366,10 +366,10 @@ defineExpose({ setImage })
 .sidebar-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .sidebar-footer { padding: 16px; background: var(--bg-card); border-top: 1px solid var(--border); }
 
-.glass-card label { display: block; font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); margin-bottom: 4px; }
+.glass-card label { display: block; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); margin-bottom: 4px; }
 .glass-card label.accent { color: var(--accent); }
 .glass-card label.danger { color: #f87171; }
-.glass-card .sub { font-weight: 600; opacity: 0.7; }
+.glass-card .sub { font-weight: var(--fw-bold); opacity: 0.7; }
 .glass-card input[type=text], .glass-card input[type=number], .glass-card textarea {
   width: 100%; box-sizing: border-box; padding: 8px 10px;
   background: var(--bg-input); border: 1px solid var(--border);
@@ -378,7 +378,7 @@ defineExpose({ setImage })
 }
 .glass-card input:focus, .glass-card textarea:focus { border-color: var(--accent); }
 .ext-check-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-.ext-check-row span { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+.ext-check-row span { font-size: 11px; color: var(--text-secondary); font-weight: var(--fw-bold); }
 .hint { font-size: var(--fs-label); line-height: 1.5; color: var(--text-muted); }
 
 .source-thumb {
@@ -386,10 +386,10 @@ defineExpose({ setImage })
   margin-top: 8px; overflow: hidden; position: relative; cursor: pointer; border: 1px solid var(--border);
 }
 .source-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.upload-hint { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: var(--fs-label); font-weight: 800; letter-spacing: 2px; }
+.upload-hint { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .edit-overlay {
   position: absolute; inset: 0; background: rgba(0,0,0,0.6); color: var(--accent);
-  display: flex; align-items: center; justify-content: center; font-size: var(--fs-label); font-weight: 800;
+  display: flex; align-items: center; justify-content: center; font-size: var(--fs-label); font-weight: var(--fw-bold);
   opacity: 0; transition: var(--transition);
 }
 .source-thumb:hover .edit-overlay { opacity: 1; }
@@ -406,8 +406,8 @@ defineExpose({ setImage })
 
 .btn-generate {
   width: 100%; height: 46px; background: var(--accent); border: none;
-  border-radius: var(--radius-pill); color: #000; font-weight: 900;
-  font-size: 12px; letter-spacing: 1px; cursor: pointer; transition: var(--transition);
+  border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold);
+  font-size: 12px; letter-spacing: 0; cursor: pointer; transition: var(--transition);
 }
 .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-generate:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }
@@ -419,12 +419,12 @@ defineExpose({ setImage })
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 12px; gap: 8px; min-height: 0; position: relative;
 }
-.pane-title { font-size: var(--fs-label); font-weight: 900; letter-spacing: 2px; color: var(--text-muted); }
+.pane-title { font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; color: var(--text-muted); }
 .pane-title.accent { color: var(--accent); }
 .pane-img { max-width: 100%; max-height: calc(100% - 40px); object-fit: contain; border-radius: 8px; }
 .pane-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 12px; }
 .chain-btn {
-  padding: 6px 12px; font-size: var(--fs-label); font-weight: 800;
+  padding: 6px 12px; font-size: var(--fs-label); font-weight: var(--fw-bold);
   background: var(--bg-button); border: 1px solid var(--border);
   border-radius: 999px; color: var(--text-primary); cursor: pointer;
 }
@@ -436,7 +436,7 @@ defineExpose({ setImage })
   display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto;
 }
 .trace-row { display: flex; gap: 8px; }
-.trace-key { flex-shrink: 0; font-weight: 900; font-size: var(--fs-label); color: var(--accent); letter-spacing: 1px; padding-top: 1px; }
+.trace-key { flex-shrink: 0; font-weight: var(--fw-bold); font-size: var(--fs-label); color: var(--accent); letter-spacing: 0; padding-top: 1px; }
 .trace-key.danger { color: #f87171; }
 .trace-val { color: var(--text-secondary); word-break: break-word; font-family: 'Consolas', monospace; }
 .refine-error {

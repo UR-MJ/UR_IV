@@ -4,7 +4,7 @@
     <header class="gallery-toolbar">
       <div class="folder-info" @click="openFolder">
         <span class="icon"><Icon name="folder" /></span>
-        <span class="path">{{ currentFolder || 'Select Output Folder' }}</span>
+        <span class="path">{{ currentFolder || '출력 폴더를 선택하세요' }}</span>
       </div>
       
       <div class="spacer"></div>
@@ -72,8 +72,8 @@
       </div>
       <div v-else-if="images.length === 0" class="empty-placeholder">
         <div class="icon"><Icon name="video" /></div>
-        <h2>GALLERY IS EMPTY</h2>
-        <p>No supported media found in the current directory</p>
+        <h2>갤러리가 비어 있습니다</h2>
+        <p>이 폴더에는 볼 수 있는 이미지가 없습니다</p>
       </div>
     </section>
 
@@ -87,10 +87,10 @@
               <button class="lv-btn" @click="editFilename"><Icon name="pencil" /> 이름 변경</button>
               <button v-if="isImage(largeView.path)" class="lv-btn save" @click="saveExif"><Icon name="save" /> EXIF 저장</button>
               <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_i2i', { path: largeView.path })">I2I</button>
-              <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">INPAINT</button>
-              <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">EDITOR</button>
-              <button class="lv-btn" @click="quickAction('add_favorite', largeView.path)"><Icon name="star" /> FAV</button>
-              <button v-if="isImage(largeView.path)" class="lv-btn accent" @click="sendExifToT2I">USE PROMPT</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">인페인트</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">에디터</button>
+              <button class="lv-btn" @click="quickAction('add_favorite', largeView.path)"><Icon name="star" /> 즐겨찾기</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn accent" @click="sendExifToT2I">프롬프트 사용</button>
               <button class="lv-close" @click="closeLargeView"><Icon name="close" /></button>
             </div>
           </div>
@@ -101,23 +101,23 @@
               <img v-else :src="mediaUrl(largeView.path, true)" />
             </div>
             <div class="large-exif">
-              <div class="meta-row"><span>TYPE</span><p>{{ largeView.mediaType || mediaLabel(largeView.path) }}</p></div>
-              <div class="meta-row"><span>SIZE</span><p>{{ largeView.size }}</p></div>
-              <div class="meta-row path-row"><span>PATH</span><p>{{ largeView.path }}</p></div>
+              <div class="meta-row"><span>종류</span><p>{{ largeView.mediaType || mediaLabel(largeView.path) }}</p></div>
+              <div class="meta-row"><span>크기</span><p>{{ largeView.size }}</p></div>
+              <div class="meta-row path-row"><span>경로</span><p>{{ largeView.path }}</p></div>
               <div v-if="largeView.prompt" class="meta-block">
-                <label>PROMPT</label>
+                <label>프롬프트</label>
                 <div class="code-box editable" contenteditable @blur="onExifEdit($event, 'prompt')">{{ largeView.prompt }}</div>
               </div>
               <div v-if="largeView.negative" class="meta-block mt-8">
-                <label class="danger">NEGATIVE</label>
+                <label class="danger">네거티브</label>
                 <div class="code-box">{{ largeView.negative }}</div>
               </div>
               <div v-if="largeView.raw && !largeView.prompt" class="meta-block">
-                <label>RAW</label>
+                <label>원본</label>
                 <div class="code-box">{{ largeView.raw }}</div>
               </div>
               <div v-if="largeViewParams" class="meta-block mt-8">
-                <label>PARAMETERS</label>
+                <label>파라미터</label>
                 <div class="code-box params">{{ largeViewParams }}</div>
               </div>
             </div>
@@ -141,40 +141,40 @@
             <div class="click-hint">클릭하여 확대</div>
           </div>
           <div class="exif-meta">
-            <h3>METADATA</h3>
-            <div class="meta-row"><span>FILE</span><p>{{ exifData.filename }}</p></div>
-            <div class="meta-row"><span>TYPE</span><p>{{ exifData.mediaType || mediaLabel(exifData.path) }}</p></div>
-            <div class="meta-row"><span>SIZE</span><p>{{ exifData.size }}</p></div>
+            <h3>메타데이터</h3>
+            <div class="meta-row"><span>파일</span><p>{{ exifData.filename }}</p></div>
+            <div class="meta-row"><span>종류</span><p>{{ exifData.mediaType || mediaLabel(exifData.path) }}</p></div>
+            <div class="meta-row"><span>크기</span><p>{{ exifData.size }}</p></div>
 
             <div v-if="exifData.prompt" class="meta-block">
-              <label>PROMPT</label>
+              <label>프롬프트</label>
               <div class="code-box">{{ exifData.prompt }}</div>
             </div>
             <div v-if="exifData.negative" class="meta-block mt-12">
-              <label class="danger">NEGATIVE</label>
+              <label class="danger">네거티브</label>
               <div class="code-box">{{ exifData.negative }}</div>
             </div>
             <div v-if="exifData.params" class="meta-block mt-12">
-              <label>PARAMETERS</label>
+              <label>파라미터</label>
               <div class="params-grid">
-                <div class="param-line" v-if="exifData.params.generation"><span class="pl">GEN</span><span>{{ exifData.params.generation }}</span></div>
-                <div class="param-line" v-if="exifData.params.core"><span class="pl">CORE</span><span>{{ exifData.params.core }}</span></div>
-                <div class="param-line" v-if="exifData.params.model"><span class="pl">MODEL</span><span>{{ exifData.params.model }}</span></div>
-                <div class="param-line" v-if="exifData.params.hires"><span class="pl">HIRES</span><span>{{ exifData.params.hires }}</span></div>
-                <div class="param-line" v-if="exifData.params.extensions"><span class="pl">EXT</span><span>{{ exifData.params.extensions }}</span></div>
-                <div class="param-line" v-if="exifData.params.other"><span class="pl">ETC</span><span>{{ exifData.params.other }}</span></div>
+                <div class="param-line" v-if="exifData.params.generation"><span class="pl">생성</span><span>{{ exifData.params.generation }}</span></div>
+                <div class="param-line" v-if="exifData.params.core"><span class="pl">기본</span><span>{{ exifData.params.core }}</span></div>
+                <div class="param-line" v-if="exifData.params.model"><span class="pl">모델</span><span>{{ exifData.params.model }}</span></div>
+                <div class="param-line" v-if="exifData.params.hires"><span class="pl">고해상도</span><span>{{ exifData.params.hires }}</span></div>
+                <div class="param-line" v-if="exifData.params.extensions"><span class="pl">확장</span><span>{{ exifData.params.extensions }}</span></div>
+                <div class="param-line" v-if="exifData.params.other"><span class="pl">기타</span><span>{{ exifData.params.other }}</span></div>
               </div>
             </div>
             <div v-else-if="sidebarParams" class="meta-block mt-12">
-              <label>PARAMETERS</label>
+              <label>파라미터</label>
               <div class="code-box params">{{ sidebarParams }}</div>
             </div>
           </div>
           <div v-if="isImage(exifData.path)" class="exif-footer">
-            <button class="main-apply-btn" @click="sendExifToT2I">USE PROMPT IN T2I</button>
+            <button class="main-apply-btn" @click="sendExifToT2I">T2I에서 사용</button>
             <div class="grid-2 mt-8">
               <button class="mini-action" @click="action('send_to_i2i', { path: exifData.path })">I2I</button>
-              <button class="mini-action" @click="action('send_to_inpaint', { path: exifData.path })">INPAINT</button>
+              <button class="mini-action" @click="action('send_to_inpaint', { path: exifData.path })">인페인트</button>
             </div>
           </div>
         </div>
@@ -184,16 +184,16 @@
     <!-- Context Menu -->
     <transition name="pop">
       <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }">
-        <div class="ctx-item" @click="ctx('add_favorite')"><Icon name="star" /> ADD TO FAVORITES</div>
-        <div class="ctx-item" @click="ctx('gallery_load_exif')"><Icon name="clipboard" /> INSPECT MEDIA</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_i2i')"><Icon name="image" /> SEND TO I2I</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_inpaint')"><Icon name="palette" /> SEND TO INPAINT</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_editor')"><Icon name="pencil" /> SEND TO EDITOR</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('before')"><Icon name="search" /> COMPARE (BEFORE)</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('after')"><Icon name="search" /> COMPARE (AFTER)</div>
-        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctxAdetailer"><Icon name="target" /> ADETAILER</div>
+        <div class="ctx-item" @click="ctx('add_favorite')"><Icon name="star" /> 즐겨찾기 추가</div>
+        <div class="ctx-item" @click="ctx('gallery_load_exif')"><Icon name="clipboard" /> 정보 보기</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_i2i')"><Icon name="image" /> I2I로 보내기</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_inpaint')"><Icon name="palette" /> 인페인트로 보내기</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctx('send_to_editor')"><Icon name="pencil" /> 에디터로 보내기</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('before')"><Icon name="search" /> 비교 (이전)</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="sendToCompare('after')"><Icon name="search" /> 비교 (이후)</div>
+        <div v-if="isImage(ctxMenu.path)" class="ctx-item" @click="ctxAdetailer"><Icon name="target" /> ADetailer</div>
         <div class="ctx-separator"></div>
-        <div class="ctx-item delete" @click="ctx('delete_image')"><Icon name="trash" /> DELETE FOREVER</div>
+        <div class="ctx-item delete" @click="ctx('delete_image')"><Icon name="trash" /> 완전 삭제</div>
       </div>
     </transition>
   </div>
@@ -358,7 +358,7 @@ function clearExifSearch() {
 }
 const galleryContentRef = ref<HTMLElement | null>(null)
 const sortBy = ref('date')
-const sortOptions = [{label: 'DATE', val: 'date'}, {label: 'NAME', val: 'name'}]
+const sortOptions = [{label: '날짜', val: 'date'}, {label: '이름', val: 'name'}]
 const ctxMenu = ref<CtxMenu>({ show: false, x: 0, y: 0, path: '' })
 const exifData = ref<ExifData | null>(null)
 const largeView = ref<ExifData | null>(null)
@@ -564,7 +564,8 @@ onUnmounted(() => {
 
 .folder-info { display: flex; align-items: center; gap: 10px; cursor: pointer; opacity: 0.7; transition: var(--transition); }
 .folder-info:hover { opacity: 1; }
-.folder-info .path { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
+/* 경로는 있는 그대로 — 대문자로 밀면 실제와 다른 문자열이 된다 */
+.folder-info .path { font-size: var(--fs-meta); color: var(--text-muted); max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
 
 .gallery-card img, .gallery-card > video { width: 100%; display: block; transition: var(--transition); }
 .gallery-card > video { min-height: 120px; max-height: 320px; object-fit: contain; background: #050505; }
@@ -574,7 +575,7 @@ onUnmounted(() => {
 .audio-icon { font-size: 34px; color: var(--accent); }
 .audio-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: var(--fs-label); color: var(--text-muted); }
 .audio-card audio { width: 100%; height: 32px; }
-.media-kind-badge { position: absolute; left: 8px; top: 8px; padding: 3px 7px; border-radius: 999px; background: rgba(0,0,0,0.72); color: #fff; font-size: var(--fs-label); font-weight: 900; letter-spacing: 0.8px; pointer-events: none; }
+.media-kind-badge { position: absolute; left: 8px; top: 8px; padding: 3px 7px; border-radius: 999px; background: rgba(0,0,0,0.72); color: #fff; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; pointer-events: none; }
 
 .exif-close { position: absolute; top: 20px; left: -20px; width: 40px; height: 40px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transform: rotate(0deg); }
 
@@ -583,19 +584,19 @@ onUnmounted(() => {
 .sidebar-audio-preview { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: #07090c; color: var(--accent); font-size: 42px; }
 .sidebar-audio-preview audio { width: 85%; }
 
-.meta-row p { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.meta-row p { font-size: 12px; font-weight: var(--fw-bold); color: var(--text-primary); }
 .meta-row.path-row { align-items: flex-start; }
 .meta-row.path-row p { max-width: 250px; word-break: break-all; text-align: right; font-size: var(--fs-label); }
 
-.meta-block label { font-size: var(--fs-label); font-weight: 900; color: var(--accent); margin-bottom: 8px; }
+.meta-block label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); margin-bottom: 8px; }
 .code-box { background: var(--bg-input); padding: 12px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 11px; line-height: 1.6; color: var(--text-secondary); word-break: break-all; }
 
 .params-grid { background: var(--bg-input); border-radius: 8px; padding: 8px 12px; }
 .param-line { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 11px; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.03); font-family: 'Consolas', monospace; }
 .param-line:last-child { border-bottom: none; }
-.pl { font-size: var(--fs-label); font-weight: 900; color: var(--accent); letter-spacing: 1px; min-width: 45px; flex-shrink: 0; }
+.pl { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); letter-spacing: 0; min-width: 45px; flex-shrink: 0; }
 
-.mini-action { flex: 1; height: 36px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
+.mini-action { flex: 1; height: 36px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 
 .ctx-item.delete { color: #f87171; }
 

@@ -219,7 +219,7 @@ function clearFilterSelection() {
   border: none;
   border-radius: 4px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .accent-btn:hover {
@@ -246,7 +246,7 @@ function clearFilterSelection() {
   border: none;
   border-radius: 4px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .auto-correct-btn:hover {
@@ -256,7 +256,7 @@ function clearFilterSelection() {
 .section-label {
   color: #585858;
   font-size: 12px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
 }
 
 .preset-grid {
@@ -272,7 +272,7 @@ function clearFilterSelection() {
   border: 1px solid #2A2A2A;
   border-radius: 4px;
   font-size: 12px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .preset-btn:hover {
@@ -292,7 +292,7 @@ function clearFilterSelection() {
   border: none;
   border-radius: 4px;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .filter-cancel-btn:hover {

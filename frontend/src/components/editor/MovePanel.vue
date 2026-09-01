@@ -212,14 +212,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .section-header {
   color: #585858;
   font-size: 18px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   padding: 2px;
 }
 
 .small-header {
   color: #585858;
   font-size: 12px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
 }
 
 .status-label {
@@ -290,7 +290,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   border-radius: 6px;
   color: #B0B0B0;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   padding: 8px 12px;
   cursor: pointer;
 }
@@ -311,7 +311,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   border-radius: 6px;
   color: #fff;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   padding: 8px 12px;
   cursor: pointer;
   width: 100%;
@@ -333,7 +333,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   border-radius: 6px;
   color: #fff;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   padding: 8px 12px;
   cursor: pointer;
   width: 100%;

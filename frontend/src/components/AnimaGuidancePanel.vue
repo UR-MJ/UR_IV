@@ -1,7 +1,7 @@
 <template>
   <details class="ext-card">
     <summary class="ext-title">
-      ANIMA GUIDANCE
+      ANIMA 가이던스
       <span v-if="activeSummary" class="ag-badge" :title="activeSummary">{{ activeSummary }}</span>
     </summary>
 
@@ -444,14 +444,14 @@ const activeSummary = computed(() => {
   background: rgba(255, 255, 255, 0.03); border-radius: 6px;
 }
 .ag-badge {
-  margin-left: 8px; font-size: var(--fs-label); font-weight: 700;
+  margin-left: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold);
   color: var(--accent); opacity: 0.9;
   max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   display: inline-block; vertical-align: bottom;
 }
 .ag-group { margin: 6px 0; border-left: 2px solid var(--border); padding-left: 8px; }
 .ag-group > summary {
-  cursor: pointer; font-size: 11px; font-weight: 800;
+  cursor: pointer; font-size: 11px; font-weight: var(--fw-bold);
   color: var(--text-secondary); padding: 4px 0; list-style: none;
 }
 .ag-group > summary::-webkit-details-marker { display: none; }
@@ -460,7 +460,7 @@ const activeSummary = computed(() => {
 .ag-group > summary:hover { color: var(--text-primary); }
 .ag-sub { margin: 6px 0 6px 4px; }
 .ag-sub > summary {
-  cursor: pointer; font-size: var(--fs-label); font-weight: 700;
+  cursor: pointer; font-size: var(--fs-label); font-weight: var(--fw-bold);
   color: var(--text-muted); padding: 3px 0;
 }
 .ext-note {
@@ -469,7 +469,7 @@ const activeSummary = computed(() => {
 }
 .ag-actions { display: flex; justify-content: space-between; gap: 6px; margin-top: 10px; }
 .ag-reset, .ag-import {
-  height: 26px; padding: 0 10px; font-size: var(--fs-label); font-weight: 700;
+  height: 26px; padding: 0 10px; font-size: var(--fs-label); font-weight: var(--fw-bold);
   border-radius: 5px; cursor: pointer;
 }
 .ag-reset { background: transparent; border: 1px dashed var(--border); color: var(--text-muted); }

@@ -95,18 +95,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .abt-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 2200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .abt-modal { width: min(720px, 92vw); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 .abt-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.abt-header h3 { font-size: 16px; font-weight: 800; }
+.abt-header h3 { font-size: 16px; font-weight: var(--fw-bold); }
 .abt-sub { font-size: 11px; color: var(--text-muted); }
 .abt-close { width: 30px; height: 30px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); cursor: pointer; }
 .abt-close:hover { color: var(--text-primary); border-color: var(--accent); }
 .abt-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
 .abt-seedrow { display: flex; align-items: center; gap: 10px; }
-.abt-seedrow label { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.abt-seedrow label { font-size: 12px; font-weight: var(--fw-bold); color: var(--text-secondary); }
 .abt-seed { width: 160px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; color: var(--text-primary); font-size: 13px; }
 .abt-seed:focus { outline: none; border-color: var(--accent); }
 .abt-hint { font-size: 11px; color: var(--text-muted); }
 .abt-group { display: flex; flex-direction: column; gap: 5px; }
-.abt-label { font-size: 12px; font-weight: 700; }
+.abt-label { font-size: 12px; font-weight: var(--fw-bold); }
 .abt-label.a { color: var(--accent); }
 .abt-label.b { color: #60a5fa; }
 .abt-label.neg { color: #f87171; }
@@ -115,6 +115,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .abt-footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
 .abt-status { font-size: 11px; color: var(--text-muted); }
 .abt-spacer { flex: 1; }
-.abt-run { background: var(--accent); color: #000; border: none; border-radius: var(--radius-base); font-weight: 700; font-size: 13px; padding: 9px 18px; cursor: pointer; }
-.abt-cancel { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-weight: 700; font-size: 13px; padding: 9px 16px; cursor: pointer; }
+.abt-run { background: var(--accent); color: #000; border: none; border-radius: var(--radius-base); font-weight: var(--fw-bold); font-size: 13px; padding: 9px 18px; cursor: pointer; }
+.abt-cancel { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-weight: var(--fw-bold); font-size: 13px; padding: 9px 16px; cursor: pointer; }
 </style>

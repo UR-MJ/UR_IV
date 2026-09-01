@@ -27,7 +27,7 @@
     <div class="info-bar" v-if="imageUrl">
       <span class="info-item">해상도 {{ resolution }}</span>
       <span class="info-item">시드 {{ seed }}</span>
-      <button class="explore-btn" @click="exploreSeed" v-if="seed"><Icon name="search" /> EXPLORE SEED</button>
+      <button class="explore-btn" @click="exploreSeed" v-if="seed"><Icon name="search" /> 시드 탐색</button>
     </div>
   </div>
 </template>
@@ -110,7 +110,7 @@ const progressPct = computed(() => {
 .placeholder-text {
   font-size: 18px;
   color: #8A8A8A;
-  font-weight: 600;
+  font-weight: var(--fw-bold);
   margin-bottom: 8px;
 }
 
@@ -132,7 +132,7 @@ const progressPct = computed(() => {
 .info-item { font-size: 12px; color: #787878; }
 .explore-btn {
   padding: 3px 12px; background: var(--bg-button); border: 1px solid var(--border);
-  border-radius: 4px; color: var(--accent); font-size: var(--fs-label); font-weight: 700; cursor: pointer;
+  border-radius: 4px; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer;
 }
 .explore-btn:hover { background: var(--accent-dim); border-color: var(--accent); }
 .generating { text-align: center; }
@@ -142,7 +142,7 @@ const progressPct = computed(() => {
   border-radius: 50%; animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.gen-text { color: #E2B340; font-size: 14px; font-weight: 600; }
+.gen-text { color: #E2B340; font-size: 14px; font-weight: var(--fw-bold); }
 .progress-bar {
   width: 200px; height: 4px; background: #1A1A1A; border-radius: 2px;
   margin: 12px auto 0; overflow: hidden;

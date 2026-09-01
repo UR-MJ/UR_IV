@@ -3,10 +3,10 @@
     <!-- 하위 탭: img2img / Refine -->
     <div class="sub-tabs">
       <button class="sub-tab" :class="{ active: subTab === 'i2i' }" @click="subTab = 'i2i'">
-        IMG2IMG
+        img2img
       </button>
       <button class="sub-tab" :class="{ active: subTab === 'refine' }" @click="subTab = 'refine'">
-        SAM3 REFINE
+        SAM3 정밀화
       </button>
     </div>
 
@@ -25,31 +25,31 @@
       <div class="sidebar-scroll">
         <!-- Input Card -->
         <div class="glass-card">
-          <label>Source Image</label>
+          <label>원본 이미지</label>
           <div class="source-thumb" @click="triggerFileInput">
             <img v-if="imageSrc" :src="imageSrc" />
-            <div v-else class="upload-hint">EMPTY</div>
-            <div class="edit-overlay">CHANGE IMAGE</div>
+            <div v-else class="upload-hint">비어 있음</div>
+            <div class="edit-overlay">이미지 변경</div>
           </div>
         </div>
 
         <div v-if="isKrea2" class="glass-card krea-card">
-          <label>Identity Reference <span class="optional">OPTIONAL</span></label>
+          <label>아이덴티티 참조 <span class="optional">선택</span></label>
           <div class="source-thumb identity-thumb" @click="triggerReferenceInput">
             <img v-if="referenceSrc" :src="referenceSrc" />
-            <div v-else class="upload-hint">SOURCE-ONLY EDIT</div>
+            <div v-else class="upload-hint">원본만 편집</div>
             <div class="edit-overlay">{{ referenceSrc ? 'CHANGE REFERENCE' : 'ADD REFERENCE' }}</div>
           </div>
-          <button v-if="referenceSrc" class="clear-reference" @click.stop="clearReference">REMOVE REFERENCE</button>
+          <button v-if="referenceSrc" class="clear-reference" @click.stop="clearReference">참조 제거</button>
           <input ref="referenceFileInput" type="file" accept="image/*" hidden @change="handleReferenceSelect" />
         </div>
 
         <!-- Prompt Card -->
         <div class="glass-card">
-          <label>Override Prompt</label>
+          <label>프롬프트 덮어쓰기</label>
           <textarea v-model="prompt" rows="3" placeholder="Leave empty to use T2I prompt..."></textarea>
           <template v-if="!isKrea2">
-            <label class="mt-12 danger">Negative</label>
+            <label class="mt-12 danger">네거티브</label>
             <textarea v-model="negPrompt" rows="2" placeholder="Override negative..."></textarea>
           </template>
           <p v-else class="krea-help">Krea2 Identity Edit는 입력 이미지를 사용한 grounded unconditional 경로를 사용하므로 Negative는 적용하지 않습니다.</p>
@@ -58,39 +58,39 @@
         <!-- Generation Params Card -->
         <div class="glass-card">
           <template v-if="isKrea2">
-            <label>Identity Fidelity</label>
+            <label>아이덴티티 유지도</label>
             <div class="premium-slider krea-slider">
               <input type="range" min="0.5" max="12" step="0.1" v-model.number="fidelity" />
               <div class="slider-display">
                 <span class="val">{{ fidelity.toFixed(1) }}</span>
-                <span class="label">Reference Boost</span>
+                <span class="label">참조 강도</span>
               </div>
             </div>
             <p class="krea-help">높을수록 원본/identity reference 보존을 강하게 요구합니다. 기본값 4.0.</p>
           </template>
           <template v-else>
-            <label>Denoising Strength</label>
+            <label>디노이즈 강도</label>
             <div class="premium-slider">
               <input type="range" min="0" max="1" step="0.01" v-model.number="denoising" />
               <div class="slider-display">
                 <span class="val">{{ denoising.toFixed(2) }}</span>
-                <span class="label">Intensity</span>
+                <span class="label">강도</span>
               </div>
             </div>
           </template>
 
           <template v-if="!isKrea2">
-            <label class="mt-12">Resize Mode</label>
-            <CustomSelect v-model="resizeModeLabel" :options="resizeModeOptions" placeholder="Resize Mode" />
+            <label class="mt-12">크기 조정</label>
+            <CustomSelect v-model="resizeModeLabel" :options="resizeModeOptions" placeholder="크기 조정" />
           </template>
 
           <div class="grid-2 mt-12">
             <div class="input-unit">
-              <label>Width</label>
+              <label>너비</label>
               <input v-model="width" type="number" />
             </div>
             <div class="input-unit">
-              <label>Height</label>
+              <label>높이</label>
               <input v-model="height" type="number" />
             </div>
           </div>
@@ -98,14 +98,14 @@
 
         <!-- Advanced Card -->
         <details class="glass-card">
-          <summary class="card-header">ADVANCED SETTINGS</summary>
+          <summary class="card-header">고급 설정</summary>
           <div class="input-group mt-12">
-            <label>Steps</label>
+            <label>스텝</label>
             <input type="range" min="1" :max="isKrea2 ? 80 : 100" v-model.number="activeSteps" class="modern-slider" />
             <div class="val-tag">{{ activeSteps }}</div>
           </div>
           <div class="input-group mt-12">
-            <label>CFG Scale</label>
+            <label>CFG</label>
             <input type="range" min="1" :max="isKrea2 ? 10 : 20" step="0.5" v-model.number="activeCfg" class="modern-slider" />
             <div class="val-tag">{{ activeCfg }}</div>
           </div>
@@ -121,7 +121,7 @@
 
       <div class="sidebar-footer">
         <button class="btn-generate primary" @click="generate" :disabled="!imageSrc">
-          {{ !imageSrc ? 'UPLOAD IMAGE FIRST' : isKrea2 ? 'START KREA2 IDENTITY EDIT' : 'START I2I GENERATION' }}
+          {{ !imageSrc ? '이미지를 먼저 올리세요' : isKrea2 ? 'Krea2 아이덴티티 편집 시작' : 'I2I 생성 시작' }}
         </button>
       </div>
     </aside>
@@ -135,8 +135,8 @@
         <transition name="scale">
           <div v-if="!imageSrc" class="drop-empty">
             <div class="icon">⤓</div>
-            <h2>DRAG & DROP SOURCE</h2>
-            <p>Or click to browse your local storage</p>
+            <h2>원본을 끌어 놓으세요</h2>
+            <p>또는 클릭해서 파일 찾기</p>
           </div>
           <div v-else class="preview-container">
             <img :src="imageSrc" class="main-preview" />
@@ -183,7 +183,7 @@ const negPrompt = ref('')
 const denoising = ref(0.75)
 const fidelity = ref(4)
 const resizeMode = ref('0')
-const resizeModeOptions = ['JUST RESIZE', 'CROP AND RESIZE', 'RESIZE AND FILL', 'LATENT RESIZE']
+const resizeModeOptions = ['그대로 늘리기', '잘라서 맞추기', '여백 채우기', 'Latent 리사이즈']
 const resizeModeLabel = computed({
   get: () => resizeModeOptions[parseInt(resizeMode.value)] || resizeModeOptions[0],
   set: (v: string) => { resizeMode.value = String(resizeModeOptions.indexOf(v)) }
@@ -288,7 +288,7 @@ function generate() {
   flex-shrink: 0;
 }
 .sub-tab {
-  padding: 8px 18px; font-size: var(--fs-label); font-weight: 800; letter-spacing: 1px;
+  padding: 8px 18px; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
   background: transparent; border: none; border-bottom: 2px solid transparent;
   color: var(--text-muted); cursor: pointer; transition: var(--transition);
 }
@@ -307,12 +307,12 @@ function generate() {
 .sidebar-footer { padding: 16px; background: var(--bg-card); border-top: 1px solid var(--border); }
 
 .krea-card { border-color: rgba(167,139,250,0.35); background: rgba(124,58,237,0.06); }
-.optional { margin-left: 5px; font-size: var(--fs-label); color: #a78bfa; letter-spacing: 1px; }
+.optional { margin-left: 5px; font-size: var(--fs-label); color: #a78bfa; letter-spacing: 0; }
 .identity-thumb { aspect-ratio: 2/1; }
 .clear-reference {
   width: 100%; margin-top: 7px; padding: 6px; background: transparent;
   border: 1px solid rgba(248,113,113,0.3); border-radius: 5px;
-  color: #f87171; font-size: var(--fs-label); font-weight: 800; cursor: pointer;
+  color: #f87171; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer;
 }
 .krea-help { margin: 8px 0 0; color: var(--text-muted); font-size: var(--fs-label); line-height: 1.45; }
 .krea-slider .val { color: #a78bfa; }
@@ -322,10 +322,10 @@ function generate() {
   margin-top: 8px; overflow: hidden; position: relative; cursor: pointer; border: 1px solid var(--border);
 }
 .source-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.upload-hint { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: var(--fs-label); font-weight: 800; letter-spacing: 2px; }
+.upload-hint { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .edit-overlay {
   position: absolute; inset: 0; background: rgba(0,0,0,0.6); color: var(--accent);
-  display: flex; align-items: center; justify-content: center; font-size: var(--fs-label); font-weight: 800;
+  display: flex; align-items: center; justify-content: center; font-size: var(--fs-label); font-weight: var(--fw-bold);
   opacity: 0; transition: var(--transition);
 }
 .source-thumb:hover .edit-overlay { opacity: 1; }
@@ -333,11 +333,11 @@ function generate() {
 /* Premium Slider */
 .premium-slider { margin-top: 8px; }
 .slider-display { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
-.slider-display .val { font-size: 20px; font-weight: 900; color: var(--accent); font-family: 'Consolas', monospace; }
-.slider-display .label { font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); text-transform: uppercase; }
+.slider-display .val { font-size: 20px; font-weight: var(--fw-bold); color: var(--accent); font-family: 'Consolas', monospace; }
+.slider-display .label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); }
 
 .modern-slider { appearance: none; width: 100%; height: 4px; background: var(--bg-input); border-radius: 2px; outline: none; accent-color: var(--accent); }
-.val-tag { font-size: 11px; font-weight: 800; color: var(--text-secondary); text-align: right; margin-top: 4px; }
+.val-tag { font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); text-align: right; margin-top: 4px; }
 .seed-row { display: flex; gap: 6px; align-items: center; }
 .seed-input {
   flex: 1; padding: 8px 10px; background: var(--bg-input); border: 1px solid var(--border);
@@ -357,8 +357,8 @@ function generate() {
 
 .btn-generate {
   width: 100%; height: 46px; background: var(--accent); border: none;
-  border-radius: var(--radius-pill); color: #000; font-weight: 900;
-  font-size: 12px; letter-spacing: 1px; cursor: pointer; transition: var(--transition);
+  border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold);
+  font-size: 12px; letter-spacing: 0; cursor: pointer; transition: var(--transition);
 }
 .btn-generate:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }
 
@@ -375,7 +375,7 @@ function generate() {
 
 .drop-empty { text-align: center; }
 .drop-empty .icon { font-size: 64px; color: var(--text-muted); margin-bottom: 16px; }
-.drop-empty h2 { font-size: 18px; letter-spacing: 4px; color: var(--text-secondary); margin-bottom: 8px; }
+.drop-empty h2 { font-size: 18px; letter-spacing: 0; color: var(--text-secondary); margin-bottom: 8px; }
 .drop-empty p { font-size: 13px; color: var(--text-muted); }
 
 .preview-container { width: 100%; height: 100%; padding: 20px; display: flex; align-items: center; justify-content: center; }

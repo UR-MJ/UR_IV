@@ -76,7 +76,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .ovr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 2300; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .ovr-modal { width: min(520px, 92vw); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 .ovr-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.ovr-header h3 { font-size: 16px; font-weight: 800; }
+.ovr-header h3 { font-size: 16px; font-weight: var(--fw-bold); }
 .ovr-sub { font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px; max-width: 400px; }
 .ovr-close { width: 30px; height: 30px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); cursor: pointer; }
 .ovr-close:hover { color: var(--text-primary); border-color: var(--accent); }
@@ -84,10 +84,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .ovr-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-base); background: var(--bg-primary); }
 .ovr-row:hover { border-color: var(--accent); }
 .ovr-row input { margin-top: 3px; accent-color: var(--accent); }
-.ovr-name { display: block; font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.ovr-name { display: block; font-size: 13px; font-weight: var(--fw-bold); color: var(--text-primary); }
 .ovr-desc { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .ovr-footer { display: flex; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
 .ovr-spacer { flex: 1; }
-.ovr-save { background: var(--accent); color: #000; border: none; border-radius: var(--radius-base); font-weight: 700; font-size: 12px; padding: 9px 18px; cursor: pointer; }
-.ovr-cancel { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-weight: 700; font-size: 12px; padding: 9px 16px; cursor: pointer; }
+.ovr-save { background: var(--accent); color: #000; border: none; border-radius: var(--radius-base); font-weight: var(--fw-bold); font-size: 12px; padding: 9px 18px; cursor: pointer; }
+.ovr-cancel { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-weight: var(--fw-bold); font-size: 12px; padding: 9px 16px; cursor: pointer; }
 </style>

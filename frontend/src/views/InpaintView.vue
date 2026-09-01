@@ -8,10 +8,10 @@
     <aside class="sidebar">
       <div class="sidebar-scroll">
         <div class="glass-card">
-          <label>Source Image</label>
+          <label>원본 이미지</label>
           <div class="source-thumb" @click="triggerFileInput">
             <img v-if="imageSrc" :src="imageSrc" />
-            <div v-else class="upload-hint">DROP OR CLICK</div>
+            <div v-else class="upload-hint">끌어 놓거나 클릭</div>
           </div>
         </div>
 
@@ -23,26 +23,26 @@
 
         <!-- 올가미 모드 -->
         <div class="glass-card" v-if="currentTool === 'lasso'">
-          <label>Lasso Mode</label>
+          <label>올가미 모드</label>
           <div class="tool-grid small">
-            <button class="tool-chip" :class="{ active: !magneticLasso }" @click="magneticLasso = false"><Icon name="loop" /> FREE</button>
-            <button class="tool-chip magnet" :class="{ active: magneticLasso }" @click="enableMagnetic"><Icon name="magnet" /> MAGNETIC</button>
+            <button class="tool-chip" :class="{ active: !magneticLasso }" @click="magneticLasso = false"><Icon name="loop" /> 자유</button>
+            <button class="tool-chip magnet" :class="{ active: magneticLasso }" @click="enableMagnetic"><Icon name="magnet" /> 자석</button>
           </div>
         </div>
 
         <!-- 지우개 모드 -->
         <div class="glass-card" v-if="currentTool === 'eraser'">
-          <label>Eraser Shape</label>
+          <label>지우개 모양</label>
           <div class="tool-grid small">
-            <button class="tool-chip" :class="{ active: eraserMode === 'brush' }" @click="eraserMode = 'brush'">BRUSH</button>
-            <button class="tool-chip" :class="{ active: eraserMode === 'box' }" @click="eraserMode = 'box'">RECT</button>
-            <button class="tool-chip" :class="{ active: eraserMode === 'lasso' }" @click="eraserMode = 'lasso'">LASSO</button>
+            <button class="tool-chip" :class="{ active: eraserMode === 'brush' }" @click="eraserMode = 'brush'">브러시</button>
+            <button class="tool-chip" :class="{ active: eraserMode === 'box' }" @click="eraserMode = 'box'">사각형</button>
+            <button class="tool-chip" :class="{ active: eraserMode === 'lasso' }" @click="eraserMode = 'lasso'">올가미</button>
           </div>
         </div>
 
         <!-- 브러시 크기 -->
         <div class="glass-card">
-          <label>Brush Size</label>
+          <label>브러시 크기</label>
           <div class="slider-row">
             <input type="range" min="3" max="200" v-model.number="brushSize" />
             <span class="slider-val">{{ brushSize }}px</span>
@@ -58,24 +58,24 @@
         </div>
 
         <div class="glass-card">
-          <label>Override Prompt</label>
+          <label>프롬프트 덮어쓰기</label>
           <textarea v-model="prompt" rows="3" placeholder="Describe the change..."></textarea>
         </div>
 
         <div class="glass-card">
-          <label>Mask Settings</label>
-          <CustomSelect v-model="maskContentLabel" :options="maskContents" placeholder="Mask Content" />
-          <CustomSelect v-model="inpaintAreaLabel" :options="inpaintAreas" placeholder="Inpaint Area" class="mt-6" />
+          <label>마스크 설정</label>
+          <CustomSelect v-model="maskContentLabel" :options="maskContents" placeholder="마스크 영역 초기값" />
+          <CustomSelect v-model="inpaintAreaLabel" :options="inpaintAreas" placeholder="인페인트 범위" class="mt-6" />
         </div>
       </div>
 
       <div class="sidebar-footer">
         <div class="mask-actions">
-          <button class="act-btn" @click="clearMask">CLEAR</button>
-          <button class="act-btn" @click="undoMask">UNDO</button>
-          <button class="act-btn" @click="redoMask">REDO</button>
+          <button class="act-btn" @click="clearMask">비우기</button>
+          <button class="act-btn" @click="undoMask">실행 취소</button>
+          <button class="act-btn" @click="redoMask">다시 실행</button>
         </div>
-        <button class="btn-gen" @click="generate" :disabled="!imageSrc">START INPAINTING</button>
+        <button class="btn-gen" @click="generate" :disabled="!imageSrc">인페인트 시작</button>
       </div>
     </aside>
 
@@ -86,7 +86,7 @@
         <div v-if="!imageSrc" class="drop-empty" @click="triggerFileInput">
           <div class="drop-icon"><Icon name="pencil" /></div>
           <h2>MASK EDITOR</h2>
-          <p>Drop image or click to start</p>
+          <p>이미지를 끌어 놓거나 클릭하세요</p>
         </div>
         <template v-else>
           <canvas ref="imgRef" class="cv" :style="cvStyle"></canvas>
@@ -131,8 +131,8 @@ const currentTool = ref('brush')
 const eraserMode = ref('brush')
 const magneticLasso = ref(false)
 let edgeMapData: Uint8Array | null = null, edgeMapW = 0, edgeMapH = 0
-const maskContents = ['FILL', 'ORIGINAL', 'LATENT NOISE', 'LATENT NOTHING']
-const inpaintAreas = ['WHOLE IMAGE', 'ONLY MASKED']
+const maskContents = ['채우기', '원본 유지', 'Latent 노이즈', 'Latent 없음']
+const inpaintAreas = ['전체 이미지', '마스크 영역만']
 const maskContentLabel = computed({
   get: () => maskContents[maskContent.value] || maskContents[0],
   set: (v: string) => { maskContent.value = maskContents.indexOf(v) }
@@ -418,7 +418,7 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
 
 .source-thumb { height: 100px; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
 .source-thumb img { width: 100%; height: 100%; object-fit: contain; }
-.upload-hint { color: var(--text-muted); font-size: var(--fs-label); font-weight: 700; }
+.upload-hint { color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); }
 .tool-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
 .tool-grid.small { grid-template-columns: repeat(3, 1fr); }
 .tool-chip { min-height: 30px; padding: 6px 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; }
@@ -431,14 +431,14 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
 .mt-6 { margin-top: 6px; }
 .mask-actions { display: flex; gap: 3px; }
 .act-btn { flex: 1; height: 30px; padding: 0 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; }
-.btn-gen { width: 100%; height: 42px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 800; font-size: 12px; cursor: pointer; }
+.btn-gen { width: 100%; height: 42px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold); font-size: 12px; cursor: pointer; }
 .btn-gen:disabled { opacity: 0.4; }
 .canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #080808; position: relative; }
 .canvas-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
 .canvas-wrap.dragging { background: rgba(250,204,21,0.05); }
 .drop-empty { text-align: center; cursor: pointer; }
 .drop-icon { font-size: 48px; opacity: 0.3; }
-.drop-empty h2 { color: var(--text-muted); letter-spacing: 4px; }
+.drop-empty h2 { letter-spacing: 0.08em; color: var(--text-muted); letter-spacing: 0; }
 .drop-empty p { color: #484848; font-size: 12px; }
 .cv { position: absolute; max-width: 85%; max-height: 85%; }
 .cv.mask { pointer-events: none; }

@@ -25,23 +25,23 @@
       </div>
       <div class="progress-track"><div class="progress-fill" :style="{ width: `${progress.percent}%` }" /></div>
       <span class="progress-value">{{ Math.round(progress.percent) }}%</span>
-      <button class="danger-button compact" @click="cancelCreator">CANCEL</button>
+      <button class="danger-button compact" @click="cancelCreator">취소</button>
     </div>
 
     <main v-if="activeMode === 'video'" class="creator-body two-column">
       <section class="settings-pane scroll-pane">
         <div class="section-heading">
-          <div><span class="section-kicker">MINIMAX H3</span><h3>VIDEO GENERATION</h3></div>
+          <div><span class="section-kicker">MiniMax H3</span><h3>영상 생성</h3></div>
           <div class="segmented">
             <button v-for="mode in videoModes" :key="mode.id" :class="{ active: videoForm.mode === mode.id }"
               @click="videoForm.mode = mode.id">{{ mode.label }}</button>
           </div>
         </div>
 
-        <label class="field wide"><span>PROMPT</span>
+        <label class="field wide"><span>프롬프트</span>
           <textarea v-model="videoForm.prompt" rows="5" placeholder="Describe action, camera movement, lighting, timing and atmosphere..." />
         </label>
-        <label class="field wide"><span>NEGATIVE PROMPT</span>
+        <label class="field wide"><span>네거티브 프롬프트</span>
           <textarea v-model="videoForm.negative" rows="2" placeholder="Artifacts or motion to avoid..." />
         </label>
 
@@ -52,33 +52,33 @@
             <span v-else>{{ videoForm.mode === 'i2v' ? 'SOURCE IMAGE' : 'SOURCE VIDEO' }}</span>
           </div>
           <div class="slot-info"><b>{{ videoForm.mode.toUpperCase() }} SOURCE</b><small>{{ videoForm.sourcePath || 'No media selected' }}</small></div>
-          <button class="secondary-button" @click="pickMedia('video_source')">SELECT</button>
+          <button class="secondary-button" @click="pickMedia('video_source')">선택</button>
           <button v-if="videoForm.sourcePath" class="icon-button" title="Clear" @click="videoForm.sourcePath = ''">×</button>
         </div>
 
         <div v-if="videoForm.mode === 'v2v'" class="media-slot">
           <div class="slot-preview">
             <img v-if="videoForm.identityPath" :src="displayMedia(videoForm.identityPath)" alt="Identity reference" />
-            <span v-else>IDENTITY</span>
+            <span v-else>아이덴티티</span>
           </div>
-          <div class="slot-info"><b>IDENTITY REFERENCE</b><small>{{ videoForm.identityPath || 'Optional character reference' }}</small></div>
-          <button class="secondary-button" @click="pickMedia('video_identity')">SELECT</button>
+          <div class="slot-info"><b>아이덴티티 참조</b><small>{{ videoForm.identityPath || 'Optional character reference' }}</small></div>
+          <button class="secondary-button" @click="pickMedia('video_identity')">선택</button>
           <button v-if="videoForm.identityPath" class="icon-button" title="Clear" @click="videoForm.identityPath = ''">×</button>
         </div>
 
         <div class="field-grid four">
-          <label class="field"><span>WIDTH</span><input v-model.number="videoForm.width" type="number" min="256" step="32" /></label>
-          <label class="field"><span>HEIGHT</span><input v-model.number="videoForm.height" type="number" min="256" step="32" /></label>
-          <label class="field"><span>FRAMES</span><input v-model.number="videoForm.frames" type="number" min="9" step="4" /></label>
-          <label class="field"><span>FPS · H3 NATIVE</span><input v-model.number="videoForm.fps" type="number" min="24" max="24" readonly /></label>
-          <label class="field span-two"><span>SEED</span><input v-model.number="videoForm.seed" type="number" min="-1" /></label>
-          <label class="toggle-field span-two"><input v-model="videoForm.includeAudio" type="checkbox" /><span>Preserve / generate audio</span></label>
+          <label class="field"><span>너비</span><input v-model.number="videoForm.width" type="number" min="256" step="32" /></label>
+          <label class="field"><span>높이</span><input v-model.number="videoForm.height" type="number" min="256" step="32" /></label>
+          <label class="field"><span>프레임</span><input v-model.number="videoForm.frames" type="number" min="9" step="4" /></label>
+          <label class="field"><span>FPS · H3 기본값</span><input v-model.number="videoForm.fps" type="number" min="24" max="24" readonly /></label>
+          <label class="field span-two"><span>시드</span><input v-model.number="videoForm.seed" type="number" min="-1" /></label>
+          <label class="toggle-field span-two"><input v-model="videoForm.includeAudio" type="checkbox" /><span>오디오 유지 · 생성</span></label>
         </div>
         <template v-if="videoForm.includeAudio">
-          <label class="field wide"><span>SOUNDSCAPE</span>
+          <label class="field wide"><span>사운드</span>
             <textarea v-model="videoForm.audioPrompt" rows="2" placeholder="Ambient sound, Foley, music and timing..." />
           </label>
-          <label class="field wide"><span>DIALOGUE</span>
+          <label class="field wide"><span>대사</span>
             <textarea v-model="videoForm.dialogue" rows="2" placeholder="Optional spoken dialogue and delivery..." />
           </label>
         </template>
@@ -87,82 +87,82 @@
           <button class="primary-button" :disabled="!canGenerateVideo || progress.visible" @click="generateVideo">
             GENERATE {{ videoForm.mode.toUpperCase() }}
           </button>
-          <button v-if="progress.visible" class="danger-button" @click="cancelCreator">CANCEL</button>
+          <button v-if="progress.visible" class="danger-button" @click="cancelCreator">취소</button>
         </div>
       </section>
 
       <section class="output-pane">
-        <OutputPreview :result="lastResult || undefined" empty-title="VIDEO OUTPUT"
-          empty-copy="Generated video, animated WebP or preview frames appear here." />
+        <OutputPreview :result="lastResult || undefined" empty-title="영상 결과"
+          empty-copy="생성된 영상 · WebP · 미리보기 프레임이 여기 표시됩니다" />
       </section>
     </main>
 
     <main v-else-if="activeMode === 'krea'" class="creator-body two-column">
       <section class="settings-pane scroll-pane">
-        <div class="section-heading"><div><span class="section-kicker">KREA2</span><h3>IDENTITY EDIT</h3></div></div>
-        <label class="field wide"><span>EDIT PROMPT</span>
+        <div class="section-heading"><div><span class="section-kicker">Krea2</span><h3>아이덴티티 편집</h3></div></div>
+        <label class="field wide"><span>편집 프롬프트</span>
           <textarea v-model="kreaForm.prompt" rows="6" placeholder="Describe the desired edit while preserving identity..." />
         </label>
         <div class="dual-media">
           <button class="media-tile" @click="pickMedia('krea_source')">
             <img v-if="kreaForm.sourcePath" :src="displayMedia(kreaForm.sourcePath)" alt="Source" />
-            <span v-else class="media-empty">＋<small>SOURCE IMAGE</small></span>
-            <b>SOURCE</b><small>{{ basename(kreaForm.sourcePath) || 'Select image' }}</small>
+            <span v-else class="media-empty">＋<small>원본 이미지</small></span>
+            <b>원본</b><small>{{ basename(kreaForm.sourcePath) || 'Select image' }}</small>
           </button>
           <button class="media-tile" @click="pickMedia('krea_reference')">
             <img v-if="kreaForm.referencePath" :src="displayMedia(kreaForm.referencePath)" alt="Identity reference" />
-            <span v-else class="media-empty">＋<small>IDENTITY REFERENCE</small></span>
-            <b>REFERENCE</b><small>{{ basename(kreaForm.referencePath) || 'Select image' }}</small>
+            <span v-else class="media-empty">＋<small>아이덴티티 참조</small></span>
+            <b>참조</b><small>{{ basename(kreaForm.referencePath) || 'Select image' }}</small>
           </button>
         </div>
         <label class="range-field">
-          <span><b>IDENTITY FIDELITY</b><output>{{ kreaForm.fidelity.toFixed(2) }}</output></span>
+          <span><b>아이덴티티 유지도</b><output>{{ kreaForm.fidelity.toFixed(2) }}</output></span>
           <input v-model.number="kreaForm.fidelity" type="range" min="0.5" max="12" step="0.25" />
           <small>Lower values allow larger edits; higher values preserve the reference identity.</small>
         </label>
         <div class="field-grid two">
-          <label class="field"><span>SEED</span><input v-model.number="kreaForm.seed" type="number" min="-1" /></label>
+          <label class="field"><span>시드</span><input v-model.number="kreaForm.seed" type="number" min="-1" /></label>
           <label class="toggle-field"><input v-model="kreaForm.hires" type="checkbox" /><span>Hires pass</span></label>
           <template v-if="kreaForm.hires">
-            <label class="field"><span>HIRES SCALE</span><input v-model.number="kreaForm.hiresScale" type="number" min="1" max="4" step="0.25" /></label>
-            <label class="field"><span>DENOISE</span><input v-model.number="kreaForm.hiresDenoise" type="number" min="0" max="1" step="0.05" /></label>
+            <label class="field"><span>고해상도 배율</span><input v-model.number="kreaForm.hiresScale" type="number" min="1" max="4" step="0.25" /></label>
+            <label class="field"><span>디노이즈</span><input v-model.number="kreaForm.hiresDenoise" type="number" min="0" max="1" step="0.05" /></label>
           </template>
         </div>
         <div class="action-row sticky-actions">
-          <button class="primary-button" :disabled="!canGenerateKrea || progress.visible" @click="generateKrea">GENERATE KREA2 EDIT</button>
-          <button v-if="progress.visible" class="danger-button" @click="cancelCreator">CANCEL</button>
+          <button class="primary-button" :disabled="!canGenerateKrea || progress.visible" @click="generateKrea">Krea2 편집 생성</button>
+          <button v-if="progress.visible" class="danger-button" @click="cancelCreator">취소</button>
         </div>
       </section>
       <section class="output-pane">
-        <OutputPreview :result="lastResult || undefined" empty-title="KREA2 OUTPUT"
+        <OutputPreview :result="lastResult || undefined" empty-title="Krea2 결과"
           empty-copy="The edited image and hires result appear here." />
       </section>
     </main>
 
     <main v-else class="creator-body comic-mode">
       <aside class="comic-sidebar scroll-pane">
-        <div class="section-heading"><div><span class="section-kicker">STORYBOARD</span><h3>COMIC DOCUMENT</h3></div></div>
-        <label class="field wide"><span>SCENE</span>
+        <div class="section-heading"><div><span class="section-kicker">스토리보드</span><h3>만화 문서</h3></div></div>
+        <label class="field wide"><span>장면</span>
           <textarea v-model="planner.scene" rows="5" placeholder="Describe the scene, characters, conflict and ending..." />
         </label>
         <div class="field-grid two">
-          <label class="field"><span>PANELS</span>
+          <label class="field"><span>패널</span>
             <select v-model.number="planner.panelCount"><option v-for="n in 6" :key="n" :value="n">{{ n }}</option></select>
           </label>
-          <label class="field"><span>STYLE</span>
+          <label class="field"><span>스타일</span>
             <select v-model="planner.style"><option v-for="style in comicStyles" :key="style">{{ style }}</option></select>
           </label>
         </div>
-        <button class="primary-button" :disabled="!planner.scene.trim() || progress.visible" @click="planComic">AI STORYBOARD</button>
+        <button class="primary-button" :disabled="!planner.scene.trim() || progress.visible" @click="planComic">AI 스토리보드</button>
 
         <div class="divider" />
-        <label class="field wide"><span>DOCUMENT TITLE</span><input v-model="comicDoc.title" type="text" /></label>
+        <label class="field wide"><span>문서 제목</span><input v-model="comicDoc.title" type="text" /></label>
         <div class="toolbar-row">
-          <button class="tool-button" :disabled="!canUndo" title="Undo" @click="undo"><Icon name="undo" /> UNDO</button>
-          <button class="tool-button" :disabled="!canRedo" title="Redo" @click="redo"><Icon name="redo" /> REDO</button>
+          <button class="tool-button" :disabled="!canUndo" title="Undo" @click="undo"><Icon name="undo" /> 실행 취소</button>
+          <button class="tool-button" :disabled="!canRedo" title="Redo" @click="redo"><Icon name="redo" /> 다시 실행</button>
           <span class="save-state">{{ saveStatus }}</span>
         </div>
-        <span class="field-caption">LAYOUT</span>
+        <span class="field-caption">레이아웃</span>
         <div class="layout-presets">
           <button v-for="layout in layouts" :key="layout.id" :class="{ active: comicDoc.layout === layout.id }"
             :title="layout.label" @click="comicDoc.layout = layout.id">
@@ -182,17 +182,17 @@
             <span><b>{{ panel.prompt || `Panel ${index + 1}` }}</b><small>{{ panel.imagePath ? basename(panel.imagePath) : 'Image not generated' }}</small></span>
           </button>
         </div>
-        <button class="secondary-button full" :disabled="progress.visible || !comicDoc.panels.length" @click="generateAllPanels">GENERATE ALL PANELS</button>
-        <button class="secondary-button full" :disabled="progress.visible || !allPanelsHaveImages" @click="animateAllPanels">ANIMATE ALL PANELS</button>
+        <button class="secondary-button full" :disabled="progress.visible || !comicDoc.panels.length" @click="generateAllPanels">전체 패널 생성</button>
+        <button class="secondary-button full" :disabled="progress.visible || !allPanelsHaveImages" @click="animateAllPanels">전체 패널 영상화</button>
       </aside>
 
       <section class="comic-canvas-pane">
         <div class="comic-stage-toolbar">
           <span>{{ comicDoc.panels.length }} PANELS · {{ comicDoc.style }}</span>
           <div>
-            <button class="tool-button" @click="exportComic('png')">EXPORT PNG</button>
-            <button class="tool-button" @click="exportComic('webp')">EXPORT WEBP</button>
-            <button class="tool-button" :disabled="!allPanelsHaveVideos" @click="exportLivingComic">EXPORT LIVING</button>
+            <button class="tool-button" @click="exportComic('png')">PNG 내보내기</button>
+            <button class="tool-button" @click="exportComic('webp')">WebP 내보내기</button>
+            <button class="tool-button" :disabled="!allPanelsHaveVideos" @click="exportLivingComic">리빙 내보내기</button>
           </div>
         </div>
         <div class="page-shell">
@@ -213,23 +213,23 @@
       <aside class="inspector scroll-pane">
         <template v-if="selectedPanel">
           <div class="section-heading compact">
-            <div><span class="section-kicker">PANEL {{ selectedPanelIndex + 1 }}</span><h3>INSPECTOR</h3></div>
-            <button class="panel-delete" :disabled="comicDoc.panels.length <= 1" @click="deleteSelectedPanel">DELETE</button>
+            <div><span class="section-kicker">PANEL {{ selectedPanelIndex + 1 }}</span><h3>속성</h3></div>
+            <button class="panel-delete" :disabled="comicDoc.panels.length <= 1" @click="deleteSelectedPanel">삭제</button>
           </div>
           <div class="inspector-image">
             <video v-if="selectedPanel.videoPath" :src="displayMedia(selectedPanel.videoPath)" muted autoplay loop controls />
             <img v-else-if="selectedPanel.imagePath" :src="displayMedia(selectedPanel.imagePath)" alt="Selected panel" />
-            <span v-else>NO IMAGE</span>
-            <button @click="pickMedia(`comic_panel_${selectedPanel.id}`)">SELECT IMAGE</button>
+            <span v-else>이미지 없음</span>
+            <button @click="pickMedia(`comic_panel_${selectedPanel.id}`)">이미지 선택</button>
           </div>
-          <label class="field wide"><span>PROMPT</span><textarea v-model="selectedPanel.prompt" rows="5" /></label>
-          <label class="field wide"><span>NEGATIVE</span><textarea v-model="selectedPanel.negative" rows="3" /></label>
-          <label class="field wide"><span>MOTION / CAMERA</span><textarea v-model="selectedPanel.motion" rows="3" /></label>
-          <button class="secondary-button full" :disabled="progress.visible || !selectedPanel.prompt.trim()" @click="generatePanel(selectedPanel)">GENERATE PANEL</button>
+          <label class="field wide"><span>프롬프트</span><textarea v-model="selectedPanel.prompt" rows="5" /></label>
+          <label class="field wide"><span>네거티브</span><textarea v-model="selectedPanel.negative" rows="3" /></label>
+          <label class="field wide"><span>모션 · 카메라</span><textarea v-model="selectedPanel.motion" rows="3" /></label>
+          <button class="secondary-button full" :disabled="progress.visible || !selectedPanel.prompt.trim()" @click="generatePanel(selectedPanel)">패널 생성</button>
 
           <div class="divider" />
-          <div class="bubble-heading"><span class="field-caption">BUBBLES</span><button class="mini-accent" @click="addBubble">＋ ADD</button></div>
-          <div v-if="!selectedPanel.bubbles.length" class="empty-small">No speech or narration bubbles.</div>
+          <div class="bubble-heading"><span class="field-caption">말풍선</span><button class="mini-accent" @click="addBubble">＋ ADD</button></div>
+          <div v-if="!selectedPanel.bubbles.length" class="empty-small">대사 · 나레이션 없음</div>
           <div v-for="(bubble, index) in selectedPanel.bubbles" :key="bubble.id" class="bubble-editor">
             <div class="bubble-editor-head">
               <select v-model="bubble.kind"><option value="speech">Speech</option><option value="thought">Thought</option><option value="narration">Narration</option></select>
@@ -244,7 +244,7 @@
             </div>
           </div>
         </template>
-        <div v-else class="empty-inspector">Select a panel to edit it.</div>
+        <div v-else class="empty-inspector">편집할 패널을 선택하세요</div>
       </aside>
     </main>
   </div>
@@ -329,11 +329,16 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 let formsTimer: ReturnType<typeof setTimeout> | null = null
 let restoringHistory = false
 
+/** 상태 문자열은 백엔드가 영어 코드로 준다 — 화면에는 한국어로 옮긴다. */
+const STATE_LABELS: Record<string, string> = {
+  idle: '대기', ready: '준비됨', busy: '작업 중', offline: '연결 안 됨', error: '오류',
+}
 const stateLabel = computed(() => {
-  if (creatorState.value.status === 'error') return creatorState.value.message || 'BACKEND ERROR'
-  if (creatorState.value.busy || progress.value.visible) return 'CREATOR BUSY'
-  if (creatorState.value.ready) return 'CREATOR READY'
-  return String(creatorState.value.status || 'OFFLINE').toUpperCase()
+  if (creatorState.value.status === 'error') return creatorState.value.message || '백엔드 오류'
+  if (creatorState.value.busy || progress.value.visible) return '작업 중'
+  if (creatorState.value.ready) return '준비됨'
+  const raw = String(creatorState.value.status || 'offline').toLowerCase()
+  return STATE_LABELS[raw] ?? raw
 })
 const stateClass = computed(() => creatorState.value.status === 'error' ? 'error' : creatorState.value.ready ? 'ready' : '')
 const canGenerateVideo = computed(() => !!videoForm.value.prompt.trim() && (videoForm.value.mode === 't2v' || !!videoForm.value.sourcePath))
@@ -685,19 +690,23 @@ onUnmounted(() => {
 <style scoped>
 .creator-studio { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; color: var(--text-primary); background: var(--bg-primary); }
 .creator-header { min-height: 62px; display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); align-items: center; gap: 20px; padding: 9px 20px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); }
-.eyebrow, .section-kicker { display: block; color: var(--accent); font-size: var(--fs-label); font-weight: 900; letter-spacing: 2px; }
-.creator-header h2, .section-heading h3 { margin: 2px 0 0; font-size: 15px; font-weight: 900; letter-spacing: 2px; }
+.eyebrow, .section-kicker { display: block; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
+/* 화면 이름(AI STUDIO PRO / CREATOR STUDIO)만 영문 대문자다 — 대문자는 글자 사이가
+   좁아 보여 트래킹이 필요하다. 한글인 섹션 제목엔 붙이면 안 된다. */
+.eyebrow { letter-spacing: 0.08em; }
+.creator-header h2, .section-heading h3 { margin: 2px 0 0; font-size: 15px; font-weight: var(--fw-bold); letter-spacing: 0; }
+.creator-header h2 { letter-spacing: 0.08em; }
 .creator-tabs { display: flex; padding: 3px; gap: 3px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-input); }
-.creator-tab { min-width: 94px; min-height: 32px; padding: 8px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-bold); letter-spacing: 0.5px; cursor: pointer; }
+.creator-tab { min-width: 94px; min-height: 32px; padding: 8px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-bold); letter-spacing: 0; cursor: pointer; }
 .creator-tab span { margin-right: 6px; }
 .creator-tab:hover { color: var(--text-secondary); }
 .creator-tab.active { background: var(--accent); color: #090909; box-shadow: 0 3px 12px rgba(250, 204, 21, .16); }
-.backend-state { justify-self: end; display: flex; align-items: center; gap: 7px; max-width: 190px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.backend-state { justify-self: end; display: flex; align-items: center; gap: 7px; max-width: 190px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .state-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #666; box-shadow: 0 0 0 3px rgba(102,102,102,.12); }
 .backend-state.ready { color: #4ade80; }.backend-state.ready .state-dot { background: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.12); }
 .backend-state.error { color: #f87171; }.backend-state.error .state-dot { background: #f87171; }
 .global-progress { display: grid; grid-template-columns: minmax(170px, 260px) 1fr 50px auto; align-items: center; gap: 12px; padding: 8px 18px; border-bottom: 1px solid var(--accent-dim); background: rgba(250, 204, 21, .045); }
-.progress-copy { min-width: 0; display: flex; flex-direction: column; }.progress-copy strong { color: var(--accent); font-size: var(--fs-meta); text-transform: uppercase; }.progress-copy span { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress-copy { min-width: 0; display: flex; flex-direction: column; }.progress-copy strong { color: var(--accent); font-size: var(--fs-meta); }.progress-copy span { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .progress-track { height: 6px; overflow: hidden; border-radius: 6px; background: var(--bg-button); }.progress-fill { height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
 .progress-value { color: var(--accent); font: 10px monospace; text-align: right; }
 .creator-body { flex: 1; min-height: 0; overflow: hidden; }.two-column { display: grid; grid-template-columns: minmax(390px, 520px) 1fr; }
@@ -706,33 +715,33 @@ onUnmounted(() => {
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 2px; }.section-heading.compact { margin-bottom: 10px; }
 .segmented { display: flex; padding: 2px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px; }
 .segmented button { min-height: 28px; padding: 5px 11px; border: 0; border-radius: var(--radius-base); color: var(--text-secondary); background: transparent; font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; }.segmented button.active { color: #000; background: var(--accent); }
-.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }.field > span, .field-caption { color: var(--text-muted); font-size: var(--fs-label); font-weight: 900; letter-spacing: 1.2px; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }.field > span, .field-caption { color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .field input, .field textarea, .field select, .bubble-editor textarea, .bubble-editor select, .bubble-position input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; outline: 0; background: var(--bg-input); color: var(--text-primary); font: inherit; font-size: 11px; }
 .field textarea, .bubble-editor textarea { resize: vertical; line-height: 1.5; }.field input:focus, .field textarea:focus, .field select:focus, .bubble-editor textarea:focus { border-color: var(--accent); }
 .field select, .bubble-editor select { color-scheme: dark; }.field.wide { width: 100%; }
 .field-grid { display: grid; gap: 10px; }.field-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }.field-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }.span-two { grid-column: span 2; }
 .toggle-field { min-height: 31px; display: flex; align-items: center; gap: 8px; padding-top: 14px; color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-medium); }.toggle-field input { width: 16px; height: 16px; accent-color: var(--accent); }
 .media-slot { min-height: 58px; display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-card); }.slot-preview { width: 64px; height: 46px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden; border-radius: 5px; background: #080808; color: var(--text-muted); font-size: var(--fs-label); }.slot-preview img, .slot-preview video { width: 100%; height: 100%; object-fit: cover; }.slot-preview.audio { color: var(--accent); font-size: 20px; }
-.slot-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }.slot-info b { font-size: var(--fs-meta); letter-spacing: .4px; }.slot-info small { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-button { font-family: inherit; }.primary-button, .secondary-button, .danger-button, .tool-button { min-height: 32px; border-radius: 7px; font-size: var(--fs-meta); font-weight: var(--fw-bold); letter-spacing: .4px; cursor: pointer; transition: .15s ease; }.primary-button { min-height: 36px; padding: 9px 15px; border: 0; background: var(--accent); color: #050505; }.primary-button:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }.primary-button:disabled, button:disabled { opacity: .35; cursor: not-allowed; }
+.slot-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }.slot-info b { font-size: var(--fs-meta); letter-spacing: 0; }.slot-info small { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+button { font-family: inherit; }.primary-button, .secondary-button, .danger-button, .tool-button { min-height: 32px; border-radius: 7px; font-size: var(--fs-meta); font-weight: var(--fw-bold); letter-spacing: 0; cursor: pointer; transition: .15s ease; }.primary-button { min-height: 36px; padding: 9px 15px; border: 0; background: var(--accent); color: #050505; }.primary-button:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }.primary-button:disabled, button:disabled { opacity: .35; cursor: not-allowed; }
 .secondary-button { padding: 7px 12px; border: 1px solid var(--border); background: var(--bg-button); color: var(--text-secondary); }.secondary-button:hover { color: var(--accent); border-color: var(--accent); }.secondary-button.full { width: 100%; min-height: 34px; }
 .danger-button { padding: 8px 13px; border: 1px solid rgba(248,113,113,.4); color: #f87171; background: rgba(248,113,113,.08); }.danger-button.compact { padding: 5px 9px; }.icon-button { width: 26px; height: 26px; border: 0; border-radius: 50%; color: #f87171; background: transparent; cursor: pointer; }
 .action-row { display: flex; gap: 8px; }.action-row .primary-button { flex: 1; }.sticky-actions { position: sticky; bottom: -22px; margin: auto -22px -22px; padding: 14px 22px 20px; background: linear-gradient(transparent, var(--bg-primary) 25%); }
 .output-pane { min-width: 0; min-height: 0; display: grid; place-items: center; padding: 24px; background-image: radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0); background-size: 18px 18px; }
-:deep(.output-empty) { max-width: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--text-muted); }:deep(.output-empty .output-mark) { color: var(--accent); font-size: 54px; opacity: .4; }:deep(.output-empty b) { color: var(--text-secondary); font-size: 12px; letter-spacing: 2px; }:deep(.output-empty p) { font-size: var(--fs-meta); line-height: 1.6; }
+:deep(.output-empty) { max-width: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--text-muted); }:deep(.output-empty .output-mark) { color: var(--accent); font-size: 54px; opacity: .4; }:deep(.output-empty b) { color: var(--text-secondary); font-size: 12px; letter-spacing: 0; }:deep(.output-empty p) { font-size: var(--fs-meta); line-height: 1.6; }
 :deep(.output-result) { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }:deep(.output-result img), :deep(.output-result video) { max-width: 100%; max-height: calc(100% - 52px); min-height: 0; object-fit: contain; border-radius: 9px; box-shadow: 0 12px 40px rgba(0,0,0,.45); }:deep(.result-meta) { width: min(720px, 100%); display: flex; align-items: center; gap: 10px; }:deep(.result-meta b) { color: var(--accent); font-size: var(--fs-label); }:deep(.result-meta small) { flex: 1; color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dual-media { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.media-tile { min-height: 190px; display: grid; grid-template-rows: 1fr auto auto; gap: 3px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--text-primary); cursor: pointer; overflow: hidden; }.media-tile:hover { border-color: var(--accent); }.media-tile img { width: 100%; height: 150px; object-fit: cover; border-radius: 6px; }.media-tile b { font-size: var(--fs-label); }.media-tile > small { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-empty { min-height: 145px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--accent); font-size: 28px; background: var(--bg-input); border-radius: 6px; }.media-empty small { color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 1px; }
-.range-field { display: flex; flex-direction: column; gap: 7px; }.range-field > span { display: flex; justify-content: space-between; color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 1px; }.range-field output { color: var(--accent); font: 11px monospace; }.range-field input { width: 100%; accent-color: var(--accent); }.range-field small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.5; }
+.dual-media { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.media-tile { min-height: 190px; display: grid; grid-template-rows: 1fr auto auto; gap: 3px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--text-primary); cursor: pointer; overflow: hidden; }.media-tile:hover { border-color: var(--accent); }.media-tile img { width: 100%; height: 150px; object-fit: cover; border-radius: 6px; }.media-tile b { font-size: var(--fs-label); }.media-tile > small { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-empty { min-height: 145px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--accent); font-size: 28px; background: var(--bg-input); border-radius: 6px; }.media-empty small { color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 0; }
+.range-field { display: flex; flex-direction: column; gap: 7px; }.range-field > span { display: flex; justify-content: space-between; color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 0; }.range-field output { color: var(--accent); font: 11px monospace; }.range-field input { width: 100%; accent-color: var(--accent); }.range-field small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.5; }
 .comic-mode { display: grid; grid-template-columns: 270px minmax(360px, 1fr) 300px; }.comic-sidebar, .inspector { min-width: 0; padding: 18px; border-right: 1px solid var(--border); background: var(--bg-secondary); }.inspector { border-right: 0; border-left: 1px solid var(--border); }
 .divider { height: 1px; flex: 0 0 auto; margin: 14px 0; background: var(--border); }.toolbar-row, .bubble-heading, .comic-stage-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 7px; }.tool-button { padding: 6px 9px; border: 1px solid var(--border); background: var(--bg-button); color: var(--text-muted); }.tool-button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }.save-state { margin-left: auto; color: var(--text-muted); font-size: var(--fs-label); }
 .layout-presets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 6px 0 12px; }.layout-presets button { min-width: 0; padding: 5px 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-input); color: var(--text-muted); font-size: 7px; cursor: pointer; }.layout-presets button.active { color: var(--accent); border-color: var(--accent); }.layout-icon { width: 22px; height: 18px; margin: 0 auto 3px; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }.layout-icon i { background: currentColor; opacity: .65; }.layout-icon.vertical { grid-template-columns: 1fr; }.layout-icon.horizontal { grid-template-columns: repeat(4,1fr); }.layout-icon.hero i:first-child { grid-column: 1 / -1; }
 .panel-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }.panel-list-item { width: 100%; min-height: 45px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; text-align: left; border: 1px solid transparent; border-radius: 6px; background: var(--bg-input); color: var(--text-secondary); cursor: pointer; }.panel-list-item.active { border-color: var(--accent); background: var(--accent-dim); }.panel-number { color: var(--accent); font: 10px monospace; }.panel-list-item > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 2px; }.panel-list-item b, .panel-list-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.panel-list-item b { font-size: var(--fs-label); }.panel-list-item small { color: var(--text-muted); font-size: var(--fs-label); }
-.comic-canvas-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #090909; }.comic-stage-toolbar { min-height: 40px; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: var(--fs-label); font-weight: 900; letter-spacing: 1px; }.comic-stage-toolbar > div { display: flex; gap: 5px; }.page-shell { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 22px; background-image: radial-gradient(circle at 1px 1px, #242424 1px, transparent 0); background-size: 18px 18px; }
+.comic-canvas-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #090909; }.comic-stage-toolbar { min-height: 40px; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }.comic-stage-toolbar > div { display: flex; gap: 5px; }.page-shell { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 22px; background-image: radial-gradient(circle at 1px 1px, #242424 1px, transparent 0); background-size: 18px 18px; }
 .comic-page { width: min(54vh, 92%); aspect-ratio: 2 / 3; padding: 2.8%; display: grid; gap: 1.2%; box-sizing: border-box; background: #f4f1e8; box-shadow: 0 15px 50px #000; }.comic-panel { position: relative; min-width: 0; min-height: 0; padding: 0; overflow: hidden; border: max(2px, .35vw) solid #080808; background: #252525; color: #fff; cursor: pointer; }.comic-panel.selected { outline: 3px solid var(--accent); outline-offset: -3px; }.comic-panel.hero { grid-column: 1 / -1; grid-row: span 2; }.comic-panel > img, .comic-panel > video { width: 100%; height: 100%; object-fit: cover; }.panel-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px; box-sizing: border-box; text-align: center; }.panel-placeholder b { color: #555; font-size: 32px; }.panel-placeholder small { color: #888; font-size: 7px; line-height: 1.35; overflow: hidden; }
-.comic-bubble { position: absolute; z-index: 2; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4%; border: 1.5px solid #111; border-radius: 50%; background: #fff; color: #111; font-size: clamp(5px, .65vw, 10px); font-weight: 800; line-height: 1.15; text-align: center; overflow: hidden; pointer-events: none; }.comic-bubble.thought { border-style: dotted; }.comic-bubble.narration { border-radius: 2px; background: #fff4b8; }
-.inspector-image { height: 135px; position: relative; display: grid; place-items: center; margin-bottom: 12px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); }.inspector-image img, .inspector-image video { width: 100%; height: 100%; object-fit: cover; }.inspector-image button { position: absolute; right: 6px; bottom: 6px; padding: 5px 8px; border: 1px solid var(--accent); border-radius: 5px; background: rgba(0,0,0,.78); color: var(--accent); font-size: var(--fs-label); font-weight: 900; cursor: pointer; }
-.bubble-heading { margin-bottom: 7px; }.mini-accent { padding: 3px 7px; border: 1px solid var(--accent-dim); border-radius: 4px; background: var(--accent-dim); color: var(--accent); font-size: var(--fs-label); font-weight: 900; cursor: pointer; }.empty-small, .empty-inspector { color: var(--text-muted); font-size: var(--fs-label); text-align: center; padding: 15px 5px; }.empty-inspector { margin-top: 40px; }
-.panel-heading { margin-top: 10px; }.panel-delete { align-self: center; padding: 4px 7px; border: 1px solid rgba(248,113,113,.3); border-radius: 4px; background: rgba(248,113,113,.06); color: #f87171; font-size: 7px; font-weight: 900; cursor: pointer; }
+.comic-bubble { position: absolute; z-index: 2; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 4%; border: 1.5px solid #111; border-radius: 50%; background: #fff; color: #111; font-size: clamp(5px, .65vw, 10px); font-weight: var(--fw-bold); line-height: 1.15; text-align: center; overflow: hidden; pointer-events: none; }.comic-bubble.thought { border-style: dotted; }.comic-bubble.narration { border-radius: 2px; background: #fff4b8; }
+.inspector-image { height: 135px; position: relative; display: grid; place-items: center; margin-bottom: 12px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); }.inspector-image img, .inspector-image video { width: 100%; height: 100%; object-fit: cover; }.inspector-image button { position: absolute; right: 6px; bottom: 6px; padding: 5px 8px; border: 1px solid var(--accent); border-radius: 5px; background: rgba(0,0,0,.78); color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
+.bubble-heading { margin-bottom: 7px; }.mini-accent { padding: 3px 7px; border: 1px solid var(--accent-dim); border-radius: 4px; background: var(--accent-dim); color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }.empty-small, .empty-inspector { color: var(--text-muted); font-size: var(--fs-label); text-align: center; padding: 15px 5px; }.empty-inspector { margin-top: 40px; }
+.panel-heading { margin-top: 10px; }.panel-delete { align-self: center; padding: 4px 7px; border: 1px solid rgba(248,113,113,.3); border-radius: 4px; background: rgba(248,113,113,.06); color: #f87171; font-size: 7px; font-weight: var(--fw-bold); cursor: pointer; }
 .bubble-editor { margin-bottom: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-card); }.bubble-editor-head { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; margin-bottom: 5px; }.bubble-editor-head select { padding: 4px 6px; }.bubble-editor-head span { color: var(--text-muted); font-size: var(--fs-label); }.bubble-editor-head button { border: 0; background: transparent; color: #f87171; font-size: 15px; cursor: pointer; }.bubble-position { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 5px; }.bubble-position label { color: var(--text-muted); font-size: 7px; }.bubble-position input { padding: 4px; margin-top: 2px; }
 
 @media (max-width: 1150px) {

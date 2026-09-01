@@ -23,16 +23,16 @@
           </div>
 
           <div class="tool-card">
-            <label>Studio Tools</label>
+            <label>스튜디오 도구</label>
             <div class="tool-grid">
-              <button class="tool-btn" @click="syncLoraStack(); action('save_settings')">SAVE</button>
-              <button class="tool-btn" @click="showPresetManager = true; loadPresetList()">PRESET</button>
-              <button class="tool-btn" @click="showWeightManager = true">WEIGHT</button>
-              <button class="tool-btn" @click="showWcManager = true">WILDCARD</button>
-              <button class="tool-btn" @click="showInstantWcManager = true; loadInstantWcList()" title="JSON 기반 인라인 와일드카드 ($$name$$)">INSTANT WC</button>
-              <button class="tool-btn" @click="showOrderManager = true; loadPromptOrder()" title="최종 프롬프트의 섹션 순서를 직접 지정">ORDER</button>
-              <button class="tool-btn" @click="openAbTestModal()">A/B TEST</button>
-              <button class="tool-btn" @click="showStatsModal = true; loadGenStats()">STATS</button>
+              <button class="tool-btn" @click="syncLoraStack(); action('save_settings')">저장</button>
+              <button class="tool-btn" @click="showPresetManager = true; loadPresetList()">프리셋</button>
+              <button class="tool-btn" @click="showWeightManager = true">가중치</button>
+              <button class="tool-btn" @click="showWcManager = true">와일드카드</button>
+              <button class="tool-btn" @click="showInstantWcManager = true; loadInstantWcList()" title="JSON 기반 인라인 와일드카드 ($$name$$)">즉석 WC</button>
+              <button class="tool-btn" @click="showOrderManager = true; loadPromptOrder()" title="최종 프롬프트의 섹션 순서를 직접 지정">순서</button>
+              <button class="tool-btn" @click="openAbTestModal()">A/B 테스트</button>
+              <button class="tool-btn" @click="showStatsModal = true; loadGenStats()">통계</button>
               <button class="tool-btn" :class="{ 'tool-btn-on': condEnabled }" @click="showCondModal = true" :title="`태그 조건부 프롬프트 (IF→THEN) 관리 — 현재 ${condEnabled ? 'ON' : 'OFF'}`">조건부<span v-if="condEnabled" class="tool-dot"></span></button>
             </div>
           </div>
@@ -41,9 +41,9 @@
         <div class="gen-footer">
           <div class="gen-actions">
             <button class="action-btn" :class="{ active: autoMode }" @click="autoMode = !autoMode; action('toggle_automation', { checked: autoMode })">
-              <Icon :name="autoMode ? 'refresh' : 'pause'" /> {{ autoMode ? 'AUTO ON' : 'AUTO OFF' }}
+              <Icon :name="autoMode ? 'refresh' : 'pause'" /> {{ autoMode ? '자동 켬' : '자동 꺼짐' }}
             </button>
-            <button class="action-btn highlight" @click="action('random_prompt')"><Icon name="dice" /> RANDOM</button>
+            <button class="action-btn highlight" @click="action('random_prompt')"><Icon name="dice" /> 무작위</button>
           </div>
           <!-- 자동화 설정 (AUTO ON일 때만) -->
           <div class="auto-settings" v-if="autoMode">
@@ -120,13 +120,13 @@
       <transition name="slide">
         <aside class="extend-overlay" v-if="showExtendPanel && showLeftPanel" @click.stop>
           <div class="extend-header">
-            <h3>ADVANCED SETTINGS</h3>
+            <h3>고급 설정</h3>
             <button class="close-btn" @click="showExtendPanel = false" title="닫기 (ESC)"><Icon name="close" /></button>
           </div>
           <div class="extend-scroll" v-scroll-memory="'extendPanel'">
             <!-- Parameters (기본) -->
             <div class="ext-card">
-              <div class="ext-title">PARAMETERS</div>
+              <div class="ext-title">파라미터</div>
               <div class="ext-field">
                 <label>Resolution</label>
                 <div class="ext-res-row">
@@ -187,7 +187,7 @@
                 </div>
               </div>
               <div class="ext-row">
-                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets.steps_input" min="1" max="150" /></div>
+                <div class="ext-field"><label>스텝</label><input type="number" v-model="storeWidgets.steps_input" min="1" max="150" /></div>
                 <div class="ext-field"><label>CFG</label><input type="number" v-model="storeWidgets.cfg_input" step="0.5" /></div>
                 <div class="ext-field"><label>Shift</label><input type="number" v-model="storeWidgets.shift_input" step="0.5" min="0" max="24" title="0이면 미사용 (Distilled CFG Scale)" /></div>
                 <div class="ext-field"><label>Seed</label><input type="text" v-model="storeWidgets.seed_input" /></div>
@@ -196,14 +196,14 @@
 
             <!-- Hires.fix -->
             <details class="ext-card">
-              <summary class="ext-title">HIRES.FIX</summary>
+              <summary class="ext-title">Hires.fix</summary>
               <label class="ext-check-row"><ToggleSwitch v-model="hires_enabled" size="sm" /><span>Hires.fix 활성화</span></label>
               <div class="ext-field">
                 <label>Upscaler</label>
                 <CustomSelect v-model="storeWidgets.upscaler_combo" :options="upscalerItems" placeholder="Upscaler..." />
               </div>
               <div class="ext-row">
-                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets.hires_steps_input" /></div>
+                <div class="ext-field"><label>스텝</label><input type="number" v-model="storeWidgets.hires_steps_input" /></div>
                 <div class="ext-field"><label>Denoise</label><input type="number" v-model="storeWidgets.hires_denoising_input" step="0.05" /></div>
               </div>
               <div class="ext-row">
@@ -225,9 +225,9 @@
             </details>
 
             <details class="ext-card" open>
-              <summary class="ext-title">PROMPT FILTERS</summary>
+              <summary class="ext-title">프롬프트 필터</summary>
               <!-- Rating 토글 -->
-              <div class="ext-sub-title">RATING FILTER</div>
+              <div class="ext-sub-title">등급 필터</div>
               <div class="rating-toggle-row">
                 <button v-for="r in ratingFilters" :key="r.key" class="rating-toggle"
                   :class="{ active: r.on }" @click="r.on = !r.on; saveRatingFilter()">{{ r.label }}</button>
@@ -251,7 +251,7 @@
 
             <!-- ADetailer -->
             <details class="ext-card">
-              <summary class="ext-title">ADETAILER</summary>
+              <summary class="ext-title">ADetailer</summary>
               <label class="ext-check-row"><ToggleSwitch v-model="ad_enabled" size="sm" /><span>ADetailer 활성화</span></label>
               <!-- Slot 1 -->
               <div class="ext-sub-title">Slot 1</div>
@@ -271,17 +271,17 @@
                 <div class="ext-field"><label>Padding</label><input type="number" v-model="storeWidgets._ad_s1_padding" min="0" /></div>
                 <div class="ext-field"><label>Dilate/Erode</label><input type="number" v-model="storeWidgets._ad_s1_dilate_erode" /></div>
               </div>
-              <div class="ext-field"><label>Mask Merge</label>
+              <div class="ext-field"><label>마스크 병합</label>
                 <CustomSelect v-model="storeWidgets._ad_s1_mask_merge" :options="['None', 'Merge', 'Merge and Invert']" placeholder="None" /></div>
               <!-- Separate settings -->
               <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_inp_size === 'true'" @update:model-value="storeWidgets._ad_s1_use_inp_size = $event ? 'true' : 'false'" size="sm" /><span>별도 Inpaint 크기</span></label>
               <div class="ext-row" v-if="storeWidgets._ad_s1_use_inp_size === 'true'">
-                <div class="ext-field"><label>Width</label><input type="number" v-model="storeWidgets._ad_s1_inp_w" /></div>
-                <div class="ext-field"><label>Height</label><input type="number" v-model="storeWidgets._ad_s1_inp_h" /></div>
+                <div class="ext-field"><label>너비</label><input type="number" v-model="storeWidgets._ad_s1_inp_w" /></div>
+                <div class="ext-field"><label>높이</label><input type="number" v-model="storeWidgets._ad_s1_inp_h" /></div>
               </div>
               <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_steps === 'true'" @update:model-value="storeWidgets._ad_s1_use_steps = $event ? 'true' : 'false'" size="sm" /><span>별도 Steps</span></label>
               <div class="ext-row" v-if="storeWidgets._ad_s1_use_steps === 'true'">
-                <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets._ad_s1_steps" min="1" /></div>
+                <div class="ext-field"><label>스텝</label><input type="number" v-model="storeWidgets._ad_s1_steps" min="1" /></div>
               </div>
               <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s1_use_cfg === 'true'" @update:model-value="storeWidgets._ad_s1_use_cfg = $event ? 'true' : 'false'" size="sm" /><span>별도 CFG</span></label>
               <div class="ext-row" v-if="storeWidgets._ad_s1_use_cfg === 'true'">
@@ -320,16 +320,16 @@
                   <div class="ext-field"><label>Padding</label><input type="number" v-model="storeWidgets._ad_s2_padding" min="0" /></div>
                   <div class="ext-field"><label>Dilate/Erode</label><input type="number" v-model="storeWidgets._ad_s2_dilate_erode" /></div>
                 </div>
-                <div class="ext-field"><label>Mask Merge</label>
+                <div class="ext-field"><label>마스크 병합</label>
                   <CustomSelect v-model="storeWidgets._ad_s2_mask_merge" :options="['None', 'Merge', 'Merge and Invert']" placeholder="None" /></div>
                 <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_inp_size === 'true'" @update:model-value="storeWidgets._ad_s2_use_inp_size = $event ? 'true' : 'false'" size="sm" /><span>별도 Inpaint 크기</span></label>
                 <div class="ext-row" v-if="storeWidgets._ad_s2_use_inp_size === 'true'">
-                  <div class="ext-field"><label>Width</label><input type="number" v-model="storeWidgets._ad_s2_inp_w" /></div>
-                  <div class="ext-field"><label>Height</label><input type="number" v-model="storeWidgets._ad_s2_inp_h" /></div>
+                  <div class="ext-field"><label>너비</label><input type="number" v-model="storeWidgets._ad_s2_inp_w" /></div>
+                  <div class="ext-field"><label>높이</label><input type="number" v-model="storeWidgets._ad_s2_inp_h" /></div>
                 </div>
                 <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_steps === 'true'" @update:model-value="storeWidgets._ad_s2_use_steps = $event ? 'true' : 'false'" size="sm" /><span>별도 Steps</span></label>
                 <div class="ext-row" v-if="storeWidgets._ad_s2_use_steps === 'true'">
-                  <div class="ext-field"><label>Steps</label><input type="number" v-model="storeWidgets._ad_s2_steps" min="1" /></div>
+                  <div class="ext-field"><label>스텝</label><input type="number" v-model="storeWidgets._ad_s2_steps" min="1" /></div>
                 </div>
                 <label class="ext-check-row"><ToggleSwitch :model-value="storeWidgets._ad_s2_use_cfg === 'true'" @update:model-value="storeWidgets._ad_s2_use_cfg = $event ? 'true' : 'false'" size="sm" /><span>별도 CFG</span></label>
                 <div class="ext-row" v-if="storeWidgets._ad_s2_use_cfg === 'true'">
@@ -368,7 +368,7 @@
               <div class="ext-row">
                 <div class="ext-field"><label>SAM3 Mode</label>
                   <CustomSelect v-model="storeWidgets._sam3_mode" :options="['Inpaint', 'Mask only']" placeholder="Inpaint" /></div>
-                <div class="ext-field"><label>Mask Processing</label>
+                <div class="ext-field"><label>마스크 처리</label>
                   <CustomSelect v-model="storeWidgets._sam3_mask_mode" :options="['Individual', 'Combined']" placeholder="Individual" /></div>
               </div>
               <div class="ext-row">
@@ -376,7 +376,7 @@
                 <div class="ext-field"><label>Mask Dilation (px)</label><input type="number" v-model="storeWidgets._sam3_mask_dilation" min="0" /></div>
               </div>
               <div class="ext-row">
-                <label class="ext-check-row" style="flex:1" title="머리카락 가닥 등을 감싸 마스크를 채움"><ToggleSwitch :model-value="storeWidgets._sam3_mask_hull === 'true'" @update:model-value="storeWidgets._sam3_mask_hull = $event ? 'true' : 'false'" size="sm" /><span>Convex Hull (wrap strands)</span></label>
+                <label class="ext-check-row" style="flex:1" title="머리카락 가닥 등을 감싸 마스크를 채움"><ToggleSwitch :model-value="storeWidgets._sam3_mask_hull === 'true'" @update:model-value="storeWidgets._sam3_mask_hull = $event ? 'true' : 'false'" size="sm" /><span>볼록 껍질 (가닥 감싸기)</span></label>
                 <div class="ext-field"><label>Outline expand (edge-aware, px)</label><input type="number" v-model="storeWidgets._sam3_mask_outline_px" min="0" /></div>
               </div>
               <div class="ext-field"><label>SAM3 Checkpoint</label>
@@ -394,7 +394,7 @@
               <details class="ext-card" open style="margin-top:8px">
                 <summary class="ext-title">인페인트</summary>
                 <div class="ext-row">
-                  <div class="ext-field"><label>Denoising Strength</label><input type="number" v-model="storeWidgets._sam3_denoise" step="0.01" min="0" max="1" /></div>
+                  <div class="ext-field"><label>디노이즈 강도</label><input type="number" v-model="storeWidgets._sam3_denoise" step="0.01" min="0" max="1" /></div>
                   <div class="ext-field"><label>Mask Blur</label><input type="number" v-model="storeWidgets._sam3_mask_blur" min="0" /></div>
                 </div>
                 <div class="ext-row">
@@ -445,7 +445,7 @@
 
             <!-- LoRA Stack -->
             <div class="ext-card">
-              <div class="ext-title">LoRA STACK
+              <div class="ext-title">LoRA 스택
                 <span v-if="loraStack.length" class="lora-tools">
                   <button class="lora-tool-btn" @click="toggleAllLoras(!allLorasOn)" :title="allLorasOn ? '전체 끄기' : '전체 켜기'">{{ allLorasOn ? '전체 OFF' : '전체 ON' }}</button>
                   <button class="lora-tool-btn" @click="insertAllTriggers" title="활성 LoRA 트리거 워드를 메인 프롬프트에 일괄 삽입">트리거 삽입</button>
@@ -517,12 +517,12 @@
           </div>
           <div class="exif-content" v-if="activeExifTab !== 'params'">{{ exifContent }}</div>
           <div class="exif-params" v-else-if="currentExif.params">
-            <div class="param-line" v-if="currentExif.params.generation"><span class="pl">GEN</span>{{ currentExif.params.generation }}</div>
-            <div class="param-line" v-if="currentExif.params.core"><span class="pl">CORE</span>{{ currentExif.params.core }}</div>
-            <div class="param-line" v-if="currentExif.params.model"><span class="pl">MODEL</span>{{ currentExif.params.model }}</div>
-            <div class="param-line" v-if="currentExif.params.hires"><span class="pl">HIRES</span>{{ currentExif.params.hires }}</div>
-            <div class="param-line" v-if="currentExif.params.extensions"><span class="pl">EXT</span>{{ currentExif.params.extensions }}</div>
-            <div class="param-line other" v-if="currentExif.params.other"><span class="pl">ETC</span>{{ currentExif.params.other }}</div>
+            <div class="param-line" v-if="currentExif.params.generation"><span class="pl">생성</span>{{ currentExif.params.generation }}</div>
+            <div class="param-line" v-if="currentExif.params.core"><span class="pl">기본</span>{{ currentExif.params.core }}</div>
+            <div class="param-line" v-if="currentExif.params.model"><span class="pl">모델</span>{{ currentExif.params.model }}</div>
+            <div class="param-line" v-if="currentExif.params.hires"><span class="pl">고해상도</span>{{ currentExif.params.hires }}</div>
+            <div class="param-line" v-if="currentExif.params.extensions"><span class="pl">확장</span>{{ currentExif.params.extensions }}</div>
+            <div class="param-line other" v-if="currentExif.params.other"><span class="pl">기타</span>{{ currentExif.params.other }}</div>
           </div>
           <div class="exif-content" v-else>{{ currentExif.params_line || currentExif.raw || 'No parameters' }}</div>
         </div>
@@ -531,7 +531,7 @@
       <!-- Right: History -->
       <aside class="side-panel right" v-show="showLeftPanel">
         <div class="hist-header">
-          <h3>HISTORY</h3>
+          <h3>히스토리</h3>
           <span class="count-badge">{{ historyImages.length }}</span>
         </div>
         <button class="hist-nav-btn" @click="histPage = Math.max(0, histPage - 1)" :disabled="histPage <= 0"><Icon name="chevron-up" /></button>
@@ -549,19 +549,19 @@
 
         <transition name="pop">
           <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="ctxMenuStyle">
-            <div class="ctx-item" @click="ctxAddFavorite"><Icon name="star" /> ADD TO FAVORITES</div>
-            <div class="ctx-item" @click="ctxSendI2I"><Icon name="image" /> SEND TO I2I</div>
-            <div class="ctx-item" @click="ctxSendInpaint"><Icon name="palette" /> SEND TO INPAINT</div>
-            <div class="ctx-item" @click="ctxSendEditor"><Icon name="pencil" /> SEND TO EDITOR</div>
-            <div class="ctx-item" @click="ctxCompare('before')"><Icon name="search" /> COMPARE (BEFORE)</div>
-            <div class="ctx-item" @click="ctxCompare('after')"><Icon name="search" /> COMPARE (AFTER)</div>
-            <div class="ctx-item" @click="ctxRunAdetailer"><Icon name="target" /> ADETAILER</div>
+            <div class="ctx-item" @click="ctxAddFavorite"><Icon name="star" /> 즐겨찾기 추가</div>
+            <div class="ctx-item" @click="ctxSendI2I"><Icon name="image" /> I2I로 보내기</div>
+            <div class="ctx-item" @click="ctxSendInpaint"><Icon name="palette" /> 인페인트로 보내기</div>
+            <div class="ctx-item" @click="ctxSendEditor"><Icon name="pencil" /> 에디터로 보내기</div>
+            <div class="ctx-item" @click="ctxCompare('before')"><Icon name="search" /> 비교 (이전)</div>
+            <div class="ctx-item" @click="ctxCompare('after')"><Icon name="search" /> 비교 (이후)</div>
+            <div class="ctx-item" @click="ctxRunAdetailer"><Icon name="target" /> ADetailer</div>
             <div class="ctx-separator"></div>
             <div class="ctx-item" @click="ctxPullPrompt"><Icon name="download" /> 프롬프트 당겨오기</div>
             <div class="ctx-item" @click="ctxAddToQueue"><Icon name="plus" /> 다음 큐에 추가</div>
             <div class="ctx-separator"></div>
-            <div class="ctx-item" @click="ctxCopyPath"><Icon name="clipboard" /> COPY PATH</div>
-            <div class="ctx-item delete" @click="ctxDelete"><Icon name="trash" /> DELETE</div>
+            <div class="ctx-item" @click="ctxCopyPath"><Icon name="clipboard" /> 경로 복사</div>
+            <div class="ctx-item delete" @click="ctxDelete"><Icon name="trash" /> 삭제</div>
           </div>
         </transition>
       </aside>
@@ -588,7 +588,7 @@
       <div v-if="showPresetManager" class="pm-overlay" @mousedown.self="showPresetManager = false">
         <div class="pm-modal">
           <div class="pm-header">
-            <h3>PRESET MANAGER</h3>
+            <h3>프리셋 관리</h3>
             <button class="close-btn" @click="showPresetManager = false"><Icon name="close" /></button>
           </div>
           <div class="pm-body">
@@ -610,10 +610,10 @@
             </div>
           </div>
           <div class="pm-footer">
-            <button class="pm-btn" @click="loadSelectedPreset" :disabled="!selectedPreset"><Icon name="folder-open" /> LOAD</button>
-            <button class="pm-btn" @click="deleteSelectedPreset" :disabled="!selectedPreset"><Icon name="trash" /> DELETE</button>
+            <button class="pm-btn" @click="loadSelectedPreset" :disabled="!selectedPreset"><Icon name="folder-open" /> 불러오기</button>
+            <button class="pm-btn" @click="deleteSelectedPreset" :disabled="!selectedPreset"><Icon name="trash" /> 삭제</button>
             <div class="pm-spacer"></div>
-            <button class="pm-btn accent" @click="saveNewPreset"><Icon name="save" /> SAVE CURRENT</button>
+            <button class="pm-btn accent" @click="saveNewPreset"><Icon name="save" /> 현재 상태 저장</button>
           </div>
         </div>
       </div>
@@ -638,7 +638,7 @@
       <div v-if="showWeightManager" class="wm-overlay" @mousedown.self="showWeightManager = false">
         <div class="wm-modal">
           <div class="wm-header">
-            <h3>GLOBAL TAG WEIGHTS</h3>
+            <h3>글로벌 태그 가중치</h3>
             <span class="wm-desc">등록된 태그는 어디서든 자동으로 지정 가중치가 적용됩니다</span>
             <button class="close-btn" @click="showWeightManager = false"><Icon name="close" /></button>
           </div>
@@ -652,7 +652,7 @@
             <button class="wm-add" @click="globalWeights.push({ tag: '', weight: 100 })">+ ADD TAG WEIGHT</button>
           </div>
           <div class="wm-footer">
-            <button class="wm-save" @click="saveGlobalWeights"><Icon name="save" /> SAVE</button>
+            <button class="wm-save" @click="saveGlobalWeights"><Icon name="save" /> 저장</button>
           </div>
         </div>
       </div>
@@ -663,7 +663,7 @@
       <div v-if="showWcManager" class="wc-overlay" @mousedown.self="showWcManager = false">
         <div class="wc-modal">
           <div class="wc-modal-header">
-            <h3>WILDCARD MANAGER</h3>
+            <h3>와일드카드 관리</h3>
             <span class="wc-path">wildcards/</span>
             <button class="wc-new-btn" @click="createNewWildcard">+ NEW</button>
             <button class="close-btn" @click="showWcManager = false"><Icon name="close" /></button>
@@ -699,9 +699,9 @@
                 <!-- 하단: 삽입 + 저장 -->
                 <div class="wc-bottom-bar">
                   <CustomSelect v-model="wcInsertTarget" :options="['main', 'prefix', 'suffix', 'clipboard']" placeholder="삽입 위치" class="wc-insert-sel" />
-                  <button class="wc-use-btn" @click="useWcSyntax">USE</button>
+                  <button class="wc-use-btn" @click="useWcSyntax">사용</button>
                   <div class="wc-spacer"></div>
-                  <button class="wc-save-btn" @click="saveCurrentWildcard"><Icon name="save" /> SAVE</button>
+                  <button class="wc-save-btn" @click="saveCurrentWildcard"><Icon name="save" /> 저장</button>
                 </div>
               </template>
               <div v-else class="wc-empty">좌측에서 와일드카드를 선택하거나 NEW를 클릭하세요</div>
@@ -784,7 +784,7 @@
       <div v-if="showInstantWcManager" class="wc-overlay" @mousedown.self="showInstantWcManager = false">
         <div class="wc-modal">
           <div class="wc-modal-header">
-            <h3>INSTANT WILDCARD MANAGER</h3>
+            <h3>즉석 와일드카드 관리</h3>
             <span class="wc-path">save/instant_wildcards.json &nbsp;·&nbsp; 문법: <code>$$name$$</code></span>
             <button class="wc-new-btn" @click="createNewInstantWc">+ NEW</button>
             <button class="close-btn" @click="showInstantWcManager = false"><Icon name="close" /></button>
@@ -823,7 +823,7 @@
                 <div class="wc-bottom-bar">
                   <span style="font-size: 11px; color: var(--text-muted); margin-right: auto;"><Icon name="bulb" /><b>$$name$$</b>을 프롬프트에 넣으면 생성 시 라인 중 하나를 뽑아 치환합니다.
                   </span>
-                  <button class="wc-save-btn" @click="saveCurrentInstantWc"><Icon name="save" /> SAVE</button>
+                  <button class="wc-save-btn" @click="saveCurrentInstantWc"><Icon name="save" /> 저장</button>
                 </div>
               </template>
               <div v-else class="wc-empty">좌측에서 선택하거나 NEW를 클릭하세요</div>
@@ -838,7 +838,7 @@
       <div v-if="showStatsModal" class="stats-overlay" @mousedown.self="showStatsModal = false">
         <div class="stats-modal">
           <div class="stats-header">
-            <h3>GENERATION STATISTICS</h3>
+            <h3>생성 통계</h3>
             <button class="close-btn" @click="showStatsModal = false">X</button>
           </div>
           <div class="stats-body" v-if="genStats.total > 0">
@@ -857,12 +857,12 @@
               </div>
               <div class="stat-card">
                 <div class="stat-val">{{ formatTime(genStats.total_time) }}</div>
-                <div class="stat-label">Total Time</div>
+                <div class="stat-label">총 시간</div>
               </div>
             </div>
 
             <div class="stats-section" v-if="genStats.daily && genStats.daily.length">
-              <h4>DAILY GENERATIONS (30 days)</h4>
+              <h4>일별 생성 (최근 30일)</h4>
               <div class="daily-chart">
                 <div v-for="d in genStats.daily" :key="d.date" class="daily-bar-wrap"
                   :title="d.date + ': ' + d.count + '장'">
@@ -876,7 +876,7 @@
 
             <div class="stats-two-col">
               <div class="stats-section" v-if="genStats.top_models && genStats.top_models.length">
-                <h4>TOP MODELS</h4>
+                <h4>많이 쓴 모델</h4>
                 <div v-for="m in genStats.top_models" :key="m.name" class="stats-bar-row">
                   <span class="bar-name">{{ m.name }}</span>
                   <div class="bar-track"><div class="bar-fill" :style="{ width: (m.count / genStats.total * 100) + '%' }"></div></div>
@@ -884,7 +884,7 @@
                 </div>
               </div>
               <div class="stats-section" v-if="genStats.top_resolutions && genStats.top_resolutions.length">
-                <h4>TOP RESOLUTIONS</h4>
+                <h4>많이 쓴 해상도</h4>
                 <div v-for="r in genStats.top_resolutions" :key="r.res" class="stats-bar-row">
                   <span class="bar-name">{{ r.res }}</span>
                   <div class="bar-track"><div class="bar-fill" :style="{ width: (r.count / genStats.total * 100) + '%' }"></div></div>
@@ -894,7 +894,7 @@
             </div>
 
             <div class="stats-section" v-if="genStats.recent && genStats.recent.length">
-              <h4>RECENT GENERATIONS</h4>
+              <h4>최근 생성</h4>
               <div class="recent-table">
                 <div v-for="r in genStats.recent" :key="r.timestamp" class="recent-row">
                   <span class="r-time">{{ r.timestamp?.slice(5, 16).replace('T', ' ') }}</span>
@@ -2185,30 +2185,30 @@ onMounted(async () => {
   box-shadow: 8px 0 32px rgba(0,0,0,0.5);
 }
 .extend-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
-.extend-header h3 { font-size: 11px; letter-spacing: 2px; color: var(--text-muted); }
+.extend-header h3 { font-size: 11px; letter-spacing: 0; color: var(--text-muted); }
 .close-btn { width: 28px; height: 28px; background: var(--bg-button); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text-secondary); font-size: 16px; cursor: pointer; }
 .close-btn:hover { border-color: #f87171; color: #f87171; background: rgba(248, 113, 113, 0.08); }
 .extend-scroll { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 
 .ext-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 12px; }
-.ext-title { font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 10px; cursor: pointer; }
+.ext-title { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-bottom: 10px; cursor: pointer; }
 .ext-field { margin-bottom: 8px; }
-.ext-field label { font-size: var(--fs-label); color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 3px; }
+.ext-field label { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); display: block; margin-bottom: 3px; }
 .ext-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .rating-toggle-row { display: flex; gap: 4px; margin-bottom: 8px; }
 .rating-toggle {
   flex: 1; padding: 4px; background: var(--bg-button); border: 1px solid var(--border);
-  border-radius: 4px; color: var(--text-muted); font-size: var(--fs-label); font-weight: 900;
+  border-radius: 4px; color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold);
   cursor: pointer; text-align: center; transition: var(--transition);
 }
 .rating-toggle.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 .ext-toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
 .char-ovr-row { margin-top: 6px; }
-.char-ovr-btn { width: 100%; padding: 6px 10px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: var(--radius-base); color: var(--accent); font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.char-ovr-btn { width: 100%; padding: 6px 10px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: var(--radius-base); color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .char-ovr-btn:hover { background: rgba(250,204,21,0.18); }
 .ext-sub { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .ext-sub summary { font-size: var(--fs-label); color: var(--text-secondary); cursor: pointer; }
-.ext-sub-title { font-size: var(--fs-label); font-weight: 800; color: var(--accent); letter-spacing: 1px; margin: 8px 0 4px; }
+.ext-sub-title { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); letter-spacing: 0; margin: 8px 0 4px; }
 
 /* LoRA block */
 .lora-block { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-button); border-radius: 6px; margin-bottom: 4px; }
@@ -2216,7 +2216,7 @@ onMounted(async () => {
 .lora-name { font-size: 11px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lora-triggers { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
 .trigger-chip {
-  padding: 1px 6px; font-size: var(--fs-label); font-weight: 700; color: var(--accent);
+  padding: 1px 6px; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent);
   background: var(--accent-dim); border: 1px solid rgba(250, 204, 21, 0.15);
   border-radius: 4px; cursor: pointer; transition: var(--transition);
 }
@@ -2234,13 +2234,13 @@ onMounted(async () => {
 .lora-weight-input:focus { outline: none; border-color: var(--accent); }
 .lora-remove { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
 .lora-tools { float: right; display: inline-flex; gap: 4px; }
-.lora-tool-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; padding: 2px 7px; cursor: pointer; }
+.lora-tool-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 2px 7px; cursor: pointer; }
 .lora-tool-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .lora-tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .lora-sets { display: flex; gap: 4px; margin-top: 6px; align-items: center; }
 .lora-set-input { width: 70px; flex-shrink: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 4px 6px; color: var(--text-primary); font-size: var(--fs-label); }
 .lora-set-sel { flex: 1; min-width: 0; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 4px; color: var(--text-primary); font-size: var(--fs-label); }
-.ext-add-btn { width: 100%; padding: 8px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 6px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; cursor: pointer; margin-top: 4px; }
+.ext-add-btn { width: 100%; padding: 8px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 6px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; margin-top: 4px; }
 .ext-res-row { display: flex; align-items: center; gap: 6px; }
 .ext-res-row input { text-align: center; flex: 1; }
 .ext-res-row span { color: var(--text-muted); }
@@ -2249,7 +2249,7 @@ onMounted(async () => {
 .ext-check-sm { display: flex; align-items: center; gap: 3px; font-size: var(--fs-label); color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
 .ext-check-sm input { width: 12px; height: 12px; margin: 0; }
 /* 고해상도 토글 — 활성 시 골드 강조 */
-.hr-toggle.active { color: var(--accent); font-weight: 700; }
+.hr-toggle.active { color: var(--accent); font-weight: var(--fw-bold); }
 .hr-toggle.active span { text-shadow: 0 0 4px rgba(250, 204, 21, 0.3); }
 
 /* 고해상도 미리보기 박스 */
@@ -2259,19 +2259,19 @@ onMounted(async () => {
   border-radius: 6px; display: flex; flex-direction: column; gap: 6px;
 }
 .hr-row { display: flex; align-items: center; gap: 8px; }
-.hr-label { font-size: var(--fs-label); font-weight: 800; color: var(--accent); letter-spacing: 1px; min-width: 26px; }
+.hr-label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); letter-spacing: 0; min-width: 26px; }
 .hr-slider { flex: 1; accent-color: var(--accent); cursor: pointer; height: 4px; }
 .hr-val {
-  font-family: 'Consolas', monospace; font-size: var(--fs-label); font-weight: 800;
+  font-family: 'Consolas', monospace; font-size: var(--fs-label); font-weight: var(--fw-bold);
   color: var(--accent); min-width: 36px; text-align: right;
 }
 .hr-result {
   font-size: var(--fs-label); color: var(--text-secondary);
   font-family: 'Consolas', monospace;
 }
-.hr-result strong { color: var(--accent); font-weight: 900; font-size: 11px; }
+.hr-result strong { color: var(--accent); font-weight: var(--fw-bold); font-size: 11px; }
 .hr-note { color: var(--text-muted); font-size: var(--fs-label); margin-left: 4px; }
-.hr-warn { color: #fb923c; margin-left: 4px; font-weight: 900; }
+.hr-warn { color: #fb923c; margin-left: 4px; font-weight: var(--fw-bold); }
 .hr-warn-banner {
   margin-top: 4px; padding: 6px 8px;
   background: rgba(251, 146, 60, 0.08);
@@ -2285,14 +2285,14 @@ onMounted(async () => {
 .rand-res-editor { margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: rgba(0,0,0,0.15); }
 .rand-res-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .rand-res-item { display: flex; align-items: center; gap: 4px; padding: 2px 6px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; font-size: var(--fs-label); }
-.rand-res-val { color: var(--text-primary); font-weight: 700; font-family: monospace; }
+.rand-res-val { color: var(--text-primary); font-weight: var(--fw-bold); font-family: monospace; }
 .rand-res-desc { color: var(--text-muted); font-size: var(--fs-label); }
 .rand-res-del { background: none; border: none; color: #f87171; cursor: pointer; font-size: var(--fs-label); padding: 0 2px; }
 .rand-res-empty { font-size: var(--fs-label); color: var(--text-muted); padding: 4px; }
 .rand-res-add { display: flex; align-items: center; gap: 4px; }
 .rand-res-add span { color: var(--text-muted); font-size: var(--fs-label); }
 .rand-res-input { width: 50px; padding: 3px 4px; font-size: var(--fs-label); text-align: center; }
-.rand-res-btn { width: 24px; height: 24px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-weight: 900; cursor: pointer; font-size: 14px; }
+.rand-res-btn { width: 24px; height: 24px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-weight: var(--fw-bold); cursor: pointer; font-size: 14px; }
 .ext-check-row { display: flex; align-items: center; gap: 6px; width: fit-content; max-width: 100%; font-size: var(--fs-label); color: var(--text-secondary); cursor: pointer; margin-bottom: 5px; white-space: nowrap; }
 /* 네이티브 체크박스(초록 강조) — appearance:none 토글이 왕복 위젯에서 반응이
    불안정해(한 박자 늦게 켜짐) 안정적인 네이티브로 복귀. accent-color로 색만 입힘. */
@@ -2303,7 +2303,7 @@ onMounted(async () => {
 .cond-textarea { min-height: 60px; font-size: 11px; line-height: 1.6; font-family: 'Consolas', monospace; }
 .cond-block { margin-top: 6px; }
 .cond-toggle-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.cond-toggle { padding: 2px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-button); color: var(--text-muted); font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
+.cond-toggle { padding: 2px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-button); color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .cond-toggle.on { background: rgba(74,222,128,0.15); border-color: #4ade80; color: #4ade80; }
 .lora-check { flex-shrink: 0; }
 .lora-check input { accent-color: var(--accent); }
@@ -2315,14 +2315,14 @@ onMounted(async () => {
 /* Tool Card */
 .tool-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }
 .tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.tool-btn { position: relative; padding: 8px 4px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; cursor: pointer; transition: var(--transition); }
+.tool-btn { position: relative; padding: 8px 4px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; transition: var(--transition); }
 .tool-btn-on { color: #4ade80; border-color: #4ade80; box-shadow: 0 0 0 1px rgba(74,222,128,0.25) inset; }
 .tool-dot { position: absolute; top: 3px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 5px #4ade80; }
 /* 세션 복구 배너 */
 .session-restore { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: center; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--accent); border-radius: 10px; padding: 10px 16px; box-shadow: 0 8px 28px rgba(0,0,0,0.5); }
 .sr-msg { font-size: 12px; color: var(--text-primary); }
-.sr-apply { background: var(--accent); color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: 800; padding: 6px 14px; cursor: pointer; }
-.sr-dismiss { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+.sr-apply { background: var(--accent); color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: var(--fw-bold); padding: 6px 14px; cursor: pointer; }
+.sr-dismiss { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: var(--fw-bold); padding: 6px 12px; cursor: pointer; }
 .tool-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .tool-btn.highlight { color: var(--accent); border-color: var(--accent-dim); }
 
@@ -2330,7 +2330,7 @@ onMounted(async () => {
 .pm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
 .pm-modal { width: min(860px, 94vw); height: min(640px, 90vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .pm-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
-.pm-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); flex: 1; }
+.pm-header h3 { font-size: 12px; letter-spacing: 0; color: var(--text-muted); flex: 1; }
 .pm-body { flex: 1; display: flex; overflow: hidden; }
 .pm-list { width: 180px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px; }
 .pm-item { padding: 7px 10px; font-size: 11px; color: var(--text-secondary); cursor: pointer; border-radius: 4px; margin-bottom: 2px; }
@@ -2339,11 +2339,11 @@ onMounted(async () => {
 .pm-preview { flex: 1; overflow-y: auto; padding: 12px; }
 .pm-detail { display: flex; flex-direction: column; gap: 4px; }
 .pm-field { display: flex; gap: 8px; font-size: var(--fs-label); border-bottom: 1px solid rgba(255,255,255,0.03); padding: 3px 0; }
-.pm-key { color: var(--accent); font-weight: 700; min-width: 100px; }
+.pm-key { color: var(--accent); font-weight: var(--fw-bold); min-width: 100px; }
 .pm-val { color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); }
 .pm-footer { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-top: 1px solid var(--border); }
-.pm-btn { padding: 6px 14px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.pm-btn { padding: 6px 14px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .pm-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .pm-btn:disabled { opacity: 0.3; }
 .pm-btn.accent { background: var(--accent); color: #000; border: none; }
@@ -2353,7 +2353,7 @@ onMounted(async () => {
 .wm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
 .wm-modal { width: min(680px, 92vw); max-height: 86vh; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .wm-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.wm-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); }
+.wm-header h3 { font-size: 12px; letter-spacing: 0; color: var(--text-muted); }
 .wm-desc { font-size: var(--fs-label); color: var(--text-muted); flex: 1; }
 .wm-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
 .wm-row { display: flex; align-items: center; gap: 6px; }
@@ -2363,13 +2363,13 @@ onMounted(async () => {
 .wm-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; }
 .wm-add { width: 100%; padding: 6px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); font-size: var(--fs-label); cursor: pointer; }
 .wm-footer { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
-.wm-save { padding: 7px 20px; background: var(--accent); border: none; border-radius: 6px; color: #000; font-size: 11px; font-weight: 800; cursor: pointer; }
+.wm-save { padding: 7px 20px; background: var(--accent); border: none; border-radius: 6px; color: #000; font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; }
 
 /* Generation Stats Modal */
 .stats-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
 .stats-modal { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; width: min(860px, 94vw); max-height: 88vh; overflow-y: auto; }
 .stats-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
-.stats-header h3 { font-size: 13px; font-weight: 900; letter-spacing: 2px; color: var(--text-primary); }
+.stats-header h3 { font-size: 13px; font-weight: var(--fw-bold); letter-spacing: 0; color: var(--text-primary); }
 .stats-body { padding: 24px; display: flex; flex-direction: column; gap: 24px; }
 .stats-empty { display: flex; align-items: center; justify-content: center; min-height: 200px; }
 .stats-empty-msg { color: var(--text-muted); font-size: 14px; }
@@ -2377,11 +2377,11 @@ onMounted(async () => {
 .stats-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .stat-card { background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
 .stat-card.accent { border-color: var(--accent-dim); }
-.stat-val { font-size: 28px; font-weight: 900; color: var(--text-primary); font-family: monospace; }
+.stat-val { font-size: 28px; font-weight: var(--fw-bold); color: var(--text-primary); font-family: monospace; }
 .stat-card.accent .stat-val { color: var(--accent); }
-.stat-label { font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); letter-spacing: 1.5px; margin-top: 4px; }
+.stat-label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-top: 4px; }
 
-.stats-section h4 { font-size: var(--fs-label); font-weight: 900; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 12px; }
+.stats-section h4 { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-bottom: 12px; }
 .stats-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 
 .daily-chart { display: flex; align-items: flex-end; gap: 2px; height: 80px; padding: 0 2px; }
@@ -2398,7 +2398,7 @@ onMounted(async () => {
 .recent-table { display: flex; flex-direction: column; gap: 4px; }
 .recent-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-input); border-radius: 6px; font-size: 11px; }
 .r-time { color: var(--text-muted); min-width: 80px; font-family: monospace; }
-.r-status { font-weight: 800; font-size: var(--fs-label); min-width: 30px; }
+.r-status { font-weight: var(--fw-bold); font-size: var(--fs-label); min-width: 30px; }
 .r-status.ok { color: #4ade80; }
 .r-status.fail { color: #f87171; }
 .r-dur { color: var(--accent); min-width: 40px; font-family: monospace; }
@@ -2409,7 +2409,7 @@ onMounted(async () => {
 .wc-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000; display: flex; align-items: center; justify-content: center; }
 .wc-modal { width: min(980px, 95vw); height: min(740px, 90vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .wc-modal-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
-.wc-modal-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); }
+.wc-modal-header h3 { font-size: 12px; letter-spacing: 0; color: var(--text-muted); }
 .wc-path { font-size: var(--fs-label); color: var(--text-muted); font-family: monospace; flex: 1; }
 .wc-modal-body { flex: 1; display: flex; overflow: hidden; }
 .wc-sidebar { width: 180px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px; }
@@ -2422,7 +2422,7 @@ onMounted(async () => {
 .wc-content-header h4 { font-size: 14px; color: var(--text-primary); }
 .wc-content-header span { font-size: var(--fs-label); color: var(--text-muted); }
 .wc-content-header code { background: var(--bg-input); padding: 2px 6px; border-radius: 3px; font-size: var(--fs-label); color: var(--accent); }
-.wc-new-btn { padding: 4px 12px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
+.wc-new-btn { padding: 4px 12px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .wc-fname { flex: 1; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .wc-del { background: none; border: none; color: #f87171; cursor: pointer; font-size: 11px; opacity: 0; transition: 0.15s; }
 .wc-file-item:hover .wc-del { opacity: 1; }
@@ -2433,15 +2433,15 @@ onMounted(async () => {
 .wc-block-row { display: flex; align-items: center; gap: 4px; }
 .wc-block-idx { font-size: var(--fs-label); color: var(--text-muted); min-width: 20px; text-align: right; font-family: monospace; }
 .wc-block-input { flex: 1; padding: 4px 8px; font-size: 11px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
-.wc-block-use { padding: 2px 6px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 3px; color: var(--accent); font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.wc-block-use { padding: 2px 6px; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 3px; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .wc-block-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
 .wc-add-line { width: 100%; padding: 4px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 3px; color: var(--text-muted); font-size: var(--fs-label); cursor: pointer; margin-top: 4px; }
 .wc-rename-input { font-size: 14px; background: var(--bg-input); border: 1px solid var(--accent); border-radius: 4px; color: var(--text-primary); padding: 2px 8px; width: 200px; }
 .wc-bottom-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .wc-insert-sel { padding: 4px 8px; font-size: var(--fs-label); background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); }
-.wc-use-btn { padding: 5px 16px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
+.wc-use-btn { padding: 5px 16px; background: var(--accent); border: none; border-radius: 4px; color: #000; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .wc-spacer { flex: 1; }
-.wc-save-btn { padding: 5px 14px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.wc-save-btn { padding: 5px 14px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .wc-save-btn:hover { border-color: var(--accent); color: var(--accent); }
 .wc-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 13px; }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
@@ -2449,34 +2449,34 @@ onMounted(async () => {
 
 .gen-footer { padding: 12px 16px; background: var(--bg-card); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .gen-actions { display: flex; gap: 6px; }
-.action-btn { flex: 1; padding: 7px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; cursor: pointer; transition: var(--transition); }
+.action-btn { flex: 1; padding: 7px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; transition: var(--transition); }
 .action-btn.active { border-color: #4ade80; color: #4ade80; background: rgba(74,222,128,0.05); }
 .action-btn.highlight { border-color: var(--accent-dim); color: var(--accent); }
 .action-btn:hover { border-color: var(--text-muted); }
 .auto-settings { display: flex; flex-direction: column; gap: 4px; padding: 8px; background: rgba(74,222,128,0.03); border: 1px solid rgba(74,222,128,0.1); border-radius: 8px; }
 .auto-row { display: flex; align-items: center; gap: 4px; }
-.auto-row label { font-size: var(--fs-label); color: var(--text-muted); font-weight: 700; min-width: 32px; }
+.auto-row label { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); min-width: 32px; }
 .auto-input { width: 50px; padding: 4px 6px; font-size: 11px; text-align: center; }
 .auto-unlimited-mark { display: inline-block; width: 50px; padding: 4px 6px; font-size: 14px;
-  color: var(--accent); text-align: center; font-weight: bold; }
+  color: var(--accent); text-align: center; font-weight: var(--fw-bold); }
 
 /* 워크플로우 프로파일 */
 .profile-card { background: rgba(96,165,250,0.04); border: 1px solid rgba(96,165,250,0.15);
   border-radius: 6px; padding: 8px; margin-bottom: 8px; }
 .profile-row { display: flex; align-items: center; gap: 6px; }
-.profile-label { font-size: var(--fs-label); color: #60a5fa; font-weight: 700; flex-shrink: 0;
-  letter-spacing: 0.5px; }
+.profile-label { font-size: var(--fs-label); color: #60a5fa; font-weight: var(--fw-bold); flex-shrink: 0;
+  letter-spacing: 0; }
 .profile-row :deep(.csel) { flex: 1; min-width: 0; }
 .profile-mini-btn { width: 28px; height: 28px; flex-shrink: 0; cursor: pointer;
   background: rgba(96,165,250,0.15); color: #93c5fd;
-  border: 1px solid rgba(96,165,250,0.3); border-radius: 4px; font-weight: bold; }
+  border: 1px solid rgba(96,165,250,0.3); border-radius: 4px; font-weight: var(--fw-bold); }
 .profile-mini-btn:hover { background: rgba(96,165,250,0.3); border-color: #60a5fa; color: #fff; }
 .profile-item { display: flex; align-items: center; gap: 6px; padding: 8px 10px;
   background: rgba(255,255,255,0.04); border-radius: 4px;
   border: 1px solid rgba(255,255,255,0.08); }
 .profile-item:hover { background: rgba(96,165,250,0.08); }
 .profile-info { flex: 1; min-width: 0; }
-.profile-name { font-size: 13px; font-weight: 600; color: var(--text-primary);
+.profile-name { font-size: 13px; font-weight: var(--fw-bold); color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .profile-meta { font-size: var(--fs-label); color: var(--text-muted); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2492,7 +2492,7 @@ onMounted(async () => {
 .order-item:hover { background: rgba(96,165,250,0.08); }
 .order-num { width: 22px; height: 22px; display: inline-flex; align-items: center;
   justify-content: center; background: rgba(96,165,250,0.2); color: #93c5fd;
-  border-radius: 50%; font-size: 11px; font-weight: bold; }
+  border-radius: 50%; font-size: 11px; font-weight: var(--fw-bold); }
 .order-label { flex: 1; font-size: 13px; color: var(--text-primary); }
 .order-btn { width: 28px; height: 28px; font-size: 13px; cursor: pointer;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
@@ -2507,7 +2507,7 @@ onMounted(async () => {
 .order-actions { display: flex; gap: 8px; align-items: center; padding-top: 6px;
   border-top: 1px solid rgba(255,255,255,0.08); }
 .order-reset, .order-cancel, .order-save { padding: 6px 14px; border-radius: 4px;
-  font-size: 12px; cursor: pointer; font-weight: 600; }
+  font-size: 12px; cursor: pointer; font-weight: var(--fw-bold); }
 .order-reset { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
   color: var(--text-muted); }
 .order-cancel { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
@@ -2519,30 +2519,30 @@ onMounted(async () => {
 /* 자동화 상태 */
 .auto-status { padding: 8px 12px; background: rgba(250, 204, 21, 0.05); border: 1px solid var(--accent-dim); border-radius: 8px; margin-bottom: 8px; }
 .auto-deck-pre { margin-top: 8px; font-size: 11px; color: var(--text-muted); padding: 6px 10px; background: rgba(250,204,21,0.05); border: 1px solid var(--accent-dim); border-radius: 6px; display: flex; align-items: center; gap: 8px; }
-.deck-reset-btn { margin-left: auto; flex-shrink: 0; padding: 3px 9px; font-size: var(--fs-label); font-weight: 700; background: var(--bg-button); color: var(--text); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; transition: all .12s; }
+.deck-reset-btn { margin-left: auto; flex-shrink: 0; padding: 3px 9px; font-size: var(--fs-label); font-weight: var(--fw-bold); background: var(--bg-button); color: var(--text); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; transition: all .12s; }
 .deck-reset-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(250,204,21,0.08); }
-.auto-deck-pre strong { color: var(--accent); font-weight: 900; }
-.auto-status-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--accent); font-weight: 700; }
+.auto-deck-pre strong { color: var(--accent); font-weight: var(--fw-bold); }
+.auto-status-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--accent); font-weight: var(--fw-bold); }
 .auto-status-sub { font-size: var(--fs-label); color: var(--text-muted); margin-top: 4px; }
 .auto-wait .wait-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-label); color: var(--text-muted); margin-bottom: 3px; }
-.auto-wait .wait-pct { color: var(--accent); font-weight: 700; }
+.auto-wait .wait-pct { color: var(--accent); font-weight: var(--fw-bold); }
 .auto-wait .wait-bar { height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
 .auto-wait .wait-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.12s linear; }
 .auto-pulse { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .generate-row { display: flex; gap: 6px; align-items: stretch; }
-.btn-cancel { width: 50px; height: 50px; background: transparent; border: 2px solid #f87171; border-radius: var(--radius-pill); color: #f87171; font-size: 18px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.btn-cancel { width: 50px; height: 50px; background: transparent; border: 2px solid #f87171; border-radius: var(--radius-pill); color: #f87171; font-size: 18px; font-weight: var(--fw-bold); cursor: pointer; transition: var(--transition); }
 .btn-cancel:hover { background: #f87171; color: #fff; }
-.gen-eta { margin-top: 6px; font-size: 11px; color: var(--muted); text-align: center; letter-spacing: 0.5px; }
+.gen-eta { margin-top: 6px; font-size: 11px; color: var(--muted); text-align: center; letter-spacing: 0; }
 .auto-check { display: flex; align-items: center; gap: 4px; font-size: var(--fs-label); color: var(--text-secondary); cursor: pointer; }
 .auto-check input { accent-color: #4ade80; }
-.btn-generate { width: 100%; height: 50px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 800; font-size: 14px; letter-spacing: 1px; cursor: pointer; transition: var(--transition); }
+.btn-generate { width: 100%; height: 50px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold); font-size: 14px; letter-spacing: 0; cursor: pointer; transition: var(--transition); }
 .btn-generate:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }
 .btn-generate:disabled { opacity: 0.5; cursor: wait; }
 .btn-generate.automating { background: #f87171; color: #fff; }
 .btn-generate.automating:hover:not(:disabled) { background: #ef4444; box-shadow: 0 8px 24px rgba(248, 113, 113, 0.3); }
 .btn-generate.converting { background: #8b5cf6; color: #fff; cursor: wait; }
-.auto-nl-toggle { display: flex; align-items: center; gap: 8px; padding: 7px 11px; margin-bottom: 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); font-size: 11px; font-weight: 700; color: var(--text-secondary); cursor: pointer; transition: var(--transition); user-select: none; width: fit-content; max-width: 100%; }
+.auto-nl-toggle { display: flex; align-items: center; gap: 8px; padding: 7px 11px; margin-bottom: 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); cursor: pointer; transition: var(--transition); user-select: none; width: fit-content; max-width: 100%; }
 .auto-nl-toggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 
 /* Viewport */
@@ -2552,17 +2552,17 @@ onMounted(async () => {
 /* EXIF Bar */
 .exif-bar { flex-shrink: 0; background: #0D0D0D; border-top: 1px solid var(--border); }
 .exif-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
-.exif-tab { flex: 1; padding: 6px; background: transparent; border: none; color: var(--text-muted); font-size: var(--fs-label); font-weight: 700; cursor: pointer; text-align: center; border-bottom: 2px solid transparent; }
+.exif-tab { flex: 1; padding: 6px; background: transparent; border: none; color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; text-align: center; border-bottom: 2px solid transparent; }
 .exif-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .exif-content { padding: 6px 12px; font-size: 11px; color: var(--text-secondary); max-height: 80px; overflow-y: auto; line-height: 1.5; font-family: 'Consolas', monospace; white-space: pre-wrap; word-break: break-all; }
 .exif-params { padding: 4px 12px; max-height: 80px; overflow-y: auto; }
 .exif-params .param-line { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; font-size: var(--fs-label); color: var(--text-secondary); font-family: 'Consolas', monospace; }
-.exif-params .pl { font-size: var(--fs-label); font-weight: 900; color: var(--accent); letter-spacing: 1px; min-width: 40px; flex-shrink: 0; }
+.exif-params .pl { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); letter-spacing: 0; min-width: 40px; flex-shrink: 0; }
 .exif-params .param-line.other { color: var(--text-muted); }
 
 /* History */
 .hist-header { padding: 16px; display: flex; justify-content: space-between; align-items: center; }
-.hist-header h3 { font-size: 12px; letter-spacing: 2px; color: var(--text-muted); }
+.hist-header h3 { font-size: 12px; letter-spacing: 0; color: var(--text-muted); }
 .count-badge { background: var(--border); padding: 2px 8px; border-radius: 10px; font-size: var(--fs-label); color: var(--text-secondary); }
 .hist-nav-btn { width: 100%; height: 28px; padding: 0; background: #131313; border: none; color: var(--text-secondary); font-size: var(--fs-meta); cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .hist-nav-btn:hover { background: #1A1A1A; color: #E8E8E8; }
@@ -2583,7 +2583,7 @@ onMounted(async () => {
 
 /* Context Menu */
 .modern-ctx-menu { position: fixed; background: #181818; border: 1px solid #222; border-radius: 10px; padding: 6px; z-index: 1000; min-width: 200px; box-shadow: 0 12px 32px rgba(0,0,0,0.8); max-height: calc(100vh - 16px); overflow-y: auto; }
-.ctx-item { padding: 10px 14px; font-size: 11px; font-weight: 600; color: #909090; cursor: pointer; border-radius: 6px; transition: var(--transition); }
+.ctx-item { padding: 10px 14px; font-size: 11px; font-weight: var(--fw-bold); color: #909090; cursor: pointer; border-radius: 6px; transition: var(--transition); }
 .ctx-item:hover { background: #252525; color: #FFF; }
 .ctx-item.delete { color: #f87171; }
 .ctx-item.delete:hover { background: rgba(248, 113, 113, 0.1); }
@@ -2593,7 +2593,7 @@ onMounted(async () => {
 @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
 
 /* VRAM Bar */
-.vram-warn { color: #fbbf24; font-weight: 900; margin-left: 6px; }
+.vram-warn { color: #fbbf24; font-weight: var(--fw-bold); margin-left: 6px; }
 .vram-bar { cursor: pointer; }
 .vram-bar:hover .vram-fill { filter: brightness(1.15); }
 .vram-bar {
@@ -2607,7 +2607,7 @@ onMounted(async () => {
 .vram-fill.critical { background: rgba(248,113,113,0.6); }
 .vram-text {
   position: absolute; left: 50%; transform: translateX(-50%);
-  font-size: 11px; font-weight: 800; color: #B0B0B0; letter-spacing: 0.5px;
+  font-size: 11px; font-weight: var(--fw-bold); color: #B0B0B0; letter-spacing: 0;
   text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
 
@@ -2622,14 +2622,14 @@ onMounted(async () => {
 }
 .toast-stack { display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
 .toast-clear-all {
-  align-self: flex-end; padding: 3px 10px; font-size: var(--fs-label); font-weight: 600;
+  align-self: flex-end; padding: 3px 10px; font-size: var(--fs-label); font-weight: var(--fw-bold);
   background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.2);
   border-radius: 4px; cursor: pointer; pointer-events: auto; backdrop-filter: blur(8px);
 }
 .toast-clear-all:hover { background: rgba(248,113,113,0.5); border-color: #f87171; }
 .toast {
   display: flex; align-items: center; gap: 8px;
-  padding: 11px 13px 11px 15px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  padding: 11px 13px 11px 15px; border-radius: 9px; font-size: 13px; font-weight: var(--fw-bold);
   color: #FFF; pointer-events: auto; min-width: 240px; max-width: 400px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4); backdrop-filter: blur(8px);
   word-break: break-word; line-height: 1.45;
@@ -2643,11 +2643,11 @@ onMounted(async () => {
 /* 알림 벨 + 히스토리 패널 */
 .notif-bell { position: fixed; top: 14px; right: 18px; z-index: 2003; width: 34px; height: 34px; border-radius: 50%; background: var(--bg-button); border: 1px solid var(--border); color: var(--text-secondary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .notif-bell:hover { border-color: var(--accent); color: var(--accent); }
-.notif-badge { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #f87171; color: #fff; font-size: var(--fs-label); font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.notif-badge { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #f87171; color: #fff; font-size: var(--fs-label); font-weight: var(--fw-bold); display: flex; align-items: center; justify-content: center; }
 .notif-overlay { position: fixed; inset: 0; z-index: 2002; }
 .notif-panel { position: fixed; top: 54px; right: 18px; z-index: 2003; width: 330px; max-height: 60vh; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; }
-.notif-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 800; color: var(--text-secondary); letter-spacing: 1px; }
-.notif-clear { background: none; border: none; color: #f87171; font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.notif-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: var(--fw-bold); color: var(--text-secondary); letter-spacing: 0; }
+.notif-clear { background: none; border: none; color: #f87171; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .notif-list { overflow-y: auto; padding: 6px; }
 .notif-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: 6px; font-size: 12px; color: var(--text-primary); }
 .notif-item:hover { background: var(--bg-button); }

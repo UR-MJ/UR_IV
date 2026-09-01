@@ -123,7 +123,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: var(--fw-bold);
   font-size: 13px;
   cursor: pointer;
   transition: var(--transition);
@@ -210,7 +210,7 @@ label {
   font-size: var(--fs-label);
   font-weight: var(--fw-medium);
   color: var(--text-muted);
-  letter-spacing: 0.4px;
+  letter-spacing: 0;
   margin-bottom: var(--sp-1);
   display: block;
 }
@@ -245,10 +245,10 @@ kbd.keycap, .keycap {
   color: var(--keycap-color);
   font-family: 'Consolas', 'JetBrains Mono', monospace;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   line-height: 1;
   text-align: center;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   vertical-align: middle;
   user-select: none;
 }
@@ -259,7 +259,7 @@ kbd.keycap.muted, .keycap.muted { color: var(--text-secondary); }
   display: inline-block;
   color: var(--text-muted);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   margin: 0 2px;
   vertical-align: middle;
 }

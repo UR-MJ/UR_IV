@@ -65,7 +65,7 @@
 }
 .gallery-workspace .count-badge {
   font-size: var(--fs-label);
-  font-weight: 900;
+  font-weight: var(--fw-bold);
   color: var(--text-muted);
   margin-left: 8px;
 }
@@ -161,7 +161,7 @@
 .gallery-workspace .thumb-size-val {
   font-size: var(--fs-label);
   color: var(--text-muted);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   min-width: 36px;
   text-align: right;
 }
@@ -232,7 +232,7 @@
 }
 .gallery-workspace .exif-meta h3 {
   font-size: 12px;
-  letter-spacing: 4px;
+  letter-spacing: 0;
   color: var(--text-muted);
   margin-bottom: 20px;
 }
@@ -245,7 +245,7 @@
 }
 .gallery-workspace .meta-row span {
   font-size: var(--fs-label);
-  font-weight: 900;
+  font-weight: var(--fw-bold);
   color: var(--text-muted);
 }
 .gallery-workspace .exif-footer {
@@ -260,9 +260,9 @@
   border: none;
   border-radius: var(--radius-pill);
   color: #000;
-  font-weight: 900;
+  font-weight: var(--fw-bold);
   font-size: 12px;
-  letter-spacing: 1px;
+  letter-spacing: 0;
   cursor: pointer;
 }
 .gallery-workspace .modern-ctx-menu {
@@ -278,7 +278,7 @@
 .gallery-workspace .ctx-item {
   padding: 10px 14px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--fw-bold);
   color: #909090;
   cursor: pointer;
   border-radius: 6px;
@@ -315,7 +315,7 @@
 }
 .gallery-workspace .large-filename {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-primary);
 }
 .gallery-workspace .large-actions {
@@ -329,7 +329,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   font-size: var(--fs-label);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .gallery-workspace .lv-btn:hover {
@@ -416,7 +416,7 @@
 .gallery-workspace .ctx-separator { height: 1px; background: #222; margin: 4px 0; }
 .gallery-workspace .empty-placeholder { text-align: center; padding: 80px 20px; color: var(--text-muted); }
 .gallery-workspace .empty-placeholder .icon { font-size: 48px; }
-.gallery-workspace .empty-placeholder h2 { font-size: 16px; letter-spacing: 3px; margin: 12px 0 6px; color: var(--text-secondary); }
+.gallery-workspace .empty-placeholder h2 { font-size: 16px; letter-spacing: 0; margin: 12px 0 6px; color: var(--text-secondary); }
 .gallery-workspace .empty-placeholder p { font-size: 12px; }
 .gallery-workspace .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .gallery-workspace .mt-12 { margin-top: 12px; }

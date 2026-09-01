@@ -2,17 +2,17 @@
   <div class="batch-view">
     <!-- 서브탭 -->
     <div class="sub-tabs">
-      <button class="sub-tab" :class="{ active: subTab === 'batch' }" @click="subTab = 'batch'">BATCH</button>
-      <button class="sub-tab" :class="{ active: subTab === 'upscale' }" @click="subTab = 'upscale'">UPSCALE</button>
-      <button class="sub-tab" :class="{ active: subTab === 'adetailer' }" @click="subTab = 'adetailer'">ADETAILER</button>
+      <button class="sub-tab" :class="{ active: subTab === 'batch' }" @click="subTab = 'batch'">일괄</button>
+      <button class="sub-tab" :class="{ active: subTab === 'upscale' }" @click="subTab = 'upscale'">업스케일</button>
+      <button class="sub-tab" :class="{ active: subTab === 'adetailer' }" @click="subTab = 'adetailer'">ADetailer</button>
       <button class="sub-tab" :class="{ active: subTab === 'sam3' }" @click="subTab = 'sam3'">SAM3</button>
-      <button class="sub-tab" :class="{ active: subTab === 'caption' }" @click="subTab = 'caption'">CAPTION</button>
+      <button class="sub-tab" :class="{ active: subTab === 'caption' }" @click="subTab = 'caption'">캡션</button>
     </div>
 
     <!-- Batch 탭 — 듀얼 패널 (좌측 설정 / 우측 썸네일 그리드) -->
     <div v-if="subTab === 'batch'" class="tab-body ad-layout">
       <div class="ad-settings">
-        <h3>BATCH PROCESSING</h3>
+        <h3>일괄 처리</h3>
         <div class="file-drop compact" @dragover.prevent @drop.prevent="onDropBatch">
           <div class="drop-hint">
             이미지 드래그 또는
@@ -52,7 +52,7 @@
     <!-- Upscale 탭 — 듀얼 패널 -->
     <div v-if="subTab === 'upscale'" class="tab-body ad-layout">
       <div class="ad-settings">
-        <h3>UPSCALE</h3>
+        <h3>업스케일</h3>
         <div class="file-drop compact" @dragover.prevent @drop.prevent="onDropUpscale">
           <div class="drop-hint">
             이미지 드래그 또는
@@ -92,7 +92,7 @@
     <div v-if="subTab === 'adetailer'" class="tab-body ad-layout">
       <!-- 좌측: 설정 -->
       <div class="ad-settings">
-        <h3>ADETAILER</h3>
+        <h3>ADetailer</h3>
         <div class="file-drop" @dragover.prevent @drop.prevent="onDropAd">
           <div v-if="adFiles.length === 0" class="drop-hint">
             이미지 드래그 또는
@@ -159,11 +159,11 @@
       <div class="ad-compare">
         <div v-if="adBefore && adAfter" class="compare-split">
           <div class="compare-col">
-            <div class="compare-label">BEFORE</div>
+            <div class="compare-label">이전</div>
             <img :src="mediaUrl(adBefore)" />
           </div>
           <div class="compare-col">
-            <div class="compare-label">AFTER</div>
+            <div class="compare-label">이후</div>
             <img :src="mediaUrl(adAfter)" />
           </div>
         </div>
@@ -201,11 +201,11 @@
 
         <div class="ad-params">
           <div class="ad-param">
-            <label>Detect Prompt</label>
+            <label>검출 프롬프트</label>
             <input type="text" v-model="sam3Prompt" placeholder="face" />
           </div>
           <div class="ad-param">
-            <label>Inpaint Prompt</label>
+            <label>인페인트 프롬프트</label>
             <label class="ad-toggle"><input type="checkbox" v-model="sam3UseExifPrompt" /><span>EXIF 프롬프트 사용</span></label>
             <input v-if="!sam3UseExifPrompt" type="text" v-model="sam3InpaintPrompt" placeholder="비워두면 메인 프롬프트 유지" />
             <div v-else class="exif-prompt-hint">각 이미지의 EXIF에서 Positive/Negative를 자동으로 읽어 사용합니다</div>
@@ -256,7 +256,7 @@
               :options="['fill', 'original', 'latent noise', 'latent nothing']" placeholder="original" />
           </div>
           <div class="ad-param">
-            <label>Steps</label>
+            <label>스텝</label>
             <input type="number" v-model.number="sam3Steps" min="1" />
           </div>
           <div class="ad-param">
@@ -278,7 +278,7 @@
           <label class="ad-toggle"><input type="checkbox" v-model="sam3MaskHull" /><span>Convex Hull (머리카락 감싸기)</span></label>
           <label class="ad-toggle"><input type="checkbox" v-model="sam3OnlyMasked" /><span>마스크된 영역만</span></label>
           <label class="ad-toggle"><input type="checkbox" v-model="sam3RestoreFace" /><span>Restore face</span></label>
-          <label class="ad-toggle"><input type="checkbox" v-model="sam3PreviewOverlay" /><span>Overlay Preview</span></label>
+          <label class="ad-toggle"><input type="checkbox" v-model="sam3PreviewOverlay" /><span>오버레이 미리보기</span></label>
           <label class="ad-toggle"><input type="checkbox" v-model="sam3SaveArtifacts" /><span>Artifacts 저장</span></label>
           <label class="ad-toggle" title="검출 직후 SAM3(~3.5GB) VRAM 회수 — 16GB GPU 권장">
             <input type="checkbox" v-model="sam3UnloadAfter" /><span>검출 후 SAM3 VRAM 해제</span></label>
@@ -304,11 +304,11 @@
       <div class="ad-compare">
         <div v-if="sam3Before && sam3After" class="compare-split">
           <div class="compare-col">
-            <div class="compare-label">BEFORE</div>
+            <div class="compare-label">이전</div>
             <img :src="mediaUrl(sam3Before)" />
           </div>
           <div class="compare-col">
-            <div class="compare-label">AFTER</div>
+            <div class="compare-label">이후</div>
             <img :src="mediaUrl(sam3After)" />
           </div>
         </div>
@@ -324,7 +324,7 @@
     <!-- CAPTION 탭 — Ollama 비전 모델 캡션 (taggui 방식 .txt 사이드카) -->
     <div v-if="subTab === 'caption'" class="tab-body ad-layout">
       <div class="ad-settings">
-        <h3>IMAGE CAPTION</h3>
+        <h3>이미지 캡션</h3>
         <label class="s-label">캡션 모델 (Ollama 비전)</label>
         <div class="cap-model-row">
           <CustomSelect v-if="ollamaModels.length" v-model="captionModel" :options="ollamaModels"
@@ -490,7 +490,7 @@ function applyADetailerModels(json: string) {
 function saveCaptionPrompt() { window.localStorage.setItem('captionPrompt', captionPrompt.value) }
 function clearCaption() { captionItems.value = [] }
 function statusLabel(s: string) {
-  return ({ pending: '⏳ 생성 중', done: '✓ 완료', error: '⚠ 실패', skip: '건너뜀' } as Record<string, string>)[s] || ''
+  return ({ pending: '생성 중', done: '✓ 완료', error: '⚠ 실패', skip: '건너뜀' } as Record<string, string>)[s] || ''
 }
 
 async function loadCaptionFor(item: CaptionItem) {
@@ -880,8 +880,8 @@ onMounted(async () => {
 .sub-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .sub-tab {
   flex: 1; padding: 8px; background: transparent; border: none; border-bottom: 2px solid transparent;
-  color: var(--text-muted); font-size: 11px; font-weight: 800; cursor: pointer; text-align: center;
-  letter-spacing: 1px;
+  color: var(--text-muted); font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; text-align: center;
+  letter-spacing: 0;
 }
 .sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
@@ -902,8 +902,8 @@ onMounted(async () => {
 .cap-item { display: flex; gap: 10px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
 .cap-thumb { width: 110px; height: 110px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: var(--bg-input); }
 .cap-body { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.cap-name { font-size: 11px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cap-status { font-size: var(--fs-label); font-weight: 700; padding: 1px 6px; border-radius: 7px; flex-shrink: 0; }
+.cap-name { font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-status { font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 1px 6px; border-radius: 7px; flex-shrink: 0; }
 .cap-status.pending { background: rgba(251,191,36,0.18); color: #fbbf24; }
 .cap-status.done { background: rgba(74,222,128,0.18); color: #4ade80; }
 .cap-status.error { background: rgba(248,113,113,0.18); color: #f87171; }
@@ -911,7 +911,7 @@ onMounted(async () => {
 .cap-text { flex: 1; min-height: 56px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.45; }
 .cap-text:focus { outline: none; border-color: var(--accent); }
 .cap-actions { display: flex; gap: 6px; }
-.cap-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; padding: 4px 10px; cursor: pointer; }
+.cap-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 4px 10px; cursor: pointer; }
 .cap-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .cap-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .cap-btn.t2i { color: var(--accent); border-color: rgba(226,179,64,0.4); }
@@ -919,7 +919,7 @@ onMounted(async () => {
 .tab-body { flex: 1; overflow-y: auto; padding: 20px; }
 
 .panel { max-width: 500px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
-.panel h3 { color: var(--text-primary); font-size: 13px; font-weight: 900; letter-spacing: 2px; margin: 0; }
+.panel h3 { color: var(--text-primary); font-size: 13px; font-weight: var(--fw-bold); letter-spacing: 0; margin: 0; }
 
 .file-drop {
   border: 2px dashed var(--border); border-radius: 8px; min-height: 100px;
@@ -936,11 +936,11 @@ onMounted(async () => {
 .file-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-item.active { background: var(--accent-dim); color: var(--accent); }
 .file-item.done { opacity: 0.6; }
-.done-badge { color: #4ade80; font-weight: 900; flex: 0 !important; }
+.done-badge { color: #4ade80; font-weight: var(--fw-bold); flex: 0 !important; }
 .rm-btn { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; flex-shrink: 0; }
 .file-count { font-size: var(--fs-label); color: var(--text-muted); }
 
-.s-label { color: var(--text-muted); font-size: var(--fs-label); font-weight: 700; letter-spacing: 1px; }
+.s-label { color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .s-select, .s-input {
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
   padding: 8px 10px; color: var(--text-primary); font-size: 12px; outline: none;
@@ -954,19 +954,19 @@ onMounted(async () => {
 .op-settings { display: flex; flex-direction: column; gap: 4px; }
 .btn-start {
   padding: 10px; background: var(--accent); border: none; border-radius: 8px;
-  color: #000; font-weight: 800; font-size: 11px; cursor: pointer; letter-spacing: 1px;
+  color: #000; font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; letter-spacing: 0;
 }
 .btn-start:disabled { opacity: 0.3; cursor: not-allowed; }
 .btn-start.batch { background: var(--bg-button); color: var(--accent); border: 1px solid var(--accent-dim); }
-.btn-stop { padding: 10px; background: #f87171; border: none; border-radius: 8px; color: #000; font-weight: 800; font-size: 11px; cursor: pointer; }
+.btn-stop { padding: 10px; background: #f87171; border: none; border-radius: 8px; color: #000; font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; }
 
 /* ADetailer Layout */
 .ad-layout { display: flex; gap: 0; padding: 0 !important; }
 .ad-settings { width: 320px; flex-shrink: 0; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--border); }
-.ad-settings h3 { color: var(--text-primary); font-size: 13px; font-weight: 900; letter-spacing: 2px; margin: 0; }
+.ad-settings h3 { color: var(--text-primary); font-size: 13px; font-weight: var(--fw-bold); letter-spacing: 0; margin: 0; }
 .ad-params { display: flex; flex-direction: column; gap: 8px; }
 .ad-param { display: flex; flex-direction: column; gap: 2px; }
-.ad-param label { font-size: var(--fs-label); color: var(--text-muted); font-weight: 700; }
+.ad-param label { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); }
 .ad-param input { padding: 6px 8px; font-size: 12px; }
 .ad-toggle { display: flex; align-items: center; gap: 4px; font-size: var(--fs-label); color: var(--text-muted); cursor: pointer; margin-bottom: 4px; }
 .ad-toggle input { width: 14px; height: 14px; accent-color: var(--accent); }
@@ -984,7 +984,7 @@ onMounted(async () => {
 .ad-compare:has(.thumb-grid) { align-items: stretch; justify-content: stretch; }
 .compare-split { display: flex; gap: 12px; width: 100%; height: 100%; }
 .compare-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-.compare-label { font-size: var(--fs-label); font-weight: 900; color: var(--text-muted); letter-spacing: 2px; }
+.compare-label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; }
 .compare-col img { max-width: 100%; max-height: calc(100% - 24px); object-fit: contain; border-radius: 6px; }
 .preview-single { display: flex; align-items: center; justify-content: center; }
 .preview-single img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
@@ -1032,7 +1032,7 @@ onMounted(async () => {
   width: 22px; height: 22px;
   background: rgba(0, 0, 0, 0.7); border: none;
   border-radius: 50%; color: #f87171;
-  font-size: 16px; font-weight: 700;
+  font-size: 16px; font-weight: var(--fw-bold);
   cursor: pointer; opacity: 0;
   transition: opacity 0.15s, background 0.15s;
   line-height: 1;
@@ -1048,6 +1048,6 @@ onMounted(async () => {
   color: var(--text-muted);
 }
 .grid-empty-ico { font-size: 56px; opacity: 0.3; line-height: 1; }
-.grid-empty-title { font-size: 15px; font-weight: 700; color: var(--text-secondary); }
+.grid-empty-title { font-size: 15px; font-weight: var(--fw-bold); color: var(--text-secondary); }
 .grid-empty-sub { font-size: 12px; color: var(--text-muted); }
 </style>

@@ -284,7 +284,7 @@ function isWc(text: string) { return /__.+__/.test(text) }
   align-items: center;
   justify-content: center;
   font-size: 0;             /* 텍스트 안 보이게 */
-  font-weight: bold;
+  font-weight: var(--fw-bold);
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 10;
   overflow: hidden;

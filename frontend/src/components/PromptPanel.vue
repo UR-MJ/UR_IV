@@ -3,15 +3,15 @@
     <!-- 1. FINAL OUTPUT PROMPT -->
     <div class="glass-card highlight">
       <div class="card-header">
-        FINAL OUTPUT PROMPT
-        <span class="token-info">{{ tokenCount }} tokens</span>
+        최종 프롬프트
+        <span class="token-info">토큰 {{ tokenCount }}</span>
       </div>
       <TagBlockField v-if="tagBlockMode" :model-value="widgets.total_prompt_display" :color-fn="blockColorClass" placeholder=""
         @update:model-value="onTotalBlockChange" @open-wildcard="(n) => emit('open-wildcard', n)" />
       <textarea v-else ref="totalPromptRef" v-model="widgets.total_prompt_display"
         class="total-prompt auto-grow" placeholder="최종 프롬프트" @input="autoGrow($event.target)"></textarea>
       <div class="prompt-actions">
-        <button class="optimize-btn" @click="optimizePrompt"><Icon name="wand" /> OPTIMIZE</button>
+        <button class="optimize-btn" @click="optimizePrompt"><Icon name="wand" /> 최적화</button>
         <button class="optimize-btn" @click="toggleSeparate" title="표정/배경/포즈/사물/메타 태그를 분류해서 제거하거나 추출"><Icon name="tag" /> 분류</button>
         <span class="opt-result" v-if="optResult">{{ optResult }}</span>
       </div>
@@ -22,8 +22,8 @@
           <span class="opt-prev-stat">중복 {{ optPreview.removed }}개 제거 · {{ optPreview.tagCount }}개 태그</span>
         </div>
         <div class="opt-prev-cols">
-          <div class="opt-prev-col"><label>BEFORE</label><div class="opt-prev-text before">{{ optPreview.before }}</div></div>
-          <div class="opt-prev-col"><label>AFTER</label><div class="opt-prev-text after">{{ optPreview.after }}</div></div>
+          <div class="opt-prev-col"><label>이전</label><div class="opt-prev-text before">{{ optPreview.before }}</div></div>
+          <div class="opt-prev-col"><label>이후</label><div class="opt-prev-text after">{{ optPreview.after }}</div></div>
         </div>
         <div class="opt-prev-conf" v-if="optPreview.conflicts.length"><Icon name="alert" /> 충돌: <span v-for="c in optPreview.conflicts" :key="c.group">{{ c.group }}({{ c.tags.join('/') }}) </span></div>
         <div class="opt-prev-btns">
@@ -51,7 +51,7 @@
       </div>
       <details class="neg-section">
         <summary class="danger-label neg-toggle">
-          NEGATIVE <Icon name="chevron-down" size="12" />
+          네거티브 <Icon name="chevron-down" size="12" />
           <button class="ai-btn neg-ai" @click.prevent.stop="runSmartNegative()" :disabled="ollamaLoading" title="AI 네거티브 자동 생성"><Icon name="cpu" /></button>
         </summary>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.neg_prompt_text" :color-fn="() => 'neg'" class="neg" placeholder="네거티브 추가..." />
@@ -61,24 +61,24 @@
 
     <!-- 2. CHARACTER & MODEL -->
     <div class="glass-card">
-      <div class="card-header">CHARACTER & MODEL</div>
+      <div class="card-header">캐릭터 · 모델</div>
       <div class="input-group">
-        <label>Char Count</label>
+        <label>글자 수</label>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.char_count_input" :color-fn="() => 'bc-count'" placeholder="인물수..." />
         <input v-else type="text" v-model="widgets.char_count_input" placeholder="e.g. 1girl, 2girls..." />
       </div>
       <div class="input-group autocomplete-wrap">
         <div class="row label-row">
-          <label>Character <span v-if="sectionTokens.character" class="tk-badge" :class="tokenBadgeClass(sectionTokens.character)">{{ sectionTokens.character }}t</span></label>
-          <button class="small-btn" @click="openCharPresetModal(); loadCharTags()">PRESET</button>
+          <label>캐릭터 <span v-if="sectionTokens.character" class="tk-badge" :class="tokenBadgeClass(sectionTokens.character)">{{ sectionTokens.character }}t</span></label>
+          <button class="small-btn" @click="openCharPresetModal(); loadCharTags()">프리셋</button>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.character_input" :color-fn="() => 'bc-count'" placeholder="캐릭터..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <input v-else type="text" v-model="widgets.character_input" placeholder="e.g. hatsune miku"
           @input="onFieldInput($event, 'character_input')" @keydown="onFieldKey($event, 'character_input')" @blur="loadCharTags" />
         <div class="char-insight" v-if="charInsight.tags.length > 0">
           <div class="insight-header">
-            <span class="insight-label"><Icon name="book" /> Official Tags</span>
-            <button class="insight-apply" @click="applyOfficialTags">APPLY ALL</button>
+            <span class="insight-label"><Icon name="book" /> 공식 태그</span>
+            <button class="insight-apply" @click="applyOfficialTags">전체 적용</button>
           </div>
           <div class="insight-tags">
             <button v-for="tag in charInsight.tags" :key="tag" class="char-tag-chip" @click="insertCharTag(tag)">{{ tag.replace(/_/g, ' ') }}</button>
@@ -89,7 +89,7 @@
         </div>
       </div>
       <div class="input-group autocomplete-wrap">
-        <label>Copyright <span v-if="sectionTokens.copyright" class="tk-badge" :class="tokenBadgeClass(sectionTokens.copyright)">{{ sectionTokens.copyright }}t</span></label>
+        <label>작품 <span v-if="sectionTokens.copyright" class="tk-badge" :class="tokenBadgeClass(sectionTokens.copyright)">{{ sectionTokens.copyright }}t</span></label>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.copyright_input" :color-fn="() => ''" placeholder="작품..." />
         <input v-else type="text" v-model="widgets.copyright_input" placeholder="Copyright / Series..."
           @input="onFieldInput($event, 'copyright_input')" @keydown="onFieldKey($event, 'copyright_input')" />
@@ -99,28 +99,28 @@
       </div>
       <div class="input-group">
         <div class="row label-row">
-          <label>Artist <span v-if="sectionTokens.artist" class="tk-badge" :class="tokenBadgeClass(sectionTokens.artist)">{{ sectionTokens.artist }}t</span></label>
+          <label>작가 <span v-if="sectionTokens.artist" class="tk-badge" :class="tokenBadgeClass(sectionTokens.artist)">{{ sectionTokens.artist }}t</span></label>
           <button class="lock-btn" :class="{ locked: artistLocked }" @click="toggleArtistLock"><Icon :name="artistLocked ? 'lock' : 'unlock'" /></button>
         </div>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.artist_input" :color-fn="() => ''" placeholder="작가..." />
         <textarea v-else ref="artistRef" v-model="widgets.artist_input" class="auto-grow" placeholder="Artist tags..." @input="autoGrow($event.target)"></textarea>
       </div>
       <div v-if="showGenerationFamily" class="input-group generation-family">
-        <label>Generation Engine</label>
+        <label>생성 엔진</label>
         <CustomSelect v-model="widgets.generation_family_combo" :options="generationFamilyItems" />
         <span class="engine-hint">T2I와 I2I에 공통 적용됩니다.</span>
       </div>
       <div v-if="!isKrea2Generation" class="input-group">
         <label>Checkpoint</label>
         <CustomSelect v-model="widgets.model_combo" :options="modelItems"
-          :option-groups="modelOptionGroups" placeholder="Select model..." />
+          :option-groups="modelOptionGroups" placeholder="모델 선택..." />
       </div>
       <div v-if="!isKrea2Generation" class="input-group">
         <label>VAE <span class="hint">(ANIMA 등 외부 VAE)</span></label>
         <CustomSelect v-model="widgets.vae_main_combo" :options="vaeItems" placeholder="(체크포인트 기본 사용)" />
       </div>
       <div v-if="!isKrea2Generation" class="input-group">
-        <label>Text Encoder <span class="hint">(드롭다운에서 추가 · 칩 클릭으로 제거)</span></label>
+        <label>텍스트 인코더 <span class="hint">(드롭다운에서 추가 · 칩 클릭으로 제거)</span></label>
         <CustomSelect :modelValue="''" @update:modelValue="addTeFile"
           :options="teUnselectedItems"
           :placeholder="teItems.length === 0 ? '(text_encoder 폴더 비어있음)' : '+ TE 파일 추가...'" />
@@ -132,7 +132,7 @@
         </div>
       </div>
       <div v-else class="krea-engine-note">
-        <strong>KREA 2 TURBO</strong>
+        <strong>Krea 2 Turbo</strong>
         <span>전용 UNET · Qwen3-VL · VAE 워크플로를 실행하며 ComfyUI 백엔드가 필요합니다.</span>
         <span>T2I 전환 시 8 steps / CFG 1을 설정합니다. Sampler는 Euler 권장, Scheduler는 Simple 고정입니다.</span>
         <span v-if="isI2IRoute">I2I Identity Edit에는 Identity Edit · TextFusion LoRA와 Krea2 Edit custom node가 추가로 필요합니다.</span>
@@ -143,7 +143,7 @@
     <!-- 3. PROMPT BLOCKS -->
     <details class="glass-card" open>
       <summary class="card-header">
-        <span>PROMPT BLOCKS</span>
+        <span>프롬프트 블록</span>
         <span class="undo-btns" @click.stop>
           <button class="undo-btn" :disabled="undoStack.length < 2" @click="performUndo" title="실행 취소 (Ctrl+Z)"><Icon name="undo" /></button>
           <button class="undo-btn" :disabled="redoStack.length === 0" @click="performRedo" title="다시 실행 (Ctrl+Y)"><Icon name="redo" /></button>
@@ -151,7 +151,7 @@
       </summary>
       <div class="input-group autocomplete-wrap">
         <div class="row label-row">
-          <label>Main Tags <span v-if="sectionTokens.main" class="tk-badge" :class="tokenBadgeClass(sectionTokens.main)">{{ sectionTokens.main }}t</span></label>
+          <label>메인 태그 <span v-if="sectionTokens.main" class="tk-badge" :class="tokenBadgeClass(sectionTokens.main)">{{ sectionTokens.main }}t</span></label>
           <div class="ai-btns">
             <!-- 태그형 출력 AI -->
             <div class="ai-menu-wrap">
@@ -198,18 +198,18 @@
         </div>
       </div>
       <div class="input-group">
-        <label>Prefix <span v-if="sectionTokens.prefix" class="tk-badge" :class="tokenBadgeClass(sectionTokens.prefix)">{{ sectionTokens.prefix }}t</span></label>
+        <label>접두 <span v-if="sectionTokens.prefix" class="tk-badge" :class="tokenBadgeClass(sectionTokens.prefix)">{{ sectionTokens.prefix }}t</span></label>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.prefix_prompt_text" :color-fn="blockColorClass" placeholder="선행 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="prefixRef" v-model="widgets.prefix_prompt_text" class="auto-grow" placeholder="선행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <div class="input-group">
-        <label>Suffix <span v-if="sectionTokens.suffix" class="tk-badge" :class="tokenBadgeClass(sectionTokens.suffix)">{{ sectionTokens.suffix }}t</span></label>
+        <label>접미 <span v-if="sectionTokens.suffix" class="tk-badge" :class="tokenBadgeClass(sectionTokens.suffix)">{{ sectionTokens.suffix }}t</span></label>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.suffix_prompt_text" :color-fn="blockColorClass" placeholder="후행 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
         <textarea v-else ref="suffixRef" v-model="widgets.suffix_prompt_text" class="auto-grow" placeholder="후행..." @input="autoGrow($event.target)"></textarea>
       </div>
       <details class="input-group exclude-section">
-        <summary class="exclude-toggle">EXCLUDE (LOCAL)
-          <span v-if="excludeRuleCount" class="excl-badge">{{ excludeRuleCount }}</span><Icon name="chevron-down" /><button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true"><Icon name="search" /> MANAGER</button></summary>
+        <summary class="exclude-toggle">제외 (로컬)
+          <span v-if="excludeRuleCount" class="excl-badge">{{ excludeRuleCount }}</span><Icon name="chevron-down" /><button class="excl-mgr-btn" @click.prevent.stop="showExcludeManager = true"><Icon name="search" /> 관리</button></summary>
         <div class="exclude-help">
           <span>단어 → 포함하는 모든 태그 제외 (short → short hair, very short hair)</span>
           <span>*단어 → 완전 일치만 제외 (*blue hair → blue hair만)</span>
@@ -231,7 +231,7 @@
       <div v-if="showExcludeManager" class="em-overlay" @mousedown.self="showExcludeManager = false">
         <div class="em-modal">
           <div class="em-header">
-            <h3>EXCLUDE MANAGER</h3>
+            <h3>제외어 관리</h3>
             <span class="em-desc">제외 규칙별 매칭 태그 미리보기</span>
             <button class="close-btn" @click="showExcludeManager = false"><Icon name="close" /></button>
           </div>
@@ -296,10 +296,13 @@ const store = useWidgetStore()
 const widgets = store.widgets
 const route = useRoute()
 
-const generationFamilyItems = ['STANDARD', 'KREA2']
+const generationFamilyItems = ['Standard', 'Krea2']
+/** 저장값(대문자)과 표시 라벨을 잇는다 — 비교는 전부 toUpperCase 로 하므로 표시만 바꾸면 된다. */
+const toFamilyLabel = (v: unknown) =>
+  generationFamilyItems.find((i) => i.toUpperCase() === String(v ?? '').toUpperCase()) ?? generationFamilyItems[0]
 const generationFamilyStorageKey = 'generationFamily'
 const standardSnapshotStorageKey = 'generationFamily.standardParams'
-const savedGenerationFamily = String(window.localStorage.getItem(generationFamilyStorageKey) || 'STANDARD').toUpperCase()
+const savedGenerationFamily = toFamilyLabel(window.localStorage.getItem(generationFamilyStorageKey))
 const showGenerationFamily = computed(() => ['t2i', 'i2i'].includes(String(route.name || '')))
 const isI2IRoute = computed(() => String(route.name || '') === 'i2i')
 const isKrea2Generation = computed(
@@ -356,8 +359,7 @@ onMounted(() => {
         generationFamilyRestoreTimer = setTimeout(restore, 50)
         return
       }
-      const family = generationFamilyItems.includes(savedGenerationFamily)
-        ? savedGenerationFamily : 'STANDARD'
+      const family = savedGenerationFamily
       generationFamilyRestored = true
       if (family === 'STANDARD' && standardGenerationSnapshot) {
         widgets.steps_input = standardGenerationSnapshot.steps
@@ -1062,7 +1064,7 @@ summary::-webkit-details-marker { display: none; }
 .neg-toggle::-webkit-details-marker { display: none; }
 .neg-ai { font-size: 12px !important; padding: 2px 6px !important; opacity: 0.6; }
 .neg-ai:hover { opacity: 1; }
-.danger-label { color: #f87171; font-size: var(--fs-label); font-weight: 800; letter-spacing: 1px; }
+.danger-label { color: #f87171; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .neg-prompt { min-height: 30px; color: #f87171; border-color: rgba(248,113,113,0.2); }
 .auto-grow { resize: none; overflow: hidden; min-height: 32px; }
 .token-info { font-size: var(--fs-label); color: var(--text-muted); }
@@ -1071,27 +1073,27 @@ summary::-webkit-details-marker { display: none; }
 .optimize-btn:hover { border-color: var(--accent); color: var(--accent); }
 .opt-result { font-size: var(--fs-label); color: #4ade80; }
 .opt-preview { margin-top: 6px; background: var(--bg-secondary); border: 1px solid var(--accent); border-radius: 8px; padding: 9px; }
-.opt-prev-head { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-label); font-weight: 800; color: var(--accent); margin-bottom: 7px; }
-.opt-prev-stat { font-size: var(--fs-label); font-weight: 700; color: var(--text-muted); }
+.opt-prev-head { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); margin-bottom: 7px; }
+.opt-prev-stat { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); }
 .opt-prev-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.opt-prev-col label { display: block; font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); margin-bottom: 3px; letter-spacing: 1px; }
+.opt-prev-col label { display: block; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); margin-bottom: 3px; letter-spacing: 0; }
 .opt-prev-text { max-height: 110px; overflow-y: auto; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; font-size: var(--fs-label); line-height: 1.4; color: var(--text-secondary); word-break: break-word; white-space: pre-wrap; }
 .opt-prev-text.after { color: var(--text-primary); border-color: rgba(74,222,128,0.4); }
 .opt-prev-conf { margin-top: 6px; font-size: var(--fs-label); color: #fbbf24; }
 .opt-prev-btns { display: flex; gap: 6px; margin-top: 8px; }
-.opt-apply { flex: 1; padding: 6px; background: var(--accent); color: #000; border: none; border-radius: 5px; font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
+.opt-apply { flex: 1; padding: 6px; background: var(--accent); color: #000; border: none; border-radius: 5px; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .opt-apply:hover { background: var(--accent-hover); }
-.opt-cancel { padding: 6px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
+.opt-cancel { padding: 6px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 
 /* ⑤ 카테고리 분리 패널 */
 .separate-panel { margin-top: 6px; padding: 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; }
 .sep-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.sep-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 12px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; padding: 3px 11px; cursor: pointer; }
+.sep-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 12px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 3px 11px; cursor: pointer; }
 .sep-chip:hover { color: var(--text-primary); }
 .sep-chip.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-.sep-n { font-size: var(--fs-label); font-weight: 700; padding: 0 5px; border-radius: 7px; background: rgba(0,0,0,0.3); }
+.sep-n { font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 0 5px; border-radius: 7px; background: rgba(0,0,0,0.3); }
 .sep-actions { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
-.sep-act { border: none; border-radius: 5px; font-size: var(--fs-label); font-weight: 700; padding: 4px 10px; cursor: pointer; }
+.sep-act { border: none; border-radius: 5px; font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 4px 10px; cursor: pointer; }
 .sep-act.remove { background: rgba(248,113,113,0.14); border: 1px solid #f87171; color: #f87171; }
 .sep-act.extract { background: rgba(96,165,250,0.14); border: 1px solid #60a5fa; color: #60a5fa; }
 .sep-hint { font-size: var(--fs-label); color: #4ade80; }
@@ -1099,8 +1101,8 @@ summary::-webkit-details-marker { display: none; }
 .conflict-item { font-size: var(--fs-label); color: #fbbf24; padding: 2px 0; }
 .char-insight { margin-top: 6px; background: rgba(45,212,191,0.03); border: 1px solid rgba(45,212,191,0.1); border-radius: 6px; padding: 8px; }
 .insight-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.insight-label { font-size: var(--fs-label); font-weight: 800; color: #2dd4bf; }
-.insight-apply { padding: 2px 8px; background: #2dd4bf; border: none; border-radius: 3px; color: #000; font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
+.insight-label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: #2dd4bf; }
+.insight-apply { padding: 2px 8px; background: #2dd4bf; border: none; border-radius: 3px; color: #000; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .insight-tags { display: flex; flex-wrap: wrap; gap: 3px; max-height: 80px; overflow-y: auto; }
 .char-tag-chip { padding: 2px 8px; background: rgba(45,212,191,0.08); border: 1px solid rgba(45,212,191,0.2); border-radius: 4px; color: #2dd4bf; font-size: var(--fs-label); cursor: pointer; }
 .char-tag-chip:hover { background: rgba(45,212,191,0.15); border-color: #2dd4bf; }
@@ -1108,14 +1110,14 @@ summary::-webkit-details-marker { display: none; }
 .ai-btn { width: 28px; height: 28px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .ai-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ai-btn:disabled { opacity: 0.3; }
-.ai-btn.go { width: auto; padding: 0 8px; background: var(--accent); color: #000; border: none; font-weight: 700; font-size: var(--fs-label); }
+.ai-btn.go { width: auto; padding: 0 8px; background: var(--accent); color: #000; border: none; font-weight: var(--fw-bold); font-size: var(--fs-label); }
 /* 2개 LLM 드롭다운 (태그 AI / 자연어 AI) */
 .ai-menu-wrap { position: relative; display: inline-block; }
-.ai-menu-btn { width: auto; padding: 0 9px; font-size: var(--fs-label); font-weight: 700; white-space: nowrap; }
+.ai-menu-btn { width: auto; padding: 0 9px; font-size: var(--fs-label); font-weight: var(--fw-bold); white-space: nowrap; }
 .ai-menu { position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 60; min-width: 180px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 1px; }
-.ai-menu button { width: 100%; height: auto; text-align: left; background: transparent; border: none; color: var(--text-secondary); font-size: 11px; font-weight: 600; padding: 7px 10px; border-radius: 5px; cursor: pointer; white-space: nowrap; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ai-menu button { width: 100%; height: auto; text-align: left; background: transparent; border: none; color: var(--text-secondary); font-size: 11px; font-weight: var(--fw-bold); padding: 7px 10px; border-radius: 5px; cursor: pointer; white-space: nowrap; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .ai-menu button:hover { background: var(--bg-button); color: var(--accent); }
-.ai-menu button em { font-style: normal; font-weight: 400; font-size: var(--fs-label); color: var(--text-muted); }
+.ai-menu button em { font-style: normal; font-weight: var(--fw-normal); font-size: var(--fs-label); color: var(--text-muted); }
 .ai-menu-backdrop { position: fixed; inset: 0; z-index: 55; }
 .nl-input-row { display: flex; gap: 4px; margin-bottom: 6px; }
 .nl-input { flex: 1; padding: 6px 10px; font-size: 11px; }
@@ -1130,8 +1132,8 @@ summary::-webkit-details-marker { display: none; }
 .ac-item:hover, .ac-item.selected { background: var(--accent-dim); color: var(--accent); }
 label.danger { color: #f87171; }
 .exclude-section { margin-bottom: 0; }
-.exclude-toggle { font-size: var(--fs-label); font-weight: 800; color: #f87171; letter-spacing: 1px; cursor: pointer; list-style: none; }
-.excl-badge { display: inline-block; min-width: 14px; padding: 0 5px; border-radius: 7px; background: rgba(248,113,113,0.2); color: #f87171; font-size: var(--fs-label); font-weight: 800; text-align: center; }
+.exclude-toggle { font-size: var(--fs-label); font-weight: var(--fw-bold); color: #f87171; letter-spacing: 0; cursor: pointer; list-style: none; }
+.excl-badge { display: inline-block; min-width: 14px; padding: 0 5px; border-radius: 7px; background: rgba(248,113,113,0.2); color: #f87171; font-size: var(--fs-label); font-weight: var(--fw-bold); text-align: center; }
 .exclude-toggle::-webkit-details-marker { display: none; }
 .exclude-help { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; padding: 6px 8px; background: rgba(248,113,113,0.03); border: 1px solid rgba(248,113,113,0.1); border-radius: 4px; }
 .exclude-help span { font-size: var(--fs-label); color: var(--text-muted); font-family: 'Consolas', monospace; }
@@ -1143,7 +1145,7 @@ label.danger { color: #f87171; }
 .em-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: flex; align-items: center; justify-content: center; }
 .em-modal { width: min(94vw, 1080px); height: min(88vh, 760px); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
 .em-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
-.em-header h3 { font-size: 12px; letter-spacing: 2px; color: #f87171; }
+.em-header h3 { font-size: 12px; letter-spacing: 0; color: #f87171; }
 .em-desc { font-size: var(--fs-label); color: var(--text-muted); flex: 1; }
 .em-body { flex: 1; display: flex; overflow: hidden; }
 .em-rules { width: 280px; overflow-y: auto; border-right: 1px solid var(--border); padding: 8px; }
@@ -1166,7 +1168,7 @@ label.danger { color: #f87171; }
 .em-rule-text { cursor: default; }
 .em-add-row { display: flex; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 .em-add-input { flex: 1; padding: 4px 8px; font-size: var(--fs-label); background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-primary); }
-.em-add-btn { width: 28px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 3px; color: var(--accent); font-weight: 800; cursor: pointer; }
+.em-add-btn { width: 28px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 3px; color: var(--accent); font-weight: var(--fw-bold); cursor: pointer; }
 .em-empty-sm { padding: 8px; text-align: center; color: var(--text-muted); font-size: var(--fs-label); }
 .em-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 12px; }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
@@ -1184,11 +1186,11 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   border: 1px solid rgba(167,139,250,0.35); border-radius: 7px;
   background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(45,212,191,0.05));
 }
-.krea-engine-note strong { font-size: 11px; letter-spacing: 1.4px; color: #c4b5fd; }
+.krea-engine-note strong { font-size: 11px; letter-spacing: 0; color: #c4b5fd; }
 .krea-engine-note span { font-size: var(--fs-label); line-height: 1.45; color: var(--text-muted); }
 .tk-badge {
   display: inline-block; padding: 1px 6px; margin-left: 6px; font-size: var(--fs-label);
-  font-weight: bold; border-radius: 8px; vertical-align: middle;
+  font-weight: var(--fw-bold); border-radius: 8px; vertical-align: middle;
   border: 1px solid transparent;
 }
 .tk-badge.tk-ok    { background: rgba(74,222,128,0.12); color: #4ade80; border-color: rgba(74,222,128,0.3); }

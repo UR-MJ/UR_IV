@@ -162,7 +162,7 @@ function switchToNative(id: string) {
   color: #585858;
   font-size: var(--fs-label);
   font-weight: var(--fw-bold);
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   white-space: nowrap;
   user-select: none;
 }
@@ -173,7 +173,7 @@ function switchToNative(id: string) {
 }
 .tab-pill:hover { color: #B0B0B0; background: rgba(255,255,255,0.03); }
 .tab-pill.active {
-  background: var(--accent); color: #000; font-weight: 800;
+  background: var(--accent); color: #000; font-weight: var(--fw-bold);
   box-shadow: 0 2px 8px rgba(250, 204, 21, 0.25);
 }
 .tab-pill.native { font-style: italic; opacity: 0.7; }

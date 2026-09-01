@@ -6,7 +6,7 @@
       @click="drawerOpen = !drawerOpen"
       :title="isRunning ? '큐 실행 중 — 클릭하여 관리' : '큐 열기 (관리)'">
       <span class="qp-ico">≣</span>
-      <span class="qp-label">QUEUE</span>
+      <span class="qp-label">대기열</span>
       <span class="qp-count" v-if="items.length">{{ items.length }}</span>
       <span class="qp-run" v-if="isRunning && !isPaused" title="실행 중"><Icon name="play" /></span>
       <span class="qp-run paused" v-else-if="isPaused" title="일시정지"><Icon name="pause" /></span>
@@ -20,10 +20,10 @@
       <aside class="queue-drawer" v-if="drawerOpen">
         <div class="qd-head">
           <span class="title">
-            QUEUE
+            대기열
             <span class="count-badge" v-if="items.length">{{ items.length }}</span>
-            <span class="running-badge" v-if="isRunning && !isPaused"><Icon name="play" /> RUNNING</span>
-            <span class="paused-badge" v-if="isPaused"><Icon name="pause" /> PAUSED</span>
+            <span class="running-badge" v-if="isRunning && !isPaused"><Icon name="play" /> 실행 중</span>
+            <span class="paused-badge" v-if="isPaused"><Icon name="pause" /> 일시정지</span>
             <span class="selected-badge" v-if="selectedIds.size > 0">{{ selectedIds.size }} 선택됨</span>
           </span>
           <button class="qd-x" @click="drawerOpen = false" title="닫기 (Esc)"><Icon name="close" /></button>
@@ -346,7 +346,7 @@ defineExpose({ items })
   z-index: 2400; display: flex; align-items: center; gap: 7px;
   height: 34px; padding: 0 14px; border-radius: 18px;
   background: #141414; border: 1px solid var(--border); color: var(--text-muted);
-  font-size: 11px; font-weight: 800; letter-spacing: 0.5px; cursor: pointer;
+  font-size: 11px; font-weight: var(--fw-bold); letter-spacing: 0; cursor: pointer;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4); transition: 0.18s;
 }
 .queue-pin:hover { background: #1e1e1e; color: #E8E8E8; border-color: var(--accent); }
@@ -356,8 +356,8 @@ defineExpose({ items })
 .queue-pin.bump { animation: pin-bump 0.55s ease; }
 @keyframes pin-bump { 0% { transform: scale(1); } 30% { transform: scale(1.12); } 100% { transform: scale(1); } }
 .qp-ico { font-size: 13px; opacity: 0.9; }
-.qp-label { letter-spacing: 1px; }
-.qp-count { background: var(--accent); color: #000; min-width: 16px; text-align: center; padding: 1px 5px; border-radius: 9px; font-size: var(--fs-label); font-weight: 900; }
+.qp-label { letter-spacing: 0; }
+.qp-count { background: var(--accent); color: #000; min-width: 16px; text-align: center; padding: 1px 5px; border-radius: 9px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
 .queue-pin.running .qp-count { background: #4ade80; }
 .queue-pin.paused .qp-count { background: #fbbf24; }
 .qp-run { font-size: var(--fs-label); }
@@ -371,17 +371,17 @@ defineExpose({ items })
   display: flex; flex-direction: column; box-shadow: -10px 0 40px rgba(0,0,0,0.55);
 }
 .qd-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
-.title { color: var(--text-secondary); font-size: 12px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.count-badge { background: var(--accent); color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: 900; }
-.running-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: 900; animation: pulse 1.5s infinite; }
-.paused-badge { background: #fbbf24; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: 900; }
-.selected-badge { background: #60a5fa; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: 900; }
+.title { color: var(--text-secondary); font-size: 12px; font-weight: var(--fw-bold); letter-spacing: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.count-badge { background: var(--accent); color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
+.running-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); animation: pulse 1.5s infinite; }
+.paused-badge { background: #fbbf24; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
+.selected-badge { background: #60a5fa; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .qd-x { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 30px; height: 30px; cursor: pointer; font-size: 13px; }
 .qd-x:hover { color: var(--text-primary); border-color: var(--accent); }
 
 .qd-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
-.btn { padding: 5px 12px; background: #181818; border: none; border-radius: 5px; color: #9a9a9a; font-size: 11px; cursor: pointer; font-weight: 700; }
+.btn { padding: 5px 12px; background: #181818; border: none; border-radius: 5px; color: #9a9a9a; font-size: 11px; cursor: pointer; font-weight: var(--fw-bold); }
 .btn:hover { background: #222; color: #E8E8E8; }
 .btn.danger { color: #f87171; }
 .btn.primary { background: var(--accent); color: #000; }
@@ -398,7 +398,7 @@ defineExpose({ items })
 .q-row.active { border-color: var(--accent); background: rgba(226,179,64,0.1); }
 .q-row.sel { border-color: #60a5fa; background: rgba(96,165,250,0.08); }
 .q-row.done { opacity: 0.45; }
-.q-row-st { flex-shrink: 0; width: 22px; text-align: center; color: var(--accent); font-weight: 800; font-size: 12px; }
+.q-row-st { flex-shrink: 0; width: 22px; text-align: center; color: var(--accent); font-weight: var(--fw-bold); font-size: 12px; }
 .q-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .q-row-prompt { color: var(--text-primary); font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-row-neg { color: #f8717188; font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -420,14 +420,14 @@ defineExpose({ items })
 .qe-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
 .qe-modal { width: min(620px, 92vw); max-height: 86vh; overflow-y: auto; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 .qe-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.qe-head h3 { font-size: 16px; font-weight: 800; color: var(--text-primary); }
+.qe-head h3 { font-size: 16px; font-weight: var(--fw-bold); color: var(--text-primary); }
 .qe-x { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 28px; height: 28px; cursor: pointer; }
-.qe-label { display: block; font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); letter-spacing: 1px; margin: 8px 0 4px; }
+.qe-label { display: block; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin: 8px 0 4px; }
 .qe-text { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; color: var(--text-primary); font-size: 12px; line-height: 1.5; resize: vertical; }
 .qe-text:focus { outline: none; border-color: var(--accent); }
 .qe-foot { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
 .qe-sp { flex: 1; }
-.qe-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; padding: 7px 12px; cursor: pointer; }
+.qe-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: var(--fw-bold); padding: 7px 12px; cursor: pointer; }
 .qe-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent); }
 .qe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .qe-btn.danger { color: #f87171; }
@@ -437,7 +437,7 @@ defineExpose({ items })
 .progress-bar { width: 100%; height: 3px; background: var(--bg-input); border-radius: 2px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
 .progress-text { font-size: var(--fs-label); color: var(--text-muted); text-align: right; margin-top: 2px; display: block; }
-.progress-text .eta { color: var(--accent); font-weight: 700; margin-left: 4px; }
+.progress-text .eta { color: var(--accent); font-weight: var(--fw-bold); margin-left: 4px; }
 
 .queue-empty { padding: 12px; text-align: center; color: #383838; font-size: 11px; }
 </style>

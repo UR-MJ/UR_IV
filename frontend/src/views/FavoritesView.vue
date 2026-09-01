@@ -4,7 +4,7 @@
     <header class="gallery-toolbar">
       <div class="folder-info no-click">
         <span class="icon"><Icon name="star" /></span>
-        <span class="path">FAVORITES</span>
+        <span class="path">즐겨찾기</span>
       </div>
 
       <div class="spacer"></div>
@@ -58,7 +58,7 @@
 
       <div v-if="images.length === 0" class="empty-placeholder">
         <div class="icon"><Icon name="star" /></div>
-        <h2>NO FAVORITES</h2>
+        <h2>즐겨찾기가 없습니다</h2>
         <p>아직 즐겨찾기한 이미지가 없습니다</p>
       </div>
     </section>
@@ -78,35 +78,35 @@
             <div class="viewer-info">
               <div class="vi-size">{{ viewerData.size }}</div>
               <div v-if="viewerData.prompt" class="vi-section">
-                <div class="vi-head"><label>PROMPT</label></div>
+                <div class="vi-head"><label>프롬프트</label></div>
                 <div class="vi-pre-wrap">
                   <button class="vi-copy-float" @click="copySection(viewerData.prompt, 'Prompt')" title="Prompt 복사"><Icon name="clipboard" /></button>
                   <pre>{{ viewerData.prompt }}</pre>
                 </div>
               </div>
               <div v-if="viewerData.negative" class="vi-section">
-                <div class="vi-head"><label class="neg">NEGATIVE</label></div>
+                <div class="vi-head"><label class="neg">네거티브</label></div>
                 <div class="vi-pre-wrap">
                   <button class="vi-copy-float" @click="copySection(viewerData.negative, 'Negative')" title="Negative 복사"><Icon name="clipboard" /></button>
                   <pre>{{ viewerData.negative }}</pre>
                 </div>
               </div>
               <div v-if="viewerData.raw && !viewerData.prompt" class="vi-section">
-                <div class="vi-head"><label>RAW</label></div>
+                <div class="vi-head"><label>원본</label></div>
                 <div class="vi-pre-wrap">
                   <button class="vi-copy-float" @click="copySection(viewerData.raw, 'Raw')" title="Raw 복사"><Icon name="clipboard" /></button>
                   <pre>{{ viewerData.raw }}</pre>
                 </div>
               </div>
               <div v-if="viewerParams" class="vi-section">
-                <div class="vi-head"><label>PARAMETERS</label></div>
+                <div class="vi-head"><label>파라미터</label></div>
                 <div class="vi-pre-wrap">
                   <button class="vi-copy-float" @click="copySection(viewerParams, 'Parameters')" title="Parameters 복사"><Icon name="clipboard" /></button>
                   <pre>{{ viewerParams }}</pre>
                 </div>
               </div>
               <div class="vi-actions-section">
-                <label class="vi-actions-label">SEND TO</label>
+                <label class="vi-actions-label">보내기</label>
                 <div class="vi-send-grid">
                   <button class="send-card primary" @click="action('gallery_send_exif_to_t2i', { exif: viewerData.raw, path: viewerData.path })" title="EXIF + 이미지를 T2I 탭에 전송">
                     <span class="send-ico"><Icon name="upload" /></span>
@@ -135,15 +135,15 @@
     <!-- Context Menu -->
     <transition name="pop">
       <div v-if="ctxMenu.show" class="modern-ctx-menu" :style="ctxMenuStyle">
-        <div class="ctx-item" @click="ctx('gallery_load_exif')"><Icon name="clipboard" /> INSPECT EXIF</div>
-        <div class="ctx-item" @click="ctx('send_to_i2i')"><Icon name="image" /> SEND TO I2I</div>
-        <div class="ctx-item" @click="ctx('send_to_inpaint')"><Icon name="palette" /> SEND TO INPAINT</div>
-        <div class="ctx-item" @click="ctx('send_to_editor')"><Icon name="pencil" /> SEND TO EDITOR</div>
-        <div class="ctx-item" @click="ctx('copy_to_clipboard')"><Icon name="clipboard" /> COPY</div>
-        <div class="ctx-item" @click="sendToCompare('before')"><Icon name="search" /> COMPARE (BEFORE)</div>
-        <div class="ctx-item" @click="sendToCompare('after')"><Icon name="search" /> COMPARE (AFTER)</div>
+        <div class="ctx-item" @click="ctx('gallery_load_exif')"><Icon name="clipboard" /> EXIF 보기</div>
+        <div class="ctx-item" @click="ctx('send_to_i2i')"><Icon name="image" /> I2I로 보내기</div>
+        <div class="ctx-item" @click="ctx('send_to_inpaint')"><Icon name="palette" /> 인페인트로 보내기</div>
+        <div class="ctx-item" @click="ctx('send_to_editor')"><Icon name="pencil" /> 에디터로 보내기</div>
+        <div class="ctx-item" @click="ctx('copy_to_clipboard')"><Icon name="clipboard" /> 복사</div>
+        <div class="ctx-item" @click="sendToCompare('before')"><Icon name="search" /> 비교 (이전)</div>
+        <div class="ctx-item" @click="sendToCompare('after')"><Icon name="search" /> 비교 (이후)</div>
         <div class="ctx-separator"></div>
-        <div class="ctx-item unfav" @click="ctxRemoveFav"><Icon name="star" /> REMOVE FROM FAVORITES</div>
+        <div class="ctx-item unfav" @click="ctxRemoveFav"><Icon name="star" /> 즐겨찾기 해제</div>
       </div>
     </transition>
   </div>
@@ -219,7 +219,7 @@ const viewerParams = computed(() => {
 
 const galleryContentRef = ref<HTMLElement | null>(null)
 const sortBy = ref('date')
-const sortOptions = [{ label: 'DATE', val: 'date' }, { label: 'NAME', val: 'name' }]
+const sortOptions = [{ label: '날짜', val: 'date' }, { label: '이름', val: 'name' }]
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
 const exifData = ref<any>(null)
 const largeView = ref<any>(null)
@@ -355,7 +355,8 @@ onUnmounted(() => {
 .folder-info { display: flex; align-items: center; gap: 10px; opacity: 0.85; }
 .folder-info.no-click { cursor: default; }
 .folder-info .icon { font-size: 15px; }
-.folder-info .path { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--accent); text-transform: uppercase; }
+/* 경로는 있는 그대로 — 대문자로 밀면 실제와 다른 문자열이 된다 */
+.folder-info .path { font-size: var(--fs-meta); color: var(--text-muted); }
 
 
 .gallery-card img { width: 100%; display: block; transition: var(--transition); }
@@ -368,9 +369,9 @@ onUnmounted(() => {
 .exif-preview { width: 100%; aspect-ratio: 1; overflow: hidden; position: relative; cursor: pointer; }
 .exif-preview img { width: 100%; height: 100%; object-fit: contain; background: #000; }
 
-.meta-row p { font-size: 12px; font-weight: 700; color: var(--text-primary); word-break: break-all; }
+.meta-row p { font-size: 12px; font-weight: var(--fw-bold); color: var(--text-primary); word-break: break-all; }
 .meta-head { display: flex; align-items: center; justify-content: space-between; min-height: 18px; margin-bottom: 6px; }
-.meta-block label { font-size: var(--fs-label); font-weight: 900; color: var(--accent); }
+.meta-block label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); }
 .meta-block label.danger { color: #f87171; }
 .copy-btn { opacity: 0; background: none; border: 1px solid transparent; color: var(--text-muted); width: 22px; height: 22px; border-radius: 4px; cursor: pointer; font-size: 11px; }
 .meta-block:hover .copy-btn { opacity: 0.7; }
@@ -389,7 +390,7 @@ onUnmounted(() => {
 .viewer-info { width: 460px; max-width: 46vw; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; border-left: 1px solid #1A1A1A; }
 .vi-size { color: #585858; font-size: 12px; }
 .vi-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; min-height: 18px; }
-.vi-head label { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 0.5px; margin: 0; }
+.vi-head label { color: var(--accent); font-size: 11px; font-weight: var(--fw-bold); letter-spacing: 0; margin: 0; }
 .vi-head label.neg { color: #f87171; }
 .vi-pre-wrap { position: relative; }
 .vi-copy-float { position: absolute; top: 7px; right: 7px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: rgba(20,20,20,0.5); border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; color: #ddd; font-size: 14px; cursor: pointer; opacity: 0.5; backdrop-filter: blur(3px); transition: opacity .15s, background .15s, border-color .15s; z-index: 2; }
@@ -397,17 +398,17 @@ onUnmounted(() => {
 .vi-copy-float:hover { opacity: 1 !important; background: rgba(45,45,45,0.9); border-color: var(--accent); color: var(--accent); }
 .vi-section pre { color: #C4C4C4; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; background: #111; padding: 12px 14px; border-radius: 6px; margin: 0; max-height: 360px; overflow-y: auto; }
 .vi-actions-section { margin-top: auto; padding-top: 12px; }
-.vi-actions-label { display: block; font-size: var(--fs-label); font-weight: 900; color: var(--text-muted); letter-spacing: 1.5px; margin-bottom: 8px; }
+.vi-actions-label { display: block; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-bottom: 8px; }
 .vi-send-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .send-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.15s; }
 .send-card:hover { background: var(--bg-input); border-color: var(--text-muted); transform: translateY(-1px); }
 .send-card.primary { background: var(--accent-dim); border-color: rgba(250,204,21,0.4); }
 .send-card.primary:hover { background: rgba(250,204,21,0.15); border-color: var(--accent); box-shadow: 0 2px 8px rgba(250,204,21,0.2); }
 .send-ico { font-size: 18px; line-height: 1; }
-.send-name { font-size: var(--fs-label); font-weight: 700; color: var(--text-secondary); letter-spacing: 0.3px; }
+.send-name { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-secondary); letter-spacing: 0; }
 .send-card.primary .send-name { color: var(--accent); }
 
-.mini-action { height: 36px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
+.mini-action { height: 36px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 
 .ctx-item.unfav { color: var(--accent); }
 

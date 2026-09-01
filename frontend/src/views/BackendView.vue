@@ -35,7 +35,7 @@ function openInBrowser() {
 .toolbar {
   display: flex; align-items: center; gap: 8px; padding: 8px 12px;
 }
-.label { color: #787878; font-size: 13px; font-weight: 600; }
+.label { color: #787878; font-size: 13px; font-weight: var(--fw-bold); }
 .btn {
   padding: 6px 14px; background: #181818; border: none; border-radius: 6px;
   color: #787878; font-size: 12px; cursor: pointer;
@@ -52,7 +52,7 @@ function openInBrowser() {
 }
 .open-btn {
   padding: 12px 32px; background: #E2B340; border: none; border-radius: 8px;
-  color: #000; font-weight: 700; font-size: 14px; cursor: pointer;
+  color: #000; font-weight: var(--fw-bold); font-size: 14px; cursor: pointer;
 }
 .open-btn:hover { background: #F0C850; }
 .open-btn.secondary { background: #181818; color: #787878; }

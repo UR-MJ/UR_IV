@@ -2,7 +2,7 @@
   <div class="settings-workspace" @keydown.ctrl.f.prevent="focusSearch">
     <!-- Left: Sub-navigation -->
     <aside class="settings-nav">
-      <div class="nav-header">PREFERENCES</div>
+      <div class="nav-header">환경설정</div>
       <div class="settings-search-wrap">
         <input ref="searchInputRef" v-model="settingsSearch" class="settings-search"
           placeholder="설정 검색 (Ctrl+F)" />
@@ -12,7 +12,7 @@
         class="nav-item" :class="{ active: currentTab === tab.id }"
         @click="currentTab = tab.id"
       >
-        <span class="icon">{{ tab.icon }}</span>
+        <Icon :name="tab.icon" size="16" />
         <span class="label">{{ tab.label }}</span>
       </button>
       <div v-if="settingsSearch && filteredSubTabs.length === 0" class="nav-empty">
@@ -26,14 +26,14 @@
         <!-- 1. General & Backend -->
         <div v-show="currentTab === 'general'" class="section-fade">
           <div class="glass-card">
-            <label>SYSTEM STATUS</label>
+            <label>시스템 상태</label>
             <div class="info-row">
-              <span class="desc">CORE VERSION</span>
+              <span class="desc">코어 버전</span>
               <span class="val-badge">v2.0.0 PRO</span>
             </div>
             <div class="info-row mt-12">
-              <span class="desc">API ORCHESTRATOR</span>
-              <button class="btn-pill" :disabled="generationApiWebMode" @click="act('show_api_manager')">MANAGE BACKENDS</button>
+              <span class="desc">API 오케스트레이터</span>
+              <button class="btn-pill" :disabled="generationApiWebMode" @click="act('show_api_manager')">백엔드 관리</button>
             </div>
           </div>
         </div>
@@ -41,18 +41,18 @@
         <!-- 2. Network & API -->
         <div v-show="currentTab === 'api'" class="section-fade generation-api-section">
           <div class="hint-banner generation-api-security">
-            <strong>AUTHENTICATED GENERATION GATEWAY</strong>
+            <strong>인증 생성 게이트웨이</strong>
             로컬 앱이 인증 token이 필요한 생성 API를 제공하고, 미리 등록한 Forge/WebUI·ComfyUI로 작업을 중계합니다.
             외부 요청은 임의 URL을 지정할 수 없으며, 기본값은 <b>127.0.0.1 / OFF</b>입니다.
           </div>
           <div v-if="generationApiReadOnlyReason" class="hint-banner generation-api-readonly">
-            <strong>READ ONLY</strong> {{ generationApiReadOnlyReason }}
+            <strong>읽기 전용</strong> {{ generationApiReadOnlyReason }}
           </div>
 
           <section class="glass-card generation-api-card">
             <header class="generation-api-header">
               <div>
-                <div class="generation-api-eyebrow">INBOUND SERVER</div>
+                <div class="generation-api-eyebrow">수신 서버</div>
                 <h2>이 앱을 생성 API로 사용</h2>
               </div>
               <div class="generation-api-badges">
@@ -67,7 +67,7 @@
 
             <div class="generation-api-toggle-row">
               <div>
-                <strong>APP STARTUP</strong>
+                <strong>앱 시작</strong>
                 <small>앱을 실행할 때 서버도 함께 시작</small>
               </div>
               <ToggleSwitch v-model="generationApi.enabled" :disabled="generationApiMutationDisabled" />
@@ -75,12 +75,12 @@
 
             <div class="generation-api-grid mt-16">
               <label class="generation-api-field">
-                <span>BIND HOST</span>
+                <span>바인드 호스트</span>
                 <input v-model.trim="generationApi.bindHost" spellcheck="false" placeholder="127.0.0.1" :disabled="generationApiMutationDisabled" />
                 <small>LAN 공유는 0.0.0.0을 명시해야 합니다.</small>
               </label>
               <label class="generation-api-field">
-                <span>PORT</span>
+                <span>포트</span>
                 <input v-model.number="generationApi.port" type="number" min="1024" max="65535" :disabled="generationApiMutationDisabled" />
                 <small>설정 저장 시 충돌을 검증합니다.</small>
               </label>
@@ -91,29 +91,29 @@
             </div>
 
             <label class="generation-api-field mt-16">
-              <span>BEARER TOKEN</span>
+              <span>Bearer 토큰</span>
               <div class="generation-api-secret">
                 <input :type="generationApiTokenVisible ? 'text' : 'password'" :value="generationApi.token || generationApi.tokenPreview"
                   readonly spellcheck="false" placeholder="SAVE 또는 ROTATE로 token 생성" />
                 <button class="btn-pill compact" @click="generationApiTokenVisible = !generationApiTokenVisible">
                   {{ generationApiTokenVisible ? 'HIDE' : 'SHOW' }}
                 </button>
-                <button class="btn-pill compact" :disabled="!generationApi.token" @click="copyGenerationApiToken">COPY</button>
-                <button class="btn-pill compact" :disabled="generationApiMutationDisabled" @click="runGenerationApiAction('rotate_token')">ROTATE</button>
+                <button class="btn-pill compact" :disabled="!generationApi.token" @click="copyGenerationApiToken">복사</button>
+                <button class="btn-pill compact" :disabled="generationApiMutationDisabled" @click="runGenerationApiAction('rotate_token')">회전</button>
               </div>
             </label>
 
             <div class="generation-api-endpoint mt-16">
-              <span>BASE URL</span>
+              <span>기본 URL</span>
               <code>{{ generationApiBaseUrl }}</code>
-              <button class="btn-pill compact" @click="copyGenerationApiExample">COPY EXAMPLE</button>
+              <button class="btn-pill compact" @click="copyGenerationApiExample">예시 복사</button>
             </div>
 
             <div class="generation-api-actions mt-16">
-              <button class="btn-pill primary" :disabled="generationApiMutationDisabled" @click="saveGenerationApiConfig">APPLY CONFIG</button>
-              <button class="btn-pill" :disabled="generationApiMutationDisabled || generationApi.running" @click="runGenerationApiAction('start')">START</button>
-              <button class="btn-pill" :disabled="generationApiMutationDisabled || !generationApi.running" @click="runGenerationApiAction('stop')">STOP</button>
-              <button class="btn-pill" :disabled="generationApiWebMode" @click="act('show_api_manager')">BACKEND MANAGER</button>
+              <button class="btn-pill primary" :disabled="generationApiMutationDisabled" @click="saveGenerationApiConfig">설정 적용</button>
+              <button class="btn-pill" :disabled="generationApiMutationDisabled || generationApi.running" @click="runGenerationApiAction('start')">시작</button>
+              <button class="btn-pill" :disabled="generationApiMutationDisabled || !generationApi.running" @click="runGenerationApiAction('stop')">중지</button>
+              <button class="btn-pill" :disabled="generationApiWebMode" @click="act('show_api_manager')">백엔드 관리</button>
             </div>
             <p v-if="generationApiStatus" class="generation-api-status">{{ generationApiStatus }}</p>
           </section>
@@ -121,14 +121,14 @@
           <section class="glass-card generation-api-card mt-16">
             <header class="generation-api-header">
               <div>
-                <div class="generation-api-eyebrow">APPROVED REMOTE TARGETS</div>
+                <div class="generation-api-eyebrow">허용된 원격 대상</div>
                 <h2>Forge/WebUI · ComfyUI 연결</h2>
               </div>
               <button class="btn-pill" :disabled="generationApiMutationDisabled" @click="addGenerationApiTarget">+ ADD TARGET</button>
             </header>
 
             <label class="generation-api-field mt-16">
-              <span>DEFAULT TARGET</span>
+              <span>기본 대상</span>
               <select v-model="generationApi.defaultTarget" :disabled="generationApiMutationDisabled">
                 <option value="active">ACTIVE BACKEND (현재 앱 백엔드)</option>
                 <option v-for="target in generationApi.targets" :key="target.id" :value="target.id">
@@ -144,23 +144,23 @@
               <div class="generation-api-target-head">
                 <strong>{{ target.name || `TARGET ${index + 1}` }}</strong>
                 <label class="generation-api-enabled">
-                  <input v-model="target.enabled" type="checkbox" :disabled="generationApiMutationDisabled" /> ENABLED
+                  <input v-model="target.enabled" type="checkbox" :disabled="generationApiMutationDisabled" /> 사용 중
                 </label>
               </div>
               <div class="generation-api-grid">
                 <label class="generation-api-field">
-                  <span>NAME</span>
+                  <span>이름</span>
                   <input v-model.trim="target.name" placeholder="Studio Forge" :disabled="generationApiMutationDisabled" />
                 </label>
                 <label class="generation-api-field">
-                  <span>TARGET ID</span>
+                  <span>대상 ID</span>
                   <input v-model.trim="target.id" spellcheck="false" placeholder="studio-forge" :disabled="generationApiMutationDisabled" />
                 </label>
                 <label class="generation-api-field">
-                  <span>ENGINE</span>
+                  <span>엔진</span>
                   <select v-model="target.engine" :disabled="generationApiMutationDisabled">
-                    <option value="webui">FORGE / WEBUI</option>
-                    <option value="comfyui">COMFYUI</option>
+                    <option value="webui">Forge / WebUI</option>
+                    <option value="comfyui">ComfyUI</option>
                   </select>
                 </label>
                 <label class="generation-api-field">
@@ -172,17 +172,17 @@
               </div>
               <div v-if="target.engine === 'comfyui'" class="generation-api-grid mt-12">
                 <label class="generation-api-field">
-                  <span>T2I WORKFLOW PROFILE PATH</span>
+                  <span>T2I 워크플로 프로필 경로</span>
                   <input v-model.trim="target.workflowPath" spellcheck="false" placeholder="C:\\workflows\\api_t2i.json" :disabled="generationApiMutationDisabled" />
                 </label>
                 <label class="generation-api-field">
-                  <span>I2I WORKFLOW PROFILE PATH</span>
+                  <span>I2I 워크플로 프로필 경로</span>
                   <input v-model.trim="target.img2imgWorkflowPath" spellcheck="false" placeholder="C:\\workflows\\api_i2i.json" :disabled="generationApiMutationDisabled" />
                 </label>
               </div>
               <div class="generation-api-target-actions mt-12">
-                <button class="btn-pill compact" :disabled="generationApiMutationDisabled || !target.url" @click="testGenerationApiTarget(target)">TEST</button>
-                <button class="btn-pill compact danger" :disabled="generationApiMutationDisabled" @click="removeGenerationApiTarget(index)">REMOVE</button>
+                <button class="btn-pill compact" :disabled="generationApiMutationDisabled || !target.url" @click="testGenerationApiTarget(target)">테스트</button>
+                <button class="btn-pill compact danger" :disabled="generationApiMutationDisabled" @click="removeGenerationApiTarget(index)">제거</button>
               </div>
             </article>
           </section>
@@ -190,10 +190,10 @@
           <section class="glass-card generation-api-card mt-16">
             <header class="generation-api-header">
               <div>
-                <div class="generation-api-eyebrow">RECENT REQUESTS</div>
+                <div class="generation-api-eyebrow">최근 요청</div>
                 <h2>외부 생성 작업</h2>
               </div>
-              <button class="btn-pill compact" :disabled="generationApiLoading" @click="loadGenerationApiState()">REFRESH</button>
+              <button class="btn-pill compact" :disabled="generationApiLoading" @click="loadGenerationApiState()">새로고침</button>
             </header>
             <div v-if="!generationApi.recentJobs.length" class="generation-api-empty mt-16">최근 외부 작업이 없습니다.</div>
             <div v-else class="generation-api-jobs mt-16">
@@ -211,20 +211,20 @@
         <!-- 3. App-managed runtimes / engines -->
         <div v-show="currentTab === 'runtimes'" class="section-fade runtime-section">
           <div class="hint-banner runtime-safety-warning">
-            <strong>SECURITY NOTICE</strong>
+            <strong>보안 안내</strong>
             확장 저장소는 엔진 프로세스 안에서 코드를 실행할 수 있습니다. 신뢰하는 저장소만 설치하세요.
-            외부 설치의 확장 폴더에는 사용자가 경로를 선택하고 <b>SAVE</b>한 뒤에만 씁니다.
+            외부 설치의 확장 폴더에는 사용자가 경로를 선택하고 <b>저장</b>한 뒤에만 씁니다.
           </div>
           <div v-if="runtimeReadOnlyReason" class="hint-banner runtime-readonly-warning">
-            <strong>READ ONLY</strong> {{ runtimeReadOnlyReason }}
+            <strong>읽기 전용</strong> {{ runtimeReadOnlyReason }}
           </div>
 
           <div v-if="runtimePrimaryCandidates.length" class="glass-card runtime-primary-card">
             <div class="runtime-primary-copy">
-              <div class="runtime-eyebrow">PRIMARY MODEL LIBRARY</div>
+              <div class="runtime-eyebrow">주 모델 라이브러리</div>
               <h2>공유할 메인 모델 소스</h2>
               <p>
-                실행·연결할 <b>ACTIVE RUNTIME</b>과 모델 폴더의 기준이 되는 <b>PRIMARY MODEL LIBRARY</b>는
+                실행·연결할 <b>실행 중인 런타임</b>과 모델 폴더의 기준이 되는 <b>주 모델 라이브러리</b>는
                 서로 다른 설정입니다. 메인 소스는 전체 모델·LoRA를 제공하고, 다른 엔진의 중복되지 않은
                 항목은 별도 UNIQUE 그룹으로 표시됩니다.
               </p>
@@ -250,7 +250,7 @@
             >
               <header class="runtime-card-header">
                 <div>
-                  <div class="runtime-eyebrow">APP-ISOLATED RUNTIME</div>
+                  <div class="runtime-eyebrow">앱 전용 런타임</div>
                   <h2>{{ runtimeEngines[engineId].name }}</h2>
                 </div>
                 <div class="runtime-badges" aria-label="Runtime status">
@@ -264,7 +264,7 @@
                     {{ runtimeEngines[engineId].healthy ? 'HEALTHY' : 'NOT READY' }}
                   </span>
                   <span class="runtime-badge busy" :class="{ on: runtimeEngines[engineId].busy }">
-                    {{ runtimeEngines[engineId].busy ? 'BUSY' : 'IDLE' }}
+                    {{ runtimeEngines[engineId].busy ? '사용 중' : '대기' }}
                   </span>
                   <span class="runtime-badge active" :class="{ on: runtimeEngines[engineId].active }">
                     {{ runtimeEngines[engineId].active ? 'ACTIVE' : 'NOT ACTIVE' }}
@@ -272,45 +272,45 @@
                   <span class="runtime-badge source" :class="{ existing: runtimeEngines[engineId].sourceMode === 'existing' }">
                     {{ runtimeEngines[engineId].sourceMode === 'existing' ? 'EXISTING' : 'MANAGED' }}
                   </span>
-                  <span v-if="primaryModelEngine === engineId" class="runtime-badge primary-source">MODEL MAIN</span>
+                  <span v-if="primaryModelEngine === engineId" class="runtime-badge primary-source">모델 메인</span>
                 </div>
               </header>
 
               <div class="runtime-meta-grid">
                 <div class="runtime-meta runtime-meta-wide">
-                  <span>INSTALL ROOT</span>
+                  <span>설치 경로</span>
                   <code :title="runtimeEngines[engineId].installRoot">{{ runtimeEngines[engineId].installRoot || 'Not installed' }}</code>
                 </div>
                 <div class="runtime-meta runtime-meta-wide">
-                  <span>SOURCE ROOT</span>
+                  <span>원본 경로</span>
                   <code :title="runtimeEngines[engineId].sourceRoot">{{ runtimeEngines[engineId].sourceRoot || 'Not detected' }}</code>
                 </div>
                 <div class="runtime-meta runtime-meta-wide">
-                  <span>PYTHON</span>
+                  <span>Python</span>
                   <code :title="runtimeEngines[engineId].pythonPath">{{ runtimeEngines[engineId].pythonPath || 'Not detected' }}</code>
                 </div>
                 <div class="runtime-meta runtime-meta-wide">
-                  <span>APP DATA (ISOLATED)</span>
+                  <span>앱 전용 데이터</span>
                   <code :title="runtimeEngines[engineId].dataRoot || runtimeEngines[engineId].root">
                     {{ runtimeEngines[engineId].dataRoot || runtimeEngines[engineId].root || 'Not assigned' }}
                   </code>
                 </div>
                 <div class="runtime-meta">
-                  <span>API ENDPOINT</span>
+                  <span>API 엔드포인트</span>
                   <code>{{ runtimeEngines[engineId].apiUrl || 'Not assigned' }}</code>
                 </div>
                 <div class="runtime-meta">
-                  <span>VERSION</span>
+                  <span>버전</span>
                   <strong>{{ runtimeEngines[engineId].version || 'Unknown' }}</strong>
                 </div>
                 <div class="runtime-meta runtime-meta-wide">
-                  <span>UPDATE STATUS</span>
+                  <span>업데이트 상태</span>
                   <strong :class="{ 'update-ready': runtimeEngines[engineId].updateAvailable }">
                     {{ runtimeEngines[engineId].updateStatus || 'Not checked' }}
                   </strong>
                 </div>
                 <div v-if="runtimeModelPathEntries(engineId).length" class="runtime-meta runtime-meta-wide runtime-model-paths">
-                  <span>MODEL LIBRARY PATHS</span>
+                  <span>모델 라이브러리 경로</span>
                   <div v-for="entry in runtimeModelPathEntries(engineId)" :key="`${entry.kind}:${entry.path}`">
                     <strong>{{ entry.kind }}</strong>
                     <code :title="entry.path">{{ entry.path }}</code>
@@ -321,13 +321,13 @@
               <section class="runtime-subsection runtime-install-source">
                 <div class="runtime-subheading">
                   <div>
-                    <h3>EXISTING INSTALLATION</h3>
+                    <h3>기존 설치</h3>
                     <p>
                       설치된 {{ runtimeEngines[engineId].name }} 루트를 연결하면 앱 전용 복사본을 다시 받지 않습니다.
                       프로세스와 앱 데이터는 Image viewer가 별도로 관리합니다.
                     </p>
                   </div>
-                  <span v-if="runtimeInstallRootDirty[engineId]" class="runtime-unsaved">UNSAVED</span>
+                  <span v-if="runtimeInstallRootDirty[engineId]" class="runtime-unsaved">저장 안 됨</span>
                 </div>
                 <div class="runtime-path-control runtime-install-path-control">
                   <input v-model="runtimeInstallRootDrafts[engineId]" spellcheck="false"
@@ -335,23 +335,23 @@
                     :disabled="runtimeMutationDisabled(engineId)"
                     @input="runtimeInstallRootDirty[engineId] = true" />
                   <button class="btn-pill compact" :disabled="runtimeMutationDisabled(engineId)"
-                    :title="runtimeMutationTitle" @click="browseRuntimeInstallDirectory(engineId)">BROWSE</button>
+                    :title="runtimeMutationTitle" @click="browseRuntimeInstallDirectory(engineId)">찾아보기</button>
                   <button class="btn-pill compact primary"
                     :disabled="runtimeMutationDisabled(engineId) || !runtimeInstallRootDrafts[engineId].trim() || (!runtimeInstallRootDirty[engineId] && runtimeEngines[engineId].sourceMode === 'existing')"
-                    :title="runtimeMutationTitle" @click="linkExistingRuntime(engineId)">LINK</button>
+                    :title="runtimeMutationTitle" @click="linkExistingRuntime(engineId)">연결</button>
                   <button class="btn-pill compact"
                     :disabled="runtimeMutationDisabled(engineId) || runtimeEngines[engineId].sourceMode === 'managed'"
-                    :title="runtimeMutationTitle" @click="useManagedRuntime(engineId)">USE MANAGED</button>
+                    :title="runtimeMutationTitle" @click="useManagedRuntime(engineId)">앱 관리 사용</button>
                 </div>
                 <div v-if="runtimeEngines[engineId].sourceMode === 'existing'" class="runtime-dependency-note">
-                  연결된 외부 설치는 앱이 자동 업데이트하지 않습니다. <b>UPDATE</b>는 비활성화되며,
+                  연결된 외부 설치는 앱이 자동 업데이트하지 않습니다. <b>업데이트</b>는 비활성화되며,
                   해당 Forge/Comfy 설치의 기존 업데이트 방법을 사용해야 합니다.
                 </div>
               </section>
 
               <div class="runtime-toggle-row">
                 <div>
-                  <strong>AUTO-START WITH IMAGE VIEWER</strong>
+                  <strong>뷰어와 함께 자동 시작</strong>
                   <small>앱 시작 시 이 격리 런타임을 자동으로 실행합니다.</small>
                 </div>
                 <ToggleSwitch
@@ -364,10 +364,10 @@
               <section class="runtime-subsection">
                 <div class="runtime-subheading">
                   <div>
-                    <h3>EXTENSION FOLDER</h3>
+                    <h3>확장 폴더</h3>
                     <p>{{ runtimeExtensionFolderHint(engineId) }}</p>
                   </div>
-                  <span v-if="runtimeExtensionFolderDirty[engineId]" class="runtime-unsaved">UNSAVED</span>
+                  <span v-if="runtimeExtensionFolderDirty[engineId]" class="runtime-unsaved">저장 안 됨</span>
                 </div>
                 <div class="runtime-path-control">
                   <input
@@ -382,29 +382,29 @@
                     :disabled="runtimeMutationDisabled(engineId)"
                     :title="runtimeMutationTitle"
                     @click="browseRuntimeExtensionDirectory(engineId)"
-                  >BROWSE</button>
+                  >찾아보기</button>
                   <button
                     class="btn-pill compact primary"
                     :disabled="runtimeMutationDisabled(engineId) || !runtimeExtensionFolderDirty[engineId] || !runtimeExtensionDrafts[engineId].trim()"
                     :title="runtimeMutationTitle"
                     @click="saveRuntimeExtensionDirectory(engineId)"
-                  >SAVE</button>
+                  >저장</button>
                 </div>
               </section>
 
               <div class="runtime-action-grid">
-                <button class="btn-pill primary" :disabled="runtimeActionDisabled(engineId, 'install')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'install')">INSTALL</button>
-                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'update')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'update')">UPDATE</button>
-                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'check_update')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'check_update')">CHECK</button>
-                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'start')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'start')">START</button>
-                <button class="btn-pill danger" :disabled="runtimeActionDisabled(engineId, 'stop')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'stop')">STOP</button>
-                <button class="btn-pill accent" :disabled="runtimeActionDisabled(engineId, 'use')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'use')">USE</button>
+                <button class="btn-pill primary" :disabled="runtimeActionDisabled(engineId, 'install')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'install')">설치</button>
+                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'update')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'update')">업데이트</button>
+                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'check_update')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'check_update')">확인</button>
+                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'start')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'start')">시작</button>
+                <button class="btn-pill danger" :disabled="runtimeActionDisabled(engineId, 'stop')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'stop')">중지</button>
+                <button class="btn-pill accent" :disabled="runtimeActionDisabled(engineId, 'use')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'use')">사용</button>
               </div>
 
               <section class="runtime-subsection runtime-extension-section">
                 <div class="runtime-subheading">
                   <div>
-                    <h3>INSTALL EXTENSION REPOSITORY</h3>
+                    <h3>확장 저장소 설치</h3>
                     <p>GitHub 저장소 URL을 검토한 뒤 이 엔진의 확장 폴더에 설치합니다.</p>
                   </div>
                 </div>
@@ -422,14 +422,14 @@
                     :disabled="runtimeMutationDisabled(engineId) || !runtimeExtensionWritable(engineId) || !runtimeRepoUrls[engineId].trim()"
                     :title="runtimeMutationTitle"
                     @click="installRuntimeExtension(engineId)"
-                  >INSTALL</button>
+                  >설치</button>
                 </div>
                 <div
                   v-if="runtimeEngines[engineId].extensionDirExternal && !runtimeExtensionWritable(engineId)"
                   class="runtime-dependency-note"
                 >
                   기존 설치의 확장 폴더는 감지했지만 아직 쓰기 권한을 부여하지 않았습니다.
-                  위에서 해당 폴더를 <b>BROWSE</b>한 뒤 <b>SAVE</b>해야 확장 설치·업데이트가 활성화됩니다.
+                  위에서 해당 폴더를 <b>찾아보기</b>한 뒤 <b>저장</b>해야 확장 설치·업데이트가 활성화됩니다.
                 </div>
 
                 <div class="runtime-extension-list">
@@ -445,7 +445,7 @@
                       <div>
                         <strong>{{ extension.name }}</strong>
                         <span v-if="extension.version">{{ extension.version }}</span>
-                        <span v-if="extension.updateAvailable" class="extension-update-badge">UPDATE</span>
+                        <span v-if="extension.updateAvailable" class="extension-update-badge">업데이트</span>
                       </div>
                       <code :title="extension.repoUrl">{{ extension.repoUrl || extension.status || 'Local extension' }}</code>
                     </div>
@@ -455,14 +455,14 @@
                         :disabled="runtimeExtensionActionDisabled(engineId, extension)"
                         :title="runtimeMutationTitle"
                         @click="runRuntimeExtensionOperation(engineId, 'check_extension', extension)"
-                      >CHECK</button>
+                      >확인</button>
                       <button
                         class="btn-pill compact"
                         :class="{ accent: extension.updateAvailable }"
                         :disabled="runtimeExtensionActionDisabled(engineId, extension)"
                         :title="runtimeMutationTitle"
                         @click="runRuntimeExtensionOperation(engineId, 'update_extension', extension)"
-                      >UPDATE</button>
+                      >업데이트</button>
                     </div>
                   </div>
                 </div>
@@ -487,11 +487,11 @@
             Forge에서 목록을 새로고침하세요.
           </div>
           <div v-if="forgeReadOnlyReason" class="hint-banner forge-readonly-warning">
-            <strong>READ ONLY</strong>{{ forgeReadOnlyReason }}
+            <strong>읽기 전용</strong>{{ forgeReadOnlyReason }}
           </div>
           <div class="glass-card">
             <div class="forge-card-heading">
-              <label>FORGE NEO MODEL DIRECTORIES</label>
+              <label>Forge Neo 모델 경로</label>
               <span v-if="forgeBusy" class="forge-scanning">SCANNING…</span>
             </div>
             <div class="forge-path-list">
@@ -515,22 +515,22 @@
                     :disabled="forgeEnvironmentLocked[field.key] || forgeBusy || !forgeCanBrowse"
                     :title="forgeBrowseTitle"
                     @click="browseForgePath(field.key)"
-                  >BROWSE</button>
+                  >찾아보기</button>
                 </div>
                 <div class="forge-path-meta">
                   <span :class="forgeEntries[field.key].exists ? 'path-ok' : 'path-missing'">
                     {{ forgeEntries[field.key].exists ? '● 폴더 확인됨' : '● 폴더 없음' }}
                   </span>
                   <span>{{ forgeEntries[field.key].count.toLocaleString() }} files</span>
-                  <span v-if="forgeEnvironmentLocked[field.key]" class="env-lock">ENV OVERRIDE</span>
+                  <span v-if="forgeEnvironmentLocked[field.key]" class="env-lock">환경변수 우선</span>
                   <span v-if="forgeErrors[field.key]" class="path-error">{{ forgeErrors[field.key] }}</span>
                 </div>
               </div>
             </div>
             <div class="forge-actions mt-16">
-              <button class="btn-pill primary" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="saveForgePaths">SAVE PATHS</button>
-              <button class="btn-pill" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="refreshForgePaths">RESCAN</button>
-              <button class="btn-pill" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="resetForgePaths">RESET AUTO</button>
+              <button class="btn-pill primary" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="saveForgePaths">경로 저장</button>
+              <button class="btn-pill" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="refreshForgePaths">다시 검색</button>
+              <button class="btn-pill" :disabled="forgeBusy || !forgeCanMutate" :title="forgeMutationTitle" @click="resetForgePaths">자동으로 되돌리기</button>
             </div>
             <div v-if="forgeStatus" class="forge-status mt-12">{{ forgeStatus }}</div>
           </div>
@@ -539,26 +539,26 @@
         <!-- 4. Prompt Logic -->
         <div v-show="currentTab === 'prompt'" class="section-fade">
           <div class="glass-card">
-            <label>PROMPT AUTOMATION</label>
+            <label>프롬프트 자동화</label>
             <div class="toggle-grid">
               <div class="toggle-row">
-                <span>Auto-clean Duplicates</span>
+                <span>중복 자동 정리</span>
                 <ToggleSwitch v-model="cleanDuplicates" />
               </div>
               <div class="toggle-row">
-                <span>Sanitize Whitespaces</span>
+                <span>공백 정리</span>
                 <ToggleSwitch v-model="cleanSpaces" />
               </div>
               <div class="toggle-row">
-                <span>Convert Underscores</span>
+                <span>언더바 변환</span>
                 <ToggleSwitch v-model="cleanUnderscore" />
               </div>
               <div class="toggle-row">
-                <span>Tag Block Mode</span>
+                <span>태그 블록 모드</span>
                 <ToggleSwitch :model-value="defaultBlockMode" @update:model-value="defaultBlockMode = $event; setBlockMode()" />
               </div>
               <div class="toggle-row">
-                <span>Gallery Metadata Panel</span>
+                <span>갤러리 메타데이터 패널</span>
                 <ToggleSwitch :model-value="galleryMetadata" @update:model-value="galleryMetadata = $event; window.localStorage.setItem('galleryShowMetadata', String(galleryMetadata))" />
               </div>
               <div class="toggle-row">
@@ -572,10 +572,10 @@
             </div>
           </div>
           <div class="glass-card mt-16">
-            <label>DATA PERSISTENCE</label>
+            <label>데이터 저장</label>
             <div class="btn-row-2">
-              <button class="btn-pill" @click="act('save_settings')">SAVE GLOBAL</button>
-              <button class="btn-pill" @click="act('show_prompt_history')">OPEN HISTORY</button>
+              <button class="btn-pill" @click="act('save_settings')">전역 저장</button>
+              <button class="btn-pill" @click="act('show_prompt_history')">히스토리 열기</button>
             </div>
           </div>
         </div>
@@ -583,7 +583,7 @@
         <!-- 4. Tab Layout (Drag & Drop) -->
         <div v-show="currentTab === 'tabs'" class="section-fade">
           <div class="glass-card">
-            <label>CUSTOM WORKSPACE ORDER</label>
+            <label>탭 순서</label>
             <div class="drag-list">
               <div v-for="(tab, i) in tabOrder" :key="tab"
                 class="drag-item"
@@ -595,8 +595,8 @@
               </div>
             </div>
             <div class="btn-row-2 mt-16">
-              <button class="btn-pill primary" @click="applyTabOrder">APPLY LAYOUT</button>
-              <button class="btn-pill" @click="resetTabOrder">RESET DEFAULT</button>
+              <button class="btn-pill primary" @click="applyTabOrder">레이아웃 적용</button>
+              <button class="btn-pill" @click="resetTabOrder">기본값으로</button>
             </div>
           </div>
         </div>
@@ -666,7 +666,7 @@
             값은 SD 호환을 위해 저장할 때 8배수로 정렬됩니다.
           </div>
           <div class="glass-card">
-            <label>ANIMA RESOLUTION GUARD</label>
+            <label>ANIMA 해상도 가드</label>
             <div class="toggle-grid">
               <div class="toggle-row">
                 <span>해상도 제한 활성화</span>
@@ -696,7 +696,7 @@
               <span class="desc">긴 변 한도</span>
               <span class="val-badge">{{ animaGuardMaxSide }} px</span>
             </div>
-            <button class="btn-pill mt-16" @click="resetAnimaGuardSettings">RESET SAFE DEFAULTS</button>
+            <button class="btn-pill mt-16" @click="resetAnimaGuardSettings">안전 기본값으로</button>
           </div>
         </div>
 
@@ -721,12 +721,12 @@
           </div>
 
           <div class="glass-card mt-16">
-            <label>T2I 기본값 <span class="sync-badge" v-if="t2iSynced">SYNCED</span></label>
+            <label>T2I 기본값 <span class="sync-badge" v-if="t2iSynced">동기화됨</span></label>
             <div class="defaults-grid">
-              <div class="def-field"><span>Steps</span><input type="number" v-model.number="defaults.steps" /></div>
-              <div class="def-field"><span>CFG Scale</span><input type="number" v-model.number="defaults.cfg" step="0.5" /></div>
-              <div class="def-field"><span>Width</span><input type="number" v-model.number="defaults.width" /></div>
-              <div class="def-field"><span>Height</span><input type="number" v-model.number="defaults.height" /></div>
+              <div class="def-field"><span>스텝</span><input type="number" v-model.number="defaults.steps" /></div>
+              <div class="def-field"><span>CFG</span><input type="number" v-model.number="defaults.cfg" step="0.5" /></div>
+              <div class="def-field"><span>너비</span><input type="number" v-model.number="defaults.width" /></div>
+              <div class="def-field"><span>높이</span><input type="number" v-model.number="defaults.height" /></div>
               <div class="def-field"><span>Seed</span><input type="text" v-model="defaults.seed" /></div>
               <div class="def-field"><span>Denoising (I2I)</span><input type="number" v-model.number="defaults.denoising" step="0.05" /></div>
               <div class="def-field"><span>Sampler</span>
@@ -736,16 +736,16 @@
                 <CustomSelect v-model="defaults.scheduler" :options="['', ...schedulerList]" placeholder="Auto" />
               </div>
             </div>
-            <button class="btn-pill mt-12" @click="syncFromT2I">SYNC FROM T2I</button>
+            <button class="btn-pill mt-12" @click="syncFromT2I">T2I에서 가져오기</button>
           </div>
 
           <div class="glass-card mt-16">
             <label>EDITOR 기본값</label>
             <div class="defaults-grid">
-              <div class="def-field"><span>Brush Size</span><input type="number" v-model.number="defaults.brushSize" /></div>
-              <div class="def-field"><span>Effect Strength</span><input type="number" v-model.number="defaults.effectStrength" /></div>
-              <div class="def-field"><span>YOLO Confidence</span><input type="number" v-model.number="defaults.yoloConf" step="0.05" /></div>
-              <div class="def-field"><span>Snap Radius</span><input type="number" v-model.number="defaults.snapRadius" /></div>
+              <div class="def-field"><span>브러시 크기</span><input type="number" v-model.number="defaults.brushSize" /></div>
+              <div class="def-field"><span>효과 세기</span><input type="number" v-model.number="defaults.effectStrength" /></div>
+              <div class="def-field"><span>YOLO 신뢰도</span><input type="number" v-model.number="defaults.yoloConf" step="0.05" /></div>
+              <div class="def-field"><span>스냅 반경</span><input type="number" v-model.number="defaults.snapRadius" /></div>
             </div>
             <div class="def-field-wide mt-12">
               <span>사이드 패널 너비 ({{ editorSidePanelWidth }}px)</span>
@@ -757,7 +757,7 @@
           <div class="glass-card mt-16">
             <label>SEARCH 기본값</label>
             <div class="defaults-grid">
-              <div class="def-field"><span>Default Rating</span>
+              <div class="def-field"><span>기본 등급</span>
                 <CustomSelect v-model="defaults.defaultRating" :options="['g', 's', 'q', 'e']" placeholder="Rating" />
               </div>
             </div>
@@ -773,22 +773,22 @@
             </div>
           </div>
           <div class="btn-row-2 mt-16">
-            <button class="btn-pill primary" @click="saveDefaults">SAVE DEFAULTS</button>
-            <button class="btn-pill" @click="resetDefaults">RESET TO FACTORY</button>
+            <button class="btn-pill primary" @click="saveDefaults">기본값 저장</button>
+            <button class="btn-pill" @click="resetDefaults">초기 상태로</button>
           </div>
         </div>
 
         <!-- 8. AI Assist (Ollama) -->
         <div v-show="currentTab === 'ollama'" class="section-fade">
           <div class="glass-card">
-            <label>OLLAMA CONFIGURATION</label>
+            <label>Ollama 설정</label>
             <div class="input-stack">
               <div class="input-unit">
-                <span class="unit-label">SERVER URL</span>
+                <span class="unit-label">서버 URL</span>
                 <input v-model="ollamaUrl" @change="saveOllamaSettings" placeholder="http://localhost:11434" />
               </div>
               <div class="input-unit mt-12">
-                <span class="unit-label">MODEL</span>
+                <span class="unit-label">모델</span>
                 <CustomSelect v-if="ollamaModels.length" v-model="ollamaModel" :options="ollamaModels" placeholder="모델 선택..." @update:modelValue="saveOllamaSettings" />
                 <input v-else v-model="ollamaModel" @change="saveOllamaSettings" placeholder="llama3.1, gemma3 등" />
               </div>
@@ -798,8 +798,8 @@
               </label>
             </div>
             <div class="btn-row-2 mt-16">
-              <button class="btn-pill primary" @click="testOllama">TEST CONNECTION</button>
-              <button class="btn-pill" @click="loadOllamaModels">REFRESH MODELS</button>
+              <button class="btn-pill primary" @click="testOllama">연결 테스트</button>
+              <button class="btn-pill" @click="loadOllamaModels">모델 새로고침</button>
             </div>
             <div class="info-row mt-12" v-if="ollamaModels.length">
               <span class="desc">AVAILABLE MODELS ({{ ollamaModels.length }})</span>
@@ -807,7 +807,7 @@
             </div>
           </div>
           <div class="glass-card mt-16">
-            <label>RECOMMENDED MODELS</label>
+            <label>추천 모델</label>
             <div class="recommend-grid">
               <div class="rec-item best">
                 <span class="rec-name">gemma3:4b</span>
@@ -840,11 +840,11 @@
             </div>
           </div>
           <div class="glass-card mt-16">
-            <label>USAGE</label>
+            <label>사용량</label>
             <div class="shortcut-grid">
-              <div class="s-row"><span><Icon name="sparkles" /> Expand Tags</span><span>기존 태그를 고품질 태그로 확장</span></div>
-              <div class="s-row"><span><Icon name="message" /> Natural Language</span><span>자연어 설명을 태그로 변환</span></div>
-              <div class="s-row"><span><Icon name="refresh" /> Suggest Similar</span><span>유사하지만 다른 태그 추천</span></div>
+              <div class="s-row"><span><Icon name="sparkles" /> 태그 확장</span><span>기존 태그를 고품질 태그로 확장</span></div>
+              <div class="s-row"><span><Icon name="message" /> 자연어</span><span>자연어 설명을 태그로 변환</span></div>
+              <div class="s-row"><span><Icon name="refresh" /> 유사 태그 추천</span><span>유사하지만 다른 태그 추천</span></div>
             </div>
           </div>
         </div>
@@ -949,16 +949,16 @@ async function studioClient(): Promise<StudioClient> {
 
 const subTabs: SubTab[] = [
   // keywords: 사용자 검색 시 라벨 외에도 매칭할 한/영 키워드들
-  { id: 'general',   label: 'GENERAL',   icon: '⚙️', keywords: 'general 일반 시스템 코어 버전' },
-  { id: 'api',       label: 'NETWORK',   icon: '🌐', keywords: 'network api 네트워크 webui comfy url 백엔드 연결' },
-  { id: 'runtimes',  label: 'RUNTIMES / ENGINES', icon: '🖥️', keywords: 'runtime engine forge neo comfyui install update start stop extension 확장 설치 업데이트 실행' },
-  { id: 'forge',     label: 'FORGE',     icon: '🧩', keywords: 'forge neo checkpoint model lora vae te text encoder 경로 폴더 모델 로라' },
-  { id: 'prompt',    label: 'LOGIC',     icon: '📝', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
-  { id: 'tabs',      label: 'WORKSPACE', icon: '🗂️', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
-  { id: 'shortcuts', label: 'HOTKEYS',   icon: '⌨️', keywords: 'hotkeys shortcuts 단축키 키보드 ctrl shift z y s g' },
-  { id: 'guard',     label: 'GUARD',     icon: '🛡️', keywords: 'anima guard 가드 자동 해상도 제한 최대 면적 픽셀 긴 변 resolution cap vram oom' },
-  { id: 'defaults',  label: 'DEFAULTS',  icon: '🎛️', keywords: 'defaults 기본값 t2i i2i inpaint 해상도 steps cfg sampler 시드' },
-  { id: 'ollama',    label: 'AI ASSIST', icon: '🧠', keywords: 'ollama ai assist 어시스트 자동완성 번역' },
+  { id: 'general',   label: '일반',       icon: 'settings', keywords: 'general 일반 시스템 코어 버전' },
+  { id: 'api',       label: '네트워크',   icon: 'globe', keywords: 'network api 네트워크 webui comfy url 백엔드 연결' },
+  { id: 'runtimes',  label: '런타임 · 엔진', icon: 'cpu', keywords: 'runtime engine forge neo comfyui install update start stop extension 확장 설치 업데이트 실행' },
+  { id: 'forge',     label: 'Forge',      icon: 'package', keywords: 'forge neo checkpoint model lora vae te text encoder 경로 폴더 모델 로라' },
+  { id: 'prompt',    label: '로직',       icon: 'pencil', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
+  { id: 'tabs',      label: '워크스페이스', icon: 'layers', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
+  { id: 'shortcuts', label: '단축키',     icon: 'keyboard', keywords: 'hotkeys shortcuts 단축키 키보드 ctrl shift z y s g' },
+  { id: 'guard',     label: '가드',       icon: 'shield', keywords: 'anima guard 가드 자동 해상도 제한 최대 면적 픽셀 긴 변 resolution cap vram oom' },
+  { id: 'defaults',  label: '기본값',     icon: 'sliders', keywords: 'defaults 기본값 t2i i2i inpaint 해상도 steps cfg sampler 시드' },
+  { id: 'ollama',    label: 'AI 어시스트', icon: 'sparkles', keywords: 'ollama ai assist 어시스트 자동완성 번역' },
 ]
 const currentTab = ref('general')
 const settingsSearch = ref('')
@@ -2238,7 +2238,7 @@ function handleOllamaModels(json: string) {
   width: 240px; background: var(--bg-secondary); border-right: 1px solid var(--border);
   padding: 24px 12px; display: flex; flex-direction: column; gap: 4px;
 }
-.nav-header { font-size: var(--fs-label); font-weight: 900; color: var(--text-muted); letter-spacing: 2px; padding: 0 12px 12px; }
+.nav-header { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; padding: 0 12px 12px; }
 .settings-search-wrap { position: relative; padding: 0 12px 12px; }
 .settings-search {
   width: 100%; padding: 7px 28px 7px 10px;
@@ -2259,12 +2259,13 @@ function handleOllamaModels(json: string) {
   border-radius: var(--radius-base); display: flex; align-items: center; gap: 12px;
   cursor: pointer; transition: var(--transition);
 }
-.nav-item .icon { font-size: 16px; opacity: 0.5; transition: var(--transition); }
-.nav-item .label { font-size: 11px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; }
+/* 이모지였을 땐 opacity 로 죽였지만, 선 아이콘은 흐려지면 형태가 안 읽힌다 — 색으로 구분한다 */
+.nav-item .icon { flex-shrink: 0; color: var(--text-muted); transition: var(--transition); }
+.nav-item .label { font-size: var(--fs-body); font-weight: var(--fw-medium); color: var(--text-secondary); letter-spacing: 0; }
 .nav-item:hover { background: var(--bg-input); }
+.nav-item:hover .icon, .nav-item:hover .label { color: var(--text-primary); }
 .nav-item.active { background: var(--accent-dim); }
-.nav-item.active .icon { opacity: 1; }
-.nav-item.active .label { color: var(--accent); }
+.nav-item.active .icon, .nav-item.active .label { color: var(--accent); }
 
 /* Content Area */
 .settings-body { flex: 1; overflow-y: auto; padding: 40px; }
@@ -2276,19 +2277,19 @@ function handleOllamaModels(json: string) {
 .glass-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 24px; }
 
 .info-row { display: flex; justify-content: space-between; align-items: center; }
-.desc { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
-.val-badge { background: var(--border); padding: 4px 12px; border-radius: var(--radius-pill); font-size: var(--fs-label); font-weight: 900; color: var(--accent); }
+.desc { font-size: 12px; font-weight: var(--fw-bold); color: var(--text-secondary); }
+.val-badge { background: var(--border); padding: 4px 12px; border-radius: var(--radius-pill); font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); }
 
 .input-stack { display: flex; flex-direction: column; gap: 16px; }
 .input-unit { position: relative; }
-.unit-label { position: absolute; left: 12px; top: -8px; background: var(--bg-primary); padding: 0 6px; font-size: var(--fs-label); font-weight: 900; color: var(--text-muted); letter-spacing: 1px; }
+.unit-label { position: absolute; left: 12px; top: -8px; background: var(--bg-primary); padding: 0 6px; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; }
 
 /* Authenticated generation API gateway */
 .generation-api-section { width: 100%; }
 .generation-api-security {
   background: rgba(34,211,238,.07); border-color: rgba(34,211,238,.3); color: var(--text-secondary);
 }
-.generation-api-security strong { display: block; margin-bottom: 4px; color: #22d3ee; letter-spacing: 1px; }
+.generation-api-security strong { display: block; margin-bottom: 4px; color: #22d3ee; letter-spacing: 0; }
 .generation-api-security b { color: var(--text-primary); }
 .generation-api-readonly {
   background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.3); color: var(--text-secondary);
@@ -2296,12 +2297,12 @@ function handleOllamaModels(json: string) {
 .generation-api-readonly strong { margin-right: 5px; color: #fbbf24; }
 .generation-api-card { border-color: rgba(34,211,238,.17); }
 .generation-api-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-.generation-api-eyebrow { color: #22d3ee; font-size: var(--fs-label); font-weight: 900; letter-spacing: 1.6px; }
+.generation-api-eyebrow { color: #22d3ee; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .generation-api-header h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 18px; }
 .generation-api-badges { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .generation-api-badge {
   padding: 4px 7px; border: 1px solid var(--border); border-radius: var(--radius-pill);
-  background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); font-weight: 900; letter-spacing: .55px;
+  background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
 .generation-api-badge.on { border-color: rgba(74,222,128,.42); background: rgba(74,222,128,.09); color: #4ade80; }
 .generation-api-toggle-row {
@@ -2309,13 +2310,13 @@ function handleOllamaModels(json: string) {
   margin-top: 18px; padding: 12px 14px; border-radius: 8px; background: var(--bg-input);
 }
 .generation-api-toggle-row > div { display: flex; flex-direction: column; gap: 3px; }
-.generation-api-toggle-row strong { color: var(--text-secondary); font-size: var(--fs-label); letter-spacing: .5px; }
+.generation-api-toggle-row strong { color: var(--text-secondary); font-size: var(--fs-label); letter-spacing: 0; }
 .generation-api-toggle-row small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.4; }
 .generation-api-toggle-row :deep(.tsw:disabled) { opacity: .45; cursor: not-allowed; }
 .generation-api-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .generation-api-field { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .generation-api-field > span, .generation-api-endpoint > span {
-  color: var(--text-muted); font-size: var(--fs-label); font-weight: 900; letter-spacing: 1px;
+  color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
 .generation-api-field > small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.4; }
 .generation-api-field input, .generation-api-field select {
@@ -2353,7 +2354,7 @@ function handleOllamaModels(json: string) {
 }
 .generation-api-target-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .generation-api-target-head > strong { color: var(--text-primary); font-size: 11px; }
-.generation-api-enabled { color: var(--text-muted); font-size: var(--fs-label); font-weight: 900; letter-spacing: .7px; }
+.generation-api-enabled { color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .generation-api-enabled input { accent-color: #22d3ee; vertical-align: -2px; }
 .generation-api-target-actions { display: flex; justify-content: flex-end; gap: 7px; }
 .generation-api-jobs { display: flex; flex-direction: column; gap: 7px; }
@@ -2366,7 +2367,7 @@ function handleOllamaModels(json: string) {
 .generation-api-job code { overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); font-size: var(--fs-label); white-space: nowrap; }
 .generation-api-job-state {
   flex-shrink: 0; padding: 3px 7px; border-radius: var(--radius-pill); background: var(--border);
-  color: var(--text-muted); font-size: var(--fs-label); font-weight: 900; letter-spacing: .6px;
+  color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
 .generation-api-job-state.completed { background: rgba(74,222,128,.1); color: #4ade80; }
 .generation-api-job-state.running { background: rgba(96,165,250,.1); color: #60a5fa; }
@@ -2377,7 +2378,7 @@ function handleOllamaModels(json: string) {
 .runtime-safety-warning {
   background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.35);
 }
-.runtime-safety-warning strong { display: block; color: #f87171; letter-spacing: 1px; margin-bottom: 3px; }
+.runtime-safety-warning strong { display: block; color: #f87171; letter-spacing: 0; margin-bottom: 3px; }
 .runtime-safety-warning b { color: var(--text-primary); }
 .runtime-readonly-warning {
   background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.3); color: var(--text-secondary);
@@ -2397,8 +2398,8 @@ function handleOllamaModels(json: string) {
   background: var(--bg-input); color: var(--text-secondary); cursor: pointer;
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
 }
-.runtime-primary-option span { font-size: 11px; font-weight: 800; }
-.runtime-primary-option strong { color: var(--text-muted); font-size: var(--fs-label); letter-spacing: .8px; }
+.runtime-primary-option span { font-size: 11px; font-weight: var(--fw-bold); }
+.runtime-primary-option strong { color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 0; }
 .runtime-primary-option:hover:not(:disabled), .runtime-primary-option.selected {
   border-color: #60a5fa; background: rgba(96,165,250,.12); color: #93c5fd;
 }
@@ -2413,12 +2414,12 @@ function handleOllamaModels(json: string) {
 .runtime-card-forge { --runtime-accent: #a78bfa; }
 .runtime-card-comfyui { --runtime-accent: #22d3ee; }
 .runtime-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
-.runtime-eyebrow { color: var(--runtime-accent); font-size: var(--fs-label); font-weight: 900; letter-spacing: 1.6px; }
+.runtime-eyebrow { color: var(--runtime-accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .runtime-card h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 20px; letter-spacing: -.2px; }
 .runtime-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; max-width: 360px; }
 .runtime-badge {
   padding: 4px 7px; border: 1px solid var(--border); border-radius: var(--radius-pill);
-  background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); font-weight: 900; letter-spacing: .55px;
+  background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
 .runtime-badge.on { border-color: rgba(96,165,250,.45); background: rgba(96,165,250,.11); color: #60a5fa; }
 .runtime-badge.health.on { border-color: rgba(74,222,128,.45); background: rgba(74,222,128,.1); color: #4ade80; }
@@ -2437,31 +2438,31 @@ function handleOllamaModels(json: string) {
   background: var(--bg-input); display: flex; flex-direction: column; gap: 4px;
 }
 .runtime-meta-wide { grid-column: 1 / -1; }
-.runtime-meta > span { color: var(--text-muted); font-size: var(--fs-label); font-weight: 900; letter-spacing: 1px; }
+.runtime-meta > span { color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .runtime-meta code, .runtime-meta strong {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--text-secondary); font-family: 'Consolas', monospace; font-size: var(--fs-label); font-weight: 700;
+  color: var(--text-secondary); font-family: 'Consolas', monospace; font-size: var(--fs-label); font-weight: var(--fw-bold);
 }
 .runtime-meta strong.update-ready { color: #fbbf24; }
 .runtime-model-paths > div { min-width: 0; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 8px; align-items: center; }
 .runtime-model-paths > div + div { margin-top: 4px; }
-.runtime-model-paths > div strong { color: var(--runtime-accent); font-size: var(--fs-label); letter-spacing: .5px; }
+.runtime-model-paths > div strong { color: var(--runtime-accent); font-size: var(--fs-label); letter-spacing: 0; }
 .runtime-install-source b, .runtime-dependency-note b { color: var(--text-primary); }
 .runtime-toggle-row {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
   margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: var(--bg-input);
 }
 .runtime-toggle-row > div { display: flex; flex-direction: column; gap: 3px; }
-.runtime-toggle-row strong { color: var(--text-secondary); font-size: var(--fs-label); letter-spacing: .5px; }
+.runtime-toggle-row strong { color: var(--text-secondary); font-size: var(--fs-label); letter-spacing: 0; }
 .runtime-toggle-row small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.4; }
 .runtime-toggle-row :deep(.tsw:disabled) { opacity: .45; cursor: not-allowed; }
 .runtime-subsection { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .runtime-subheading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 9px; }
-.runtime-subheading h3 { margin: 0; color: var(--text-primary); font-size: var(--fs-label); letter-spacing: .8px; }
+.runtime-subheading h3 { margin: 0; color: var(--text-primary); font-size: var(--fs-label); letter-spacing: 0; }
 .runtime-subheading p { margin: 3px 0 0; color: var(--text-muted); font-size: var(--fs-label); line-height: 1.45; }
 .runtime-unsaved, .extension-update-badge {
   flex-shrink: 0; padding: 3px 6px; border-radius: 4px; background: rgba(251,191,36,.12);
-  color: #fbbf24; font-size: var(--fs-label); font-weight: 900; letter-spacing: .6px;
+  color: #fbbf24; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
 .runtime-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; }
 .runtime-install-path-control { grid-template-columns: minmax(0, 1fr) auto auto auto; }
@@ -2514,14 +2515,14 @@ function handleOllamaModels(json: string) {
 .forge-readonly-warning { margin-top: 10px; border-color: rgba(245,158,11,.28); }
 .forge-readonly-warning strong { color: #fbbf24; margin-right: 5px; }
 .forge-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.forge-scanning { color: var(--accent); font-size: var(--fs-label); font-weight: 900; letter-spacing: 1px; }
+.forge-scanning { color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .forge-path-list { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
 .forge-path-row {
   padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-base);
   background: var(--bg-input);
 }
 .forge-path-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.forge-path-label > span { color: var(--text-primary); font-size: 11px; font-weight: 900; letter-spacing: .7px; }
+.forge-path-label > span { color: var(--text-primary); font-size: 11px; font-weight: var(--fw-bold); letter-spacing: 0; }
 .forge-path-label small { color: var(--text-muted); font-size: var(--fs-label); text-align: right; }
 .forge-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .forge-path-control input {
@@ -2537,7 +2538,7 @@ function handleOllamaModels(json: string) {
 .path-ok { color: #4ade80; }
 .path-missing, .path-error { color: #f87171; }
 .path-error { width: 100%; }
-.env-lock { padding: 2px 6px; border-radius: 4px; background: rgba(96,165,250,.12); color: #60a5fa; font-weight: 800; }
+.env-lock { padding: 2px 6px; border-radius: 4px; background: rgba(96,165,250,.12); color: #60a5fa; font-weight: var(--fw-bold); }
 .forge-actions { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 10px; }
 .forge-status { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.5; }
 
@@ -2548,7 +2549,7 @@ function handleOllamaModels(json: string) {
   cursor: pointer; transition: var(--transition);
 }
 .toggle-row:hover { background: var(--bg-button); }
-.toggle-row span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.toggle-row span { font-size: 13px; font-weight: var(--fw-bold); color: var(--text-secondary); }
 /* 체크박스 → 토글 스위치 */
 .toggle-row input[type="checkbox"] {
   appearance: none; -webkit-appearance: none; margin: 0; flex-shrink: 0;
@@ -2575,7 +2576,7 @@ function handleOllamaModels(json: string) {
 }
 .drag-item:active { cursor: grabbing; background: var(--bg-button); scale: 0.98; }
 .drag-item .handle { color: var(--text-muted); }
-.drag-item .name { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--text-primary); }
+.drag-item .name { font-size: 12px; font-weight: var(--fw-bold); letter-spacing: 0; color: var(--text-primary); }
 
 .shortcut-grid { display: flex; flex-direction: column; gap: 4px; }
 .s-row {
@@ -2585,7 +2586,7 @@ function handleOllamaModels(json: string) {
 }
 .s-row:hover { background: rgba(255, 255, 255, 0.025); }
 .s-row span { font-size: 13px; color: var(--text-secondary); }
-.hjm-select { background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 12px; font-weight: 700; padding: 4px 10px; cursor: pointer; }
+.hjm-select { background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 12px; font-weight: var(--fw-bold); padding: 4px 10px; cursor: pointer; }
 /* kbd 단축키 표시 — style.css의 .keycap 스타일 토큰을 그대로 사용
    (전역 일관성 위해 클래스 없이도 키캡 모양이 나오도록) */
 kbd {
@@ -2601,9 +2602,9 @@ kbd {
   color: var(--keycap-color);
   font-family: 'Consolas', 'JetBrains Mono', monospace;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   line-height: 1;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   vertical-align: middle;
 }
 .hint-banner {
@@ -2618,7 +2619,7 @@ kbd {
 .defaults-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .def-field { display: flex; flex-direction: column; gap: 3px; }
 .def-field-wide { display: flex; flex-direction: column; gap: 6px; }
-.def-field-wide span { font-size: 11px; color: var(--text-secondary); font-weight: 700; }
+.def-field-wide span { font-size: 11px; color: var(--text-secondary); font-weight: var(--fw-bold); }
 .guard-fields-disabled { opacity: 0.45; }
 .w-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
 
@@ -2627,7 +2628,7 @@ kbd {
 .scale-btn {
   flex: 1; padding: 8px 6px; background: var(--bg-input);
   border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text-secondary); font-size: 11px; font-weight: 700;
+  color: var(--text-secondary); font-size: 11px; font-weight: var(--fw-bold);
   cursor: pointer; transition: all 0.15s; font-family: 'Consolas', monospace;
 }
 .scale-btn:hover { background: var(--bg-button); color: var(--text-primary); border-color: var(--text-muted); }
@@ -2635,14 +2636,14 @@ kbd {
   background: var(--accent-dim); border-color: var(--accent); color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-dim);
 }
-.def-field span { font-size: var(--fs-label); font-weight: 700; color: var(--text-muted); }
-.sync-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 4px; font-size: var(--fs-label); font-weight: 900; margin-left: 8px; }
+.def-field span { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); }
+.sync-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 4px; font-size: var(--fs-label); font-weight: var(--fw-bold); margin-left: 8px; }
 .def-field input, .def-field select { padding: 8px 10px; font-size: 12px; }
 .ollama-unload-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer; line-height: 1.4; }
 .ollama-unload-row input { margin-top: 2px; accent-color: var(--accent); }
 
 /* Ollama */
-.model-select { width: 100%; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-primary); font-size: 13px; font-weight: 600; }
+.model-select { width: 100%; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-primary); font-size: 13px; font-weight: var(--fw-bold); }
 .model-select:focus { border-color: var(--accent); outline: none; }
 
 .recommend-grid { display: flex; flex-direction: column; gap: 8px; }
@@ -2653,7 +2654,7 @@ kbd {
 }
 .rec-item:hover { border-color: #444; }
 .rec-item.best { border-color: var(--accent-dim); background: rgba(250, 204, 21, 0.03); }
-.rec-name { font-size: 13px; font-weight: 800; color: var(--text-primary); min-width: 120px; font-family: 'Consolas', monospace; }
+.rec-name { font-size: 13px; font-weight: var(--fw-bold); color: var(--text-primary); min-width: 120px; font-family: 'Consolas', monospace; }
 .rec-item.best .rec-name { color: var(--accent); }
 .rec-desc { font-size: 11px; color: var(--text-muted); text-align: right; }
 .rec-note { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
@@ -2679,7 +2680,7 @@ kbd {
   }
   .nav-header, .settings-search-wrap, .nav-empty { grid-column: 1 / -1; }
   .nav-item { height: 38px; padding: 0 10px; }
-  .nav-item .label { font-size: var(--fs-label); letter-spacing: .5px; }
+  .nav-item .label { font-size: var(--fs-label); letter-spacing: 0; }
   .settings-body { padding: 16px 12px 28px; }
   .glass-card { padding: 17px; }
   .generation-api-header { flex-direction: column; }

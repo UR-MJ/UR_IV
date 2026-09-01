@@ -54,10 +54,10 @@
             <div class="lm-item-main">
               <div class="lm-name-row">
                 <div class="lm-name" :title="l.runtimeName || l.name">{{ l.label || l.name }}</div>
-                <span v-if="isPrimaryLora(l)" class="lm-source-badge main">MAIN</span>
+                <span v-if="isPrimaryLora(l)" class="lm-source-badge main">메인</span>
                 <span v-if="l.source" class="lm-source-badge">{{ l.sourceName || sourceLabel(l.source) }}</span>
                 <span v-if="l.group && !isPrimaryLora(l)" class="lm-source-badge secondary">{{ groupLabel(l.group) }}</span>
-                <span v-if="l.nameConflict" class="lm-source-badge conflict">NAME CONFLICT</span>
+                <span v-if="l.nameConflict" class="lm-source-badge conflict">이름 충돌</span>
               </div>
               <div v-if="l.backendAvailable === false" class="lm-unavailable">
                 현재 실행 백엔드에서는 이 LoRA 경로를 사용할 수 없습니다.
@@ -273,13 +273,13 @@ onUnmounted(() => {
 .lm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 3200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .lm-modal { width: min(840px, 94vw); height: min(840px, 92vh); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 .lm-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.lm-header h3 { font-size: 17px; font-weight: 800; color: var(--text-primary); }
+.lm-header h3 { font-size: 17px; font-weight: var(--fw-bold); color: var(--text-primary); }
 .lm-sub { font-size: 11px; color: var(--text-muted); }
 .lm-close { width: 30px; height: 30px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); cursor: pointer; }
 .lm-close:hover { color: var(--text-primary); border-color: var(--accent); }
 .lm-head-actions { display: flex; align-items: center; gap: 6px; }
 .lm-modetab {
-  height: 30px; padding: 0 12px; font-size: var(--fs-label); font-weight: 800;
+  height: 30px; padding: 0 12px; font-size: var(--fs-label); font-weight: var(--fw-bold);
   background: var(--bg-button); border: 1px solid var(--border);
   border-radius: var(--radius-base); color: var(--text-muted); cursor: pointer;
 }
@@ -306,21 +306,21 @@ onUnmounted(() => {
   padding: 9px 11px; background: var(--bg-input); border-bottom: 1px solid var(--border);
 }
 .lm-section-header > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.lm-section-header strong { color: var(--text-primary); font-size: var(--fs-label); letter-spacing: .8px; }
+.lm-section-header strong { color: var(--text-primary); font-size: var(--fs-label); letter-spacing: 0; }
 .lm-section-header span { color: var(--text-muted); font-size: var(--fs-label); }
 .lm-section-count {
   flex-shrink: 0; min-width: 20px; padding: 2px 6px; border-radius: 8px;
-  background: var(--bg-button); color: var(--text-secondary) !important; text-align: center; font-weight: 800;
+  background: var(--bg-button); color: var(--text-secondary) !important; text-align: center; font-weight: var(--fw-bold);
 }
 .lm-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-bottom: 1px solid var(--border); }
 .lm-item:last-child { border-bottom: none; }
 .lm-item.unavailable { opacity: .58; }
 .lm-item-main { flex: 1; min-width: 0; }
 .lm-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; }
-.lm-name { min-width: 0; flex: 1; font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-name { min-width: 0; flex: 1; font-size: 12px; font-weight: var(--fw-bold); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lm-source-badge {
   flex-shrink: 0; padding: 2px 5px; border: 1px solid var(--border); border-radius: 7px;
-  background: var(--bg-input); color: var(--text-muted); font-size: 7px; font-weight: 900; letter-spacing: .4px;
+  background: var(--bg-input); color: var(--text-muted); font-size: 7px; font-weight: var(--fw-bold); letter-spacing: 0;
 }
 .lm-source-badge.main { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); color: #60a5fa; }
 .lm-source-badge.secondary { border-color: rgba(34,211,238,.3); background: rgba(34,211,238,.08); color: #67e8f9; }
@@ -329,17 +329,17 @@ onUnmounted(() => {
 .lm-triggers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .lm-tw { font-size: var(--fs-label); padding: 1px 6px; border-radius: 7px; background: var(--bg-button); color: var(--text-muted); }
 .lm-weight { width: 64px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 5px 6px; color: var(--text-primary); font-size: 12px; text-align: center; }
-.lm-add { background: var(--accent); color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.lm-add { background: var(--accent); color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: var(--fw-bold); padding: 6px 12px; cursor: pointer; white-space: nowrap; }
 .lm-add:hover { background: var(--accent-hover); }
 .lm-add:disabled, .lm-weight:disabled { opacity: .5; cursor: not-allowed; }
 .lm-batch { margin: 4px 20px; border: 1px solid var(--border); border-radius: var(--radius-base); }
-.lm-batch > summary { padding: 8px 12px; font-size: 11px; font-weight: 700; color: var(--text-secondary); cursor: pointer; }
+.lm-batch > summary { padding: 8px 12px; font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); cursor: pointer; }
 .lm-batch-text { width: calc(100% - 24px); margin: 0 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; color: var(--text-primary); font-size: 11px; resize: vertical; }
-.lm-batch-btn { margin: 8px 12px; background: var(--bg-button); border: 1px solid var(--accent); border-radius: 6px; color: var(--accent); font-size: 11px; font-weight: 700; padding: 5px 12px; cursor: pointer; }
+.lm-batch-btn { margin: 8px 12px; background: var(--bg-button); border: 1px solid var(--accent); border-radius: 6px; color: var(--accent); font-size: 11px; font-weight: var(--fw-bold); padding: 5px 12px; cursor: pointer; }
 .lm-footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
 .lm-count { font-size: 11px; color: var(--text-muted); }
 .lm-foot-spacer { flex: 1; }
-.lm-done { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 12px; font-weight: 700; padding: 9px 16px; cursor: pointer; }
+.lm-done { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: 12px; font-weight: var(--fw-bold); padding: 9px 16px; cursor: pointer; }
 .lm-done:hover { color: var(--text-primary); border-color: var(--accent); }
 @media (max-width: 520px) {
   .lm-header { align-items: flex-start; padding: 12px; }
