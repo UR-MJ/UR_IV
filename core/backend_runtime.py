@@ -1,0 +1,2009 @@
+"""App-owned Forge Neo and ComfyUI runtime lifecycle management.
+
+This module deliberately sits above :mod:`backends`: the existing backend
+classes own the HTTP generation protocol, while ``BackendRuntimeManager`` owns
+only app-managed source trees, virtual environments and child processes.
+
+The public interface is intentionally small: ``snapshot()``, ``configure()``
+and ``execute()``.  Git, package installation, process creation and readiness
+checks remain replaceable behind ``LocalRuntimeAdapter`` for deterministic
+tests.
+"""
+from __future__ import annotations
+
+import configparser
+import json
+import os
+import queue
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import threading
+import time
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Mapping, Protocol, Sequence
+from urllib.parse import urlparse, urlsplit, urlunsplit
+
+from utils.atomic_json import atomic_write_json, load_json_safe
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_PATH = PROJECT_ROOT / "user_data" / "backend_runtime.json"
+
+FORGE_REPOSITORY = "https://github.com/Haoming02/sd-webui-forge-classic.git"
+COMFYUI_REPOSITORY = "https://github.com/Comfy-Org/ComfyUI.git"
+
+ENGINE_ALIASES = {
+    "forge": "forge",
+    "forge_neo": "forge",
+    "forge-neo": "forge",
+    "comfy": "comfyui",
+    "comfyui": "comfyui",
+}
+
+
+@dataclass(frozen=True)
+class EngineDefinition:
+    key: str
+    name: str
+    repository: str
+    branch: str
+    protocol: str
+    preferred_port: int
+    health_path: str
+    extension_folder: str
+    entrypoint: str
+
+
+ENGINE_DEFINITIONS: dict[str, EngineDefinition] = {
+    "forge": EngineDefinition(
+        key="forge",
+        name="Forge Neo",
+        repository=FORGE_REPOSITORY,
+        branch="neo",
+        protocol="webui",
+        preferred_port=17860,
+        health_path="/sdapi/v1/samplers",
+        extension_folder="extensions",
+        entrypoint="launch.py",
+    ),
+    "comfyui": EngineDefinition(
+        key="comfyui",
+        name="ComfyUI",
+        repository=COMFYUI_REPOSITORY,
+        branch="master",
+        protocol="comfyui",
+        preferred_port=18188,
+        health_path="/system_stats",
+        extension_folder="custom_nodes",
+        entrypoint="main.py",
+    ),
+}
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _default_runtime_root() -> Path:
+    override = str(os.environ.get("AISTUDIO_MANAGED_BACKENDS_DIR", "") or "").strip()
+    if override:
+        return Path(os.path.abspath(os.path.expandvars(os.path.expanduser(override))))
+    return PROJECT_ROOT / "user_data" / "managed_backends"
+
+
+def _canonical_engine(value: str) -> str:
+    key = ENGINE_ALIASES.get(str(value or "").strip().casefold(), "")
+    if not key:
+        raise BackendRuntimeError("INVALID_ENGINE", f"지원하지 않는 엔진입니다: {value}")
+    return key
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+class BackendRuntimeError(RuntimeError):
+    """Structured lifecycle error safe to send across QWebChannel."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        stage: str = "",
+        retryable: bool = False,
+        details: Mapping[str, Any] | None = None,
+    ):
+        self.code = str(code)
+        self.stage = str(stage or "")
+        self.retryable = bool(retryable)
+        self.details = dict(details or {})
+        super().__init__(str(message))
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "stage": self.stage,
+            "retryable": self.retryable,
+            "message": str(self),
+            "details": self.details,
+        }
+
+
+@dataclass
+class CommandResult:
+    returncode: int
+    output: str = ""
+
+
+class ProcessHandle(Protocol):
+    pid: int
+
+    def poll(self) -> int | None: ...
+
+    def terminate(self) -> None: ...
+
+    def wait(self, timeout: float | None = None) -> int: ...
+
+    def kill(self) -> None: ...
+
+
+class RuntimeAdapter(Protocol):
+    def which(self, executable: str) -> str | None: ...
+
+    def run(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path | None = None,
+        env: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+        on_line: Callable[[str], None] | None = None,
+    ) -> CommandResult: ...
+
+    def start(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        env: Mapping[str, str],
+        log_path: Path,
+    ) -> ProcessHandle: ...
+
+    def probe(self, url: str, path: str, timeout: float = 2.0) -> bool: ...
+
+    def port_available(self, host: str, port: int) -> bool: ...
+
+
+class LocalRuntimeAdapter:
+    """Production adapter for local commands, processes and loopback HTTP."""
+
+    def __init__(self) -> None:
+        self._command_lock = threading.Lock()
+        self._commands: set[subprocess.Popen] = set()
+        self._shutdown = threading.Event()
+
+    @staticmethod
+    def _terminate_command(process: subprocess.Popen) -> None:
+        if process.poll() is not None:
+            return
+        if os.name == "nt":
+            # The PID is taken only from a live Popen created by this adapter.
+            # /T also stops pip/git/bootstrap descendants instead of orphaning them.
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                check=False,
+            )
+        else:
+            try:
+                process.terminate()
+            except Exception:
+                pass
+        try:
+            process.wait(timeout=5)
+        except Exception:
+            try:
+                process.kill()
+            except Exception:
+                pass
+
+    def shutdown(self) -> None:
+        """Cancel command trees created by this adapter; never consult PID files."""
+        self._shutdown.set()
+        with self._command_lock:
+            commands = tuple(self._commands)
+        for process in commands:
+            self._terminate_command(process)
+
+    def which(self, executable: str) -> str | None:
+        return shutil.which(executable)
+
+    def run(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path | None = None,
+        env: Mapping[str, str] | None = None,
+        timeout: float | None = None,
+        on_line: Callable[[str], None] | None = None,
+    ) -> CommandResult:
+        if self._shutdown.is_set():
+            raise BackendRuntimeError(
+                "COMMAND_CANCELLED", "앱 종료 요청으로 명령 실행을 취소했습니다", stage="command"
+            )
+        command = [str(item) for item in argv]
+        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=str(cwd) if cwd else None,
+                env=dict(env) if env is not None else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=flags,
+            )
+        except OSError as exc:
+            raise BackendRuntimeError(
+                "COMMAND_START_FAILED",
+                f"명령을 시작하지 못했습니다: {command[0]}",
+                stage="command",
+                details={"reason": str(exc)},
+            ) from exc
+        with self._command_lock:
+            self._commands.add(process)
+
+        try:
+            if self._shutdown.is_set():
+                self._terminate_command(process)
+                raise BackendRuntimeError(
+                    "COMMAND_CANCELLED", "앱 종료 요청으로 명령 실행을 취소했습니다",
+                    stage="command",
+                )
+
+            lines: list[str] = []
+            started = time.monotonic()
+            output_queue: queue.Queue[str | None] = queue.Queue()
+            assert process.stdout is not None
+
+            def _read_output() -> None:
+                try:
+                    for raw_line in iter(process.stdout.readline, ""):
+                        output_queue.put(raw_line)
+                finally:
+                    output_queue.put(None)
+
+            reader = threading.Thread(target=_read_output, daemon=True, name="backend-command-output")
+            reader.start()
+            stream_done = False
+            while not stream_done or process.poll() is None:
+                try:
+                    line = output_queue.get(timeout=0.1)
+                except queue.Empty:
+                    line = ""
+                if line is None:
+                    stream_done = True
+                elif line:
+                    clean = line.rstrip("\r\n")
+                    lines.append(clean)
+                    if len(lines) > 500:
+                        del lines[:100]
+                    if on_line:
+                        on_line(clean)
+                if self._shutdown.is_set():
+                    self._terminate_command(process)
+                    raise BackendRuntimeError(
+                        "COMMAND_CANCELLED", "앱 종료 요청으로 명령 실행을 취소했습니다",
+                        stage="command",
+                    )
+                if timeout is not None and time.monotonic() - started > timeout:
+                    self._terminate_command(process)
+                    raise BackendRuntimeError(
+                        "COMMAND_TIMEOUT",
+                        f"명령 실행 제한 시간({int(timeout)}초)을 초과했습니다",
+                        stage="command",
+                        retryable=True,
+                    )
+            reader.join(timeout=1)
+            return CommandResult(process.returncode or 0, "\n".join(lines))
+        finally:
+            with self._command_lock:
+                self._commands.discard(process)
+            try:
+                if process.stdout is not None:
+                    process.stdout.close()
+            except Exception:
+                pass
+
+    def start(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        env: Mapping[str, str],
+        log_path: Path,
+    ) -> ProcessHandle:
+        if self._shutdown.is_set():
+            raise BackendRuntimeError(
+                "PROCESS_START_CANCELLED", "앱 종료 요청으로 백엔드 실행을 취소했습니다",
+                stage="launch",
+            )
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_handle = open(log_path, "a", encoding="utf-8", buffering=1)
+        flags = 0
+        if os.name == "nt":
+            flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        try:
+            process = subprocess.Popen(
+                [str(item) for item in argv],
+                cwd=str(cwd),
+                env=dict(env),
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                creationflags=flags,
+            )
+        except Exception:
+            log_handle.close()
+            raise
+        # Keep the file object alive with the process without exposing it publicly.
+        setattr(process, "_aistudio_log_handle", log_handle)
+        return process
+
+    def probe(self, url: str, path: str, timeout: float = 2.0) -> bool:
+        try:
+            import requests
+
+            response = requests.get(f"{url.rstrip('/')}{path}", timeout=timeout)
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def port_available(self, host: str, port: int) -> bool:
+        family = socket.AF_INET6 if ":" in host else socket.AF_INET
+        try:
+            with socket.socket(family, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind((host, int(port)))
+            return True
+        except OSError:
+            return False
+
+
+@dataclass
+class _OwnedProcess:
+    process: ProcessHandle
+    endpoint: str
+    port: int
+    nonce: str
+    started_at: str
+    log_path: Path
+
+
+ProgressCallback = Callable[[dict[str, Any]], None]
+
+
+class BackendRuntimeManager:
+    """Deep module owning both managed engine lifecycles behind one interface."""
+
+    SCHEMA_VERSION = 1
+
+    def __init__(
+        self,
+        *,
+        config_path: Path | str | None = None,
+        runtime_root: Path | str | None = None,
+        adapter: RuntimeAdapter | None = None,
+        health_timeout: float = 180.0,
+    ):
+        self.config_path = Path(config_path or CONFIG_PATH)
+        self.runtime_root = Path(runtime_root or _default_runtime_root()).resolve()
+        self.adapter: RuntimeAdapter = adapter or LocalRuntimeAdapter()
+        self.health_timeout = float(health_timeout)
+        self._state_lock = threading.RLock()
+        # An operation for either engine may stop/restart the other engine.  Keep
+        # the entire managed-runtime transaction linearizable across engines;
+        # per-engine locks alone allow UPDATE/extension restart to interleave with
+        # a cross-engine START and leave the app pointing at a stopped endpoint.
+        self._operation_gate = threading.Lock()
+        self._operation_locks = {key: threading.Lock() for key in ENGINE_DEFINITIONS}
+        self._process_lock = threading.RLock()
+        self._start_gate = threading.Lock()
+        self._shutdown_requested = threading.Event()
+        self._processes: dict[str, _OwnedProcess] = {}
+        self._start_cancel = {key: threading.Event() for key in ENGINE_DEFINITIONS}
+        self._healthy: dict[str, bool] = {key: False for key in ENGINE_DEFINITIONS}
+        self._busy: dict[str, bool] = {key: False for key in ENGINE_DEFINITIONS}
+        self._last_messages: dict[str, str] = {key: "" for key in ENGINE_DEFINITIONS}
+        self.runtime_root.mkdir(parents=True, exist_ok=True)
+        self._state = self._load_state()
+        self._cleanup_inactive_releases()
+
+    # ------------------------------------------------------------------ store
+
+    def _default_engine_state(self, definition: EngineDefinition) -> dict[str, Any]:
+        return {
+            "release": "",
+            "autoStart": False,
+            "port": definition.preferred_port,
+            "extensionDir": "",
+            "remoteVersion": "",
+            "remoteCommit": "",
+            "lastChecked": "",
+            "lastError": "",
+        }
+
+    def _load_state(self) -> dict[str, Any]:
+        raw = load_json_safe(str(self.config_path), {})
+        if not isinstance(raw, dict):
+            raw = {}
+        engines = raw.get("engines")
+        if not isinstance(engines, dict):
+            engines = {}
+        normalised: dict[str, Any] = {
+            "schemaVersion": self.SCHEMA_VERSION,
+            "activeEngine": ENGINE_ALIASES.get(
+                str(raw.get("activeEngine", "") or "").casefold(), ""
+            ),
+            "engines": {},
+        }
+        for key, definition in ENGINE_DEFINITIONS.items():
+            item = self._default_engine_state(definition)
+            saved = engines.get(key)
+            if not isinstance(saved, dict) and key == "forge":
+                saved = engines.get("forge_neo")
+            if isinstance(saved, dict):
+                for field in item:
+                    if field in saved:
+                        item[field] = saved[field]
+            try:
+                item["port"] = int(item["port"])
+            except (TypeError, ValueError):
+                item["port"] = definition.preferred_port
+            if not 1 <= item["port"] <= 65535:
+                item["port"] = definition.preferred_port
+            release = str(item.get("release", "") or "").strip()
+            if release and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", release):
+                release = ""
+                item["lastError"] = "안전하지 않은 runtime release 설정을 무시했습니다"
+            item["release"] = release
+            extension_dir = str(item.get("extensionDir", "") or "").strip()
+            if extension_dir:
+                try:
+                    extension_path = Path(
+                        os.path.abspath(
+                            os.path.expandvars(os.path.expanduser(extension_dir))
+                        )
+                    ).resolve()
+                    item["extensionDir"] = str(
+                        self._validate_extension_root(
+                            extension_dir,
+                            create_managed=_is_relative_to(extension_path, self.runtime_root),
+                            engine=key,
+                            require_exists=False,
+                        )
+                    )
+                except BackendRuntimeError:
+                    item["extensionDir"] = ""
+                    item["lastError"] = "유효하지 않은 확장 폴더 설정을 무시했습니다"
+            item["autoStart"] = bool(item["autoStart"])
+            normalised["engines"][key] = item
+        forge_extension = Path(
+            normalised["engines"]["forge"].get("extensionDir")
+            or self._default_extension_root("forge")
+        )
+        comfy_extension = Path(
+            normalised["engines"]["comfyui"].get("extensionDir")
+            or self._default_extension_root("comfyui")
+        )
+        if self._extension_roots_overlap(forge_extension, comfy_extension):
+            normalised["engines"]["comfyui"]["extensionDir"] = ""
+            normalised["engines"]["comfyui"]["lastError"] = (
+                "Forge와 겹치는 ComfyUI 확장 폴더 설정을 무시했습니다"
+            )
+        auto_engines = [
+            key for key in ENGINE_DEFINITIONS
+            if normalised["engines"][key].get("autoStart")
+        ]
+        if len(auto_engines) > 1:
+            preferred = normalised.get("activeEngine")
+            keep = preferred if preferred in auto_engines else auto_engines[0]
+            for key in auto_engines:
+                normalised["engines"][key]["autoStart"] = key == keep
+        return normalised
+
+    def _save_state(self) -> None:
+        with self._state_lock:
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(str(self.config_path), self._state, indent=2)
+
+    def _cleanup_inactive_releases(self) -> None:
+        """Remove only unreferenced app-owned release trees left by updates/crashes."""
+        for engine in ENGINE_DEFINITIONS:
+            releases_root = (self._engine_root(engine) / "releases").resolve()
+            if not releases_root.is_dir():
+                continue
+            active_id = str(self._state["engines"][engine].get("release", "") or "")
+            active = (releases_root / active_id).resolve() if active_id else None
+            try:
+                children = tuple(releases_root.iterdir())
+            except OSError:
+                continue
+            for child in children:
+                try:
+                    resolved = child.resolve()
+                    if not child.is_dir() or (active is not None and resolved == active):
+                        continue
+                    if not _is_relative_to(resolved, releases_root):
+                        continue
+                    shutil.rmtree(resolved, ignore_errors=True)
+                except OSError:
+                    continue
+
+    # --------------------------------------------------------------- filesystem
+
+    def _engine_root(self, engine: str) -> Path:
+        return self.runtime_root / engine
+
+    def _release_root(self, engine: str, release: str | None = None) -> Path:
+        release_id = release or str(self._state["engines"][engine].get("release", ""))
+        return self._engine_root(engine) / "releases" / release_id
+
+    def _source_root(self, engine: str) -> Path:
+        return self._release_root(engine) / "source"
+
+    def _venv_root(self, engine: str) -> Path:
+        return self._release_root(engine) / "venv"
+
+    @staticmethod
+    def _venv_python(venv_root: Path) -> Path:
+        return venv_root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+    def _data_root(self, engine: str) -> Path:
+        return self._engine_root(engine) / "data"
+
+    def _default_extension_root(self, engine: str) -> Path:
+        folder = ENGINE_DEFINITIONS[engine].extension_folder
+        return self._engine_root(engine) / "shared" / folder
+
+    def _extension_root(self, engine: str) -> Path:
+        configured = str(self._state["engines"][engine].get("extensionDir", "") or "").strip()
+        return Path(configured).resolve() if configured else self._default_extension_root(engine).resolve()
+
+    def _extension_mount(self, engine: str) -> Path:
+        return self._data_root(engine) / ENGINE_DEFINITIONS[engine].extension_folder
+
+    @staticmethod
+    def _extension_roots_overlap(first: Path, second: Path) -> bool:
+        first = first.resolve()
+        second = second.resolve()
+        return _is_relative_to(first, second) or _is_relative_to(second, first)
+
+    def _validate_extension_root(
+        self,
+        value: str | os.PathLike[str],
+        *,
+        create_managed: bool = False,
+        engine: str | None = None,
+        require_exists: bool = True,
+    ) -> Path:
+        raw = os.path.expandvars(os.path.expanduser(str(value or "").strip()))
+        if not raw or not Path(raw).is_absolute():
+            raise BackendRuntimeError(
+                "EXTENSION_PATH_INVALID", "확장 폴더는 절대 경로여야 합니다", stage="configure"
+            )
+        path = Path(os.path.abspath(os.path.normpath(raw))).resolve()
+        anchors = {Path(path.anchor).resolve(), Path.home().resolve(), PROJECT_ROOT.resolve()}
+        if path in anchors:
+            raise BackendRuntimeError(
+                "EXTENSION_PATH_UNSAFE", "드라이브 루트·홈·앱 루트는 확장 폴더로 사용할 수 없습니다",
+                stage="configure",
+            )
+        if _is_relative_to(path, PROJECT_ROOT.resolve()) and not _is_relative_to(path, self.runtime_root):
+            raise BackendRuntimeError(
+                "EXTENSION_PATH_UNSAFE",
+                "앱 소스/설정 하위 폴더는 외부 확장 폴더로 사용할 수 없습니다",
+                stage="configure",
+            )
+        if _is_relative_to(path, self.runtime_root):
+            allowed = bool(
+                engine
+                and _is_relative_to(path, (self._engine_root(engine) / "shared").resolve())
+            )
+            if not allowed:
+                raise BackendRuntimeError(
+                    "EXTENSION_PATH_UNSAFE",
+                    "관리형 런타임의 구조/소스 폴더는 확장 폴더로 사용할 수 없습니다",
+                    stage="configure",
+                )
+        if not path.exists():
+            if create_managed and _is_relative_to(path, self.runtime_root):
+                path.mkdir(parents=True, exist_ok=True)
+            elif require_exists:
+                raise BackendRuntimeError(
+                    "EXTENSION_PATH_INVALID", "지정한 확장 폴더가 존재하지 않습니다", stage="configure"
+                )
+            else:
+                return path
+        if not path.is_dir():
+            raise BackendRuntimeError(
+                "EXTENSION_PATH_INVALID", "지정한 경로가 폴더가 아닙니다", stage="configure"
+            )
+        if not os.access(path, os.W_OK):
+            raise BackendRuntimeError(
+                "EXTENSION_PATH_READ_ONLY", "지정한 확장 폴더에 쓸 수 없습니다", stage="configure"
+            )
+        return path
+
+    @staticmethod
+    def _is_reparse_directory(path: Path) -> bool:
+        if path.is_symlink():
+            return True
+        if os.name != "nt":
+            return False
+        try:
+            attrs = os.lstat(path).st_file_attributes
+            return bool(attrs & 0x400)  # FILE_ATTRIBUTE_REPARSE_POINT
+        except (AttributeError, OSError):
+            return False
+
+    def _ensure_extension_mount(self, engine: str) -> Path:
+        target = self._extension_root(engine)
+        target = self._validate_extension_root(target, create_managed=True, engine=engine)
+        mount = self._extension_mount(engine)
+        mount.parent.mkdir(parents=True, exist_ok=True)
+        if mount.exists() or mount.is_symlink():
+            try:
+                if mount.resolve() == target.resolve():
+                    return target
+            except OSError:
+                pass
+            if self._is_reparse_directory(mount):
+                os.rmdir(mount)
+            elif mount.is_dir() and not any(mount.iterdir()):
+                mount.rmdir()
+            else:
+                raise BackendRuntimeError(
+                    "EXTENSION_MOUNT_CONFLICT",
+                    f"관리형 확장 연결 위치에 기존 파일이 있습니다: {mount}",
+                    stage="extension_mount",
+                )
+        if os.name == "nt":
+            powershell = self.adapter.which("powershell.exe") or self.adapter.which("pwsh.exe")
+            if not powershell:
+                raise BackendRuntimeError(
+                    "EXTENSION_MOUNT_FAILED",
+                    "확장 폴더 연결을 만들 PowerShell을 찾지 못했습니다",
+                    stage="extension_mount",
+                )
+            junction_env = os.environ.copy()
+            junction_env["AISTUDIO_JUNCTION_PATH"] = str(mount)
+            junction_env["AISTUDIO_JUNCTION_TARGET"] = str(target)
+            result = self.adapter.run(
+                [
+                    powershell,
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "$ErrorActionPreference='Stop'; "
+                    "New-Item -ItemType Junction -Path $env:AISTUDIO_JUNCTION_PATH "
+                    "-Target $env:AISTUDIO_JUNCTION_TARGET | Out-Null",
+                ],
+                cwd=mount.parent,
+                env=junction_env,
+                timeout=30,
+            )
+            if result.returncode != 0 or not mount.exists():
+                raise BackendRuntimeError(
+                    "EXTENSION_MOUNT_FAILED",
+                    "확장 폴더 연결(junction)을 만들지 못했습니다",
+                    stage="extension_mount",
+                    details={"output": result.output[-1000:]},
+                )
+        else:
+            mount.symlink_to(target, target_is_directory=True)
+        return target
+
+    # ---------------------------------------------------------------- snapshot
+
+    @staticmethod
+    def _git_dir(source: Path) -> Path | None:
+        dot_git = source / ".git"
+        if dot_git.is_dir():
+            return dot_git.resolve()
+        if not dot_git.is_file():
+            return None
+        try:
+            marker = dot_git.read_text(encoding="utf-8", errors="replace").strip()
+            if not marker.casefold().startswith("gitdir:"):
+                return None
+            value = marker.split(":", 1)[1].strip()
+            candidate = Path(value)
+            if not candidate.is_absolute():
+                candidate = source / candidate
+            candidate = candidate.resolve()
+            return candidate if candidate.is_dir() else None
+        except OSError:
+            return None
+
+    @staticmethod
+    def _read_git_ref(git_dir: Path, ref: str) -> str:
+        if not ref.startswith("refs/") or ".." in Path(ref).parts:
+            return ""
+        loose = (git_dir / Path(ref)).resolve()
+        if _is_relative_to(loose, git_dir):
+            try:
+                value = loose.read_text(encoding="ascii", errors="ignore").strip()
+                if re.fullmatch(r"[0-9a-fA-F]{40,64}", value):
+                    return value.lower()
+            except OSError:
+                pass
+        try:
+            for line in (git_dir / "packed-refs").read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines():
+                if not line or line.startswith(("#", "^")):
+                    continue
+                commit, _, packed_ref = line.partition(" ")
+                if packed_ref.strip() == ref and re.fullmatch(r"[0-9a-fA-F]{40,64}", commit):
+                    return commit.lower()
+        except OSError:
+            pass
+        return ""
+
+    def _local_git_info(self, source: Path) -> tuple[str, str, str]:
+        """Read local Git metadata without spawning processes or contacting remotes."""
+        git_dir = self._git_dir(source)
+        if git_dir is None:
+            return "", "", ""
+        try:
+            head = (git_dir / "HEAD").read_text(
+                encoding="ascii", errors="ignore"
+            ).strip()
+        except OSError:
+            return "", "", ""
+        branch = ""
+        if head.startswith("ref:"):
+            ref = head.split(":", 1)[1].strip()
+            commit = self._read_git_ref(git_dir, ref)
+            if ref.startswith("refs/heads/"):
+                branch = ref[len("refs/heads/"):]
+        elif re.fullmatch(r"[0-9a-fA-F]{40,64}", head):
+            commit = head.lower()
+        else:
+            commit = ""
+        return (commit[:12] if commit else ""), commit, branch
+
+    def _git_origin_url(self, source: Path) -> str:
+        git_dir = self._git_dir(source)
+        if git_dir is None:
+            return ""
+        parser = configparser.RawConfigParser(strict=False)
+        try:
+            parser.read(git_dir / "config", encoding="utf-8")
+            return str(parser.get('remote "origin"', "url", fallback="") or "").strip()
+        except (OSError, configparser.Error):
+            return ""
+
+    @staticmethod
+    def _sanitize_repository_url(value: str) -> str:
+        """Remove credentials/query secrets before state reaches disk, Vue or web mode."""
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        try:
+            parts = urlsplit(raw)
+            if parts.scheme and parts.hostname:
+                host = parts.hostname
+                if ":" in host and not host.startswith("["):
+                    host = f"[{host}]"
+                try:
+                    if parts.port is not None:
+                        host = f"{host}:{parts.port}"
+                except ValueError:
+                    pass
+                return urlunsplit((parts.scheme, host, parts.path, "", ""))
+        except ValueError:
+            pass
+        if "@" in raw:
+            return raw.rsplit("@", 1)[1]
+        return raw.split("?", 1)[0].split("#", 1)[0]
+
+    def _capture(self, argv: Sequence[str], *, cwd: Path | None = None) -> str:
+        try:
+            result = self.adapter.run(argv, cwd=cwd, timeout=30)
+            return result.output.strip().splitlines()[-1] if result.returncode == 0 and result.output.strip() else ""
+        except Exception:
+            return ""
+
+    def _process_running(self, engine: str) -> bool:
+        with self._process_lock:
+            owned = self._processes.get(engine)
+            if owned is None:
+                return False
+            if owned.process.poll() is None:
+                return True
+            self._close_process_log(owned.process)
+            self._processes.pop(engine, None)
+            self._healthy[engine] = False
+            return False
+
+    def _extension_state(self, engine: str) -> list[dict[str, Any]]:
+        root = self._extension_root(engine)
+        if not root.is_dir():
+            return []
+        result: list[dict[str, Any]] = []
+        try:
+            children = sorted(root.iterdir(), key=lambda item: item.name.casefold())
+        except OSError:
+            return []
+        for child in children:
+            if not child.is_dir() or child.name.startswith("."):
+                continue
+            version, commit, _branch = self._local_git_info(child)
+            repo_url = self._sanitize_repository_url(self._git_origin_url(child))
+            # Snapshot must remain local-only.  A remote commit is only retained by explicit
+            # check operations in the extension marker, never fetched here.
+            marker = self._extension_marker(engine, child.name)
+            marker_data = load_json_safe(str(marker), {}) if marker.is_file() else {}
+            cached_remote = ""
+            if isinstance(marker_data, dict) and str(marker_data.get("repoUrl") or "") == repo_url:
+                cached_remote = str(marker_data.get("remoteCommit", "") or "")
+            result.append({
+                "id": child.name,
+                "name": child.name,
+                "path": str(child),
+                "repoUrl": repo_url,
+                "version": version or (commit[:12] if commit else "local"),
+                "commit": commit,
+                "remoteCommit": cached_remote,
+                "updateAvailable": bool(commit and cached_remote and commit != cached_remote),
+                "status": "git" if (child / ".git").is_dir() else "local / version unknown",
+                "busy": False,
+            })
+        return result
+
+    def _extension_marker(self, engine: str, extension_id: str) -> Path:
+        safe_id = re.sub(r"[^A-Za-z0-9._-]", "_", extension_id)[:128]
+        return self._engine_root(engine) / "extension_state" / f"{safe_id}.json"
+
+    def snapshot(self) -> dict[str, Any]:
+        """Return cached/local state only; never contacts GitHub or PyPI."""
+        with self._state_lock:
+            engines: dict[str, Any] = {}
+            for key, definition in ENGINE_DEFINITIONS.items():
+                saved = self._state["engines"][key]
+                release = str(saved.get("release", "") or "")
+                source = self._source_root(key) if release else Path()
+                venv_python = self._venv_python(self._venv_root(key)) if release else Path()
+                installed = bool(release and (source / definition.entrypoint).is_file() and venv_python.is_file())
+                version, commit, branch = self._local_git_info(source) if installed else ("", "", "")
+                with self._process_lock:
+                    running = self._process_running(key)
+                    owned_process = self._processes.get(key) if running else None
+                    healthy = bool(owned_process is not None and self._healthy.get(key))
+                port = int(saved.get("port") or definition.preferred_port)
+                endpoint = owned_process.endpoint if owned_process else f"http://127.0.0.1:{port}"
+                remote_commit = str(saved.get("remoteCommit", "") or "")
+                update_available = bool(commit and remote_commit and commit != remote_commit)
+                if not saved.get("lastChecked"):
+                    update_status = "Not checked"
+                elif update_available:
+                    update_status = "Update available"
+                else:
+                    update_status = "Up to date"
+                engines[key] = {
+                    "engine": key,
+                    "name": definition.name,
+                    "protocol": definition.protocol,
+                    "installed": installed,
+                    "running": running,
+                    "healthy": healthy,
+                    "owned": running,
+                    "busy": bool(self._busy.get(key)),
+                    "active": self._state.get("activeEngine") == key,
+                    "autoStart": bool(saved.get("autoStart")),
+                    "root": str(self._engine_root(key)),
+                    "sourceRoot": str(source) if release else "",
+                    "dataRoot": str(self._data_root(key)),
+                    "apiUrl": endpoint,
+                    "port": port,
+                    "version": version or (commit[:12] if commit else ""),
+                    "commit": commit,
+                    "branch": branch or definition.branch,
+                    "remoteVersion": str(saved.get("remoteVersion", "") or ""),
+                    "remoteCommit": remote_commit,
+                    "lastChecked": str(saved.get("lastChecked", "") or ""),
+                    "updateAvailable": update_available,
+                    "updateStatus": update_status,
+                    "extensionDir": str(self._extension_root(key)),
+                    "defaultExtensionDir": str(self._default_extension_root(key)),
+                    "extensionDirExternal": self._extension_root(key) != self._default_extension_root(key).resolve(),
+                    "extensions": self._extension_state(key),
+                    "message": self._last_messages.get(key) or str(saved.get("lastError", "") or ""),
+                    "logPath": str(owned_process.log_path) if owned_process else "",
+                }
+            return {
+                "ok": True,
+                "schemaVersion": self.SCHEMA_VERSION,
+                "activeEngine": self._state.get("activeEngine") or "",
+                "runtimeRoot": str(self.runtime_root),
+                "engines": engines,
+            }
+
+    # -------------------------------------------------------------- configure
+
+    def configure(self, engine: str, patch: Mapping[str, Any]) -> dict[str, Any]:
+        key = _canonical_engine(engine)
+        if not isinstance(patch, Mapping):
+            raise BackendRuntimeError("INVALID_PAYLOAD", "설정 payload가 객체가 아닙니다")
+        with self._state_lock:
+            saved = self._state["engines"][key]
+            if "autoStart" in patch:
+                enabled = bool(patch.get("autoStart"))
+                saved["autoStart"] = enabled
+                if enabled:
+                    for other in ENGINE_DEFINITIONS:
+                        if other != key:
+                            self._state["engines"][other]["autoStart"] = False
+            if "extensionDir" in patch:
+                value = str(patch.get("extensionDir", "") or "").strip()
+                if value:
+                    candidate = self._validate_extension_root(value, engine=key)
+                    for other in ENGINE_DEFINITIONS:
+                        if other == key:
+                            continue
+                        other_root = self._extension_root(other)
+                        if self._extension_roots_overlap(candidate, other_root):
+                            raise BackendRuntimeError(
+                                "EXTENSION_PATH_CONFLICT",
+                                "Forge extensions와 ComfyUI custom_nodes는 서로 분리된 폴더여야 합니다",
+                                stage="configure",
+                            )
+                    saved["extensionDir"] = str(candidate)
+                else:
+                    saved["extensionDir"] = ""
+                    self._validate_extension_root(
+                        self._default_extension_root(key), create_managed=True, engine=key
+                    )
+            if patch.get("active") is True:
+                self._state["activeEngine"] = key
+            self._save_state()
+        return self.snapshot()
+
+    # -------------------------------------------------------------- operations
+
+    def execute(
+        self,
+        engine: str,
+        action: str,
+        payload: Mapping[str, Any] | None = None,
+        on_progress: ProgressCallback | None = None,
+    ) -> dict[str, Any]:
+        key = _canonical_engine(engine)
+        action_name = str(action or "").strip().casefold()
+        payload = dict(payload or {})
+        if not self._operation_gate.acquire(blocking=False):
+            raise BackendRuntimeError(
+                "OPERATION_BUSY",
+                "다른 관리형 백엔드 작업이 진행 중입니다",
+                stage=action_name,
+                retryable=True,
+            )
+        lock = self._operation_locks[key]
+        if not lock.acquire(blocking=False):
+            self._operation_gate.release()
+            raise BackendRuntimeError(
+                "OPERATION_BUSY", f"{ENGINE_DEFINITIONS[key].name} 작업이 이미 진행 중입니다",
+                stage=action_name, retryable=True,
+            )
+        self._busy[key] = True
+        try:
+            self._progress(on_progress, key, action_name, "start", f"{action_name} 작업을 시작합니다", 0)
+            if action_name == "install":
+                result = self._install(key, on_progress)
+            elif action_name == "update":
+                result = self._update(key, on_progress)
+            elif action_name in {"check", "check_update", "check_version"}:
+                result = self._check_update(key, on_progress)
+            elif action_name in {"start", "use"}:
+                # Explicit Start/Use may prepare a missing runtime. Startup auto-start
+                # passes ``startup=true`` and must never trigger downloads implicitly.
+                install_if_missing = bool(
+                    payload.get("installIfMissing", not bool(payload.get("startup", False)))
+                )
+                result = self._start(key, on_progress, install_if_missing=install_if_missing)
+                startup = bool(payload.get("startup", False))
+                # START normally only launches.  If launching this engine had to
+                # stop another managed engine, however, leaving the app connected
+                # to the stopped endpoint would be invalid.  That replacement is
+                # an actual backend switch and must activate/reconnect the new one.
+                activate = bool(
+                    action_name == "use"
+                    or startup
+                    or result.get("replacedEngine")
+                )
+                if activate:
+                    patch: dict[str, Any] = {"active": True}
+                    if "autoStart" in payload:
+                        # Only USE owns this optional preference mutation.  START
+                        # must never change auto-start just because it switched.
+                        if action_name == "use":
+                            patch["autoStart"] = bool(payload.get("autoStart"))
+                    self.configure(key, patch)
+                result["activate"] = activate
+            elif action_name == "stop":
+                result = self._stop(key, on_progress)
+            elif action_name == "set_auto_start":
+                state = self.configure(key, {"autoStart": bool(payload.get("autoStart"))})
+                result = {"message": "자동 시작 설정을 저장했습니다", "state": state}
+            elif action_name in {"save_extension_dir", "set_extension_dir"}:
+                was_running = self._process_running(key)
+                previous = str(self._state["engines"][key].get("extensionDir", "") or "")
+                if was_running:
+                    self._stop(key, on_progress)
+                try:
+                    state = self.configure(key, {"extensionDir": payload.get("extensionDir", "")})
+                    self._ensure_extension_mount(key)
+                except Exception:
+                    self.configure(key, {"extensionDir": previous})
+                    try:
+                        self._ensure_extension_mount(key)
+                    except Exception:
+                        pass
+                    if was_running:
+                        try:
+                            self._start(key, on_progress, install_if_missing=False)
+                        except Exception:
+                            pass
+                    raise
+                if was_running:
+                    self._start(key, on_progress, install_if_missing=False)
+                result = {"message": "확장 폴더를 저장했습니다", "state": state}
+            elif action_name == "install_extension":
+                result = self._install_extension(key, payload, on_progress)
+            elif action_name in {"check_extension", "check_extensions"}:
+                result = self._check_extension(key, payload, on_progress)
+            elif action_name == "update_extension":
+                result = self._update_extension(key, payload, on_progress)
+            else:
+                raise BackendRuntimeError("INVALID_ACTION", f"지원하지 않는 작업입니다: {action}")
+            message = str(result.get("message", "완료"))
+            self._last_messages[key] = message
+            self._state["engines"][key]["lastError"] = ""
+            self._save_state()
+            final = {
+                "ok": True,
+                "engine": key,
+                "action": action_name,
+                **result,
+                "snapshot": self.snapshot(),
+            }
+            self._progress(on_progress, key, action_name, "complete", message, 100)
+            return final
+        except BackendRuntimeError as exc:
+            self._last_messages[key] = str(exc)
+            self._state["engines"][key]["lastError"] = str(exc)
+            self._save_state()
+            self._progress(on_progress, key, action_name, "error", str(exc), 100, error=exc.as_dict())
+            raise
+        except Exception as exc:
+            wrapped = BackendRuntimeError(
+                "RUNTIME_OPERATION_FAILED", str(exc), stage=action_name, retryable=True
+            )
+            self._last_messages[key] = str(wrapped)
+            self._state["engines"][key]["lastError"] = str(wrapped)
+            self._save_state()
+            self._progress(on_progress, key, action_name, "error", str(wrapped), 100, error=wrapped.as_dict())
+            raise wrapped from exc
+        finally:
+            self._busy[key] = False
+            lock.release()
+            self._operation_gate.release()
+
+    def _progress(
+        self,
+        callback: ProgressCallback | None,
+        engine: str,
+        action: str,
+        phase: str,
+        message: str,
+        progress: int,
+        **extra: Any,
+    ) -> None:
+        if not callback:
+            return
+        event = {
+            "engine": engine,
+            "action": action,
+            "phase": phase,
+            "message": str(message)[:1000],
+            "progress": max(0, min(100, int(progress))),
+            **extra,
+        }
+        try:
+            callback(event)
+        except Exception:
+            pass
+
+    def _command_progress(
+        self,
+        callback: ProgressCallback | None,
+        engine: str,
+        action: str,
+        phase: str,
+        base_progress: int,
+    ) -> Callable[[str], None]:
+        last_emit = [0.0]
+
+        def emit(line: str) -> None:
+            now = time.monotonic()
+            if now - last_emit[0] < 0.2:
+                return
+            last_emit[0] = now
+            clean = re.sub(r"https://[^\s/@]+@", "https://***@", str(line))
+            self._progress(callback, engine, action, phase, clean[-800:], base_progress)
+
+        return emit
+
+    # ----------------------------------------------------------- install/update
+
+    def _require_tools(self) -> None:
+        if not self.adapter.which("git"):
+            raise BackendRuntimeError(
+                "GIT_NOT_FOUND", "Git을 찾을 수 없습니다", stage="preflight"
+            )
+
+    def _new_release_id(self, commit_hint: str = "candidate") -> str:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        safe = re.sub(r"[^0-9a-f]", "", commit_hint.casefold())[:12] or "candidate"
+        return f"{stamp}-{safe}-{uuid.uuid4().hex[:6]}"
+
+    def _remote_head(self, definition: EngineDefinition) -> str:
+        result = self.adapter.run(
+            ["git", "ls-remote", definition.repository, f"refs/heads/{definition.branch}"],
+            timeout=60,
+        )
+        if result.returncode != 0 or not result.output.strip():
+            raise BackendRuntimeError(
+                "VERSION_CHECK_FAILED", "원격 버전을 확인하지 못했습니다",
+                stage="version_check", retryable=True,
+                details={"output": result.output[-1000:]},
+            )
+        return result.output.strip().split()[0]
+
+    def _prepare_release(self, engine: str, on_progress: ProgressCallback | None) -> tuple[str, str]:
+        self._require_tools()
+        definition = ENGINE_DEFINITIONS[engine]
+        action = "install" if not self._state["engines"][engine].get("release") else "update"
+        self._progress(on_progress, engine, action, "version_check", "원격 소스 버전을 확인합니다", 5)
+        remote_commit = self._remote_head(definition)
+        release_id = self._new_release_id(remote_commit)
+        release_root = self._release_root(engine, release_id)
+        source = release_root / "source"
+        venv = release_root / "venv"
+        release_root.mkdir(parents=True, exist_ok=False)
+        try:
+            self._progress(on_progress, engine, action, "download", "소스 코드를 격리 폴더에 다운로드합니다", 15)
+            result = self.adapter.run(
+                [
+                    "git", "clone", "--branch", definition.branch, "--single-branch",
+                    definition.repository, str(source),
+                ],
+                cwd=release_root,
+                timeout=1800,
+                on_line=self._command_progress(on_progress, engine, action, "download", 20),
+            )
+            if result.returncode != 0:
+                raise BackendRuntimeError(
+                    "SOURCE_FETCH_FAILED", "백엔드 소스 다운로드에 실패했습니다",
+                    stage="download", retryable=True,
+                    details={"output": result.output[-2000:]},
+                )
+            actual_commit = self._capture(["git", "rev-parse", "HEAD"], cwd=source)
+            if actual_commit and actual_commit != remote_commit:
+                raise BackendRuntimeError(
+                    "SOURCE_REVISION_MISMATCH", "다운로드한 소스 버전이 확인한 원격 버전과 다릅니다",
+                    stage="verify",
+                )
+            self._create_venv(engine, venv, on_progress, action)
+            self._bootstrap(engine, source, venv, on_progress, action)
+            manifest = {
+                "schemaVersion": 1,
+                "engine": engine,
+                "repository": definition.repository,
+                "branch": definition.branch,
+                "commit": actual_commit or remote_commit,
+                "createdAt": _utc_now(),
+            }
+            atomic_write_json(str(release_root / "release.json"), manifest, indent=2)
+            return release_id, actual_commit or remote_commit
+        except Exception:
+            # Only the not-yet-active candidate is removed.  Active releases and all
+            # shared user data remain untouched.
+            if release_root.exists() and _is_relative_to(release_root.resolve(), (self._engine_root(engine) / "releases").resolve()):
+                shutil.rmtree(release_root, ignore_errors=True)
+            raise
+
+    def _create_venv(
+        self,
+        engine: str,
+        venv: Path,
+        on_progress: ProgressCallback | None,
+        action: str,
+    ) -> None:
+        self._progress(on_progress, engine, action, "venv", "전용 Python 환경을 만듭니다", 40)
+        uv = self.adapter.which("uv")
+        if uv:
+            argv = [uv, "venv", str(venv), "--python", "3.13", "--seed"]
+        else:
+            py = self.adapter.which("py")
+            if py:
+                argv = [py, "-3.13", "-m", "venv", str(venv)]
+            elif Path(sys.executable).name.casefold().startswith("python"):
+                argv = [sys.executable, "-m", "venv", str(venv)]
+            else:
+                raise BackendRuntimeError(
+                    "PYTHON_NOT_FOUND",
+                    "Python 3.13 또는 uv를 찾을 수 없습니다",
+                    stage="venv",
+                )
+        result = self.adapter.run(
+            argv,
+            cwd=venv.parent,
+            timeout=600,
+            on_line=self._command_progress(on_progress, engine, action, "venv", 45),
+        )
+        if result.returncode != 0 or not self._venv_python(venv).is_file():
+            raise BackendRuntimeError(
+                "VENV_CREATE_FAILED", "전용 Python 환경 생성에 실패했습니다",
+                stage="venv", details={"output": result.output[-2000:]},
+            )
+
+    def _pip_install(
+        self,
+        engine: str,
+        python: Path,
+        requirements: Path,
+        on_progress: ProgressCallback | None,
+        action: str,
+        progress: int,
+    ) -> None:
+        if not requirements.is_file():
+            return
+        uv = self.adapter.which("uv")
+        if uv:
+            argv = [uv, "pip", "install", "--python", str(python), "-r", str(requirements)]
+        else:
+            argv = [str(python), "-m", "pip", "install", "-r", str(requirements)]
+        result = self.adapter.run(
+            argv,
+            cwd=requirements.parent,
+            timeout=3600,
+            on_line=self._command_progress(on_progress, engine, action, "dependencies", progress),
+        )
+        if result.returncode != 0:
+            raise BackendRuntimeError(
+                "PACKAGE_INSTALL_FAILED", f"의존성 설치에 실패했습니다: {requirements.name}",
+                stage="dependencies", retryable=True,
+                details={"output": result.output[-3000:]},
+            )
+
+    def _bootstrap(
+        self,
+        engine: str,
+        source: Path,
+        venv: Path,
+        on_progress: ProgressCallback | None,
+        action: str,
+    ) -> None:
+        python = self._venv_python(venv)
+        self._progress(on_progress, engine, action, "dependencies", "백엔드 의존성을 설치합니다", 55)
+        if engine == "comfyui":
+            self._pip_install(engine, python, source / "requirements.txt", on_progress, action, 60)
+            self._pip_install(engine, python, source / "manager_requirements.txt", on_progress, action, 72)
+            result = self.adapter.run(
+                [str(python), "-c", "import sys; import torch; print(sys.version.split()[0]); print(torch.__version__)"],
+                cwd=source,
+                timeout=120,
+            )
+        else:
+            data_root = self._data_root(engine)
+            data_root.mkdir(parents=True, exist_ok=True)
+            argv = [str(python), str(source / "launch.py"), "--exit", "--api", "--data-dir", str(data_root)]
+            result = self.adapter.run(
+                argv,
+                cwd=source,
+                timeout=5400,
+                on_line=self._command_progress(on_progress, engine, action, "dependencies", 65),
+            )
+        if result.returncode != 0:
+            raise BackendRuntimeError(
+                "BOOTSTRAP_FAILED", f"{ENGINE_DEFINITIONS[engine].name} 초기 구성에 실패했습니다",
+                stage="verify", retryable=True,
+                details={"output": result.output[-3000:]},
+            )
+        self._progress(on_progress, engine, action, "verify", "격리 런타임 구성을 확인했습니다", 88)
+
+    def _install(self, engine: str, on_progress: ProgressCallback | None) -> dict[str, Any]:
+        current = self.snapshot()["engines"][engine]
+        if current["installed"]:
+            return {"message": f"{ENGINE_DEFINITIONS[engine].name}가 이미 설치되어 있습니다"}
+        release, commit = self._prepare_release(engine, on_progress)
+        with self._state_lock:
+            saved = self._state["engines"][engine]
+            saved["release"] = release
+            saved["remoteCommit"] = commit
+            saved["remoteVersion"] = commit[:12]
+            saved["lastChecked"] = _utc_now()
+            self._save_state()
+        self._ensure_extension_mount(engine)
+        return {"message": f"{ENGINE_DEFINITIONS[engine].name} 설치를 완료했습니다", "release": release}
+
+    def _check_update(self, engine: str, on_progress: ProgressCallback | None) -> dict[str, Any]:
+        definition = ENGINE_DEFINITIONS[engine]
+        self._require_tools()
+        self._progress(on_progress, engine, "check_update", "version_check", "원격 버전을 확인합니다", 30)
+        remote = self._remote_head(definition)
+        source = self._source_root(engine)
+        local = self._capture(["git", "rev-parse", "HEAD"], cwd=source) if source.is_dir() else ""
+        with self._state_lock:
+            saved = self._state["engines"][engine]
+            saved["remoteCommit"] = remote
+            saved["remoteVersion"] = remote[:12]
+            saved["lastChecked"] = _utc_now()
+            self._save_state()
+        available = bool(local and remote != local)
+        if not local:
+            message = f"원격 최신 버전은 {remote[:12]}입니다 · 아직 설치되지 않았습니다"
+        else:
+            message = "업데이트가 있습니다" if available else "현재 버전이 최신입니다"
+        return {
+            "message": message,
+            "localCommit": local,
+            "remoteCommit": remote,
+            "updateAvailable": available,
+        }
+
+    def _update(self, engine: str, on_progress: ProgressCallback | None) -> dict[str, Any]:
+        state = self.snapshot()["engines"][engine]
+        if not state["installed"]:
+            return self._install(engine, on_progress)
+        check = self._check_update(engine, on_progress)
+        if not check["updateAvailable"]:
+            return {"message": "현재 버전이 최신입니다", **check}
+        was_running = self._process_running(engine)
+        previous_release = str(self._state["engines"][engine].get("release", ""))
+        release, commit = self._prepare_release(engine, on_progress)
+        if was_running:
+            self._stop(engine, on_progress)
+        with self._state_lock:
+            self._state["engines"][engine]["release"] = release
+            self._state["engines"][engine]["remoteCommit"] = commit
+            self._state["engines"][engine]["remoteVersion"] = commit[:12]
+            self._state["engines"][engine]["lastChecked"] = _utc_now()
+            self._save_state()
+        try:
+            if was_running:
+                self._start(engine, on_progress, install_if_missing=False)
+        except Exception as exc:
+            with self._state_lock:
+                self._state["engines"][engine]["release"] = previous_release
+                self._save_state()
+            rollback_error = ""
+            if previous_release and was_running:
+                try:
+                    self._start(engine, on_progress, install_if_missing=False)
+                except Exception as rollback_exc:
+                    rollback_error = str(rollback_exc)
+            if rollback_error:
+                raise BackendRuntimeError(
+                    "ROLLBACK_FAILED",
+                    "업데이트 실행 확인과 이전 버전 재시작이 모두 실패했습니다",
+                    stage="rollback", retryable=True,
+                    details={"reason": str(exc), "rollbackReason": rollback_error},
+                ) from exc
+            raise BackendRuntimeError(
+                "UPDATE_VERIFY_FAILED", "업데이트 실행 확인에 실패해 이전 버전으로 되돌렸습니다",
+                stage="rollback", retryable=True, details={"reason": str(exc)},
+            ) from exc
+        return {"message": f"{ENGINE_DEFINITIONS[engine].name} 업데이트를 완료했습니다", "release": release}
+
+    # --------------------------------------------------------------- launching
+
+    def _choose_port(self, engine: str) -> int:
+        preferred = int(self._state["engines"][engine].get("port") or ENGINE_DEFINITIONS[engine].preferred_port)
+        for port in range(preferred, preferred + 50):
+            if self.adapter.port_available("127.0.0.1", port):
+                return port
+        raise BackendRuntimeError(
+            "PORT_UNAVAILABLE", f"{preferred}번부터 사용 가능한 로컬 포트를 찾지 못했습니다",
+            stage="start", retryable=True,
+        )
+
+    def _write_comfy_model_paths(self) -> Path:
+        from core.forge_modules import get_forge_paths
+
+        paths = get_forge_paths()
+        output = self._data_root("comfyui") / "aistudio_extra_model_paths.yaml"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        # JSON is a valid YAML 1.2 document and avoids adding a YAML writer dependency.
+        payload = {
+            "aistudio_shared": {
+                "base_path": "",
+                "checkpoints": str(paths["checkpoint_dir"]),
+                "loras": str(paths["lora_dir"]),
+                "vae": str(paths["vae_dir"]),
+                "text_encoders": str(paths["text_encoder_dir"]),
+            }
+        }
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+        tmp = output.with_suffix(output.suffix + ".tmp")
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, output)
+        return output
+
+    def _launch_argv(self, engine: str, port: int) -> tuple[list[str], Path, dict[str, str]]:
+        definition = ENGINE_DEFINITIONS[engine]
+        source = self._source_root(engine)
+        python = self._venv_python(self._venv_root(engine))
+        data = self._data_root(engine)
+        data.mkdir(parents=True, exist_ok=True)
+        env = os.environ.copy()
+        env["AISTUDIO_MANAGED_ENGINE"] = engine
+        env["AISTUDIO_LAUNCH_NONCE"] = uuid.uuid4().hex
+        if engine == "forge":
+            from core.forge_modules import get_forge_paths
+
+            argv = [
+                str(python), str(source / definition.entrypoint),
+                "--api", "--api-server-stop", "--port", str(port),
+                "--data-dir", str(data), "--theme", "dark",
+            ]
+            flag_map = {
+                "checkpoint_dir": "--ckpt-dirs",
+                "lora_dir": "--lora-dirs",
+                "vae_dir": "--vae-dirs",
+                "text_encoder_dir": "--text-encoder-dirs",
+            }
+            for key, path in get_forge_paths().items():
+                if path.is_dir():
+                    argv.extend([flag_map[key], str(path)])
+        else:
+            extra_paths = self._write_comfy_model_paths()
+            argv = [
+                str(python), str(source / definition.entrypoint),
+                "--listen", "127.0.0.1", "--port", str(port),
+                "--base-directory", str(data),
+                "--extra-model-paths-config", str(extra_paths),
+                "--enable-manager",
+            ]
+        return argv, source, env
+
+    def _start(
+        self,
+        engine: str,
+        on_progress: ProgressCallback | None,
+        *,
+        install_if_missing: bool,
+    ) -> dict[str, Any]:
+        if self._shutdown_requested.is_set():
+            raise BackendRuntimeError(
+                "START_CANCELLED", "앱 종료 요청으로 백엔드 시작을 취소했습니다", stage="start"
+            )
+        # Forge and Comfy have independent UI operation queues.  Serialize only
+        # their start transitions so near-simultaneous clicks cannot launch both
+        # GPU runtimes before either process becomes visible in ``_processes``.
+        # STOP does not acquire this gate and can still cancel a health wait.
+        with self._start_gate:
+            if self._shutdown_requested.is_set():
+                raise BackendRuntimeError(
+                    "START_CANCELLED", "앱 종료 요청으로 백엔드 시작을 취소했습니다", stage="start"
+                )
+            previous_engine = next(
+                (
+                    other for other in ENGINE_DEFINITIONS
+                    if other != engine and self._process_running(other)
+                ),
+                "",
+            )
+            try:
+                return self._start_serialized(
+                    engine, on_progress, install_if_missing=install_if_missing
+                )
+            except Exception as exc:
+                if previous_engine and not self._shutdown_requested.is_set():
+                    try:
+                        self._start_serialized(
+                            previous_engine, on_progress, install_if_missing=False
+                        )
+                    except Exception as restore_exc:
+                        raise BackendRuntimeError(
+                            "BACKEND_SWITCH_ROLLBACK_FAILED",
+                            "새 백엔드 시작과 이전 백엔드 복구가 모두 실패했습니다",
+                            stage="rollback",
+                            retryable=True,
+                            details={
+                                "reason": str(exc),
+                                "rollbackReason": str(restore_exc),
+                                "previousEngine": previous_engine,
+                            },
+                        ) from exc
+                raise
+
+    def _start_serialized(
+        self,
+        engine: str,
+        on_progress: ProgressCallback | None,
+        *,
+        install_if_missing: bool,
+    ) -> dict[str, Any]:
+        cancel = self._start_cancel[engine]
+        cancel.clear()
+        with self._process_lock:
+            if self._process_running(engine):
+                owned = self._processes[engine]
+                return {
+                    "message": f"{ENGINE_DEFINITIONS[engine].name}가 이미 실행 중입니다",
+                    "apiUrl": owned.endpoint,
+                }
+
+        state = self.snapshot()["engines"][engine]
+        if not state["installed"]:
+            if not install_if_missing:
+                raise BackendRuntimeError(
+                    "NOT_INSTALLED", "관리형 백엔드가 설치되지 않았습니다", stage="start"
+                )
+            self._install(engine, on_progress)
+        if cancel.is_set():
+            raise BackendRuntimeError(
+                "START_CANCELLED", "앱 종료 요청으로 백엔드 시작을 취소했습니다", stage="start"
+            )
+
+        # A single app-managed GPU backend is active at a time. External processes
+        # are invisible to this map and are never touched.
+        replaced_engine = ""
+        for other in ENGINE_DEFINITIONS:
+            if other != engine and self._process_running(other):
+                self._stop(other, on_progress)
+                replaced_engine = other
+        self._ensure_extension_mount(engine)
+        port = self._choose_port(engine)
+        argv, cwd, env = self._launch_argv(engine, port)
+        log_dir = self._engine_root(engine) / "logs"
+        log_path = log_dir / f"{datetime.now():%Y%m%d-%H%M%S}.log"
+        if cancel.is_set():
+            raise BackendRuntimeError(
+                "START_CANCELLED", "앱 종료 요청으로 백엔드 시작을 취소했습니다", stage="start"
+            )
+        self._progress(on_progress, engine, "start", "launch", "격리 백엔드 프로세스를 시작합니다", 20)
+        try:
+            process = self.adapter.start(argv, cwd=cwd, env=env, log_path=log_path)
+        except OSError as exc:
+            raise BackendRuntimeError(
+                "PROCESS_START_FAILED", "백엔드 프로세스를 시작하지 못했습니다",
+                stage="launch", retryable=True, details={"reason": str(exc)},
+            ) from exc
+        endpoint = f"http://127.0.0.1:{port}"
+        owned = _OwnedProcess(
+            process=process,
+            endpoint=endpoint,
+            port=port,
+            nonce=env["AISTUDIO_LAUNCH_NONCE"],
+            started_at=_utc_now(),
+            log_path=log_path,
+        )
+        with self._process_lock:
+            self._processes[engine] = owned
+            self._healthy[engine] = False
+
+        deadline = time.monotonic() + self.health_timeout
+        while time.monotonic() < deadline:
+            with self._process_lock:
+                still_owned = self._processes.get(engine) is owned
+            if cancel.is_set() or not still_owned:
+                self._stop(engine, on_progress)
+                raise BackendRuntimeError(
+                    "START_CANCELLED", "앱 종료 요청으로 백엔드 시작을 취소했습니다",
+                    stage="health",
+                )
+            returncode = process.poll()
+            if returncode is not None:
+                with self._process_lock:
+                    if self._processes.get(engine) is owned:
+                        self._processes.pop(engine, None)
+                    self._healthy[engine] = False
+                self._close_process_log(process)
+                raise BackendRuntimeError(
+                    "PROCESS_EXITED_EARLY", f"백엔드가 준비 전에 종료되었습니다 (code {returncode})",
+                    stage="health", retryable=True,
+                    details={"logPath": str(log_path)},
+                )
+            if self.adapter.probe(endpoint, ENGINE_DEFINITIONS[engine].health_path, timeout=2):
+                with self._process_lock:
+                    if cancel.is_set() or self._processes.get(engine) is not owned:
+                        continue
+                    self._healthy[engine] = True
+                with self._state_lock:
+                    self._state["engines"][engine]["port"] = port
+                    self._save_state()
+                result = {
+                    "message": f"{ENGINE_DEFINITIONS[engine].name}가 준비되었습니다",
+                    "apiUrl": endpoint,
+                    "protocol": ENGINE_DEFINITIONS[engine].protocol,
+                    "pid": process.pid,
+                    "logPath": str(log_path),
+                }
+                if replaced_engine:
+                    result["replacedEngine"] = replaced_engine
+                return result
+            elapsed = self.health_timeout - max(0, deadline - time.monotonic())
+            pct = 25 + int(min(65, elapsed / max(1.0, self.health_timeout) * 65))
+            self._progress(on_progress, engine, "start", "health", "API 준비를 기다리는 중입니다", pct)
+            cancel.wait(0.5)
+        self._stop(engine, on_progress)
+        raise BackendRuntimeError(
+            "ENGINE_HEALTH_TIMEOUT", "백엔드 API가 제한 시간 내 준비되지 않았습니다",
+            stage="health", retryable=True, details={"logPath": str(log_path)},
+        )
+
+    @staticmethod
+    def _close_process_log(process: ProcessHandle) -> None:
+        handle = getattr(process, "_aistudio_log_handle", None)
+        if handle is not None:
+            try:
+                handle.close()
+            except Exception:
+                pass
+
+    def _stop(self, engine: str, on_progress: ProgressCallback | None) -> dict[str, Any]:
+        self._start_cancel[engine].set()
+        with self._process_lock:
+            owned = self._processes.pop(engine, None)
+            self._healthy[engine] = False
+        if owned is None or owned.process.poll() is not None:
+            if owned is not None:
+                self._close_process_log(owned.process)
+            return {"message": f"{ENGINE_DEFINITIONS[engine].name}가 이미 중지되어 있습니다"}
+
+        self._progress(on_progress, engine, "stop", "stopping", "앱이 시작한 프로세스를 종료합니다", 40)
+        process = owned.process
+        stopped = False
+        try:
+            # PID comes from the live Popen handle created by this manager; no stale
+            # pid file or unrelated external process is ever passed to taskkill.
+            if os.name == "nt" and isinstance(process, subprocess.Popen):
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    check=False,
+                )
+                try:
+                    process.wait(timeout=12)
+                except Exception:
+                    pass
+            else:
+                try:
+                    process.terminate()
+                    process.wait(timeout=12)
+                except Exception:
+                    pass
+            if process.poll() is None:
+                try:
+                    process.kill()
+                    process.wait(timeout=5)
+                except Exception:
+                    pass
+            stopped = process.poll() is not None
+        finally:
+            if not stopped:
+                # Preserve the live handle so a later STOP/quit can retry.  Never
+                # report success after losing ownership of a surviving process.
+                with self._process_lock:
+                    self._processes.setdefault(engine, owned)
+            else:
+                self._close_process_log(process)
+        if not stopped:
+            raise BackendRuntimeError(
+                "PROCESS_STOP_FAILED",
+                f"{ENGINE_DEFINITIONS[engine].name} 프로세스 트리를 종료하지 못했습니다",
+                stage="stop",
+                retryable=True,
+                details={"pid": process.pid, "logPath": str(owned.log_path)},
+            )
+        return {"message": f"{ENGINE_DEFINITIONS[engine].name}를 중지했습니다"}
+
+    def stop_all_owned(self, on_progress: ProgressCallback | None = None) -> None:
+        """Stop only backend/command handles created by this manager instance."""
+        self._shutdown_requested.set()
+        for cancel in self._start_cancel.values():
+            cancel.set()
+        shutdown_adapter = getattr(self.adapter, "shutdown", None)
+        if callable(shutdown_adapter):
+            try:
+                shutdown_adapter()
+            except Exception:
+                pass
+        for engine in tuple(ENGINE_DEFINITIONS):
+            try:
+                self._stop(engine, on_progress)
+            except Exception:
+                pass
+
+    # --------------------------------------------------------------- extensions
+
+    @staticmethod
+    def _validate_repository_url(value: str) -> tuple[str, str]:
+        url = str(value or "").strip()
+        parsed = urlparse(url)
+        if (
+            parsed.scheme != "https"
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise BackendRuntimeError(
+                "INVALID_EXTENSION_SOURCE",
+                "확장은 인증정보가 없는 HTTPS Git 저장소 URL만 설치할 수 있습니다",
+                stage="extension",
+            )
+        name = Path(parsed.path.rstrip("/")).name
+        if name.casefold().endswith(".git"):
+            name = name[:-4]
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", name or ""):
+            raise BackendRuntimeError(
+                "INVALID_EXTENSION_SOURCE", "확장 저장소 이름이 안전하지 않습니다", stage="extension"
+            )
+        return url, name
+
+    def _extension_by_id(self, engine: str, payload: Mapping[str, Any]) -> Path:
+        extension_id = str(payload.get("id") or payload.get("extensionId") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", extension_id):
+            raise BackendRuntimeError("INVALID_EXTENSION_TARGET", "확장 ID가 올바르지 않습니다")
+        root = self._extension_root(engine).resolve()
+        target = (root / extension_id).resolve()
+        if not _is_relative_to(target, root) or not target.is_dir():
+            raise BackendRuntimeError("INVALID_EXTENSION_TARGET", "설치된 확장을 찾을 수 없습니다")
+        return target
+
+    def _install_extension(
+        self,
+        engine: str,
+        payload: Mapping[str, Any],
+        on_progress: ProgressCallback | None,
+    ) -> dict[str, Any]:
+        state = self.snapshot()["engines"][engine]
+        installed = bool(state["installed"])
+        external_directory = bool(state.get("extensionDirExternal"))
+        if not installed and not external_directory:
+            raise BackendRuntimeError(
+                "NOT_INSTALLED",
+                "관리형 백엔드를 설치하거나 기존 백엔드의 확장 폴더를 먼저 지정하세요",
+                stage="extension",
+            )
+        url, name = self._validate_repository_url(str(payload.get("repoUrl") or payload.get("url") or ""))
+        root = self._ensure_extension_mount(engine) if installed else self._validate_extension_root(
+            self._extension_root(engine), engine=engine
+        )
+        target = (root / name).resolve()
+        if not _is_relative_to(target, root.resolve()):
+            raise BackendRuntimeError("INVALID_EXTENSION_TARGET", "확장 설치 경로가 루트를 벗어납니다")
+        if target.exists():
+            raise BackendRuntimeError("EXTENSION_ALREADY_EXISTS", f"이미 설치된 확장입니다: {name}")
+        staging = root / f".{name}.aistudio-{uuid.uuid4().hex[:8]}"
+        was_running = self._process_running(engine)
+        if was_running:
+            self._stop(engine, on_progress)
+        self._progress(on_progress, engine, "install_extension", "download", f"{name} 저장소를 다운로드합니다", 20)
+        dependencies_pending = False
+        requirements_path = ""
+        try:
+            result = self.adapter.run(
+                ["git", "clone", url, str(staging)], cwd=root, timeout=900,
+                on_line=self._command_progress(on_progress, engine, "install_extension", "download", 35),
+            )
+            if result.returncode != 0:
+                raise BackendRuntimeError(
+                    "EXTENSION_FETCH_FAILED", f"{name} 다운로드에 실패했습니다",
+                    stage="extension", retryable=True,
+                    details={"output": result.output[-2000:]},
+                )
+            requirements = staging / "requirements.txt"
+            if requirements.is_file():
+                if installed:
+                    self._pip_install(
+                        engine, self._venv_python(self._venv_root(engine)), requirements,
+                        on_progress, "install_extension", 65,
+                    )
+                else:
+                    dependencies_pending = True
+            os.replace(staging, target)
+            if dependencies_pending:
+                requirements_path = str(target / "requirements.txt")
+        except Exception:
+            if staging.exists() and _is_relative_to(staging.resolve(), root.resolve()):
+                shutil.rmtree(staging, ignore_errors=True)
+            if was_running:
+                try:
+                    self._start(engine, on_progress, install_if_missing=False)
+                except Exception:
+                    pass
+            raise
+        if was_running:
+            self._start(engine, on_progress, install_if_missing=False)
+        if dependencies_pending:
+            message = (
+                f"{name} 확장 코드를 설치했습니다 · 기존 백엔드 Python에서 "
+                "requirements.txt 설치가 필요합니다"
+            )
+        else:
+            message = f"{name} 확장을 설치했습니다"
+            if was_running:
+                message += " · 백엔드를 재시작해 적용했습니다"
+        return {
+            "message": message,
+            "extensionId": name,
+            "restartRequired": False,
+            "dependenciesInstalled": not dependencies_pending,
+            "dependenciesPending": dependencies_pending,
+            "requirementsPath": requirements_path,
+        }
+
+    def _check_extension(
+        self,
+        engine: str,
+        payload: Mapping[str, Any],
+        on_progress: ProgressCallback | None,
+    ) -> dict[str, Any]:
+        target = self._extension_by_id(engine, payload)
+        if not (target / ".git").is_dir():
+            raise BackendRuntimeError("EXTENSION_NOT_GIT", "Git으로 설치된 확장만 버전을 확인할 수 있습니다")
+        url = self._git_origin_url(target)
+        if not url:
+            raise BackendRuntimeError("EXTENSION_REMOTE_MISSING", "확장 원격 저장소가 없습니다")
+        self._progress(on_progress, engine, "check_extension", "version_check", f"{target.name} 버전을 확인합니다", 40)
+        remote_result = self.adapter.run(["git", "ls-remote", url, "HEAD"], cwd=target, timeout=60)
+        if remote_result.returncode != 0 or not remote_result.output.strip():
+            raise BackendRuntimeError("VERSION_CHECK_FAILED", "확장 원격 버전을 확인하지 못했습니다", retryable=True)
+        remote = remote_result.output.strip().split()[0]
+        local = self._capture(["git", "rev-parse", "HEAD"], cwd=target)
+        marker = self._extension_marker(engine, target.name)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(
+            str(marker),
+            {
+                "repoUrl": self._sanitize_repository_url(url),
+                "remoteCommit": remote,
+                "lastChecked": _utc_now(),
+            },
+            indent=2,
+        )
+        available = bool(local and remote != local)
+        return {
+            "message": f"{target.name}: " + ("업데이트가 있습니다" if available else "최신입니다"),
+            "extensionId": target.name,
+            "localCommit": local,
+            "remoteCommit": remote,
+            "updateAvailable": available,
+        }
+
+    def _update_extension(
+        self,
+        engine: str,
+        payload: Mapping[str, Any],
+        on_progress: ProgressCallback | None,
+    ) -> dict[str, Any]:
+        state = self.snapshot()["engines"][engine]
+        installed = bool(state["installed"])
+        if not installed and not state.get("extensionDirExternal"):
+            raise BackendRuntimeError(
+                "NOT_INSTALLED",
+                "관리형 백엔드를 설치하거나 기존 백엔드의 확장 폴더를 먼저 지정하세요",
+                stage="extension_update",
+            )
+        target = self._extension_by_id(engine, payload)
+        if not (target / ".git").is_dir():
+            raise BackendRuntimeError("EXTENSION_NOT_GIT", "Git으로 설치된 확장만 업데이트할 수 있습니다")
+        dirty = self._capture(["git", "status", "--porcelain"], cwd=target)
+        if dirty:
+            raise BackendRuntimeError(
+                "EXTENSION_DIRTY", "수정된 파일이 있어 확장을 자동 업데이트하지 않습니다",
+                stage="extension_update",
+            )
+        was_running = self._process_running(engine)
+        if was_running:
+            self._stop(engine, on_progress)
+        dependencies_pending = False
+        requirements_path = ""
+        try:
+            self._progress(on_progress, engine, "update_extension", "download", f"{target.name}을 업데이트합니다", 35)
+            result = self.adapter.run(
+                ["git", "pull", "--ff-only"], cwd=target, timeout=600,
+                on_line=self._command_progress(on_progress, engine, "update_extension", "download", 50),
+            )
+            if result.returncode != 0:
+                raise BackendRuntimeError(
+                    "EXTENSION_UPDATE_FAILED", "확장을 fast-forward 업데이트하지 못했습니다",
+                    stage="extension_update", retryable=True,
+                    details={"output": result.output[-2000:]},
+                )
+            requirements = target / "requirements.txt"
+            if requirements.is_file():
+                if installed:
+                    self._pip_install(
+                        engine, self._venv_python(self._venv_root(engine)), requirements,
+                        on_progress, "update_extension", 75,
+                    )
+                else:
+                    dependencies_pending = True
+                    requirements_path = str(requirements)
+            checked = self._check_extension(engine, {"id": target.name}, on_progress)
+        except Exception:
+            if was_running:
+                try:
+                    self._start(engine, on_progress, install_if_missing=False)
+                except Exception:
+                    pass
+            raise
+        if was_running:
+            self._start(engine, on_progress, install_if_missing=False)
+        if dependencies_pending:
+            message = (
+                f"{target.name} 확장 코드를 업데이트했습니다 · 기존 백엔드 Python에서 "
+                "requirements.txt 설치가 필요합니다"
+            )
+        else:
+            message = f"{target.name} 확장을 업데이트했습니다"
+            if was_running:
+                message += " · 백엔드를 재시작해 적용했습니다"
+        return {
+            "message": message,
+            "extensionId": target.name,
+            "restartRequired": False,
+            "dependenciesInstalled": not dependencies_pending,
+            "dependenciesPending": dependencies_pending,
+            "requirementsPath": requirements_path,
+            **{key: value for key, value in checked.items() if key not in {"message"}},
+        }
+
+
+_MANAGER: BackendRuntimeManager | None = None
+_MANAGER_LOCK = threading.Lock()
+
+
+def get_backend_runtime_manager() -> BackendRuntimeManager:
+    """Process-wide manager preserving the owned ``Popen`` handles."""
+    global _MANAGER
+    with _MANAGER_LOCK:
+        if _MANAGER is None:
+            _MANAGER = BackendRuntimeManager()
+        return _MANAGER
+
+
+def reset_backend_runtime_manager_for_tests() -> None:
+    """Test helper; production callers should never drop owned process handles."""
+    global _MANAGER
+    with _MANAGER_LOCK:
+        if _MANAGER is not None:
+            _MANAGER.stop_all_owned()
+        _MANAGER = None

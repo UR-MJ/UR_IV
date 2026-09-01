@@ -88,6 +88,7 @@ class GeneratorMainUI(
 
             # 3. UI 및 프록시 레이어 구축
             self._setup_ui()
+            self.vue_bridge.backendRuntimeEvent.connect(self._on_backend_runtime_event)
 
             # 에러 핸들러에 bridge 등록
             from core.error_handler import set_bridge
@@ -1265,6 +1266,127 @@ class GeneratorMainUI(
             from core.error_handler import handle_error
             handle_error('E010', f'Action: {action}', e)
 
+    @pyqtSlot(str)
+    def _on_backend_runtime_event(self, payload_json: str) -> None:
+        """managed runtime worker 결과를 GUI 스레드의 기존 backend seam에 연결."""
+        try:
+            event = json.loads(payload_json or '{}')
+        except Exception:
+            return
+        if not isinstance(event, dict):
+            return
+
+        event_type = str(event.get('type') or '')
+        action = str(event.get('action') or '')
+        engine = str(event.get('engine') or '')
+        startup = bool(event.get('startup', False))
+
+        if startup and event_type in {'started', 'progress'}:
+            message = str(event.get('message') or '앱 관리형 백엔드를 시작하는 중입니다…')
+            try:
+                self.viewer_label.setText(f'{message}\n\n설정에서 진행 상태를 확인할 수 있습니다.')
+            except Exception:
+                pass
+            return
+
+        if event_type == 'completed' and bool(event.get('ok')):
+            if bool(event.get('activate')) and action in {'start', 'use'}:
+                result = event.get('result') if isinstance(event.get('result'), dict) else {}
+                state = event.get('state') if isinstance(event.get('state'), dict) else {}
+                url = str(
+                    result.get('apiUrl') or result.get('url') or state.get('apiUrl') or ''
+                ).strip()
+                if not url:
+                    self._backend_connected = False
+                    self._managed_runtime_startup_inflight = False
+                    self._backend_startup_result = 'managed_failed'
+                    self._managed_runtime_startup_error = 'runtime이 API URL을 반환하지 않았습니다'
+                    self.vue_bridge.showNotification.emit(
+                        'error', '백엔드는 시작됐지만 API URL을 확인하지 못했습니다'
+                    )
+                    return
+                try:
+                    from backends import BackendType, set_backend
+
+                    backend_type = (
+                        BackendType.WEBUI if engine == 'forge' else BackendType.COMFYUI
+                    )
+                    set_backend(backend_type, url)
+                    self._backend_startup_result = 'managed_connected'
+                    # startup 연결 실패는 modal 대신 offline으로 폴백해야 하므로
+                    # info worker 결과가 올 때까지 이 표식을 유지한다.
+                    self._managed_runtime_startup_inflight = startup
+                    self._backend_connected = False
+                    if hasattr(self, 'save_settings'):
+                        self.save_settings()
+                    # startup apply 전 성공은 _apply_backend_startup_result가 연결하고,
+                    # apply가 이미 pending으로 지나간 뒤 성공하면 여기서 연결한다.
+                    # 이 경계가 없으면 타이밍에 따라 info worker가 두 번 시작된다.
+                    if not startup or getattr(self, '_managed_runtime_startup_apply_done', False):
+                        self.load_webui_info()
+                    if not startup:
+                        label = 'Forge Neo' if engine == 'forge' else 'ComfyUI'
+                        self.vue_bridge.showNotification.emit(
+                            'success', f'{label}를 시작하고 현재 백엔드로 선택했습니다'
+                        )
+                except Exception as exc:
+                    self._backend_connected = False
+                    self._managed_runtime_startup_inflight = False
+                    self._backend_startup_result = 'managed_failed'
+                    self._managed_runtime_startup_error = str(exc)
+                    self.vue_bridge.showNotification.emit(
+                        'error', f'실행된 백엔드 연결 실패: {exc}'
+                    )
+                return
+
+            if action == 'stop':
+                try:
+                    from backends import BackendType, get_backend_type
+
+                    stopped_type = (
+                        BackendType.WEBUI if engine == 'forge' else BackendType.COMFYUI
+                    )
+                    if get_backend_type() == stopped_type:
+                        self._backend_connected = False
+                        self.btn_generate.setEnabled(False)
+                        self.viewer_label.setText(
+                            '앱 관리형 백엔드를 중지했습니다.\n\n설정에서 다시 시작하세요.'
+                        )
+                except Exception:
+                    pass
+            return
+
+        if event_type == 'error':
+            error = event.get('error')
+            if isinstance(error, dict):
+                message = str(error.get('message') or error.get('error') or error)
+                error_code = str(error.get('code') or '')
+            else:
+                message = str(error or event.get('message') or '알 수 없는 오류')
+                error_code = ''
+            if startup:
+                self._backend_connected = False
+                self._managed_runtime_startup_inflight = False
+                self._backend_startup_result = 'managed_failed'
+                self._managed_runtime_startup_error = message
+                self.btn_generate.setEnabled(False)
+                self.viewer_label.setText(
+                    '앱 관리형 백엔드를 자동 시작하지 못했습니다.\n'
+                    '설정에서 다시 시작하거나 기존 API URL을 연결하세요.\n\n'
+                    + message
+                )
+            elif error_code == 'BACKEND_SWITCH_ROLLBACK_FAILED':
+                self._backend_connected = False
+                self.btn_generate.setEnabled(False)
+                self.viewer_label.setText(
+                    '새 관리형 백엔드와 이전 백엔드를 모두 시작하지 못했습니다.\n'
+                    '설정에서 사용할 백엔드를 다시 시작하세요.\n\n'
+                    + message
+                )
+            self.vue_bridge.showNotification.emit(
+                'error', f'백엔드 {action} 실패: {message}'
+            )
+
     def _persist_search_results(self, active, full=None):
         """검색 결과 디스크 영속화 — 단일 쓰기 경로(중복 제거).
         디스크 = 영속 단일 소스. 메모리(filtered_results/shuffled_prompt_deck)는 런타임 캐시,
@@ -1904,6 +2026,7 @@ class GeneratorMainUI(
             # 5. 백엔드 연결 + 모델/샘플러/LoRA → Vue
             _step("백엔드 연결 · 모델 로딩 중…", 60)
             self._apply_backend_startup_result()
+            self._managed_runtime_startup_apply_done = True
             self._await_signal(getattr(self, 'info_worker', None), 'info_ready', 8000, app,
                                also='error_occurred')
             _step("완료", 100)
@@ -1921,6 +2044,7 @@ class GeneratorMainUI(
             except Exception: pass
             try:
                 self._apply_backend_startup_result()
+                self._managed_runtime_startup_apply_done = True
             except Exception: pass
             try:
                 self._restore_search_deck()
@@ -2511,7 +2635,20 @@ class GeneratorMainUI(
                 self.db.close()
         except Exception:
             pass
+        self._stop_owned_backend_runtimes()
         # 최종 종료는 os._exit 유지 — QApplication.quit()은 QWebEngineProfile/Page 해체 순서
         # 크래시·행이 재발함(커밋 24d7856d6, e6f964c6f 이력). 위에서 설정 저장 + QThread
         # 정지·대기 + DB close를 마쳤고, 에디터/캡션/영속 쓰기는 Python 데몬 스레드라 안전.
         os._exit(0)
+
+    def _stop_owned_backend_runtimes(self) -> None:
+        """앱이 시작한 process만 종료한다. 외부 URL/process는 절대 건드리지 않는다."""
+        try:
+            from core.backend_runtime import get_backend_runtime_manager
+
+            manager = get_backend_runtime_manager()
+            # manager는 이 프로세스가 만든 live Popen handle만 보관하므로 외부
+            # Forge/ComfyUI를 건드릴 수 없다.
+            manager.stop_all_owned()
+        except Exception as exc:
+            print(f"[Runtime] owned process 종료 실패(계속 종료): {exc}")

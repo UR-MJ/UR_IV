@@ -56,7 +56,197 @@
           </div>
         </div>
 
-        <!-- 3. Forge Neo model directories -->
+        <!-- 3. App-managed runtimes / engines -->
+        <div v-show="currentTab === 'runtimes'" class="section-fade runtime-section">
+          <div class="hint-banner runtime-safety-warning">
+            <strong>SECURITY NOTICE</strong>
+            확장 저장소는 엔진 프로세스 안에서 코드를 실행할 수 있습니다. 신뢰하는 저장소만 설치하세요.
+            외부 설치의 확장 폴더에는 사용자가 경로를 선택하고 <b>SAVE</b>한 뒤에만 씁니다.
+          </div>
+          <div v-if="runtimeReadOnlyReason" class="hint-banner runtime-readonly-warning">
+            <strong>READ ONLY</strong> {{ runtimeReadOnlyReason }}
+          </div>
+
+          <div class="runtime-card-list">
+            <article
+              v-for="engineId in runtimeEngineOrder"
+              :key="engineId"
+              class="glass-card runtime-card"
+              :class="`runtime-card-${engineId}`"
+            >
+              <header class="runtime-card-header">
+                <div>
+                  <div class="runtime-eyebrow">APP-ISOLATED RUNTIME</div>
+                  <h2>{{ runtimeEngines[engineId].name }}</h2>
+                </div>
+                <div class="runtime-badges" aria-label="Runtime status">
+                  <span class="runtime-badge" :class="{ on: runtimeEngines[engineId].installed }">
+                    {{ runtimeEngines[engineId].installed ? 'INSTALLED' : 'NOT INSTALLED' }}
+                  </span>
+                  <span class="runtime-badge" :class="{ on: runtimeEngines[engineId].running }">
+                    {{ runtimeEngines[engineId].running ? 'RUNNING' : 'STOPPED' }}
+                  </span>
+                  <span class="runtime-badge health" :class="{ on: runtimeEngines[engineId].healthy }">
+                    {{ runtimeEngines[engineId].healthy ? 'HEALTHY' : 'NOT READY' }}
+                  </span>
+                  <span class="runtime-badge busy" :class="{ on: runtimeEngines[engineId].busy }">
+                    {{ runtimeEngines[engineId].busy ? 'BUSY' : 'IDLE' }}
+                  </span>
+                  <span class="runtime-badge active" :class="{ on: runtimeEngines[engineId].active }">
+                    {{ runtimeEngines[engineId].active ? 'ACTIVE' : 'NOT ACTIVE' }}
+                  </span>
+                </div>
+              </header>
+
+              <div class="runtime-meta-grid">
+                <div class="runtime-meta runtime-meta-wide">
+                  <span>ISOLATED ROOT</span>
+                  <code :title="runtimeEngines[engineId].root">{{ runtimeEngines[engineId].root || 'Not installed' }}</code>
+                </div>
+                <div class="runtime-meta">
+                  <span>API ENDPOINT</span>
+                  <code>{{ runtimeEngines[engineId].apiUrl || 'Not assigned' }}</code>
+                </div>
+                <div class="runtime-meta">
+                  <span>VERSION</span>
+                  <strong>{{ runtimeEngines[engineId].version || 'Unknown' }}</strong>
+                </div>
+                <div class="runtime-meta runtime-meta-wide">
+                  <span>UPDATE STATUS</span>
+                  <strong :class="{ 'update-ready': runtimeEngines[engineId].updateAvailable }">
+                    {{ runtimeEngines[engineId].updateStatus || 'Not checked' }}
+                  </strong>
+                </div>
+              </div>
+
+              <div class="runtime-toggle-row">
+                <div>
+                  <strong>AUTO-START WITH IMAGE VIEWER</strong>
+                  <small>앱 시작 시 이 격리 런타임을 자동으로 실행합니다.</small>
+                </div>
+                <ToggleSwitch
+                  :model-value="runtimeEngines[engineId].autoStart"
+                  :disabled="runtimeMutationDisabled(engineId)"
+                  @update:model-value="setRuntimeAutoStart(engineId, $event)"
+                />
+              </div>
+
+              <section class="runtime-subsection">
+                <div class="runtime-subheading">
+                  <div>
+                    <h3>EXTENSION FOLDER</h3>
+                    <p>{{ runtimeExtensionFolderHint(engineId) }}</p>
+                  </div>
+                  <span v-if="runtimeExtensionFolderDirty[engineId]" class="runtime-unsaved">UNSAVED</span>
+                </div>
+                <div class="runtime-path-control">
+                  <input
+                    v-model="runtimeExtensionDrafts[engineId]"
+                    spellcheck="false"
+                    :placeholder="runtimeExtensionPlaceholder(engineId)"
+                    :disabled="runtimeMutationDisabled(engineId)"
+                    @input="runtimeExtensionFolderDirty[engineId] = true"
+                  />
+                  <button
+                    class="btn-pill compact"
+                    :disabled="runtimeMutationDisabled(engineId)"
+                    :title="runtimeMutationTitle"
+                    @click="browseRuntimeExtensionDirectory(engineId)"
+                  >BROWSE</button>
+                  <button
+                    class="btn-pill compact primary"
+                    :disabled="runtimeMutationDisabled(engineId) || !runtimeExtensionFolderDirty[engineId] || !runtimeExtensionDrafts[engineId].trim()"
+                    :title="runtimeMutationTitle"
+                    @click="saveRuntimeExtensionDirectory(engineId)"
+                  >SAVE</button>
+                </div>
+              </section>
+
+              <div class="runtime-action-grid">
+                <button class="btn-pill primary" :disabled="runtimeActionDisabled(engineId, 'install')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'install')">INSTALL</button>
+                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'update')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'update')">UPDATE</button>
+                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'check_update')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'check_update')">CHECK</button>
+                <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'start')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'start')">START</button>
+                <button class="btn-pill danger" :disabled="runtimeActionDisabled(engineId, 'stop')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'stop')">STOP</button>
+                <button class="btn-pill accent" :disabled="runtimeActionDisabled(engineId, 'use')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'use')">USE</button>
+              </div>
+
+              <section class="runtime-subsection runtime-extension-section">
+                <div class="runtime-subheading">
+                  <div>
+                    <h3>INSTALL EXTENSION REPOSITORY</h3>
+                    <p>GitHub 저장소 URL을 검토한 뒤 이 엔진의 확장 폴더에 설치합니다.</p>
+                  </div>
+                </div>
+                <div class="runtime-repo-control">
+                  <input
+                    v-model="runtimeRepoUrls[engineId]"
+                    type="url"
+                    spellcheck="false"
+                    placeholder="https://github.com/owner/repository.git"
+                    :disabled="runtimeMutationDisabled(engineId) || !runtimeExtensionWritable(engineId)"
+                    @keyup.enter="installRuntimeExtension(engineId)"
+                  />
+                  <button
+                    class="btn-pill primary"
+                    :disabled="runtimeMutationDisabled(engineId) || !runtimeExtensionWritable(engineId) || !runtimeRepoUrls[engineId].trim()"
+                    :title="runtimeMutationTitle"
+                    @click="installRuntimeExtension(engineId)"
+                  >INSTALL</button>
+                </div>
+                <div
+                  v-if="runtimeEngines[engineId].extensionDirExternal && !runtimeEngines[engineId].installed"
+                  class="runtime-dependency-note"
+                >
+                  외부 폴더에는 확장 코드만 설치합니다. requirements.txt가 있으면 기존 백엔드의 Python 환경에 직접 설치해야 합니다.
+                </div>
+
+                <div class="runtime-extension-list">
+                  <div v-if="runtimeEngines[engineId].extensions.length === 0" class="runtime-empty">
+                    설치된 확장이 없습니다.
+                  </div>
+                  <div
+                    v-for="extension in runtimeEngines[engineId].extensions"
+                    :key="extension.id"
+                    class="runtime-extension-item"
+                  >
+                    <div class="runtime-extension-copy">
+                      <div>
+                        <strong>{{ extension.name }}</strong>
+                        <span v-if="extension.version">{{ extension.version }}</span>
+                        <span v-if="extension.updateAvailable" class="extension-update-badge">UPDATE</span>
+                      </div>
+                      <code :title="extension.repoUrl">{{ extension.repoUrl || extension.status || 'Local extension' }}</code>
+                    </div>
+                    <div class="runtime-extension-actions">
+                      <button
+                        class="btn-pill compact"
+                        :disabled="runtimeExtensionActionDisabled(engineId, extension)"
+                        :title="runtimeMutationTitle"
+                        @click="runRuntimeExtensionOperation(engineId, 'check_extension', extension)"
+                      >CHECK</button>
+                      <button
+                        class="btn-pill compact"
+                        :class="{ accent: extension.updateAvailable }"
+                        :disabled="runtimeExtensionActionDisabled(engineId, extension)"
+                        :title="runtimeMutationTitle"
+                        @click="runRuntimeExtensionOperation(engineId, 'update_extension', extension)"
+                      >UPDATE</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div v-if="runtimeEngines[engineId].message" class="runtime-message">
+                {{ runtimeEngines[engineId].message }}
+              </div>
+            </article>
+          </div>
+
+          <div v-if="runtimeStatus" class="runtime-global-status" role="status">{{ runtimeStatus }}</div>
+        </div>
+
+        <!-- 4. Forge Neo model directories -->
         <div v-show="currentTab === 'forge'" class="section-fade">
           <div class="hint-banner forge-hint">
             이 설정은 Image viewer가 VAE·TE를 직접 찾고 Forge 파일 구성을 확인할 때 사용합니다.
@@ -430,7 +620,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
@@ -449,6 +639,40 @@ interface ForgePathEntry {
   count: number
 }
 
+type RuntimeEngineId = 'forge' | 'comfyui'
+type RuntimeAction = 'install' | 'update' | 'check_update' | 'start' | 'stop' | 'use'
+type RuntimeExtensionAction = 'check_extension' | 'update_extension'
+
+interface RuntimeExtensionState {
+  id: string
+  name: string
+  repoUrl: string
+  version: string
+  updateAvailable: boolean
+  status: string
+  busy: boolean
+}
+
+interface RuntimeEngineState {
+  engine: RuntimeEngineId
+  name: string
+  installed: boolean
+  running: boolean
+  healthy: boolean
+  busy: boolean
+  active: boolean
+  autoStart: boolean
+  root: string
+  apiUrl: string
+  version: string
+  updateAvailable: boolean
+  updateStatus: string
+  extensionDir: string
+  extensionDirExternal: boolean
+  extensions: RuntimeExtensionState[]
+  message: string
+}
+
 // 템플릿 인라인 핸들러(82·146행)가 window.localStorage를 참조 — 셋업 스코프에 노출
 const window = globalThis.window
 
@@ -456,6 +680,7 @@ const subTabs: SubTab[] = [
   // keywords: 사용자 검색 시 라벨 외에도 매칭할 한/영 키워드들
   { id: 'general',   label: 'GENERAL',   icon: '⚙️', keywords: 'general 일반 시스템 코어 버전' },
   { id: 'api',       label: 'NETWORK',   icon: '🌐', keywords: 'network api 네트워크 webui comfy url 백엔드 연결' },
+  { id: 'runtimes',  label: 'RUNTIMES / ENGINES', icon: '🖥️', keywords: 'runtime engine forge neo comfyui install update start stop extension 확장 설치 업데이트 실행' },
   { id: 'forge',     label: 'FORGE',     icon: '🧩', keywords: 'forge neo checkpoint model lora vae te text encoder 경로 폴더 모델 로라' },
   { id: 'prompt',    label: 'LOGIC',     icon: '📝', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
   { id: 'tabs',      label: 'WORKSPACE', icon: '🗂️', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
@@ -487,6 +712,41 @@ function focusSearch() {
 }
 const webuiUrl = ref('http://127.0.0.1:7860')
 const comfyUrl = ref('http://127.0.0.1:8188')
+
+function createRuntimeEngine(engine: RuntimeEngineId, name: string): RuntimeEngineState {
+  return {
+    engine, name,
+    installed: false, running: false, healthy: false, busy: false, active: false, autoStart: false,
+    root: '', apiUrl: '', version: '', updateAvailable: false, updateStatus: 'Not checked',
+    extensionDir: '', extensionDirExternal: false, extensions: [], message: '',
+  }
+}
+
+const runtimeEngineOrder: RuntimeEngineId[] = ['forge', 'comfyui']
+const runtimeEngines = reactive<Record<RuntimeEngineId, RuntimeEngineState>>({
+  forge: createRuntimeEngine('forge', 'Forge Neo'),
+  comfyui: createRuntimeEngine('comfyui', 'ComfyUI'),
+})
+const runtimeExtensionDrafts = reactive<Record<RuntimeEngineId, string>>({ forge: '', comfyui: '' })
+const runtimeExtensionFolderDirty = reactive<Record<RuntimeEngineId, boolean>>({ forge: false, comfyui: false })
+const runtimeRepoUrls = reactive<Record<RuntimeEngineId, string>>({ forge: '', comfyui: '' })
+const runtimeNativeOperations = ref(false)
+const runtimeBridgeAvailable = ref(false)
+const runtimeLoaded = ref(false)
+const runtimeLoading = ref(false)
+const runtimeStatus = ref('')
+const runtimeWebMode = Boolean((window as any).__AISTUDIO_WS_PORT__ || (window as any).__AISTUDIO_WS_URL__)
+const runtimeCanMutate = computed(() =>
+  runtimeLoaded.value && runtimeBridgeAvailable.value && runtimeNativeOperations.value && !runtimeWebMode
+)
+const runtimeReadOnlyReason = computed(() => {
+  if (runtimeWebMode) return '웹 모드에서는 설치·업데이트·프로세스·외부 폴더 작업을 사용할 수 없습니다.'
+  if (runtimeLoaded.value && !runtimeBridgeAvailable.value) return '현재 백엔드는 런타임 관리 기능을 제공하지 않습니다.'
+  if (runtimeLoaded.value && !runtimeNativeOperations.value) return '이 환경에서는 네이티브 런타임 작업이 비활성화되어 있습니다.'
+  return ''
+})
+const runtimeMutationTitle = computed(() => runtimeReadOnlyReason.value || '런타임 작업 실행')
+
 const forgePathFields: Array<{ key: ForgePathKey; label: string; description: string }> = [
   { key: 'checkpoint_dir', label: 'CHECKPOINT / MODEL', description: 'Stable-diffusion 모델 폴더' },
   { key: 'lora_dir', label: 'LORA', description: 'LoRA 가중치 폴더' },
@@ -587,6 +847,291 @@ function applyUiPrefs(prefs: any) {
   if (prefs.ollamaUrl) { ollamaUrl.value = prefs.ollamaUrl; window.localStorage.setItem('ollamaUrl', prefs.ollamaUrl) }
   if (prefs.ollamaModel) { ollamaModel.value = prefs.ollamaModel; window.localStorage.setItem('ollamaModel', prefs.ollamaModel) }
   if (typeof prefs.ollamaUnloadOnGen === 'boolean') { ollamaUnloadOnGen.value = prefs.ollamaUnloadOnGen; window.localStorage.setItem('ollamaUnloadOnGen', String(prefs.ollamaUnloadOnGen)) }
+}
+
+function parseRuntimePayload(raw: unknown): any {
+  let payload: any = raw
+  for (let i = 0; i < 2 && typeof payload === 'string'; i += 1) {
+    payload = JSON.parse(payload || '{}')
+  }
+  if (payload && typeof payload === 'object' && payload.value !== undefined && payload.engines === undefined) {
+    return parseRuntimePayload(payload.value)
+  }
+  return payload && typeof payload === 'object' ? payload : {}
+}
+
+function normalizeRuntimeEngineId(value: unknown): RuntimeEngineId | null {
+  const key = String(value || '').trim().toLowerCase().replace(/-/g, '_')
+  if (key === 'forge' || key === 'forge_neo' || key === 'webui') return 'forge'
+  if (key === 'comfyui' || key === 'comfy_ui' || key === 'comfy') return 'comfyui'
+  return null
+}
+
+function normalizeRuntimeExtensions(raw: unknown): RuntimeExtensionState[] {
+  const entries: any[] = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object'
+      ? Object.entries(raw as Record<string, unknown>).map(([id, item]) => (
+          item && typeof item === 'object' ? { id, ...(item as Record<string, unknown>) } : { id, name: item }
+        ))
+      : []
+  return entries.map((item, index) => {
+    const extension = item && typeof item === 'object' ? item as Record<string, any> : {}
+    const repoUrl = String(extension.repoUrl || extension.url || extension.repository || '')
+    return {
+      id: String(extension.id || extension.slug || extension.name || repoUrl || `extension-${index}`),
+      name: String(extension.name || extension.id || extension.slug || `Extension ${index + 1}`),
+      repoUrl,
+      version: String(extension.version || extension.currentVersion || extension.commit || ''),
+      updateAvailable: Boolean(extension.updateAvailable || extension.hasUpdate),
+      status: String(extension.status || extension.updateStatus || ''),
+      busy: Boolean(extension.busy),
+    }
+  })
+}
+
+function applyRuntimeEngineState(engineId: RuntimeEngineId, raw: any) {
+  if (!raw || typeof raw !== 'object') return
+  const current = runtimeEngines[engineId]
+  const updateAvailable = Boolean(raw.updateAvailable ?? raw.hasUpdate ?? current.updateAvailable)
+  const latestVersion = String(raw.latestVersion || raw.availableVersion || '')
+  const extensionDir = String(
+    raw.extensionDir || raw.extensionDirectory || raw.extensionFolder || raw.paths?.extensionDir || ''
+  )
+  Object.assign(current, {
+    engine: engineId,
+    name: String(raw.name || current.name),
+    installed: Boolean(raw.installed ?? current.installed),
+    running: Boolean(raw.running ?? current.running),
+    healthy: Boolean(raw.healthy ?? raw.ready ?? current.healthy),
+    busy: Boolean(raw.busy ?? current.busy),
+    active: Boolean(raw.active ?? current.active),
+    autoStart: Boolean(raw.autoStart ?? raw.autostart ?? current.autoStart),
+    root: String(raw.root || raw.installRoot || raw.isolatedRoot || current.root || ''),
+    apiUrl: String(raw.apiUrl || raw.endpoint || raw.url || current.apiUrl || ''),
+    version: String(raw.version || raw.currentVersion || current.version || ''),
+    updateAvailable,
+    updateStatus: String(
+      raw.updateStatus || raw.versionStatus ||
+      (updateAvailable ? `Update available${latestVersion ? ` · ${latestVersion}` : ''}` : current.updateStatus)
+    ),
+    extensionDir: extensionDir || current.extensionDir,
+    extensionDirExternal: Boolean(raw.extensionDirExternal ?? current.extensionDirExternal),
+    extensions: normalizeRuntimeExtensions(raw.extensions ?? raw.installedExtensions ?? current.extensions),
+    message: String(raw.message || raw.statusMessage || raw.error || ''),
+  })
+  if (extensionDir && runtimeExtensionFolderDirty[engineId]
+    && extensionDir.trim() === runtimeExtensionDrafts[engineId].trim()) {
+    runtimeExtensionFolderDirty[engineId] = false
+  }
+  if (!runtimeExtensionFolderDirty[engineId]) {
+    runtimeExtensionDrafts[engineId] = current.extensionDir
+  }
+}
+
+function applyRuntimeSnapshot(raw: unknown) {
+  const payload = parseRuntimePayload(raw)
+  if (payload.ok === false) throw new Error(payload.error || '런타임 상태를 불러오지 못했습니다')
+  const snapshot = payload.snapshot && typeof payload.snapshot === 'object' ? payload.snapshot : payload
+  if (typeof snapshot.nativeOperations === 'boolean') runtimeNativeOperations.value = snapshot.nativeOperations
+  else if (typeof payload.nativeOperations === 'boolean') runtimeNativeOperations.value = payload.nativeOperations
+
+  const engines = snapshot.engines || snapshot.runtimes || snapshot.instances || snapshot
+  if (Array.isArray(engines)) {
+    for (const engine of engines) {
+      const engineId = normalizeRuntimeEngineId(engine?.engine || engine?.id || engine?.kind)
+      if (engineId) applyRuntimeEngineState(engineId, engine)
+    }
+  } else if (engines && typeof engines === 'object') {
+    for (const [key, engine] of Object.entries(engines)) {
+      const engineId = normalizeRuntimeEngineId((engine as any)?.engine || key)
+      if (engineId) applyRuntimeEngineState(engineId, engine)
+    }
+  }
+  runtimeLoaded.value = true
+}
+
+async function callRuntimeBridge(method: string, ...args: unknown[]): Promise<any> {
+  const backend: any = await getBackend()
+  const fn = backend?.[method]
+  if (typeof fn !== 'function') throw new Error(`백엔드가 ${method} 기능을 지원하지 않습니다`)
+  return new Promise((resolve, reject) => {
+    try {
+      fn(...args, (raw: unknown) => {
+        try { resolve(parseRuntimePayload(raw)) }
+        catch (error) { reject(error) }
+      })
+    } catch (error) {
+      reject(error)
+    }
+  })
+}
+
+function showRuntimeError(error: unknown, engineId?: RuntimeEngineId) {
+  const message = error instanceof Error ? error.message : String(error)
+  runtimeStatus.value = message
+  if (engineId) {
+    runtimeEngines[engineId].busy = false
+    runtimeEngines[engineId].message = message
+  }
+  requestAction('show_toast', { type: 'error', msg: message })
+}
+
+async function loadBackendRuntimeState(backend?: any) {
+  const bk = backend || await getBackend()
+  runtimeBridgeAvailable.value = typeof bk?.getBackendRuntimeState === 'function'
+    && typeof bk?.runBackendRuntimeOperation === 'function'
+  if (typeof bk?.getBackendRuntimeState !== 'function') {
+    runtimeNativeOperations.value = false
+    runtimeLoaded.value = true
+    return
+  }
+  runtimeLoading.value = true
+  try {
+    const payload = await new Promise<any>((resolve, reject) => {
+      bk.getBackendRuntimeState((raw: unknown) => {
+        try { resolve(parseRuntimePayload(raw)) }
+        catch (error) { reject(error) }
+      })
+    })
+    applyRuntimeSnapshot(payload)
+  } catch (error) {
+    runtimeLoaded.value = true
+    showRuntimeError(error)
+  } finally {
+    runtimeLoading.value = false
+  }
+}
+
+function runtimeMutationDisabled(engineId: RuntimeEngineId) {
+  return !runtimeCanMutate.value || runtimeLoading.value || runtimeEngines[engineId].busy
+}
+
+function runtimeActionDisabled(engineId: RuntimeEngineId, action: RuntimeAction) {
+  if (runtimeMutationDisabled(engineId)) return true
+  const engine = runtimeEngines[engineId]
+  if (action === 'install') return engine.installed
+  if (action === 'update') return !engine.installed
+  if (action === 'start') return !engine.installed || engine.running
+  if (action === 'stop') return !engine.running
+  if (action === 'use') return !engine.healthy || engine.active
+  return false
+}
+
+function runtimeExtensionActionDisabled(engineId: RuntimeEngineId, extension: RuntimeExtensionState) {
+  return runtimeMutationDisabled(engineId) || !runtimeExtensionWritable(engineId) || extension.busy
+}
+
+function runtimeExtensionWritable(engineId: RuntimeEngineId) {
+  const engine = runtimeEngines[engineId]
+  return engine.installed || engine.extensionDirExternal
+}
+
+function runtimeExtensionPlaceholder(engineId: RuntimeEngineId) {
+  return engineId === 'forge' ? '...\\Forge Neo\\extensions' : '...\\ComfyUI\\custom_nodes'
+}
+
+function runtimeExtensionFolderHint(engineId: RuntimeEngineId) {
+  return engineId === 'forge'
+    ? 'Forge extensions 폴더. 외부 설치를 연결할 때 직접 지정할 수 있습니다.'
+    : 'ComfyUI custom_nodes 폴더. 외부 설치를 연결할 때 직접 지정할 수 있습니다.'
+}
+
+async function runRuntimeOperation(
+  engineId: RuntimeEngineId,
+  action: RuntimeAction | 'set_auto_start' | 'save_extension_dir' | 'install_extension' | RuntimeExtensionAction,
+  payload: Record<string, unknown> = {},
+) {
+  if (runtimeMutationDisabled(engineId)) return false
+  const engine = runtimeEngines[engineId]
+  engine.busy = true
+  engine.message = ''
+  runtimeStatus.value = `${engine.name}: ${action.replace(/_/g, ' ')} 요청 중…`
+  try {
+    const result = await callRuntimeBridge(
+      'runBackendRuntimeOperation', engineId, action, JSON.stringify(payload),
+    )
+    if (result.ok === false || result.accepted === false) {
+      throw new Error(result.error || result.message || '런타임 작업이 거부되었습니다')
+    }
+    if (result.state) applyRuntimeEngineState(engineId, result.state)
+    runtimeStatus.value = String(result.message || `${engine.name}: 작업이 접수되었습니다.`)
+    requestAction('show_toast', { type: 'info', msg: runtimeStatus.value })
+    await loadBackendRuntimeState()
+    return true
+  } catch (error) {
+    showRuntimeError(error, engineId)
+    return false
+  }
+}
+
+async function setRuntimeAutoStart(engineId: RuntimeEngineId, autoStart: boolean) {
+  await runRuntimeOperation(engineId, 'set_auto_start', { autoStart })
+}
+
+async function browseRuntimeExtensionDirectory(engineId: RuntimeEngineId) {
+  if (runtimeMutationDisabled(engineId)) return
+  try {
+    const result = await callRuntimeBridge('selectBackendExtensionDirectory', engineId)
+    if (result.cancelled) return
+    if (result.ok === false) throw new Error(result.error || '확장 폴더를 선택하지 못했습니다')
+    const path = String(result.path || result.directory || '')
+    if (!path) throw new Error('선택된 확장 폴더가 없습니다')
+    runtimeExtensionDrafts[engineId] = path
+    runtimeExtensionFolderDirty[engineId] = true
+  } catch (error) {
+    showRuntimeError(error, engineId)
+  }
+}
+
+async function saveRuntimeExtensionDirectory(engineId: RuntimeEngineId) {
+  const extensionDir = runtimeExtensionDrafts[engineId].trim()
+  if (!extensionDir) return
+  await runRuntimeOperation(engineId, 'save_extension_dir', { extensionDir })
+}
+
+async function installRuntimeExtension(engineId: RuntimeEngineId) {
+  const repoUrl = runtimeRepoUrls[engineId].trim()
+  if (!repoUrl) return
+  await runRuntimeOperation(engineId, 'install_extension', { repoUrl })
+}
+
+async function runRuntimeExtensionOperation(
+  engineId: RuntimeEngineId,
+  action: RuntimeExtensionAction,
+  extension: RuntimeExtensionState,
+) {
+  await runRuntimeOperation(engineId, action, {
+    extensionId: extension.id,
+    repoUrl: extension.repoUrl,
+  })
+}
+
+function handleBackendRuntimeEvent(raw: unknown) {
+  try {
+    const payload = parseRuntimePayload(raw)
+    const engineId = normalizeRuntimeEngineId(payload.engine || payload.engineId || payload.state?.engine)
+    if (payload.snapshot || payload.engines || payload.runtimes) applyRuntimeSnapshot(payload)
+    else if (engineId && payload.state) applyRuntimeEngineState(engineId, payload.state)
+    else if (engineId) applyRuntimeEngineState(engineId, payload)
+
+    const message = String(payload.message || payload.error || '')
+    if (message) {
+      runtimeStatus.value = message
+      if (engineId) runtimeEngines[engineId].message = message
+    }
+    const eventType = String(payload.type || payload.event || '').toLowerCase()
+    if (['complete', 'completed', 'failed', 'error', 'cancelled', 'canceled'].includes(eventType)) {
+      if (engineId) runtimeEngines[engineId].busy = false
+      if (engineId && ['complete', 'completed'].includes(eventType)
+        && String(payload.action || '') === 'install_extension') {
+        runtimeRepoUrls[engineId] = ''
+      }
+      window.setTimeout(() => { void loadBackendRuntimeState() }, 150)
+    }
+  } catch (error) {
+    showRuntimeError(error)
+  }
 }
 
 function parseForgePayload(raw: unknown): any {
@@ -710,12 +1255,14 @@ async function resetForgePaths() {
 
 // UI prefs 로드 시 동기화
 import { onBackendEvent, getBackend } from '../bridge.js'
+let disconnectBackendRuntimeEvent: (() => void) | null = null
 onMounted(async () => {
   onBackendEvent('ollamaModelsReady', handleOllamaModels)
+  disconnectBackendRuntimeEvent = onBackendEvent('backendRuntimeEvent', handleBackendRuntimeEvent)
   autoLoadOllamaModels()   // AI Assistant 모델 목록 시작 시 자동 로드
   // defaults 로드
   const bk: any = await getBackend()
-  await loadForgePaths(bk)
+  await Promise.all([loadForgePaths(bk), loadBackendRuntimeState(bk)])
   if (bk.getTabDefaults) {
     bk.getTabDefaults((json: string) => {
       try { const d = JSON.parse(json); Object.assign(defaults, d) } catch {}
@@ -730,6 +1277,10 @@ onMounted(async () => {
   onBackendEvent('uiPrefsLoaded', (json: string) => {
     try { applyUiPrefs(JSON.parse(json)) } catch {}
   })
+})
+onUnmounted(() => {
+  disconnectBackendRuntimeEvent?.()
+  disconnectBackendRuntimeEvent = null
 })
 function setBlockMode() {
   window.localStorage.setItem('tagBlockMode', String(defaultBlockMode.value))
@@ -966,6 +1517,111 @@ function handleOllamaModels(json: string) {
 .input-unit { position: relative; }
 .unit-label { position: absolute; left: 12px; top: -8px; background: var(--bg-primary); padding: 0 6px; font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; }
 
+/* App-managed runtimes */
+.runtime-section { width: 100%; }
+.runtime-safety-warning {
+  background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.35);
+}
+.runtime-safety-warning strong { display: block; color: #f87171; letter-spacing: 1px; margin-bottom: 3px; }
+.runtime-safety-warning b { color: var(--text-primary); }
+.runtime-readonly-warning {
+  background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.3); color: var(--text-secondary);
+}
+.runtime-readonly-warning strong { color: #fbbf24; margin-right: 5px; }
+.runtime-card-list { display: flex; flex-direction: column; gap: 18px; }
+.runtime-card { position: relative; overflow: hidden; }
+.runtime-card::before {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: 3px;
+  background: var(--runtime-accent, var(--accent)); opacity: .85;
+}
+.runtime-card-forge { --runtime-accent: #a78bfa; }
+.runtime-card-comfyui { --runtime-accent: #22d3ee; }
+.runtime-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.runtime-eyebrow { color: var(--runtime-accent); font-size: 8px; font-weight: 900; letter-spacing: 1.6px; }
+.runtime-card h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 20px; letter-spacing: -.2px; }
+.runtime-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; max-width: 360px; }
+.runtime-badge {
+  padding: 4px 7px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--bg-input); color: var(--text-muted); font-size: 8px; font-weight: 900; letter-spacing: .55px;
+}
+.runtime-badge.on { border-color: rgba(96,165,250,.45); background: rgba(96,165,250,.11); color: #60a5fa; }
+.runtime-badge.health.on { border-color: rgba(74,222,128,.45); background: rgba(74,222,128,.1); color: #4ade80; }
+.runtime-badge.busy.on { border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.1); color: #fbbf24; animation: runtimePulse 1.25s ease-in-out infinite; }
+.runtime-badge.active.on { border-color: color-mix(in srgb, var(--runtime-accent) 55%, transparent); background: color-mix(in srgb, var(--runtime-accent) 12%, transparent); color: var(--runtime-accent); }
+@keyframes runtimePulse { 50% { opacity: .52; } }
+.runtime-meta-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px;
+  margin-top: 18px;
+}
+.runtime-meta {
+  min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--bg-input); display: flex; flex-direction: column; gap: 4px;
+}
+.runtime-meta-wide { grid-column: 1 / -1; }
+.runtime-meta > span { color: var(--text-muted); font-size: 8px; font-weight: 900; letter-spacing: 1px; }
+.runtime-meta code, .runtime-meta strong {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-secondary); font-family: 'Consolas', monospace; font-size: 10px; font-weight: 700;
+}
+.runtime-meta strong.update-ready { color: #fbbf24; }
+.runtime-toggle-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: var(--bg-input);
+}
+.runtime-toggle-row > div { display: flex; flex-direction: column; gap: 3px; }
+.runtime-toggle-row strong { color: var(--text-secondary); font-size: 10px; letter-spacing: .5px; }
+.runtime-toggle-row small { color: var(--text-muted); font-size: 9px; line-height: 1.4; }
+.runtime-toggle-row :deep(.tsw:disabled) { opacity: .45; cursor: not-allowed; }
+.runtime-subsection { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.runtime-subheading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 9px; }
+.runtime-subheading h3 { margin: 0; color: var(--text-primary); font-size: 10px; letter-spacing: .8px; }
+.runtime-subheading p { margin: 3px 0 0; color: var(--text-muted); font-size: 9px; line-height: 1.45; }
+.runtime-unsaved, .extension-update-badge {
+  flex-shrink: 0; padding: 3px 6px; border-radius: 4px; background: rgba(251,191,36,.12);
+  color: #fbbf24; font-size: 8px; font-weight: 900; letter-spacing: .6px;
+}
+.runtime-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; }
+.runtime-repo-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.runtime-path-control input, .runtime-repo-control input {
+  width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--bg-primary); color: var(--text-primary); outline: none;
+  font-family: 'Consolas', monospace; font-size: 10px; box-sizing: border-box;
+}
+.runtime-path-control input:focus, .runtime-repo-control input:focus { border-color: var(--runtime-accent); }
+.runtime-path-control input:disabled, .runtime-repo-control input:disabled { opacity: .52; cursor: not-allowed; }
+.runtime-dependency-note {
+  margin-top: 8px; padding: 8px 10px; border: 1px solid rgba(251,191,36,.28); border-radius: 7px;
+  background: rgba(251,191,36,.06); color: #d4b45f; font-size: 9px; line-height: 1.5;
+}
+.runtime-action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.runtime-action-grid .btn-pill { min-width: 0; }
+.btn-pill.danger:not(:disabled) { border-color: rgba(248,113,113,.4); color: #f87171; }
+.btn-pill.accent:not(:disabled) { border-color: var(--runtime-accent, var(--accent)); color: var(--runtime-accent, var(--accent)); }
+.runtime-extension-section { margin-top: 18px; }
+.runtime-extension-list { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.runtime-empty {
+  padding: 13px; border: 1px dashed var(--border); border-radius: 7px;
+  color: var(--text-muted); text-align: center; font-size: 10px;
+}
+.runtime-extension-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-input);
+}
+.runtime-extension-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.runtime-extension-copy > div { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.runtime-extension-copy strong { color: var(--text-primary); font-size: 11px; }
+.runtime-extension-copy span:not(.extension-update-badge) { color: var(--text-muted); font-size: 9px; }
+.runtime-extension-copy code {
+  min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-muted); font-family: 'Consolas', monospace; font-size: 9px;
+}
+.runtime-extension-actions { flex-shrink: 0; display: flex; gap: 6px; }
+.runtime-message, .runtime-global-status {
+  margin-top: 12px; padding: 9px 11px; border-radius: 7px; background: var(--bg-input);
+  color: var(--text-secondary); font-size: 10px; line-height: 1.5;
+}
+.runtime-global-status { border: 1px solid var(--border); }
+
 /* Forge model directories */
 .forge-hint code {
   padding: 1px 5px; border-radius: 4px; background: var(--bg-button);
@@ -1120,8 +1776,32 @@ kbd {
 @media (max-width: 820px) {
   .settings-nav { width: 190px; }
   .settings-body { padding: 24px; }
+  .runtime-card-header { flex-direction: column; }
+  .runtime-badges { justify-content: flex-start; max-width: none; }
   .forge-path-label { align-items: flex-start; flex-direction: column; gap: 3px; }
   .forge-path-label small { text-align: left; }
   .forge-actions { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .settings-workspace { flex-direction: column; }
+  .settings-nav {
+    width: 100%; max-height: 168px; padding: 10px; border-right: 0; border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow-y: auto; box-sizing: border-box;
+  }
+  .nav-header, .settings-search-wrap, .nav-empty { grid-column: 1 / -1; }
+  .nav-item { height: 38px; padding: 0 10px; }
+  .nav-item .label { font-size: 9px; letter-spacing: .5px; }
+  .settings-body { padding: 16px 12px 28px; }
+  .glass-card { padding: 17px; }
+  .runtime-meta-grid { grid-template-columns: 1fr; }
+  .runtime-meta-wide { grid-column: auto; }
+  .runtime-toggle-row { align-items: flex-start; }
+  .runtime-path-control, .runtime-repo-control { grid-template-columns: 1fr 1fr; }
+  .runtime-path-control input, .runtime-repo-control input { grid-column: 1 / -1; }
+  .runtime-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .runtime-extension-item { align-items: flex-start; flex-direction: column; }
+  .runtime-extension-actions { width: 100%; }
+  .runtime-extension-actions .btn-pill { flex: 1; }
 }
 </style>

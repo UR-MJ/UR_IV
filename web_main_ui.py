@@ -103,6 +103,11 @@ _WEB_METHODS = frozenset({
     "searchDanbooru", "loadLastSearchResults", "loadFullResults", "getUiPrefs",
     "getForgeModelPaths", "selectForgeModelDirectory", "saveForgeModelPaths",
     "resetForgeModelPaths", "refreshForgeModelPaths",
+    # facade 계약에는 보이지만 두 mutator는 VueBridge가 parent.web_mode를 먼저
+    # 확인해 항상 거부한다. 이를 명시적으로 노출해야 프론트 슬롯 계약 검사도
+    # 유지하면서 LAN WebChannel이 로컬 process/filesystem을 바꾸지 못한다.
+    "getBackendRuntimeState", "runBackendRuntimeOperation",
+    "selectBackendExtensionDirectory",
     "getUpscalers", "requestUpscalers", "saveImageExif", "renameFile",
     "getEdgeMap", "ollamaEnhance", "convertPromptToNl", "editorPasteImage",
     "editorAutoSave", "editorCheckAutoSave", "editorClearAutoSave", "getFileInfo",
@@ -140,6 +145,7 @@ _WEB_SIGNALS = frozenset({
     "widgetPropertyChanged", "batchUpdate", "tabChanged", "vramUpdated",
     "creatorStateChanged", "creatorProgress", "creatorResult",
     "creatorMediaSelected", "comicStoryboardReady", "comicDocumentChanged",
+    "backendRuntimeEvent",
     # SAM3 Refine (sam-extra 워크플로 2) + 임베드 LoRA Manager (워크플로 4)
     "refineResult", "loraManagerUrlReady",
 })

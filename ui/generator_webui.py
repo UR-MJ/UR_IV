@@ -2,6 +2,7 @@
 """
 API 연결 및 정보 로드 로직 (WebUI + ComfyUI 지원)
 """
+import json
 import os
 import requests
 from PyQt6.QtWidgets import (
@@ -24,7 +25,77 @@ class WebUIMixin:
 
     def _startup_backend_check(self):
         """앱 시작 시 백엔드 선택 다이얼로그 표시"""
+        # 명시적으로 API 관리자 팝업을 연 경우에는 기존 URL selector를 그대로
+        # 보여준다. 일반 startup만, 이미 설치된 active managed runtime의
+        # auto-start가 켜진 managed runtime이 있을 때에 한해 modal을 생략한다.
+        if not getattr(self, '_api_manager_mode', False):
+            if self._try_managed_backend_autostart():
+                return
         self._show_startup_selector()
+
+    def _try_managed_backend_autostart(self) -> bool:
+        """설치된 auto-start managed runtime만 조용히 시작한다.
+
+        start 전에 ``installed``를 확인하므로 이 경로는 다운로드·설치·업데이트를
+        절대 유발하지 않는다. 실패해도 selector로 되돌아가 앱을 종료시키지 않고
+        offline 상태로 이어간다.
+        """
+        if getattr(self, 'web_mode', False):
+            # Web host는 로컬 파일/프로세스 mutator 권한이 없다.
+            return False
+        eligible = False
+        try:
+            from core.backend_runtime import get_backend_runtime_manager
+
+            snapshot = get_backend_runtime_manager().snapshot()
+            runtimes = snapshot.get('engines') if isinstance(snapshot, dict) else {}
+            runtimes = runtimes if isinstance(runtimes, dict) else {}
+            active = str(snapshot.get('activeEngine') or '') if isinstance(snapshot, dict) else ''
+            if active == 'forge_neo':
+                active = 'forge'
+            auto_candidates = [
+                engine for engine in ('forge', 'comfyui')
+                if isinstance(runtimes.get(engine), dict)
+                and bool(runtimes[engine].get('autoStart', False))
+            ]
+            kind = active if active in auto_candidates else (auto_candidates[0] if auto_candidates else '')
+            runtime = runtimes.get(kind)
+            runtime = runtime if isinstance(runtime, dict) else {}
+            eligible = (
+                kind in {'forge', 'comfyui'}
+                and bool(runtime.get('installed', False))
+            )
+            if not eligible:
+                return False
+
+            ui_engine = kind
+            self._backend_startup_result = 'managed_pending'
+            self._managed_runtime_startup_inflight = True
+            self._managed_runtime_startup_engine = ui_engine
+            raw = self.vue_bridge.runBackendRuntimeOperation(
+                ui_engine,
+                'start',
+                '{"startup": true}',
+            )
+            result = json.loads(raw or '{}')
+            if result.get('accepted'):
+                return True
+
+            self._managed_runtime_startup_inflight = False
+            self._backend_startup_result = 'managed_failed'
+            self._managed_runtime_startup_error = str(
+                result.get('error') or 'managed backend 시작 요청이 거부되었습니다'
+            )
+            return True
+        except Exception as exc:
+            if eligible:
+                self._managed_runtime_startup_inflight = False
+                self._backend_startup_result = 'managed_failed'
+                self._managed_runtime_startup_error = str(exc)
+                return True
+            # core가 없거나 설정을 읽지 못한 경우에는 기존 selector가 안전한 폴백이다.
+            print(f"[Runtime] managed auto-start 확인 실패(기존 selector 사용): {exc}")
+            return False
 
     def _show_startup_selector(self):
         import config
@@ -408,6 +479,26 @@ class WebUIMixin:
                 "백엔드에 연결되지 않았습니다.\n\n"
                 "하단 도구 바의 '백엔드' 버튼으로 연결하세요."
             )
+        elif result == 'managed_pending':
+            if not getattr(self, '_backend_connected', False):
+                self.viewer_label.setText(
+                    "앱 관리형 백엔드를 시작하는 중입니다…\n\n"
+                    "설정에서 진행 상태를 확인할 수 있습니다."
+                )
+                self.btn_generate.setEnabled(False)
+        elif result == 'managed_connected':
+            # runtime은 Vue보다 먼저 준비될 수 있다. 이 지점은 startup sequence가
+            # Vue loadFinished를 기다린 뒤 호출되므로 초기 목록 push가 유실되지 않는다.
+            self.load_webui_info()
+        elif result == 'managed_failed':
+            self._backend_connected = False
+            error = str(getattr(self, '_managed_runtime_startup_error', '') or '')
+            suffix = f"\n\n{error}" if error else ''
+            self.viewer_label.setText(
+                "앱 관리형 백엔드를 자동 시작하지 못했습니다.\n"
+                "설정에서 다시 시작하거나 기존 API URL을 연결하세요."
+                + suffix
+            )
 
     @staticmethod
     def _quick_test(url: str, endpoint: str) -> bool:
@@ -449,6 +540,7 @@ class WebUIMixin:
 
     def on_webui_info_loaded(self, info):
         """서버 정보 로드 완료"""
+        self._managed_runtime_startup_inflight = False
         backend_name = "ComfyUI" if get_backend_type() == BackendType.COMFYUI else "WebUI"
 
         # 모델
@@ -567,6 +659,8 @@ class WebUIMixin:
 
     def on_webui_info_error(self, error_msg):
         """서버 정보 로드 실패"""
+        managed_startup = bool(getattr(self, '_managed_runtime_startup_inflight', False))
+        self._managed_runtime_startup_inflight = False
         self._backend_connected = False  # 폴링 중단 (다음 연결 성공 시 재개)
         backend_name = "ComfyUI" if get_backend_type() == BackendType.COMFYUI else "WebUI"
         api_url = get_backend().api_url
@@ -586,15 +680,17 @@ class WebUIMixin:
         if hasattr(self, 'backend_ui_tab'):
             self.backend_ui_tab.load_backend_ui()
 
-        QMessageBox.critical(
-            self, "연결 실패",
-            f"{backend_name} API 연결에 실패했습니다.\n\n"
-            f"오류: {error_msg}\n\n"
-            f"현재 URL: {api_url}\n\n"
-            f"1. {backend_name}가 실행 중인지 확인하세요.\n"
-            f"2. API 주소가 올바른지 확인하세요.\n"
-            f"3. 방화벽 설정을 확인하세요."
-        )
+        # startup auto-start 실패는 modal/종료 없이 offline UI로 폴백한다.
+        if not managed_startup:
+            QMessageBox.critical(
+                self, "연결 실패",
+                f"{backend_name} API 연결에 실패했습니다.\n\n"
+                f"오류: {error_msg}\n\n"
+                f"현재 URL: {api_url}\n\n"
+                f"1. {backend_name}가 실행 중인지 확인하세요.\n"
+                f"2. API 주소가 올바른지 확인하세요.\n"
+                f"3. 방화벽 설정을 확인하세요."
+            )
 
     def retry_connection(self, new_url=None):
         """연결 재시도"""

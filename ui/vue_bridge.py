@@ -19,6 +19,16 @@ _EDITOR_TEMP_KEEP = 60
 # 썸네일 캐시 상한 — 넘으면 오래된 것부터 정리 (언제든 재생성 가능한 캐시)
 _THUMB_CACHE_MAX_BYTES = 300 * 1024 * 1024
 
+_RUNTIME_ENGINE_TO_CORE = {
+    'forge': 'forge',
+    'forge_neo': 'forge',
+    'comfyui': 'comfyui',
+}
+_RUNTIME_CORE_TO_ENGINE = {
+    'forge': 'forge',
+    'comfyui': 'comfyui',
+}
+
 # Gallery는 Creator Studio가 생성하는 정지 이미지, 애니메이션, 영상, 오디오를
 # 같은 목록에서 다룬다. 확장자 판정은 한곳에 두어 동기/비동기 API가 어긋나지 않게 한다.
 _GALLERY_MEDIA_EXTS = frozenset({
@@ -119,6 +129,10 @@ class VueBridge(QObject):
     comicStoryboardReady = pyqtSignal(str)
     comicDocumentChanged = pyqtSignal(str)
 
+    # 앱 관리형 Forge Neo / ComfyUI runtime. 설치처럼 긴 작업은 슬롯에서
+    # operation id만 즉시 돌려주고 이 단일 JSON signal로 진행/완료를 보낸다.
+    backendRuntimeEvent = pyqtSignal(str)
+
     # 위젯 값/속성 동기화 (Python → Vue)
     widgetValueChanged = pyqtSignal(str, str)       # (widget_id, value)
     widgetPropertyChanged = pyqtSignal(str, str, str)  # (widget_id, prop, value_json)
@@ -137,6 +151,8 @@ class VueBridge(QObject):
         self._action_handler = None  # 액션 디스패처 (메인 윈도우에서 설정)
         self._async_lookup_inflight = set()
         self._async_lookup_lock = threading.Lock()
+        self._backend_runtime_inflight = {}
+        self._backend_runtime_lock = threading.Lock()
         self.adetailerModelsReady.connect(self._apply_adetailer_models_json)
 
     def _run_async_lookup(self, key, loader, signal):
@@ -265,6 +281,302 @@ class VueBridge(QObject):
             elif hasattr(proxy, 'currentText'):
                 result[wid] = proxy.currentText()
         return json.dumps(result)
+
+    # ── App-managed backend runtime ──
+
+    def _backend_runtime_is_web_mode(self) -> bool:
+        """로컬 파일/프로세스 변경 권한이 없는 Web host인지 확인."""
+        return bool(getattr(self.parent(), 'web_mode', False))
+
+    @staticmethod
+    def _backend_runtime_engine(engine: str) -> tuple[str, str]:
+        ui_engine = str(engine or '').strip().lower()
+        core_engine = _RUNTIME_ENGINE_TO_CORE.get(ui_engine)
+        if not core_engine:
+            raise ValueError(f'지원하지 않는 백엔드 runtime입니다: {engine}')
+        return _RUNTIME_CORE_TO_ENGINE[core_engine], core_engine
+
+    def _backend_runtime_public_snapshot(self, raw=None) -> dict:
+        """core snapshot을 Settings가 소비하는 안정된 JSON 계약으로 어댑트."""
+        if raw is None:
+            from core.backend_runtime import get_backend_runtime_manager
+            raw = get_backend_runtime_manager().snapshot()
+        raw = raw if isinstance(raw, dict) else {}
+        runtimes = raw.get('engines') if isinstance(raw.get('engines'), dict) else {}
+        active_core = _RUNTIME_ENGINE_TO_CORE.get(
+            str(raw.get('activeEngine') or '').strip().lower(),
+            '',
+        )
+        active_engine = _RUNTIME_CORE_TO_ENGINE.get(active_core, '')
+        with self._backend_runtime_lock:
+            inflight = dict(self._backend_runtime_inflight)
+
+        engines = {}
+        for ui_engine, core_engine, name in (
+            ('forge', 'forge', 'Forge Neo'),
+            ('comfyui', 'comfyui', 'ComfyUI'),
+        ):
+            runtime = runtimes.get(core_engine)
+            runtime = runtime if isinstance(runtime, dict) else {}
+            running = bool(runtime.get('running', False))
+            api_url = str(runtime.get('apiUrl') or '')
+            update_available = bool(runtime.get('updateAvailable', False))
+            extension_dir = str(runtime.get('extensionDir') or '')
+            version = str(runtime.get('version') or '')
+            remote_commit = str(runtime.get('remoteCommit') or '')
+            engines[ui_engine] = {
+                'engine': ui_engine,
+                'kind': core_engine,
+                'name': str(runtime.get('name') or name),
+                'installed': bool(runtime.get('installed', False)),
+                'running': running,
+                'healthy': bool(runtime.get('healthy', running and bool(api_url))),
+                'owned': bool(runtime.get('owned', False)),
+                'busy': ui_engine in inflight or bool(runtime.get('busy', False)),
+                'autoStart': bool(runtime.get('autoStart', False)),
+                'active': bool(runtime.get('active', active_core == core_engine)),
+                'ownership': 'managed',
+                'root': str(runtime.get('root') or ''),
+                'installRoot': str(runtime.get('root') or ''),
+                'apiUrl': api_url,
+                'port': runtime.get('port'),
+                'version': version,
+                'installedCommit': str(runtime.get('commit') or ''),
+                'latestCommit': remote_commit,
+                'updateAvailable': update_available,
+                'updateStatus': str(runtime.get('updateStatus') or ('Update available' if update_available else 'Up to date')),
+                'extensionDir': extension_dir,
+                'defaultExtensionDir': str(runtime.get('defaultExtensionDir') or ''),
+                'extensionDirExternal': bool(runtime.get('extensionDirExternal', False)),
+                'extensions': list(runtime.get('extensions') or []),
+                'status': 'running' if running else 'installed' if runtime.get('installed') else 'not_installed',
+                'message': str(runtime.get('message') or ''),
+                'logPath': str(runtime.get('logPath') or ''),
+            }
+
+        return {
+            'ok': True,
+            'nativeOperations': not self._backend_runtime_is_web_mode(),
+            'active': {
+                'engine': active_engine,
+                'kind': active_core,
+                'ownership': 'managed' if active_core else '',
+                'autoStart': bool(
+                    engines.get(active_engine, {}).get('autoStart', False)
+                    if active_engine else False
+                ),
+            },
+            'runtimeRoot': str(raw.get('runtimeRoot') or ''),
+            'engines': engines,
+        }
+
+    @pyqtSlot(result=str)
+    def getBackendRuntimeState(self) -> str:
+        """앱 관리형 backend 상태 조회. Web facade에도 읽기 전용으로 허용."""
+        try:
+            return json.dumps(
+                self._backend_runtime_public_snapshot(),
+                ensure_ascii=False,
+                default=str,
+            )
+        except Exception as exc:
+            return json.dumps(
+                {
+                    'ok': False,
+                    'nativeOperations': not self._backend_runtime_is_web_mode(),
+                    'error': str(exc),
+                    'engines': {},
+                },
+                ensure_ascii=False,
+            )
+
+    @pyqtSlot(str, str, str, result=str)
+    def runBackendRuntimeOperation(self, engine: str, action: str, payload_json: str) -> str:
+        """runtime 변경 작업을 worker에서 시작하고 즉시 operation id를 반환."""
+        if self._backend_runtime_is_web_mode():
+            return json.dumps({
+                'ok': False,
+                'accepted': False,
+                'error': '웹 모드에서는 로컬 백엔드 설치·실행을 변경할 수 없습니다.',
+            }, ensure_ascii=False)
+
+        try:
+            ui_engine, core_engine = self._backend_runtime_engine(engine)
+            action = str(action or '').strip().lower()
+            allowed = {
+                'install', 'update', 'check_update', 'start', 'stop', 'use',
+                'set_auto_start', 'save_extension_dir', 'install_extension',
+                'update_extension', 'check_extension', 'check_extensions',
+            }
+            if action not in allowed:
+                raise ValueError(f'지원하지 않는 runtime 작업입니다: {action}')
+            payload = json.loads(payload_json) if payload_json else {}
+            if not isinstance(payload, dict):
+                raise ValueError('payload는 JSON 객체여야 합니다')
+        except Exception as exc:
+            return json.dumps(
+                {'ok': False, 'accepted': False, 'error': str(exc)},
+                ensure_ascii=False,
+            )
+
+        import uuid
+        operation_id = uuid.uuid4().hex
+        with self._backend_runtime_lock:
+            current = self._backend_runtime_inflight.get(ui_engine)
+            if current:
+                return json.dumps({
+                    'ok': False,
+                    'accepted': False,
+                    'operationId': current,
+                    'error': f'{ui_engine} runtime 작업이 이미 진행 중입니다.',
+                }, ensure_ascii=False)
+            self._backend_runtime_inflight[ui_engine] = operation_id
+
+        threading.Thread(
+            target=self._run_backend_runtime_operation,
+            args=(ui_engine, core_engine, action, payload, operation_id),
+            daemon=True,
+            name=f'backend-runtime-{ui_engine}-{action}',
+        ).start()
+        return json.dumps({
+            'ok': True,
+            'accepted': True,
+            'engine': ui_engine,
+            'action': action,
+            'operationId': operation_id,
+        }, ensure_ascii=False)
+
+    def _emit_backend_runtime_event(self, payload: dict) -> None:
+        try:
+            self.backendRuntimeEvent.emit(json.dumps(payload, ensure_ascii=False, default=str))
+        except RuntimeError:
+            # 앱 종료 중 bridge QObject가 이미 정리된 경우 결과를 버린다.
+            pass
+
+    def _run_backend_runtime_operation(
+        self,
+        ui_engine: str,
+        core_engine: str,
+        action: str,
+        payload: dict,
+        operation_id: str,
+    ) -> None:
+        """Qt 비의존 runtime manager를 worker에서 실행하는 단일 경계."""
+        self._emit_backend_runtime_event({
+            'engine': ui_engine,
+            'type': 'started',
+            'action': action,
+            'operationId': operation_id,
+            'message': f'{ui_engine} {action} 작업을 시작했습니다.',
+            'startup': bool(payload.get('startup', False)),
+        })
+
+        def progress(update):
+            event = dict(update) if isinstance(update, dict) else {'message': str(update)}
+            event.update({
+                'engine': ui_engine,
+                'type': 'progress',
+                'action': action,
+                'operationId': operation_id,
+                'startup': bool(payload.get('startup', False)),
+            })
+            self._emit_backend_runtime_event(event)
+
+        raw_result = None
+        try:
+            from core.backend_runtime import get_backend_runtime_manager
+            manager = get_backend_runtime_manager()
+            raw_result = manager.execute(
+                core_engine,
+                action,
+                dict(payload),
+                on_progress=progress,
+            )
+            if not isinstance(raw_result, dict):
+                raw_result = {
+                    'ok': False,
+                    'engine': core_engine,
+                    'action': action,
+                    'error': 'runtime manager가 잘못된 결과를 반환했습니다.',
+                }
+        except Exception as exc:
+            error = exc.as_dict() if hasattr(exc, 'as_dict') else str(exc)
+            raw_result = {
+                'ok': False,
+                'engine': core_engine,
+                'action': action,
+                'error': error,
+            }
+        finally:
+            with self._backend_runtime_lock:
+                if self._backend_runtime_inflight.get(ui_engine) == operation_id:
+                    self._backend_runtime_inflight.pop(ui_engine, None)
+
+        try:
+            from core.backend_runtime import get_backend_runtime_manager
+            public = self._backend_runtime_public_snapshot(
+                get_backend_runtime_manager().snapshot()
+            )
+        except Exception as exc:
+            public = {
+                'ok': False,
+                'nativeOperations': True,
+                'engines': {},
+                'error': str(exc),
+            }
+
+        ok = bool(raw_result.get('ok', False))
+        error = raw_result.get('error')
+        if isinstance(error, dict):
+            message = str(error.get('message') or error.get('error') or error)
+        else:
+            message = str(error or raw_result.get('message') or '')
+        result = {
+            key: value for key, value in raw_result.items()
+            if key not in {'snapshot'}
+        }
+        event = {
+            'engine': ui_engine,
+            'type': 'completed' if ok else 'error',
+            'action': action,
+            'operationId': operation_id,
+            'ok': ok,
+            'result': result,
+            'error': error if not ok else None,
+            'message': message,
+            'startup': bool(payload.get('startup', False)),
+            'activate': bool(ok and raw_result.get('activate', False)),
+            'state': public.get('engines', {}).get(ui_engine, {}),
+            'snapshot': public,
+        }
+        self._emit_backend_runtime_event(event)
+
+    @pyqtSlot(str, result=str)
+    def selectBackendExtensionDirectory(self, engine: str) -> str:
+        """기존 extensions/custom_nodes 폴더를 고르는 desktop-only 슬롯."""
+        if self._backend_runtime_is_web_mode():
+            return json.dumps({
+                'ok': False,
+                'error': '웹 모드에서는 로컬 폴더를 선택할 수 없습니다.',
+            }, ensure_ascii=False)
+        try:
+            from PyQt6.QtWidgets import QFileDialog
+
+            ui_engine, _core_engine = self._backend_runtime_engine(engine)
+            state = self._backend_runtime_public_snapshot()
+            current = str(
+                state.get('engines', {}).get(ui_engine, {}).get('extensionDir') or ''
+            )
+            selected = QFileDialog.getExistingDirectory(
+                self.parent(),
+                '기존 extensions 폴더 선택' if ui_engine == 'forge' else '기존 custom_nodes 폴더 선택',
+                current,
+            )
+            if not selected:
+                return json.dumps({'ok': False, 'cancelled': True}, ensure_ascii=False)
+            return json.dumps({'ok': True, 'path': selected}, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False)
 
     # ── Editor ──
 
