@@ -202,10 +202,7 @@ class ComfyUIBackend(AbstractBackend):
         """ComfyUI /object_info에서 모델/샘플러/스케줄러 추출"""
         info = BackendInfo()
 
-        from core.http_retry import get_with_retry
-        obj_info = get_with_retry(
-            f'{self.api_url}/object_info', timeout=15, retries=3,
-        ).json()
+        obj_info = self.get_object_info()
 
         # 체크포인트 모델
         ckpt_node = obj_info.get('CheckpointLoaderSimple', {})
@@ -248,6 +245,21 @@ class ComfyUIBackend(AbstractBackend):
             pass
 
         return info
+
+    def get_object_info(self) -> dict:
+        """Return the complete ComfyUI node/resource capability document.
+
+        Model-family workflow runners use the full schema both to fail before
+        queueing missing nodes and to resolve server-native model path choices.
+        """
+        from core.http_retry import get_with_retry
+
+        data = get_with_retry(
+            f'{self.api_url}/object_info', timeout=15, retries=3,
+        ).json()
+        if not isinstance(data, dict):
+            raise RuntimeError("ComfyUI /object_info 응답이 객체가 아닙니다")
+        return data
 
     def get_system_stats(self) -> dict:
         """GPU/VRAM 상태 조회"""

@@ -33,27 +33,56 @@
           </div>
         </div>
 
+        <div v-if="isKrea2" class="glass-card krea-card">
+          <label>Identity Reference <span class="optional">OPTIONAL</span></label>
+          <div class="source-thumb identity-thumb" @click="triggerReferenceInput">
+            <img v-if="referenceSrc" :src="referenceSrc" />
+            <div v-else class="upload-hint">SOURCE-ONLY EDIT</div>
+            <div class="edit-overlay">{{ referenceSrc ? 'CHANGE REFERENCE' : 'ADD REFERENCE' }}</div>
+          </div>
+          <button v-if="referenceSrc" class="clear-reference" @click.stop="clearReference">REMOVE REFERENCE</button>
+          <input ref="referenceFileInput" type="file" accept="image/*" hidden @change="handleReferenceSelect" />
+        </div>
+
         <!-- Prompt Card -->
         <div class="glass-card">
           <label>Override Prompt</label>
           <textarea v-model="prompt" rows="3" placeholder="Leave empty to use T2I prompt..."></textarea>
-          <label class="mt-12 danger">Negative</label>
-          <textarea v-model="negPrompt" rows="2" placeholder="Override negative..."></textarea>
+          <template v-if="!isKrea2">
+            <label class="mt-12 danger">Negative</label>
+            <textarea v-model="negPrompt" rows="2" placeholder="Override negative..."></textarea>
+          </template>
+          <p v-else class="krea-help">Krea2 Identity Edit는 입력 이미지를 사용한 grounded unconditional 경로를 사용하므로 Negative는 적용하지 않습니다.</p>
         </div>
 
         <!-- Generation Params Card -->
         <div class="glass-card">
-          <label>Denoising Strength</label>
-          <div class="premium-slider">
-            <input type="range" min="0" max="1" step="0.01" v-model.number="denoising" />
-            <div class="slider-display">
-              <span class="val">{{ denoising.toFixed(2) }}</span>
-              <span class="label">Intensity</span>
+          <template v-if="isKrea2">
+            <label>Identity Fidelity</label>
+            <div class="premium-slider krea-slider">
+              <input type="range" min="0.5" max="12" step="0.1" v-model.number="fidelity" />
+              <div class="slider-display">
+                <span class="val">{{ fidelity.toFixed(1) }}</span>
+                <span class="label">Reference Boost</span>
+              </div>
             </div>
-          </div>
+            <p class="krea-help">높을수록 원본/identity reference 보존을 강하게 요구합니다. 기본값 4.0.</p>
+          </template>
+          <template v-else>
+            <label>Denoising Strength</label>
+            <div class="premium-slider">
+              <input type="range" min="0" max="1" step="0.01" v-model.number="denoising" />
+              <div class="slider-display">
+                <span class="val">{{ denoising.toFixed(2) }}</span>
+                <span class="label">Intensity</span>
+              </div>
+            </div>
+          </template>
 
-          <label class="mt-12">Resize Mode</label>
-          <CustomSelect v-model="resizeModeLabel" :options="resizeModeOptions" placeholder="Resize Mode" />
+          <template v-if="!isKrea2">
+            <label class="mt-12">Resize Mode</label>
+            <CustomSelect v-model="resizeModeLabel" :options="resizeModeOptions" placeholder="Resize Mode" />
+          </template>
 
           <div class="grid-2 mt-12">
             <div class="input-unit">
@@ -72,13 +101,13 @@
           <summary class="card-header">ADVANCED SETTINGS</summary>
           <div class="input-group mt-12">
             <label>Steps</label>
-            <input type="range" min="1" max="100" v-model.number="steps" class="modern-slider" />
-            <div class="val-tag">{{ steps }}</div>
+            <input type="range" min="1" :max="isKrea2 ? 80 : 100" v-model.number="activeSteps" class="modern-slider" />
+            <div class="val-tag">{{ activeSteps }}</div>
           </div>
           <div class="input-group mt-12">
             <label>CFG Scale</label>
-            <input type="range" min="1" max="20" step="0.5" v-model.number="cfg" class="modern-slider" />
-            <div class="val-tag">{{ cfg }}</div>
+            <input type="range" min="1" :max="isKrea2 ? 10 : 20" step="0.5" v-model.number="activeCfg" class="modern-slider" />
+            <div class="val-tag">{{ activeCfg }}</div>
           </div>
           <div class="input-group mt-12">
             <label>Seed (−1 = 랜덤)</label>
@@ -92,7 +121,7 @@
 
       <div class="sidebar-footer">
         <button class="btn-generate primary" @click="generate" :disabled="!imageSrc">
-          {{ !imageSrc ? 'UPLOAD IMAGE FIRST' : 'START I2I GENERATION' }}
+          {{ !imageSrc ? 'UPLOAD IMAGE FIRST' : isKrea2 ? 'START KREA2 IDENTITY EDIT' : 'START I2I GENERATION' }}
         </button>
       </div>
     </aside>
@@ -122,7 +151,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { requestAction, getProperty } from '../stores/widgetStore.js'
+import { requestAction, getProperty, getValue } from '../stores/widgetStore.js'
 import { onBackendEvent } from '../bridge.js'
 import { mediaUrl } from '../utils/media.js'
 import CustomSelect from '../components/CustomSelect.vue'
@@ -146,9 +175,13 @@ const isDragging = ref(false)
 const imageSrc = ref('')
 const imagePath = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
+const referenceSrc = ref('')
+const referencePath = ref('')
+const referenceFileInput = ref<HTMLInputElement | null>(null)
 const prompt = ref('')
 const negPrompt = ref('')
 const denoising = ref(0.75)
+const fidelity = ref(4)
 const resizeMode = ref('0')
 const resizeModeOptions = ['JUST RESIZE', 'CROP AND RESIZE', 'RESIZE AND FILL', 'LATENT RESIZE']
 const resizeModeLabel = computed({
@@ -159,10 +192,37 @@ const width = ref('1024')
 const height = ref('1024')
 const steps = ref(20)
 const cfg = ref(7)
+const kreaSteps = ref(15)
+const kreaCfg = ref(1)
 const seed = ref('-1')
+
+const generationFamily = computed(() => String(getValue('generation_family_combo') || 'STANDARD').toUpperCase())
+const isKrea2 = computed(() => generationFamily.value === 'KREA2')
+const activeSteps = computed({
+  get: () => isKrea2.value ? kreaSteps.value : steps.value,
+  set: (value: number) => { if (isKrea2.value) kreaSteps.value = value; else steps.value = value },
+})
+const activeCfg = computed({
+  get: () => isKrea2.value ? kreaCfg.value : cfg.value,
+  set: (value: number) => { if (isKrea2.value) kreaCfg.value = value; else cfg.value = value },
+})
 
 function triggerFileInput() { fileInput.value?.click() }
 function handleFileSelect(e: Event) { const f = (e.target as HTMLInputElement).files?.[0]; if (f) loadFile(f) }
+function triggerReferenceInput() { referenceFileInput.value?.click() }
+function handleReferenceSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (ev: ProgressEvent<FileReader>) => { referenceSrc.value = ev.target?.result as string }
+  reader.readAsDataURL(file)
+  referencePath.value = ((file as any).path || '').replace(/\\/g, '/')
+}
+function clearReference() {
+  referenceSrc.value = ''
+  referencePath.value = ''
+  if (referenceFileInput.value) referenceFileInput.value.value = ''
+}
 function handleDrop(e: DragEvent) {
   isDragging.value = false
   // 파일 드롭
@@ -176,7 +236,7 @@ function loadFile(file: File) {
   const reader = new FileReader()
   reader.onload = (ev: ProgressEvent<FileReader>) => { imageSrc.value = ev.target?.result as string }
   reader.readAsDataURL(file)
-  if ((file as any).path) imagePath.value = (file as any).path.replace(/\\/g, '/')
+  imagePath.value = ((file as any).path || '').replace(/\\/g, '/')
 }
 
 // 경로로 직접 이미지 로드 (History/Gallery에서 전송 시)
@@ -201,16 +261,20 @@ watch(subTab, (v) => {
 
 function generate() {
   requestAction('generate_i2i', {
+    generation_family: isKrea2.value ? 'krea2' : 'standard',
     image: imagePath.value ? '' : imageSrc.value,
     image_path: imagePath.value,
+    reference_image: isKrea2.value && !referencePath.value ? referenceSrc.value : '',
+    reference_path: isKrea2.value ? referencePath.value : '',
     prompt: prompt.value,
     negative_prompt: negPrompt.value,
     denoising: denoising.value,
+    fidelity: fidelity.value,
     resize_mode: parseInt(resizeMode.value),
     width: parseInt(width.value),
     height: parseInt(height.value),
-    steps: steps.value,
-    cfg: cfg.value,
+    steps: activeSteps.value,
+    cfg: activeCfg.value,
     seed: seed.value,
   })
 }
@@ -246,6 +310,16 @@ function generate() {
   background: rgba(255,255,255,0.02); border: 1px solid var(--border);
   border-radius: var(--radius-card); padding: 14px;
 }
+.krea-card { border-color: rgba(167,139,250,0.35); background: rgba(124,58,237,0.06); }
+.optional { margin-left: 5px; font-size: 8px; color: #a78bfa; letter-spacing: 1px; }
+.identity-thumb { aspect-ratio: 2/1; }
+.clear-reference {
+  width: 100%; margin-top: 7px; padding: 6px; background: transparent;
+  border: 1px solid rgba(248,113,113,0.3); border-radius: 5px;
+  color: #f87171; font-size: 9px; font-weight: 800; cursor: pointer;
+}
+.krea-help { margin: 8px 0 0; color: var(--text-muted); font-size: 9px; line-height: 1.45; }
+.krea-slider .val { color: #a78bfa; }
 
 .source-thumb {
   width: 100%; aspect-ratio: 16/9; background: var(--bg-input); border-radius: var(--radius-base);

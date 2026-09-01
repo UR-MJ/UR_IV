@@ -17,6 +17,8 @@ Supported modes
     ``input_image`` as an identity reference.
 ``krea2_edit``
     Krea 2 Identity Edit.  Requires ``input_image``.
+``krea2_t2i``
+    Krea 2 Turbo text-to-image.
 ``krea2_hires``
     Krea 2 latent hires pass.  Requires ``input_image``.
 
@@ -58,6 +60,7 @@ SUPPORTED_MODES: tuple[str, ...] = (
     "h3_t2v",
     "h3_i2v",
     "h3_v2v",
+    "krea2_t2i",
     "krea2_edit",
     "krea2_hires",
 )
@@ -134,6 +137,12 @@ _CAPABILITIES: dict[str, dict[str, Any]] = {
         "inputs": ["prompt", "input_video", "input_image?"],
         "outputs": ["video/mp4", "image/webp"],
     },
+    "krea2_t2i": {
+        "family": "krea2",
+        "description": "Krea 2 Turbo text-to-image generation.",
+        "inputs": ["prompt"],
+        "outputs": ["image"],
+    },
     "krea2_edit": {
         "family": "krea2",
         "description": "Krea 2 identity-preserving image edit.",
@@ -179,6 +188,8 @@ def build(mode: str, params: Mapping[str, Any] | None = None) -> CreatorWorkflow
     models = _resolve_model_preset(values.get("model_preset"))
     if canonical_mode.startswith("h3_"):
         graph, output_node_ids, metadata = _build_h3(canonical_mode, values, models)
+    elif canonical_mode == "krea2_t2i":
+        graph, output_node_ids, metadata = _build_krea2_t2i(values, models)
     elif canonical_mode == "krea2_edit":
         graph, output_node_ids, metadata = _build_krea2_edit(values, models)
     else:
@@ -525,6 +536,99 @@ def _build_h3(
     }
 
 
+def _build_krea2_t2i(
+    params: Mapping[str, Any],
+    models: Mapping[str, str],
+) -> tuple[dict[str, dict[str, Any]], list[str], dict[str, Any]]:
+    """Build the native ComfyUI Krea 2 Turbo text-to-image graph.
+
+    This mirrors Comfy's official Turbo template: eight distilled Euler/simple
+    steps at CFG 1, with the positive conditioning zeroed for the unconditional
+    branch.  The optional TextFusion LoRA is deliberately off by default so the
+    three official Krea model files are sufficient for T2I.
+    """
+
+    prompt = _text(params.get("prompt"), "prompt", required=True)
+    width, height = _size(params, default=(1024, 1024), minimum=256, maximum=4096)
+    internal_width = _align(width, 8)
+    internal_height = _align(height, 8)
+    seed = _integer(params.get("seed", 1), "seed", minimum=0, maximum=(1 << 64) - 1)
+    steps = _integer(params.get("steps", 8), "steps", minimum=1, maximum=80)
+    cfg = _number(params.get("cfg", 1), "cfg", minimum=1, maximum=10)
+    sampler = _choice(params.get("sampler", "euler"), "sampler", _SAMPLERS)
+    output_prefix = _relative_filename(
+        params.get("output_prefix", "Krea2/T2I"),
+        "output_prefix",
+    )
+    use_textfusion = _boolean(params.get("use_textfusion", False), "use_textfusion")
+    textfusion_strength = _number(
+        params.get("textfusion_strength", 0.35),
+        "textfusion_strength",
+        minimum=0,
+        maximum=1.5,
+    )
+
+    graph: dict[str, dict[str, Any]] = {
+        "1": _node("UNETLoader", unet_name=models["krea2_unet"], weight_dtype="default"),
+        "2": _node("CLIPLoader", clip_name=models["krea2_clip"], type="krea2", device="default"),
+        "3": _node("VAELoader", vae_name=models["krea2_vae"]),
+        "4": _node("CLIPTextEncode", text=prompt, clip=_ref(2)),
+        "5": _node("ConditioningZeroOut", conditioning=_ref(4)),
+        "6": _node(
+            "EmptyLatentImage",
+            width=internal_width,
+            height=internal_height,
+            batch_size=1,
+        ),
+    }
+    model_ref = _ref(1)
+    if use_textfusion:
+        graph["7"] = _node(
+            "LoraLoaderModelOnly",
+            model=model_ref,
+            lora_name=models["krea2_textfusion_lora"],
+            strength_model=textfusion_strength,
+        )
+        model_ref = _ref(7)
+    graph["8"] = _node(
+        "KSampler",
+        seed=seed,
+        steps=steps,
+        cfg=cfg,
+        sampler_name=sampler,
+        scheduler="simple",
+        denoise=1,
+        model=model_ref,
+        positive=_ref(4),
+        negative=_ref(5),
+        latent_image=_ref(6),
+    )
+    graph["9"] = _node("VAEDecode", samples=_ref(8), vae=_ref(3))
+    image_ref = _ref(9)
+    if (internal_width, internal_height) != (width, height):
+        graph["10"] = _node(
+            "ImageCrop",
+            width=width,
+            height=height,
+            x=(internal_width - width) // 2,
+            y=(internal_height - height) // 2,
+            image=image_ref,
+        )
+        image_ref = _ref(10)
+    graph["11"] = _node("SaveImage", filename_prefix=output_prefix, images=image_ref)
+    return graph, ["11"], {
+        "width": width,
+        "height": height,
+        "internal_width": internal_width,
+        "internal_height": internal_height,
+        "seed": seed,
+        "steps": steps,
+        "cfg": cfg,
+        "sampler": sampler,
+        "scheduler": "simple",
+    }
+
+
 def _build_krea2_edit(
     params: Mapping[str, Any],
     models: Mapping[str, str],
@@ -664,6 +768,8 @@ def _build_krea2_edit(
         "fidelity": fidelity,
         "steps": steps,
         "cfg": cfg,
+        "sampler": sampler,
+        "scheduler": "simple",
         "uses_reference_image": bool(reference_image),
     }
 

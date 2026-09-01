@@ -15,6 +15,7 @@ class CreatorWorkflowTests(unittest.TestCase):
             "h3_t2v": {"prompt": "a lighthouse in a storm"},
             "h3_i2v": {"prompt": "slow camera orbit", "input_image": "start.png"},
             "h3_v2v": {"prompt": "change the scene to winter", "input_video": "motion.mp4"},
+            "krea2_t2i": {"prompt": "a glass sculpture on black velvet"},
             "krea2_edit": {"prompt": "change the jacket to red", "input_image": "person.png"},
             "krea2_hires": {"input_image": "result.png", "size": "2048x1536"},
         }
@@ -119,6 +120,29 @@ class CreatorWorkflowTests(unittest.TestCase):
             with self.subTest(alias=alias):
                 self.assertEqual(build(alias, edit_params)["metadata"]["mode"], "krea2_edit")
         self.assertEqual(build("krea_hires", hires_params)["metadata"]["mode"], "krea2_hires")
+
+    def test_krea2_t2i_matches_official_turbo_core_graph(self):
+        result = build(
+            "krea2_t2i",
+            {"prompt": "a ceramic fox", "size": "1001x769", "seed": 44},
+        )
+        graph = result["workflow"]
+        self.assertEqual(graph["1"]["class_type"], "UNETLoader")
+        self.assertEqual(graph["2"]["inputs"]["type"], "krea2")
+        self.assertEqual(graph["4"], {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": "a ceramic fox", "clip": ["2", 0]},
+        })
+        self.assertEqual(graph["5"]["class_type"], "ConditioningZeroOut")
+        self.assertEqual(graph["6"]["class_type"], "EmptyLatentImage")
+        self.assertEqual(graph["6"]["inputs"]["width"], 1008)
+        self.assertEqual(graph["6"]["inputs"]["height"], 776)
+        self.assertEqual(graph["8"]["inputs"]["steps"], 8)
+        self.assertEqual(graph["8"]["inputs"]["cfg"], 1)
+        self.assertEqual(graph["8"]["inputs"]["sampler_name"], "euler")
+        self.assertEqual(graph["8"]["inputs"]["scheduler"], "simple")
+        self.assertEqual(graph["11"]["inputs"]["images"], ["10", 0])
+        self.assertNotIn("LoraLoaderModelOnly", result["required_node_types"])
 
     def test_action_adapter_name_and_transport_param_aliases(self):
         self.assertIs(build_creator_workflow, build)

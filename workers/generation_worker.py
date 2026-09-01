@@ -123,6 +123,7 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
             backend = get_backend()
             payload = dict(self.payload)
             postprocess_chain = list(payload.pop("_postprocess_chain", []) or [])
+            generation_family = str(payload.pop("_generation_family", "standard") or "standard").lower()
 
             def on_progress(step: int, total: int, preview):
                 if self.is_cancelled:
@@ -136,7 +137,19 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
             with get_generation_coordinator().reserve(
                 "txt2img", unload_llm=False, timeout=0
             ):
-                result = backend.txt2img(self.model_name, payload, progress_callback=on_progress)
+                if generation_family == "krea2":
+                    from core.krea2_generation import run_krea2_generation
+
+                    # Forge-specific post-process steps are not part of the Krea
+                    # Comfy graph contract and must not leak into this branch.
+                    postprocess_chain = []
+                    result = run_krea2_generation(
+                        backend, "t2i", payload, progress_callback=on_progress,
+                    )
+                else:
+                    result = backend.txt2img(
+                        self.model_name, payload, progress_callback=on_progress,
+                    )
 
                 # 취소 후 도착한 결과(interrupt의 부분 이미지 포함)는 성공으로 emit하지 않음
                 # — 디스크 저장/히스토리/성공 통계/자동화 계속으로 이어지던 버그 방지
@@ -185,6 +198,7 @@ class Img2ImgFlowWorker(QThread, _CancellableMixin):
             backend = get_backend()
             payload = dict(self.payload)
             postprocess_chain = list(payload.pop("_postprocess_chain", []) or [])
+            generation_family = str(payload.pop("_generation_family", "standard") or "standard").lower()
 
             def on_progress(step: int, total: int, preview):
                 if self.is_cancelled:
@@ -198,7 +212,17 @@ class Img2ImgFlowWorker(QThread, _CancellableMixin):
             with get_generation_coordinator().reserve(
                 "img2img", unload_llm=False, timeout=0
             ):
-                result = backend.img2img(self.model_name, payload, progress_callback=on_progress)
+                if generation_family == "krea2":
+                    from core.krea2_generation import run_krea2_generation
+
+                    postprocess_chain = []
+                    result = run_krea2_generation(
+                        backend, "i2i", payload, progress_callback=on_progress,
+                    )
+                else:
+                    result = backend.img2img(
+                        self.model_name, payload, progress_callback=on_progress,
+                    )
 
                 if self.is_cancelled:
                     self.finished.emit("생성 취소됨", {'cancelled': True})

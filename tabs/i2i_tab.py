@@ -36,6 +36,9 @@ class Img2ImgTab(QWidget):
         self.main_window = main_window
         self.current_image_path = None
         self.current_base64 = None
+        self.current_reference_base64 = None
+        self._generation_family = "standard"
+        self._krea2_fidelity = 4.0
         self.gen_worker = None
         self.setAcceptDrops(True)
         self._setup_ui()
@@ -323,6 +326,13 @@ class Img2ImgTab(QWidget):
 
     def generate_from_payload(self, payload: dict):
         """Vue I2IView 페이로드로 생성 (image data-URL/base64/path + 설정 정규화 후 기존 워커 실행)."""
+        family = str(payload.get('generation_family', 'standard') or 'standard').strip().lower()
+        self._generation_family = 'krea2' if family == 'krea2' else 'standard'
+        try:
+            self._krea2_fidelity = float(payload.get('fidelity', 4))
+        except (TypeError, ValueError):
+            self._krea2_fidelity = 4.0
+
         img = payload.get('image') or ''
         if isinstance(img, str) and img.startswith('data:'):
             img = img.split(',', 1)[-1]
@@ -332,6 +342,21 @@ class Img2ImgTab(QWidget):
                 self.current_image_path = payload['image_path']
         elif payload.get('image_path') and os.path.exists(payload['image_path']):
             self._load_image(payload['image_path'])
+
+        reference = payload.get('reference_image') or ''
+        if isinstance(reference, str) and reference.startswith('data:'):
+            reference = reference.split(',', 1)[-1]
+        reference_path = payload.get('reference_path') or ''
+        if reference:
+            self.current_reference_base64 = reference
+        elif reference_path and os.path.exists(reference_path):
+            try:
+                with open(reference_path, 'rb') as handle:
+                    self.current_reference_base64 = base64.b64encode(handle.read()).decode('ascii')
+            except OSError:
+                self.current_reference_base64 = None
+        else:
+            self.current_reference_base64 = None
         if not self.current_base64:
             if self.main_window and hasattr(self.main_window, 'vue_bridge'):
                 self.main_window.vue_bridge.showNotification.emit('error', 'I2I: 입력 이미지가 없습니다')
@@ -385,6 +410,12 @@ class Img2ImgTab(QWidget):
             "save_images": True,
             "alwayson_scripts": {},
         }
+
+        if self._generation_family == 'krea2':
+            payload["_generation_family"] = "krea2"
+            payload["krea2_fidelity"] = self._krea2_fidelity
+            if self.current_reference_base64:
+                payload["krea2_reference_image"] = self.current_reference_base64
 
         # 확장(NegPiP/ADetailer/SAM3/Anima Guidance) — Forge Neo와 동일하게
         # img2img에도 alwayson_scripts로 적용. 확장 show()가 AlwaysVisible이라

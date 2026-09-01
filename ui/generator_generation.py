@@ -66,6 +66,12 @@ _logger = get_logger('generation')
 
 class GenerationMixin:
     """이미지 생성 관련 로직을 담당하는 Mixin"""
+
+    def _is_krea2_generation(self) -> bool:
+        combo = getattr(self, 'generation_family_combo', None)
+        if combo is None or not hasattr(combo, 'currentText'):
+            return False
+        return str(combo.currentText() or '').strip().upper() == 'KREA2'
     
     def _maybe_unload_ollama(self):
         """생성 직전 Ollama LLM 언로드 (ui_prefs.ollamaUnloadOnGen 켜진 경우) → VRAM 양보.
@@ -239,7 +245,7 @@ class GenerationMixin:
         lora_text = getattr(self, '_vue_lora_text', '')
         if not lora_text and hasattr(self, 'lora_active_panel'):
             lora_text = self.lora_active_panel.get_active_lora_text()
-        if lora_text:
+        if lora_text and not self._is_krea2_generation():
             # 프롬프트에 이미 <lora:NAME...>이 있으면(큐 항목의 EXIF 로라 등) 스택의 같은
             # LoRA는 제외 — 동일 LoRA 이중 적용 방지.
             import re as _re
@@ -352,6 +358,8 @@ class GenerationMixin:
             _logger.error("payload invalid: %s", msg)
             return None, msg
 
+        if self._is_krea2_generation():
+            payload["_generation_family"] = "krea2"
         return payload, None
 
     def _build_vae_te_override(self) -> list:
@@ -659,6 +667,8 @@ class GenerationMixin:
             payload["alwayson_scripts"]["NegPiP"] = {"args": [True]}
 
         self._apply_postprocess_chain(payload)
+        if self._is_krea2_generation():
+            payload["_generation_family"] = "krea2"
         
         selected_model = self.model_combo.currentText()
         

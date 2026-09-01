@@ -303,6 +303,10 @@ class UISetupMixin:
         if not hasattr(self, '_char_feature_override'):
             self._char_feature_override = {'hair_length': False, 'eye_color': False}
 
+        # 서버 종류와 별개인 생성 family. Krea2는 ComfyUI 위에서 전용
+        # 워크플로를 실행하므로 checkpoint 콤보와 분리해 관리한다.
+        self.generation_family_combo = ComboBoxProxy(b, 'generation_family_combo')
+        self.generation_family_combo.addItems(["STANDARD", "KREA2"])
         self.model_combo = ComboBoxProxy(b, 'model_combo')
         self.vae_main_combo = ComboBoxProxy(b, 'vae_main_combo')
         self.te_main_input = LineEditProxy(b, 'te_main_input')

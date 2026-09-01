@@ -105,15 +105,20 @@
         <TagBlockField v-if="tagBlockMode" v-model="widgets.artist_input" :color-fn="() => ''" placeholder="작가..." />
         <textarea v-else ref="artistRef" v-model="widgets.artist_input" class="auto-grow" placeholder="Artist tags..." @input="autoGrow($event.target)"></textarea>
       </div>
-      <div class="input-group">
+      <div v-if="showGenerationFamily" class="input-group generation-family">
+        <label>Generation Engine</label>
+        <CustomSelect v-model="widgets.generation_family_combo" :options="generationFamilyItems" />
+        <span class="engine-hint">T2I와 I2I에 공통 적용됩니다.</span>
+      </div>
+      <div v-if="!isKrea2Generation" class="input-group">
         <label>Checkpoint</label>
         <CustomSelect v-model="widgets.model_combo" :options="modelItems" placeholder="Select model..." />
       </div>
-      <div class="input-group">
+      <div v-if="!isKrea2Generation" class="input-group">
         <label>VAE <span class="hint">(ANIMA 등 외부 VAE)</span></label>
         <CustomSelect v-model="widgets.vae_main_combo" :options="vaeItems" placeholder="(체크포인트 기본 사용)" />
       </div>
-      <div class="input-group">
+      <div v-if="!isKrea2Generation" class="input-group">
         <label>Text Encoder <span class="hint">(드롭다운에서 추가 · 칩 클릭으로 제거)</span></label>
         <CustomSelect :modelValue="''" @update:modelValue="addTeFile"
           :options="teUnselectedItems"
@@ -124,6 +129,13 @@
             {{ f }} <span class="te-chip-x">×</span>
           </button>
         </div>
+      </div>
+      <div v-else class="krea-engine-note">
+        <strong>KREA 2 TURBO</strong>
+        <span>전용 UNET · Qwen3-VL · VAE 워크플로를 실행하며 ComfyUI 백엔드가 필요합니다.</span>
+        <span>T2I 전환 시 8 steps / CFG 1을 설정합니다. Sampler는 Euler 권장, Scheduler는 Simple 고정입니다.</span>
+        <span v-if="isI2IRoute">I2I Identity Edit에는 Identity Edit · TextFusion LoRA와 Krea2 Edit custom node가 추가로 필요합니다.</span>
+        <span>일반 Checkpoint · VAE · TE · LoRA Stack · Forge 확장과 Negative는 이 모드에서 적용되지 않습니다.</span>
       </div>
     </div>
 
@@ -272,6 +284,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useWidgetStore, requestAction } from '../stores/widgetStore.js'
 import { openCharPresetModal } from '../composables/uiModals.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
@@ -281,6 +294,95 @@ import TagBlockField from './TagBlockField.vue'
 const emit = defineEmits(['toggle-extend', 'open-wildcard'])
 const store = useWidgetStore()
 const widgets = store.widgets
+const route = useRoute()
+
+const generationFamilyItems = ['STANDARD', 'KREA2']
+const generationFamilyStorageKey = 'generationFamily'
+const standardSnapshotStorageKey = 'generationFamily.standardParams'
+const savedGenerationFamily = String(window.localStorage.getItem(generationFamilyStorageKey) || 'STANDARD').toUpperCase()
+const showGenerationFamily = computed(() => ['t2i', 'i2i'].includes(String(route.name || '')))
+const isI2IRoute = computed(() => String(route.name || '') === 'i2i')
+const isKrea2Generation = computed(
+  () => showGenerationFamily.value && String(widgets.generation_family_combo || '').toUpperCase() === 'KREA2')
+function loadStandardGenerationSnapshot(): { steps: string; cfg: string } | null {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(standardSnapshotStorageKey) || 'null')
+    if (value && typeof value.steps === 'string' && typeof value.cfg === 'string') return value
+  } catch {}
+  return null
+}
+let standardGenerationSnapshot: { steps: string; cfg: string } | null = loadStandardGenerationSnapshot()
+let generationFamilyRestored = false
+let generationFamilyRestoreTimer: ReturnType<typeof setTimeout> | null = null
+
+function saveStandardGenerationSnapshot() {
+  if (!standardGenerationSnapshot) return
+  try { window.localStorage.setItem(standardSnapshotStorageKey, JSON.stringify(standardGenerationSnapshot)) } catch {}
+}
+
+function clearStandardGenerationSnapshot() {
+  standardGenerationSnapshot = null
+  try { window.localStorage.removeItem(standardSnapshotStorageKey) } catch {}
+}
+
+watch(() => widgets.generation_family_combo, (value: any, previous: any) => {
+  if (!generationFamilyRestored) return
+  const family = String(value || 'STANDARD').toUpperCase()
+  try { window.localStorage.setItem(generationFamilyStorageKey, family) } catch {}
+  if (family === 'KREA2' && String(previous || '').toUpperCase() !== 'KREA2') {
+    if (!standardGenerationSnapshot) {
+      standardGenerationSnapshot = {
+        steps: String(widgets.steps_input || '25'),
+        cfg: String(widgets.cfg_input || '7'),
+      }
+      saveStandardGenerationSnapshot()
+    }
+    widgets.steps_input = '8'
+    widgets.cfg_input = '1'
+  } else if (family !== 'KREA2' && String(previous || '').toUpperCase() === 'KREA2' && standardGenerationSnapshot) {
+    widgets.steps_input = standardGenerationSnapshot.steps
+    widgets.cfg_input = standardGenerationSnapshot.cfg
+    clearStandardGenerationSnapshot()
+  }
+})
+
+onMounted(() => {
+  getBackend().then(() => {
+    let attempts = 0
+    const restore = () => {
+      // QWebChannel의 초기 getAllWidgetValues 콜백이 끝난 뒤 복원해야
+      // Python 기본값이 localStorage 선택을 다시 덮어쓰지 않는다.
+      if (widgets.generation_family_combo === undefined && attempts++ < 40) {
+        generationFamilyRestoreTimer = setTimeout(restore, 50)
+        return
+      }
+      const family = generationFamilyItems.includes(savedGenerationFamily)
+        ? savedGenerationFamily : 'STANDARD'
+      generationFamilyRestored = true
+      if (family === 'STANDARD' && standardGenerationSnapshot) {
+        widgets.steps_input = standardGenerationSnapshot.steps
+        widgets.cfg_input = standardGenerationSnapshot.cfg
+        clearStandardGenerationSnapshot()
+      } else if (family === 'KREA2' && String(widgets.generation_family_combo || '').toUpperCase() === 'KREA2') {
+        if (!standardGenerationSnapshot) {
+          standardGenerationSnapshot = {
+            steps: String(widgets.steps_input || '25'),
+            cfg: String(widgets.cfg_input || '7'),
+          }
+          saveStandardGenerationSnapshot()
+        }
+        widgets.steps_input = '8'
+        widgets.cfg_input = '1'
+      }
+      widgets.generation_family_combo = family
+    }
+    restore()
+  })
+})
+
+onUnmounted(() => {
+  if (generationFamilyRestoreTimer) clearTimeout(generationFamilyRestoreTimer)
+})
 
 // 블록 모드 (Settings에서 제어)
 const tagBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'true')
@@ -1078,6 +1180,15 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .neg :deep(.tbf) { border-color: rgba(248,113,113,0.15); }
 .neg :deep(.tbf-block) { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
 .hint { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: normal; margin-left: 4px; }
+.generation-family { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.engine-hint { display: block; margin-top: 5px; font-size: 9px; color: var(--text-muted); }
+.krea-engine-note {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; padding: 10px;
+  border: 1px solid rgba(167,139,250,0.35); border-radius: 7px;
+  background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(45,212,191,0.05));
+}
+.krea-engine-note strong { font-size: 11px; letter-spacing: 1.4px; color: #c4b5fd; }
+.krea-engine-note span { font-size: 9px; line-height: 1.45; color: var(--text-muted); }
 .tk-badge {
   display: inline-block; padding: 1px 6px; margin-left: 6px; font-size: 9px;
   font-weight: bold; border-radius: 8px; vertical-align: middle;
