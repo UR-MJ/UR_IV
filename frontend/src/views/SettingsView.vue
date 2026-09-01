@@ -33,27 +33,179 @@
             </div>
             <div class="info-row mt-12">
               <span class="desc">API ORCHESTRATOR</span>
-              <button class="btn-pill" @click="act('show_api_manager')">MANAGE BACKENDS</button>
+              <button class="btn-pill" :disabled="generationApiWebMode" @click="act('show_api_manager')">MANAGE BACKENDS</button>
             </div>
           </div>
         </div>
 
         <!-- 2. Network & API -->
-        <div v-show="currentTab === 'api'" class="section-fade">
-          <div class="glass-card">
-            <label>API CONFIGURATION</label>
-            <div class="input-stack">
-              <div class="input-unit">
-                <span class="unit-label">STABLE DIFFUSION WEBUI</span>
-                <input v-model="webuiUrl" placeholder="http://127.0.0.1:7860" />
+        <div v-show="currentTab === 'api'" class="section-fade generation-api-section">
+          <div class="hint-banner generation-api-security">
+            <strong>AUTHENTICATED GENERATION GATEWAY</strong>
+            로컬 앱이 인증 token이 필요한 생성 API를 제공하고, 미리 등록한 Forge/WebUI·ComfyUI로 작업을 중계합니다.
+            외부 요청은 임의 URL을 지정할 수 없으며, 기본값은 <b>127.0.0.1 / OFF</b>입니다.
+          </div>
+          <div v-if="generationApiReadOnlyReason" class="hint-banner generation-api-readonly">
+            <strong>READ ONLY</strong> {{ generationApiReadOnlyReason }}
+          </div>
+
+          <section class="glass-card generation-api-card">
+            <header class="generation-api-header">
+              <div>
+                <div class="generation-api-eyebrow">INBOUND SERVER</div>
+                <h2>이 앱을 생성 API로 사용</h2>
               </div>
-              <div class="input-unit mt-12">
-                <span class="unit-label">COMFYUI (NODE-BASED)</span>
-                <input v-model="comfyUrl" placeholder="http://127.0.0.1:8188" />
+              <div class="generation-api-badges">
+                <span class="generation-api-badge" :class="{ on: generationApi.running }">
+                  {{ generationApi.running ? 'RUNNING' : 'STOPPED' }}
+                </span>
+                <span class="generation-api-badge" :class="{ on: generationApi.enabled }">
+                  {{ generationApi.enabled ? 'AUTO START' : 'MANUAL' }}
+                </span>
+              </div>
+            </header>
+
+            <div class="generation-api-toggle-row">
+              <div>
+                <strong>APP STARTUP</strong>
+                <small>앱을 실행할 때 서버도 함께 시작</small>
+              </div>
+              <ToggleSwitch v-model="generationApi.enabled" :disabled="generationApiMutationDisabled" />
+            </div>
+
+            <div class="generation-api-grid mt-16">
+              <label class="generation-api-field">
+                <span>BIND HOST</span>
+                <input v-model.trim="generationApi.bindHost" spellcheck="false" placeholder="127.0.0.1" :disabled="generationApiMutationDisabled" />
+                <small>LAN 공유는 0.0.0.0을 명시해야 합니다.</small>
+              </label>
+              <label class="generation-api-field">
+                <span>PORT</span>
+                <input v-model.number="generationApi.port" type="number" min="1024" max="65535" :disabled="generationApiMutationDisabled" />
+                <small>설정 저장 시 충돌을 검증합니다.</small>
+              </label>
+            </div>
+            <div v-if="generationApiLanExposed" class="generation-api-lan-warning">
+              LAN에 평문 HTTP로 공개되어 token·prompt·입력 이미지가 암호화되지 않습니다.
+              신뢰 LAN/VPN/HTTPS reverse proxy 안에서만 사용하고 방화벽 접근을 제한하세요.
+            </div>
+
+            <label class="generation-api-field mt-16">
+              <span>BEARER TOKEN</span>
+              <div class="generation-api-secret">
+                <input :type="generationApiTokenVisible ? 'text' : 'password'" :value="generationApi.token || generationApi.tokenPreview"
+                  readonly spellcheck="false" placeholder="SAVE 또는 ROTATE로 token 생성" />
+                <button class="btn-pill compact" @click="generationApiTokenVisible = !generationApiTokenVisible">
+                  {{ generationApiTokenVisible ? 'HIDE' : 'SHOW' }}
+                </button>
+                <button class="btn-pill compact" :disabled="!generationApi.token" @click="copyGenerationApiToken">COPY</button>
+                <button class="btn-pill compact" :disabled="generationApiMutationDisabled" @click="runGenerationApiAction('rotate_token')">ROTATE</button>
+              </div>
+            </label>
+
+            <div class="generation-api-endpoint mt-16">
+              <span>BASE URL</span>
+              <code>{{ generationApiBaseUrl }}</code>
+              <button class="btn-pill compact" @click="copyGenerationApiExample">COPY EXAMPLE</button>
+            </div>
+
+            <div class="generation-api-actions mt-16">
+              <button class="btn-pill primary" :disabled="generationApiMutationDisabled" @click="saveGenerationApiConfig">APPLY CONFIG</button>
+              <button class="btn-pill" :disabled="generationApiMutationDisabled || generationApi.running" @click="runGenerationApiAction('start')">START</button>
+              <button class="btn-pill" :disabled="generationApiMutationDisabled || !generationApi.running" @click="runGenerationApiAction('stop')">STOP</button>
+              <button class="btn-pill" :disabled="generationApiWebMode" @click="act('show_api_manager')">BACKEND MANAGER</button>
+            </div>
+            <p v-if="generationApiStatus" class="generation-api-status">{{ generationApiStatus }}</p>
+          </section>
+
+          <section class="glass-card generation-api-card mt-16">
+            <header class="generation-api-header">
+              <div>
+                <div class="generation-api-eyebrow">APPROVED REMOTE TARGETS</div>
+                <h2>Forge/WebUI · ComfyUI 연결</h2>
+              </div>
+              <button class="btn-pill" :disabled="generationApiMutationDisabled" @click="addGenerationApiTarget">+ ADD TARGET</button>
+            </header>
+
+            <label class="generation-api-field mt-16">
+              <span>DEFAULT TARGET</span>
+              <select v-model="generationApi.defaultTarget" :disabled="generationApiMutationDisabled">
+                <option value="active">ACTIVE BACKEND (현재 앱 백엔드)</option>
+                <option v-for="target in generationApi.targets" :key="target.id" :value="target.id">
+                  {{ target.name || target.id }} · {{ target.engine.toUpperCase() }}
+                </option>
+              </select>
+            </label>
+
+            <div v-if="!generationApi.targets.length" class="generation-api-empty mt-16">
+              등록된 원격 target이 없습니다. 외부 요청은 현재 활성 백엔드로 전달됩니다.
+            </div>
+            <article v-for="(target, index) in generationApi.targets" :key="target.localKey" class="generation-api-target mt-16">
+              <div class="generation-api-target-head">
+                <strong>{{ target.name || `TARGET ${index + 1}` }}</strong>
+                <label class="generation-api-enabled">
+                  <input v-model="target.enabled" type="checkbox" :disabled="generationApiMutationDisabled" /> ENABLED
+                </label>
+              </div>
+              <div class="generation-api-grid">
+                <label class="generation-api-field">
+                  <span>NAME</span>
+                  <input v-model.trim="target.name" placeholder="Studio Forge" :disabled="generationApiMutationDisabled" />
+                </label>
+                <label class="generation-api-field">
+                  <span>TARGET ID</span>
+                  <input v-model.trim="target.id" spellcheck="false" placeholder="studio-forge" :disabled="generationApiMutationDisabled" />
+                </label>
+                <label class="generation-api-field">
+                  <span>ENGINE</span>
+                  <select v-model="target.engine" :disabled="generationApiMutationDisabled">
+                    <option value="webui">FORGE / WEBUI</option>
+                    <option value="comfyui">COMFYUI</option>
+                  </select>
+                </label>
+                <label class="generation-api-field">
+                  <span>API URL</span>
+                  <input v-model.trim="target.url" spellcheck="false"
+                    :placeholder="target.engine === 'comfyui' ? 'http://127.0.0.1:8188' : 'http://127.0.0.1:7860'"
+                    :disabled="generationApiMutationDisabled" />
+                </label>
+              </div>
+              <div v-if="target.engine === 'comfyui'" class="generation-api-grid mt-12">
+                <label class="generation-api-field">
+                  <span>T2I WORKFLOW PROFILE PATH</span>
+                  <input v-model.trim="target.workflowPath" spellcheck="false" placeholder="C:\\workflows\\api_t2i.json" :disabled="generationApiMutationDisabled" />
+                </label>
+                <label class="generation-api-field">
+                  <span>I2I WORKFLOW PROFILE PATH</span>
+                  <input v-model.trim="target.img2imgWorkflowPath" spellcheck="false" placeholder="C:\\workflows\\api_i2i.json" :disabled="generationApiMutationDisabled" />
+                </label>
+              </div>
+              <div class="generation-api-target-actions mt-12">
+                <button class="btn-pill compact" :disabled="generationApiMutationDisabled || !target.url" @click="testGenerationApiTarget(target)">TEST</button>
+                <button class="btn-pill compact danger" :disabled="generationApiMutationDisabled" @click="removeGenerationApiTarget(index)">REMOVE</button>
+              </div>
+            </article>
+          </section>
+
+          <section class="glass-card generation-api-card mt-16">
+            <header class="generation-api-header">
+              <div>
+                <div class="generation-api-eyebrow">RECENT REQUESTS</div>
+                <h2>외부 생성 작업</h2>
+              </div>
+              <button class="btn-pill compact" :disabled="generationApiLoading" @click="loadGenerationApiState()">REFRESH</button>
+            </header>
+            <div v-if="!generationApi.recentJobs.length" class="generation-api-empty mt-16">최근 외부 작업이 없습니다.</div>
+            <div v-else class="generation-api-jobs mt-16">
+              <div v-for="job in generationApi.recentJobs.slice(0, 8)" :key="job.id" class="generation-api-job">
+                <div>
+                  <strong>{{ job.mode.toUpperCase() }} · {{ job.target }}</strong>
+                  <code>{{ job.id }}</code>
+                </div>
+                <span class="generation-api-job-state" :class="job.status">{{ job.status.toUpperCase() }}</span>
               </div>
             </div>
-            <button class="btn-pill primary mt-16" @click="act('show_api_manager')">TEST CONNECTIVITY</button>
-          </div>
+          </section>
         </div>
 
         <!-- 3. App-managed runtimes / engines -->
@@ -762,6 +914,26 @@ interface RuntimeEngineState {
   message: string
 }
 
+type GenerationApiEngine = 'webui' | 'comfyui'
+
+interface GenerationApiTarget {
+  localKey: string
+  id: string
+  name: string
+  engine: GenerationApiEngine
+  url: string
+  enabled: boolean
+  workflowPath: string
+  img2imgWorkflowPath: string
+}
+
+interface GenerationApiJob {
+  id: string
+  mode: string
+  target: string
+  status: string
+}
+
 // 템플릿 인라인 핸들러(82·146행)가 window.localStorage를 참조 — 셋업 스코프에 노출
 const window = globalThis.window
 
@@ -799,8 +971,312 @@ function focusSearch() {
   searchInputRef.value?.focus()
   searchInputRef.value?.select()
 }
-const webuiUrl = ref('http://127.0.0.1:7860')
-const comfyUrl = ref('http://127.0.0.1:8188')
+const generationApi = reactive({
+  enabled: false,
+  running: false,
+  bindHost: '127.0.0.1',
+  port: 17860,
+  token: '',
+  tokenPreview: '',
+  listenUrl: '',
+  defaultTarget: 'active',
+  targets: [] as GenerationApiTarget[],
+  recentJobs: [] as GenerationApiJob[],
+})
+const generationApiLoaded = ref(false)
+const generationApiLoading = ref(false)
+const generationApiBusy = ref(false)
+const generationApiOperationId = ref('')
+const generationApiBridgeAvailable = ref(false)
+const generationApiNativeOperations = ref(false)
+const generationApiStatus = ref('')
+const generationApiTokenVisible = ref(false)
+const generationApiWebMode = Boolean((window as any).__AISTUDIO_WS_PORT__ || (window as any).__AISTUDIO_WS_URL__)
+const generationApiReadOnlyReason = computed(() => {
+  if (generationApiWebMode) return '웹 모드에서는 서버·token·원격 target 설정을 변경할 수 없습니다.'
+  if (generationApiLoaded.value && !generationApiBridgeAvailable.value) return '현재 백엔드는 생성 API 관리 기능을 제공하지 않습니다.'
+  if (generationApiLoaded.value && !generationApiNativeOperations.value) return '이 환경에서는 생성 API 변경 작업이 비활성화되어 있습니다.'
+  return ''
+})
+const generationApiMutationDisabled = computed(() =>
+  generationApiBusy.value || generationApiLoading.value || !generationApiLoaded.value
+  || !generationApiBridgeAvailable.value || !generationApiNativeOperations.value || generationApiWebMode
+)
+const generationApiLanExposed = computed(() => {
+  const host = generationApi.bindHost.trim().toLowerCase()
+  return !['127.0.0.1', 'localhost', '::1'].includes(host)
+})
+const generationApiBaseUrl = computed(() => {
+  if (generationApi.listenUrl) return generationApi.listenUrl.replace(/\/$/, '')
+  const configured = generationApi.bindHost.trim()
+  const host = ['0.0.0.0', '::', ''].includes(configured) ? '127.0.0.1' : configured
+  const displayHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+  return `http://${displayHost}:${generationApi.port}`
+})
+
+let generationApiTargetSequence = 0
+
+function parseGenerationApiPayload(raw: unknown): any {
+  let payload: any = raw
+  for (let i = 0; i < 2 && typeof payload === 'string'; i += 1) {
+    payload = JSON.parse(payload || '{}')
+  }
+  if (payload && typeof payload === 'object' && payload.value !== undefined
+    && payload.config === undefined && payload.running === undefined && payload.snapshot === undefined) {
+    return parseGenerationApiPayload(payload.value)
+  }
+  return payload && typeof payload === 'object' ? payload : {}
+}
+
+function normalizeGenerationApiTarget(raw: any, index: number): GenerationApiTarget {
+  const engine = String(raw?.engine || raw?.type || 'webui').toLowerCase() === 'comfyui'
+    ? 'comfyui' as const
+    : 'webui' as const
+  return {
+    localKey: String(raw?.localKey || `api-target-${Date.now()}-${generationApiTargetSequence++}-${index}`),
+    id: String(raw?.id || raw?.targetId || ''),
+    name: String(raw?.name || raw?.label || ''),
+    engine,
+    url: String(raw?.url || raw?.apiUrl || raw?.endpoint || ''),
+    enabled: raw?.enabled !== false,
+    workflowPath: String(raw?.workflowPath || raw?.txt2imgWorkflowPath || ''),
+    img2imgWorkflowPath: String(raw?.img2imgWorkflowPath || ''),
+  }
+}
+
+function applyGenerationApiState(raw: unknown) {
+  const payload = parseGenerationApiPayload(raw)
+  if (payload.ok === false && !payload.snapshot) throw new Error(String(payload.error || '생성 API 상태를 불러오지 못했습니다.'))
+  const snapshot = payload.snapshot && typeof payload.snapshot === 'object' ? payload.snapshot : payload
+  const config = snapshot.config && typeof snapshot.config === 'object' ? snapshot.config : snapshot
+  const server = snapshot.server && typeof snapshot.server === 'object' ? snapshot.server : snapshot
+  if (typeof snapshot.nativeOperations === 'boolean') generationApiNativeOperations.value = snapshot.nativeOperations
+  else generationApiNativeOperations.value = !generationApiWebMode
+
+  generationApi.enabled = Boolean(config.enabled ?? config.autoStart ?? generationApi.enabled)
+  generationApi.running = Boolean(server.running ?? server.started ?? snapshot.running ?? false)
+  generationApi.bindHost = String(config.bindHost ?? config.host ?? generationApi.bindHost ?? '127.0.0.1')
+  generationApi.port = Number(config.port ?? generationApi.port ?? 17860)
+  generationApi.defaultTarget = String(config.defaultTarget ?? config.default_target ?? 'active') || 'active'
+  generationApi.listenUrl = String(server.listenUrl || server.baseUrl || snapshot.listenUrl || snapshot.baseUrl || '')
+
+  const token = String(config.token ?? snapshot.token ?? '')
+  const looksRedacted = /[*•]/.test(token)
+  if (token && !looksRedacted) generationApi.token = token
+  generationApi.tokenPreview = String(config.tokenPreview || snapshot.tokenPreview || (looksRedacted ? token : ''))
+
+  const targets = config.targets ?? snapshot.targets
+  if (Array.isArray(targets)) {
+    generationApi.targets = targets.map(normalizeGenerationApiTarget)
+  }
+  const jobs = snapshot.recentJobs ?? snapshot.jobs ?? server.recentJobs
+  generationApi.recentJobs = Array.isArray(jobs)
+    ? jobs.map((job: any, index: number) => ({
+        id: String(job?.id || job?.jobId || `job-${index}`),
+        mode: String(job?.mode || job?.task || 'generation'),
+        target: String(job?.target || job?.targetId || 'active'),
+        status: String(job?.status || job?.state || 'unknown').toLowerCase(),
+      }))
+    : []
+  generationApiLoaded.value = true
+}
+
+async function callGenerationApiBridge(method: string, ...args: unknown[]): Promise<any> {
+  const backend: any = await getBackend()
+  const fn = backend?.[method]
+  if (typeof fn !== 'function') throw new Error(`백엔드가 ${method} 기능을 지원하지 않습니다.`)
+  return new Promise((resolve, reject) => {
+    try {
+      fn(...args, (raw: unknown) => {
+        try { resolve(parseGenerationApiPayload(raw)) }
+        catch (error) { reject(error) }
+      })
+    } catch (error) {
+      reject(error)
+    }
+  })
+}
+
+function showGenerationApiError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  generationApiStatus.value = message
+  generationApiBusy.value = false
+  requestAction('show_toast', { type: 'error', msg: message })
+}
+
+async function loadGenerationApiState(backend?: any) {
+  const bk: any = backend || await getBackend()
+  generationApiBridgeAvailable.value = typeof bk?.getGenerationApiState === 'function'
+    && typeof bk?.runGenerationApiOperation === 'function'
+  if (typeof bk?.getGenerationApiState !== 'function') {
+    generationApiLoaded.value = true
+    generationApiNativeOperations.value = false
+    return
+  }
+  generationApiLoading.value = true
+  try {
+    const payload = await new Promise<any>((resolve, reject) => {
+      bk.getGenerationApiState((raw: unknown) => {
+        try { resolve(parseGenerationApiPayload(raw)) }
+        catch (error) { reject(error) }
+      })
+    })
+    applyGenerationApiState(payload)
+  } catch (error) {
+    generationApiLoaded.value = true
+    showGenerationApiError(error)
+  } finally {
+    generationApiLoading.value = false
+  }
+}
+
+async function runGenerationApiAction(action: string, payload: Record<string, unknown> = {}) {
+  if (generationApiMutationDisabled.value) return
+  generationApiBusy.value = true
+  generationApiStatus.value = `${action.replace(/_/g, ' ')} 요청 중…`
+  try {
+    const result = await callGenerationApiBridge('runGenerationApiOperation', action, JSON.stringify(payload))
+    if (result.ok === false || result.accepted === false) throw new Error(String(result.error || '작업이 거부되었습니다.'))
+    // A very fast worker can emit completed before the slot callback returns.
+    // Do not overwrite that terminal message with a stale "started" message.
+    if (generationApiBusy.value) {
+      generationApiOperationId.value = String(result.operationId || '')
+      generationApiStatus.value = '작업을 시작했습니다…'
+    }
+  } catch (error) {
+    showGenerationApiError(error)
+  }
+}
+
+function serializeGenerationApiTarget(target: GenerationApiTarget) {
+  return {
+    id: target.id.trim(),
+    name: target.name.trim(),
+    engine: target.engine,
+    url: target.url.trim(),
+    enabled: target.enabled,
+    workflowPath: target.workflowPath.trim(),
+    img2imgWorkflowPath: target.img2imgWorkflowPath.trim(),
+  }
+}
+
+function validateGenerationApiConfig() {
+  const port = Number(generationApi.port)
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('PORT는 1024~65535 정수여야 합니다.')
+  if (!generationApi.bindHost.trim()) throw new Error('BIND HOST를 입력하세요.')
+  const ids = new Set<string>()
+  for (const target of generationApi.targets) {
+    const id = target.id.trim()
+    if (!id || id === 'active' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id)) {
+      throw new Error('TARGET ID는 active 이외의 1~64자 영문·숫자·._- 조합으로 입력하세요.')
+    }
+    if (ids.has(id)) throw new Error(`중복된 TARGET ID입니다: ${id}`)
+    ids.add(id)
+    if (!target.name.trim()) throw new Error(`${id}: NAME을 입력하세요.`)
+    try {
+      const parsed = new URL(target.url.trim())
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('protocol')
+    } catch {
+      throw new Error(`${id}: http:// 또는 https:// API URL을 입력하세요.`)
+    }
+  }
+  if (generationApi.defaultTarget !== 'active' && !ids.has(generationApi.defaultTarget)) {
+    throw new Error('DEFAULT TARGET이 현재 target 목록에 없습니다.')
+  }
+}
+
+async function saveGenerationApiConfig() {
+  try {
+    validateGenerationApiConfig()
+    await runGenerationApiAction('save_config', {
+      enabled: generationApi.enabled,
+      bindHost: generationApi.bindHost.trim(),
+      port: Number(generationApi.port),
+      token: generationApi.token,
+      defaultTarget: generationApi.defaultTarget,
+      targets: generationApi.targets.map(serializeGenerationApiTarget),
+    })
+  } catch (error) {
+    showGenerationApiError(error)
+  }
+}
+
+function addGenerationApiTarget() {
+  const existing = new Set(generationApi.targets.map(target => target.id))
+  let suffix = generationApi.targets.length + 1
+  while (existing.has(`remote-${suffix}`)) suffix += 1
+  generationApi.targets.push(normalizeGenerationApiTarget({
+    id: `remote-${suffix}`,
+    name: `Remote ${suffix}`,
+    engine: 'webui',
+    url: 'http://127.0.0.1:7860',
+    enabled: true,
+  }, generationApi.targets.length))
+}
+
+function removeGenerationApiTarget(index: number) {
+  const removed = generationApi.targets.splice(index, 1)[0]
+  if (removed && generationApi.defaultTarget === removed.id) generationApi.defaultTarget = 'active'
+}
+
+function testGenerationApiTarget(target: GenerationApiTarget) {
+  runGenerationApiAction('test_target', {
+    targetId: target.id.trim(),
+    target: serializeGenerationApiTarget(target),
+  })
+}
+
+function handleGenerationApiEvent(raw: unknown) {
+  try {
+    const event = parseGenerationApiPayload(raw)
+    if (event.type === 'started') {
+      generationApiBusy.value = true
+      generationApiOperationId.value = String(event.operationId || '')
+      generationApiStatus.value = String(event.message || '작업을 시작했습니다…')
+      return
+    }
+    if (event.snapshot) applyGenerationApiState(event.snapshot)
+    generationApiBusy.value = false
+    generationApiOperationId.value = ''
+    const ok = event.type === 'completed' && event.ok !== false
+    const message = String(event.message || (ok ? '작업이 완료되었습니다.' : event.error || '작업에 실패했습니다.'))
+    generationApiStatus.value = message
+    requestAction('show_toast', { type: ok ? 'success' : 'error', msg: message })
+  } catch (error) {
+    showGenerationApiError(error)
+  }
+}
+
+async function copyText(value: string, successMessage: string) {
+  if (!value) return
+  try {
+    if (globalThis.navigator?.clipboard?.writeText) {
+      await globalThis.navigator.clipboard.writeText(value)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    requestAction('show_toast', { type: 'success', msg: successMessage })
+  } catch {
+    requestAction('show_toast', { type: 'error', msg: '클립보드에 복사하지 못했습니다.' })
+  }
+}
+
+function copyGenerationApiToken() {
+  copyText(generationApi.token, 'API token을 복사했습니다.')
+}
+
+function copyGenerationApiExample() {
+  const token = generationApi.token || '<TOKEN>'
+  const example = `curl -X POST "${generationApiBaseUrl.value}/api/v1/generations?wait=120" -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"target":"${generationApi.defaultTarget}","mode":"txt2img","payload":{"prompt":"masterpiece","width":1024,"height":1024}}'`
+  copyText(example, 'API 호출 예시를 복사했습니다.')
+}
 
 function createRuntimeEngine(engine: RuntimeEngineId, name: string): RuntimeEngineState {
   return {
@@ -1440,13 +1916,15 @@ async function resetForgePaths() {
 // UI prefs 로드 시 동기화
 import { onBackendEvent, getBackend } from '../bridge.js'
 let disconnectBackendRuntimeEvent: (() => void) | null = null
+let disconnectGenerationApiEvent: (() => void) | null = null
 onMounted(async () => {
   onBackendEvent('ollamaModelsReady', handleOllamaModels)
   disconnectBackendRuntimeEvent = onBackendEvent('backendRuntimeEvent', handleBackendRuntimeEvent)
+  disconnectGenerationApiEvent = onBackendEvent('generationApiEvent', handleGenerationApiEvent)
   autoLoadOllamaModels()   // AI Assistant 모델 목록 시작 시 자동 로드
   // defaults 로드
   const bk: any = await getBackend()
-  await Promise.all([loadForgePaths(bk), loadBackendRuntimeState(bk)])
+  await Promise.all([loadForgePaths(bk), loadBackendRuntimeState(bk), loadGenerationApiState(bk)])
   if (bk.getTabDefaults) {
     bk.getTabDefaults((json: string) => {
       try { const d = JSON.parse(json); Object.assign(defaults, d) } catch {}
@@ -1465,6 +1943,8 @@ onMounted(async () => {
 onUnmounted(() => {
   disconnectBackendRuntimeEvent?.()
   disconnectBackendRuntimeEvent = null
+  disconnectGenerationApiEvent?.()
+  disconnectGenerationApiEvent = null
 })
 function setBlockMode() {
   window.localStorage.setItem('tagBlockMode', String(defaultBlockMode.value))
@@ -1700,6 +2180,95 @@ function handleOllamaModels(json: string) {
 .input-stack { display: flex; flex-direction: column; gap: 16px; }
 .input-unit { position: relative; }
 .unit-label { position: absolute; left: 12px; top: -8px; background: var(--bg-primary); padding: 0 6px; font-size: 9px; font-weight: 900; color: var(--text-muted); letter-spacing: 1px; }
+
+/* Authenticated generation API gateway */
+.generation-api-section { width: 100%; }
+.generation-api-security {
+  background: rgba(34,211,238,.07); border-color: rgba(34,211,238,.3); color: var(--text-secondary);
+}
+.generation-api-security strong { display: block; margin-bottom: 4px; color: #22d3ee; letter-spacing: 1px; }
+.generation-api-security b { color: var(--text-primary); }
+.generation-api-readonly {
+  background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.3); color: var(--text-secondary);
+}
+.generation-api-readonly strong { margin-right: 5px; color: #fbbf24; }
+.generation-api-card { border-color: rgba(34,211,238,.17); }
+.generation-api-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.generation-api-eyebrow { color: #22d3ee; font-size: 8px; font-weight: 900; letter-spacing: 1.6px; }
+.generation-api-header h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 18px; }
+.generation-api-badges { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.generation-api-badge {
+  padding: 4px 7px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--bg-input); color: var(--text-muted); font-size: 8px; font-weight: 900; letter-spacing: .55px;
+}
+.generation-api-badge.on { border-color: rgba(74,222,128,.42); background: rgba(74,222,128,.09); color: #4ade80; }
+.generation-api-toggle-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  margin-top: 18px; padding: 12px 14px; border-radius: 8px; background: var(--bg-input);
+}
+.generation-api-toggle-row > div { display: flex; flex-direction: column; gap: 3px; }
+.generation-api-toggle-row strong { color: var(--text-secondary); font-size: 10px; letter-spacing: .5px; }
+.generation-api-toggle-row small { color: var(--text-muted); font-size: 9px; line-height: 1.4; }
+.generation-api-toggle-row :deep(.tsw:disabled) { opacity: .45; cursor: not-allowed; }
+.generation-api-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.generation-api-field { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.generation-api-field > span, .generation-api-endpoint > span {
+  color: var(--text-muted); font-size: 8px; font-weight: 900; letter-spacing: 1px;
+}
+.generation-api-field > small { color: var(--text-muted); font-size: 8px; line-height: 1.4; }
+.generation-api-field input, .generation-api-field select {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 9px 11px;
+  border: 1px solid var(--border); border-radius: 7px; outline: none;
+  background: var(--bg-primary); color: var(--text-primary); font-family: 'Consolas', monospace; font-size: 10px;
+}
+.generation-api-field input:focus, .generation-api-field select:focus { border-color: #22d3ee; }
+.generation-api-field input:disabled, .generation-api-field select:disabled { opacity: .5; cursor: not-allowed; }
+.generation-api-secret { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 7px; }
+.generation-api-lan-warning {
+  margin-top: 10px; padding: 9px 11px; border: 1px solid rgba(248,113,113,.35); border-radius: 7px;
+  background: rgba(248,113,113,.07); color: #fca5a5; font-size: 9px; line-height: 1.5;
+}
+.generation-api-endpoint {
+  min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-input);
+}
+.generation-api-endpoint code {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #67e8f9; font-family: 'Consolas', monospace; font-size: 10px;
+}
+.generation-api-actions { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1.2fr; gap: 8px; }
+.generation-api-actions .btn-pill { min-width: 0; }
+.generation-api-status {
+  margin: 12px 0 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--bg-input); color: var(--text-secondary); font-size: 10px; line-height: 1.5;
+}
+.generation-api-empty {
+  padding: 14px; border: 1px dashed var(--border); border-radius: 7px;
+  color: var(--text-muted); text-align: center; font-size: 10px; line-height: 1.5;
+}
+.generation-api-target {
+  padding: 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-input);
+}
+.generation-api-target-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.generation-api-target-head > strong { color: var(--text-primary); font-size: 11px; }
+.generation-api-enabled { color: var(--text-muted); font-size: 8px; font-weight: 900; letter-spacing: .7px; }
+.generation-api-enabled input { accent-color: #22d3ee; vertical-align: -2px; }
+.generation-api-target-actions { display: flex; justify-content: flex-end; gap: 7px; }
+.generation-api-jobs { display: flex; flex-direction: column; gap: 7px; }
+.generation-api-job {
+  min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-input);
+}
+.generation-api-job > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.generation-api-job strong { color: var(--text-secondary); font-size: 9px; }
+.generation-api-job code { overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); font-size: 8px; white-space: nowrap; }
+.generation-api-job-state {
+  flex-shrink: 0; padding: 3px 7px; border-radius: var(--radius-pill); background: var(--border);
+  color: var(--text-muted); font-size: 8px; font-weight: 900; letter-spacing: .6px;
+}
+.generation-api-job-state.completed { background: rgba(74,222,128,.1); color: #4ade80; }
+.generation-api-job-state.running { background: rgba(96,165,250,.1); color: #60a5fa; }
+.generation-api-job-state.failed, .generation-api-job-state.cancelled { background: rgba(248,113,113,.1); color: #f87171; }
 
 /* App-managed runtimes */
 .runtime-section { width: 100%; }
@@ -1989,6 +2558,7 @@ kbd {
 @media (max-width: 820px) {
   .settings-nav { width: 190px; }
   .settings-body { padding: 24px; }
+  .generation-api-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .runtime-primary-card { grid-template-columns: 1fr; }
   .runtime-card-header { flex-direction: column; }
   .runtime-badges { justify-content: flex-start; max-width: none; }
@@ -2008,6 +2578,14 @@ kbd {
   .nav-item .label { font-size: 9px; letter-spacing: .5px; }
   .settings-body { padding: 16px 12px 28px; }
   .glass-card { padding: 17px; }
+  .generation-api-header { flex-direction: column; }
+  .generation-api-badges { justify-content: flex-start; }
+  .generation-api-grid { grid-template-columns: 1fr; }
+  .generation-api-secret { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .generation-api-secret input { grid-column: 1 / -1; }
+  .generation-api-endpoint { grid-template-columns: 1fr auto; }
+  .generation-api-endpoint > span { grid-column: 1 / -1; }
+  .generation-api-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .runtime-meta-grid { grid-template-columns: 1fr; }
   .runtime-meta-wide { grid-column: auto; }
   .runtime-toggle-row { align-items: flex-start; }
@@ -2017,5 +2595,11 @@ kbd {
   .runtime-extension-item { align-items: flex-start; flex-direction: column; }
   .runtime-extension-actions { width: 100%; }
   .runtime-extension-actions .btn-pill { flex: 1; }
+}
+
+@media (max-width: 520px) {
+  .generation-api-section { box-sizing: border-box; padding-right: 104px; }
+  .generation-api-secret { grid-template-columns: 1fr; }
+  .generation-api-secret input { grid-column: auto; }
 }
 </style>

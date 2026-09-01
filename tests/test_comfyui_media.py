@@ -171,6 +171,64 @@ class TestComfyMediaFetch(unittest.TestCase):
         self.assertEqual(result.image_data, b'ok')
         self.assertEqual(result.info['artifact_download_errors'], ['missing.png'])
 
+    def test_artifact_count_limit_rejects_extra_media(self):
+        history = {
+            'limited-count': {
+                'outputs': {
+                    '1': {
+                        'images': [
+                            {'filename': 'first.png'},
+                            {'filename': 'second.png'},
+                        ],
+                    },
+                },
+            },
+        }
+        viewed = []
+
+        def fake_get(url, **kwargs):
+            if '/history/' in url:
+                return _FakeResponse(payload=history)
+            viewed.append(kwargs['params']['filename'])
+            return _FakeResponse(content=b'png', content_type='image/png')
+
+        with mock.patch(
+            'backends.comfyui_backend._MAX_RESULT_ARTIFACTS', 1
+        ), mock.patch(
+            'backends.comfyui_backend.requests.get', side_effect=fake_get
+        ):
+            result = self.backend._fetch_result_artifacts('limited-count')
+
+        self.assertFalse(result.success)
+        self.assertIn('최대 1개', result.error)
+        self.assertEqual(result.artifacts, [])
+        self.assertEqual(viewed, ['first.png'])
+
+    def test_artifact_total_size_limit_rejects_oversized_media(self):
+        history = {
+            'limited-size': {
+                'outputs': {
+                    '1': {'images': [{'filename': 'large.png'}]},
+                },
+            },
+        }
+
+        def fake_get(url, **_kwargs):
+            if '/history/' in url:
+                return _FakeResponse(payload=history)
+            return _FakeResponse(content=b'12345', content_type='image/png')
+
+        with mock.patch(
+            'backends.comfyui_backend._MAX_RESULT_BYTES', 4
+        ), mock.patch(
+            'backends.comfyui_backend.requests.get', side_effect=fake_get
+        ):
+            result = self.backend._fetch_result_artifacts('limited-size')
+
+        self.assertFalse(result.success)
+        self.assertIn('총 용량', result.error)
+        self.assertEqual(result.artifacts, [])
+
     def test_public_workflow_seam_delegates_to_generic_runner(self):
         workflow = {'1': {'class_type': 'SaveImage', 'inputs': {}}}
         expected = GenerationResult(success=True)

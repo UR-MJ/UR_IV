@@ -91,6 +91,18 @@ def main():
     # (실패해도 내부 폴백으로 앱은 뜸. 시작 다이얼로그 X면 SystemExit로 종료.)
     if hasattr(window, '_run_startup_sequence'):
         window._run_startup_sequence(app)
+
+    # 생성 API는 설정에서 명시적으로 켜 둔 경우에만 로컬 서버를 연다.
+    # 위젯에 참조를 보관해 앱 수명과 gateway 수명을 일치시킨다.
+    try:
+        from core.generation_api import get_generation_api_manager
+
+        generation_api_manager = get_generation_api_manager()
+        window._generation_api_manager = generation_api_manager
+        generation_api_manager.start_if_enabled()
+        app.aboutToQuit.connect(generation_api_manager.shutdown)
+    except Exception as exc:
+        print(f"[Generation API] startup skipped: {exc}")
     window.showMaximized()
 
     sys.exit(app.exec())

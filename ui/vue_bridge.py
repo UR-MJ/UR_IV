@@ -78,6 +78,7 @@ class VueBridge(QObject):
     generationError = pyqtSignal(str)
 
     editorImageLoaded = pyqtSignal(str)   # file path
+    editorWatermarkImageLoaded = pyqtSignal(str)   # 워터마크로 쓸 이미지 파일 경로
     captionFilesSelected = pyqtSignal(str)  # JSON [path] — 캡션 대상 이미지
     captionProgress = pyqtSignal(str)       # JSON {index,total,path,caption,error}
     captionDone = pyqtSignal(str)           # JSON {total,ok,failed}
@@ -133,6 +134,10 @@ class VueBridge(QObject):
     # operation id만 즉시 돌려주고 이 단일 JSON signal로 진행/완료를 보낸다.
     backendRuntimeEvent = pyqtSignal(str)
 
+    # 외부에 제공하는 생성 API 서버와 원격 WebUI/ComfyUI target 관리.
+    # 민감한 token은 Web 모드에서 항상 제거된 snapshot만 전달한다.
+    generationApiEvent = pyqtSignal(str)
+
     # 위젯 값/속성 동기화 (Python → Vue)
     widgetValueChanged = pyqtSignal(str, str)       # (widget_id, value)
     widgetPropertyChanged = pyqtSignal(str, str, str)  # (widget_id, prop, value_json)
@@ -153,6 +158,8 @@ class VueBridge(QObject):
         self._async_lookup_lock = threading.Lock()
         self._backend_runtime_inflight = {}
         self._backend_runtime_lock = threading.Lock()
+        self._generation_api_inflight = None
+        self._generation_api_lock = threading.Lock()
         self.adetailerModelsReady.connect(self._apply_adetailer_models_json)
 
     def _run_async_lookup(self, key, loader, signal):
@@ -235,6 +242,9 @@ class VueBridge(QObject):
     @pyqtSlot(str, str)
     def onAction(self, action: str, payload_json: str):
         """Vue에서 버튼 클릭 등 액션 요청"""
+        if self._backend_runtime_is_web_mode() and str(action or '').strip().lower() in {'show_api_manager'}:
+            self.showNotification.emit('warning', '웹 모드에서는 데스크톱 백엔드 관리 창을 열 수 없습니다.')
+            return
         if self._action_handler:
             try:
                 # payload가 이미 dict인 경우와 JSON 문자열인 경우 모두 대응
@@ -406,6 +416,171 @@ class VueBridge(QObject):
                 },
                 ensure_ascii=False,
             )
+
+    # ── Generation API gateway ──
+
+    def _generation_api_public_snapshot(self) -> dict:
+        from core.generation_api import get_generation_api_manager
+
+        include_secret = not self._backend_runtime_is_web_mode()
+        raw = get_generation_api_manager().snapshot(include_secret=include_secret)
+        snapshot = dict(raw) if isinstance(raw, dict) else {}
+        if not include_secret:
+            # 코어 실현이 제거하더라도 bridge 경계에서 중첩 객체까지 한 번 더 차단한다.
+            sensitive = {'token', 'apitoken', 'authorization', 'secret'}
+
+            def redact(value):
+                if isinstance(value, dict):
+                    return {
+                        key: redact(item)
+                        for key, item in value.items()
+                        if str(key).replace('_', '').lower() not in sensitive
+                    }
+                if isinstance(value, list):
+                    return [redact(item) for item in value]
+                return value
+
+            snapshot = redact(snapshot)
+            config = snapshot.get('config')
+            if isinstance(config, dict):
+                safe_targets = []
+                for item in config.get('targets', []):
+                    if not isinstance(item, dict):
+                        continue
+                    target = dict(item)
+                    target['urlConfigured'] = bool(target.pop('url', ''))
+                    target['workflowConfigured'] = bool(target.pop('workflowPath', ''))
+                    target['img2imgWorkflowConfigured'] = bool(target.pop('img2imgWorkflowPath', ''))
+                    safe_targets.append(target)
+                config['targets'] = safe_targets
+        snapshot['nativeOperations'] = include_secret
+        return snapshot
+
+    @pyqtSlot(result=str)
+    def getGenerationApiState(self) -> str:
+        """생성 API 서버/target 상태 조회.
+
+        Web facade에서도 상태는 읽을 수 있지만 token과 변경 권한은 주지 않는다.
+        """
+        try:
+            return json.dumps(
+                {'ok': True, **self._generation_api_public_snapshot()},
+                ensure_ascii=False,
+                default=str,
+            )
+        except Exception as exc:
+            return json.dumps({
+                'ok': False,
+                'nativeOperations': not self._backend_runtime_is_web_mode(),
+                'error': str(exc),
+            }, ensure_ascii=False)
+
+    @pyqtSlot(str, str, result=str)
+    def runGenerationApiOperation(self, action: str, payload_json: str) -> str:
+        """생성 API 설정/실행 작업을 worker에 넘기고 즉시 operation id를 반환."""
+        if self._backend_runtime_is_web_mode():
+            return json.dumps({
+                'ok': False,
+                'accepted': False,
+                'error': '웹 모드에서는 API 서버·token·원격 target 설정을 변경할 수 없습니다.',
+            }, ensure_ascii=False)
+
+        try:
+            action = str(action or '').strip().lower()
+            allowed = {'save_config', 'start', 'stop', 'rotate_token', 'test_target'}
+            if action not in allowed:
+                raise ValueError(f'지원하지 않는 생성 API 작업입니다: {action}')
+            payload = json.loads(payload_json) if payload_json else {}
+            if not isinstance(payload, dict):
+                raise ValueError('payload는 JSON 객체여야 합니다')
+        except Exception as exc:
+            return json.dumps(
+                {'ok': False, 'accepted': False, 'error': str(exc)},
+                ensure_ascii=False,
+            )
+
+        import uuid
+        operation_id = uuid.uuid4().hex
+        with self._generation_api_lock:
+            if self._generation_api_inflight:
+                return json.dumps({
+                    'ok': False,
+                    'accepted': False,
+                    'operationId': self._generation_api_inflight,
+                    'error': '생성 API 설정 작업이 이미 진행 중입니다.',
+                }, ensure_ascii=False)
+            self._generation_api_inflight = operation_id
+
+        threading.Thread(
+            target=self._run_generation_api_operation,
+            args=(action, payload, operation_id),
+            daemon=True,
+            name=f'generation-api-{action}',
+        ).start()
+        return json.dumps({
+            'ok': True,
+            'accepted': True,
+            'action': action,
+            'operationId': operation_id,
+        }, ensure_ascii=False)
+
+    def _emit_generation_api_event(self, payload: dict) -> None:
+        try:
+            self.generationApiEvent.emit(json.dumps(payload, ensure_ascii=False, default=str))
+        except RuntimeError:
+            pass
+
+    def _run_generation_api_operation(
+        self,
+        action: str,
+        payload: dict,
+        operation_id: str,
+    ) -> None:
+        self._emit_generation_api_event({
+            'type': 'started',
+            'action': action,
+            'operationId': operation_id,
+            'message': f'생성 API {action} 작업을 시작했습니다.',
+        })
+        try:
+            from core.generation_api import get_generation_api_manager
+
+            manager = get_generation_api_manager()
+            raw = manager.execute(action, dict(payload))
+            result = dict(raw) if isinstance(raw, dict) else {'value': raw}
+            ok = bool(result.get('ok', True))
+            error = result.get('error') if not ok else None
+        except Exception as exc:
+            result = {'ok': False, 'error': str(exc)}
+            ok = False
+            error = str(exc)
+        finally:
+            with self._generation_api_lock:
+                if self._generation_api_inflight == operation_id:
+                    self._generation_api_inflight = None
+
+        try:
+            snapshot = self._generation_api_public_snapshot()
+        except Exception as exc:
+            snapshot = {
+                'nativeOperations': True,
+                'error': str(exc),
+            }
+        message = str(
+            result.get('message')
+            or (error.get('message') if isinstance(error, dict) else error)
+            or ('작업이 완료되었습니다.' if ok else '작업에 실패했습니다.')
+        )
+        self._emit_generation_api_event({
+            'type': 'completed' if ok else 'error',
+            'action': action,
+            'operationId': operation_id,
+            'ok': ok,
+            'message': message,
+            'error': error,
+            'result': result,
+            'snapshot': snapshot,
+        })
 
     @pyqtSlot(str, str, str, result=str)
     def runBackendRuntimeOperation(self, engine: str, action: str, payload_json: str) -> str:
@@ -632,6 +807,8 @@ class VueBridge(QObject):
     # ── Editor ──
 
     editorResult = pyqtSignal(str)  # 에디터 비동기 처리 결과 JSON (path|mask_base64|error + operation, job_id)
+    # 프리뷰 축소 한도 — 이보다 길면 줄여서 처리한다(1024면 대부분 20ms 내).
+    _PREVIEW_MAX_EDGE = 1024
 
     @pyqtSlot(str, str, str, result=str)
     def editorProcess(self, image_path: str, operation: str, params_json: str) -> str:
@@ -696,6 +873,20 @@ class VueBridge(QObject):
                 img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
             elif img.ndim == 3 and img.shape[2] == 2:
                 img = cv2.cvtColor(img[:, :, 0], cv2.COLOR_GRAY2BGR)
+
+            # ── 실시간 프리뷰 ──────────────────────────────────────────────
+            # 슬라이더를 움직이는 동안 '적용해야만 결과를 아는' 문제를 없앤다.
+            # CSS 필터로 흉내 내면 백엔드 연산(HSV 채도, 레벨, 12종 필터)과 어긋나므로
+            # 같은 코드로 축소본을 실제 처리해 돌려준다. 마스크가 있는 작업은
+            # 좌표가 어긋나므로 프리뷰 대상에서 제외한다.
+            is_preview = bool(params.get('preview')) and not params.get('mask_base64')
+            if is_preview:
+                _h, _w = img.shape[:2]
+                _long = max(_h, _w)
+                if _long > self._PREVIEW_MAX_EDGE:
+                    _r = self._PREVIEW_MAX_EDGE / float(_long)
+                    img = cv2.resize(img, (max(1, int(_w * _r)), max(1, int(_h * _r))),
+                                     interpolation=cv2.INTER_AREA)
 
             # ── 마스크 처리 (base64 PNG → numpy) ──
             mask = None
@@ -963,7 +1154,13 @@ class VueBridge(QObject):
                 except Exception:
                     font = ImageFont.load_default()
                 alpha_val = int(opacity * 255)
-                color = (255, 255, 255, alpha_val)
+                # 예전에는 흰색 고정이라 패널의 색상 선택이 결과에 반영되지 않았다.
+                _hex = str(params.get('color', '#FFFFFF')).lstrip('#')
+                try:
+                    _r, _g, _b = int(_hex[0:2], 16), int(_hex[2:4], 16), int(_hex[4:6], 16)
+                except Exception:
+                    _r, _g, _b = 255, 255, 255
+                color = (_r, _g, _b, alpha_val)
                 bbox = draw.textbbox((0, 0), text, font=font)
                 tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
                 x = int(pil_img.width * x_pct / 100 - tw / 2)
@@ -983,7 +1180,42 @@ class VueBridge(QObject):
                 img = cv2.cvtColor(np.array(result.convert('RGB')), cv2.COLOR_RGB2BGR)
 
             elif operation == 'image_watermark':
-                return json.dumps({'error': '이미지 워터마크: 먼저 이미지를 로드하세요'})
+                # 예전에는 무조건 에러를 반환하는 스텁이었다 — 패널·파일 다이얼로그는
+                # 있는데 백엔드가 없어 end-to-end 로 죽어 있었다.
+                wm_path = str(params.get('watermark_path', '') or '')
+                if not wm_path or not os.path.isfile(wm_path):
+                    return json.dumps({'error': '워터마크 이미지를 먼저 불러오세요'})
+                from PIL import Image as PILImage
+                try:
+                    wm = PILImage.open(wm_path).convert('RGBA')
+                except Exception as e:
+                    return json.dumps({'error': f'워터마크 이미지를 열 수 없습니다: {e}'})
+
+                base = PILImage.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)).convert('RGBA')
+                scale = max(1.0, float(params.get('scale', 100))) / 100.0
+                new_w = max(1, int(wm.width * scale))
+                new_h = max(1, int(wm.height * scale))
+                if params.get('clamp', True):
+                    # 원본 밖으로 나가지 않도록 축소
+                    ratio = min(1.0, base.width / new_w, base.height / new_h)
+                    new_w, new_h = max(1, int(new_w * ratio)), max(1, int(new_h * ratio))
+                wm = wm.resize((new_w, new_h), PILImage.LANCZOS)
+
+                opacity = max(0.0, min(1.0, float(params.get('opacity', 0.5))))
+                if opacity < 1.0:
+                    alpha = wm.getchannel('A').point(lambda v: int(v * opacity))
+                    wm.putalpha(alpha)
+
+                x = int(base.width * float(params.get('xPct', 50)) / 100 - new_w / 2)
+                y = int(base.height * float(params.get('yPct', 50)) / 100 - new_h / 2)
+                if params.get('clamp', True):
+                    x = max(0, min(x, base.width - new_w))
+                    y = max(0, min(y, base.height - new_h))
+
+                overlay = PILImage.new('RGBA', base.size, (0, 0, 0, 0))
+                overlay.paste(wm, (x, y), wm)
+                result = PILImage.alpha_composite(base, overlay)
+                img = cv2.cvtColor(np.array(result.convert('RGB')), cv2.COLOR_RGB2BGR)
 
             elif operation == 'rotate_cw':
                 img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
@@ -994,9 +1226,11 @@ class VueBridge(QObject):
             elif operation == 'flip_v':
                 img = cv2.flip(img, 0)
             elif operation == 'resize':
-                w = int(params.get('width', img.shape[1]))
-                h = int(params.get('height', img.shape[0]))
-                img = cv2.resize(img, (w, h))
+                w = max(1, int(params.get('width', img.shape[1])))
+                h = max(1, int(params.get('height', img.shape[0])))
+                # 축소는 INTER_AREA 가 맞다 — 기본 INTER_LINEAR 는 축소에서 계단이 생긴다.
+                interp = cv2.INTER_AREA if (w < img.shape[1] or h < img.shape[0]) else cv2.INTER_LANCZOS4
+                img = cv2.resize(img, (w, h), interpolation=interp)
             elif operation == 'crop' and has_roi:
                 img = img[y1:y2, x1:x2]
             elif operation == 'remove_bg':
@@ -1130,6 +1364,18 @@ class VueBridge(QObject):
                 # 예전에는 모르는 op가 모든 elif를 통과해 원본을 그대로 다시 저장했다.
                 # 사용자에겐 '눌렀는데 아무 일도 안 남 + undo 스택만 늘어남'이었다.
                 return json.dumps({'error': f'지원하지 않는 편집 작업: {operation}'})
+
+            if is_preview:
+                # 파일을 만들지 않는다 — 프리뷰는 undo 스택에도 들어가면 안 된다.
+                ok, buf = cv2.imencode('.png', img)
+                if not ok:
+                    return json.dumps({'error': '프리뷰 인코딩 실패'})
+                import base64 as _b64p
+                return json.dumps({
+                    'preview': True,
+                    'image_base64': 'data:image/png;base64,' + _b64p.b64encode(buf.tobytes()).decode('ascii'),
+                    'width': img.shape[1], 'height': img.shape[0],
+                })
 
             # 결과 저장 — uuid4로 파일명 충돌 제거.
             # (예전 f"edited_{int(time.time())}_{randint(100,999)}"는 같은 초에 1/900 확률로

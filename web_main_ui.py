@@ -107,6 +107,7 @@ _WEB_METHODS = frozenset({
     # 확인해 항상 거부한다. 이를 명시적으로 노출해야 프론트 슬롯 계약 검사도
     # 유지하면서 LAN WebChannel이 로컬 process/filesystem을 바꾸지 못한다.
     "getBackendRuntimeState", "runBackendRuntimeOperation",
+    "getGenerationApiState", "runGenerationApiOperation",
     "selectBackendExtensionDirectory", "selectBackendInstallDirectory",
     "getUpscalers", "requestUpscalers", "saveImageExif", "renameFile",
     "getEdgeMap", "ollamaEnhance", "convertPromptToNl", "editorPasteImage",
@@ -145,7 +146,7 @@ _WEB_SIGNALS = frozenset({
     "widgetPropertyChanged", "batchUpdate", "tabChanged", "vramUpdated",
     "creatorStateChanged", "creatorProgress", "creatorResult",
     "creatorMediaSelected", "comicStoryboardReady", "comicDocumentChanged",
-    "backendRuntimeEvent",
+    "backendRuntimeEvent", "generationApiEvent",
     # SAM3 Refine (sam-extra 워크플로 2) + 임베드 LoRA Manager (워크플로 4)
     "refineResult", "loraManagerUrlReady",
 })
@@ -639,6 +640,16 @@ def main():
 
     # HTTP 정적 서버 + 브라우저 오픈
     http_server = _start_http_server()
+    # 정적 UI 포트를 먼저 점유한다. generation API 설정이 같은 포트를
+    # 가리키더라도 웹 UI가 죽지 않고 API 시작만 안전하게 거부된다.
+    generation_api_manager = None
+    try:
+        from core.generation_api import get_generation_api_manager
+
+        generation_api_manager = get_generation_api_manager()
+        generation_api_manager.start_if_enabled()
+    except Exception as exc:
+        print(f"[Generation API] startup skipped: {exc}")
     browser_host = "127.0.0.1" if BIND_HOST in ("0.0.0.0", "::") else BIND_HOST
     url = f"http://{browser_host}:{HTTP_PORT}/?token={SESSION_TOKEN}"
     print("=" * 60)
@@ -660,6 +671,8 @@ def main():
     QTimer.singleShot(0, functools.partial(_web_startup, window, app, web_server))
 
     def _shutdown_servers():
+        if generation_api_manager is not None:
+            generation_api_manager.shutdown()
         web_server.close()
         http_server.shutdown()
         http_server.server_close()

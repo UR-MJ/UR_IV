@@ -1,6 +1,7 @@
 # backends/webui_backend.py
 """WebUI (A1111/Forge) 백엔드 구현"""
 import base64
+import binascii
 import copy
 import io
 import json
@@ -8,21 +9,114 @@ import logging
 import threading
 import time
 import requests
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 from PIL import Image
 
 from backends.base import (
-    AbstractBackend, BackendInfo, GenerationResult, ProgressCallback
+    AbstractBackend, BackendInfo, GenerationResult, MediaArtifact,
+    ProgressCallback,
 )
 from core.http_retry import get_with_retry
 
 logger = logging.getLogger(__name__)
 
 _HEADERS = {"accept": "application/json", "Content-Type": "application/json"}
+_IMAGE_EXTENSIONS = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/bmp": ".bmp",
+    "image/tiff": ".tiff",
+}
+_MAX_RESULT_ARTIFACTS = 64
+_MAX_RESULT_BYTES = 256 * 1024 * 1024
+_MAX_RESPONSE_BYTES = 384 * 1024 * 1024
+
+
+def _bounded_response_json(response):
+    """Parse a real streaming response without accepting an unbounded body."""
+
+    headers = getattr(response, "headers", {}) or {}
+    try:
+        declared_length = int(headers.get("Content-Length", "0") or 0)
+    except (TypeError, ValueError):
+        declared_length = 0
+    if declared_length > _MAX_RESPONSE_BYTES:
+        raise ValueError("WebUI 응답이 허용된 384MiB를 초과합니다.")
+    iterator = getattr(response, "iter_content", None)
+    if not callable(iterator):
+        # Lightweight test doubles and legacy response wrappers.
+        return response.json()
+    body = bytearray()
+    for chunk in iterator(chunk_size=1024 * 1024):
+        if not chunk:
+            continue
+        if len(body) + len(chunk) > _MAX_RESPONSE_BYTES:
+            raise ValueError("WebUI 응답이 허용된 384MiB를 초과합니다.")
+        body.extend(chunk)
+    return json.loads(body.decode("utf-8"))
+
+
+def _decode_webui_image(value: str, index: int) -> MediaArtifact:
+    """Decode one A1111 image field without trusting a data-URI MIME value."""
+    if not isinstance(value, str):
+        raise ValueError(f"images[{index}]가 base64 문자열이 아닙니다.")
+
+    encoded = value.strip()
+    if encoded[:5].lower() == "data:":
+        header, separator, encoded = encoded.partition(",")
+        if not separator:
+            raise ValueError(f"images[{index}]의 data URI가 올바르지 않습니다.")
+        media_parts = header[5:].split(";")
+        candidate = media_parts[0].strip().lower()
+        parameters = {part.strip().lower() for part in media_parts[1:]}
+        if "base64" not in parameters:
+            raise ValueError(f"images[{index}]의 data URI는 base64 형식이어야 합니다.")
+        if candidate:
+            if candidate not in _IMAGE_EXTENSIONS:
+                raise ValueError(f"images[{index}]의 MIME 형식이 올바르지 않습니다.")
+
+    compact = "".join(encoded.split())
+    if not compact:
+        raise ValueError(f"images[{index}]가 비어 있습니다.")
+    compact += "=" * (-len(compact) % 4)
+    try:
+        data = base64.b64decode(compact, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError(f"images[{index}]의 base64 데이터가 올바르지 않습니다.") from exc
+    if not data:
+        raise ValueError(f"images[{index}]의 이미지 데이터가 비어 있습니다.")
+
+    detected_mime = None
+    is_animated = False
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            detected_mime = Image.MIME.get(image.format)
+            is_animated = bool(getattr(image, "is_animated", False))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"images[{index}]가 지원되는 raster 이미지가 아닙니다.") from exc
+
+    if detected_mime not in _IMAGE_EXTENSIONS:
+        raise ValueError(f"images[{index}]의 이미지 형식을 지원하지 않습니다.")
+    mime = detected_mime
+    extension = _IMAGE_EXTENSIONS.get(mime, ".img")
+    return MediaArtifact(
+        kind="animated" if is_animated or mime == "image/gif" else "image",
+        data=data,
+        filename=f"image_{index + 1:03d}{extension}",
+        mime=mime,
+        metadata={"source_index": index},
+    )
 
 
 class WebUIBackend(AbstractBackend):
     """Stable Diffusion WebUI API 백엔드"""
+
+    def __init__(self, api_url: str):
+        super().__init__(api_url)
+        self._generation_state_lock = threading.Lock()
+        self._generation_inflight = False
 
     @staticmethod
     def _build_postprocess_payload(image_b64: str, settings: Dict, *, prompt: str, negative_prompt: str) -> Dict:
@@ -136,6 +230,13 @@ class WebUIBackend(AbstractBackend):
     def interrupt(self):
         """진행 중 생성 중단 — POST /sdapi/v1/interrupt (best-effort, 실패 무시).
         호출되면 진행 중이던 txt2img/img2img requests.post가 부분 결과로 곧 반환된다."""
+        with self._generation_state_lock:
+            inflight = self._generation_inflight
+        if not inflight:
+            return
+        self._post_interrupt()
+
+    def _post_interrupt(self):
         try:
             requests.post(f'{self.api_url}/sdapi/v1/interrupt',
                           headers=_HEADERS, timeout=5)
@@ -287,17 +388,20 @@ class WebUIBackend(AbstractBackend):
         """필요 시 모델 전환"""
         if not model_name:
             return
-        current_options = requests.get(
+        current_response = requests.get(
             url=f'{self.api_url}/sdapi/v1/options',
             headers=_HEADERS, timeout=10
-        ).json()
+        )
+        current_response.raise_for_status()
+        current_options = current_response.json()
 
         if current_options.get('sd_model_checkpoint') != model_name:
-            requests.post(
+            switch_response = requests.post(
                 url=f'{self.api_url}/sdapi/v1/options',
                 json={'sd_model_checkpoint': model_name},
                 headers=_HEADERS, timeout=60
             )
+            switch_response.raise_for_status()
 
     def cleanup_models(self, full_reload: bool = False) -> bool:
         """LoRA patches + 캐시 정리.
@@ -369,10 +473,15 @@ class WebUIBackend(AbstractBackend):
             stop_event.wait(0.5)
 
     def _generate(self, endpoint: str, model_name: str, payload: Dict,
-                  progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
+                  progress_callback: Optional[ProgressCallback] = None,
+                  cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
         """txt2img / img2img 공통 생성 로직"""
         try:
+            if cancel_check and cancel_check():
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다")
             self._switch_model_if_needed(model_name)
+            if cancel_check and cancel_check():
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다")
 
             # NOTE: 이전에 SAM3+LoRA 감지 시 사전 unload-checkpoint 호출 했었음.
             # 그러나 sam3_unload_after=True 추가로 sam-extra가 검출 후 알아서
@@ -381,6 +490,10 @@ class WebUIBackend(AbstractBackend):
 
             # 진행률 폴링 시작
             stop_event = threading.Event()
+            with self._generation_state_lock:
+                if cancel_check and cancel_check():
+                    return GenerationResult(success=False, error="사용자가 작업을 취소했습니다")
+                self._generation_inflight = True
             if progress_callback:
                 poll_thread = threading.Thread(
                     target=self._start_progress_polling,
@@ -388,24 +501,76 @@ class WebUIBackend(AbstractBackend):
                     daemon=True
                 )
                 poll_thread.start()
+            if cancel_check:
+                def watch_cancellation():
+                    while not stop_event.wait(0.05):
+                        if not cancel_check():
+                            continue
+                        # A1111/Forge exposes only a global interrupt and no
+                        # prompt id. Repeat while the generation HTTP call is
+                        # alive so an interrupt racing just before submission
+                        # cannot leave a later-starting request running.
+                        while not stop_event.is_set():
+                            self._post_interrupt()
+                            if stop_event.wait(0.25):
+                                return
+                        return
+
+                threading.Thread(
+                    target=watch_cancellation,
+                    name="webui-cancel-watch",
+                    daemon=True,
+                ).start()
 
             try:
                 response = requests.post(
                     url=f'{self.api_url}{endpoint}',
-                    json=payload, headers=_HEADERS, timeout=600
+                    json=payload, headers=_HEADERS, timeout=600, stream=True
                 )
                 response.raise_for_status()
             finally:
+                with self._generation_state_lock:
+                    self._generation_inflight = False
                 stop_event.set()
 
-            r = response.json()
+            try:
+                r = _bounded_response_json(response)
+            finally:
+                close_response = getattr(response, "close", None)
+                if callable(close_response):
+                    close_response()
             if 'images' in r and r['images']:
-                image_data = base64.b64decode(r['images'][0])
-                generation_info = json.loads(r.get('info', '{}'))
+                image_values = r['images']
+                if not isinstance(image_values, list) or len(image_values) > _MAX_RESULT_ARTIFACTS:
+                    raise ValueError(f"WebUI 이미지 결과는 최대 {_MAX_RESULT_ARTIFACTS}개까지 허용됩니다.")
+                artifacts = []
+                total_bytes = 0
+                for index, value in enumerate(image_values):
+                    artifact = _decode_webui_image(value, index)
+                    total_bytes += len(artifact.data or b"")
+                    if total_bytes > _MAX_RESULT_BYTES:
+                        raise ValueError("WebUI 이미지 결과 총 용량이 256MiB를 초과합니다.")
+                    artifacts.append(artifact)
+                raw_info = r.get('info', {})
+                if isinstance(raw_info, dict):
+                    generation_info = copy.deepcopy(raw_info)
+                elif isinstance(raw_info, str):
+                    try:
+                        parsed_info = json.loads(raw_info) if raw_info else {}
+                    except json.JSONDecodeError:
+                        parsed_info = {"raw_info": raw_info}
+                    generation_info = (
+                        parsed_info if isinstance(parsed_info, dict)
+                        else {"raw_info": parsed_info}
+                    )
+                else:
+                    generation_info = {"raw_info": raw_info}
+                generation_info['artifact_count'] = len(artifacts)
                 return GenerationResult(
                     success=True,
-                    image_data=image_data,
-                    info=generation_info
+                    image_data=artifacts[0].data,
+                    info=generation_info,
+                    artifacts=artifacts,
                 )
             else:
                 return GenerationResult(
@@ -419,14 +584,20 @@ class WebUIBackend(AbstractBackend):
             return GenerationResult(success=False, error=f"생성 중 오류: {e}")
 
     def txt2img(self, model_name: str, payload: Dict,
-                progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
+                progress_callback: Optional[ProgressCallback] = None,
+                cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
         """텍스트→이미지 생성"""
-        return self._generate('/sdapi/v1/txt2img', model_name, payload, progress_callback)
+        return self._generate(
+            '/sdapi/v1/txt2img', model_name, payload, progress_callback, cancel_check
+        )
 
     def img2img(self, model_name: str, payload: Dict,
-                progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
+                progress_callback: Optional[ProgressCallback] = None,
+                cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
         """이미지→이미지 생성"""
-        return self._generate('/sdapi/v1/img2img', model_name, payload, progress_callback)
+        return self._generate(
+            '/sdapi/v1/img2img', model_name, payload, progress_callback, cancel_check
+        )
 
     def upscale(self, image_b64: str, settings: Dict) -> str:
         """extra-single-image API로 업스케일"""

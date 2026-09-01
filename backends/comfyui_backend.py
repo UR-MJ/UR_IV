@@ -1,12 +1,19 @@
 # backends/comfyui_backend.py
 """ComfyUI 백엔드 구현"""
+import base64
+import binascii
+import copy
+import io
 import json
 import mimetypes
 import uuid
 import random
+import threading
 import requests
 import websocket
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
+
+from PIL import Image
 
 from backends.base import (
     AbstractBackend, BackendInfo, GenerationResult, MediaArtifact,
@@ -31,6 +38,39 @@ _IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff'}
 _ANIMATED_EXTENSIONS = {'.gif', '.apng'}
 _VIDEO_EXTENSIONS = {'.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v'}
 _AUDIO_EXTENSIONS = {'.wav', '.mp3', '.ogg', '.flac', '.m4a', '.aac', '.opus'}
+_UPLOAD_IMAGE_FORMATS = {
+    'PNG': ('png', 'image/png'),
+    'JPEG': ('jpg', 'image/jpeg'),
+    'WEBP': ('webp', 'image/webp'),
+    'BMP': ('bmp', 'image/bmp'),
+    'TIFF': ('tiff', 'image/tiff'),
+}
+_MAX_RESULT_ARTIFACTS = 64
+_MAX_RESULT_BYTES = 256 * 1024 * 1024
+
+
+def _read_bounded_media(response, remaining_bytes: int) -> bytes:
+    headers = getattr(response, 'headers', {}) or {}
+    try:
+        declared_length = int(headers.get('Content-Length', '0') or 0)
+    except (TypeError, ValueError):
+        declared_length = 0
+    if declared_length > remaining_bytes:
+        raise ValueError("ComfyUI 미디어 결과 총 용량이 256MiB를 초과합니다.")
+    iterator = getattr(response, 'iter_content', None)
+    if not callable(iterator):
+        data = bytes(getattr(response, 'content', b''))
+        if len(data) > remaining_bytes:
+            raise ValueError("ComfyUI 미디어 결과 총 용량이 256MiB를 초과합니다.")
+        return data
+    data = bytearray()
+    for chunk in iterator(chunk_size=1024 * 1024):
+        if not chunk:
+            continue
+        if len(data) + len(chunk) > remaining_bytes:
+            raise ValueError("ComfyUI 미디어 결과 총 용량이 256MiB를 초과합니다.")
+        data.extend(chunk)
+    return bytes(data)
 
 
 def analyze_workflow(file_path: str) -> dict:
@@ -172,21 +212,62 @@ def analyze_workflow(file_path: str) -> dict:
 class ComfyUIBackend(AbstractBackend):
     """ComfyUI API 백엔드"""
 
-    def __init__(self, api_url: str):
+    def __init__(self, api_url: str, *, workflow_path: Optional[str] = None,
+                 img2img_workflow_path: Optional[str] = None):
         super().__init__(api_url)
+        # ``None`` means follow the process-wide legacy config. An explicit
+        # string (including an empty one) belongs to this backend/profile only.
+        self._workflow_path_override = workflow_path
+        self._img2img_workflow_path_override = img2img_workflow_path
+        self._prompt_lock = threading.Lock()
+        self._current_prompt_id = None
+
+    def _configured_workflow_path(self, mode: str) -> str:
+        if mode == 'img2img':
+            if self._img2img_workflow_path_override is not None:
+                return self._img2img_workflow_path_override
+            return getattr(config, 'COMFYUI_WORKFLOW_IMG2IMG_PATH', '')
+        if self._workflow_path_override is not None:
+            return self._workflow_path_override
+        return getattr(config, 'COMFYUI_WORKFLOW_PATH', '')
 
     def get_backend_type(self) -> str:
         return "comfyui"
 
     def interrupt(self):
-        """진행 중 생성 중단 — POST /interrupt + 대기 큐에서 항목 삭제 (best-effort)."""
+        """Cancel only this adapter's prompt without interrupting another client."""
+        with self._prompt_lock:
+            pid = self._current_prompt_id
+        if pid:
+            self._cancel_prompt(pid)
+
+    def _cancel_prompt(self, pid: str) -> None:
+        """Cancel a prompt after proving whether it is running or pending."""
         try:
-            requests.post(f'{self.api_url}/interrupt', timeout=5)
-            pid = getattr(self, '_current_prompt_id', None)
-            if pid:
-                # 아직 실행 전(큐 대기)이면 큐에서 제거
-                requests.post(f'{self.api_url}/queue', json={'delete': [pid]}, timeout=5)
-            _logger.info("interrupt 요청 전송")
+            queue_response = requests.get(f'{self.api_url}/queue', timeout=5)
+            queue_response.raise_for_status()
+            queue_state = queue_response.json()
+
+            def prompt_ids(key):
+                entries = queue_state.get(key, []) if isinstance(queue_state, dict) else []
+                return {
+                    str(entry[1])
+                    for entry in entries
+                    if isinstance(entry, (list, tuple)) and len(entry) > 1
+                }
+
+            if pid in prompt_ids('queue_running'):
+                response = requests.post(f'{self.api_url}/interrupt', timeout=5)
+                response.raise_for_status()
+                _logger.info("현재 ComfyUI prompt interrupt 요청 전송: %s", pid)
+            else:
+                # Pending or already-finished prompts can be removed without a
+                # global interrupt that would affect another ComfyUI client.
+                response = requests.post(
+                    f'{self.api_url}/queue', json={'delete': [pid]}, timeout=5
+                )
+                response.raise_for_status()
+                _logger.info("ComfyUI 대기 prompt 삭제 요청 전송: %s", pid)
         except Exception as e:
             _logger.debug(f"interrupt 실패(무시): {e}")
 
@@ -303,7 +384,7 @@ class ComfyUIBackend(AbstractBackend):
 
     def _load_workflow(self) -> dict:
         """사용자 워크플로우 JSON 로드 (API/웹 포맷 자동 감지)"""
-        workflow_path = getattr(config, 'COMFYUI_WORKFLOW_PATH', '')
+        workflow_path = self._configured_workflow_path('txt2img')
         if not workflow_path:
             raise RuntimeError(
                 "ComfyUI 워크플로우 파일이 설정되지 않았습니다.\n"
@@ -564,13 +645,25 @@ class ComfyUIBackend(AbstractBackend):
                     break
 
         # EmptyLatentImage
+        def positive_int(value, default=1):
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                return default
+            return parsed if parsed > 0 else default
+
+        batch_size = positive_int(payload.get('batch_size', 1))
+        batch_count = max(
+            positive_int(payload.get('n_iter', 1)),
+            positive_int(payload.get('batch_count', 1)),
+        )
         for node_id, node in workflow.items():
             if not isinstance(node, dict):
                 continue
             if node.get('class_type') == 'EmptyLatentImage':
                 node['inputs']['width'] = payload.get('width', 512)
                 node['inputs']['height'] = payload.get('height', 512)
-                node['inputs']['batch_size'] = 1
+                node['inputs']['batch_size'] = batch_size * batch_count
                 break
 
         _logger.info("워크플로우 파라미터 매핑 완료")
@@ -578,10 +671,13 @@ class ComfyUIBackend(AbstractBackend):
     # ── 생성 및 결과 수신 ──
 
     def _queue_and_wait(self, workflow: dict,
-                        progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
+                        progress_callback: Optional[ProgressCallback] = None,
+                        cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
         """워크플로우를 큐에 넣고 WebSocket으로 결과 대기"""
         ws = None
         try:
+            if cancel_check and cancel_check():
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
             # ★ 요청마다 고유 client_id 생성
             client_id = str(uuid.uuid4())
 
@@ -610,6 +706,8 @@ class ComfyUIBackend(AbstractBackend):
             )
 
             # 프롬프트 제출
+            if cancel_check and cancel_check():
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
             _logger.info("프롬프트 제출 중...")
             prompt_response = requests.post(
                 f'{self.api_url}/prompt',
@@ -660,13 +758,22 @@ class ComfyUIBackend(AbstractBackend):
                     _logger.warning(f"노드 경고: {details}")
 
             _logger.info(f"프롬프트 등록 완료: {prompt_id}")
-            self._current_prompt_id = prompt_id   # interrupt()의 큐 삭제용
+            with self._prompt_lock:
+                self._current_prompt_id = prompt_id
+            if cancel_check and cancel_check():
+                self._cancel_prompt(prompt_id)
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
 
             # 결과 대기. 워크플로우 전체를 아는 순수 tracker가 노드별 이벤트를
             # 기존 3인자 progress callback 형식의 단조 증가 퍼센트로 변환한다.
             tracker = ProgressTracker(workflow)
+            if cancel_check is None:
+                return self._wait_for_result(
+                    ws, prompt_id, progress_callback, tracker=tracker
+                )
             return self._wait_for_result(
-                ws, prompt_id, progress_callback, tracker=tracker
+                ws, prompt_id, progress_callback, tracker=tracker,
+                cancel_check=cancel_check,
             )
 
         except requests.exceptions.RequestException as e:
@@ -679,6 +786,11 @@ class ComfyUIBackend(AbstractBackend):
             _logger.error(f"생성 오류: {e}", exc_info=True)
             return GenerationResult(success=False, error=f"ComfyUI 생성 오류: {e}")
         finally:
+            prompt_id_value = locals().get('prompt_id')
+            if prompt_id_value:
+                with self._prompt_lock:
+                    if self._current_prompt_id == prompt_id_value:
+                        self._current_prompt_id = None
             if ws:
                 try:
                     ws.close()
@@ -687,12 +799,16 @@ class ComfyUIBackend(AbstractBackend):
 
     def _wait_for_result(self, ws, prompt_id: str,
                          progress_callback: Optional[ProgressCallback],
-                         tracker: Optional[ProgressTracker] = None) -> GenerationResult:
+                         tracker: Optional[ProgressTracker] = None,
+                         cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
         """WebSocket 메시지를 수신하며 결과 대기"""
         _logger.info(f"결과 대기 중... (prompt_id={prompt_id})")
         tracker = tracker or ProgressTracker({})
 
         while True:
+            if cancel_check and cancel_check():
+                self._cancel_prompt(prompt_id)
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
             msg = ws.recv()
             if isinstance(msg, bytes):
                 continue  # 바이너리 메시지 (프리뷰 이미지) 스킵
@@ -810,6 +926,7 @@ class ComfyUIBackend(AbstractBackend):
         artifacts: List[MediaArtifact] = []
         seen: set = set()
         failed_downloads: List[str] = []
+        total_bytes = 0
 
         for raw_node_id, node_output in outputs.items():
             if not isinstance(node_output, dict):
@@ -837,8 +954,14 @@ class ComfyUIBackend(AbstractBackend):
                     identity = (storage_type, subfolder, filename)
                     if identity in seen:
                         continue
+                    if len(seen) >= _MAX_RESULT_ARTIFACTS:
+                        return GenerationResult(
+                            success=False,
+                            error=f"ComfyUI 미디어 결과는 최대 {_MAX_RESULT_ARTIFACTS}개까지 허용됩니다.",
+                        )
                     seen.add(identity)
 
+                    media_response = None
                     try:
                         media_response = requests.get(
                             f'{self.api_url}/view',
@@ -848,12 +971,23 @@ class ComfyUIBackend(AbstractBackend):
                                 'type': storage_type,
                             },
                             timeout=60,
+                            stream=True,
                         )
                         media_response.raise_for_status()
+                        media_data = _read_bounded_media(
+                            media_response, _MAX_RESULT_BYTES - total_bytes
+                        )
+                        total_bytes += len(media_data)
+                    except ValueError as exc:
+                        return GenerationResult(success=False, error=str(exc))
                     except requests.exceptions.RequestException as exc:
                         _logger.warning(f"미디어 다운로드 실패 ({filename}): {exc}")
                         failed_downloads.append(filename)
                         continue
+                    finally:
+                        close_response = getattr(media_response, 'close', None)
+                        if callable(close_response):
+                            close_response()
 
                     mime = self._response_mime(media_response, filename)
                     kind = self._media_kind(output_field, filename, mime) or initial_kind
@@ -869,7 +1003,7 @@ class ComfyUIBackend(AbstractBackend):
                     })
                     artifacts.append(MediaArtifact(
                         kind=kind,
-                        data=media_response.content,
+                        data=media_data,
                         filename=filename,
                         mime=mime,
                         metadata=metadata,
@@ -918,7 +1052,8 @@ class ComfyUIBackend(AbstractBackend):
     # ── 공개 API ──
 
     def run_workflow(self, workflow: Dict,
-                     progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
+                     progress_callback: Optional[ProgressCallback] = None,
+                     cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
         """Run an already prepared API-format workflow.
 
         Model-specific workflow packs can use this seam without depending on
@@ -932,11 +1067,92 @@ class ComfyUIBackend(AbstractBackend):
                 success=False,
                 error="ComfyUI API 형식의 워크플로우가 필요합니다.",
             )
-        return self._queue_and_wait(workflow, progress_callback)
+        if cancel_check is None:
+            return self._queue_and_wait(workflow, progress_callback)
+        return self._queue_and_wait(workflow, progress_callback, cancel_check)
+
+    def generate_workflow(self, mode: str, workflow: Dict, model_name: str,
+                          payload: Dict,
+                          progress_callback: Optional[ProgressCallback] = None,
+                          cancel_check: Optional[Callable[[], bool]] = None,
+                          ) -> GenerationResult:
+        """Generate from a caller-approved workflow without mutating caller data.
+
+        ``mode`` accepts the normalized API names and their short UI aliases.
+        The supplied workflow may be ComfyUI API format or exported web format.
+        For img2img, the first ``init_images`` entry is uploaded and assigned to
+        the workflow's ``LoadImage`` node before the normal parameter mapping and
+        queue/result path are used.
+        """
+        mode_aliases = {
+            'txt2img': 'txt2img',
+            't2i': 'txt2img',
+            'img2img': 'img2img',
+            'i2i': 'img2img',
+        }
+        normalized_mode = mode_aliases.get(str(mode or '').strip().lower())
+        if normalized_mode is None:
+            return GenerationResult(
+                success=False,
+                error="mode는 txt2img(t2i) 또는 img2img(i2i)여야 합니다.",
+            )
+        if not isinstance(workflow, dict):
+            return GenerationResult(
+                success=False,
+                error="ComfyUI 워크플로우는 JSON 객체여야 합니다.",
+            )
+        if not isinstance(payload, dict):
+            return GenerationResult(
+                success=False,
+                error="생성 payload는 JSON 객체여야 합니다.",
+            )
+
+        try:
+            if cancel_check and cancel_check():
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
+            prepared = copy.deepcopy(workflow)
+            prepared_payload = copy.deepcopy(payload)
+            if 'nodes' in prepared and isinstance(prepared['nodes'], list):
+                prepared = self._convert_web_to_api(prepared)
+
+            if normalized_mode == 'img2img':
+                init_images = prepared_payload.get('init_images', [])
+                if not isinstance(init_images, list) or not init_images:
+                    return GenerationResult(
+                        success=False,
+                        error="입력 이미지가 없습니다.",
+                    )
+                load_image_id = self._find_load_image_node(prepared)
+                if load_image_id is None:
+                    return GenerationResult(
+                        success=False,
+                        error="img2img 워크플로우에 LoadImage 노드가 없습니다.",
+                    )
+                uploaded_filename = (
+                    self._upload_image(init_images[0])
+                    if cancel_check is None
+                    else self._upload_image(init_images[0], cancel_check)
+                )
+                prepared[load_image_id].setdefault('inputs', {})['image'] = uploaded_filename
+                prepared_payload.setdefault('denoising_strength', 0.75)
+
+            if cancel_check and cancel_check():
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
+            self._apply_params(prepared, model_name, prepared_payload)
+            if cancel_check is None:
+                return self.run_workflow(prepared, progress_callback)
+            return self.run_workflow(prepared, progress_callback, cancel_check)
+        except Exception as exc:
+            _logger.error("외부 워크플로우 생성 오류: %s", exc, exc_info=True)
+            return GenerationResult(
+                success=False,
+                error=f"ComfyUI 워크플로우 생성 오류: {exc}",
+            )
 
     def upload_media(self, data: bytes, filename: str,
                      mime: str = 'application/octet-stream',
-                     overwrite: bool = True) -> str:
+                     overwrite: bool = True,
+                     cancel_check: Optional[Callable[[], bool]] = None) -> str:
         """Upload one input artifact and return its ComfyUI input name."""
         clean_filename = str(filename or '').strip()
         if (
@@ -949,6 +1165,8 @@ class ComfyUIBackend(AbstractBackend):
         if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError("data는 bytes 계열이어야 합니다.")
 
+        if cancel_check and cancel_check():
+            raise RuntimeError("사용자가 작업을 취소했습니다.")
         response = requests.post(
             f'{self.api_url}/upload/image',
             files={'image': (clean_filename, bytes(data), mime)},
@@ -966,16 +1184,21 @@ class ComfyUIBackend(AbstractBackend):
         return remote_name
 
     def txt2img(self, model_name: str, payload: Dict,
-                progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
+                progress_callback: Optional[ProgressCallback] = None,
+                cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
         """텍스트→이미지 생성"""
         try:
+            if cancel_check and cancel_check():
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
             _logger.info(f"=== ComfyUI txt2img 시작 ===")
             _logger.info(f"모델: {model_name}")
-            _logger.info(f"워크플로우 경로: {getattr(config, 'COMFYUI_WORKFLOW_PATH', '(미설정)')}")
+            _logger.info(f"워크플로우 경로: {self._configured_workflow_path('txt2img') or '(미설정)'}")
 
             workflow = self._load_workflow()
             self._apply_params(workflow, model_name, payload)
-            return self._queue_and_wait(workflow, progress_callback)
+            if cancel_check is None:
+                return self._queue_and_wait(workflow, progress_callback)
+            return self._queue_and_wait(workflow, progress_callback, cancel_check)
 
         except FileNotFoundError as e:
             _logger.error(f"워크플로우 파일 없음: {e}")
@@ -993,7 +1216,7 @@ class ComfyUIBackend(AbstractBackend):
     def _load_img2img_workflow(self) -> dict:
         """img2img 워크플로우 JSON 로드"""
         import os
-        workflow_path = getattr(config, 'COMFYUI_WORKFLOW_IMG2IMG_PATH', '')
+        workflow_path = self._configured_workflow_path('img2img')
         if not workflow_path:
             raise RuntimeError(
                 "ComfyUI img2img 워크플로우 파일이 설정되지 않았습니다.\n"
@@ -1009,11 +1232,44 @@ class ComfyUIBackend(AbstractBackend):
             return self._convert_web_to_api(data)
         return data
 
-    def _upload_image(self, image_b64: str) -> str:
+    def _upload_image(self, image_b64: str,
+                      cancel_check: Optional[Callable[[], bool]] = None) -> str:
         """ComfyUI에 이미지 업로드 → 파일명 반환"""
-        import base64
-        image_bytes = base64.b64decode(image_b64)
-        return self.upload_media(image_bytes, 'input.png', 'image/png')
+        if not isinstance(image_b64, str) or not image_b64.strip():
+            raise ValueError("입력 이미지는 base64 문자열이어야 합니다.")
+
+        encoded = image_b64.strip()
+        if encoded[:5].lower() == 'data:':
+            header, separator, encoded = encoded.partition(',')
+            if not separator or ';base64' not in header.lower():
+                raise ValueError("입력 이미지 data URI가 올바르지 않습니다.")
+
+        compact = ''.join(encoded.split())
+        compact += '=' * (-len(compact) % 4)
+        try:
+            image_bytes = base64.b64decode(compact, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("입력 이미지 base64가 올바르지 않습니다.") from exc
+        if not image_bytes:
+            raise ValueError("입력 이미지가 비어 있습니다.")
+
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as image:
+                image_format = str(image.format or '').upper()
+                image.verify()
+        except (OSError, ValueError) as exc:
+            raise ValueError("지원되는 입력 이미지 파일이 아닙니다.") from exc
+
+        format_info = _UPLOAD_IMAGE_FORMATS.get(image_format)
+        if format_info is None:
+            raise ValueError("입력 이미지는 PNG/JPEG/WebP/BMP/TIFF만 지원합니다.")
+        extension, mime = format_info
+        filename = f'input_{uuid.uuid4().hex}.{extension}'
+        if cancel_check is None:
+            return self.upload_media(image_bytes, filename, mime)
+        return self.upload_media(
+            image_bytes, filename, mime, cancel_check=cancel_check
+        )
 
     def _find_load_image_node(self, workflow: dict) -> Optional[str]:
         """LoadImage 노드 ID 찾기"""
@@ -1025,9 +1281,12 @@ class ComfyUIBackend(AbstractBackend):
         return None
 
     def img2img(self, model_name: str, payload: Dict,
-                progress_callback: Optional[ProgressCallback] = None) -> GenerationResult:
+                progress_callback: Optional[ProgressCallback] = None,
+                cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
         """이미지→이미지 생성"""
         try:
+            if cancel_check and cancel_check():
+                return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
             _logger.info("=== ComfyUI img2img 시작 ===")
 
             workflow = self._load_img2img_workflow()
@@ -1037,7 +1296,11 @@ class ComfyUIBackend(AbstractBackend):
             if not init_images:
                 return GenerationResult(success=False, error="입력 이미지가 없습니다.")
 
-            uploaded_filename = self._upload_image(init_images[0])
+            uploaded_filename = (
+                self._upload_image(init_images[0])
+                if cancel_check is None
+                else self._upload_image(init_images[0], cancel_check)
+            )
 
             # LoadImage 노드에 파일명 설정
             load_img_id = self._find_load_image_node(workflow)
@@ -1056,7 +1319,9 @@ class ComfyUIBackend(AbstractBackend):
             except RuntimeError:
                 pass
 
-            return self._queue_and_wait(workflow, progress_callback)
+            if cancel_check is None:
+                return self._queue_and_wait(workflow, progress_callback)
+            return self._queue_and_wait(workflow, progress_callback, cancel_check)
 
         except RuntimeError as e:
             _logger.error(f"img2img 오류: {e}")

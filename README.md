@@ -15,6 +15,7 @@ PyQt6 + Vue 3 SPA 하이브리드 AI 이미지 생성 스튜디오. **무거운 
 - **워크플로우 프로파일**: 모델/VAE/TE/해상도 등 한 묶음으로 저장·복원
 - **프롬프트 Undo/Redo**: Ctrl+Z/Y, 워크플로우 토큰 카운터, 자동완성
 - **생성 큐**: 일시정지·우선순위·다중 삭제·ETA
+- **Generation API Gateway**: 인증된 외부 요청 수신 + 승인된 Forge/WebUI·ComfyUI target 중계 + A1111 생성 API 호환 subset
 - **단축키**: Ctrl+G 생성, Ctrl+Tab 탭 이동, Ctrl+F 설정 검색, ESC 패널 닫기
 
 ---
@@ -34,7 +35,7 @@ PyQt6 + Vue 3 SPA 하이브리드 AI 이미지 생성 스튜디오. **무거운 
 | **Gallery** | 폴더 기반 갤러리. 무한스크롤, EXIF 검색, 메타 사이드바, 컨텍스트 메뉴(T2I/I2I/Inpaint/Editor 전송) |
 | **Favorites** | 즐겨찾기 그리드. EXIF 배치 검색, 뷰어에서 항목별 복사 + 전송 카드 그리드 |
 | **PNG Info** | EXIF/PNG chunks 메타데이터 표시. PROMPT/NEGATIVE/PARAMS 항목별 복사 버튼. Compare 서브탭에서 두 이미지 슬라이더 비교 + 파라미터 diff + GIF 내보내기 |
-| **Settings** | API URL, 단축키, 탭 순서(드래그), 기본값(T2I/I2I/Inpaint), 와일드카드, Ollama. **Ctrl+F로 검색** |
+| **Settings** | 백엔드 runtime·모델 경로, Generation API/원격 target, 단축키, 탭 기본값, 와일드카드, Ollama. **Ctrl+F로 검색** |
 | **Web** | 내장 웹브라우저 (참고용) |
 | **Backend** | 백엔드 자체 UI 임베드 (디버그) |
 
@@ -111,7 +112,10 @@ new_run_main_ui.bat
 python core\check_requirements.py && python core\fetch_data.py && python new_main_ui.py
 ```
 
-설정 → NETWORK 탭에서 백엔드 URL 입력 후 "TEST CONNECTIVITY".
+설정 → RUNTIMES / ENGINES에서 앱 관리형 또는 기존 설치 백엔드를 연결할 수 있습니다.
+외부 프로그램에서 작업을 보내거나 다른 Forge/ComfyUI로 중계하려면 설정 → NETWORK의
+Generation API Gateway를 사용하세요. 전체 호출 규격과 PowerShell 예시는
+[`docs/generation_api.md`](docs/generation_api.md)에 있습니다.
 
 ### Vue 수정 시
 ```bash

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import inspect
 import re
 import secrets
 import uuid
@@ -42,6 +43,7 @@ def run_krea2_generation(
     operation: str,
     payload: Mapping[str, Any],
     progress_callback: Callable[[int, int, bytes | None], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> GenerationResult:
     """Run Krea 2 T2I or identity-edit I2I through a ComfyUI adapter.
 
@@ -51,6 +53,26 @@ def run_krea2_generation(
     """
 
     try:
+        def ensure_not_cancelled() -> None:
+            if cancel_check and cancel_check():
+                raise RuntimeError("사용자가 작업을 취소했습니다")
+
+        def call_cancellable(method: Callable[..., Any], *args: Any) -> Any:
+            ensure_not_cancelled()
+            try:
+                parameters = inspect.signature(method).parameters.values()
+                supports_cancel = any(
+                    parameter.name == "cancel_check"
+                    or parameter.kind == inspect.Parameter.VAR_KEYWORD
+                    for parameter in parameters
+                )
+            except (TypeError, ValueError):
+                supports_cancel = False
+            if supports_cancel:
+                return method(*args, cancel_check=cancel_check)
+            return method(*args)
+
+        ensure_not_cancelled()
         _require_comfy_adapter(backend, operation)
         values = dict(payload or {})
         mode = str(operation or "").strip().lower()
@@ -78,7 +100,8 @@ def run_krea2_generation(
         else:
             source = _first_image(values.get("init_images"))
             source_data, source_ext, source_mime = _decode_image(source, "Krea2 I2I 원본")
-            source_name = backend.upload_media(
+            source_name = call_cancellable(
+                backend.upload_media,
                 source_data,
                 f"krea2_source_{uuid.uuid4().hex}.{source_ext}",
                 source_mime,
@@ -98,20 +121,23 @@ def run_krea2_generation(
             reference = values.get("krea2_reference_image")
             if reference:
                 ref_data, ref_ext, ref_mime = _decode_image(reference, "Krea2 identity reference")
-                params["reference_image"] = backend.upload_media(
+                params["reference_image"] = call_cancellable(
+                    backend.upload_media,
                     ref_data,
                     f"krea2_reference_{uuid.uuid4().hex}.{ref_ext}",
                     ref_mime,
                 )
             built = build("krea2_edit", params)
 
-        object_info = backend.get_object_info()
+        object_info = call_cancellable(backend.get_object_info)
         if not isinstance(object_info, dict):
             raise RuntimeError("ComfyUI /object_info 응답이 올바른 객체가 아닙니다")
         _check_required_nodes(built, set(object_info))
         _resolve_comfy_choices(built, object_info)
 
-        result = backend.run_workflow(built["workflow"], progress_callback)
+        result = call_cancellable(
+            backend.run_workflow, built["workflow"], progress_callback
+        )
         if not isinstance(result, GenerationResult):
             raise TypeError("ComfyUI adapter가 GenerationResult를 반환하지 않았습니다")
         if not result.success:
