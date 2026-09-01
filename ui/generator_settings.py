@@ -102,6 +102,10 @@ class SettingsMixin:
             "adetailer_slot2": self._get_slot_settings(self.s2_widgets),
             "sam3_enabled": self.sam3_group.isChecked() if hasattr(self, 'sam3_group') else False,
             "sam3_settings": self._get_sam3_settings(self.sam3_widgets) if hasattr(self, 'sam3_widgets') else {},
+            "anima_guidance_settings": (
+                self._get_anima_guidance_settings(self.anima_guidance_widgets)
+                if hasattr(self, 'anima_guidance_widgets') else {}
+            ),
             
             "prefix_toggle": self.prefix_toggle_button.isChecked(),
             "suffix_toggle": self.suffix_toggle_button.isChecked(),
@@ -301,6 +305,11 @@ class SettingsMixin:
                 self.sam3_group.setChecked(settings.get("sam3_enabled", False))
             if hasattr(self, 'sam3_widgets') and "sam3_settings" in settings:
                 self._set_sam3_settings(self.sam3_widgets, settings["sam3_settings"])
+            if hasattr(self, 'anima_guidance_widgets') and "anima_guidance_settings" in settings:
+                self._set_anima_guidance_settings(
+                    self.anima_guidance_widgets,
+                    settings["anima_guidance_settings"],
+                )
             
             # 토글 상태
             self.prefix_toggle_button.setChecked(settings.get("prefix_toggle", True))
@@ -544,6 +553,32 @@ class SettingsMixin:
             "noise_multiplier": widgets['noise_multiplier'].text(),
             "restore_face": widgets['restore_face'].isChecked(),
         }
+
+    def _get_anima_guidance_settings(self, widgets):
+        """62/7/13 위치 계약의 원본 문자열 값을 key 기반 dict로 저장한다."""
+        return {
+            key: proxy.text()
+            for key, proxy in widgets.items()
+            if hasattr(proxy, 'text')
+        }
+
+    def _set_anima_guidance_settings(self, widgets, settings):
+        """저장된 ANIMA 값만 복원하고 새 확장 필드는 코어 기본값으로 보완한다."""
+        if not isinstance(settings, dict):
+            return
+        from core.anima_guidance import default_settings
+        defaults = default_settings()
+        for key, proxy in widgets.items():
+            if not hasattr(proxy, 'setText'):
+                continue
+            value = settings.get(key, defaults.get(key, ''))
+            if isinstance(value, bool):
+                value = 'true' if value else 'false'
+            elif value is None:
+                value = ''
+            else:
+                value = str(value)
+            proxy.setText(value)
     
     def _set_slot_settings(self, widgets, settings):
         """ADetailer 슬롯 설정 적용"""

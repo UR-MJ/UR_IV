@@ -30,7 +30,12 @@ def _try_install_with_uv() -> bool:
     if not shutil.which("uv"):
         return False
     try:
-        subprocess.check_call(["uv", "pip", "install", "-U", "huggingface_hub"])
+        subprocess.check_call(
+            [
+                "uv", "pip", "install", "--python", sys.executable,
+                "-U", "huggingface_hub",
+            ]
+        )
         return True
     except subprocess.CalledProcessError:
         return False

@@ -9,10 +9,11 @@ import os
 import random
 import shutil
 import subprocess
+import threading
 from urllib.parse import unquote
 
 from PyQt6.QtWidgets import QMessageBox, QLineEdit, QTextEdit, QApplication, QHBoxLayout, QWidget, QFileDialog, QMenu
-from PyQt6.QtCore import QTimer, QEvent, Qt, pyqtSlot
+from PyQt6.QtCore import QTimer, QEvent, Qt, pyqtSignal, pyqtSlot
 
 
 def _clean_path(path: str) -> str:
@@ -55,6 +56,7 @@ class GeneratorMainUI(
     CreatorActionsMixin,
 ):
     _IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.webp', '.bmp')
+    animaForgeImportReady = pyqtSignal(object)
 
     def __init__(self):
         try:
@@ -88,6 +90,7 @@ class GeneratorMainUI(
 
             # 3. UI 및 프록시 레이어 구축
             self._setup_ui()
+            self.animaForgeImportReady.connect(self._apply_anima_forge_import)
             self.vue_bridge.backendRuntimeEvent.connect(self._on_backend_runtime_event)
 
             # 에러 핸들러에 bridge 등록
@@ -362,6 +365,8 @@ class GeneratorMainUI(
                     pass
                 if hasattr(self, 'vue_bridge'):
                     self.vue_bridge.showNotification.emit('success', '설정이 저장되었습니다')
+            elif action == 'import_anima_from_forge':
+                self._start_anima_forge_import()
             elif action == 'swap_resolution': self._swap_resolution()
             elif action == 'set_random_resolutions':
                 lst = payload.get('list', [])
@@ -637,6 +642,9 @@ class GeneratorMainUI(
                 path, _ = QFileDialog.getOpenFileName(self, "워터마크 이미지 선택", "", "Images (*.png *.jpg *.jpeg *.webp)")
                 if path:
                     self.show_status(f"Watermark image: {os.path.basename(path)}")
+                    # 경로를 Vue 로 되돌려야 image_watermark 가 성립한다.
+                    if hasattr(self, 'vue_bridge'):
+                        self.vue_bridge.editorWatermarkImageLoaded.emit(path.replace('\\', '/'))
 
             # 15. Search parquet 저장/불러오기
             elif action == 'export_search_results':
@@ -1172,7 +1180,13 @@ class GeneratorMainUI(
             elif action == 'unload_model_request':
                 # VRAM 게이지 클릭으로 사용자가 수동 unload 요청 — 백엔드에 위임
                 try:
-                    backend = getattr(self, 'backend', None) or getattr(self, '_backend', None)
+                    # 저장소 표준 관용구 — self.backend/_backend 는 어디에서도 대입되지 않아
+                    # 예전 getattr 방식은 모든 백엔드에서 항상 None 이었다.
+                    try:
+                        from backends import get_backend
+                        backend = get_backend()
+                    except Exception:
+                        backend = None
                     if backend and hasattr(backend, 'unload_models'):
                         backend.unload_models()
                         self.show_status("Model unload requested.")
@@ -1265,6 +1279,96 @@ class GeneratorMainUI(
         except Exception as e:
             from core.error_handler import handle_error
             handle_error('E010', f'Action: {action}', e)
+
+    def _start_anima_forge_import(self) -> None:
+        """Forge가 공개한 Anima script-info 값을 UI 멈춤 없이 가져온다."""
+        if getattr(self, '_anima_forge_import_inflight', False):
+            self.vue_bridge.showNotification.emit('info', 'Forge Anima 설정을 이미 가져오는 중입니다')
+            return
+
+        self._anima_forge_import_inflight = True
+        self.vue_bridge.showNotification.emit('info', 'Forge에서 Anima 설정을 가져오는 중...')
+        threading.Thread(
+            target=self._fetch_anima_forge_import,
+            daemon=True,
+            name='anima-forge-import',
+        ).start()
+
+    def _fetch_anima_forge_import(self) -> None:
+        result = {}
+        try:
+            from backends import BackendType, get_backend, get_backend_type
+            if get_backend_type() is not BackendType.WEBUI:
+                raise RuntimeError('현재 백엔드가 Forge/WebUI가 아닙니다')
+
+            backend = get_backend()
+            api_url = str(getattr(backend, 'api_url', '') or '').rstrip('/')
+            if not api_url:
+                raise RuntimeError('Forge API 주소가 비어 있습니다')
+
+            import requests
+            response = requests.get(f'{api_url}/sdapi/v1/script-info', timeout=8)
+            response.raise_for_status()
+
+            from core.anima_guidance import parse_forge_script_info
+            settings, meta = parse_forge_script_info(response.json())
+            result = {
+                'settings': settings,
+                'meta': meta,
+                'api_url': api_url,
+            }
+        except Exception as exc:
+            result = {'error': str(exc)[:400]}
+
+        try:
+            self.animaForgeImportReady.emit(result)
+        except RuntimeError:
+            # 종료 중 메인 QObject가 이미 정리된 경우에는 결과를 버린다.
+            pass
+
+    @pyqtSlot(object)
+    def _apply_anima_forge_import(self, result) -> None:
+        """worker 결과를 GUI 스레드에서 프록시와 Vue에 원자적으로 적용한다."""
+        self._anima_forge_import_inflight = False
+        if not isinstance(result, dict) or result.get('error'):
+            message = result.get('error', '알 수 없는 오류') if isinstance(result, dict) else '잘못된 응답'
+            self.vue_bridge.showNotification.emit('error', f'Forge 설정 가져오기 실패: {message}')
+            return
+
+        widgets = getattr(self, 'anima_guidance_widgets', None) or {}
+        settings = result.get('settings') or {}
+        updated = 0
+        self.vue_bridge.beginBatchUpdate()
+        try:
+            for key, value in settings.items():
+                proxy = widgets.get(key)
+                if proxy is None or not hasattr(proxy, 'setText'):
+                    continue
+                if isinstance(value, bool):
+                    text = 'true' if value else 'false'
+                elif value is None:
+                    text = ''
+                else:
+                    text = str(value)
+                proxy.setText(text)
+                updated += 1
+        finally:
+            self.vue_bridge.endBatchUpdate()
+
+        meta = result.get('meta') or {}
+        ignored = int(meta.get('ignored_trailing_args') or 0)
+        missing = meta.get('missing_scripts') or []
+        details = []
+        if ignored:
+            details.append(f'신버전 후행 인자 {ignored}개 제외')
+        if missing:
+            details.append(f'미설치 스크립트 {len(missing)}개')
+        suffix = f" ({', '.join(details)})" if details else ''
+        level = 'warning' if missing else 'success'
+        self.vue_bridge.showNotification.emit(
+            level,
+            f'Forge Anima 설정 {updated}개를 적용했습니다{suffix} · 저장하려면 SAVE를 누르세요',
+        )
 
     @pyqtSlot(str)
     def _on_backend_runtime_event(self, payload_json: str) -> None:

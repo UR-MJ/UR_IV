@@ -109,14 +109,14 @@ const progressPct = computed(() => {
 
 .placeholder-text {
   font-size: 18px;
-  color: #787878;
+  color: #8A8A8A;
   font-weight: 600;
   margin-bottom: 8px;
 }
 
 .placeholder-sub {
   font-size: 13px;
-  color: #484848;
+  color: #8A8A8A;
   margin-bottom: 4px;
 }
 

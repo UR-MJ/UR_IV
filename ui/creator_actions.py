@@ -799,7 +799,13 @@ class CreatorActionsMixin:
         url, model = self._creator_ollama_config()
         if not model:
             return True
-        return OllamaClient(url, model).unload()
+        client = OllamaClient(url, model)
+        if not client.test_connection():
+            # Ollama 가 떠 있지 않으면 점유한 VRAM 도 없다 → 언로드 성공으로 본다.
+            # ui/generator_generation.py 의 _maybe_unload_ollama 와 같은 의미론
+            # ("Ollama 미실행/미설정이면 조용히 무시").
+            return True
+        return client.unload()
 
     def _comic_ollama_complete(self, system: str, user: str) -> str:
         import requests

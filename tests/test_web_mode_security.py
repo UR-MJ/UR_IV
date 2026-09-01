@@ -211,6 +211,26 @@ class TestWebModeSecurity(unittest.TestCase):
         self.assertEqual(missing, set())
         self.assertTrue(all(callable(getattr(VueBridge, name, None)) for name in web_main_ui._WEB_METHODS))
 
+    def test_frontend_events_are_covered_by_web_signals(self):
+        """프론트가 onBackendEvent 로 듣는 시그널은 전부 _WEB_SIGNALS 에 있어야 한다.
+
+        누락되면 웹 모드에서 그 이벤트만 조용히 사라진다(예전 searchResultsReady).
+        데스크톱 모드는 멀쩡해서 눈치채기 어렵다.
+        """
+        root = pathlib.Path(__file__).resolve().parents[1]
+        source = (root / "ui" / "vue_bridge.py").read_text(encoding="utf-8")
+        frontend = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (root / "frontend" / "src").rglob("*")
+            if path.suffix in {".vue", ".js", ".ts"}
+        )
+        signals = set(re.findall(r"^[ \t]*(\w+)\s*=\s*pyqtSignal\(", source, re.MULTILINE))
+        listened = set(re.findall(r"onBackendEvent\(\s*[\"'](\w+)[\"']", frontend))
+        missing = (listened & signals) - web_main_ui._WEB_SIGNALS
+        self.assertEqual(missing, set())
+        # 반대 방향: 화이트리스트에 실제 시그널이 아닌 이름(오타/사문)이 남지 않도록.
+        self.assertEqual(web_main_ui._WEB_SIGNALS - signals, set())
+
 
 if __name__ == "__main__":
     unittest.main()

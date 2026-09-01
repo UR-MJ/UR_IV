@@ -524,7 +524,7 @@ class UISetupMixin:
         self.sam3_widgets['cn_threshold_b'].setText('-1')
         self.sam3_widgets['cn_pixel_perfect'].setChecked(True)
 
-        # ── Anima Guidance Suite (PAG/SEG/SLG · APG/CWM/SMC · Skimmed · DCW/DAVE/CNS
+        # ── Anima Guidance Suite (PAG/SEG/SLG · APG/CWM/SMC · Skimmed · DCW/RDC/DAVE/CNS
         #    · Detail Daemon · Modulation). 위치 인자 계약은 core/anima_guidance.py 참조.
         self.anima_guidance_widgets = self._init_anima_guidance_proxies(b)
 
@@ -543,7 +543,7 @@ class UISetupMixin:
     def _init_anima_guidance_proxies(self, b):
         """Anima Guidance Suite 프록시 — core/anima_guidance.py 스펙에서 자동 생성.
 
-        키가 76개(56+7+13)라 하나씩 손으로 나열하면 스펙과 어긋나기 쉽다. 스펙을
+        키가 82개(62+7+13)라 하나씩 손으로 나열하면 스펙과 어긋나기 쉽다. 스펙을
         단일 출처로 삼아 루프로 만든다. 값은 Vue에서 전부 문자열로 오고
         (`'true'`/`'0.75'`), 타입 강제는 core 쪽 `build_args`가 담당하므로
         프록시는 LineEditProxy 하나로 통일한다.

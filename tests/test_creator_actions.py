@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from ui.creator_actions import CreatorActionsMixin
@@ -129,6 +130,45 @@ class CreatorActionAdapterTests(unittest.TestCase):
             built["workflow"]["7"]["inputs"]["model_name"],
             "RealESRGAN_x4plus.pth",
         )
+
+
+class CreatorOllamaUnloadTests(unittest.TestCase):
+    """Ollama 미실행을 '언로드 실패'로 오인하면 Creator 생성이 시작조차 못 한다.
+
+    ResourceCoordinator.reserve 는 unload_llm 이 False 를 돌려주면 하드 abort 하므로,
+    "언로드할 게 없음"과 "언로드 실패"를 여기서 구분해야 한다.
+    ui/generator_generation.py 의 _maybe_unload_ollama 와 같은 의미론.
+    """
+
+    def setUp(self):
+        self.actions = CreatorActionsMixin()
+        self.actions._creator_ollama_config = lambda: ("http://localhost:11434", "qwen3:8b")
+
+    def test_unreachable_ollama_counts_as_unloaded(self):
+        with mock.patch("core.ollama_client.OllamaClient") as client_cls:
+            client = client_cls.return_value
+            client.test_connection.return_value = False
+            self.assertTrue(self.actions._creator_unload_ollama())
+            client.unload.assert_not_called()
+
+    def test_running_ollama_is_actually_unloaded(self):
+        with mock.patch("core.ollama_client.OllamaClient") as client_cls:
+            client = client_cls.return_value
+            client.test_connection.return_value = True
+            client.unload.return_value = True
+            self.assertTrue(self.actions._creator_unload_ollama())
+            client.unload.assert_called_once_with()
+
+    def test_real_unload_failure_is_still_reported(self):
+        with mock.patch("core.ollama_client.OllamaClient") as client_cls:
+            client = client_cls.return_value
+            client.test_connection.return_value = True
+            client.unload.return_value = False
+            self.assertFalse(self.actions._creator_unload_ollama())
+
+    def test_no_model_configured_is_a_noop(self):
+        self.actions._creator_ollama_config = lambda: ("http://localhost:11434", "")
+        self.assertTrue(self.actions._creator_unload_ollama())
 
 
 if __name__ == "__main__":

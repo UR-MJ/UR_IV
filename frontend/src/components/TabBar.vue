@@ -124,7 +124,7 @@ function switchToNative(id: string) {
 .pill-sep { width: 1px; background: #2A2A2A; margin: 4px 2px; }
 .tab-pill {
   padding: 7px 16px; background: transparent; border: none;
-  border-radius: 22px; color: #585858; font-size: 11px; font-weight: 700;
+  border-radius: 22px; color: #9A9A9A; font-size: 11px; font-weight: 700;
   cursor: pointer; transition: all 0.2s; white-space: nowrap;
 }
 .tab-pill:hover { color: #B0B0B0; background: rgba(255,255,255,0.03); }

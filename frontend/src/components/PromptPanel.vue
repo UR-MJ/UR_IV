@@ -1181,7 +1181,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 /* neg block field */
 .neg :deep(.tbf) { border-color: rgba(248,113,113,0.15); }
 .neg :deep(.tbf-block) { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
-.hint { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: normal; margin-left: 4px; }
+.hint { font-size: var(--fs-label); color: var(--text-muted); font-weight: normal; margin-left: 4px; }
 .generation-family { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
 .engine-hint { display: block; margin-top: 5px; font-size: 9px; color: var(--text-muted); }
 .krea-engine-note {

@@ -18,8 +18,21 @@ from core.sam3_args import (
     default_settings,
 )
 
-_ARGS_PY = os.path.join('C:\\', 'sd-webui-forge-neo', 'extensions',
-                        'forge_sam3_extension', 'sam3ext', 'args.py')
+def _find_extension_args_py() -> str:
+    configured = os.environ.get('AISTUDIO_FORGE_EXTENSION_DIR', '').strip()
+    roots = [configured] if configured else []
+    roots.extend([
+        os.path.join('C:\\', 'sd-webui-forge-classic', 'extensions',
+                     'forge_sam3_extension'),
+        os.path.join('C:\\', 'sd-webui-forge-neo', 'extensions',
+                     'forge_sam3_extension'),
+        os.path.join(os.path.expanduser('~'), 'Desktop', 'sam-extra'),
+    ])
+    candidates = [os.path.join(root, 'sam3ext', 'args.py') for root in roots if root]
+    return next((path for path in candidates if os.path.isfile(path)), candidates[0])
+
+
+_ARGS_PY = _find_extension_args_py()
 
 # Sam3Args 스키마 밖의 활성화 플래그 — state에는 있지만 스펙에는 없어야 하는 키
 _ACTIVATION_ONLY = {'sam3_enable', 'enabled'}

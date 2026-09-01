@@ -15,8 +15,8 @@ from utils.theme_manager import get_color
 
 
 # YOLO 모델 경로 설정 파일
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_EDITOR_MODELS_DIR = os.path.join(_PROJECT_ROOT, "editor_models")
+_PROJECT_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+_EDITOR_MODELS_DIR = os.path.join(_PROJECT_ROOT, "Editor_models")
 _YOLO_CONFIG_PATH = os.path.join(_EDITOR_MODELS_DIR, "yolo_config.json")
 
 # editor_models 디렉토리 자동 생성
@@ -36,6 +36,44 @@ def _is_sam_file(fname: str) -> bool:
     return any(k in fl for k in _SAM_KEYWORDS)
 
 
+def _resolve_yolo_model_path(path: str) -> str:
+    """설정 경로를 현재 프로젝트 기준 절대경로로 변환한다.
+
+    프로젝트 내부 경로는 다른 PC에서도 동작하도록 상대경로를 허용한다.
+    이전 PC의 절대경로가 남아 있으면 Editor_models의 동일 파일명으로 이관한다.
+    """
+    value = os.path.expandvars(os.path.expanduser(str(path or '').strip()))
+    if not value:
+        return ''
+
+    if not os.path.isabs(value):
+        from_root = os.path.abspath(os.path.join(_PROJECT_ROOT, value))
+        from_models = os.path.abspath(os.path.join(_EDITOR_MODELS_DIR, value))
+        value = from_root if os.path.exists(from_root) else from_models
+    else:
+        value = os.path.abspath(value)
+
+    if not os.path.exists(value):
+        local_copy = os.path.join(_EDITOR_MODELS_DIR, os.path.basename(value))
+        if os.path.exists(local_copy):
+            value = local_copy
+    return value
+
+
+def _portable_yolo_model_path(path: str) -> str:
+    """프로젝트 내부 모델은 프로젝트 루트 상대경로로 저장한다."""
+    resolved = _resolve_yolo_model_path(path)
+    if not resolved:
+        return ''
+    try:
+        relative = os.path.relpath(resolved, _PROJECT_ROOT)
+    except ValueError:  # Windows에서 드라이브가 다른 외부 경로
+        return resolved
+    if relative == os.pardir or relative.startswith(os.pardir + os.sep):
+        return resolved
+    return relative.replace(os.sep, '/')
+
+
 def _load_yolo_model_paths() -> list:
     """저장된 YOLO 모델 경로 목록 불러오기 (editor_models/ 기준)
     SAM 계열(mobile_sam / FastSAM / sam_vit*)은 검출 모델이 아니므로 제외.
@@ -50,6 +88,7 @@ def _load_yolo_model_paths() -> list:
                 if not paths:
                     old = data.get('model_path', '')
                     paths = [old] if old else []
+                paths = [_resolve_yolo_model_path(p) for p in paths]
 
         # 2. editor_models/ 디렉토리 내 .pt/.onnx 파일 자동 감지
         for f in os.listdir(_EDITOR_MODELS_DIR):
@@ -68,7 +107,8 @@ def _save_yolo_model_paths(paths: list):
     try:
         os.makedirs(_EDITOR_MODELS_DIR, exist_ok=True)
         with open(_YOLO_CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump({'model_paths': paths}, f, ensure_ascii=False, indent=2)
+            portable_paths = [p for p in (_portable_yolo_model_path(p) for p in paths) if p]
+            json.dump({'model_paths': portable_paths}, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 

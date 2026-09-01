@@ -1343,7 +1343,9 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; background: #111;
 }
-canvas { max-width: 90%; max-height: 90%; position: absolute; }
+/* 90% 제한은 고정폭 사이드패널과 겹쳐 이미지가 창의 약 59%만 쓰게 했다.
+   baseScale(=clientWidth/width)이 실측값을 읽으므로 좌표 변환은 그대로 성립한다. */
+canvas { max-width: 100%; max-height: 100%; position: absolute; }
 .mask-overlay { pointer-events: none; }
 .canvas-info {
   position: absolute; bottom: 8px; right: 12px;

@@ -149,6 +149,9 @@ _WEB_SIGNALS = frozenset({
     "backendRuntimeEvent", "generationApiEvent",
     # SAM3 Refine (sam-extra 워크플로 2) + 임베드 LoRA Manager (워크플로 4)
     "refineResult", "loraManagerUrlReady",
+    "editorWatermarkImageLoaded",
+    # 태그 검색 결과 — 누락되면 웹 모드에서 결과가 영영 도착하지 않는다.
+    "searchResultsReady",
 })
 
 

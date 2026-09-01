@@ -11,10 +11,11 @@
   --accent-dim: rgba(250, 204, 21, 0.1);
   
   --text-primary: #FFFFFF;
-  --text-secondary: #909090;
-  --text-muted: #505050;
+  --text-secondary: #B8B8B8;
+  --text-muted: #8A8A8A;
   
-  --border: #1F1F1F;
+  --border: #363636;
+  --border-strong: #565656;
   --radius-pill: 24px;
   --radius-card: 12px;
   --radius-base: 8px;
@@ -22,11 +23,74 @@
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ─────────────────────────────────────────────────────────────
+   디자인 토큰 (2026-09 리디자인) — 기존 토큰은 건드리지 않고 추가만.
+   결정 근거는 T2I 리디자인 캔버스 참조.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  /* 타입 스케일 — 4단계. 이전에는 10/11px이 전체의 94%였다. */
+  --fs-title: 16px;   /* 패널·섹션 제목 */
+  --fs-body:  13px;   /* 본문·내비 */
+  --fs-meta:  12px;   /* 값·보조 정보 */
+  --fs-label: 11px;   /* 라벨·거터 */
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-bold:   600;
+
+  /* 간격 — 4pt 그리드. 3/7/9/14px 같은 값을 쓰지 말 것. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+
+  /* 경계와 고도(elevation)
+     근-검정 위에 근-검정 면을 얹고 검은 그림자로 띄우면 대비가 1.0~1.3:1로
+     형태가 사라진다. 떠 있는 것·누를 수 있는 것은 --edge 헤어라인으로 형태를 준다. */
+  --edge: #666666;    /* 상호작용·부유 요소 경계 — 모든 배경에서 3:1 이상 */
+  --rule: #2E2E2E;    /* 순수 구분선(장식) */
+
+  /* 강조색 역할 분리 — --accent 는 '주 실행'과 '열린 상태' 전용.
+     선택·상태·알림에 --accent 를 쓰지 말 것. */
+  --state-info:  #7FA8D6;   /* 선택·진행·준비됨 */
+  --state-alert: #D14343;   /* 알림 배지 — 흰 글자와 4.57:1 */
+  --state-ok:    #4ADE80;   /* 연결됨 (색만으로 표시하지 말고 문구 병기) */
+
+  /* 태그 분류 색 — 채도 S58 · 명도 L72 고정, 최소 색상각 38도.
+     --accent(H48)와 52도 이상 이격. 대비 7.12~13.98:1.
+     이전 12색은 5개 색상 무리에 뭉쳐 있었다(인물수↔사물 2도). */
+  --tag-person:  #8EADE1;   /* 인물 · 캐릭터   H218 */
+  --tag-scene:   #8EE1DE;   /* 배경 · 구도     H178 */
+  --tag-pose:    #8EE19C;   /* 포즈 · 표정     H130 */
+  --tag-wear:    #BA8EE1;   /* 의상            H272 */
+  --tag-fx:      #E18EC8;   /* 효과 · 색       H318 */
+  --tag-nsfw:    #E18E94;   /* NSFW           H356 */
+  --tag-neutral: #C6C6C6;   /* 신체 · 사물 · 특성 · 일반 */
+  /* 와일드카드는 색이 아니라 형태로 구분한다 — 점선 + 왼쪽 위 wild 라벨 */
+  --tag-wild-edge: #8A8A8A;
+}
+
 * {
   margin: 0; padding: 0;
   box-sizing: border-box;
   font-family: 'Pretendard', 'Inter', system-ui, sans-serif;
   user-select: none;
+}
+
+/* 전역 user-select:none 은 드래그 UI 보호용이지만, 사용자가 복사해야 하는
+   텍스트까지 막아 왔다(프롬프트·에러·메타데이터). 필요한 곳만 되돌린다. */
+input, textarea, select, [contenteditable="true"],
+.selectable, .selectable * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* 키보드 포커스가 보이지 않으면 키보드로 쓸 수 없다. 마우스 클릭에는 안 뜬다. */
+:focus-visible {
+  outline: 2px solid var(--state-info);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 body {
@@ -105,6 +169,12 @@ input:focus, textarea:focus, select:focus {
   background: var(--bg-card);
 }
 
+/* 비활성 버튼도 위치와 의미를 식별할 수 있어야 한다. 개별 컴포넌트의
+   과도한 opacity 선언보다 이 가시성 하한을 우선한다. */
+button:disabled {
+  opacity: 0.65 !important;
+}
+
 /* 전역 체크박스 행 */
 label:has(input[type="checkbox"]) {
   display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
@@ -127,12 +197,11 @@ option:checked { background: #FACC15; color: #000; }
 option:hover { background: #252525; }
 
 label {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 6px;
+  letter-spacing: 0.4px;
+  margin-bottom: var(--sp-1);
   display: block;
 }
 

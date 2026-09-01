@@ -74,9 +74,9 @@
       </template>
     </details>
 
-    <!-- ── CFG base: APG / SMC / CWM ────────────────────────────────── -->
+    <!-- ── CFG base: APG / CWM / SMC ────────────────────────────────── -->
     <details class="ag-group">
-      <summary>APG / SMC / CWM — CFG base</summary>
+      <summary>APG / CWM / SMC — CFG base</summary>
 
       <label class="ext-check-row">
         <ToggleSwitch :model-value="b('guid_apg_enabled')" @update:model-value="setB('guid_apg_enabled', $event)" size="sm" />
@@ -98,17 +98,6 @@
       </template>
 
       <label class="ext-check-row">
-        <ToggleSwitch :model-value="b('guid_smc_enabled')" @update:model-value="setB('guid_smc_enabled', $event)" size="sm" />
-        <span>Enable SMC</span>
-      </label>
-      <div class="ext-row" v-if="b('guid_smc_enabled')">
-        <div class="ext-field"><label>SMC lambda (Anima 6.0)</label>
-          <input type="number" v-model="w._guid_smc_lambda" step="0.1" min="0" max="10" /></div>
-        <div class="ext-field"><label>SMC k (Anima 0.20)</label>
-          <input type="number" v-model="w._guid_smc_k" step="0.01" min="0" max="1" /></div>
-      </div>
-
-      <label class="ext-check-row">
         <ToggleSwitch :model-value="b('guid_cwm_enabled')" @update:model-value="setB('guid_cwm_enabled', $event)" size="sm" />
         <span>Enable CWM</span>
       </label>
@@ -119,6 +108,20 @@
           <input type="number" v-model="w._guid_cwm_alpha_high" step="0.01" min="-1" max="1" /></div>
       </div>
 
+      <label class="ext-check-row">
+        <ToggleSwitch :model-value="b('guid_smc_master_enabled')" @update:model-value="setB('guid_smc_master_enabled', $event)" size="sm" />
+        <span>Enable SMC</span>
+      </label>
+      <div class="ext-field"><label>SMC preset</label>
+        <CustomSelect v-model="w._guid_smc_preset" :options="smcPresets" placeholder="Auto" /></div>
+      <div class="ext-row" v-if="w._guid_smc_preset === 'Custom'">
+        <div class="ext-field"><label>Custom SMC lambda</label>
+          <input type="number" v-model="w._guid_smc_lambda" step="0.1" min="0.5" max="30" /></div>
+        <div class="ext-field"><label>Custom SMC k</label>
+          <input type="number" v-model="w._guid_smc_k" step="0.01" min="0" max="5" /></div>
+      </div>
+      <div class="ext-note">Auto는 모델을 감지하며 Anima는 Cosmos / Wan 프리셋을 사용합니다.</div>
+
       <details class="ag-sub">
         <summary>Legacy CFG base 라디오 (상호배타)</summary>
         <div class="ext-field"><label>CFG base mode</label>
@@ -126,6 +129,10 @@
         <label class="ext-check-row">
           <ToggleSwitch :model-value="b('guid_experimental_stack')" @update:model-value="setB('guid_experimental_stack', $event)" size="sm" />
           <span>Experimental stack: SMC → APG → CWM</span>
+        </label>
+        <label class="ext-check-row">
+          <ToggleSwitch :model-value="b('guid_smc_enabled')" @update:model-value="setB('guid_smc_enabled', $event)" size="sm" />
+          <span>Enable SMC (legacy)</span>
         </label>
       </details>
     </details>
@@ -159,9 +166,9 @@
       </template>
     </details>
 
-    <!-- ── DCW / DAVE / CNS ─────────────────────────────────────────── -->
+    <!-- ── DCW / RDC / DAVE / CNS ───────────────────────────────────── -->
     <details class="ag-group">
-      <summary>DCW / DAVE / CNS</summary>
+      <summary>DCW / RDC / DAVE / CNS</summary>
 
       <label class="ext-check-row">
         <ToggleSwitch :model-value="b('guid_dcw_enabled')" @update:model-value="setB('guid_dcw_enabled', $event)" size="sm" />
@@ -173,6 +180,22 @@
         <div class="ext-field"><label>DCW lambda high</label>
           <input type="number" v-model="w._guid_dcw_lambda_high" step="0.005" min="-0.5" max="0.5" /></div>
       </div>
+
+      <label class="ext-check-row">
+        <ToggleSwitch :model-value="b('guid_rdc_enabled')" @update:model-value="setB('guid_rdc_enabled', $event)" size="sm" />
+        <span>Enable RDC (band-wise reverse drift compensation)</span>
+      </label>
+      <template v-if="b('guid_rdc_enabled')">
+        <div class="ext-field"><label>RDC tau (EMA 기억 구간)</label>
+          <input type="number" v-model="w._guid_rdc_tau" step="0.01" min="0" max="0.5" /></div>
+        <div class="ext-row">
+          <div class="ext-field"><label>RDC alpha LL (구조 drift)</label>
+            <input type="number" v-model="w._guid_rdc_alpha_ll" step="0.005" min="0" max="0.3" /></div>
+          <div class="ext-field"><label>RDC alpha HH (텍스처 drift)</label>
+            <input type="number" v-model="w._guid_rdc_alpha_hh" step="0.001" min="0" max="0.1" /></div>
+        </div>
+        <div class="ext-note">권장 시작값: tau 0.15 · LL 0.03 · HH 0. 텍스처가 흐려지면 HH를 0으로 유지하세요.</div>
+      </template>
 
       <label class="ext-check-row">
         <ToggleSwitch :model-value="b('guid_dave_enabled')" @update:model-value="setB('guid_dave_enabled', $event)" size="sm" />
@@ -308,6 +331,10 @@
     </details>
 
     <div class="ag-actions">
+      <button class="ag-import" @click="importFromForge"
+        title="현재 Forge API의 /sdapi/v1/script-info가 공개하는 Anima 설정을 가져옵니다. Forge 브라우저에서 아직 적용되지 않은 입력값은 Forge 버전에 따라 포함되지 않을 수 있습니다.">
+        ↻ Forge에서 가져오기
+      </button>
       <button class="ag-reset" @click="resetAll" title="Anima Guidance 전체를 확장 기본값으로">전체 초기화</button>
     </div>
   </details>
@@ -317,6 +344,7 @@
 import { computed } from 'vue'
 import ToggleSwitch from './ToggleSwitch.vue'
 import CustomSelect from './CustomSelect.vue'
+import { requestAction } from '../stores/widgetStore.js'
 
 /**
  * Anima Guidance Suite 패널.
@@ -338,6 +366,10 @@ function setB(key: string, val: boolean) {
 }
 
 const cfgModes = ['Preserve incoming', 'APG', 'CWM', 'SMC', 'SMC + CWM']
+const smcPresets = [
+  'Auto', 'SD1.5 / SD2', 'SDXL', 'SD3 / SD3.5',
+  'Flux', 'Qwen-Image', 'Cosmos / Wan', 'Custom',
+]
 
 // 확장 기본값 — core/anima_guidance.py 스펙과 일치해야 한다
 const DEFAULTS: Record<string, string> = {
@@ -352,7 +384,7 @@ const DEFAULTS: Record<string, string> = {
   _guid_legacy_attn: 'false', _guid_seg_sigma: '100',
   _guid_cfg_mode: 'Preserve incoming', _guid_experimental_stack: 'false',
   _guid_cwm_alpha_low: '0.3', _guid_cwm_alpha_high: '0.15',
-  _guid_smc_lambda: '6', _guid_smc_k: '0.2',
+  _guid_smc_lambda: '6', _guid_smc_k: '0.1',
   _guid_dcw_enabled: 'false', _guid_dcw_lambda_low: '0.1', _guid_dcw_lambda_high: '0.02',
   _guid_dave_enabled: 'false', _guid_dave_strength: '0.3', _guid_dave_tau: '0.1',
   _guid_dave_blocks: '8-18',
@@ -367,6 +399,9 @@ const DEFAULTS: Record<string, string> = {
   _guid_mod_negative_source: 'Main negative',
   _guid_mod_negative_prompt: 'worst quality, low quality',
   _guid_mod_adapter_mode: 'Auto-download official', _guid_mod_adapter_path: '',
+  _guid_smc_preset: 'Auto', _guid_smc_master_enabled: 'false',
+  _guid_rdc_enabled: 'false', _guid_rdc_tau: '0.15',
+  _guid_rdc_alpha_ll: '0.03', _guid_rdc_alpha_hh: '0',
   _skim_enabled: 'false', _skim_skimming_cfg: '7', _skim_full_skim_negative: 'false',
   _skim_disable_flipping_filter: 'false', _skim_start_percent: '0',
   _skim_end_percent: '1', _skim_flip_at: '0',
@@ -380,17 +415,25 @@ function resetAll() {
   for (const [key, val] of Object.entries(DEFAULTS)) w[key] = val
 }
 
+function importFromForge() {
+  requestAction('import_anima_from_forge')
+}
+
 // 켜져 있는 기능 요약 — 아코디언을 접어둬도 뭐가 도는지 보이게
 const activeSummary = computed(() => {
   const parts: string[] = []
   if (b('guid_enabled') && w._guid_attn_method !== 'None') parts.push(String(w._guid_attn_method || 'PAG'))
-  const flags: Array<[string, string]> = [
+  const beforeSmc: Array<[string, string]> = [
     ['guid_slg_on', 'SLG'], ['guid_apg_enabled', 'APG'], ['guid_adg_enabled', 'ADG'],
-    ['guid_smc_enabled', 'SMC'], ['guid_cwm_enabled', 'CWM'], ['guid_dcw_enabled', 'DCW'],
+  ]
+  for (const [key, label] of beforeSmc) if (b(key)) parts.push(label)
+  if (b('guid_smc_master_enabled') || b('guid_smc_enabled')) parts.push('SMC')
+  const afterSmc: Array<[string, string]> = [
+    ['guid_cwm_enabled', 'CWM'], ['guid_dcw_enabled', 'DCW'], ['guid_rdc_enabled', 'RDC'],
     ['guid_dave_enabled', 'DAVE'], ['guid_cns_enabled', 'CNS'],
     ['guid_mod_enabled', 'MOD'], ['skim_enabled', 'Skim'], ['dd_enabled', 'DD'],
   ]
-  for (const [key, label] of flags) if (b(key)) parts.push(label)
+  for (const [key, label] of afterSmc) if (b(key)) parts.push(label)
   return parts.join(' · ')
 })
 </script>
@@ -421,11 +464,28 @@ const activeSummary = computed(() => {
   cursor: pointer; font-size: 10px; font-weight: 700;
   color: var(--text-muted); padding: 3px 0;
 }
-.ag-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
-.ag-reset {
-  height: 26px; padding: 0 10px; font-size: 10px; font-weight: 700;
-  background: transparent; border: 1px dashed var(--border);
-  border-radius: 5px; color: var(--text-muted); cursor: pointer;
+.ext-note {
+  margin: 3px 0 6px; color: var(--text-muted);
+  font-size: 10px; line-height: 1.45;
 }
+.ag-actions { display: flex; justify-content: space-between; gap: 6px; margin-top: 10px; }
+.ag-reset, .ag-import {
+  height: 26px; padding: 0 10px; font-size: 10px; font-weight: 700;
+  border-radius: 5px; cursor: pointer;
+}
+.ag-reset { background: transparent; border: 1px dashed var(--border); color: var(--text-muted); }
 .ag-reset:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.ag-import {
+  background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.55);
+  color: #bfdbfe;
+}
+.ag-import:hover { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; color: #fff; }
+
+/* Anima 패널은 9~11px의 컴팩트 입력 체계다. 공용 CustomSelect의 14px 기본값을
+   이 패널 안에서만 맞춰 다른 드롭다운과 입력의 글자 크기가 튀지 않게 한다. */
+:deep(.csel-display) {
+  min-height: 32px; padding: 6px 8px; font-size: 11px;
+}
+:deep(.csel-option) { padding: 6px 8px; font-size: 11px; }
+:deep(.csel-arrow) { font-size: 10px; }
 </style>

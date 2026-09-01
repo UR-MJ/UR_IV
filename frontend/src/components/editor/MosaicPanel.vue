@@ -191,8 +191,38 @@
         <button class="mini-btn" @click="$emit('flip', 'vertical')" title="Flip Vertical">↕</button>
       </div>
       <div class="btn-row mt-8">
-        <button class="action-btn" @click="$emit('crop')">CROP</button>
-        <button class="action-btn" @click="$emit('resize')">RESIZE</button>
+        <button class="action-btn" :class="{ on: !!cropPending }" @click="$emit('crop')">CROP</button>
+        <button class="action-btn" :class="{ on: showResize }" @click="showResize = !showResize">RESIZE</button>
+      </div>
+
+      <!-- 크롭 확인 — 예전에는 마스크 bbox 로 확인 없이 바로 잘랐다.
+           무엇이 얼마로 잘리는지 보여주고 확정을 받는다. -->
+      <div v-if="cropPending" class="resize-box mt-8">
+        <div class="resize-cur">자르기 결과 {{ cropPending }}</div>
+        <div class="btn-row">
+          <button class="action-btn accent" @click="$emit('crop-confirm')">자르기</button>
+          <button class="action-btn" @click="$emit('crop-cancel')">취소</button>
+        </div>
+      </div>
+
+      <!-- 리사이즈 — 예전에는 파라미터 없이 emit 해서 원본과 같은 크기로 다시 저장만 했다.
+           PyQt ResizeDialog(비율 유지 + W/H)를 모달 대신 인라인으로 옮겼다. -->
+      <div v-if="showResize" class="resize-box mt-8">
+        <div class="resize-cur">현재 {{ imgWidth }} × {{ imgHeight }}</div>
+        <div class="resize-row">
+          <label class="resize-l">W</label>
+          <input class="resize-in" type="number" min="1" max="65536" v-model.number="resizeW" @input="onResizeW" />
+          <span class="resize-x">×</span>
+          <label class="resize-l">H</label>
+          <input class="resize-in" type="number" min="1" max="65536" v-model.number="resizeH" @input="onResizeH" />
+        </div>
+        <label class="resize-lock">
+          <input type="checkbox" v-model="keepRatio" /> 비율 유지
+        </label>
+        <div class="btn-row mt-8">
+          <button class="action-btn" @click="applyResize">적용</button>
+          <button class="action-btn" @click="resetResize">되돌리기</button>
+        </div>
       </div>
       <!-- 원근 보정 — 꼭짓점 4개를 드래그해 기울어진 사각형을 정면으로 편다 -->
       <div class="btn-row mt-8" v-if="!perspectiveActive">
@@ -229,7 +259,9 @@ const emit = defineEmits<{
   'effect-apply': [payload: { tool: number; effect: number; toolSize: number; strength: number }]
   'cancel-selection': []
   'crop': []
-  'resize': []
+  'crop-confirm': []
+  'crop-cancel': []
+  'resize': [payload: { width: number; height: number }]
   'perspective-start': []
   'perspective-confirm': []
   'perspective-cancel': []
@@ -249,7 +281,10 @@ const props = withDefaults(defineProps<{
   modelLabel?: string
   detectStatus?: string
   perspectiveActive?: boolean
-}>(), { modelLabel: 'No Model Loaded', detectStatus: '', perspectiveActive: false })
+  imgWidth?: number
+  imgHeight?: number
+  cropPending?: string
+}>(), { modelLabel: 'No Model Loaded', detectStatus: '', perspectiveActive: false, imgWidth: 0, imgHeight: 0, cropPending: '' })
 
 const tools: Tool[] = [
   { id: 0, label: 'RECT', icon: '⬚' },
@@ -263,6 +298,31 @@ const effects: Effect[] = [
   { id: 1, label: 'BLACK BAR' },
   { id: 2, label: 'BLUR' },
 ]
+
+// ── 리사이즈 ──
+const showResize = ref(false)
+const keepRatio = ref(true)
+const resizeW = ref(0)
+const resizeH = ref(0)
+const _ratio = () => (props.imgHeight > 0 ? props.imgWidth / props.imgHeight : 1)
+function resetResize() { resizeW.value = props.imgWidth; resizeH.value = props.imgHeight }
+watch(() => [props.imgWidth, props.imgHeight], resetResize, { immediate: true })
+watch(showResize, (v) => { if (v) resetResize() })
+function onResizeW() {
+  if (!keepRatio.value || !resizeW.value) return
+  resizeH.value = Math.max(1, Math.round(resizeW.value / _ratio()))
+}
+function onResizeH() {
+  if (!keepRatio.value || !resizeH.value) return
+  resizeW.value = Math.max(1, Math.round(resizeH.value * _ratio()))
+}
+function applyResize() {
+  const w = Math.max(1, Math.min(65536, Math.round(resizeW.value || 0)))
+  const h = Math.max(1, Math.min(65536, Math.round(resizeH.value || 0)))
+  if (w === props.imgWidth && h === props.imgHeight) return   // 같은 크기면 보내지 않는다
+  emit('resize', { width: w, height: h })
+  showResize.value = false
+}
 
 const selectedTool = ref(0)
 const selectedEffect = ref(0)
@@ -334,6 +394,32 @@ watch([toolSize, strength, stampSpacing, stampShapeLocal, barW, barH, selectedEf
 </script>
 
 <style scoped>
+/* 리사이즈 인라인 입력 */
+.resize-box {
+  border: 1px solid var(--edge, #666);
+  border-radius: var(--radius-base, 8px);
+  padding: var(--sp-3, 12px);
+  display: flex; flex-direction: column; gap: var(--sp-2, 8px);
+}
+.resize-cur { font-size: var(--fs-label, 11px); color: var(--text-muted, #8A8A8A); }
+.resize-row { display: flex; align-items: center; gap: var(--sp-2, 8px); }
+.resize-l { font-size: var(--fs-label, 11px); color: var(--text-muted, #8A8A8A); margin: 0; }
+.resize-x { color: var(--text-muted, #8A8A8A); }
+.resize-in {
+  flex: 1; min-width: 0; height: 32px;
+  background: var(--bg-input, #181818);
+  border: 1px solid var(--border, #363636);
+  border-radius: var(--radius-base, 8px);
+  color: var(--text-primary, #fff);
+  font-size: var(--fs-meta, 12px);
+  padding: 0 var(--sp-2, 8px);
+}
+.resize-lock {
+  display: flex; align-items: center; gap: var(--sp-2, 8px);
+  font-size: var(--fs-meta, 12px); color: var(--text-secondary, #B8B8B8);
+  margin: 0; text-transform: none; letter-spacing: 0;
+}
+.action-btn.on { border-color: var(--accent, #FACC15); color: var(--accent, #FACC15); }
 .mosaic-panel {
   display: flex; flex-direction: column; height: 100%;
   padding: 16px; background: var(--bg-secondary); gap: 20px;

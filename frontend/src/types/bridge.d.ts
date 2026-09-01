@@ -36,7 +36,8 @@ export type ActionName =
   | 'prompt_order_list' | 'prompt_order_save' | 'prompt_order_reset'
   | 'instant_wildcards_list' | 'instant_wildcards_save' | 'instant_wildcards_delete'
   | 'show_prompt_history' | 'open_lora_manager' | 'show_api_manager' | 'open_url'
-  | 'unload_model_request' | 'show_toast' | 'native_tab_switch' | 'vue_tab_switch'
+  | 'import_anima_from_forge' | 'unload_model_request' | 'show_toast'
+  | 'native_tab_switch' | 'vue_tab_switch'
   | (string & {})
 
 /** Python이 vue_bridge에서 emit하고 Vue가 onBackendEvent()로 받는 시그널 이름. */
@@ -46,7 +47,7 @@ export type BackendEvent =
   | 'searchResultsReady' | 'searchStatus' | 'queueUpdated' | 'queueItemAdded' | 'queueCompleted'
   | 'uiPrefsLoaded' | 'condRulesLoaded' | 'loraStackLoaded' | 'loraInserted' | 'globalWeightsLoaded'
   | 'promptOrderLoaded' | 'instantWildcardsList' | 'workflowProfilesList'
-  | 'editorImageLoaded' | 'editorResult' | 'yoloModelUpdated' | 'i2iImageLoaded' | 'inpaintImageLoaded'
+  | 'editorImageLoaded' | 'editorWatermarkImageLoaded' | 'editorResult' | 'yoloModelUpdated' | 'i2iImageLoaded' | 'inpaintImageLoaded'
   | 'compareImageLoaded' | 'galleryFolderLoaded' | 'galleryImagesReady' | 'thumbnailReady'
   | 'upscalersReady' | 'ollamaModelsReady' | 'adetailerModelsReady'
   | 'batchFilesSelected' | 'adetailerResult' | 'adetailerProgress' | 'sam3Result' | 'sam3Progress'

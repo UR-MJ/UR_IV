@@ -76,7 +76,7 @@ def _uv_executable() -> str | None:
 def install_missing(missing: list[str], prefer_uv: bool = True) -> int:
     """누락 패키지를 개별 설치.
     한 패키지 실패가 다른 패키지 설치를 막지 않도록 하나씩 설치.
-    실패 패키지가 있어도 0 반환 (앱은 lazy import + bbox 폴백으로 동작).
+    하나라도 끝까지 설치되지 않으면 non-zero를 반환한다.
     """
     if not missing:
         return 0
@@ -90,7 +90,7 @@ def install_missing(missing: list[str], prefer_uv: bool = True) -> int:
         print(f"[deps] Using uv ({uv})")
         base_cmd = [uv, "pip", "install", "--python", sys.executable]
     else:
-        print("[deps] uv not found — falling back to pip")
+        print("[deps] uv not found - falling back to pip")
         base_cmd = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check"]
 
     # 1단계: 일괄 설치 시도 (의존성 그래프를 한 번에 해결 — 가장 빠름)
@@ -101,7 +101,7 @@ def install_missing(missing: list[str], prefer_uv: bool = True) -> int:
         return 0
 
     # 2단계: 일괄 설치 실패 시 개별 재시도 (어떤 패키지가 문제인지 격리)
-    print(f"[deps] Bulk install failed (rc={rc}) — retrying one-by-one...")
+    print(f"[deps] Bulk install failed (rc={rc}) - retrying one-by-one...")
     failed: list[str] = []
     for spec in missing:
         # 이미 설치되었을 수도 있으니 재확인
@@ -119,12 +119,13 @@ def install_missing(missing: list[str], prefer_uv: bool = True) -> int:
             print(f"[deps]   OK  : {spec}")
 
     if failed:
-        print(f"[deps] WARNING — {len(failed)} package(s) failed to install:")
+        print(f"[deps] ERROR - {len(failed)} package(s) failed to install:")
         for spec in failed:
             print(f"  - {spec}")
-        print("[deps] App will continue (lazy imports / fallbacks may apply).")
+        print("[deps] App startup aborted. Fix the install error and run again.")
+        return 1
 
-    return 0  # 앱 실행은 계속 — import 실패 시 각 모듈이 알아서 폴백
+    return 0
 
 
 def _torch_is_cuda_build() -> bool:
@@ -152,9 +153,9 @@ def ensure_cuda_torch(prefer_uv: bool = True) -> bool:
 
     try:
         v = version("torch")
-        print(f"[deps] torch is CPU/unknown build ({v}) — reinstalling with CUDA from {_TORCH_CUDA_INDEX}")
+        print(f"[deps] torch is CPU/unknown build ({v}) - reinstalling with CUDA from {_TORCH_CUDA_INDEX}")
     except PackageNotFoundError:
-        print(f"[deps] torch not installed — installing CUDA build from {_TORCH_CUDA_INDEX}")
+        print(f"[deps] torch not installed - installing CUDA build from {_TORCH_CUDA_INDEX}")
 
     uv = _uv_executable() if prefer_uv else None
     if uv:
@@ -167,7 +168,7 @@ def ensure_cuda_torch(prefer_uv: bool = True) -> bool:
 
     rc = subprocess.call(cmd)
     if rc != 0:
-        print(f"[deps] WARNING — CUDA torch install failed (rc={rc}). "
+        print(f"[deps] WARNING - CUDA torch install failed (rc={rc}). "
               f"시스템 CUDA가 없거나 인덱스 URL을 시스템 CUDA 버전에 맞게 변경 필요.")
         return False
 
@@ -179,23 +180,36 @@ def ensure_cuda_torch(prefer_uv: bool = True) -> bool:
             v = "?"
         print(f"[deps] torch CUDA installed: {v}")
         return True
-    print("[deps] WARNING — install 성공했으나 CUDA 태그가 없음. 인덱스 URL 확인 필요.")
+    print("[deps] WARNING - install 성공했으나 CUDA 태그가 없음. 인덱스 URL 확인 필요.")
     return False
 
 
 def main() -> int:
     # 1) GPU torch 우선 확보 (SAM3 전제 조건)
-    ensure_cuda_torch()
+    torch_ready = ensure_cuda_torch()
 
     # 2) requirements.txt의 나머지 패키지 누락 검사 + 설치
     missing = find_missing()
-    if not missing:
-        print("[deps] All requirements satisfied.")
-        return 0
-    rc = install_missing(missing)
-    if rc != 0:
-        print(f"[deps] pip install exit code: {rc}")
-    return rc
+    install_rc = install_missing(missing) if missing else 0
+
+    # 설치 도구의 성공 코드만 믿지 않고 실제 메타데이터를 다시 검사한다.
+    remaining = find_missing()
+    if remaining:
+        print(f"[deps] ERROR - {len(remaining)} requirement(s) are still missing:")
+        for spec in remaining:
+            print(f"  - {spec}")
+        return 1
+
+    if install_rc != 0:
+        print(f"[deps] pip install exit code: {install_rc}")
+        return install_rc
+
+    if not torch_ready:
+        print("[deps] ERROR - a CUDA-enabled torch installation is required.")
+        return 1
+
+    print("[deps] All requirements satisfied.")
+    return 0
 
 
 if __name__ == "__main__":

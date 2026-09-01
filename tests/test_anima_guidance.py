@@ -24,11 +24,28 @@ from core.anima_guidance import (
     default_settings,
     describe_active,
     is_script_active,
+    parse_forge_script_info,
 )
 
-# 확장 소스 위치 (reference: Forge Neo 설치 경로)
-_EXT_DIR = os.path.join('C:\\', 'sd-webui-forge-neo', 'extensions',
-                        'forge_sam3_extension', 'scripts')
+
+def _find_extension_scripts_dir() -> str:
+    """현재 PC의 Forge 설치를 우선하고 사용자 홈의 소스 복사본은 fallback으로 쓴다."""
+    configured = os.environ.get('AISTUDIO_FORGE_EXTENSION_DIR', '').strip()
+    candidates = []
+    if configured:
+        candidates.append(configured if os.path.basename(configured) == 'scripts'
+                          else os.path.join(configured, 'scripts'))
+    candidates.extend([
+        os.path.join('C:\\', 'sd-webui-forge-classic', 'extensions',
+                     'forge_sam3_extension', 'scripts'),
+        os.path.join('C:\\', 'sd-webui-forge-neo', 'extensions',
+                     'forge_sam3_extension', 'scripts'),
+        os.path.join(os.path.expanduser('~'), 'Desktop', 'sam-extra', 'scripts'),
+    ])
+    return next((path for path in candidates if os.path.isdir(path)), candidates[0])
+
+
+_EXT_DIR = _find_extension_scripts_dir()
 
 # ── 1) 리터럴 고정 ───────────────────────────────────────────────────────────
 # 확장 varname 순서 그대로. 우리 키는 접두사만 다름(guid_/skim_/dd_).
@@ -51,6 +68,8 @@ EXPECTED_PERTURBATION = [
     'mod_base_source', 'mod_base_prompt', 'mod_positive_prompt',
     'mod_negative_source', 'mod_negative_prompt',
     'mod_adapter_mode', 'mod_adapter_path',
+    'smc_preset', 'smc_master_enabled',
+    'rdc_enabled', 'rdc_tau', 'rdc_alpha_ll', 'rdc_alpha_hh',
 ]
 EXPECTED_SKIMMED = [
     'enabled', 'skimming_cfg', 'full_skim_negative',
@@ -79,7 +98,7 @@ class TestSpecOrder(unittest.TestCase):
                 self.assertEqual(got, expected)
 
     def test_arg_counts(self):
-        self.assertEqual(len(PERTURBATION_SPEC), 56)
+        self.assertEqual(len(PERTURBATION_SPEC), 62)
         self.assertEqual(len(SKIMMED_SPEC), 7)
         self.assertEqual(len(DETAIL_DAEMON_SPEC), 13)
 
@@ -134,6 +153,13 @@ class TestBuildArgs(unittest.TestCase):
         self.assertEqual(args[22], 'SMC + CWM')
         args = build_args(SCRIPT_PERTURBATION, {'guid_attn_method': 'seg'})
         self.assertEqual(args[1], 'SEG')
+        args = build_args(SCRIPT_PERTURBATION, {'guid_smc_preset': 'cosmos / wan'})
+        self.assertEqual(args[56], 'Cosmos / Wan')
+
+    def test_current_smc_and_rdc_defaults_match_forge(self):
+        args = build_args(SCRIPT_PERTURBATION, {})
+        self.assertEqual(args[27], 0.10)
+        self.assertEqual(args[56:62], ['Auto', False, False, 0.15, 0.03, 0.0])
 
     def test_unknown_script_raises(self):
         with self.assertRaises(KeyError):
@@ -157,6 +183,12 @@ class TestActivation(unittest.TestCase):
         self.assertIn(SCRIPT_PERTURBATION, block)
         self.assertIs(block[SCRIPT_PERTURBATION]['args'][31], True)
 
+    def test_current_smc_master_and_rdc_activate_perturbation_script(self):
+        smc = build_alwayson({'guid_smc_master_enabled': 'true'})
+        self.assertIs(smc[SCRIPT_PERTURBATION]['args'][57], True)
+        rdc = build_alwayson({'guid_rdc_enabled': 'true'})
+        self.assertIs(rdc[SCRIPT_PERTURBATION]['args'][58], True)
+
     def test_payload_shape_is_args_list(self):
         block = build_alwayson({'dd_enabled': True})
         self.assertEqual(set(block[SCRIPT_DETAIL_DAEMON]), {'args'})
@@ -168,6 +200,14 @@ class TestActivation(unittest.TestCase):
         self.assertIn('SEG(5)', text)
         self.assertIn('Skimmed CFG', text)
         self.assertEqual(describe_active({}), '')
+
+    def test_describe_current_smc_and_rdc(self):
+        text = describe_active({
+            'guid_smc_master_enabled': True,
+            'guid_rdc_enabled': True,
+        })
+        self.assertIn('SMC', text)
+        self.assertIn('RDC', text)
 
 
 class TestApplyToPayload(unittest.TestCase):
@@ -196,6 +236,64 @@ class TestApplyToPayload(unittest.TestCase):
         payload = {}
         apply_to_payload(payload, {})
         self.assertEqual(payload, {})
+
+
+class TestForgeScriptInfoImport(unittest.TestCase):
+    @staticmethod
+    def _entry(title, spec, *, img2img=False, overrides=None, trailing=0):
+        overrides = overrides or {}
+        values = [overrides.get(key, default) for key, _kind, default, _extra in spec]
+        values.extend(f'future-{i}' for i in range(trailing))
+        return {
+            'name': title.lower(),
+            'is_alwayson': True,
+            'is_img2img': img2img,
+            'args': [{'value': value} for value in values],
+        }
+
+    def test_imports_known_values_by_positional_contract(self):
+        payload = [
+            self._entry(SCRIPT_PERTURBATION, PERTURBATION_SPEC,
+                        overrides={'guid_enabled': True, 'guid_scale': 6.5}),
+            self._entry(SCRIPT_SKIMMED_CFG, SKIMMED_SPEC,
+                        overrides={'skim_enabled': True}),
+            self._entry(SCRIPT_DETAIL_DAEMON, DETAIL_DAEMON_SPEC,
+                        overrides={'dd_preset': 'Strong'}),
+        ]
+        settings, meta = parse_forge_script_info(payload)
+        self.assertIs(settings['guid_enabled'], True)
+        self.assertEqual(settings['guid_scale'], 6.5)
+        self.assertIs(settings['skim_enabled'], True)
+        self.assertEqual(settings['dd_preset'], 'Strong')
+        self.assertEqual(meta['missing_scripts'], [])
+
+    def test_prefers_txt2img_when_forge_returns_both_modes(self):
+        payload = [
+            self._entry(SCRIPT_PERTURBATION, PERTURBATION_SPEC, img2img=True,
+                        overrides={'guid_scale': 9.0}),
+            self._entry(SCRIPT_PERTURBATION, PERTURBATION_SPEC, img2img=False,
+                        overrides={'guid_scale': 5.0}),
+        ]
+        settings, _meta = parse_forge_script_info(payload)
+        self.assertEqual(settings['guid_scale'], 5.0)
+
+    def test_future_trailing_forge_args_are_ignored_and_reported(self):
+        payload = [self._entry(
+            SCRIPT_PERTURBATION, PERTURBATION_SPEC, trailing=2,
+        )]
+        settings, meta = parse_forge_script_info(payload)
+        self.assertEqual(len(settings), len(PERTURBATION_SPEC))
+        self.assertEqual(meta['ignored_trailing_args'], 2)
+
+    def test_short_positional_payload_is_rejected(self):
+        payload = [self._entry(SCRIPT_PERTURBATION, PERTURBATION_SPEC)]
+        payload[0]['args'].pop()
+        with self.assertRaisesRegex(ValueError, '인자 수'):
+            parse_forge_script_info(payload)
+
+    def test_requires_at_least_one_supported_script(self):
+        with self.assertRaisesRegex(ValueError, 'Anima 스크립트'):
+            parse_forge_script_info([{'name': 'unrelated', 'args': []}])
 
 
 # ── 2) 설치된 확장과 교차검증 ────────────────────────────────────────────────

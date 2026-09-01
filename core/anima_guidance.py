@@ -1,7 +1,7 @@
 # core/anima_guidance.py
 """Anima Guidance Suite — alwayson_scripts 인자 빌더. 순수 함수(테스트 가능), Qt 의존 없음.
 
-sam-extra(forge_sam3_extension v0.20.0)의 세 스크립트는 `process_before_every_sampling`에서
+sam-extra(forge_sam3_extension v0.21.2+)의 세 스크립트는 `process_before_every_sampling`에서
 `args[i]`를 **위치(index)로만** 읽는다(`_arg(i, default)`). 따라서 순서가 곧 계약이고,
 한 칸만 밀려도 조용히 엉뚱한 값이 들어간다. SAM3 Mask처럼 dict를 받아주지 않는다.
 
@@ -73,7 +73,7 @@ def _as_text(value, default: str) -> str:
 # (key, kind, default, extra) — extra: 숫자는 (lo, hi), choice는 선택지 튜플
 _B, _F, _I, _C, _T = 'bool', 'float', 'int', 'choice', 'text'
 
-# scripts/anima_safe_pag.py — ui() return 순서 (v0.20.0 기준 56개)
+# scripts/anima_safe_pag.py — ui() return 순서 (v0.21.2+ 기준 62개)
 PERTURBATION_SPEC = (
     # 0-4 : PAG/SEG 본체
     ('guid_enabled',            _B, False,  None),
@@ -110,8 +110,8 @@ PERTURBATION_SPEC = (
     # 24-27 : CWM / SMC 파라미터
     ('guid_cwm_alpha_low',      _F, 0.30,   (-1.0, 1.0)),
     ('guid_cwm_alpha_high',     _F, 0.15,   (-1.0, 1.0)),
-    ('guid_smc_lambda',         _F, 6.0,    (0.0, 10.0)),
-    ('guid_smc_k',              _F, 0.20,   (0.0, 1.0)),
+    ('guid_smc_lambda',         _F, 6.0,    (0.5, 30.0)),
+    ('guid_smc_k',              _F, 0.10,   (0.0, 5.0)),
     # 28-30 : DCW
     ('guid_dcw_enabled',        _B, False,  None),
     ('guid_dcw_lambda_low',     _F, 0.10,   (-0.5, 0.5)),
@@ -147,6 +147,16 @@ PERTURBATION_SPEC = (
     ('guid_mod_adapter_mode',   _C, 'Auto-download official',
      ('Auto-download official', 'Local file')),
     ('guid_mod_adapter_path',   _T, '',     None),
+    # 56 : v0.21.2 이후 SMC preset append
+    ('guid_smc_preset',         _C, 'Auto',
+     ('Auto', 'SD1.5 / SD2', 'SDXL', 'SD3 / SD3.5', 'Flux',
+      'Qwen-Image', 'Cosmos / Wan', 'Custom')),
+    # 57-61 : explicit SMC master + RDC append. 이전 56개 인덱스는 그대로 유지한다.
+    ('guid_smc_master_enabled', _B, False,  None),
+    ('guid_rdc_enabled',        _B, False,  None),
+    ('guid_rdc_tau',            _F, 0.15,   (0.0, 0.5)),
+    ('guid_rdc_alpha_ll',       _F, 0.03,   (0.0, 0.3)),
+    ('guid_rdc_alpha_hh',       _F, 0.0,    (0.0, 0.1)),
 )
 
 # scripts/anima_skimmed_cfg.py — ui() return 순서 (7개)
@@ -189,7 +199,8 @@ SPECS = {
 _ACTIVATION_KEYS = {
     SCRIPT_PERTURBATION: (
         'guid_enabled', 'guid_slg_on', 'guid_apg_enabled', 'guid_adg_enabled',
-        'guid_smc_enabled', 'guid_cwm_enabled', 'guid_dcw_enabled',
+        'guid_smc_enabled', 'guid_smc_master_enabled', 'guid_cwm_enabled',
+        'guid_dcw_enabled', 'guid_rdc_enabled',
         'guid_dave_enabled', 'guid_cns_enabled', 'guid_mod_enabled',
         'guid_experimental_stack',
     ),
@@ -217,6 +228,65 @@ def default_settings() -> dict:
         for key, kind, default, _extra in spec:
             out[key] = default
     return out
+
+
+def parse_forge_script_info(payload) -> tuple[dict, dict]:
+    """Forge ``/sdapi/v1/script-info`` 응답에서 지원하는 Anima 값을 가져온다.
+
+    Forge는 txt2img/img2img 항목을 각각 반환할 수 있으므로 txt2img를 우선한다.
+    확장의 인자는 위치 계약이므로 앱 스펙보다 짧은 배열은 잘못 매핑하지 않고
+    즉시 거부한다. 반대로 새 Forge 버전이 뒤에 append한 인자는 기존 인덱스를
+    보존하므로 무시하되 개수를 메타데이터로 알린다.
+    """
+    if not isinstance(payload, list):
+        raise ValueError('Forge script-info 응답이 배열이 아닙니다.')
+
+    by_name = {}
+    for entry in payload:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get('name') or '').strip().casefold()
+        if name:
+            by_name.setdefault(name, []).append(entry)
+
+    settings = {}
+    imported_scripts = []
+    missing_scripts = []
+    ignored_trailing_args = 0
+
+    for title, spec in SPECS.items():
+        candidates = by_name.get(title.casefold(), [])
+        if not candidates:
+            missing_scripts.append(title)
+            continue
+
+        # Forge 응답은 보통 txt2img(false), img2img(true) 순이지만 순서에
+        # 의존하지 않는다. 문자열 boolean도 기존 coercion 규칙으로 처리한다.
+        entry = min(candidates, key=lambda item: _as_bool(item.get('is_img2img'), False))
+        args = entry.get('args')
+        if not isinstance(args, list):
+            raise ValueError(f'{title}: args가 배열이 아닙니다.')
+        if len(args) < len(spec):
+            raise ValueError(
+                f'{title}: Forge 인자 수 {len(args)}개가 앱 계약 {len(spec)}개보다 짧습니다.'
+            )
+
+        for index, (key, kind, default, extra) in enumerate(spec):
+            item = args[index]
+            raw = item.get('value', default) if isinstance(item, dict) else item
+            settings[key] = _coerce(kind, raw, default, extra)
+
+        imported_scripts.append(title)
+        ignored_trailing_args += len(args) - len(spec)
+
+    if not imported_scripts:
+        raise ValueError('Forge에서 지원되는 Anima 스크립트를 찾지 못했습니다.')
+
+    return settings, {
+        'imported_scripts': imported_scripts,
+        'missing_scripts': missing_scripts,
+        'ignored_trailing_args': ignored_trailing_args,
+    }
 
 
 def build_args(script_title: str, settings=None) -> list:
@@ -278,8 +348,17 @@ def describe_active(settings=None) -> str:
             parts.append(f"{method}({_as_float(settings.get('guid_scale'), 4.0, 0.0, 15.0):g})")
     for key, label in (
         ('guid_slg_on', 'SLG'), ('guid_apg_enabled', 'APG'),
-        ('guid_adg_enabled', 'Adaptive'), ('guid_smc_enabled', 'SMC'),
+        ('guid_adg_enabled', 'Adaptive'),
+    ):
+        if _as_bool(settings.get(key), False):
+            parts.append(label)
+    if any(_as_bool(settings.get(key), False) for key in (
+        'guid_smc_master_enabled', 'guid_smc_enabled',
+    )):
+        parts.append('SMC')
+    for key, label in (
         ('guid_cwm_enabled', 'CWM'), ('guid_dcw_enabled', 'DCW'),
+        ('guid_rdc_enabled', 'RDC'),
         ('guid_dave_enabled', 'DAVE'), ('guid_cns_enabled', 'CNS'),
         ('guid_mod_enabled', 'Modulation'), ('skim_enabled', 'Skimmed CFG'),
     ):

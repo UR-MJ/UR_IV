@@ -742,7 +742,7 @@ class GenerationMixin:
                 _logger.info("SAM3 alwayson_scripts 적용됨 (Forge Neo 방식)")
 
         # Anima Guidance Suite: PAG/SEG/SLG · APG/CWM/SMC · Skimmed CFG ·
-        # DCW/DAVE/CNS · Modulation · Detail Daemon.
+        # DCW/RDC/DAVE/CNS · Modulation · Detail Daemon.
         # 전부 꺼져 있으면 아무것도 넣지 않는다 (확장을 건드리지 않아야 결과가 동일).
         try:
             from core import anima_guidance

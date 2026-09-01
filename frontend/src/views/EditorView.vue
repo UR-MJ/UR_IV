@@ -36,11 +36,12 @@
           <div class="tab-buttons">
             <button v-for="(tab, i) in tabs" :key="i"
               class="tab-btn" :class="{ active: activeTab === i }"
-              @click="activeTab = i"
+              @click="switchTab(i)"
             >{{ tab.icon }} {{ tab.label }}</button>
           </div>
           <div class="tab-content">
             <MosaicPanel v-show="activeTab === 0"
+              :img-width="imgWidth" :img-height="imgHeight" :crop-pending="cropPending"
               :model-label="modelLabel"
               :detect-status="detectStatus"
               :perspective-active="perspectiveActive"
@@ -51,7 +52,7 @@
               @auto-censor="runAutoCensor"
               @auto-detect="runAutoDetect"
               @cancel-selection="canvasRef?.clearSelection()"
-              @crop="doCrop"
+              @crop="doCrop" @crop-confirm="confirmCrop" @crop-cancel="cancelCrop"
               @resize="doResize"
               @perspective-start="onStartPerspective"
               @perspective-confirm="onConfirmPerspective"
@@ -67,6 +68,7 @@
             <ColorPanel v-show="activeTab === 1"
               @adjustment-changed="previewAdj" @apply="applyAdj"
               @reset="resetAdj" @filter-apply="applyFilter"
+              @filter-preview="previewFilter" @filter-cancel="clearPreview"
               @auto-correct="doOp('auto_correct')"
             />
             <AdvancedColorPanel v-show="activeTab === 2"
@@ -75,13 +77,26 @@
             <WatermarkPanel v-show="activeTab === 3"
               @apply-text="applyTextWm" @apply-image="applyImageWm"
               @load-watermark-image="loadWatermarkImage"
+              :text-color="wmTextColor"
+              @preview="previewWatermark" @preview-clear="clearPreview"
+              @pick-text-color="() => pickColor('wmText')"
+              @clamp-changed="v => wmClamp = v"
             />
             <DrawPanel v-show="activeTab === 4" ref="drawPanelRef"
-              @tool-changed="currentTool = $event"
+              :gradient-end-color="drawGradientEnd"
+              @tool-changed="onDrawToolChanged"
+              @params-changed="onDrawToolChanged"
+              @color-changed="p => drawParams.color = p.color"
+              @pick-custom-color="() => pickColor('draw')"
+              @pick-gradient-end-color="() => pickColor('gradient')"
+              @layer-opacity-changed="v => drawLayerOpacity = v"
+              @heal-apply="applyHeal"
               @flatten-layer="applyFlatten"
             />
             <MovePanel v-show="activeTab === 5" ref="movePanelRef"
               :status-text="moveStatusText"
+              :can-inpaint="canInpaint"
+              @send-inpaint="onSendInpaint"
               :can-undo="undoStack.length > 1"
               @start-move="onStartMove"
               @confirm-move="onConfirmMove"
@@ -95,7 +110,7 @@
 
         <!-- 중앙: 캔버스 -->
         <EditorCanvas ref="canvasRef"
-          :image-src="imageDisplay"
+          :image-src="canvasSrc"
           :tool="currentTool"
           :brush-size="brushSize"
           :eraser-mode="eraserMode"
@@ -160,6 +175,12 @@ import MovePanel from '../components/editor/MovePanel.vue'
 const isDragging = ref(false)
 const imagePath = ref('')
 const imageDisplay = ref('')
+// 프리뷰가 살아있는 동안 캔버스는 이 base64 를 보여준다. 파일도 undo 도 건드리지 않는다.
+const previewSrc = ref('')
+const canvasSrc = computed(() => previewSrc.value || imageDisplay.value)
+// 확정 이미지가 바뀌면 프리뷰는 무조건 무효다. 결과 핸들러 안에서 인라인으로
+// 지우면 도착 순서(늦게 온 프리뷰, keep-alive 로 살아있는 옛 리스너)에 흔들린다.
+watch(imageDisplay, () => { previewSrc.value = '' })
 const imgWidth = ref(0)
 const imgHeight = ref(0)
 // 마지막 사용 탭 영속화 (localStorage)
@@ -204,6 +225,14 @@ const moveScale = ref(100)
 const moveFillColor = ref('black')
 // 드로잉 레이어 불투명도 (병합 시 사용)
 const drawLayerOpacity = ref(100)
+// DrawPanel이 보내는 도구 파라미터. currentTool 에는 문자열만 넣는다(캔버스가 문자열 비교).
+const drawParams = ref<{ tool: string; color: string; size: number; opacity: number; filled: boolean }>({
+  tool: 'pen', color: '#ffffff', size: 10, opacity: 1, filled: false,
+})
+const wmClamp = ref(true)          // 워터마크 '이미지 영역 내 제한'
+const wmImagePath = ref('')        // 이미지 워터마크로 고른 파일 경로
+const wmTextColor = ref('#FFFFFF') // 텍스트 워터마크 색 (WatermarkPanel의 textColor prop)
+const drawGradientEnd = ref('#000000')  // 그라디언트 끝 색 (DrawPanel의 gradientEndColor prop)
 
 const undoStack = ref<string[]>([])
 const redoStack = ref<string[]>([])
@@ -342,6 +371,8 @@ function _captureJob(result: any) {
 
 async function doOp(operation: string, params: any = {}) {
   if (!imagePath.value) return
+  // 확정 작업이면 예약된 프리뷰를 먼저 취소한다(결과 역전 방지).
+  if (!params.preview) cancelPendingPreview()
   const backend: any = await getBackend()
   const cleanPath = imagePath.value.replace('file:///', '')
   // 처리는 비동기 — 결과는 editorResult 이벤트로 도착. 콜백은 즉시 거절(경로/파라미터 오류)만 + job_id 캡처.
@@ -383,7 +414,15 @@ function onEditorResult(json: string) {
     if (typeof result.job_id === 'number' && result.job_id < _latestEditorJob) {
       return
     }
+    if (result.preview) {
+      // 원본이 그새 교체됐으면(적용/회전 등) 이 프리뷰는 이미 낡았다 — 버린다.
+      if (_previewForPath && _previewForPath !== imagePath.value) return
+      // 프리뷰는 화면에만 반영한다 — 파일 교체도 undo 푸시도 하지 않는다.
+      previewSrc.value = result.image_base64 || ''
+      return
+    }
     if (result.path) {
+      previewSrc.value = ''   // 확정 결과가 왔으니 프리뷰는 걷는다
       pushState(result.path)
       if (result.operation === 'auto_censor') detectStatus.value = '완료'
     } else if (result.mask_base64) {
@@ -550,10 +589,28 @@ async function runAutoDetect(params: any) {
   })
 }
 
+// 예전에는 마스크 bbox 로 확인 없이 즉시 잘랐고, 선택이 없으면 아무 말 없이 무시했다.
+const cropSel = ref<any>(null)
+const cropPending = computed(() => {
+  const s = cropSel.value
+  if (!s) return ''
+  // EditorCanvas.getSelection() 은 {x, y, w, h} 를 준다
+  return `${Math.max(0, Math.round(s.w))} × ${Math.max(0, Math.round(s.h))}`
+})
 function doCrop() {
   const sel = canvasRef.value?.getSelection()
-  if (sel) doOp('crop', { selection: sel })
+  if (!sel) {
+    requestAction('show_toast', { type: 'warning', msg: '먼저 자를 영역을 선택하세요' })
+    return
+  }
+  cropSel.value = sel
 }
+function confirmCrop() {
+  if (!cropSel.value) return
+  doOp('crop', { selection: cropSel.value })
+  cropSel.value = null
+}
+function cancelCrop() { cropSel.value = null }
 
 // ── 원근 보정 ──
 // 꼭짓점 4개를 드래그해 '원본에서 직사각형이어야 할 영역'을 지정하면
@@ -586,11 +643,64 @@ function onCancelPerspective() {
 }
 function doResize(params?: any) { doOp('resize', params) }
 function applyAdj(adj: any) { doOp('color_adjust', adj) }
-// previewAdj / previewAdvAdj — 미구현 빈 함수였음. 실시간 프리뷰는 향후 구현 예정 (TODO).
-// resetAdj — ColorPanel 내부에서 자체 reset만 수행하면 됨 (백엔드 호출 불필요).
-function previewAdj(_adj: any) { /* TODO: 실시간 색감 프리뷰 (마스크 영역만 임시 렌더) */ }
-function resetAdj() { /* ColorPanel이 자체적으로 처리 — 백엔드 액션 없음 */ }
-function previewAdvAdj(_adj: any) { /* TODO: Advanced 색감 실시간 프리뷰 */ }
+// ── 실시간 프리뷰 ────────────────────────────────────────────────────────
+// 예전에는 이 두 함수가 빈 TODO 였다. 패널은 열심히 emit 하는데 받는 쪽이
+// 아무것도 안 해서, 슬라이더를 움직여도 화면이 그대로였다(= '적용해야 결과를 앎').
+// 백엔드가 축소본으로 같은 연산을 돌려 base64 로 돌려준다 — CSS 필터 근사와 달리
+// 12종 필터·HSV 채도·레벨까지 실제 결과와 일치한다.
+let _previewTimer: ReturnType<typeof setTimeout> | null = null
+// 프리뷰를 쏠 때의 원본 경로. 확정 작업이 끼어들어 이미지가 교체되면, 뒤늦게
+// 도착하는 프리뷰는 '옛 이미지 기준' 결과라 화면에 올리면 안 된다.
+// (job_id 가드는 이걸 못 잡는다 — 늦게 쏜 프리뷰가 job_id 는 더 크기 때문)
+let _previewForPath = ''
+function schedulePreview(operation: string, params: any) {
+  if (!imagePath.value) return
+  if (_previewTimer) clearTimeout(_previewTimer)
+  _previewTimer = setTimeout(() => {
+    _previewForPath = imagePath.value
+    doOp(operation, { ...params, preview: true })
+  }, 120)
+}
+// 대기 중인 프리뷰만 취소한다(화면은 그대로) — 확정 작업을 보낼 때 쓴다.
+// 이걸 안 하면: 적용 클릭 → 패널이 adjustment-changed 도 함께 emit → 120ms 뒤
+// 프리뷰가 한 번 더 나가고, 그게 적용보다 늦게 도착해 job_id 가 더 커서 가드도
+// 통과하며 화면을 축소본으로 되돌린다(실제로 있었던 증상).
+function cancelPendingPreview() {
+  if (_previewTimer) { clearTimeout(_previewTimer); _previewTimer = null }
+}
+function clearPreview() {
+  cancelPendingPreview()
+  previewSrc.value = ''
+}
+// 조정값이 전부 중립이면 보여줄 게 없다 — 프리뷰를 요청하지 말고 걷는다.
+// (ColorPanel.onApply 는 적용 후 resetSliders() 를 부르고, 그 watch 가
+//  adjustment-changed {0,0,0} 을 다시 쏜다. 그걸 그대로 프리뷰로 만들면
+//  방금 확정한 전체 해상도 결과를 축소본이 덮어쓴다.)
+function previewAdj(adj: any) {
+  if (!adj || (!adj.brightness && !adj.contrast && !adj.saturation)) { clearPreview(); return }
+  schedulePreview('color_adjust', adj)
+}
+function previewAdvAdj(adj: any) {
+  const neutral = !adj || (!adj.blackPoint && (adj.whitePoint ?? 255) === 255
+    && Math.abs((adj.gamma ?? 1) - 1) < 1e-6 && !adj.temperature && !adj.tint)
+  if (neutral) { clearPreview(); return }
+  schedulePreview('adv_color', adj)
+}
+function previewFilter(payload: any) {
+  if (!payload || !payload.filter || !payload.strength) { clearPreview(); return }
+  schedulePreview('filter', payload)
+}
+// WatermarkPanel 은 텍스트/이미지 두 설정을 같은 'preview' 로 보낸다 — text 유무로 가른다.
+function previewWatermark(cfg: any) {
+  if (!cfg) return
+  if (typeof cfg.text === 'string') {
+    schedulePreview('text_watermark', { ...cfg, clamp: wmClamp.value, color: wmTextColor.value })
+  } else if (wmImagePath.value) {
+    schedulePreview('image_watermark', { ...cfg, clamp: wmClamp.value, watermark_path: wmImagePath.value })
+  }
+}
+function switchTab(i: number) { clearPreview(); activeTab.value = i }
+function resetAdj() { clearPreview() }
 // ColorPanel은 { filter, strength }를 보낸다. 예전 `filter.name || filter.type`은
 // 둘 다 없어서 operation이 undefined로 나갔고, 백엔드는 모든 분기를 통과해
 // 원본을 그대로 재저장했다 (= 필터 프리셋 전부 무반응).
@@ -648,10 +758,60 @@ function onCancelMove() {
   currentTool.value = 'box'
   moveStatusText.value = '마스킹을 먼저 해주세요'
 }
-function applyTextWm(params: any) { doOp('text_watermark', params) }
-function applyImageWm(params: any) { doOp('image_watermark', params) }
+function applyTextWm(params: any) { doOp('text_watermark', { ...params, clamp: wmClamp.value, color: wmTextColor.value }) }
+function applyImageWm(params: any) {
+  if (!wmImagePath.value) { requestAction('show_toast', { type: 'warning', msg: '먼저 워터마크 이미지를 불러오세요' }); return }
+  doOp('image_watermark', { ...params, clamp: wmClamp.value, watermark_path: wmImagePath.value })
+}
 function loadWatermarkImage() { requestAction('editor_load_watermark_image') }
+
+// DrawPanel은 {tool,color,size,opacity,filled} 객체를 보낸다. 예전에는 이 객체를
+// currentTool 에 그대로 넣어서, EditorCanvas 의 문자열 비교(props.tool === 'box' 등)가
+// 전부 어긋났다 — 그리기 탭이 죽는 것에 더해 선택 도구까지 함께 죽었다.
+function onDrawToolChanged(p: any) {
+  if (!p) return
+  if (typeof p === 'string') { currentTool.value = p; return }
+  drawParams.value = { ...drawParams.value, ...p }
+  if (typeof p.tool === 'string') currentTool.value = p.tool
+}
+
+// 앱에 색상 선택 다이얼로그가 없다(QColorDialog 미사용). 브리지 왕복 없이
+// 네이티브 컬러 입력을 띄운다. 실패하면 패널의 12색 팔레트가 그대로 대안이다.
+function pickColor(target: 'draw' | 'gradient' | 'wmText') {
+  const el = document.createElement('input')
+  el.type = 'color'
+  el.value = target === 'draw' ? drawParams.value.color : '#ffffff'
+  el.style.position = 'fixed'; el.style.left = '-9999px'
+  document.body.appendChild(el)
+  el.addEventListener('change', () => {
+    const v = el.value
+    if (target === 'draw') { drawParams.value.color = v; drawPanelRef.value?.setColor?.(v) }
+    else if (target === 'gradient') { drawGradientEnd.value = v }
+    else { wmTextColor.value = v }
+    el.remove()
+  })
+  el.addEventListener('cancel', () => el.remove())
+  el.click()
+}
+
+// 마스크 영역을 인페인트로 넘긴다. 백엔드에 이미 send_to_inpaint 액션이 있다
+// (generator_main.py: tabChanged → inpaintImageLoaded).
+function onSendInpaint(_payload: any) {
+  if (!imagePath.value) return
+  requestAction('send_to_inpaint', { path: imagePath.value })
+}
+
+// 복원 브러시(heal)는 드로잉 레이어가 있어야 성립한다 — 레이어 구현 전까지는
+// 사용자에게 조용히 실패하지 않고 이유를 알린다.
+function applyHeal() {
+  requestAction('show_toast', { type: 'info', msg: '복원 브러시는 드로잉 레이어 구현 후 활성화됩니다' })
+}
 function onSelectionChanged(sel: any) { selection.value = sel }
+
+// MovePanel 인페인트 버튼 활성 조건. canInpaint prop 자체가 전달되지 않아
+// 기본값 false 로 영구 비활성이었다. 이 버튼은 이미지를 Inpaint 탭으로 넘기는
+// 동작이므로(마스킹은 그 탭에서 한다) 이미지가 열려 있으면 충분하다.
+const canInpaint = computed(() => !!imagePath.value)
 
 function onDrop(e: DragEvent) {
   isDragging.value = false
@@ -872,6 +1032,7 @@ async function _checkAutoSaveRecovery() {
 
 onMounted(() => {
   onBackendEvent('editorImageLoaded', (path: string) => loadImage(path))
+  onBackendEvent('editorWatermarkImageLoaded', (path: string) => { wmImagePath.value = path })
   onBackendEvent('yoloModelUpdated', (label: string) => { modelLabel.value = label })
   onBackendEvent('editorResult', onEditorResult)
   // 앱 시작 시 YOLO 모델 자동 감지 + 최근 파일 로드 + 크래시 복구 확인
