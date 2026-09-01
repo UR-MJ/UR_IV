@@ -68,11 +68,11 @@ function endDrag() { dragging.value = false }
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: 36px; height: 36px; background: var(--accent); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: #000; font-size: 10px; font-weight: 900;
+  color: #000; font-size: var(--fs-label); font-weight: 900;
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
 .compare-label {
-  position: absolute; top: 12px; font-size: 10px; font-weight: 800;
+  position: absolute; top: 12px; font-size: var(--fs-label); font-weight: 800;
   color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.5);
   padding: 3px 10px; border-radius: 4px; letter-spacing: 1px;
 }
@@ -80,7 +80,7 @@ function endDrag() { dragging.value = false }
 .after-label { right: 12px; }
 .compare-info {
   position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
-  font-size: 10px; color: var(--text-muted); background: rgba(0,0,0,0.6);
+  font-size: var(--fs-label); color: var(--text-muted); background: rgba(0,0,0,0.6);
   padding: 2px 10px; border-radius: 4px;
 }
 </style>

@@ -242,5 +242,5 @@ function exportCSV() {
 }
 .result-item { border-radius: 4px; overflow: hidden; border: 1px solid #1A1A1A; }
 .result-item img { width: 100%; aspect-ratio: 1; object-fit: cover; }
-.result-label { font-size: 10px; color: #585858; padding: 4px 6px; text-align: center; }
+.result-label { font-size: var(--fs-label); color: #585858; padding: 4px 6px; text-align: center; }
 </style>

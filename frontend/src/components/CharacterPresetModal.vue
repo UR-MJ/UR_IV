@@ -616,7 +616,7 @@ onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKe
 .cpm-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 9px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text-primary); }
 .cpm-item:hover { background: var(--bg-button); }
 .cpm-item.active { background: var(--accent); color: #000; font-weight: 700; }
-.cpm-item-count { font-size: 10px; color: var(--text-muted); }
+.cpm-item-count { font-size: var(--fs-label); color: var(--text-muted); }
 .cpm-item.active .cpm-item-count { color: rgba(0,0,0,0.6); }
 .cpm-empty { padding: 16px; text-align: center; color: var(--text-muted); font-size: 12px; }
 
@@ -631,7 +631,7 @@ onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKe
 .cpm-copychip { background: rgba(139,92,246,0.16); border: 1px solid #8b5cf6; border-radius: 12px; color: #a78bfa; font-size: 11px; font-weight: 700; padding: 4px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .cpm-copychip:hover { background: rgba(139,92,246,0.28); }
 .cpm-copychip.off { background: var(--bg-button); border-color: var(--border); color: var(--text-muted); text-decoration: line-through; }
-.cpm-copytag { font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 8px; background: rgba(0,0,0,0.25); text-decoration: none; }
+.cpm-copytag { font-size: var(--fs-label); font-weight: 600; padding: 1px 6px; border-radius: 8px; background: rgba(0,0,0,0.25); text-decoration: none; }
 
 .cpm-selrow { display: flex; gap: 6px; padding-bottom: 8px; flex-wrap: wrap; }
 .cpm-sel.db { color: #60a5fa; border-color: #60a5fa; }
@@ -647,12 +647,12 @@ onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKe
 .cpm-section-label.costume { color: #fb923c; }
 .cpm-section-label.etc { color: #94a3b8; }
 .cpm-section-label.aux { color: #38bdf8; }
-.cpm-etc-hint { font-size: 9px; font-weight: 400; color: var(--text-muted); margin-left: 4px; }
+.cpm-etc-hint { font-size: var(--fs-label); font-weight: 400; color: var(--text-muted); margin-left: 4px; }
 .cpm-section-label.custom { color: #f59e0b; }
-.cpm-regiontoggle { float: right; background: var(--bg-button); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: 9px; font-weight: 700; padding: 2px 8px; cursor: pointer; }
+.cpm-regiontoggle { float: right; background: var(--bg-button); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; padding: 2px 8px; cursor: pointer; }
 .cpm-regiontoggle:hover { color: #fb923c; border-color: #fb923c; }
 .cpm-region-grp { margin: 2px 0 6px; }
-.cpm-region-label { font-size: 10px; font-weight: 700; color: #fb923c; opacity: 0.85; padding: 4px 0 3px; border-top: 1px dashed rgba(251,146,60,0.25); }
+.cpm-region-label { font-size: var(--fs-label); font-weight: 700; color: #fb923c; opacity: 0.85; padding: 4px 0 3px; border-top: 1px dashed rgba(251,146,60,0.25); }
 .cpm-region-n { color: var(--text-muted); font-weight: 600; }
 .cpm-chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .cpm-none { font-size: 11px; color: var(--text-muted); }
@@ -664,15 +664,15 @@ onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKe
 
 /* 전역(모든 캐릭터) 설정 바 */
 .cpm-global { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
-.cpm-global-head { font-size: 10px; font-weight: 800; color: var(--accent); letter-spacing: 0.5px; margin-bottom: 7px; }
+.cpm-global-head { font-size: var(--fs-label); font-weight: 800; color: var(--accent); letter-spacing: 0.5px; margin-bottom: 7px; }
 .cpm-global-cats { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 7px; }
 .cpm-global-words { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
-.cpm-global-sub { font-size: 9px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.5px; margin-right: 2px; }
-.cpm-gcat { padding: 4px 10px; border-radius: 12px; border: 1px solid #4ade80; background: rgba(74,222,128,0.18); color: #4ade80; font-size: 10px; font-weight: 800; cursor: pointer; }
+.cpm-global-sub { font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); letter-spacing: 0.5px; margin-right: 2px; }
+.cpm-gcat { padding: 4px 10px; border-radius: 12px; border: 1px solid #4ade80; background: rgba(74,222,128,0.18); color: #4ade80; font-size: var(--fs-label); font-weight: 800; cursor: pointer; }
 .cpm-gcat.off { border-color: var(--border); background: var(--bg-button); color: var(--text-muted); }
 .cpm-gword-in { flex: 0 1 170px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; color: var(--text-primary); font-size: 11px; }
 .cpm-gword-add { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg-button); color: var(--accent); font-weight: 900; cursor: pointer; flex-shrink: 0; }
-.cpm-gword-chip { padding: 4px 8px; border-radius: 12px; border: 1px solid #f87171; background: rgba(248,113,113,0.15); color: #fca5a5; font-size: 10px; font-weight: 700; cursor: pointer; }
+.cpm-gword-chip { padding: 4px 8px; border-radius: 12px; border: 1px solid #f87171; background: rgba(248,113,113,0.15); color: #fca5a5; font-size: var(--fs-label); font-weight: 700; cursor: pointer; }
 .cpm-gword-chip:hover { background: rgba(248,113,113,0.3); }
 .cpm-chip.cust:not(.off) { background: #f59e0b; color: #000; }
 .cpm-chip.existing { background: var(--bg-button); color: var(--text-muted); border: 1px dashed var(--border); cursor: default; text-decoration: none; }

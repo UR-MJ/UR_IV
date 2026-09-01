@@ -132,7 +132,7 @@ const progressPct = computed(() => {
 .info-item { font-size: 12px; color: #787878; }
 .explore-btn {
   padding: 3px 12px; background: var(--bg-button); border: 1px solid var(--border);
-  border-radius: 4px; color: var(--accent); font-size: 10px; font-weight: 700; cursor: pointer;
+  border-radius: 4px; color: var(--accent); font-size: var(--fs-label); font-weight: 700; cursor: pointer;
 }
 .explore-btn:hover { background: var(--accent-dim); border-color: var(--accent); }
 .generating { text-align: center; }

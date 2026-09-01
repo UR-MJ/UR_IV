@@ -903,7 +903,7 @@ onMounted(async () => {
 .cap-thumb { width: 110px; height: 110px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: var(--bg-input); }
 .cap-body { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .cap-name { font-size: 11px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cap-status { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 7px; flex-shrink: 0; }
+.cap-status { font-size: var(--fs-label); font-weight: 700; padding: 1px 6px; border-radius: 7px; flex-shrink: 0; }
 .cap-status.pending { background: rgba(251,191,36,0.18); color: #fbbf24; }
 .cap-status.done { background: rgba(74,222,128,0.18); color: #4ade80; }
 .cap-status.error { background: rgba(248,113,113,0.18); color: #f87171; }
@@ -911,7 +911,7 @@ onMounted(async () => {
 .cap-text { flex: 1; min-height: 56px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.45; }
 .cap-text:focus { outline: none; border-color: var(--accent); }
 .cap-actions { display: flex; gap: 6px; }
-.cap-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: 10px; font-weight: 700; padding: 4px 10px; cursor: pointer; }
+.cap-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: 700; padding: 4px 10px; cursor: pointer; }
 .cap-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .cap-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .cap-btn.t2i { color: var(--accent); border-color: rgba(226,179,64,0.4); }
@@ -926,7 +926,7 @@ onMounted(async () => {
   display: flex; align-items: center; justify-content: center; padding: 12px;
 }
 .drop-hint { color: var(--text-muted); font-size: 12px; text-align: center; }
-.link-btn { background: none; border: none; color: var(--accent); cursor: pointer; text-decoration: underline; font-size: 12px; }
+.link-btn { min-height: 28px; padding: 0 4px; background: none; border: none; color: var(--accent); cursor: pointer; text-decoration: underline; font-size: var(--fs-meta); }
 .file-list { width: 100%; max-height: 200px; overflow-y: auto; }
 .file-item {
   display: flex; align-items: center; gap: 6px;
@@ -938,9 +938,9 @@ onMounted(async () => {
 .file-item.done { opacity: 0.6; }
 .done-badge { color: #4ade80; font-weight: 900; flex: 0 !important; }
 .rm-btn { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; flex-shrink: 0; }
-.file-count { font-size: 10px; color: var(--text-muted); }
+.file-count { font-size: var(--fs-label); color: var(--text-muted); }
 
-.s-label { color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+.s-label { color: var(--text-muted); font-size: var(--fs-label); font-weight: 700; letter-spacing: 1px; }
 .s-select, .s-input {
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
   padding: 8px 10px; color: var(--text-primary); font-size: 12px; outline: none;
@@ -966,17 +966,17 @@ onMounted(async () => {
 .ad-settings h3 { color: var(--text-primary); font-size: 13px; font-weight: 900; letter-spacing: 2px; margin: 0; }
 .ad-params { display: flex; flex-direction: column; gap: 8px; }
 .ad-param { display: flex; flex-direction: column; gap: 2px; }
-.ad-param label { font-size: 10px; color: var(--text-muted); font-weight: 700; }
+.ad-param label { font-size: var(--fs-label); color: var(--text-muted); font-weight: 700; }
 .ad-param input { padding: 6px 8px; font-size: 12px; }
-.ad-toggle { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted); cursor: pointer; margin-bottom: 4px; }
+.ad-toggle { display: flex; align-items: center; gap: 4px; font-size: var(--fs-label); color: var(--text-muted); cursor: pointer; margin-bottom: 4px; }
 .ad-toggle input { width: 14px; height: 14px; accent-color: var(--accent); }
-.exif-prompt-hint { font-size: 10px; color: var(--accent); background: var(--accent-dim); padding: 6px 8px; border-radius: 4px; }
+.exif-prompt-hint { font-size: var(--fs-label); color: var(--accent); background: var(--accent-dim); padding: 6px 8px; border-radius: 4px; }
 .ad-actions { display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
 
 .ad-progress { display: flex; align-items: center; gap: 8px; }
 .progress-bar { flex: 1; height: 6px; background: var(--bg-button); border-radius: 3px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
-.ad-progress span { font-size: 10px; color: var(--text-muted); font-family: monospace; }
+.ad-progress span { font-size: var(--fs-label); color: var(--text-muted); font-family: monospace; }
 
 /* Compare */
 .ad-compare { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; overflow: hidden; }
@@ -984,7 +984,7 @@ onMounted(async () => {
 .ad-compare:has(.thumb-grid) { align-items: stretch; justify-content: stretch; }
 .compare-split { display: flex; gap: 12px; width: 100%; height: 100%; }
 .compare-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-.compare-label { font-size: 10px; font-weight: 900; color: var(--text-muted); letter-spacing: 2px; }
+.compare-label { font-size: var(--fs-label); font-weight: 900; color: var(--text-muted); letter-spacing: 2px; }
 .compare-col img { max-width: 100%; max-height: calc(100% - 24px); object-fit: contain; border-radius: 6px; }
 .preview-single { display: flex; align-items: center; justify-content: center; }
 .preview-single img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
@@ -1021,7 +1021,7 @@ onMounted(async () => {
   background: #000;
 }
 .thumb-name {
-  font-size: 10px; color: var(--text-secondary);
+  font-size: var(--fs-label); color: var(--text-secondary);
   padding: 5px 8px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background: var(--bg-card);

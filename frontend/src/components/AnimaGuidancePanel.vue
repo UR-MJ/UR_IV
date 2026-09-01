@@ -439,12 +439,12 @@ const activeSummary = computed(() => {
 
 <style scoped>
 .ag-note {
-  font-size: 10px; line-height: 1.5; color: var(--text-muted);
+  font-size: var(--fs-label); line-height: 1.5; color: var(--text-muted);
   margin: 6px 0 10px; padding: 6px 8px;
   background: rgba(255, 255, 255, 0.03); border-radius: 6px;
 }
 .ag-badge {
-  margin-left: 8px; font-size: 9px; font-weight: 700;
+  margin-left: 8px; font-size: var(--fs-label); font-weight: 700;
   color: var(--accent); opacity: 0.9;
   max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   display: inline-block; vertical-align: bottom;
@@ -460,16 +460,16 @@ const activeSummary = computed(() => {
 .ag-group > summary:hover { color: var(--text-primary); }
 .ag-sub { margin: 6px 0 6px 4px; }
 .ag-sub > summary {
-  cursor: pointer; font-size: 10px; font-weight: 700;
+  cursor: pointer; font-size: var(--fs-label); font-weight: 700;
   color: var(--text-muted); padding: 3px 0;
 }
 .ext-note {
   margin: 3px 0 6px; color: var(--text-muted);
-  font-size: 10px; line-height: 1.45;
+  font-size: var(--fs-label); line-height: 1.45;
 }
 .ag-actions { display: flex; justify-content: space-between; gap: 6px; margin-top: 10px; }
 .ag-reset, .ag-import {
-  height: 26px; padding: 0 10px; font-size: 10px; font-weight: 700;
+  height: 26px; padding: 0 10px; font-size: var(--fs-label); font-weight: 700;
   border-radius: 5px; cursor: pointer;
 }
 .ag-reset { background: transparent; border: 1px dashed var(--border); color: var(--text-muted); }
@@ -486,5 +486,5 @@ const activeSummary = computed(() => {
   min-height: 32px; padding: 6px 8px; font-size: 11px;
 }
 :deep(.csel-option) { padding: 6px 8px; font-size: 11px; }
-:deep(.csel-arrow) { font-size: 10px; }
+:deep(.csel-arrow) { font-size: var(--fs-label); }
 </style>

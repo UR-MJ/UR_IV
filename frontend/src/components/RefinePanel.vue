@@ -371,7 +371,7 @@ defineExpose({ setImage })
   border-radius: var(--radius-card); padding: 14px;
 }
 .card-header { cursor: pointer; font-size: 11px; font-weight: 800; color: var(--text-secondary); }
-.glass-card label { display: block; font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 4px; }
+.glass-card label { display: block; font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); margin-bottom: 4px; }
 .glass-card label.accent { color: var(--accent); }
 .glass-card label.danger { color: #f87171; }
 .glass-card .sub { font-weight: 600; opacity: 0.7; }
@@ -384,17 +384,17 @@ defineExpose({ setImage })
 .glass-card input:focus, .glass-card textarea:focus { border-color: var(--accent); }
 .ext-check-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .ext-check-row span { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
-.hint { font-size: 10px; line-height: 1.5; color: var(--text-muted); }
+.hint { font-size: var(--fs-label); line-height: 1.5; color: var(--text-muted); }
 
 .source-thumb {
   width: 100%; aspect-ratio: 16/9; background: var(--bg-input); border-radius: var(--radius-base);
   margin-top: 8px; overflow: hidden; position: relative; cursor: pointer; border: 1px solid var(--border);
 }
 .source-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.upload-hint { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 10px; font-weight: 800; letter-spacing: 2px; }
+.upload-hint { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: var(--fs-label); font-weight: 800; letter-spacing: 2px; }
 .edit-overlay {
   position: absolute; inset: 0; background: rgba(0,0,0,0.6); color: var(--accent);
-  display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; font-size: var(--fs-label); font-weight: 800;
   opacity: 0; transition: var(--transition);
 }
 .source-thumb:hover .edit-overlay { opacity: 1; }
@@ -424,12 +424,12 @@ defineExpose({ setImage })
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 12px; gap: 8px; min-height: 0; position: relative;
 }
-.pane-title { font-size: 10px; font-weight: 900; letter-spacing: 2px; color: var(--text-muted); }
+.pane-title { font-size: var(--fs-label); font-weight: 900; letter-spacing: 2px; color: var(--text-muted); }
 .pane-title.accent { color: var(--accent); }
 .pane-img { max-width: 100%; max-height: calc(100% - 40px); object-fit: contain; border-radius: 8px; }
 .pane-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 12px; }
 .chain-btn {
-  padding: 6px 12px; font-size: 10px; font-weight: 800;
+  padding: 6px 12px; font-size: var(--fs-label); font-weight: 800;
   background: var(--bg-button); border: 1px solid var(--border);
   border-radius: 999px; color: var(--text-primary); cursor: pointer;
 }
@@ -441,7 +441,7 @@ defineExpose({ setImage })
   display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto;
 }
 .trace-row { display: flex; gap: 8px; }
-.trace-key { flex-shrink: 0; font-weight: 900; font-size: 9px; color: var(--accent); letter-spacing: 1px; padding-top: 1px; }
+.trace-key { flex-shrink: 0; font-weight: 900; font-size: var(--fs-label); color: var(--accent); letter-spacing: 1px; padding-top: 1px; }
 .trace-key.danger { color: #f87171; }
 .trace-val { color: var(--text-secondary); word-break: break-word; font-family: 'Consolas', monospace; }
 .refine-error {

@@ -209,7 +209,7 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
 .csel-group-header {
   position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px;
   padding: 7px 11px; background: #141414; color: var(--text-muted);
-  font-size: 9px; font-weight: 900; letter-spacing: .8px; cursor: default;
+  font-size: var(--fs-label); font-weight: 900; letter-spacing: .8px; cursor: default;
 }
 .csel-group-main, .csel-group-source {
   padding: 2px 5px; border: 1px solid rgba(96,165,250,.35); border-radius: 7px;

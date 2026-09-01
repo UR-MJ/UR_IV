@@ -279,7 +279,7 @@ onUnmounted(() => {
 .lm-close:hover { color: var(--text-primary); border-color: var(--accent); }
 .lm-head-actions { display: flex; align-items: center; gap: 6px; }
 .lm-modetab {
-  height: 30px; padding: 0 12px; font-size: 10px; font-weight: 800;
+  height: 30px; padding: 0 12px; font-size: var(--fs-label); font-weight: 800;
   background: var(--bg-button); border: 1px solid var(--border);
   border-radius: var(--radius-base); color: var(--text-muted); cursor: pointer;
 }
@@ -298,7 +298,7 @@ onUnmounted(() => {
 .lm-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px; }
 .lm-availability-note {
   margin: 4px 4px 10px; padding: 8px 10px; border: 1px solid rgba(251,191,36,.28);
-  border-radius: 7px; background: rgba(251,191,36,.06); color: #d4b45f; font-size: 10px;
+  border-radius: 7px; background: rgba(251,191,36,.06); color: #d4b45f; font-size: var(--fs-label);
 }
 .lm-section { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .lm-section-header {
@@ -306,8 +306,8 @@ onUnmounted(() => {
   padding: 9px 11px; background: var(--bg-input); border-bottom: 1px solid var(--border);
 }
 .lm-section-header > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.lm-section-header strong { color: var(--text-primary); font-size: 10px; letter-spacing: .8px; }
-.lm-section-header span { color: var(--text-muted); font-size: 9px; }
+.lm-section-header strong { color: var(--text-primary); font-size: var(--fs-label); letter-spacing: .8px; }
+.lm-section-header span { color: var(--text-muted); font-size: var(--fs-label); }
 .lm-section-count {
   flex-shrink: 0; min-width: 20px; padding: 2px 6px; border-radius: 8px;
   background: var(--bg-button); color: var(--text-secondary) !important; text-align: center; font-weight: 800;
@@ -325,9 +325,9 @@ onUnmounted(() => {
 .lm-source-badge.main { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); color: #60a5fa; }
 .lm-source-badge.secondary { border-color: rgba(34,211,238,.3); background: rgba(34,211,238,.08); color: #67e8f9; }
 .lm-source-badge.conflict { border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.1); color: #f87171; }
-.lm-unavailable { margin-top: 3px; color: #d4b45f; font-size: 9px; }
+.lm-unavailable { margin-top: 3px; color: #d4b45f; font-size: var(--fs-label); }
 .lm-triggers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.lm-tw { font-size: 9px; padding: 1px 6px; border-radius: 7px; background: var(--bg-button); color: var(--text-muted); }
+.lm-tw { font-size: var(--fs-label); padding: 1px 6px; border-radius: 7px; background: var(--bg-button); color: var(--text-muted); }
 .lm-weight { width: 64px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 5px 6px; color: var(--text-primary); font-size: 12px; text-align: center; }
 .lm-add { background: var(--accent); color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: 700; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
 .lm-add:hover { background: var(--accent-hover); }

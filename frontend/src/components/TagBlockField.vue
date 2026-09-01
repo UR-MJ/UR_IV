@@ -333,7 +333,7 @@ function isWc(text: string) { return /__.+__/.test(text) }
 .tbf-block.bc-color { border-color: rgba(244,114,182,0.3); color: #f472b6; }
 .tbf-block.bc-trait { border-color: rgba(52,211,153,0.3); color: #34d399; }
 .tbf-block.wc-block { border-color: rgba(250,204,21,0.4); background: rgba(250,204,21,0.08); color: var(--accent); border-style: dashed; }
-.wc-ico { margin-right: 2px; font-size: 9px; }
+.wc-ico { margin-right: 2px; font-size: var(--fs-label); }
 /* 드롭 마커 */
 .tbf-drop-marker {
   width: 4px; height: 24px; background: var(--accent); border-radius: 3px; flex-shrink: 0;
@@ -348,7 +348,7 @@ function isWc(text: string) { return /__.+__/.test(text) }
 .tbf-edit { padding: 3px 8px; font-size: 11px; background: var(--bg-card); border: 1px solid var(--accent); border-radius: 4px; color: var(--text-primary); width: 120px; }
 /* 추가 */
 .tbf-add-wrap { position: relative; display: inline-block; }
-.tbf-add { padding: 3px 8px; font-size: 10px; background: transparent; border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); width: 80px; min-width: 60px; }
+.tbf-add { padding: 3px 8px; font-size: var(--fs-label); background: transparent; border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); width: 80px; min-width: 60px; }
 .tbf-add:focus { border-color: var(--accent); color: var(--text-primary); width: 140px; }
 .ac-popup-block {
   position: absolute; top: 100%; left: 0; z-index: 100;
@@ -365,5 +365,5 @@ function isWc(text: string) { return /__.+__/.test(text) }
   background: rgba(96,165,250,0.2); color: #93c5fd;
 }
 /* neg */
-.neg .tbf-block { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: 10px; }
+.neg .tbf-block { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: var(--fs-label); }
 </style>

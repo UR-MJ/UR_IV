@@ -398,19 +398,19 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
 .glass-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px; }
 .source-thumb { height: 100px; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--bg-input); display: flex; align-items: center; justify-content: center; }
 .source-thumb img { width: 100%; height: 100%; object-fit: contain; }
-.upload-hint { color: var(--text-muted); font-size: 10px; font-weight: 700; }
+.upload-hint { color: var(--text-muted); font-size: var(--fs-label); font-weight: 700; }
 .tool-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
 .tool-grid.small { grid-template-columns: repeat(3, 1fr); }
-.tool-chip { padding: 6px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 9px; font-weight: 800; cursor: pointer; text-align: center; }
+.tool-chip { min-height: 30px; padding: 6px 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; }
 .tool-chip:hover { border-color: var(--text-muted); }
 .tool-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .tool-chip.magnet.active { background: rgba(96,165,250,0.1); border-color: #60a5fa; color: #60a5fa; }
 .slider-row { display: flex; align-items: center; gap: 6px; }
 .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
-.slider-val { font-size: 10px; color: var(--accent); min-width: 36px; text-align: right; font-family: monospace; }
+.slider-val { font-size: var(--fs-label); color: var(--accent); min-width: 36px; text-align: right; font-family: monospace; }
 .mt-6 { margin-top: 6px; }
 .mask-actions { display: flex; gap: 3px; }
-.act-btn { flex: 1; padding: 5px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: 9px; font-weight: 700; cursor: pointer; }
+.act-btn { flex: 1; height: 30px; padding: 0 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; }
 .btn-gen { width: 100%; height: 42px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: 800; font-size: 12px; cursor: pointer; }
 .btn-gen:disabled { opacity: 0.4; }
 .canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #080808; position: relative; }
@@ -423,5 +423,5 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
 .cv { position: absolute; max-width: 85%; max-height: 85%; }
 .cv.mask { pointer-events: none; }
 .cv.overlay { pointer-events: auto; }
-.cv-info { position: absolute; bottom: 8px; right: 12px; color: #585858; font-size: 10px; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; pointer-events: none; }
+.cv-info { position: absolute; bottom: 8px; right: 12px; color: #585858; font-size: var(--fs-label); background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; pointer-events: none; }
 </style>

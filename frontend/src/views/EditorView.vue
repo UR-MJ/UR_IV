@@ -1190,7 +1190,7 @@ onUnmounted(() => {
   padding: 0 8px;
 }
 .dirty-mark { color: #fbbf24; margin-right: 4px; font-size: 14px; vertical-align: middle; }
-.bar-counter { color: #585858; font-size: 9px; font-family: 'Consolas', monospace; margin-left: 4px; }
+.bar-counter { color: #585858; font-size: var(--fs-label); font-family: 'Consolas', monospace; margin-left: 4px; }
 
 .editor-body { flex: 1; display: flex; overflow: hidden; }
 
@@ -1228,10 +1228,10 @@ onUnmounted(() => {
 .drop-shortcuts { color: #585858; font-size: 11px; margin-top: 4px; }
 .drop-shortcuts kbd {
   background: #1A1A1A; color: #E2B340; padding: 1px 6px; border-radius: 3px;
-  font-family: Consolas, monospace; font-size: 10px; margin: 0 2px;
+  font-family: Consolas, monospace; font-size: var(--fs-label); margin: 0 2px;
 }
 .recent-files { width: 100%; max-width: 540px; margin-top: 14px; }
-.recent-label { color: #787878; font-size: 10px; letter-spacing: 1px;
+.recent-label { color: #787878; font-size: var(--fs-label); letter-spacing: 1px;
   font-weight: 800; padding: 0 4px 6px; }
 .recent-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .recent-item {

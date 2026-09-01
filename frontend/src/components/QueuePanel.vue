@@ -357,10 +357,10 @@ defineExpose({ items })
 @keyframes pin-bump { 0% { transform: scale(1); } 30% { transform: scale(1.12); } 100% { transform: scale(1); } }
 .qp-ico { font-size: 13px; opacity: 0.9; }
 .qp-label { letter-spacing: 1px; }
-.qp-count { background: var(--accent); color: #000; min-width: 16px; text-align: center; padding: 1px 5px; border-radius: 9px; font-size: 10px; font-weight: 900; }
+.qp-count { background: var(--accent); color: #000; min-width: 16px; text-align: center; padding: 1px 5px; border-radius: 9px; font-size: var(--fs-label); font-weight: 900; }
 .queue-pin.running .qp-count { background: #4ade80; }
 .queue-pin.paused .qp-count { background: #fbbf24; }
-.qp-run { font-size: 10px; }
+.qp-run { font-size: var(--fs-label); }
 .qp-run.paused { color: #fbbf24; }
 
 /* ── 우측 드로어 ── */
@@ -372,10 +372,10 @@ defineExpose({ items })
 }
 .qd-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .title { color: var(--text-secondary); font-size: 12px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.count-badge { background: var(--accent); color: #000; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 900; }
-.running-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 900; animation: pulse 1.5s infinite; }
-.paused-badge { background: #fbbf24; color: #000; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 900; }
-.selected-badge { background: #60a5fa; color: #000; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 900; }
+.count-badge { background: var(--accent); color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: 900; }
+.running-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: 900; animation: pulse 1.5s infinite; }
+.paused-badge { background: #fbbf24; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: 900; }
+.selected-badge { background: #60a5fa; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: 900; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .qd-x { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 30px; height: 30px; cursor: pointer; font-size: 13px; }
 .qd-x:hover { color: var(--text-primary); border-color: var(--accent); }
@@ -401,7 +401,7 @@ defineExpose({ items })
 .q-row-st { flex-shrink: 0; width: 22px; text-align: center; color: var(--accent); font-weight: 800; font-size: 12px; }
 .q-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .q-row-prompt { color: var(--text-primary); font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.q-row-neg { color: #f8717188; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-row-neg { color: #f8717188; font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-row-tools { flex-shrink: 0; display: flex; gap: 3px; opacity: 0; transition: 0.12s; }
 .q-row:hover .q-row-tools { opacity: 1; }
 .qr-btn { width: 24px; height: 24px; background: #222; border: 1px solid var(--border); border-radius: 5px; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 0; }
@@ -414,7 +414,7 @@ defineExpose({ items })
 .qd-slide-enter-from, .qd-slide-leave-to { transform: translateX(100%); }
 .qd-fade-enter-active, .qd-fade-leave-active { transition: opacity 0.22s ease; }
 .qd-fade-enter-from, .qd-fade-leave-to { opacity: 0; }
-.qe-hint { color: #4a4a4a; font-size: 10px; }
+.qe-hint { color: #4a4a4a; font-size: var(--fs-label); }
 
 /* 큐 항목 편집 모달 */
 .qe-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
@@ -422,7 +422,7 @@ defineExpose({ items })
 .qe-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .qe-head h3 { font-size: 16px; font-weight: 800; color: var(--text-primary); }
 .qe-x { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 28px; height: 28px; cursor: pointer; }
-.qe-label { display: block; font-size: 10px; font-weight: 800; color: var(--text-muted); letter-spacing: 1px; margin: 8px 0 4px; }
+.qe-label { display: block; font-size: var(--fs-label); font-weight: 800; color: var(--text-muted); letter-spacing: 1px; margin: 8px 0 4px; }
 .qe-text { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; color: var(--text-primary); font-size: 12px; line-height: 1.5; resize: vertical; }
 .qe-text:focus { outline: none; border-color: var(--accent); }
 .qe-foot { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
@@ -436,7 +436,7 @@ defineExpose({ items })
 .queue-progress { padding: 4px 16px 8px; }
 .progress-bar { width: 100%; height: 3px; background: var(--bg-input); border-radius: 2px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
-.progress-text { font-size: 9px; color: var(--text-muted); text-align: right; margin-top: 2px; display: block; }
+.progress-text { font-size: var(--fs-label); color: var(--text-muted); text-align: right; margin-top: 2px; display: block; }
 .progress-text .eta { color: var(--accent); font-weight: 700; margin-left: 4px; }
 
 .queue-empty { padding: 12px; text-align: center; color: #383838; font-size: 11px; }
