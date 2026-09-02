@@ -42,6 +42,11 @@
   .cell:hover { color: var(--text-primary); border-color: var(--edge); }
   .cell.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
   .cell .icon { font-size: 22px; }
+  /* Icon.vue 의 scoped 규칙과 같은 기본값 — 인라인으로 주면 프리셋이 transform-box 를
+     덮어쓸 수 없어 데모가 실제 앱과 다르게 동작한다(실제로 그렇게 어긋났다). */
+  .icon { display: inline-block; vertical-align: -0.16em; flex-shrink: 0;
+          transform-box: view-box; transform-origin: center; }
+  .icon-part { transform-box: fill-box; transform-origin: center; }
   .quiet-note { color: var(--text-muted); }
   .legend { margin-top: 20px; color: var(--text-muted); line-height: 1.7; max-width: 72ch; }
   .legend code { color: var(--text-secondary); }
@@ -85,10 +90,8 @@ function svg(name) {
      width="1em" height="1em" viewBox="0 0 24 24"
      fill="${filled ? 'currentColor' : 'none'}" stroke="${filled ? 'none' : 'currentColor'}"
      stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
-     aria-hidden="true" focusable="false"
-     style="transform-box: view-box; transform-origin: center;">
-   ${paths.map((d, i) => `<path class="icon-part icon-part-${i + 1}" data-icon-part="${i + 1}" d="${d}"
-       style="transform-box: fill-box; transform-origin: center;" />`).join('')}
+     aria-hidden="true" focusable="false">
+   ${paths.map((d, i) => `<path class="icon-part icon-part-${i + 1}" data-icon-part="${i + 1}" d="${d}" />`).join('')}
    </svg>`
 }
 

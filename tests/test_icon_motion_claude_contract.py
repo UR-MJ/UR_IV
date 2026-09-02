@@ -70,6 +70,52 @@ class MotionPrincipleTests(unittest.TestCase):
                 "--ic-glyph", stripped, f"조각 변수가 글리프에 걸렸다: {stripped}"
             )
 
+    def test_press_wins_over_hover_and_selected(self):
+        """상태 규칙 넷은 특정성이 같다 — 순서가 승자를 정한다.
+
+        누름이 호버보다 **앞**에 있으면 마우스로 누르는 동안 호버가 이겨서
+        '장치가 쉼 자리로 돌아가 착지한다' 가 한 번도 일어나지 않는다.
+        실제로 그렇게 났던 버그라 순서를 못 박는다.
+        """
+        def first(needle: str) -> int:
+            index = CSS.find(needle)
+            self.assertNotEqual(index, -1, f"{needle} 규칙이 없다")
+            return index
+
+        selected = first("[aria-pressed='true'],")
+        focus = first("):focus-visible .icon[data-icon-motion] .icon-part {")
+        hover = first("):hover .icon[data-icon-motion] .icon-part {")
+        press = first("):active .icon[data-icon-motion] {")
+        self.assertLess(selected, focus, "선택은 포커스보다 앞")
+        self.assertLess(focus, hover, "포커스는 호버보다 앞")
+        self.assertLess(hover, press, "누름은 맨 뒤여야 호버를 이긴다")
+
+    def test_multi_part_rules_do_not_share_one_transform_origin(self):
+        """`transform-box: fill-box` 는 조각마다 제 경계상자를 쓴다.
+
+        조각 여러 개를 한 규칙에 묶고 `transform-origin` 을 주면 축이 서로 갈려
+        조각들이 분해된다. 휴지통 뚜껑이 그렇게 어긋났었다.
+        """
+        for chunk in CSS.split("}"):
+            if "transform-origin" not in chunk or "view-box" in chunk:
+                continue
+            parts = re.findall(r"\.icon-part-(\d+)", chunk)
+            self.assertLessEqual(
+                len(set(parts)), 1,
+                f"조각 여러 개가 origin 을 나눠 쓴다 — 축이 갈린다: {chunk.strip()[:90]}",
+            )
+
+    def test_translations_are_large_enough_to_see(self):
+        """0.3 유닛 아래는 15px 로 그려지면 0.2 픽셀이라 보이지 않는다.
+
+        안 보이는 변형은 뜻은 없고 리페인트 비용만 남는다.
+        """
+        tiny = [
+            value for value in re.findall(r"translate[XY]?\(([-\d.]+)px", CSS)
+            if 0 < abs(float(value)) < 0.3
+        ]
+        self.assertEqual(tiny, [], f"눈에 안 보이는 이동: {tiny}")
+
     def test_press_scale_is_a_single_shared_value(self):
         """눌림은 '버튼을 눌렀다' 는 촉감이라 아이콘마다 다르면 안 된다."""
         presses = re.findall(r"--ic-press:\s*([^;]+);", CSS)
