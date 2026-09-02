@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import csv
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
@@ -35,6 +36,31 @@ def _post(post_id: int, rating: str, parent_id=None) -> dict:
 
 
 class DanbooruDatasetRefreshTests(unittest.TestCase):
+    def test_legacy_archive_rejects_non_csv_output_without_overwriting_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            protected = root / "dataset_manifest.json"
+            original = b'{"keep": true}'
+            protected.write_bytes(original)
+
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                result = main(
+                    [
+                        "archive-legacy-tags",
+                        "--input-dir",
+                        str(root),
+                        "--latest-label",
+                        "latest",
+                        "--legacy-labels",
+                        "old",
+                        "--output",
+                        str(protected),
+                    ]
+                )
+
+            self.assertEqual(result, 1)
+            self.assertEqual(protected.read_bytes(), original)
+
     def test_builds_search_and_cross_rating_complete_event_shards(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -97,6 +123,102 @@ class DanbooruDatasetRefreshTests(unittest.TestCase):
 
             stored = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertTrue(stored["build"]["cross_rating_parent_duplication"])
+
+    def test_archives_unique_tags_missing_from_latest_release(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def write_release(label, *, comma_separated, rows):
+                for rating in ("g", "s", "q", "e"):
+                    selected = rows if rating == "g" else []
+                    frame = pd.DataFrame(
+                        selected,
+                        columns=(
+                            "general",
+                            "character",
+                            "copyright",
+                            "artist",
+                            "metadata" if comma_separated else "meta",
+                        ),
+                    )
+                    frame.insert(0, "rating", rating)
+                    frame.to_parquet(root / f"danbooru_{label}_{rating}.parquet", index=False)
+
+            write_release(
+                "latest",
+                comma_separated=False,
+                rows=[
+                    {
+                        "general": "shared_tag latest_tag tag_moved_category",
+                        "character": "latest_character",
+                        "copyright": "",
+                        "artist": "",
+                        "meta": "",
+                    }
+                ],
+            )
+            write_release(
+                "old_a",
+                comma_separated=True,
+                rows=[
+                    {
+                        "general": "shared tag, old only tag, tag moved category",
+                        "character": "old character",
+                        "copyright": "",
+                        "artist": "repeat old tag",
+                        "metadata": "legacy metadata",
+                    }
+                ],
+            )
+            write_release(
+                "old_b",
+                comma_separated=False,
+                rows=[
+                    {
+                        "general": "old_only_tag second_old_tag",
+                        "character": "",
+                        "copyright": "repeat_old_tag",
+                        "artist": "",
+                        "meta": "",
+                    }
+                ],
+            )
+            output = root / "legacy.csv"
+
+            with redirect_stdout(StringIO()):
+                result = main(
+                    [
+                        "archive-legacy-tags",
+                        "--input-dir",
+                        str(root),
+                        "--latest-label",
+                        "latest",
+                        "--legacy-labels",
+                        "old_a",
+                        "old_b",
+                        "--output",
+                        str(output),
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+            with output.open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            by_tag = {row["tag"]: row for row in rows}
+            self.assertNotIn("shared_tag", by_tag)
+            self.assertNotIn("tag_moved_category", by_tag)
+            self.assertEqual(
+                by_tag["old_only_tag"]["legacy_releases"],
+                "old_a|old_b",
+            )
+            self.assertEqual(
+                by_tag["repeat_old_tag"]["legacy_categories"],
+                "copyright|artist",
+            )
+            self.assertEqual(
+                list(by_tag),
+                sorted(by_tag),
+            )
 
 
 if __name__ == "__main__":

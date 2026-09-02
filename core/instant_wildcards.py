@@ -13,7 +13,7 @@ NAIA 2.0 ``modules/instant_wildcard_module.py`` 패턴 참고.
 - 와일드카드 이력 추적 (어떤 슬롯에서 어떤 값이 뽑혔는지)
 - ImageWindow 우클릭 메뉴 "이 와일드카드 결과 복사/고정/제거" 등 고급 UX 기반
 
-파일 형식 (``save/instant_wildcards.json``):
+파일 형식 (``user_data/instant_wildcards.json``):
 ```json
 {
   "version": 1,
@@ -119,10 +119,8 @@ class InstantWildcards:
             self.store_path.parent.mkdir(parents=True, exist_ok=True)
             with self._lock:
                 data = self._set.to_dict()
-            self.store_path.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            from utils.atomic_json import atomic_write_json
+            atomic_write_json(str(self.store_path), data, indent=2)
             return True
         except Exception:
             _logger.exception(f"instant wildcards save failed: {self.store_path}")

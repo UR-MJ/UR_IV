@@ -1,7 +1,7 @@
 """Forge Neo 모델 디렉터리 설정과 로컬 파일 검색.
 
 Settings에서 체크포인트 / LoRA / VAE / Text Encoder 폴더를 각각 지정한다.
-설정은 사용자 전용 ``user_data/forge_model_paths.json``에 저장되며 Git에는
+설정은 사용자 전용 ``config/forge_model_paths.json``에 저장되며 Git에는
 포함되지 않는다.
 
 우선순위는 개별 환경변수 → 저장된 Settings 값 → Forge models 루트 기반
@@ -15,6 +15,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from core.storage_paths import config_file
+
 DEFAULT_FORGE_MODELS_ROOT = r"C:\sd-webui-forge-neo\models"
 FORGE_ROOT_CANDIDATES = (
     Path(DEFAULT_FORGE_MODELS_ROOT),
@@ -22,7 +24,10 @@ FORGE_ROOT_CANDIDATES = (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-FORGE_PATHS_FILE = PROJECT_ROOT / "user_data" / "forge_model_paths.json"
+FORGE_PATHS_FILE = config_file(
+    "forge_model_paths.json",
+    legacy_paths="user_data/forge_model_paths.json",
+)
 LEGACY_ROOT_FILE = PROJECT_ROOT / "config" / "forge_models_root.txt"
 
 FORGE_PATH_KEYS = (

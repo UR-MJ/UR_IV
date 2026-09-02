@@ -6,7 +6,7 @@ NAIA 2.0의 ``core/ui_state_manager.py`` 패턴 참고.
 설계
 ----
 UI 요소가 자신의 상태를 어떻게 직렬화하는지 모름 — 호출자가 ``register()``로
-이름과 ``get_state`` / ``set_state`` 콜백을 제공. 매니저는 그것을 ``save/ui_state.json``에
+이름과 ``get_state`` / ``set_state`` 콜백을 제공. 매니저는 그것을 ``config/state/ui_state.json``에
 모아서 저장하고, 시작 시 복원.
 
 복원은 150ms 지연 — 위젯 레이아웃이 자리 잡기를 기다림 (NAIA 패턴).
@@ -15,7 +15,7 @@ Qt 의존성 없음. 콜백은 PyQt/Vue/뭐든 사용 가능.
 
 사용 예
 -------
->>> mgr = UIStateManager(state_file=Path("save/ui_state.json"))
+>>> mgr = UIStateManager(state_file=Path("config/state/ui_state.json"))
 >>>
 >>> # 메인 윈도우 등록
 >>> mgr.register("main_window",
@@ -119,10 +119,8 @@ class UIStateManager:
         try:
             state = self.collect_state()
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
-            self.state_file.write_text(
-                json.dumps(state, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            from utils.atomic_json import atomic_write_json
+            atomic_write_json(str(self.state_file), state, indent=2)
             with self._lock:
                 self._cached_state = state
             return True

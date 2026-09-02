@@ -444,10 +444,13 @@ class CreatorActionsMixin:
 
     def _comic_studio(self):
         from core.comic_studio import ComicStudio
+        from core.storage_paths import user_data_file
 
-        root = Path(__file__).resolve().parent.parent
         return ComicStudio(
-            root / "config" / "comic_studio.json",
+            user_data_file(
+                "creator/comic_studio.json",
+                legacy_paths="config/comic_studio.json",
+            ),
             complete_json=self._comic_ollama_complete if self._creator_ollama_config()[1] else None,
         )
 

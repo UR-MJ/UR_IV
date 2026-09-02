@@ -67,7 +67,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set "CRASH_LOG=config\last_crash.log"
+if not exist logs mkdir logs
+if not exist logs\last_crash.log if exist config\last_crash.log move config\last_crash.log logs\last_crash.log >nul
+set "CRASH_LOG=logs\last_crash.log"
 set "PREVIOUS_CRASH_LOG="
 call :preserve_previous_crash_log
 
@@ -144,7 +146,7 @@ exit /b 0
 if not exist "%CRASH_LOG%" exit /b 0
 
 :choose_crash_log_backup
-set "PREVIOUS_CRASH_LOG=config\last_crash.previous-%RANDOM%-%RANDOM%.log"
+set "PREVIOUS_CRASH_LOG=logs\last_crash.previous-%RANDOM%-%RANDOM%.log"
 if exist "%PREVIOUS_CRASH_LOG%" goto :choose_crash_log_backup
 move "%CRASH_LOG%" "%PREVIOUS_CRASH_LOG%" >nul
 if errorlevel 1 (

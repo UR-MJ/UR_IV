@@ -8,9 +8,9 @@ UR_IV는 WEBUI/COMFYUI 두 백엔드를 전환하며 사용한다.
 
 저장 위치
 ---------
-``<project_root>/save/<base_filename>_<MODE>.json``
+``<project_root>/config/automation/<base_filename>_<MODE>.json``
 
-예: ``save/automation_webui.json`` / ``save/automation_comfyui.json``
+예: ``config/automation/automation_webui.json`` / ``..._comfyui.json``
 
 사용 패턴
 ---------
@@ -39,17 +39,6 @@ from typing import Optional
 from utils.app_logger import get_logger
 
 _logger = get_logger("mode_aware")
-
-
-def _project_root() -> Path:
-    # core/ 의 부모 = 프로젝트 루트
-    return Path(__file__).resolve().parent.parent
-
-
-def _save_dir() -> Path:
-    d = _project_root() / "save"
-    d.mkdir(exist_ok=True)
-    return d
 
 
 def _current_mode_value() -> str:
@@ -100,17 +89,20 @@ class ModeAwareMixin:
                 "(e.g., 'automation')"
             )
         m = mode_value or _current_mode_value()
-        return _save_dir() / f"{base}_{m}.json"
+        filename = f"{base}_{m}.json"
+        from core.storage_paths import config_file
+        return config_file(
+            f"automation/{filename}",
+            legacy_paths=f"save/{filename}",
+        )
 
     def save_mode_settings(self, mode_value: Optional[str] = None) -> bool:
         """현재 (또는 지정한) 모드로 설정 저장. 성공 시 True."""
         try:
             path = self._settings_path(mode_value)
             data = self.collect_current_settings()
-            path.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            from utils.atomic_json import atomic_write_json
+            atomic_write_json(str(path), data, indent=2)
             _logger.debug(f"saved: {path.name}")
             return True
         except Exception:
@@ -126,8 +118,8 @@ class ModeAwareMixin:
         """
         try:
             path = self._settings_path(mode_value)
-        except ValueError:
-            _logger.exception("load_mode_settings: invalid base_filename")
+        except (ValueError, OSError):
+            _logger.exception("load_mode_settings: settings path unavailable")
             return False
 
         if not path.exists():

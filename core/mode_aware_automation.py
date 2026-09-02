@@ -5,8 +5,8 @@ ModeAwareMixin 어댑터. 호스트(보통 GeneratorMainUI)의
 ``_vue_automation_settings`` dict와 Vue UI 사이를 매개.
 
 저장 파일:
-- ``save/automation_settings_webui.json``
-- ``save/automation_settings_comfyui.json``
+- ``config/automation/automation_settings_webui.json``
+- ``config/automation/automation_settings_comfyui.json``
 
 흐름:
 1. 시작 시 현재 모드 설정 로드 → 호스트 dict 갱신 → Vue 시그널 발행

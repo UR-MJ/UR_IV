@@ -44,7 +44,7 @@ export type ActionName =
 export type BackendEvent =
   | 'imageGenerated' | 'generationStarted' | 'generationError' | 'generationProgress'
   | 'automationStatus' | 'automationSettingsLoaded'
-  | 'searchResultsReady' | 'searchStatus' | 'queueUpdated' | 'queueItemAdded' | 'queueCompleted'
+  | 'searchResultsReady' | 'searchResultLineage' | 'searchStatus' | 'queueUpdated' | 'queueItemAdded' | 'queueCompleted'
   | 'uiPrefsLoaded' | 'condRulesLoaded' | 'loraStackLoaded' | 'loraInserted' | 'globalWeightsLoaded'
   | 'promptOrderLoaded' | 'instantWildcardsList' | 'workflowProfilesList'
   | 'editorImageLoaded' | 'editorWatermarkImageLoaded' | 'editorResult' | 'yoloModelUpdated' | 'i2iImageLoaded' | 'inpaintImageLoaded'

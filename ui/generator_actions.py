@@ -324,9 +324,11 @@ class ActionsMixin:
 
     # ── 덱 진행도 영속 (재시작 시 '얼마나 뽑았는지' 복원) ────────────────
     def _deck_state_path(self):
-        import os
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        return os.path.join(base, 'config', 'last_deck.json')
+        from core.storage_paths import cache_file
+        return str(cache_file(
+            'search/last_deck.json',
+            legacy_paths='config/last_deck.json',
+        ))
 
     def _save_deck_state(self):
         """남은 덱을 filtered_results 인덱스 리스트로 저장.
@@ -336,17 +338,32 @@ class ActionsMixin:
             import os, json
             fr = getattr(self, 'filtered_results', None) or []
             deck = getattr(self, 'shuffled_prompt_deck', None)
-            if not fr or deck is None:
+            snapshot_id = getattr(self, '_search_snapshot_id', None)
+            if (
+                deck is None
+                or not isinstance(snapshot_id, str)
+                or len(snapshot_id) != 32
+                or any(ch not in '0123456789abcdefABCDEF' for ch in snapshot_id)
+            ):
                 return
             # id→index 맵 캐시 (filtered_results 객체가 교체되면 재생성)
-            if getattr(self, '_deck_idmap_for', None) is not id(fr):
+            if getattr(self, '_deck_idmap_for', None) != id(fr):
                 self._deck_idmap = {id(b): i for i, b in enumerate(fr)}
                 self._deck_idmap_for = id(fr)
             idmap = self._deck_idmap
             idx = [idmap[id(b)] for b in deck if id(b) in idmap]
             path = self._deck_state_path()
             from utils.atomic_json import atomic_write_json
-            atomic_write_json(path, {'pool_size': len(fr), 'remaining': idx}, indent=None)
+            atomic_write_json(
+                path,
+                {
+                    'schema_version': 1,
+                    'snapshot_id': snapshot_id,
+                    'pool_size': len(fr),
+                    'remaining': idx,
+                },
+                indent=None,
+            )
         except Exception as e:
             print(f"[Deck] save 실패: {e}")
 
@@ -363,6 +380,10 @@ class ActionsMixin:
                 return False
             with open(path, encoding='utf-8') as f:
                 st = json.load(f)
+            if st.get('schema_version') != 1:
+                return False
+            if st.get('snapshot_id') != getattr(self, '_search_snapshot_id', None):
+                return False
             if st.get('pool_size') != len(fr):
                 return False  # 풀이 바뀜 → 복원 불가
             n = len(fr)

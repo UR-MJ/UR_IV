@@ -1114,25 +1114,30 @@ class SettingsTab(QWidget):
             self.parent_ui.apply_stylesheet()
 
     def _restart_application(self):
-        """설정 저장 후 앱 재시작"""
+        """설정 저장 후 앱 재시작 (가져온 백업은 덮어쓰지 않음)."""
         import sys
         import os
         import subprocess
 
+        preserving_import = bool(
+            self.parent_ui
+            and getattr(self.parent_ui, '_preserve_imported_settings_on_quit', False)
+        )
+        prompt = (
+            "가져온 설정을 유지한 채 앱을 재시작합니다.\n계속하시겠습니까?"
+            if preserving_import
+            else "현재 설정을 저장하고 앱을 재시작합니다.\n계속하시겠습니까?"
+        )
         reply = QMessageBox.question(
             self, "앱 재시작",
-            "현재 설정을 저장하고 앱을 재시작합니다.\n계속하시겠습니까?",
+            prompt,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # 설정 저장
-        try:
-            self.save_all_settings()
-        except Exception:
-            pass
+        self._save_before_restart()
 
         # 새 프로세스 실행 후 현재 프로세스 종료
         python = sys.executable
@@ -1140,6 +1145,19 @@ class SettingsTab(QWidget):
         args = sys.argv[1:]
         subprocess.Popen([python, script] + args)
         os._exit(0)
+
+    def _save_before_restart(self) -> bool:
+        """Save live state unless a newly imported backup must remain authoritative."""
+        if (
+            self.parent_ui
+            and getattr(self.parent_ui, '_preserve_imported_settings_on_quit', False)
+        ):
+            return False
+        try:
+            self.save_all_settings()
+            return True
+        except Exception:
+            return False
 
     def apply_api_url(self):
         """API URL 적용"""
@@ -1313,23 +1331,6 @@ class SettingsTab(QWidget):
 
     def _export_settings(self):
         """설정 파일들을 ZIP으로 내보내기"""
-        import zipfile
-        import os
-
-        base = os.path.dirname(os.path.dirname(__file__))
-        targets = [
-            'prompt_settings.json',
-            'prompt_presets.json',
-            'favorite_tags.json',
-            'favorites.json',
-            'event_gen_settings.json',
-            'search_tab_settings.json',
-        ]
-        # shortcuts
-        shortcut_file = os.path.join(base, 'shortcuts.json')
-        if os.path.exists(shortcut_file):
-            targets.append('shortcuts.json')
-
         save_path, _ = QFileDialog.getSaveFileName(
             self, "설정 내보내기", "ai_studio_backup.zip", "ZIP (*.zip)"
         )
@@ -1337,28 +1338,18 @@ class SettingsTab(QWidget):
             return
 
         try:
-            with zipfile.ZipFile(save_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                for fname in targets:
-                    # 사용자 상태 JSON은 user_data/, shortcuts.json은 루트에 있음
-                    fpath = (os.path.join(base, fname) if fname == 'shortcuts.json'
-                             else os.path.join(base, 'user_data', fname))
-                    if os.path.exists(fpath):
-                        zf.write(fpath, fname)
-                # queue_presets 폴더
-                qp_dir = os.path.join(base, 'queue_presets')
-                if os.path.isdir(qp_dir):
-                    for qf in os.listdir(qp_dir):
-                        if qf.endswith('.json'):
-                            zf.write(os.path.join(qp_dir, qf), f'queue_presets/{qf}')
-            QMessageBox.information(self, "내보내기 완료", f"설정이 저장되었습니다:\n{save_path}")
+            from core.settings_backup import export_settings_archive
+            count = export_settings_archive(save_path)
+            QMessageBox.information(
+                self,
+                "내보내기 완료",
+                f"설정 {count}개가 저장되었습니다:\n{save_path}",
+            )
         except Exception as e:
             QMessageBox.warning(self, "오류", f"내보내기 실패: {e}")
 
     def _import_settings(self):
         """ZIP에서 설정 파일 복원"""
-        import zipfile
-        import os
-
         zip_path, _ = QFileDialog.getOpenFileName(
             self, "설정 가져오기", "", "ZIP (*.zip)"
         )
@@ -1374,24 +1365,16 @@ class SettingsTab(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        base = os.path.dirname(os.path.dirname(__file__))
         try:
-            with zipfile.ZipFile(zip_path, 'r') as zf:
-                for info in zf.infolist():
-                    if info.is_dir():
-                        continue
-                    # 사용자 상태 JSON은 user_data/로, queue_presets/·shortcuts.json은 루트로
-                    _fn = info.filename
-                    if '/' in _fn or _fn == 'shortcuts.json':
-                        target = os.path.join(base, _fn)
-                    else:
-                        target = os.path.join(base, 'user_data', _fn)
-                    os.makedirs(os.path.dirname(target), exist_ok=True)
-                    with zf.open(info) as src, open(target, 'wb') as dst:
-                        dst.write(src.read())
+            from core.settings_backup import import_settings_archive
+            count = import_settings_archive(zip_path)
+            if self.parent_ui:
+                # 종료 시 현재 메모리 값을 자동 저장하면 방금 가져온 파일을 다시
+                # 덮어쓰므로, 이번 종료에서는 설정/UI 상태 저장을 건너뛴다.
+                self.parent_ui._preserve_imported_settings_on_quit = True
             QMessageBox.information(
                 self, "복원 완료",
-                "설정이 복원되었습니다.\n일부 설정은 앱을 재시작해야 적용됩니다."
+                f"설정 {count}개가 복원되었습니다.\n앱을 재시작하면 적용됩니다."
             )
         except Exception as e:
             QMessageBox.warning(self, "오류", f"가져오기 실패: {e}")

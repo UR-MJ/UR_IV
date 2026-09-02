@@ -8,6 +8,38 @@ from PyQt6.QtWidgets import QMessageBox, QFileDialog
 from config import PROMPT_SETTINGS_FILE
 from utils.shortcut_manager import get_shortcut_manager
 
+
+def migrate_legacy_gallery_folder(
+    settings: dict,
+    *,
+    prompt_settings_path: str = PROMPT_SETTINGS_FILE,
+    ui_prefs_path: str | None = None,
+) -> str:
+    """Move the old prompt-settings gallery path into ui_prefs exactly once.
+
+    The current ui_prefs value always wins.  The legacy key is removed only
+    after a valid destination has been read or written successfully.
+    """
+    from core.config_migration import load_ui_prefs, save_ui_prefs
+    from core.storage_paths import config_file
+    from utils.atomic_json import atomic_write_json
+
+    prefs_path = ui_prefs_path or str(config_file('ui_prefs.json'))
+    prefs = load_ui_prefs(prefs_path)
+    current = str(prefs.get('galleryFolder', '') or '').strip()
+    legacy = str(settings.get('gallery_folder', '') or '').strip()
+
+    if not current and legacy:
+        prefs['galleryFolder'] = legacy
+        save_ui_prefs(prefs_path, prefs)
+        current = legacy
+
+    if 'gallery_folder' in settings and (current or not legacy):
+        settings.pop('gallery_folder', None)
+        atomic_write_json(prompt_settings_path, settings, indent=4)
+    return current
+
+
 class SettingsMixin:
     """설정 관련 로직을 담당하는 Mixin"""
 
@@ -151,12 +183,12 @@ class SettingsMixin:
             "parquet_dir": self.settings_tab.parquet_dir_input.text() if hasattr(self.settings_tab, 'parquet_dir_input') else "",
             "event_parquet_dir": self.settings_tab.event_parquet_dir_input.text() if hasattr(self.settings_tab, 'event_parquet_dir_input') else "",
 
-            "gallery_folder": self.gallery_tab._current_folder if hasattr(self, 'gallery_tab') else "",
-
             # 백엔드 설정
             "backend_type": self._get_backend_type_str(),
+            "webui_url": self._get_webui_url(),
             "comfyui_url": self._get_comfyui_url(),
             "comfyui_workflow_path": self._get_comfyui_workflow_path(),
+            "comfyui_workflow_img2img_path": self._get_comfyui_workflow_img2img_path(),
 
             # I2I 탭 설정
             "i2i_settings": self._get_i2i_settings() if hasattr(self, 'i2i_tab') else {},
@@ -445,8 +477,8 @@ class SettingsMixin:
                 self.settings_tab.event_parquet_dir_input.setText(event_parquet_dir)
                 _cfg.EVENT_PARQUET_DIR = event_parquet_dir
 
-            # 갤러리 폴더 복원 (경로만 기억, 탭 클릭 시 실제 로드)
-            gallery_folder = settings.get("gallery_folder", "")
+            # 옛 중복 키를 ui_prefs 단일 소스로 1회 흡수. 현재 ui_prefs가 항상 우선.
+            gallery_folder = migrate_legacy_gallery_folder(settings)
             if gallery_folder and os.path.isdir(gallery_folder) and hasattr(self, 'gallery_tab'):
                 self.gallery_tab._current_folder = gallery_folder
                 self.gallery_tab.label_folder.setText(gallery_folder)
@@ -742,23 +774,49 @@ class SettingsMixin:
         import config
         return getattr(config, 'COMFYUI_API_URL', 'http://127.0.0.1:8188')
 
+    def _get_webui_url(self) -> str:
+        """WebUI/Forge API URL"""
+        import config
+        return getattr(config, 'WEBUI_API_URL', 'http://127.0.0.1:7860')
+
     def _get_comfyui_workflow_path(self) -> str:
         """ComfyUI 워크플로우 경로"""
         import config
         return getattr(config, 'COMFYUI_WORKFLOW_PATH', '')
 
+    def _get_comfyui_workflow_img2img_path(self) -> str:
+        """ComfyUI img2img 워크플로우 경로"""
+        import config
+        return getattr(config, 'COMFYUI_WORKFLOW_IMG2IMG_PATH', '')
+
     def _restore_backend_settings(self, settings: dict):
         """백엔드 설정 복원"""
         import config
         backend_type_str = settings.get("backend_type", "webui")
-        comfyui_url = settings.get("comfyui_url", "http://127.0.0.1:8188")
-        workflow_path = settings.get("comfyui_workflow_path", "")
+        webui_url = settings.get(
+            "webui_url",
+            getattr(config, "WEBUI_API_URL", "http://127.0.0.1:7860"),
+        )
+        comfyui_url = settings.get(
+            "comfyui_url",
+            getattr(config, "COMFYUI_API_URL", "http://127.0.0.1:8188"),
+        )
+        workflow_path = settings.get(
+            "comfyui_workflow_path",
+            getattr(config, "COMFYUI_WORKFLOW_PATH", ""),
+        )
+        img2img_workflow_path = settings.get(
+            "comfyui_workflow_img2img_path",
+            getattr(config, "COMFYUI_WORKFLOW_IMG2IMG_PATH", ""),
+        )
 
+        config.WEBUI_API_URL = webui_url
         config.COMFYUI_API_URL = comfyui_url
         config.COMFYUI_WORKFLOW_PATH = workflow_path
+        config.COMFYUI_WORKFLOW_IMG2IMG_PATH = img2img_workflow_path
 
         from backends import set_backend, BackendType
         if backend_type_str == "comfyui":
             set_backend(BackendType.COMFYUI, comfyui_url)
         else:
-            set_backend(BackendType.WEBUI, config.WEBUI_API_URL)
+            set_backend(BackendType.WEBUI, webui_url)

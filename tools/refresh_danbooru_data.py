@@ -31,9 +31,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"
 MANIFEST_VERSION = 1
 RATINGS = ("g", "s", "q", "e")
+ARCHIVE_TAG_CATEGORIES = ("general", "character", "copyright", "artist", "meta")
+ARCHIVE_TAG_COLUMNS = ("tag", "legacy_categories", "legacy_releases")
 RATING_NAMES = {
     "general": "g",
     "safe": "s",
@@ -865,6 +867,186 @@ def build_posts(args: argparse.Namespace) -> dict[str, Any]:
         shutil.rmtree(stage_root, ignore_errors=True)
 
 
+def _release_parquet_files(input_root: Path, dataset_label: str) -> dict[str, Path]:
+    label = _validate_dataset_label(dataset_label)
+    files = {
+        rating: input_root / f"danbooru_{label}_{rating}.parquet"
+        for rating in RATINGS
+    }
+    missing = [path.name for path in files.values() if not path.is_file()]
+    if missing:
+        raise RefreshError(
+            f"{label} Search 릴리스가 완전하지 않습니다: {', '.join(missing)}"
+        )
+    return files
+
+
+def _unique_normalized_tags(values: Any, *, comma_separated: bool) -> list[str]:
+    """Return unique canonical tag spellings from one Arrow string chunk."""
+    pa, pc, _pq = _import_arrow()
+    text = pc.fill_null(pc.cast(values, pa.string()), "")
+    if comma_separated:
+        pieces = pc.list_flatten(pc.split_pattern(text, pattern=","))
+    else:
+        pieces = pc.list_flatten(
+            pc.split_pattern_regex(pc.utf8_trim_whitespace(text), pattern=r"\s+")
+        )
+    normalized = pc.replace_substring_regex(
+        pc.utf8_trim_whitespace(pieces),
+        pattern=r"\s+",
+        replacement="_",
+    )
+    non_empty = pc.not_equal(normalized, "")
+    return [
+        tag
+        for tag in pc.unique(pc.filter(normalized, non_empty)).to_pylist()
+        if tag
+    ]
+
+
+def _iter_release_tag_batches(
+    input_root: Path,
+    dataset_label: str,
+) -> Iterable[tuple[str, list[str]]]:
+    """Yield category and unique tags while keeping Parquet memory bounded."""
+    _pa, _pc, pq = _import_arrow()
+    for rating, path in _release_parquet_files(input_root, dataset_label).items():
+        parquet = pq.ParquetFile(path)
+        schema_names = set(parquet.schema.names)
+        column_map: dict[str, str] = {}
+        for category in ARCHIVE_TAG_CATEGORIES:
+            if category in schema_names:
+                column_map[category] = category
+            elif category == "meta" and "metadata" in schema_names:
+                column_map[category] = "metadata"
+            else:
+                raise RefreshError(
+                    f"{path.name}: 태그 컬럼이 없습니다: {category}"
+                )
+
+        comma_separated = "metadata" in schema_names and "meta" not in schema_names
+        read_columns = list(dict.fromkeys(column_map.values()))
+        _log(
+            f"태그 스캔: {path.name} "
+            f"({parquet.metadata.num_rows:,}행, {parquet.metadata.num_row_groups}그룹)"
+        )
+        for row_group in range(parquet.metadata.num_row_groups):
+            table = parquet.read_row_group(row_group, columns=read_columns)
+            for category, source_column in column_map.items():
+                yield category, _unique_normalized_tags(
+                    table[source_column],
+                    comma_separated=comma_separated,
+                )
+
+
+def archive_legacy_tags(args: argparse.Namespace) -> dict[str, Any]:
+    """Archive tags absent from the latest Search release as one compact CSV."""
+    input_root = Path(args.input_dir).expanduser().resolve(strict=True)
+    latest_label = _validate_dataset_label(args.latest_label)
+    legacy_labels = [
+        _validate_dataset_label(label) for label in args.legacy_labels
+    ]
+    if not legacy_labels:
+        raise RefreshError("하나 이상의 구형 릴리스가 필요합니다")
+    if latest_label in legacy_labels:
+        raise RefreshError("최신 릴리스는 구형 릴리스 목록에 넣을 수 없습니다")
+    if len(set(legacy_labels)) != len(legacy_labels):
+        raise RefreshError("구형 릴리스 이름이 중복되었습니다")
+
+    output = (
+        Path(args.output).expanduser()
+        if args.output
+        else input_root / f"legacy_search_tags_before_{latest_label}.csv"
+    ).resolve(strict=False)
+    if output.suffix.lower() != ".csv":
+        raise RefreshError("legacy 태그 archive 출력은 .csv 파일이어야 합니다")
+
+    source_files: set[Path] = set()
+    for label in (latest_label, *legacy_labels):
+        source_files.update(
+            path.resolve(strict=True)
+            for path in _release_parquet_files(input_root, label).values()
+        )
+    if output in source_files:
+        raise RefreshError("legacy 태그 archive 출력이 입력 parquet와 충돌합니다")
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    latest_tags: set[str] = set()
+    for _category, tags in _iter_release_tag_batches(input_root, latest_label):
+        latest_tags.update(tags)
+    _log(f"최신 고유 태그: {len(latest_tags):,}개")
+
+    category_bits = {
+        category: 1 << index
+        for index, category in enumerate(ARCHIVE_TAG_CATEGORIES)
+    }
+    release_bits = {
+        label: 1 << index for index, label in enumerate(legacy_labels)
+    }
+    legacy_only: dict[str, tuple[int, int]] = {}
+    for label in legacy_labels:
+        for category, tags in _iter_release_tag_batches(input_root, label):
+            category_bit = category_bits[category]
+            release_bit = release_bits[label]
+            for tag in tags:
+                if tag in latest_tags:
+                    continue
+                old_categories, old_releases = legacy_only.get(tag, (0, 0))
+                legacy_only[tag] = (
+                    old_categories | category_bit,
+                    old_releases | release_bit,
+                )
+
+    temp_handle = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8-sig",
+        newline="",
+        prefix=f".{output.name}.",
+        suffix=".tmp",
+        dir=output.parent,
+        delete=False,
+    )
+    temp_path = Path(temp_handle.name)
+    try:
+        with temp_handle:
+            writer = csv.writer(temp_handle, lineterminator="\n")
+            writer.writerow(ARCHIVE_TAG_COLUMNS)
+            for tag in sorted(legacy_only):
+                category_mask, release_mask = legacy_only[tag]
+                categories = "|".join(
+                    category
+                    for category in ARCHIVE_TAG_CATEGORIES
+                    if category_mask & category_bits[category]
+                )
+                releases = "|".join(
+                    label
+                    for label in legacy_labels
+                    if release_mask & release_bits[label]
+                )
+                writer.writerow((tag, categories, releases))
+            temp_handle.flush()
+            os.fsync(temp_handle.fileno())
+        os.replace(temp_path, output)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    result = {
+        "output": str(output),
+        "rows": len(legacy_only),
+        "latest_label": latest_label,
+        "latest_unique_tags": len(latest_tags),
+        "legacy_labels": legacy_labels,
+        "sha256": _sha256(output),
+        "size_bytes": output.stat().st_size,
+    }
+    _log(
+        f"구형 전용 태그 CSV 저장: {output} "
+        f"({result['rows']:,}행, {result['size_bytes']:,}바이트, "
+        f"SHA-256 {result['sha256']})"
+    )
+    return result
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Danbooru Search/Event 데이터와 태그 자산을 검증 후 갱신합니다."
@@ -895,6 +1077,28 @@ def _build_parser() -> argparse.ArgumentParser:
     posts.add_argument("--allow-missing-parents", action="store_true")
     posts.add_argument("--dry-run", action="store_true")
     posts.set_defaults(handler=build_posts)
+
+    archive = subparsers.add_parser(
+        "archive-legacy-tags",
+        help="구형 Search 릴리스에만 남은 고유 태그를 작은 CSV로 보관",
+    )
+    archive.add_argument(
+        "--input-dir",
+        default=str(Path(__file__).resolve().parents[1] / "danbooru_optimized"),
+        help="Search parquet가 있는 danbooru_optimized 경로",
+    )
+    archive.add_argument("--latest-label", default="2026_07")
+    archive.add_argument(
+        "--legacy-labels",
+        nargs="+",
+        default=["2025", "2026", "2026_06"],
+    )
+    archive.add_argument(
+        "--output",
+        default="",
+        help="출력 CSV 경로(기본: input-dir/legacy_search_tags_before_<latest>.csv)",
+    )
+    archive.set_defaults(handler=archive_legacy_tags)
 
     validate = subparsers.add_parser(
         "validate",

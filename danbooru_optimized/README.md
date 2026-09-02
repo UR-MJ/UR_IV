@@ -9,7 +9,17 @@
 
 - `danbooru_2026_07_{g,s,q,e}.parquet`: Search용 전체 게시물 태그
 - `danbooru_sorted/danbooru_{g,s,q,e}.parquet`: Event Gen용 parent-child 그래프
-- `dataset_manifest.json`: 원본 revision과 8개 산출물의 검증 정보
+- `dataset_manifest.json`: 활성 릴리스, 원본 revision과 모든 Search/Event 산출물의 검증 정보
+- `legacy_search_tags_before_2026_07.csv`: 구형 Search 3세대에만 남은 태그 archive
+
+Search는 manifest가 지정한 `2026_07` 단일 활성 릴리스의 G/S/Q/E 4개 shard만
+불러옵니다. 과거 릴리스를 선택하거나 구형 파일로 fallback하지 않습니다.
+
+`legacy_search_tags_before_2026_07.csv`는 삭제 전 `2025`, `2026`, `2026_06`
+릴리스의 합집합에서 최신 `2026_07`에 없는 고유 태그만 추린 파일입니다.
+열은 `tag`, `legacy_categories`, `legacy_releases`이며 Search 게시물 shard를
+대체하지 않는 보존용 목록입니다. 현재 보관본은 27,108행, 968,296바이트이며
+SHA-256은 `3274463b91c21559eaae915319c780ca54e89adc5abace9e08d7a2ef943e44ab`입니다.
 
 Event shard에는 해당 등급 child와 그 child가 참조하는 모든 parent가 들어갑니다.
 parent의 자체 등급이 달라도 포함되므로 단일 등급만 선택해도 그래프가 끊기지 않습니다.
@@ -33,6 +43,16 @@ hf download nyanko-devs/danbooru2026 metadata/posts-snapshot.parquet `
   --source-revision ebb02a630201c7b51487e45fb90b3fcf4cbedc20 `
   --snapshot-at 2026-07-13T16:25:53.082Z `
   --expected-source-sha256 5b6b2671dc0fa966de71af76dfd342f485f76581447cec9e26c313ba9fb1c2fd
+```
+
+구형 shard를 삭제하기 전에 legacy 태그 archive를 다시 만들려면:
+
+```powershell
+.\venv\Scripts\python.exe tools\refresh_danbooru_data.py archive-legacy-tags `
+  --input-dir danbooru_optimized `
+  --latest-label 2026_07 `
+  --legacy-labels 2025 2026 2026_06 `
+  --output danbooru_optimized/legacy_search_tags_before_2026_07.csv
 ```
 
 생성 결과만 다시 검사하려면:

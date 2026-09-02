@@ -394,6 +394,22 @@ class GeneratorMainUI(
                 # Vue에서 필터링된 결과로 덱 업데이트
                 deck = payload.get('results', [])
                 if 'results' in payload and isinstance(deck, list):
+                    current_identity = getattr(
+                        self, '_search_dataset_identity', None
+                    )
+                    current_lineage = {
+                        'label': current_identity.get('label'),
+                        'fingerprint': current_identity.get('fingerprint'),
+                        'snapshot_id': getattr(
+                            self, '_search_snapshot_id', None
+                        ),
+                    } if isinstance(current_identity, dict) else None
+                    if payload.get('lineage') != current_lineage:
+                        self.show_status(
+                            '검색 결과 lineage가 현재 결과와 일치하지 않아 '
+                            '지연된 필터 요청을 무시했습니다.'
+                        )
+                        return
                     import random as _rnd
                     rating_filter = getattr(self, '_rating_filter', {'g', 's', 'q', 'e'})
                     self.filtered_results = deck
@@ -401,6 +417,10 @@ class GeneratorMainUI(
                         r for r in deck if r.get('rating', 'g') in rating_filter
                     ]
                     _rnd.shuffle(self.shuffled_prompt_deck)
+                    if not deck and getattr(self, 'is_automating', False):
+                        self._stop_automation(
+                            '검색 필터 결과가 없어 자동화를 중지했습니다.'
+                        )
                     # 필터 적용 결과를 디스크에 저장(단일 쓰기 경로) → 재시작 시 '필터링된' 덱 복원.
                     #   full은 갱신 안 함(새 검색 때만) → '필터 해제' 베이스(last_full)는 유지.
                     self._persist_search_results(deck)
@@ -728,7 +748,17 @@ class GeneratorMainUI(
                         if hasattr(self, '_save_deck_state'):
                             self._save_deck_state()
                         # Vue로 결과 전달
-                        self.vue_bridge.searchResultsReady.emit(json.dumps(out))
+                        imported_results_json = json.dumps(out)
+                        imported_lineage_json = json.dumps({
+                            **imported_identity,
+                            'snapshot_id': imported_snapshot,
+                        }, ensure_ascii=False, separators=(',', ':'))
+                        self.vue_bridge.searchResultLineage.emit(
+                            imported_lineage_json
+                        )
+                        self.vue_bridge.searchResultsReady.emit(
+                            imported_results_json
+                        )
                         self.show_status(f"Imported {len(out)} results")
                     except Exception as e:
                         self.show_status(f"Import failed: {e}")

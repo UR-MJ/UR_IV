@@ -103,7 +103,8 @@ _WEB_METHODS = frozenset({
     "onWidgetChanged", "onAction", "getWidgetValue", "getAllWidgetValues",
     "editorProcess", "getLastGalleryFolder", "getGalleryImages",
     "requestGalleryImages", "getFavorites", "generateThumbnails",
-    "searchDanbooru", "loadLastSearchResults", "loadFullResults", "getUiPrefs",
+    "searchDanbooru", "loadLastSearchResults", "loadFullResults",
+    "getActiveSearchDataset", "getUiPrefs",
     # Backend runtime, generation API, model-path 설정은 redaction과 native
     # capability 검사를 한곳에서 강제하는 ``studio`` 객체로만 공개한다.
     "getUpscalers", "requestUpscalers", "saveImageExif", "renameFile",
@@ -131,7 +132,7 @@ _WEB_SIGNALS = frozenset({
     "imageGenerated", "generationStarted", "generationError", "generationProgress",
     "editorImageLoaded", "editorResult", "captionFilesSelected", "captionProgress",
     "captionDone", "captionOutDirSelected", "i2iImageLoaded", "galleryFolderLoaded",
-    "inpaintImageLoaded", "searchStatus", "loraInserted", "loraStackLoaded",
+    "inpaintImageLoaded", "searchStatus", "searchResultLineage", "loraInserted", "loraStackLoaded",
     "yoloModelUpdated", "condRulesLoaded", "batchFilesSelected", "ollamaResult",
     "genNlResult", "globalWeightsLoaded", "uiPrefsLoaded", "compareImageLoaded",
     "galleryImagesReady", "thumbnailReady", "upscalersReady", "ollamaModelsReady",

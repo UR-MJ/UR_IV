@@ -40,7 +40,7 @@ if errorlevel 1 (
     echo ============================================================
     echo [run] 웹 모드가 비정상 종료했습니다. 아래 크래시 로그를 확인하세요:
     echo ============================================================
-    if exist config\last_crash.log type config\last_crash.log
+    if exist logs\last_crash.log type logs\last_crash.log
     echo ============================================================
     pause
 )

@@ -60,9 +60,10 @@ def main():
 
     # 예외 핸들러 — 크래시 원인 로깅 (콘솔 + 파일).
     # Python 예외와 네이티브 크래시(SIGSEGV/abort/0x80000003)를 모두
-    # config/last_crash.log 에 기록해, 콘솔 창이 닫혀도 사후 확인 가능.
+    # logs/last_crash.log 에 기록해, 콘솔 창이 닫혀도 사후 확인 가능.
     import traceback, faulthandler
-    _crash_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config', 'last_crash.log')
+    from core.storage_paths import log_file
+    _crash_log = str(log_file('last_crash.log', legacy_paths='config/last_crash.log'))
     _crash_fp = None
     try:
         os.makedirs(os.path.dirname(_crash_log), exist_ok=True)

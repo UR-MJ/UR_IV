@@ -1423,13 +1423,23 @@ class VueBridge(QObject):
 
     @pyqtSlot(result=str)
     def getLastGalleryFolder(self) -> str:
-        """마지막 Gallery 폴더 경로 반환"""
+        """ui_prefs의 마지막 Gallery 폴더 경로 반환 (옛 txt는 1회 흡수)."""
         import os
-        cfg = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'gallery_last_folder.txt')
+        base = os.path.dirname(os.path.dirname(__file__))
+        prefs_path = os.path.join(base, 'config', 'ui_prefs.json')
         try:
-            if os.path.exists(cfg):
-                with open(cfg, 'r') as f:
-                    return f.read().strip()
+            from core.config_migration import load_ui_prefs
+            prefs = load_ui_prefs(prefs_path)
+            saved = str(prefs.get('galleryFolder', '') or '').strip()
+            if saved:
+                return saved
+            legacy = os.path.join(base, 'config', 'gallery_last_folder.txt')
+            if os.path.exists(legacy):
+                with open(legacy, 'r', encoding='utf-8') as f:
+                    saved = f.read().strip()
+                if saved:
+                    self._save_gallery_folder(saved)
+                    return saved
         except Exception as e:
             logger.warning("getLastGalleryFolder failed: %s", e)
         from config import OUTPUT_DIR
@@ -1437,10 +1447,15 @@ class VueBridge(QObject):
 
     def _save_gallery_folder(self, folder: str):
         import os
-        cfg = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'gallery_last_folder.txt')
-        os.makedirs(os.path.dirname(cfg), exist_ok=True)
-        with open(cfg, 'w') as f:
-            f.write(folder)
+        from core.config_migration import load_ui_prefs, save_ui_prefs
+        prefs_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'config',
+            'ui_prefs.json',
+        )
+        prefs = load_ui_prefs(prefs_path)
+        prefs['galleryFolder'] = str(folder or '').strip()
+        save_ui_prefs(prefs_path, prefs)
 
     def _gallery_images_payload(self, folder: str) -> str:
         """scandir의 stat 캐시를 이용해 날짜순 미디어 목록을 만든다."""
@@ -1585,6 +1600,7 @@ class VueBridge(QObject):
             logger.warning("썸네일 캐시 정리 실패 (무시): %s", e)
 
     searchResultsReady = pyqtSignal(str)   # JSON results
+    searchResultLineage = pyqtSignal(str)  # JSON {label,fingerprint,snapshot_id}
     queueUpdated = pyqtSignal(str)         # JSON queue state
     eventSearchResults = pyqtSignal(str)   # JSON event results
     generationProgress = pyqtSignal(int, int)  # current, total steps
@@ -1597,7 +1613,7 @@ class VueBridge(QObject):
           queries: { character: '...', copyright: '...', ... }    # 포함 조건
           excludes: { character: '...', ... }                     # 제외 조건
           combine_mode: 'and' | 'or'  (필드 간 결합 — 기본 'and')
-          dataset_year: '2025' | '2026'  (단일 선택 — 기본 '2026')
+          활성 데이터셋은 danbooru_optimized/dataset_manifest.json의 단일 릴리스
         """
         try:
             if isinstance(query_json, str):
@@ -1614,10 +1630,6 @@ class VueBridge(QObject):
             from workers.search_worker import PandasSearchWorker
             from config import PARQUET_DIR
 
-            dataset_year = str(q.get('dataset_year', PandasSearchWorker.DEFAULT_YEAR))
-            if dataset_year not in PandasSearchWorker.AVAILABLE_YEARS:
-                dataset_year = PandasSearchWorker.DEFAULT_YEAR
-
             # 결과 cap 비활성화 — 사용자가 "무제한" 모드 선택 시
             self._disable_result_cap = bool(q.get('disable_result_cap', False))
 
@@ -1627,6 +1639,10 @@ class VueBridge(QObject):
             if prev is not None and prev.isRunning():
                 try:
                     prev.results_ready.disconnect(self._on_search_results)
+                except TypeError:
+                    pass
+                try:
+                    prev.status_update.disconnect(self._on_search_status)
                 except TypeError:
                     pass
                 prev.stop()
@@ -1642,17 +1658,42 @@ class VueBridge(QObject):
             self._search_worker = PandasSearchWorker(
                 PARQUET_DIR, ratings, queries, excludes,
                 combine_mode=combine_mode,
-                dataset_year=dataset_year,
                 result_cap=None if self._disable_result_cap else 500_000,
             )
             self._search_worker.results_ready.connect(self._on_search_results)
+            self._search_worker.status_update.connect(self._on_search_status)
             self._search_worker.start()
             cap_note = " · cap OFF" if self._disable_result_cap else ""
             self.searchStatus.emit(
-                f"검색 중... ({dataset_year} · {combine_mode.upper()}{cap_note})"
+                f"검색 중... (최신 데이터 · {combine_mode.upper()}{cap_note})"
             )
         except Exception as e:
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
+
+    def _on_search_status(self, message):
+        """현재 Search worker의 진행/오류만 Vue에 전달한다."""
+        sender = self.sender()
+        if sender is not None and sender is not getattr(self, '_search_worker', None):
+            return
+        text = str(message)
+        if (
+            sender is not None
+            and getattr(sender, '_bridge_result_rejected', False)
+            and not text.lstrip().startswith('❌')
+        ):
+            return
+        self.searchStatus.emit(text)
+
+    @staticmethod
+    def _search_result_lineage_json(dataset_identity, snapshot_id):
+        """Build the additive lineage event without changing result JSON shape."""
+        if not isinstance(dataset_identity, dict):
+            raise ValueError('검색 결과 dataset identity가 올바르지 않습니다.')
+        return json.dumps({
+            'label': dataset_identity.get('label'),
+            'fingerprint': dataset_identity.get('fingerprint'),
+            'snapshot_id': snapshot_id,
+        }, ensure_ascii=False, separators=(',', ':'))
 
     def _on_search_results(self, results, total_count):
         """검색 결과 수신 → Vue 전달 + Python filtered_results 업데이트
@@ -1668,6 +1709,30 @@ class VueBridge(QObject):
             return
         try:
             import random as _rnd
+            import uuid as _uuid
+            from core.search_result_store import SearchResultStore
+
+            store = SearchResultStore()
+            current_identity = store.dataset_info()
+            worker_identity = getattr(sender, 'dataset_identity', None)
+            if sender is not None:
+                if not isinstance(worker_identity, dict):
+                    sender._bridge_result_rejected = True
+                    self.searchStatus.emit(
+                        '❌ 검색 결과의 데이터셋 검증 정보가 없습니다.'
+                    )
+                    return
+                if worker_identity != current_identity:
+                    sender._bridge_result_rejected = True
+                    self.searchStatus.emit(
+                        '❌ 검색 중 데이터셋이 변경되어 결과를 폐기했습니다.'
+                    )
+                    return
+            else:
+                worker_identity = current_identity
+            if sender is not None:
+                sender._bridge_result_rejected = False
+            snapshot_id = _uuid.uuid4().hex
             out = []
 
             def _pick(row, primary, alt):
@@ -1745,14 +1810,33 @@ class VueBridge(QObject):
                 _rnd.shuffle(out)
                 out = out[:MAX_RESULTS_TO_VUE]
 
-            # Vue로 전달
-            self.searchResultsReady.emit(
-                json.dumps(out, ensure_ascii=False, separators=(',', ':')))
+            # JSON 직렬화까지 끝낸 뒤 manifest identity를 다시 확인한다. 큰 결과는
+            # 직렬화 자체도 오래 걸릴 수 있으므로 이 검증보다 앞에 두어야 한다.
+            result_json = json.dumps(
+                out, ensure_ascii=False, separators=(',', ':')
+            )
+            publish_identity = store.dataset_info()
+            if worker_identity != publish_identity:
+                if sender is not None:
+                    sender._bridge_result_rejected = True
+                self.searchStatus.emit(
+                    '❌ 검색 결과 게시 전 데이터셋이 변경되어 결과를 폐기했습니다.'
+                )
+                return
+
+            # 기존 searchResultsReady 배열 계약은 유지하고, 그 배열에 결합된
+            # provenance를 additive signal로 먼저 전달한다.
+            self.searchResultLineage.emit(
+                self._search_result_lineage_json(worker_identity, snapshot_id)
+            )
+            self.searchResultsReady.emit(result_json)
             self.searchStatus.emit(f'{len(out):,}개 결과 (전체 {total_count:,}개)')
 
             # Python 메인 윈도우의 filtered_results도 업데이트 (랜덤 프롬프트용)
             main_win = self.parent()
             if main_win and hasattr(main_win, 'filtered_results'):
+                main_win._search_dataset_identity = worker_identity
+                main_win._search_snapshot_id = snapshot_id
                 main_win.filtered_results = out
                 main_win.shuffled_prompt_deck = out.copy()
                 _rnd.shuffle(main_win.shuffled_prompt_deck)
@@ -1761,24 +1845,42 @@ class VueBridge(QObject):
                     main_win._save_deck_state()
 
             # ── 디스크 영속(단일 쓰기 경로): 재시작 시 자동 복원 → 자동화 즉시 사용 ──
-            #   새 검색이므로 active=full 동일(전체). 디스크=영속 단일소스, localStorage(slim)=폴백.
+            #   새 검색이므로 active=full 동일(전체). manifest provenance를 검증하는
+            #   backend cache만 영속 소스로 사용한다.
             #   쓰기 로직은 generator_main._persist_search_results 한 곳으로 통일(드리프트 방지).
             if main_win and hasattr(main_win, '_persist_search_results'):
-                main_win._persist_search_results(out, full=out)
+                main_win._persist_search_results(
+                    out,
+                    full=out,
+                    dataset_identity=worker_identity,
+                    snapshot_id=snapshot_id,
+                )
                 print(f"[Search] saved {len(out):,} rows to disk (single write path)")
             else:
                 # 폴백: 메인 윈도우 없음(개발/단독) — 직접 기록
                 try:
-                    import os
-                    from utils.atomic_json import atomic_write_json
-                    cache_dir = os.path.join(
-                        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
-                    for name in ('last_search_results.json', 'last_full_results.json'):
-                        atomic_write_json(os.path.join(cache_dir, name), out, indent=None)
+                    store.save(
+                        out,
+                        full=out,
+                        snapshot_id=snapshot_id,
+                        expected_identity=worker_identity,
+                    )
                 except Exception as e:
                     print(f"[Search] disk backup failed: {e}")
         except Exception as e:
+            if sender is not None:
+                sender._bridge_result_rejected = True
+            self.searchStatus.emit(f'❌ 검색 결과 처리 실패: {e}')
             self.searchResultsReady.emit(json.dumps({'error': str(e)}))
+
+    @pyqtSlot(result=str)
+    def getActiveSearchDataset(self) -> str:
+        """현재 Search 경로의 manifest label/fingerprint를 반환한다."""
+        try:
+            from core.search_result_store import SearchResultStore
+            return json.dumps(SearchResultStore().dataset_info(), ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)}, ensure_ascii=False)
 
     @pyqtSlot(result=str)
     def loadLastSearchResults(self) -> str:
@@ -1786,30 +1888,33 @@ class VueBridge(QObject):
         Returns: JSON string of list[dict] (빈 경우 '[]')
         """
         try:
-            import os
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            path = os.path.join(base_dir, 'config', 'last_search_results.json')
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = f.read()
-                # main_win.filtered_results 도 미리 복원해두면 자동화 즉시 사용 가능
-                try:
-                    parsed = json.loads(data)
-                    if isinstance(parsed, list) and parsed:
-                        main_win = self.parent()
-                        if main_win and hasattr(main_win, 'filtered_results'):
-                            import random as _rnd
-                            main_win.filtered_results = parsed
-                            # 저장된 덱 진행도 복원 ('얼마나 뽑았는지' 유지).
-                            # 실패(파일 없음/풀 크기 변경)면 전체 셔플로 폴백.
-                            if not (hasattr(main_win, '_restore_deck_state')
-                                    and main_win._restore_deck_state()):
-                                main_win.shuffled_prompt_deck = parsed.copy()
-                                _rnd.shuffle(main_win.shuffled_prompt_deck)
-                            print(f"[Search] restored {len(parsed):,} rows from disk → filtered_results")
-                except Exception:
-                    pass
-                return data
+            from core.search_result_store import SearchResultStore
+            store = SearchResultStore()
+            parsed = store.load_active()
+            if store.last_error:
+                print(f"[Search] cache ignored: {store.last_error}")
+            main_win = self.parent()
+            if store.last_snapshot_id is not None:
+                self.searchResultLineage.emit(
+                    self._search_result_lineage_json(
+                        store.last_dataset_identity,
+                        store.last_snapshot_id,
+                    )
+                )
+            if (store.last_snapshot_id is not None and main_win
+                    and hasattr(main_win, 'filtered_results')):
+                import random as _rnd
+                main_win._search_snapshot_id = store.last_snapshot_id
+                main_win._search_dataset_identity = store.last_dataset_identity
+                main_win.filtered_results = parsed
+                # 저장된 덱 진행도 복원 ('얼마나 뽑았는지' 유지).
+                # 실패(파일 없음/풀 크기 변경)면 전체 셔플로 폴백.
+                if not (hasattr(main_win, '_restore_deck_state')
+                        and main_win._restore_deck_state()):
+                    main_win.shuffled_prompt_deck = parsed.copy()
+                    _rnd.shuffle(main_win.shuffled_prompt_deck)
+                print(f"[Search] restored {len(parsed):,} rows from disk → filtered_results")
+            return json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
         except Exception as e:
             print(f"[Search] loadLastSearchResults failed: {e}")
         return '[]'
@@ -1817,17 +1922,18 @@ class VueBridge(QObject):
     @pyqtSlot(result=str)
     def loadFullResults(self) -> str:
         """필터 적용 '전' 전체 검색 셋을 디스크에서 로드 (Vue가 '필터 해제' 베이스로 사용).
-        last_full_results.json 우선, 없으면 last_search_results.json 폴백.
+        full cache 우선, 없으면 active cache로 폴백.
         (loadLastSearchResults와 달리 Python 덱/filtered_results는 건드리지 않음 —
         순수 조회.)"""
         try:
-            import os
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            for name in ('last_full_results.json', 'last_search_results.json'):
-                path = os.path.join(base_dir, 'config', name)
-                if os.path.exists(path):
-                    with open(path, 'r', encoding='utf-8') as f:
-                        return f.read()
+            from core.search_result_store import SearchResultStore
+            store = SearchResultStore()
+            parsed = store.load_full()
+            if not parsed:
+                parsed = store.load_active()
+            if store.last_error:
+                print(f"[Search] full cache ignored: {store.last_error}")
+            return json.dumps(parsed, ensure_ascii=False, separators=(',', ':'))
         except Exception as e:
             print(f"[Search] loadFullResults failed: {e}")
         return '[]'
@@ -2798,15 +2904,19 @@ class VueBridge(QObject):
 
     @pyqtSlot(str, result=str)
     def saveSession(self, payload_json: str) -> str:
-        """세션 상태(탭/프롬프트 등)를 config/session_backup.json에 저장 (크래시 복구용).
+        """세션 상태(탭/프롬프트 등)를 cache/session에 저장 (크래시 복구용).
         localStorage가 PID별로 초기화돼도 살아남도록 백엔드 파일에 보관."""
         try:
-            import os
-            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            path = os.path.join(base, 'config', 'session_backup.json')
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(payload_json or '{}')
+            from core.storage_paths import cache_file
+            from utils.atomic_json import atomic_write_json
+            path = cache_file(
+                'session/session_backup.json',
+                legacy_paths='config/session_backup.json',
+            )
+            payload = json.loads(payload_json or '{}')
+            if not isinstance(payload, dict):
+                raise ValueError('세션 payload는 JSON 객체여야 합니다')
+            atomic_write_json(str(path), payload, indent=None)
             return json.dumps({"ok": True})
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -2815,11 +2925,13 @@ class VueBridge(QObject):
     def getSession(self) -> str:
         """저장된 세션 상태 반환 (없으면 {})."""
         try:
-            import os
-            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            path = os.path.join(base, 'config', 'session_backup.json')
-            if os.path.exists(path):
-                with open(path, encoding='utf-8') as f:
+            from core.storage_paths import cache_file
+            path = cache_file(
+                'session/session_backup.json',
+                legacy_paths='config/session_backup.json',
+            )
+            if path.exists():
+                with path.open(encoding='utf-8') as f:
                     return f.read() or '{}'
             return json.dumps({})
         except Exception as e:

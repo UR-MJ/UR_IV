@@ -342,6 +342,12 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { condRulesPayload } from '../composables/condRules.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
+import {
+  buildSearchDeckUpdate,
+  parseSearchResultLineage,
+  resolveSearchCacheRestore,
+  type SearchResultLineage,
+} from '../utils/searchRestore'
 import CustomSelect from '../components/CustomSelect.vue'
 
 interface RatingChip { key: string; label: string; checked: boolean }
@@ -404,6 +410,8 @@ const lastQuerySummary = ref('')
 // 런타임 Search는 사용자 지정 데이터 경로의 manifest가 가리키는 단일 릴리스만 사용한다.
 const activeDatasetLabel = ref('2026_07')
 const activeDatasetDisplay = computed(() => activeDatasetLabel.value.replace(/^([0-9]{4})_([0-9]{2})$/, '$1.$2'))
+const activeResultLineage = ref<SearchResultLineage | null>(null)
+const pendingResultLineage = ref<SearchResultLineage | null>(null)
 
 // 결과 cap — 기본 50만 (UI 부하 방지), 'unlimited' 선택 시 전체 결과 받음
 // 무제한이면 JSON 직렬화 + Vue 메모리가 무거워질 수 있음 (수 GB 가능)
@@ -644,21 +652,36 @@ onMounted(() => {
       if (backend.loadFullResults) {
         try { full = JSON.parse(await new Promise<string>(r => backend.loadFullResults((s: string) => r(s)))) } catch {}
       }
-      if (Array.isArray(active) && active.length > 0) {
-        const base = (Array.isArray(full) && full.length) ? full : active
-        results.value = base; lastResults.value = base   // 전체(필터 해제 베이스)
-        deepBase.value = active                           // 심층검색 베이스 = 복원된 표시 셋
-        filteredResults.value = active                    // 표시 = 필터된 셋
-        statusText.value = `${active.length.toLocaleString()} MATCHES (디스크 복원)`
+      const restored = resolveSearchCacheRestore<SearchRow>(active, full)
+      if (restored) {
+        activeResultLineage.value = pendingResultLineage.value
+        pendingResultLineage.value = null
+        results.value = restored.base; lastResults.value = restored.base   // 전체(필터 해제 베이스)
+        // deep-only 중간층은 별도 저장하지 않으므로 full을 복원 기준으로 삼는다.
+        // 그래야 0건 필터를 포함해 재시작 후 필터 해제/RESET으로 전체를 회복할 수 있다.
+        deepBase.value = restored.base
+        filteredResults.value = restored.active                    // 표시 = 필터된 셋
+        isFiltered.value = restored.isFiltered
+        statusText.value = `${restored.active.length.toLocaleString()} MATCHES (디스크 복원)`
         return
       }
     } catch (e) { console.warn('[Search] backend restore failed:', e) }
   })()
 
+  onBackendEvent('searchResultLineage', (json: string) => {
+    // 결과 배열과 별도 additive signal이므로 즉시 active로 바꾸지 않는다. 다음
+    // searchResultsReady/디스크 복원과 같은 작업에서 승격해야 A rows+B lineage 틈이 없다.
+    pendingResultLineage.value = parseSearchResultLineage(json)
+    if (pendingResultLineage.value) {
+      activeDatasetLabel.value = pendingResultLineage.value.label
+    }
+  })
   onBackendEvent('searchResultsReady', (json: string) => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
+        activeResultLineage.value = pendingResultLineage.value
+        pendingResultLineage.value = null
         results.value = data; deepBase.value = data; filteredResults.value = data; previewIdx.value = 0
         lastResults.value = data
         statusText.value = `${data.length} MATCHES`
@@ -676,6 +699,7 @@ onMounted(() => {
         requestAction('show_toast', { type: 'error', msg: '검색 결과 형식 오류 — 배열이 아닙니다' })
       }
     } catch (e: any) {
+      pendingResultLineage.value = null
       statusText.value = `JSON 파싱 실패: ${e?.message || 'unknown'}`
       requestAction('show_toast', { type: 'error', msg: `검색 결과 JSON 파싱 실패: ${e?.message || e}` })
     }
@@ -918,7 +942,15 @@ function _applyManagerFilters(arr: SearchRow[]): SearchRow[] {
 const filteredByManager = computed(() => _applyManagerFilters(deepBase.value))
 // filteredResults → 자동화 덱 동기화 (모든 필터 변경 시 호출 → 덱이 항상 표시와 일치)
 function syncDeck() {
-  requestAction('update_prompt_deck', { results: filteredResults.value })
+  const payload = buildSearchDeckUpdate(filteredResults.value, activeResultLineage.value)
+  if (!payload) {
+    requestAction('show_toast', {
+      type: 'error',
+      msg: '검색 결과 출처를 확인할 수 없어 필터를 적용하지 않았습니다.',
+    })
+    return
+  }
+  requestAction('update_prompt_deck', payload)
 }
 
 // activeFilters(Set들)를 localStorage에 영속 → 재시작 시 필터 칩 복원

@@ -14,6 +14,7 @@ QImageReader.setAllocationLimit(4096)  # MB 단위 — 16K RGBA 직전까지 허
 
 # QtWebEngine은 QApplication 생성 전에 import 필요
 from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+from core.storage_paths import config_file, storage_paths, user_data_file
 
 # --- [설정 상수] ---
 USER_INPUT_URL = "http://127.0.0.1:7860/?__theme=dark"
@@ -34,35 +35,33 @@ _logger.info(f"초기 설정된 API 주소: {WEBUI_API_URL}")
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(CURRENT_DIR, 'generated_images')
 
-# ── 사용자 상태 JSON 통합 폴더 ──
-# 루트에 흩어져 있던 사용자 상태 파일(history/presets/favorites/settings 등)을
-# user_data/ 하나로 모음. import 시 1회 자동 마이그레이션 — 기존 루트 파일을
-# user_data/로 이동해 데이터 보존. config.py는 거의 최초로 import되므로 다른
-# 모듈이 파일을 읽기 전에 이전이 끝남.
-USER_DATA_DIR = os.path.join(CURRENT_DIR, 'user_data')
+# ── 애플리케이션 소유 저장 경계 ──
+# config = 설정/경로, user_data = 프리셋·즐겨찾기 같은 사용자 작성 데이터.
+# 위치 결정과 레거시 이동은 traversal-safe 중앙 모듈 한 곳에서 담당한다.
+
+USER_DATA_DIR = str(storage_paths.user_data_dir)
 os.makedirs(USER_DATA_DIR, exist_ok=True)
 _USER_DATA_FILES = (
     'character_presets.json', 'event_gen_settings.json', 'favorite_tags.json',
     'favorites.json', 'prompt_history.json', 'prompt_presets.json',
-    'prompt_settings.json', 'search_tab_settings.json',
+    'search_tab_settings.json',
 )
 for _n in _USER_DATA_FILES:
-    _old = os.path.join(CURRENT_DIR, _n)
-    _new = os.path.join(USER_DATA_DIR, _n)
-    if os.path.exists(_old) and not os.path.exists(_new):
-        try:
-            import shutil as _shutil
-            _shutil.move(_old, _new)
-        except Exception:
-            pass
+    try:
+        user_data_file(_n, legacy_paths=_n)
+    except OSError as _exc:
+        _logger.warning("사용자 데이터 이전 실패 (%s): %s", _n, _exc)
 
 
 def user_data_path(name: str) -> str:
     """user_data/ 내 파일 경로 반환 (사용자 상태 JSON 통합용)."""
-    return os.path.join(USER_DATA_DIR, name)
+    return str(user_data_file(name))
 
 
-PROMPT_SETTINGS_FILE = user_data_path('prompt_settings.json')
+PROMPT_SETTINGS_FILE = str(config_file(
+    'prompt_settings.json',
+    legacy_paths=('user_data/prompt_settings.json', 'prompt_settings.json'),
+))
 CACHE_DIR = os.path.join(CURRENT_DIR, 'image_cache')
 THUMB_DIR = os.path.join(CACHE_DIR, 'thumbs')
 os.makedirs(THUMB_DIR, exist_ok=True)

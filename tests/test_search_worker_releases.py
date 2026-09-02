@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.parquet as pq
 
 from workers.search_worker import PandasSearchWorker
 
@@ -28,6 +31,8 @@ class SearchWorkerReleaseTests(unittest.TestCase):
         PandasSearchWorker.loaded_year = ""
         if hasattr(PandasSearchWorker, "loaded_file_signature"):
             PandasSearchWorker.loaded_file_signature = ()
+        if hasattr(PandasSearchWorker, "verified_artifact_signatures"):
+            PandasSearchWorker.verified_artifact_signatures.clear()
 
     def _write_release(
         self,
@@ -51,18 +56,73 @@ class SearchWorkerReleaseTests(unittest.TestCase):
         row.update(overrides)
         for column in drop_columns:
             row.pop(column, None)
-        pd.DataFrame([row]).to_parquet(
-            self.data_dir / f"danbooru_{year}_{rating}.parquet",
-            index=False,
+        path = self.data_dir / f"danbooru_{year}_{rating}.parquet"
+        pd.DataFrame([row]).to_parquet(path, index=False)
+        return path
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _artifact(self, year: str, rating: str, **overrides):
+        path = self.data_dir / f"danbooru_{year}_{rating}.parquet"
+        if path.is_file():
+            parquet = pq.ParquetFile(path)
+            schema = [
+                {
+                    "name": field.name,
+                    "type": str(field.type),
+                    "nullable": bool(field.nullable),
+                }
+                for field in parquet.schema_arrow
+            ]
+            artifact = {
+                "kind": "search",
+                "format": "parquet",
+                "path": path.name,
+                "rating_shard": rating,
+                "rows": parquet.metadata.num_rows,
+                "schema": schema,
+                "sha256": self._sha256(path),
+                "size_bytes": path.stat().st_size,
+            }
+        else:
+            artifact = {
+                "kind": "search",
+                "format": "parquet",
+                "path": path.name,
+                "rating_shard": rating,
+                "rows": 0,
+                "schema": [],
+                "sha256": "0" * 64,
+                "size_bytes": 0,
+            }
+        artifact.update(overrides)
+        return artifact
+
+    def _write_manifest(self, year: str, ratings=("g",), *, artifacts=None):
+        if artifacts is None:
+            artifacts = [self._artifact(year, rating) for rating in ratings]
+        payload = {
+            "format_version": 1,
+            "dataset_label": year,
+            "artifacts": artifacts,
+        }
+        (self.data_dir / "dataset_manifest.json").write_text(
+            json.dumps(payload, ensure_ascii=False),
+            encoding="utf-8",
         )
 
-    def _run(self, *, year=None, ratings=("g",)):
+    def _run(self, *, ratings=("g",)):
         emissions = []
         worker = PandasSearchWorker(
             str(self.data_dir),
             ratings,
             queries={},
-            dataset_year=year,
         )
         worker.results_ready.connect(
             lambda rows, total: emissions.append((rows, total))
@@ -71,9 +131,23 @@ class SearchWorkerReleaseTests(unittest.TestCase):
         self.assertEqual(len(emissions), 1)
         return worker, emissions[0]
 
-    def test_default_release_prefers_2026_07_when_present(self):
+    def _run_failure(self, *, ratings=("g",)):
+        emissions = []
+        statuses = []
+        worker = PandasSearchWorker(str(self.data_dir), ratings, queries={})
+        worker.results_ready.connect(
+            lambda rows, total: emissions.append((rows, total))
+        )
+        worker.status_update.connect(statuses.append)
+        worker.run()
+        self.assertEqual(emissions, [])
+        self.assertTrue(any(status.startswith("❌") for status in statuses), statuses)
+        return worker, statuses
+
+    def test_only_active_2026_07_release_is_loaded(self):
         self._write_release("2026_07", "g", "new_release_tag")
         self._write_release("2026_06", "g", "previous_release_tag")
+        self._write_manifest("2026_07")
 
         worker, (rows, total) = self._run()
 
@@ -81,60 +155,25 @@ class SearchWorkerReleaseTests(unittest.TestCase):
         self.assertEqual(total, 1)
         self.assertEqual(rows[0]["general"], "new_release_tag")
 
-    def test_missing_latest_release_falls_back_to_2026_06(self):
+    def test_old_release_is_not_used_when_latest_is_missing(self):
         self._write_release("2026_06", "g", "fallback_release_tag")
+        self._write_manifest("2026_07")
 
-        worker, (rows, total) = self._run(year="2026_07")
+        worker, _statuses = self._run_failure()
 
-        self.assertEqual(worker.dataset_year, "2026_06")
-        self.assertEqual(total, 1)
-        self.assertEqual(rows[0]["general"], "fallback_release_tag")
+        self.assertEqual(worker.dataset_year, "2026_07")
 
-    def test_fallback_uses_one_complete_release_for_all_ratings(self):
+    def test_incomplete_active_release_does_not_mix_old_shards(self):
         self._write_release("2026_07", "g", "partial_latest_tag")
         self._write_release("2026_06", "g", "fallback_general_tag")
         self._write_release("2026_06", "s", "fallback_sensitive_tag")
+        self._write_manifest("2026_07", ("g", "s"))
 
-        worker, (rows, total) = self._run(
-            year="2026_07",
-            ratings=("g", "s"),
-        )
+        worker, _statuses = self._run_failure(ratings=("g", "s"))
 
-        self.assertEqual(worker.dataset_year, "2026_06")
-        self.assertEqual(total, 2)
-        self.assertEqual(
-            {row["general"] for row in rows},
-            {"fallback_general_tag", "fallback_sensitive_tag"},
-        )
+        self.assertEqual(worker.dataset_year, "2026_07")
 
-    def test_fallback_reaches_2025_and_keeps_metadata_compatibility(self):
-        self._write_release(
-            "2025",
-            "g",
-            "legacy_release_tag",
-            drop_columns=("meta", "image_width", "image_height"),
-            metadata="legacy_metadata",
-        )
-
-        worker, (rows, total) = self._run(year="2026_07")
-
-        self.assertEqual(worker.dataset_year, "2025")
-        self.assertEqual(total, 1)
-        self.assertEqual(rows[0]["general"], "legacy_release_tag")
-        self.assertEqual(rows[0]["image_width"], "")
-        self.assertEqual(rows[0]["image_height"], "")
-
-    def test_fallback_uses_2026_before_2025(self):
-        self._write_release("2026", "g", "full_release_tag")
-        self._write_release("2025", "g", "oldest_release_tag")
-
-        worker, (rows, total) = self._run(year="2026_07")
-
-        self.assertEqual(worker.dataset_year, "2026")
-        self.assertEqual(total, 1)
-        self.assertEqual(rows[0]["general"], "full_release_tag")
-
-    def test_release_missing_required_schema_falls_back_as_a_whole(self):
+    def test_active_release_missing_required_schema_fails_as_a_whole(self):
         self._write_release(
             "2026_07",
             "g",
@@ -142,16 +181,80 @@ class SearchWorkerReleaseTests(unittest.TestCase):
             drop_columns=("artist",),
         )
         self._write_release("2026_06", "g", "valid_fallback_tag")
+        self._write_manifest("2026_07")
 
-        worker, (rows, total) = self._run(year="2026_07")
+        worker, _statuses = self._run_failure()
 
-        self.assertEqual(worker.dataset_year, "2026_06")
+        self.assertEqual(worker.dataset_year, "2026_07")
+
+    def test_manifest_selects_the_single_active_release(self):
+        self._write_release("next_release", "g", "manifest_release_tag")
+        self._write_manifest("next_release")
+        manifest_bytes = (self.data_dir / "dataset_manifest.json").read_bytes()
+
+        worker, (rows, total) = self._run()
+
+        self.assertEqual(worker.dataset_year, "next_release")
+        self.assertEqual(worker.dataset_identity, {
+            "label": "next_release",
+            "fingerprint": hashlib.sha256(manifest_bytes).hexdigest(),
+        })
         self.assertEqual(total, 1)
-        self.assertEqual(rows[0]["general"], "valid_fallback_tag")
+        self.assertEqual(rows[0]["general"], "manifest_release_tag")
+
+    def test_invalid_manifest_never_falls_back_to_an_old_release(self):
+        self._write_release("2026_06", "g", "old_release_tag")
+        (self.data_dir / "dataset_manifest.json").write_text(
+            json.dumps({
+                "format_version": 1,
+                "dataset_label": "../unsafe",
+                "artifacts": [{}],
+            }),
+            encoding="utf-8",
+        )
+        statuses = []
+        worker = PandasSearchWorker(str(self.data_dir), ("g",), queries={})
+        worker.status_update.connect(statuses.append)
+        emissions = []
+        worker.results_ready.connect(
+            lambda rows, total: emissions.append((rows, total))
+        )
+
+        worker.run()
+
+        self.assertEqual(emissions, [])
+        self.assertTrue(
+            any("manifest 오류" in status for status in statuses),
+            statuses,
+        )
+
+    def test_non_string_manifest_label_is_rejected(self):
+        self._write_release("2026_07", "g", "current_release_tag")
+        (self.data_dir / "dataset_manifest.json").write_text(
+            json.dumps({
+                "format_version": 1,
+                "dataset_label": 202607,
+                "artifacts": [{}],
+            }),
+            encoding="utf-8",
+        )
+        statuses = []
+        worker = PandasSearchWorker(str(self.data_dir), ("g",), queries={})
+        worker.status_update.connect(statuses.append)
+        emissions = []
+        worker.results_ready.connect(
+            lambda rows, total: emissions.append((rows, total))
+        )
+
+        worker.run()
+
+        self.assertEqual(emissions, [])
+        self.assertTrue(any("문자열" in status for status in statuses), statuses)
 
     def test_replacing_a_release_file_invalidates_the_dataframe_cache(self):
         self._write_release("2026_07", "g", "before_update")
-        _, (first_rows, _) = self._run(year="2026_07")
+        self._write_manifest("2026_07")
+        _, (first_rows, _) = self._run()
         path = self.data_dir / "danbooru_2026_07_g.parquet"
         previous_mtime = path.stat().st_mtime_ns
 
@@ -160,23 +263,179 @@ class SearchWorkerReleaseTests(unittest.TestCase):
             path,
             ns=(path.stat().st_atime_ns, previous_mtime + 2_000_000_000),
         )
-        _, (second_rows, _) = self._run(year="2026_07")
+        self._write_manifest("2026_07")
+        _, (second_rows, _) = self._run()
 
         self.assertEqual(first_rows[0]["general"], "before_update")
         self.assertEqual(second_rows[0]["general"], "after_update")
 
-    def test_no_compatible_release_emits_a_terminal_empty_result(self):
+    def test_invalid_release_emits_an_error_without_replacing_results(self):
         self._write_release(
             "2026_07",
             "g",
             "invalid_release_tag",
             drop_columns=("copyright",),
         )
+        self._write_manifest("2026_07")
 
-        _, (rows, total) = self._run(year="2026_07")
+        worker, _statuses = self._run_failure()
+        self.assertIsNone(worker.dataset_identity)
 
-        self.assertEqual(rows, [])
-        self.assertEqual(total, 0)
+    def test_manifest_is_required_at_runtime(self):
+        self._write_release("2026_07", "g", "unverified_tag")
+        statuses = []
+        worker = PandasSearchWorker(str(self.data_dir), ("g",), queries={})
+        worker.status_update.connect(statuses.append)
+        emissions = []
+        worker.results_ready.connect(
+            lambda rows, total: emissions.append((rows, total))
+        )
+
+        worker.run()
+
+        self.assertEqual(emissions, [])
+        self.assertTrue(any("manifest 없음" in item for item in statuses), statuses)
+
+    def test_missing_selected_manifest_artifact_fails_closed(self):
+        self._write_release("2026_07", "g", "current_release_tag")
+        self._write_manifest("2026_07", artifacts=[{
+            "kind": "event_graph",
+            "rating_shard": "g",
+        }])
+        statuses = []
+        worker = PandasSearchWorker(str(self.data_dir), ("g",), queries={})
+        worker.status_update.connect(statuses.append)
+        emissions = []
+        worker.results_ready.connect(
+            lambda rows, total: emissions.append((rows, total))
+        )
+
+        worker.run()
+
+        self.assertEqual(emissions, [])
+        self.assertTrue(any("정확히 1개" in item for item in statuses), statuses)
+
+    def test_selected_manifest_artifact_path_must_match_active_release(self):
+        self._write_release("2026_07", "g", "current_release_tag")
+        artifact = self._artifact(
+            "2026_07", "g", path="danbooru_2026_06_g.parquet"
+        )
+        self._write_manifest("2026_07", artifacts=[artifact])
+        statuses = []
+        worker = PandasSearchWorker(str(self.data_dir), ("g",), queries={})
+        worker.status_update.connect(statuses.append)
+        emissions = []
+        worker.results_ready.connect(
+            lambda rows, total: emissions.append((rows, total))
+        )
+
+        worker.run()
+
+        self.assertEqual(emissions, [])
+        self.assertTrue(any("경로 불일치" in item for item in statuses), statuses)
+
+    def test_manifest_size_hash_and_row_mismatches_fail_closed(self):
+        self._write_release("2026_07", "g", "verified_release_tag")
+        valid_artifact = self._artifact("2026_07", "g")
+        cases = {
+            "size": {"size_bytes": valid_artifact["size_bytes"] + 1},
+            "hash": {"sha256": "0" * 64},
+            "rows": {"rows": valid_artifact["rows"] + 1},
+        }
+
+        for label, override in cases.items():
+            with self.subTest(label=label):
+                self._reset_cache()
+                artifact = dict(valid_artifact)
+                artifact.update(override)
+                self._write_manifest("2026_07", artifacts=[artifact])
+                statuses = []
+                worker = PandasSearchWorker(
+                    str(self.data_dir), ("g",), queries={}
+                )
+                worker.status_update.connect(statuses.append)
+                emissions = []
+                worker.results_ready.connect(
+                    lambda rows, total: emissions.append((rows, total))
+                )
+
+                worker.run()
+
+                self.assertEqual(emissions, [])
+                self.assertTrue(
+                    any("불일치" in item for item in statuses),
+                    statuses,
+                )
+
+    def test_manifest_change_during_artifact_validation_fails_closed(self):
+        self._write_release("2026_07", "g", "verified_release_tag")
+        self._write_manifest("2026_07")
+        manifest_path = self.data_dir / "dataset_manifest.json"
+        statuses = []
+        emissions = []
+        worker = PandasSearchWorker(str(self.data_dir), ("g",), queries={})
+        worker.status_update.connect(statuses.append)
+        worker.results_ready.connect(
+            lambda rows, total: emissions.append((rows, total))
+        )
+        original_sha256 = worker._sha256
+
+        def mutate_manifest_after_hash(path):
+            result = original_sha256(path)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["changed_during_validation"] = True
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            return result
+
+        worker._sha256 = mutate_manifest_after_hash
+
+        worker.run()
+
+        self.assertEqual(emissions, [])
+        self.assertIsNone(worker.dataset_identity)
+        self.assertTrue(
+            any(item.startswith("❌") and "변경" in item for item in statuses),
+            statuses,
+        )
+
+    def test_previously_verified_shard_replaced_by_later_validation_is_rejected(self):
+        self._write_release("2026_07", "g", "verified_g")
+        self._write_release("2026_07", "s", "verified_s")
+        self._write_manifest("2026_07", ("g", "s"))
+        statuses = []
+        emissions = []
+        worker = PandasSearchWorker(
+            str(self.data_dir), ("g", "s"), queries={}
+        )
+        worker.status_update.connect(statuses.append)
+        worker.results_ready.connect(
+            lambda rows, total: emissions.append((rows, total))
+        )
+        original_validate = worker._validate_manifest_artifact
+
+        def replace_g_after_s_validation(artifact, **kwargs):
+            result = original_validate(artifact, **kwargs)
+            if kwargs["rating"] == "s":
+                g_path = self.data_dir / "danbooru_2026_07_g.parquet"
+                replacement = self.data_dir / "replacement_g.parquet"
+                frame = pd.read_parquet(g_path)
+                frame = pd.concat([frame, frame], ignore_index=True)
+                frame.loc[0, "general"] = "unverified_1"
+                frame.loc[1, "general"] = "unverified_2"
+                frame.to_parquet(replacement, index=False)
+                os.replace(replacement, g_path)
+            return result
+
+        worker._validate_manifest_artifact = replace_g_after_s_validation
+
+        worker.run()
+
+        self.assertEqual(emissions, [])
+        self.assertIsNone(worker.dataset_identity)
+        self.assertTrue(
+            any(item.startswith("❌") and "변경" in item for item in statuses),
+            statuses,
+        )
 
 
 if __name__ == "__main__":

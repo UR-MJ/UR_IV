@@ -10,7 +10,7 @@ PyQt6 + Vue 3 SPA 하이브리드 AI 이미지 생성 스튜디오. **무거운 
 
 - **하이브리드 아키텍처**: PyQt6 윈도우 + QWebEngineView 안에서 Vue 3 SPA 렌더
 - **다중 백엔드**: WebUI(A1111/Forge), ComfyUI 동시 등록 및 즉시 전환
-- **Danbooru 데이터셋 검색**: 1천만+ 행 parquet (2025/2026 선택), AND/OR 토글, 페이지네이션
+- **Danbooru 데이터셋 검색**: manifest로 검증하는 `2026_07` 단일 활성 릴리스(G/S/Q/E 4개 shard), AND/OR 토글, 페이지네이션
 - **AI 자동 검열**: YOLO 검출 + SAM3 텍스트 프롬프트 정밀 마스킹 + exclude 프롬프트
 - **워크플로우 프로파일**: 모델/VAE/TE/해상도 등 한 묶음으로 저장·복원
 - **프롬프트 Undo/Redo**: Ctrl+Z/Y, 워크플로우 토큰 카운터, 자동완성
@@ -28,7 +28,7 @@ PyQt6 + Vue 3 SPA 하이브리드 AI 이미지 생성 스튜디오. **무거운 
 | **I2I** | 이미지→이미지. 이미지 업로드/드래그, 리사이즈 모드, denoising, seed |
 | **Inpaint** | 마스크 그리기로 부분 재생성. 브러시/박스/올가미, 자석 올가미, 마스크 Undo |
 | **Editor** | 비-생성 편집. 브러시/스탬프/지우개, **YOLO+SAM3 자동 검열**(exclude 프롬프트), 배경 제거(rembg+알파매팅), 크롭/리사이즈, 색감, 워터마크, 5분 자동저장 |
-| **Search** | Danbooru 데이터셋 태그 검색. **2025/2026 토글**, **AND/OR 결합 모드**, `[A\|B]` OR 그룹, `*word` 정확매칭, 결과 정렬·페이지네이션·50만 cap |
+| **Search** | Danbooru `2026_07` 단일 활성 데이터셋 검색. **G/S/Q/E 등급 필터**, **AND/OR 결합 모드**, `[A\|B]` OR 그룹, `*word` 정확매칭, 결과 정렬·페이지네이션·50만 cap |
 | **Event Gen** | 이벤트·시리즈 단위 검색 → 멀티스텝 프롬프트 생성 |
 | **XYZ Plot** | 파라미터 그리드 비교 (steps×CFG×sampler 등). 결과 CSV 내보내기 |
 | **Batch** | 일괄 처리. 좌측 설정 / 우측 썸네일 그리드. BATCH/UPSCALE/ADETAILER/SAM3 서브탭 (ADetailer 배치는 ETA 표시) |
@@ -127,21 +127,23 @@ cd frontend && npm run build
 
 ## 📊 데이터셋 (Search 탭)
 
-Danbooru 태그 parquet 파일을 `danbooru_optimized/` 폴더에 배치:
+Search는 `dataset_manifest.json`이 지정하고 검증하는 `2026_07` 릴리스만 사용합니다.
+릴리스 선택이나 구형 파일 fallback 없이, G/S/Q/E 등급별 4개 shard를 불러옵니다.
 
 ```
 danbooru_optimized/
-├── danbooru_2025_g.parquet  (~450MB)
-├── danbooru_2025_s.parquet  (~660MB)
-├── danbooru_2025_q.parquet  (~150MB)
-├── danbooru_2025_e.parquet  (~130MB)
-├── danbooru_2026_g.parquet  (~580MB)  ← 2026이 기본
-├── danbooru_2026_s.parquet  (~810MB)
-├── danbooru_2026_q.parquet  (~180MB)
-└── danbooru_2026_e.parquet  (~165MB)
+├── dataset_manifest.json
+├── danbooru_2026_07_g.parquet
+├── danbooru_2026_07_s.parquet
+├── danbooru_2026_07_q.parquet
+├── danbooru_2026_07_e.parquet
+└── legacy_search_tags_before_2026_07.csv
 ```
 
-Hugging Face에서 다운로드 가능: `wd-tagger` 또는 Danbooru 덤프 프로젝트.
+`legacy_search_tags_before_2026_07.csv`는 삭제 전 구형 3세대(`2025`, `2026`,
+`2026_06`)의 합집합에는 있었지만 `2026_07`에는 없는 고유 태그만 보존합니다.
+열은 `tag`, `legacy_categories`, `legacy_releases`입니다. 데이터 생성·검증 및
+구형 태그 archive 재생성 방법은 [`danbooru_optimized/README.md`](danbooru_optimized/README.md)를 참고하세요.
 
 ### 검색 문법
 
@@ -215,7 +217,10 @@ Hugging Face에서 다운로드 가능: `wd-tagger` 또는 Danbooru 덤프 프�
 │       ├── stores/           # widgetStore (state + IPC)
 │       └── bridge.js         # QWebChannel 초기화
 ├── frontend_dist/            # Vue 빌드 산출물 (커밋됨, QWebEngineView가 로드)
-├── config/                   # 사용자 설정 (gitignored)
+├── config/                   # 앱 설정·경로·UI 상태 (설정의 기준 위치)
+├── user_data/                # 사용자 프리셋·통계·API 비밀값·관리형 백엔드
+├── cache/                    # 검색 결과·대기열·세션 복구 캐시 (삭제 가능)
+├── logs/                     # 크래시·진단 기록
 ├── editor_models/            # YOLO + SAM 체크포인트 (gitignored)
 ├── danbooru_optimized/       # Danbooru parquet (gitignored)
 └── CLAUDE.md                 # 개발 지침 (Claude Code 에이전트용)

@@ -29,11 +29,15 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
+from core.storage_paths import config_file
 from utils.atomic_json import atomic_write_json, load_json_safe
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = PROJECT_ROOT / "user_data" / "backend_runtime.json"
+CONFIG_PATH = config_file(
+    "backend_runtime.json",
+    legacy_paths="user_data/backend_runtime.json",
+)
 
 FORGE_REPOSITORY = "https://github.com/Haoming02/sd-webui-forge-classic.git"
 COMFYUI_REPOSITORY = "https://github.com/Comfy-Org/ComfyUI.git"

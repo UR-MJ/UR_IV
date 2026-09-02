@@ -20,11 +20,13 @@ PRESET_DIR = "queue_presets"
 
 logger = logging.getLogger(__name__)
 
-# 앱 크래시 후에도 대기열 복구에 쓰는 영속 파일
-_QUEUE_STATE_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "config", "queue_state.json",
-)
+# 앱 크래시 후에도 대기열 복구에 쓰는 세션 캐시
+from core.storage_paths import cache_file
+
+_QUEUE_STATE_PATH = str(cache_file(
+    "session/queue_state.json",
+    legacy_paths="config/queue_state.json",
+))
 
 
 class QueueItemEditDialog(QDialog):

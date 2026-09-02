@@ -9,12 +9,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STYLE = (ROOT / "frontend" / "src" / "style.css").read_text(encoding="utf-8")
+# 색 토큰은 `core/theme_presets.py` 로 이사했고 style.css 는 치수/타입만 남았다.
+# 여기서 보는 건 그 생성물(기본 프리셋의 폴백) — 스크립트가 죽어도 실제로 화면에
+# 깔리는 값이라, 이 검사가 지키려던 "기본 화면의 대비"의 뜻은 그대로다.
+# 프리셋 3종 전체의 대비는 `tests/test_theme_contract.py` 가 본다.
+TOKENS = (ROOT / "frontend" / "src" / "styles" / "theme-fallback.css").read_text(encoding="utf-8")
 APP = (ROOT / "frontend" / "src" / "App.vue").read_text(encoding="utf-8")
 ANIMA_PANEL = (ROOT / "frontend" / "src" / "components" / "AnimaGuidancePanel.vue").read_text(encoding="utf-8")
 
 
 def _css_hex_variable(name: str) -> str:
-    match = re.search(rf"{re.escape(name)}\s*:\s*(#[0-9a-fA-F]{{6}})", STYLE)
+    pattern = rf"{re.escape(name)}\s*:\s*(#[0-9a-fA-F]{{6}})"
+    match = re.search(pattern, TOKENS) or re.search(pattern, STYLE)
     assert match, f"missing CSS variable: {name}"
     return match.group(1)
 

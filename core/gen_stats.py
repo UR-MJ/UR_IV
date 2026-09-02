@@ -6,7 +6,12 @@ import threading
 from collections import Counter
 from datetime import datetime, timedelta
 
-_STATS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'gen_stats.json')
+from core.storage_paths import user_data_file
+
+_STATS_PATH = str(user_data_file(
+    'stats/generation.json',
+    legacy_paths='config/gen_stats.json',
+))
 _MAX_RECORDS = 5000  # 최대 보관 레코드 수
 _instance = None
 

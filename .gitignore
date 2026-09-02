@@ -26,6 +26,9 @@ backend_ui_cache/
 # User-specific config (절대 경로, 개인 설정 포함)
 # 이제 user_data/ 폴더로 통합 (config.py가 import 시 루트→user_data 자동 마이그레이션)
 user_data/
+# 세션/검색 캐시와 진단 로그 — 설정과 물리적으로 분리
+cache/
+logs/
 # QWebEngine 저장소/캐시 — 고정 경로(localStorage 영속용). 커밋 금지
 web_profile/
 # 하위 호환: 옛 위치에 남아있을 수 있는 루트 파일들도 계속 무시
@@ -102,6 +105,11 @@ Desktop.ini
 *.swp
 config/session_backup.json
 config/char_global_prefs.json
+config/prompt_settings.json
+config/backend_runtime.json
+config/forge_model_paths.json
+config/automation/
+config/state/
 
 # 디자인 캔버스 시드 산출물 — .dc.html 소스에서 다시 만들 수 있고 2.5MB 다
 design/**/*.html
