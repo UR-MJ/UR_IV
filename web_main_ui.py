@@ -154,6 +154,9 @@ _WEB_SIGNALS = frozenset({
     # 된다 — 게이트가 backendSelected 로만 닫히므로 웹 모드에서 영영 안 닫힌다.
     "backendSelectionRequired", "backendProbeResult", "backendSelected",
     "comfyWorkflowPicked",
+    # 하단 계기 스트립의 백엔드 칸. 빠지면 웹 모드에서만 스트립이 영영 비어 있고
+    # 데스크톱은 멀쩡해 눈치채기 어렵다(게이트 4종과 같은 함정).
+    "backendStatus",
 })
 
 

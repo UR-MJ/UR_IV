@@ -699,6 +699,105 @@ class WebUIMixin:
         except Exception as exc:
             print(f"[Backend] 게이트 결과 전송 실패: {exc}")
 
+    # ── 하단 계기 스트립: 백엔드 · VRAM · 모델 중 '백엔드' 칸 ──
+    # 게이트가 '고르기 전 한 번'이라면 이쪽은 앱이 사는 내내의 상태다.
+    # 연결/실패/미연결이 모두 같은 채널로 가야 스트립이 한 값만 들고 있으면 된다.
+
+    # 게이트 재전송과 같은 간격 — 이유도 같다(_emit_backend_status 주석 참고).
+    _BACKEND_STATUS_RETRIES = (300, 700, 1200)
+
+    @staticmethod
+    def _backend_status_url() -> str:
+        """지금 백엔드가 바라보는 주소. set_backend()가 config를 늘 갱신해 둔다."""
+        import config
+
+        if get_backend_type() == BackendType.COMFYUI:
+            return str(getattr(config, 'COMFYUI_API_URL', '') or '')
+        return str(getattr(config, 'WEBUI_API_URL', '') or '')
+
+    def _remember_webui_label(self, info) -> None:
+        """연결에 성공한 순간의 options 로 WebUI 계열의 표시 이름을 확정한다.
+
+        **왜 options 인가**: Forge 계열은 자기 설정을 `forge_` 접두어로
+        /sdapi/v1/options 에 등록한다 — 이 앱이 생성 페이로드에 이미 실어 보내는
+        `forge_additional_modules` 가 그 중 하나다. A1111 에는 그런 키가 없다.
+        반대로 'A1111 이다'라고 단정할 양성 표지는 어디에도 없다(reForge·SD.Next
+        같은 포크도 같은 API 를 낸다). 그래서 표지가 보일 때만 'Forge' 라 부르고
+        아니면 'WebUI' 로 둔다 — **틀린 이름은 모르는 것보다 나쁘다.**
+
+        URL 을 함께 적어 두는 이유: 다른 주소로 갈아탄 뒤에도 이름이 남으면
+        남의 서버를 Forge 라고 부르게 된다.
+        """
+        options = info.get('options') if isinstance(info, dict) else None
+        label = 'WebUI'
+        try:
+            if isinstance(options, dict) and any(
+                str(key).startswith('forge_') for key in options
+            ):
+                label = 'Forge'
+        except Exception:
+            pass
+        self._webui_label = (self._backend_status_url(), label)
+
+    def _emit_backend_status(self, connected: bool, error: str | None = None) -> None:
+        """스트립이 읽을 백엔드 상태를 보내고, 짧게 몇 번 되풀이한다.
+
+        **왜 되풀이하나**: 게이트(`_emit_backend_selection_required`)와 같은 이유다.
+        loadFinished 는 '페이지가 떴다'까지만 보장하고 QWebChannel 핸드셰이크와 Vue
+        마운트는 그 뒤에 비동기로 끝난다. 시작 직후의 첫 연결 결과를 한 번만 보내면
+        리스너가 붙기 전에 도착해 조용히 사라지고, 스트립은 영영 빈 칸으로 남는다.
+        전체 상태를 통째로 보내는 통보라 여러 번 받아도 결과가 같다(멱등).
+        """
+        is_comfy = get_backend_type() == BackendType.COMFYUI
+        url = self._backend_status_url()
+        if is_comfy:
+            label = 'ComfyUI'
+        else:
+            # 이름의 근거는 연결됐을 때 본 options 뿐이다. 주소가 그때와 다르면
+            # 그 근거는 남의 서버 것이므로 버리고 중립적인 'WebUI' 로 돌아간다.
+            remembered = getattr(self, '_webui_label', None)
+            label = (
+                remembered[1]
+                if isinstance(remembered, tuple) and remembered[0] == url
+                else 'WebUI'
+            )
+
+        payload = {
+            'kind': 'comfyui' if is_comfy else 'webui',
+            'label': label,
+            'url': url,
+            'connected': bool(connected),
+        }
+        if not connected and error:
+            payload['error'] = str(error)
+
+        # 재전송은 '예약 당시'가 아니라 '지금'의 상태를 보내야 한다. payload 를 여기
+        # 적어 두고 체인은 이 값을 읽는다 — 재전송 도중 연결이 바뀌었는데 옛 상태가
+        # 되살아나면 스트립이 거짓말을 한다. 세대 번호로 낡은 체인은 끊는다.
+        self._backend_status_payload = payload
+        self._backend_status_gen = getattr(self, '_backend_status_gen', 0) + 1
+        self._send_backend_status(self._backend_status_gen, 0)
+
+    def _send_backend_status(self, generation: int, attempt: int) -> None:
+        """현재 상태를 한 번 보내고, 세대가 그대로면 다음 재전송을 예약한다."""
+        if generation != getattr(self, '_backend_status_gen', 0):
+            return  # 더 새로운 상태가 나왔다 — 이 체인은 버린다
+        payload = getattr(self, '_backend_status_payload', None)
+        if not payload:
+            return
+        try:
+            self.vue_bridge.backendStatus.emit(
+                json.dumps(payload, ensure_ascii=False)
+            )
+        except Exception as exc:
+            print(f"[Backend] 상태 전송 실패: {exc}")
+
+        if attempt < len(self._BACKEND_STATUS_RETRIES):
+            QTimer.singleShot(
+                self._BACKEND_STATUS_RETRIES[attempt],
+                lambda: self._send_backend_status(generation, attempt + 1),
+            )
+
     def _resolve_backend_gate(self, ok: bool, error: str = '') -> bool:
         """게이트가 기다리던 연결 결과를 돌려준다. 처리했으면 True.
 
@@ -731,6 +830,9 @@ class WebUIMixin:
                 "백엔드에 연결되지 않았습니다.\n\n"
                 "하단 도구 바의 '백엔드' 버튼으로 연결하세요."
             )
+            # 이 경로는 info worker 를 아예 안 돌린다 — 여기서 안 알리면 스트립이
+            # '아직 모름'과 '연결 안 함'을 구분하지 못한 채 영영 비어 있다.
+            self._emit_backend_status(False, '백엔드에 연결하지 않고 시작했습니다')
         elif result == 'managed_pending':
             if not getattr(self, '_backend_connected', False):
                 self.viewer_label.setText(
@@ -738,6 +840,9 @@ class WebUIMixin:
                     "설정에서 진행 상태를 확인할 수 있습니다."
                 )
                 self.btn_generate.setEnabled(False)
+                # 아직 실패가 아니라 '시작 중'이라 error 는 붙이지 않는다 —
+                # 곧 도착할 연결 성공/실패 통보가 이 값을 덮어쓴다.
+                self._emit_backend_status(False)
         elif result == 'managed_connected':
             # runtime은 Vue보다 먼저 준비될 수 있다. 이 지점은 startup sequence가
             # Vue loadFinished를 기다린 뒤 호출되므로 초기 목록 push가 유실되지 않는다.
@@ -750,6 +855,11 @@ class WebUIMixin:
                 "앱 관리형 백엔드를 자동 시작하지 못했습니다.\n"
                 "설정에서 다시 시작하거나 기존 API URL을 연결하세요."
                 + suffix
+            )
+            # 자동 시작이 프로세스 단계에서 죽으면 info worker 가 돌지 않는다 —
+            # on_webui_info_error 를 못 거치므로 실패를 여기서 직접 알린다.
+            self._emit_backend_status(
+                False, error or '앱 관리형 백엔드를 자동 시작하지 못했습니다'
             )
 
     @staticmethod
@@ -931,6 +1041,13 @@ class WebUIMixin:
         except Exception:
             pass
         self._backend_connected = True
+        # 스트립에 '연결됨'을 알린다. 이름(Forge/WebUI)의 근거인 options 는 이
+        # 순간에만 손에 있으므로 먼저 확정해 둔다 — 나중엔 다시 볼 수 없다.
+        try:
+            self._remember_webui_label(info)
+            self._emit_backend_status(True)
+        except Exception as exc:
+            print(f"[Backend] 상태 통보 실패(무시): {exc}")
         self.btn_generate.setEnabled(True)
         self.viewer_label.setText(f"✅ {backend_name} 연결 완료!\n생성 버튼을 눌러 시작하세요.")
         self.show_status(
@@ -999,6 +1116,13 @@ class WebUIMixin:
 
         # 게이트가 기다리던 연결이면 결과를 오버레이로 돌려준다(게이트는 계속 떠 있다).
         self._resolve_backend_gate(False, error_msg)
+
+        # 스트립에도 실패를 알린다 — 게이트를 이미 지난 뒤(연결 끊김·URL 변경)엔
+        # 이 통보가 사용자가 상태를 알 수 있는 유일한 경로다.
+        try:
+            self._emit_backend_status(False, error_msg)
+        except Exception as exc:
+            print(f"[Backend] 상태 통보 실패(무시): {exc}")
 
         # startup auto-start 실패는 modal/종료 없이 offline UI로 폴백한다.
         # 게이트 경로도 마찬가지 — 오버레이가 이미 오류를 보여주는데 그 위에

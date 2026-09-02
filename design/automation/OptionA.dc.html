@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .num { font-family: 'IBM Plex Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div style="width: 420px; height: 780px; background: #060606; box-sizing: border-box; padding: 20px 30px; display: flex; flex-direction: column; gap: 12px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div style="font-size: 11px; font-weight: 500; color: #C9A227;">A안</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">설정을 서랍으로 뺀다</div>
+  </div>
+
+  <div style="width: 360px; background: #0A0A0A; border: 1px solid #242424; box-sizing: border-box; display: flex; flex-direction: column; position: relative;">
+
+    <!-- 프롬프트 영역이 그대로 남는다 -->
+    <div style="height: 244px; border-bottom: 1px solid #242424; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+      <div style="font-size: 13px; font-weight: 500; color: #A2A2A2;">최종 프롬프트</div>
+      <div style="flex: 1; background: #131313; border: 1px solid #242424; border-radius: 6px;"></div>
+      <div style="font-size: 13px; font-weight: 500; color: #A2A2A2;">캐릭터 · 모델</div>
+      <div style="height: 28px; background: #131313; border: 1px solid #242424; border-radius: 6px;"></div>
+    </div>
+
+    <div style="padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+
+      <!-- 한 줄로 접힌 자동화 -->
+      <div style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; background: rgba(201,162,39,0.14); border: 1px solid #C9A227; border-radius: 6px; box-sizing: border-box;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9A227" stroke-width="1.6" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>
+        <span style="font-size: 12px; font-weight: 500; color: #C9A227;">자동</span>
+        <span style="font-size: 12px; color: #A2A2A2;" class="num">10장 · 대기 1.0s</span>
+        <span style="margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11px; color: #8A8A8A;">
+          설정
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        </span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #A2A2A2;">
+        <span style="width: 26px; height: 15px; background: #242424; border-radius: 8px;"></span>
+        <span>생성 시 태그를 자연어로 변환</span>
+      </div>
+
+      <div style="height: 40px; background: #C9A227; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 600; color: #0A0A0A;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="#0A0A0A" stroke="none"><path d="M7 4l13 8-13 8z"/></svg>
+        자동 생성 시작
+      </div>
+    </div>
+
+    <!-- 열린 서랍 -->
+    <div style="position: absolute; left: 360px; top: 268px; width: 300px; background: #131313; border: 1px solid #747474; border-radius: 8px; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 13px; font-weight: 500; color: #E4E4E4;">자동 생성 설정</div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 11px; color: #8A8A8A;">얼마나</div>
+        <div style="display: flex; gap: 6px;">
+          <span style="flex: 1; height: 28px; background: rgba(201,162,39,0.14); border: 1px solid #C9A227; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #C9A227;">10장</span>
+          <span style="flex: 1; height: 28px; background: #1E1E1E; border: 1px solid #242424; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #A2A2A2;">50장</span>
+          <span style="flex: 1; height: 28px; background: #1E1E1E; border: 1px solid #242424; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #A2A2A2;">무제한</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 11px; color: #8A8A8A;">사이 간격</div>
+        <div style="height: 28px; background: #0A0A0A; border: 1px solid #242424; border-radius: 6px; display: flex; align-items: center; padding: 0 10px; box-sizing: border-box; font-size: 12px; color: #E4E4E4;" class="num">1.0 초</div>
+      </div>
+
+      <div style="border-top: 1px solid #242424; padding-top: 8px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 12px; color: #A2A2A2;">고급</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #A2A2A2; line-height: 1.5; margin-top: 132px;">
+    <div style="color: #4ADE80; font-weight: 500;">얻는 것</div>
+    <div>프롬프트 영역이 한 줄도 안 줄어든다. 자동 상태를 한 줄로 늘 보여 준다.</div>
+    <div style="color: #E0B341; font-weight: 500; margin-top: 4px;">치르는 것</div>
+    <div>설정을 보려면 한 번 더 눌러야 한다. 서랍이 무대를 덮는다.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

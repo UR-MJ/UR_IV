@@ -593,15 +593,11 @@
 
     <QueuePanel />
 
-    <!-- VRAM 게이지 (하단 고정) — 클릭으로 상세 메모리 정보 + 권장사항 -->
-    <div class="vram-bar" v-if="vramInfo.total > 0" @click="onVramClick" :title="vramTooltip">
-      <div class="vram-fill" :style="{ width: vramInfo.pct + '%' }" :class="vramClass"></div>
-      <span class="vram-text">
-        VRAM {{ vramInfo.used }}GB / {{ vramInfo.total }}GB ({{ vramInfo.pct }}%)
-        <span v-if="vramClass === 'critical'" class="vram-warn"><Icon name="alert" /> 위험</span>
-        <span v-else-if="vramClass === 'warn'" class="vram-warn"><Icon name="chevron-up" /> 주의</span>
-      </span>
-    </div>
+    <!-- 하단 계기 스트립 (백엔드 · VRAM · 모델) — 값이 없어도 줄은 남는다.
+         예전 VRAM 바는 `v-if="vramInfo.total > 0"` 이라 백엔드가 없으면 통째로
+         사라졌고, 그래서 개발 서버에서는 아무것도 안 보였다. -->
+    <StatusStrip :backend="backendStatus" :vram="vramInfo" :vram-level="vramClass"
+      :vram-tooltip="vramTooltip" @vram-click="onVramClick" />
 
     <!-- Preset Manager Modal -->
     <transition name="fade">
@@ -1083,6 +1079,7 @@ import NavRail from './components/NavRail.vue'
 import BackendGate from './components/BackendGate.vue'
 import type { NavSection } from './utils/navSections'
 import QueuePanel from './components/QueuePanel.vue'
+import StatusStrip from './components/StatusStrip.vue'
 import CharacterPresetModal from './components/CharacterPresetModal.vue'
 import ABTestModal from './components/ABTestModal.vue'
 import CharFeatureOverrideModal from './components/CharFeatureOverrideModal.vue'
@@ -1185,6 +1182,9 @@ const waitPct = computed(() => {
   const elapsed = waitTotalMs.value - waitRemainingMs.value
   return Math.max(0, Math.min(100, (elapsed / waitTotalMs.value) * 100))
 })
+// 하단 계기 스트립이 그리는 백엔드 상태. null = 아직 신호 없음(= '연결 안 됨').
+// 파이썬이 backendStatus 를 짧게 몇 번 되풀이 보내므로 늦게 붙어도 곧 채워진다.
+const backendStatus = ref<{ kind?: string; label?: string; url?: string; connected?: boolean; error?: string } | null>(null)
 const vramInfo = ref({ used: 0, total: 0, pct: 0 })
 const vramClass = computed(() => vramInfo.value.pct > 90 ? 'critical' : vramInfo.value.pct > 70 ? 'warn' : 'ok')
 const vramTooltip = computed(() => {
@@ -1940,6 +1940,11 @@ onMounted(async () => {
   // 게이트를 가장 먼저 붙인다. 파이썬은 Vue 로드 직후 backendSelectionRequired 를
   // 보내기 시작하므로(0.3초 뒤 첫 재전송), 다른 구독보다 늦으면 첫 신호를 흘린다.
   bindBackendGate()
+  // 계기 스트립의 백엔드 칸. 게이트와 같은 이유로 일찍 붙인다 — 파이썬이 되풀이해
+  // 보내긴 하지만, 늦게 붙을수록 첫 몇 번을 흘려 스트립이 '연결 안 됨'으로 머문다.
+  onBackendEvent('backendStatus', (json: string) => {
+    try { backendStatus.value = JSON.parse(json || 'null') } catch { /* 깨진 페이로드로 줄을 잃지 않는다 */ }
+  })
   onBackendEvent('ollamaModelsReady', applyOllamaModels)
   onBackendEvent('adetailerModelsReady', (json: string) => { try { adModelItems.value = JSON.parse(json) } catch {} })
   storeWidgets.negpip_group = 'true'   // NegPiP 상시 적용 (UI 토글 제거)
@@ -2691,24 +2696,7 @@ onMounted(async () => {
 .pop-enter-active { animation: pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
 
-/* VRAM Bar */
-.vram-warn { color: var(--state-warn-fg); font-weight: var(--fw-bold); margin-left: 6px; }
-.vram-bar { cursor: pointer; }
-.vram-bar:hover .vram-fill { filter: brightness(1.15); }
-.vram-bar {
-  position: fixed; bottom: 0; left: 0; right: 0; height: 22px;
-  background: var(--bg-primary); border-top: 1px solid var(--border); z-index: 500;
-  display: flex; align-items: center;
-}
-.vram-fill { height: 100%; transition: width 1s ease; }
-.vram-fill.ok { background: rgba(74,222,128,0.4); }
-.vram-fill.warn { background: rgba(251,191,36,0.5); }
-.vram-fill.critical { background: rgba(248,113,113,0.6); }
-.vram-text {
-  position: absolute; left: 50%; transform: translateX(-50%);
-  font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); letter-spacing: 0;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-}
+/* 하단 VRAM 바는 components/StatusStrip.vue 로 옮겼다 (백엔드·VRAM·모델 한 줄). */
 
 .global-progress { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: transparent; z-index: 1000; }
 .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }

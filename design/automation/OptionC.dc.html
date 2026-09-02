@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .num { font-family: 'IBM Plex Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div style="width: 420px; height: 780px; background: #060606; box-sizing: border-box; padding: 20px 30px; display: flex; flex-direction: column; gap: 12px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div style="font-size: 11px; font-weight: 500; color: #C9A227;">C안</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">돌 때는 상태만 보여 준다</div>
+  </div>
+
+  <div style="width: 360px; background: #0A0A0A; border: 1px solid #242424; box-sizing: border-box; display: flex; flex-direction: column;">
+
+    <div style="height: 190px; border-bottom: 1px solid #242424; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+      <div style="font-size: 13px; font-weight: 500; color: #A2A2A2;">최종 프롬프트</div>
+      <div style="flex: 1; background: #131313; border: 1px solid #242424; border-radius: 6px;"></div>
+    </div>
+
+    <div style="padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+
+      <!-- 설정이 있던 자리를 상태가 통째로 차지한다 -->
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; align-self: center;"></span>
+        <span class="num" style="font-size: 30px; font-weight: 600; color: #E4E4E4; line-height: 1;">37</span>
+        <span style="font-size: 13px; color: #A2A2A2;">/ 50 장</span>
+        <span style="margin-left: auto; font-size: 12px; color: #8A8A8A;" class="num">12분 남음</span>
+      </div>
+
+      <div style="height: 4px; background: #242424; border-radius: 2px; overflow: hidden;">
+        <div style="width: 74%; height: 100%; background: #C9A227;"></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #A2A2A2;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.6"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M7 4h14v12"/></svg>
+          <span>덱 <strong class="num" style="color:#E4E4E4;">83</strong> / 120 남음</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #A2A2A2;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.6" stroke-linecap="round"><path d="M6 3h12"/><path d="M6 21h12"/><path d="M8 3v4l4 5 4-5V3"/><path d="M8 21v-4l4-5 4 5v4"/></svg>
+          <span>다음까지 <span class="num" style="color:#E4E4E4;">0.6</span>초</span>
+          <span style="flex: 1; height: 3px; background: #242424; border-radius: 2px; overflow: hidden;"><span style="display: block; width: 40%; height: 100%; background: #8FB8E6;"></span></span>
+        </div>
+      </div>
+
+      <!-- 돌면서 바꿀 수 있는 것만 남긴다 -->
+      <div style="display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid #242424;">
+        <span style="font-size: 11px; color: #8A8A8A;">사이 간격</span>
+        <span class="num" style="font-size: 12px; color: #E4E4E4;">1.0초</span>
+        <span style="margin-left: auto; font-size: 11px; color: #8A8A8A;">설정은 멈춘 뒤에</span>
+      </div>
+
+      <div style="height: 40px; background: #1E1E1E; border: 1px solid #D14141; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 600; color: #F87171;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#F87171" stroke="none"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+        멈추기
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #A2A2A2; line-height: 1.5;">
+    <div style="color: #4ADE80; font-weight: 500;">얻는 것</div>
+    <div>돌 때 알고 싶은 것(몇 장, 얼마 남음, 덱, 다음까지)이 한눈에 든다. 지금은 설정 7줄 아래 작은 글씨다.</div>
+    <div style="color: #E0B341; font-weight: 500; margin-top: 4px;">치르는 것</div>
+    <div>돌면서 설정을 볼 수 없다. 어차피 대부분 못 바꾸지만, 값을 확인하려면 멈춰야 한다.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

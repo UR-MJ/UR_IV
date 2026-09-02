@@ -145,6 +145,19 @@ class VueBridge(QObject):
     backendSelected = pyqtSignal(str)           # JSON {ok: bool, error?: str}
     comfyWorkflowPicked = pyqtSignal(str)       # JSON {path, info}
 
+    # ── 하단 계기 스트립이 읽는 백엔드 연결 상태 ──
+    # 왜 게이트 4종과 따로인가: 게이트는 '고르기 전' 한 번의 사건이고 이건 앱이
+    # 사는 내내 바뀌는 상태다 — URL 을 바꾸거나 연결이 끊겨도 같은 채널로 온다.
+    # 받는 쪽이 마지막 값만 들고 있으면 되도록 항상 전체 상태를 보낸다(멱등).
+    # JSON {
+    #   kind: 'webui' | 'comfyui',
+    #   label: 'Forge' | 'A1111' | 'ComfyUI' | 'WebUI',  # 사람이 읽는 이름
+    #   url: 'http://127.0.0.1:7860',
+    #   connected: bool,
+    #   error?: str,                                     # connected=false 일 때만
+    # }
+    backendStatus = pyqtSignal(str)
+
     # 외부에 제공하는 생성 API 서버와 원격 WebUI/ComfyUI target 관리.
     # 민감한 token은 Web 모드에서 항상 제거된 snapshot만 전달한다.
     generationApiEvent = pyqtSignal(str)

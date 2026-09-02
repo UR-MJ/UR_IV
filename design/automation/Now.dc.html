@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .num { font-family: 'IBM Plex Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div style="width: 420px; height: 780px; background: #060606; box-sizing: border-box; padding: 20px 30px; display: flex; flex-direction: column; gap: 12px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div style="font-size: 11px; font-weight: 500; color: #8A8A8A;">지금</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">설정 7개가 한 덩어리로 쌓여 있다</div>
+  </div>
+
+  <!-- 좌측 패널 360px 재현 -->
+  <div style="width: 360px; background: #0A0A0A; border: 1px solid #242424; box-sizing: border-box; display: flex; flex-direction: column;">
+
+    <!-- 프롬프트 영역 (남은 자리) -->
+    <div style="height: 96px; border-bottom: 1px solid #242424; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+      <div style="font-size: 13px; font-weight: 500; color: #A2A2A2;">최종 프롬프트</div>
+      <div style="height: 44px; background: #131313; border: 1px solid #242424; border-radius: 6px;"></div>
+    </div>
+
+    <!-- gen-footer -->
+    <div style="padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 1; height: 28px; background: rgba(201,162,39,0.14); border: 1px solid #C9A227; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: #C9A227;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>
+          자동 켬
+        </div>
+        <div style="flex: 1; height: 28px; background: #1E1E1E; border: 1px solid #242424; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: #A2A2A2;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/></svg>
+          무작위
+        </div>
+      </div>
+
+      <!-- 자동화 설정 — 여기가 209px 를 먹는다 -->
+      <div style="background: #0D0D0D; border: 1px solid #242424; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; position: relative;">
+
+        <div style="position: absolute; left: -30px; top: 0; bottom: 0; width: 3px; background: #D14141;"></div>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 11px; color: #8A8A8A; width: 62px;">횟수</span>
+          <span style="width: 50px; height: 25px; background: #131313; border: 1px solid #242424; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; font-size: 11px; color: #E4E4E4;" class="num">10</span>
+          <span style="flex: 1; height: 25px; background: #131313; border: 1px solid #242424; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; font-size: 11px; color: #A2A2A2;">count</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 11px; color: #8A8A8A; width: 62px;">반복</span>
+          <span style="width: 50px; height: 25px; background: #131313; border: 1px solid #242424; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; font-size: 11px; color: #E4E4E4;" class="num">1</span>
+          <span style="font-size: 11px; color: #8A8A8A;">대기(초)</span>
+          <span style="width: 50px; height: 25px; background: #131313; border: 1px solid #242424; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; font-size: 11px; color: #E4E4E4;" class="num">1.0</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 11px; color: #8A8A8A; width: 62px; border-bottom: 1px dotted #585858;">재시도</span>
+          <span style="width: 50px; height: 25px; background: #131313; border: 1px solid #242424; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; font-size: 11px; color: #E4E4E4;" class="num">2</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 11px; color: #8A8A8A; width: 84px; border-bottom: 1px dotted #585858;">cleanup 주기</span>
+          <span style="width: 50px; height: 25px; background: #131313; border: 1px solid #242424; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; font-size: 11px; color: #E4E4E4;" class="num">0</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #A2A2A2;">
+          <span style="width: 14px; height: 14px; border: 1px solid #585858; border-radius: 3px;"></span> 중복 허용
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #A2A2A2;">
+          <span style="width: 14px; height: 14px; border: 1px solid #585858; border-radius: 3px;"></span> 덱 소진 시 초기화
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 4px; border-top: 1px solid #242424; font-size: 11px; color: #8A8A8A;">
+          <span>덱 <strong style="color: #E4E4E4;" class="num">120</strong> / 120 남음</span>
+          <span style="color: #A2A2A2;">덱 초기화</span>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #A2A2A2;">
+        <span style="width: 26px; height: 15px; background: #242424; border-radius: 8px;"></span>
+        <span>🅣→🅝 생성 시 태그→자연어 변환</span>
+      </div>
+
+      <div style="height: 40px; background: #C9A227; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 600; color: #0A0A0A; letter-spacing: 0.06em;">
+        START AUTOMATION
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #A2A2A2; line-height: 1.5;">
+    <div style="color: #F87171; font-weight: 500;">측정한 문제</div>
+    <div>· 자동화를 켜면 프롬프트 영역이 <span class="num" style="color:#E4E4E4;">408 → 199px</span>, 절반이 사라진다</div>
+    <div>· 숫자 칸 5개가 전부 <span class="num" style="color:#E4E4E4;">50×25px</span> — 위계가 없다 (최소 28px 규칙도 미달)</div>
+    <div>· 점선 라벨 둘은 설명이 툴팁에만 있다 — <span class="num" style="color:#E4E4E4;">255자</span>·<span class="num" style="color:#E4E4E4;">260자</span></div>
+    <div>· 덱이 실행 전·중 두 번 따로 그려진다</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

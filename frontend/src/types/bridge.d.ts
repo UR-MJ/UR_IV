@@ -58,7 +58,7 @@ export type BackendEvent =
   | 'eventSearchProgress' | 'eventSearchResults' | 'eventImportResults'
   | 'ollamaResult' | 'genNlResult' | 'vramUpdated' | 'showNotification' | 'tabChanged'
   | 'backendSelectionRequired' | 'backendProbeResult' | 'backendSelected' | 'comfyWorkflowPicked'
-  | 'backendRuntimeEvent' | 'generationApiEvent'
+  | 'backendRuntimeEvent' | 'generationApiEvent' | 'backendStatus'
   | 'creatorStateChanged' | 'creatorProgress' | 'creatorResult' | 'creatorMediaSelected'
   | 'comicStoryboardReady' | 'comicDocumentChanged'
   | 'loraManagerUrlReady' | 'refineResult'
