@@ -31,6 +31,7 @@ export type ActionName =
   | 'pull_prompt_from_image' | 'explore_seed' | 'copy_to_clipboard'
   | 'gallery_open_folder' | 'gallery_send_exif_to_t2i' | 'add_favorite' | 'remove_favorite' | 'delete_image'
   | 'toggle_automation' | 'stop_automation' | 'set_automation_settings'
+  | 'automation_override_next' | 'pause_automation' | 'resume_automation'
   | 'workflow_profile_list' | 'workflow_profile_save' | 'workflow_profile_load'
   | 'workflow_profile_delete' | 'workflow_profile_rename'
   | 'prompt_order_list' | 'prompt_order_save' | 'prompt_order_reset'
@@ -83,6 +84,48 @@ export interface LoraEntry {
 
 /** set_lora_stack 페이로드 */
 export interface SetLoraStackPayload { entries: LoraEntry[] }
+
+// ── 자동화 ──
+// 화면은 '10장 / 1시간 / 무제한' 으로 말하지만 계약은 mode + limit 두 개뿐이다.
+// 단위 환산(시간 → 분)은 전부 Vue 쪽에서 끝내고, 백엔드에는 예전 그대로 보낸다.
+
+/** set_automation_settings 페이로드 — 자동화 루프 설정 한 벌.
+ *  `limit` 의 단위는 mode 가 정한다: count=장 수, timer=분, unlimited=안 씀. */
+export interface AutomationSettings {
+  mode: 'count' | 'timer' | 'unlimited'
+  limit: number
+  /** 한 프롬프트로 이어서 만들 장 수 (시드만 바뀐다). */
+  repeat: number
+  /** 장과 장 사이에 쉬는 시간(초). */
+  delay: number
+  allowDupes: boolean
+  autoResetDeck: boolean
+  /** 생성 실패 1회당 다시 시도할 횟수. */
+  maxRetries: number
+  /** N장마다 백엔드의 LoRA 캐시를 비운다. 0 이면 안 비운다. */
+  cleanupEveryN: number
+}
+
+/** automation_override_next 페이로드 — **다음 한 장에만** 쓸 프롬프트 전문.
+ *  백엔드가 한 번 쓰고 스스로 지운다. 빈 문자열이면 덮어쓰기 취소(원래 프롬프트로). */
+export interface AutomationOverrideNextPayload { prompt: string }
+
+/** automationStatus 이벤트 — 자동화 루프가 매 단계 보내는 상태.
+ *  `prompt`/`paused` 는 조종석(다음 프롬프트 편집 · 일시정지 버튼) 때문에 늘어난 필드다. */
+export interface AutomationStatusEvent {
+  running: boolean
+  paused: boolean
+  count: number
+  waiting: boolean
+  wait_remaining_ms: number
+  wait_total_ms: number
+  deck_total: number
+  deck_remaining: number
+  deck_used: number
+  allow_duplicates: boolean
+  /** 다음 생성에 나갈 프롬프트 전문. 없으면 빈 문자열. */
+  prompt: string
+}
 
 // ── 시작 백엔드 게이트 ──
 // 창 위에 뜨는 Vue 오버레이. 예전의 별도 QDialog 를 대체하지만, Vue 가 못 뜨면

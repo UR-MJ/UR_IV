@@ -407,11 +407,18 @@ class ActionsMixin:
         self.is_automating = True
         self.auto_gen_count = 0
         self.auto_current_repeat = 1
+        # 일시정지 · 일회성 덮어쓰기 상태를 새 회차에 물려주지 않는다.
+        # (직전 자동화에서 멈춘 채 끝났으면 새로 시작하자마자 또 멈춰 버린다)
+        self._auto_paused = False
+        self._auto_resume_pending = ''
+        self._wait_paused_remaining_ms = None
+        self._auto_prompt_override = ''
+        self._auto_override_used = False
 
         settings = self.automation_widget.get_settings()
         self.auto_settings = settings
         self._emit_auto_status()
-        
+
         # 시간 제한 모드면 시작 시간 기록
         if settings['termination_mode'] == 'timer':
             self.auto_start_time = time.time()
@@ -444,11 +451,15 @@ class ActionsMixin:
 
         # ★★★ 첫 번째 프롬프트 적용 (apply_random_prompt 사용!) ★★★
         self.apply_random_prompt()
+        # 위 호출이 총 프롬프트 상자를 다시 채운 '뒤'에 한 번 더 보낸다 —
+        # 위쪽 첫 emit 은 아직 직전 회차의 프롬프트를 담고 있어 화면이 한 박자 어긋난다.
+        self._emit_auto_status()
 
-        # 첫 생성 시작
+        # 첫 생성 시작 — 자동화 경로의 생성은 전부 _automation_start_generation 을 거친다
+        # (일시정지 확인 + 일회성 덮어쓰기 소비가 여기 한 곳에만 있어야 새는 경로가 없다)
         from PyQt6.QtCore import QTimer
         delay_ms = int(settings['delay'] * 1000)
-        QTimer.singleShot(delay_ms, self.start_generation)
+        QTimer.singleShot(delay_ms, self._automation_start_generation)
 
 
     def _run_automation_cycle(self):
@@ -458,6 +469,23 @@ class ActionsMixin:
 
         import time
         from PyQt6.QtCore import QTimer
+
+        # 일시정지 — 덱·카운트·반복 상태를 건드리지 않고 그대로 선다.
+        if getattr(self, '_auto_paused', False):
+            self._auto_resume_pending = 'cycle'
+            self._emit_auto_status()
+            return
+
+        # 직전 회차에서 일회성 덮어쓰기를 썼다면 총 프롬프트 상자를 섹션에서 다시 조립한다.
+        # 반복 생성(repeat_per_prompt>1) 회차는 새 프롬프트를 안 뽑아 상자를 갱신하지
+        # 않으므로, 여기서 되돌리지 않으면 덮어쓴 값이 다음 장까지 따라간다 —
+        # 사용자가 정한 '이번만' 이 깨지는 유일한 구멍이었다.
+        if getattr(self, '_auto_override_used', False):
+            self._auto_override_used = False
+            try:
+                self.update_total_prompt_display()
+            except Exception:
+                pass
 
         settings = self.auto_settings
 
@@ -512,6 +540,129 @@ class ActionsMixin:
             self._emit_auto_status(waiting=False)
             QTimer.singleShot(0, self._automation_generate)
 
+    # ── 일시정지 / 재개 · 일회성 프롬프트 덮어쓰기 ───────────────────────
+    def _auto_is_waiting(self) -> bool:
+        """지금이 '사이 간격 대기' 중인가.
+
+        카운트다운 타이머가 돌고 있거나, 일시정지로 남은 시간을 얼려 둔 상태면 대기다.
+        (_emit_auto_status 를 대기 여부를 모르는 곳 — 액션 핸들러 — 에서 부를 때 쓴다)
+        """
+        if getattr(self, '_wait_paused_remaining_ms', None) is not None:
+            return True
+        t = getattr(self, '_wait_timer', None)
+        return bool(t is not None and t.isActive())
+
+    def _set_prompt_override(self, text: str):
+        """다음 '한 장'에만 쓸 프롬프트 전문을 걸어 둔다. 빈 문자열이면 덮어쓰기 취소.
+
+        Vue 는 추가/제거를 따로 추적하지 않고 편집 결과를 전문으로 보낸다 — 그래야
+        와일드카드가 이미 풀린 문자열을 사람이 그대로 손볼 수 있다.
+        걸자마자 총 프롬프트 상자에 반영하는 이유: 그 상자가 곧 API 로 나갈 문자열이고
+        (_build_generation_payload 가 그대로 읽는다), 사용자가 방금 고친 게 화면에
+        남아 있어야 '보이는 대로 나간다'가 성립한다.
+        """
+        text = (text or '').strip()
+        self._auto_prompt_override = text
+        try:
+            if text:
+                self.total_prompt_display.setPlainText(text)
+            else:
+                # 취소 → 섹션 위젯에서 원래 프롬프트를 다시 조립한다.
+                self.update_total_prompt_display()
+        except Exception:
+            pass
+        self._emit_auto_status(waiting=self._auto_is_waiting())
+
+    def _consume_prompt_override(self):
+        """걸린 덮어쓰기를 총 프롬프트 상자에 밀어 넣고 '즉시' 비운다.
+
+        덱에는 손대지 않는다 — 덱 pop 은 _run_automation_cycle → apply_random_prompt
+        가 따로 하므로, 이번 장을 손봤다고 덱 진행이 어긋나지 않는다.
+        (큐 우선 항목도 같은 방식으로 총 프롬프트 상자에 직접 넣는다 — 검증된 경로)
+        """
+        ov = getattr(self, '_auto_prompt_override', '') or ''
+        if not ov:
+            return
+        self._auto_prompt_override = ''      # '이번만' — 쓰는 순간 사라진다
+        self._auto_override_used = True      # 다음 사이클에서 상자를 되돌리라는 표시
+        try:
+            self.total_prompt_display.setPlainText(ov)
+        except Exception:
+            pass
+
+    def _automation_start_generation(self):
+        """자동화 경로의 유일한 생성 진입점 — 일시정지 확인 + 덮어쓰기 소비 후 생성."""
+        if not self.is_automating:
+            return
+        if getattr(self, '_auto_paused', False):
+            # 반복 카운터·자연어 변환은 이미 끝난 지점이라 재개 시 여기로 되돌아온다.
+            self._auto_resume_pending = 'start'
+            self._emit_auto_status()
+            return
+        self._consume_prompt_override()
+        self.start_generation()
+
+    def _pause_automation(self):
+        """자동화 일시정지 — 덱·카운트·반복 상태를 모두 유지한다(_stop_automation 과 다름).
+
+        진행 중인 생성은 중단하지 않는다. 이 화면에서 '멈춤'은 다음 장을 내보내기 전에
+        프롬프트를 손보려는 것이라, 이미 GPU 에 넘어간 장을 버릴 이유가 없다.
+        대기 시간 처리: 남은 시간을 그 자리에서 '얼린다'(흘려보내지 않는다). 사이 간격은
+        API 호출 사이의 최소 간격이라 사람이 잠깐 세웠다고 건너뛰면 설정이 무의미해지고,
+        얼려 봐야 재개 후 최대 delay 한 번(보통 1초)이라 체감 비용이 없다.
+        """
+        if not self.is_automating or getattr(self, '_auto_paused', False):
+            return
+        self._auto_paused = True
+        t = getattr(self, '_wait_timer', None)
+        if t is not None and t.isActive():
+            import time as _t
+            self._wait_paused_remaining_ms = max(
+                0, int((getattr(self, '_wait_end_time', 0) - _t.time()) * 1000))
+            t.stop()
+            self._wait_end_time = 0
+        self.show_status("⏸ 자동화 일시정지 — 덱·카운트는 그대로")
+        self._emit_auto_status(waiting=self._auto_is_waiting())
+
+    def _resume_automation(self):
+        """멈춘 지점부터 잇는다 — 어디서 섰는지에 따라 되돌아갈 곳이 다르다."""
+        if not self.is_automating or not getattr(self, '_auto_paused', False):
+            return
+        self._auto_paused = False
+        from PyQt6.QtCore import QTimer
+
+        # 1) 대기 중에 멈췄다 → 얼려 둔 잔여 시간부터 다시 센다.
+        rem = getattr(self, '_wait_paused_remaining_ms', None)
+        if rem is not None:
+            import time as _t
+            self._wait_paused_remaining_ms = None
+            self._wait_end_time = _t.time() + (max(0, int(rem)) / 1000.0)
+            self._ensure_wait_timer()
+            self._wait_timer.start(100)
+            self.show_status("▶ 자동화 재개")
+            self._emit_auto_status(waiting=True)
+            return
+
+        # 2) 그 외 — 멈춘 단계로 되돌아간다.
+        #    generate : 대기가 끝난 직후(반복 카운터 올리기 전)
+        #    start    : 반복 카운터·자연어 변환까지 끝난 직후
+        #    continue : 생성이 끝난 뒤(큐 우선 → 덱 순서를 그대로 잇는다)
+        #    cycle    : 사이클 진입 직전
+        pending = getattr(self, '_auto_resume_pending', '') or ''
+        self._auto_resume_pending = ''
+        self.show_status("▶ 자동화 재개")
+        self._emit_auto_status()
+        target = {
+            'generate': getattr(self, '_automation_generate', None),
+            'start': getattr(self, '_automation_start_generation', None),
+            'continue': getattr(self, '_continue_automation', None),
+            'cycle': getattr(self, '_run_automation_cycle', None),
+        }.get(pending)
+        if target is not None:
+            QTimer.singleShot(0, target)
+        # pending 이 비어 있으면 생성이 아직 진행 중이라는 뜻 —
+        # 그 생성이 끝나면 _continue_automation 이 평소대로 이어간다.
+
 
     def _automation_generate(self):
         """자동화 이미지 생성"""
@@ -523,17 +674,29 @@ class ActionsMixin:
             self._wait_timer.stop()
         self._wait_end_time = 0
 
+        # 대기가 끝난 바로 이 지점이 '대기와 생성 사이'다 — 일시정지는 여기서 선다.
+        # 반복 카운터를 올리기 전이라, 재개하면 이 함수로 되돌아와 그대로 이어간다.
+        if getattr(self, '_auto_paused', False):
+            self._wait_paused_remaining_ms = None   # 대기는 이미 다 흘렀다
+            self._auto_resume_pending = 'generate'
+            self._emit_auto_status()
+            return
+
         self.auto_current_repeat += 1
 
         # 생성 시 태그→자연어 자동 변환 (비동기 worker — UI 안 멈춤).
         # 이미 변환된 프롬프트(반복 생성 등)는 문자열 비교로 건너뜀 → 누적 방지.
         # 큐 우선 항목은 _automation_generate를 거치지 않으므로 자연스럽게 제외됨.
-        if getattr(self, '_auto_nl_enabled', False) and not getattr(self, '_auto_processing_queue', False):
+        # 사용자가 이번 장 프롬프트를 직접 고쳤으면(덮어쓰기) 변환을 건너뛴다 —
+        # 고친 전문이 그대로 나가야 화면에 보인 것과 API 로 나간 것이 같아진다.
+        if (getattr(self, '_auto_nl_enabled', False)
+                and not getattr(self, '_auto_processing_queue', False)
+                and not (getattr(self, '_auto_prompt_override', '') or '')):
             cur = self.main_prompt_text.toPlainText().strip()
             if cur and cur != getattr(self, '_auto_nl_last_output', None):
                 if self._start_auto_nl_then_generate(cur):
-                    return   # worker 완료 콜백에서 start_generation 호출
-        self.start_generation()
+                    return   # worker 완료 콜백에서 생성 호출
+        self._automation_start_generation()
 
     def _start_auto_nl_then_generate(self, base_tags: str) -> bool:
         """태그→nl_caption 변환을 비동기로 시작. 성공 시 True(호출자는 start_generation 생략)."""
@@ -582,13 +745,15 @@ class ActionsMixin:
         except Exception as e:
             print(f"[AutoNL] 결과 처리 실패: {e}")
         if self.is_automating:
-            self.start_generation()
+            # 변환이 update_total_prompt_display 로 상자를 다시 채웠으므로,
+            # 덮어쓰기 소비는 반드시 그 '뒤'인 여기서 일어나야 한다.
+            self._automation_start_generation()
 
     def _on_auto_nl_error(self, err: str):
         """변환 실패 → 원본 태그 그대로 생성."""
         print(f"[AutoNL] 변환 실패(태그로 생성): {err}")
         if self.is_automating:
-            self.start_generation()
+            self._automation_start_generation()
 
     def _ensure_wait_timer(self):
         """자동화 대기 카운트다운 타이머 보장 (100ms 간격)."""
@@ -601,7 +766,8 @@ class ActionsMixin:
     def _on_wait_tick(self):
         """대기 중 남은 시간 갱신 → 0이 되면 생성 시작."""
         import time
-        if not self.is_automating:
+        if not self.is_automating or getattr(self, '_auto_paused', False):
+            # 일시정지는 _pause_automation 이 이미 타이머를 세웠다 — 여기는 방어선.
             if getattr(self, '_wait_timer', None):
                 self._wait_timer.stop()
             return
@@ -636,6 +802,14 @@ class ActionsMixin:
                     qp.remove_first_item()
                 except Exception:
                     pass
+
+        # 1.5) 일시정지 — 방금 끝난 생성의 뒷정리까지만 하고 선다. 새 생성은 시작하지 않는다.
+        #      재개하면 이 함수 처음부터 다시 들어온다(위 1단계는 _auto_processing_queue 가
+        #      이미 False 라 무해) → 큐 우선 → 프롬프트 복원 → 덱 순서가 그대로 이어진다.
+        if getattr(self, '_auto_paused', False):
+            self._auto_resume_pending = 'continue'
+            self._emit_auto_status()
+            return
 
         # 2) 큐 우선 처리: 대기 항목이 있으면 다음 큐 항목 생성 (반복 상태 건드리지 않음)
         if qp is not None:
@@ -689,8 +863,33 @@ class ActionsMixin:
             import time as _t
             _wait_total = int(getattr(self, '_wait_total_ms', 0) or 0)
             _wait_remaining = 0
-            if waiting:
+            _frozen = getattr(self, '_wait_paused_remaining_ms', None)
+            if _frozen is not None:
+                # 일시정지가 대기 중에 걸렸다 — 얼려 둔 잔여 시간을 그대로 비춘다.
+                waiting = True
+                _wait_remaining = max(0, int(_frozen))
+            elif waiting:
                 _wait_remaining = max(0, int((getattr(self, '_wait_end_time', 0) - _t.time()) * 1000))
+            # 다음 생성에 나갈 프롬프트.
+            #   total_prompt_display 는 _build_generation_payload 가 '그대로 읽어' API 로
+            #   보내는 바로 그 문자열이다. 덱에서 뽑는 순간(apply_prompt_from_data)에
+            #   제외 프롬프트 · 캐릭터 특징 · 조건식(1·2차) · 와일드카드 치환까지 모두
+            #   끝나 이 상자에 들어오므로, 대기 중에도 이미 확정된 값을 보낼 수 있다.
+            #   아직 반영되지 않는 것 = 생성 직전에야 붙는 3가지:
+            #     · run_pipeline_on_text 훅(인스턴트 와일드카드 $$name$$, 중복 제거)
+            #     · LoRA 스택 텍스트(<lora:...>) 꼬리
+            #     · 태그→자연어 자동 변환(켰을 때만, 생성 직전 비동기)
+            #   이 셋은 여기서 미리 계산할 수 없다(훅·와일드카드는 매 호출 결과가 달라져
+            #   미리 돌리면 실제로 나갈 값과 어긋난다). 그래서 '지금 알 수 있는 가장
+            #   가까운 값'인 이 상자를 보낸다 — 사람이 손볼 대상도 이 문자열이다.
+            # 덮어쓰기가 걸려 있으면 그 값이 우선 — 방금 고친 게 그대로 보여야 한다.
+            _override = getattr(self, '_auto_prompt_override', '') or ''
+            _prompt = _override
+            if not _prompt:
+                try:
+                    _prompt = self.total_prompt_display.toPlainText()
+                except Exception:
+                    _prompt = ''
             self.vue_bridge.automationStatus.emit(json.dumps({
                 'running': self.is_automating,
                 'count': getattr(self, 'auto_gen_count', 0),
@@ -701,6 +900,8 @@ class ActionsMixin:
                 'deck_total': _total,
                 'deck_used': _used,
                 'allow_duplicates': bool(getattr(self, 'auto_settings', {}).get('allow_duplicates', False)),
+                'paused': bool(getattr(self, '_auto_paused', False)),
+                'prompt': _prompt or '',
             }))
         # PR 3: AppContext에도 발행 (다른 모듈이 구독 가능 — 큐, 통계 등)
         try:
@@ -730,6 +931,18 @@ class ActionsMixin:
             self._wait_timer.stop()
         self._wait_end_time = 0
         self._wait_total_ms = 0
+        # 일시정지·일회성 덮어쓰기는 자동화 한 회차짜리 상태다 — 중지와 함께 사라진다.
+        # (남겨 두면 다음 '시작'이 멈춘 채로 뜨거나 남의 프롬프트로 첫 장이 나간다)
+        self._auto_paused = False
+        self._auto_resume_pending = ''
+        self._wait_paused_remaining_ms = None
+        if getattr(self, '_auto_prompt_override', '') or getattr(self, '_auto_override_used', False):
+            self._auto_prompt_override = ''
+            self._auto_override_used = False
+            try:
+                self.update_total_prompt_display()   # 덮어쓴 상자를 원래대로
+            except Exception:
+                pass
         self._emit_auto_status()
         # PR 3: 중지 이벤트 발행
         if was_running:

@@ -139,6 +139,10 @@ _WEB_SIGNALS = frozenset({
     "adetailerModelsReady", "queueUpdated", "queueItemAdded", "queueCompleted",
     "showNotification", "adetailerResult", "adetailerProgress", "sam3Result",
     "sam3Progress", "eventSearchProgress", "eventSearchResults", "eventImportResults",
+    # automationStatus 는 prompt·paused 필드가 늘어도 그대로 통과한다(JSON 통째 전달).
+    # 새 액션(automation_override_next / pause_automation / resume_automation)은
+    # onAction 이 이미 _WEB_METHODS 에 있어 별도 등록이 필요 없다 — 액션은 이름별로
+    # 막지 않는다. 여기 목록은 '시그널'만 막는다.
     "automationStatus", "automationSettingsLoaded", "instantWildcardsList",
     "promptOrderLoaded", "workflowProfilesList", "widgetValueChanged",
     "widgetPropertyChanged", "batchUpdate", "tabChanged", "vramUpdated",

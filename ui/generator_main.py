@@ -801,6 +801,15 @@ class GeneratorMainUI(
             elif action == 'stop_automation':
                 if self.is_automating:
                     self._stop_automation("사용자가 자동화를 중지했습니다.")
+            elif action == 'pause_automation':
+                # 중지와 다르다 — 덱·카운트·반복 상태를 유지한 채 대기/생성 사이에서 선다.
+                self._pause_automation()
+            elif action == 'resume_automation':
+                self._resume_automation()
+            elif action == 'automation_override_next':
+                # 다음 '한 장'에만 쓸 프롬프트 전문. 쓰고 나면 백엔드가 스스로 지운다.
+                # 빈 문자열이면 덮어쓰기 취소 → 원래 조립된 프롬프트로 돌아간다.
+                self._set_prompt_override(str(payload.get('prompt', '') or ''))
 
             # ═══════ 워크플로우 프로파일 ═══════
             elif action == 'workflow_profile_list':

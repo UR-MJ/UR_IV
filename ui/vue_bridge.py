@@ -114,7 +114,14 @@ class VueBridge(QObject):
     # sam-extra 임베드 LoRA Manager 주소 — JSON {url, status, message}
     loraManagerUrlReady = pyqtSignal(str)
     eventSearchProgress = pyqtSignal(int, int) # (current, total)
-    automationStatus = pyqtSignal(str)        # JSON {running, count, waiting}
+    # JSON {running, count, waiting, wait_remaining_ms, wait_total_ms,
+    #       deck_remaining, deck_total, deck_used, allow_duplicates,
+    #       paused,   ← 일시정지 여부 (Vue 가 일시정지/재개 버튼 모양을 정한다)
+    #       prompt}   ← 다음 생성에 나갈 프롬프트 전문. 없으면 ''.
+    # prompt 로 무엇을 보내는지는 generator_actions._emit_auto_status 주석 참조 —
+    # total_prompt_display(=API 로 그대로 나가는 문자열)이며, 생성 직전에 붙는
+    # 파이프라인 훅·LoRA 꼬리·자연어 변환만 아직 반영되지 않는다.
+    automationStatus = pyqtSignal(str)
     automationSettingsLoaded = pyqtSignal(str)  # JSON {mode, limit, repeat, delay, allowDupes, maxRetries} — PR 9 mode-aware
     instantWildcardsList = pyqtSignal(str)      # JSON [{name, lines: [...]}] — PR 8
     promptOrderLoaded = pyqtSignal(str)         # JSON [{key, label}] — 사용자 지정 섹션 순서

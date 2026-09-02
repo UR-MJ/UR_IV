@@ -62,62 +62,40 @@
             </button>
             <button class="action-btn highlight" @click="action('random_prompt')"><Icon name="dice" /> 무작위</button>
           </div>
-          <!-- 자동화 설정 (AUTO ON일 때만) -->
-          <div class="auto-settings" v-if="autoMode">
-            <div class="auto-row">
-              <label>{{ autoSettings.mode === 'unlimited' ? '무제한' : autoSettings.mode === 'count' ? '횟수' : '시간(분)' }}</label>
-              <input v-if="autoSettings.mode !== 'unlimited'" type="number" v-model.number="autoSettings.limit" min="1" class="auto-input" />
-              <span v-else class="auto-unlimited-mark">∞</span>
-              <CustomSelect v-model="autoSettings.mode" :options="['count', 'timer', 'unlimited']" placeholder="모드" class="auto-select" />
-            </div>
-            <div class="auto-row">
-              <label>반복</label>
-              <input type="number" v-model.number="autoSettings.repeat" min="1" max="100" class="auto-input" />
-              <label>대기(초)</label>
-              <input type="number" v-model.number="autoSettings.delay" min="0" step="0.5" class="auto-input" />
-            </div>
-            <div class="auto-row">
-              <label title="한 생성이 실패(서버 에러/타임아웃/OOM 등)했을 때 자동으로 다시 시도할 횟수.&#10;반복과 별개 — 반복은 같은 프롬프트로 N장 생성, 재시도는 실패 1회당 N번까지 다시 시도.&#10;지수 백오프(2s → 4s → 8s, 최대 30s)로 대기 후 재시도.&#10;&#10;예) 반복=3, 재시도=2:&#10;  · 2번째 시도가 실패하면 2초 대기 → 재시도 → 4초 → 재시도&#10;  · 두 재시도도 모두 실패 시 포기, 3번째 반복으로 진행">재시도</label>
-              <input type="number" v-model.number="autoSettings.maxRetries" min="0" max="10" class="auto-input" />
-            </div>
-            <div class="auto-row">
-              <label title="N회 generation마다 백엔드(WebUI/Forge)에 LoRA 캐시 정리 요청.&#10;Forge가 API 호출에서 LoRA patches를 누적시키는 버그 회피용.&#10;&#10;0 = 사용 안 함 (기본)&#10;5 = 매 5회마다 cleanup (LoRA 4개+SAM3 사용 시 권장)&#10;10 = 매 10회마다 (가벼운 워크플로우)&#10;&#10;cleanup은 ~1초 소요. OOM 발생 후 재시도 전엔 자동으로 full reload 실행됨.">cleanup 주기</label>
-              <input type="number" v-model.number="autoSettings.cleanupEveryN" min="0" max="100" class="auto-input" />
-            </div>
-            <label class="auto-check"><input type="checkbox" v-model="autoSettings.allowDupes" /><span>중복 허용</span></label>
-            <label class="auto-check"><input type="checkbox" v-model="autoSettings.autoResetDeck" /><span title="덱을 다 쓰면 자동으로 다시 채워 계속(모두 1회씩 뽑은 뒤 재셔플 — 무한·공평)">덱 소진 시 초기화</span></label>
-            <div class="auto-deck-pre" v-if="deckTotal > 0 && !isAutomating">
-              <span><Icon name="cards" /> 덱 <strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용<template v-if="deckAllowDup"> (중복·무한)</template></span>
-              <button class="deck-reset-btn" @click="resetDeck" title="덱을 가득 다시 채움 (사용 0으로 초기화)"><Icon name="rotate-cw" /> 덱 초기화</button>
-            </div>
-          </div>
-          <!-- 자동화 상태 표시 -->
-          <div class="auto-status" v-if="isAutomating">
-            <div class="auto-status-bar">
-              <span class="auto-pulse"></span>
-              <span>자동화 진행 중 — {{ autoGenCount }}장 완료</span>
-            </div>
-            <div class="auto-status-sub deck-status" v-if="deckTotal > 0"><Icon name="cards" /> 덱
-              <template v-if="deckAllowDup">{{ deckTotal }}개 (중복 허용 · 무한)</template>
-              <template v-else><strong>{{ deckRemaining }}</strong> / {{ deckTotal }} 남음 · {{ deckUsed }}개 사용</template>
-            </div>
-            <div class="auto-status-sub auto-wait" v-if="autoWaiting && waitTotalMs > 0">
-              <div class="wait-row"><span><Icon name="hourglass" /> 다음 생성까지 {{ waitSec }}s</span><span class="wait-pct">{{ Math.round(waitPct) }}%</span></div>
-              <div class="wait-bar"><div class="wait-fill" :style="{ width: waitPct + '%' }"></div></div>
-            </div>
-            <div class="auto-status-sub" v-else-if="autoWaiting">대기 중...</div>
-          </div>
+          <!-- 자동화 — 멈춰 있으면 설정, 돌면 조종석. 한 자리를 두 모드가 번갈아 쓴다.
+               (예전엔 설정·상태·덱이 서로 다른 조건으로 겹쳐 그려져 푸터가 두 배가 됐다) -->
+          <AutomationPanel
+            v-if="autoMode"
+            :settings="autoSettings"
+            :running="isAutomating"
+            :paused="autoPaused"
+            :count="autoGenCount"
+            :waiting="autoWaiting"
+            :wait-remaining-ms="waitRemainingMs"
+            :wait-total-ms="waitTotalMs"
+            :deck-total="deckTotal"
+            :deck-remaining="deckRemaining"
+            :deck-used="deckUsed"
+            :deck-allow-dup="deckAllowDup"
+            :next-prompt="autoNextPrompt"
+            @update:settings="applyAutoSettings"
+            @reset-deck="resetDeck"
+            @pause="pauseAutomation"
+            @resume="resumeAutomation"
+            @stop="stopAutomation"
+            @override="overrideNextPrompt"
+          />
           <label class="auto-nl-toggle" :class="{ on: autoNlGen }" title="생성 시 메인 프롬프트의 태그를 자연어 문장으로 자동 변환한 뒤 생성합니다 (Flux/SD3/NAI 등 자연어 모델용). Ollama 필요.">
             <ToggleSwitch v-model="autoNlGen" size="sm" />
-            <span>🅣→🅝 생성 시 태그→자연어 변환</span>
+            <span>생성 시 태그를 자연어로 변환</span>
           </label>
-          <div class="generate-row">
-            <button class="btn-generate" :class="{ automating: isAutomating, converting: nlConverting }" @click="doGenerate" :disabled="(isGenerating && !isAutomating) || nlConverting">
-              <Icon v-if="isAutomating" name="stop" /><Icon
-                v-else-if="autoMode && !isGenerating && !nlConverting" name="play" />
-              {{ nlConverting ? '🅣→🅝 자연어 변환 중…' : isAutomating ? 'STOP AUTOMATION' : isGenerating ? 'GENERATING...' : autoMode ? 'START AUTOMATION' : 'GENERATE IMAGE' }}
+          <!-- 자동화 중엔 멈추기가 조종석 안에 있다 — 같은 일을 하는 버튼을 두 개 두지 않는다. -->
+          <div class="generate-row" v-if="!isAutomating">
+            <button class="btn-generate" :class="{ converting: nlConverting }" @click="doGenerate" :disabled="isGenerating || nlConverting">
+              <Icon v-if="autoMode && !isGenerating && !nlConverting" name="play" />
+              {{ nlConverting ? '자연어 변환 중…' : isGenerating ? '생성 중…' : autoMode ? '자동 생성 시작' : 'GENERATE IMAGE' }}
             </button>
-            <button v-if="isGenerating && !isAutomating" class="btn-cancel" @click="cancelGeneration" title="생성 취소"><Icon name="close" /></button>
+            <button v-if="isGenerating" class="btn-cancel" @click="cancelGeneration" title="생성 취소"><Icon name="close" /></button>
           </div>
           <div class="gen-eta" v-if="isGenerating && genEta">{{ genEta }}</div>
         </div>
@@ -985,7 +963,7 @@ import { useHighRes } from './composables/useHighRes.js'
 import { useRatingFilter } from './composables/useRatingFilter.js'
 import { useBackendGate } from './composables/useBackendGate'
 import { reconcileTheme } from './theme/applyTheme'
-import type { ActionName } from './types/bridge'
+import type { ActionName, AutomationSettings } from './types/bridge'
 
 const wStore = useWidgetStore()
 const storeWidgets = wStore.widgets
@@ -1086,6 +1064,7 @@ import CharFeatureOverrideModal from './components/CharFeatureOverrideModal.vue'
 import LoraManagerModal from './components/LoraManagerModal.vue'
 import CondPromptModal from './components/CondPromptModal.vue'
 import ToggleSwitch from './components/ToggleSwitch.vue'
+import AutomationPanel from './components/AutomationPanel.vue'
 import AnimaGuidancePanel from './components/AnimaGuidancePanel.vue'
 import AppTooltip from './components/AppTooltip.vue'
 import { loadCondRules, condEnabled } from './composables/condRules.js'
@@ -1165,6 +1144,11 @@ watch(autoNlGen, (v) => {
 })
 const autoGenCount = ref(0)
 const autoWaiting = ref(false)
+// 일시정지는 '멈추기'와 다르다 — 덱 진행을 유지한 채 대기/생성 사이에서만 선다.
+const autoPaused = ref(false)
+// 다음 생성에 나갈 프롬프트 전문. 덱·와일드카드·조건식이 매번 바꾸는데
+// 지금까지는 화면에 나올 자리가 없었다 — 조종석이 이걸 태그 칩으로 그린다.
+const autoNextPrompt = ref('')
 const deckRemaining = ref(0)
 const deckTotal = ref(0)
 const deckUsed = ref(0)
@@ -1173,15 +1157,33 @@ function resetDeck() {
   requestAction('reset_prompt_deck')   // 백엔드: filtered_results에서 덱 가득 채우고 셔플 + 상태 재전송
   addToast('success', '덱을 초기화했습니다 (사용 0)')
 }
-// 자동화 대기 카운트다운 (다음 생성까지) — Search % 바 느낌
+// 자동화 대기 카운트다운 (다음 생성까지) — 진행 표시는 AutomationPanel 이 그린다.
 const waitRemainingMs = ref(0)
 const waitTotalMs = ref(0)
-const waitSec = computed(() => (waitRemainingMs.value / 1000).toFixed(1))
-const waitPct = computed(() => {
-  if (waitTotalMs.value <= 0) return 0
-  const elapsed = waitTotalMs.value - waitRemainingMs.value
-  return Math.max(0, Math.min(100, (elapsed / waitTotalMs.value) * 100))
-})
+
+// 패널은 바뀐 항목만 올려보낸다. 여기서 합치면 기존 deep watch 가 그대로
+// syncAutomationSettings 를 태워, 백엔드 계약(set_automation_settings)은 안 바뀐다.
+function applyAutoSettings(patch: Partial<typeof autoSettings>) {
+  Object.assign(autoSettings, patch)
+}
+function pauseAutomation() {
+  autoPaused.value = true   // 백엔드 status 를 기다리면 버튼이 한 박자 늦게 바뀐다
+  action('pause_automation')
+}
+function resumeAutomation() {
+  autoPaused.value = false
+  action('resume_automation')
+}
+function stopAutomation() {
+  action('stop_automation')
+  isAutomating.value = false
+  autoWaiting.value = false
+  autoPaused.value = false
+}
+/** 다음 한 장에만 쓸 프롬프트. 빈 문자열이면 덮어쓰기 취소(원래 프롬프트로). */
+function overrideNextPrompt(prompt: string) {
+  requestAction('automation_override_next', { prompt })
+}
 // 하단 계기 스트립이 그리는 백엔드 상태. null = 아직 신호 없음(= '연결 안 됨').
 // 파이썬이 backendStatus 를 짧게 몇 번 되풀이 보내므로 늦게 붙어도 곧 채워진다.
 const backendStatus = ref<{ kind?: string; label?: string; url?: string; connected?: boolean; error?: string } | null>(null)
@@ -1205,7 +1207,7 @@ function onVramClick() {
   requestAction('unload_model_request', {})
   requestAction('show_toast', { type: 'info', msg: '백엔드에 모델 unload 요청 전송됨' })
 }
-const autoSettings = reactive({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, autoResetDeck: false, maxRetries: 2, cleanupEveryN: 0 })
+const autoSettings = reactive<AutomationSettings>({ mode: 'count', limit: 10, repeat: 1, delay: 1.0, allowDupes: false, autoResetDeck: false, maxRetries: 2, cleanupEveryN: 0 })
 
 function syncAutomationSettings() {
   const limit = Number(autoSettings.limit)
@@ -1703,13 +1705,8 @@ function _finishNlGen(result: any) {
 }
 
 async function doGenerate() {
-  // 자동화 중이면 중지
-  if (isAutomating.value) {
-    action('stop_automation')
-    isAutomating.value = false
-    autoWaiting.value = false
-    return
-  }
+  // 자동화 중이면 중지 (버튼은 조종석으로 옮겼지만 단축키·외부 호출 경로가 남아 있다)
+  if (isAutomating.value) { stopAutomation(); return }
   if (nlConverting.value) return
   // 생성 시 태그→자연어 자동 변환 (단일 생성에서만 — 자동화는 프롬프트마다 변환하면 너무 느림)
   if (autoNlGen.value && !autoMode.value) {
@@ -2081,8 +2078,11 @@ onMounted(async () => {
     try {
       const d = JSON.parse(json)
       isAutomating.value = d.running || false
+      autoPaused.value = d.paused || false
       autoGenCount.value = d.count || 0
       autoWaiting.value = d.waiting || false
+      // 다음에 나갈 프롬프트 전문 — 조종석의 태그 칩이 이걸 그린다.
+      autoNextPrompt.value = typeof d.prompt === 'string' ? d.prompt : ''
       deckRemaining.value = d.deck_remaining || 0
       deckTotal.value = d.deck_total || 0
       deckUsed.value = d.deck_used || 0
@@ -2551,12 +2551,9 @@ onMounted(async () => {
 .action-btn.active { border-color: var(--state-ok-fg); color: var(--state-ok-fg); background: rgba(74,222,128,0.05); }
 .action-btn.highlight { border-color: var(--accent-dim); color: var(--accent); }
 .action-btn:hover { border-color: var(--text-muted); }
-.auto-settings { display: flex; flex-direction: column; gap: 4px; padding: 8px; background: rgba(74,222,128,0.03); border: 1px solid rgba(74,222,128,0.1); border-radius: 8px; }
-.auto-row { display: flex; align-items: center; gap: 4px; }
-.auto-row label { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); min-width: 32px; }
-.auto-input { width: 50px; padding: 4px 6px; font-size: 11px; text-align: center; }
-.auto-unlimited-mark { display: inline-block; width: 50px; padding: 4px 6px; font-size: 14px;
-  color: var(--accent); text-align: center; font-weight: var(--fw-bold); }
+/* 자동화 설정·상태의 모양은 `components/AutomationPanel.vue` 로 옮겼다 —
+   여기 있던 .auto-settings / .auto-status / .auto-deck-pre 는 같은 내용을
+   조건만 달리해 두 번 그리던 자리였다. */
 
 /* 워크플로우 프로파일 */
 .profile-card { background: rgba(96,165,250,0.04); border: 1px solid rgba(96,165,250,0.15);
@@ -2612,41 +2609,21 @@ onMounted(async () => {
   color: var(--text-primary); }
 .order-save { background: var(--state-info); border: 1px solid var(--state-info); color: white; }
 .order-save:hover { filter: brightness(1.15); }
-.auto-select { min-width: 90px; padding: 4px; font-size: var(--fs-label); }
-
-/* 자동화 상태 */
-.auto-status { padding: 8px 12px; background: rgba(250, 204, 21, 0.05); border: 1px solid var(--accent-dim); border-radius: 8px; margin-bottom: 8px; }
-.auto-deck-pre { margin-top: 8px; font-size: 11px; color: var(--text-muted); padding: 6px 10px; background: rgba(250,204,21,0.05); border: 1px solid var(--accent-dim); border-radius: 6px; display: flex; align-items: center; gap: 8px; }
-.deck-reset-btn { margin-left: auto; flex-shrink: 0; padding: 3px 9px; font-size: var(--fs-label); font-weight: var(--fw-bold); background: var(--bg-button); color: var(--text); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; transition: all .12s; }
-.deck-reset-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(250,204,21,0.08); }
-.auto-deck-pre strong { color: var(--accent); font-weight: var(--fw-bold); }
-.auto-status-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--accent); font-weight: var(--fw-bold); }
-.auto-status-sub { font-size: var(--fs-label); color: var(--text-muted); margin-top: 4px; }
-.auto-wait .wait-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-label); color: var(--text-muted); margin-bottom: 3px; }
-.auto-wait .wait-pct { color: var(--accent); font-weight: var(--fw-bold); }
-.auto-wait .wait-bar { height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
-.auto-wait .wait-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.12s linear; }
-.auto-pulse { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .generate-row { display: flex; gap: 6px; align-items: stretch; }
 .btn-cancel { width: 50px; height: 50px; background: transparent; border: 2px solid var(--state-alert-fg); border-radius: var(--radius-pill); color: var(--state-alert-fg); font-size: 18px; font-weight: var(--fw-bold); cursor: pointer; transition: var(--transition); }
 /* 채움 위의 흰 글자는 토큰이 아니다 — --state-alert 는 "흰 글자와 4.5:1"
    을 맞춘 면 색이고(라이트에선 #B3261E, 7.5:1), --text-primary 를 쓰면
    라이트에서 검은 글자가 빨간 면에 얹혀 2.2:1 로 무너진다. */
 .btn-cancel:hover { background: var(--state-alert); color: #fff; }
-.gen-eta { margin-top: 6px; font-size: 11px; color: var(--muted); text-align: center; letter-spacing: 0; }
-.auto-check { display: flex; align-items: center; gap: 4px; font-size: var(--fs-label); color: var(--text-secondary); cursor: pointer; }
-.auto-check input { accent-color: var(--state-ok); }
+.gen-eta { font-size: var(--fs-label); color: var(--text-muted); text-align: center; letter-spacing: 0; }
 .btn-generate { width: 100%; height: 50px; background: var(--accent-fill); border: none; border-radius: var(--radius-pill); color: var(--on-accent); font-weight: var(--fw-bold); font-size: 14px; letter-spacing: 0; cursor: pointer; transition: var(--transition); }
 .btn-generate:hover:not(:disabled) { background: var(--accent-fill-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }
 .btn-generate:disabled { opacity: 0.5; cursor: wait; }
-.btn-generate.automating { background: var(--state-alert); color: #fff; }
-/* 배경을 한 번 더 못박는 건 중복이 아니다 — .btn-generate:hover:not(:disabled)(클래스 3개)가
-   .btn-generate.automating(2개)보다 특정도가 높아, 여기서 안 덮으면 정지 버튼이 hover 때
-   금색으로 돌아간다. 색 대신 위 규칙의 lift + 아래 글로우가 hover 피드백을 준다. */
-.btn-generate.automating:hover:not(:disabled) { background: var(--state-alert); box-shadow: 0 8px 24px rgba(248, 113, 113, 0.3); }
+/* 자동화 중지 버튼(.automating)은 사라졌다 — 멈추기는 조종석 안에 있다. */
 .btn-generate.converting { background: var(--state-info); color: #fff; cursor: wait; }
-.auto-nl-toggle { display: flex; align-items: center; gap: 8px; padding: 7px 11px; margin-bottom: 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); cursor: pointer; transition: var(--transition); user-select: none; width: fit-content; max-width: 100%; }
+/* margin-bottom 은 .gen-footer 의 gap 과 겹쳐 16px 짜리 빈 줄을 만들고 있었다.
+   자동화를 켜면 프롬프트 영역이 그만큼 더 깎인다 — 간격은 부모의 gap 하나로 둔다. */
+.auto-nl-toggle { display: flex; align-items: center; gap: var(--sp-2); min-height: 28px; padding: var(--sp-1) var(--sp-2); background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); font-size: var(--fs-label); font-weight: var(--fw-medium); color: var(--text-secondary); cursor: pointer; transition: var(--transition); user-select: none; width: fit-content; max-width: 100%; }
 .auto-nl-toggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 
 /* Viewport */
