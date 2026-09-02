@@ -2,6 +2,8 @@
   <svg
     class="icon"
     :class="{ 'icon-filled': filled }"
+    :data-icon-name="name"
+    :data-icon-motion="motion"
     :width="size"
     :height="size"
     viewBox="0 0 24 24"
@@ -13,7 +15,14 @@
     aria-hidden="true"
     focusable="false"
   >
-    <path v-for="(d, i) in paths" :key="i" :d="d" />
+    <path
+      v-for="(d, i) in paths"
+      :key="i"
+      class="icon-part"
+      :class="`icon-part-${i + 1}`"
+      :data-icon-part="i + 1"
+      :d="d"
+    />
   </svg>
 </template>
 
@@ -29,6 +38,7 @@
  */
 import { computed } from 'vue'
 import { ICONS, FILLED } from '../icons'
+import { motionForIcon } from '../icons/motion'
 
 const props = withDefaults(defineProps<{
   name: string
@@ -48,6 +58,7 @@ const props = withDefaults(defineProps<{
 
 const paths = computed(() => ICONS[props.name] ?? [])
 const filled = computed(() => !!FILLED[props.name])
+const motion = computed(() => motionForIcon(props.name))
 </script>
 
 <style scoped>
@@ -55,5 +66,11 @@ const filled = computed(() => !!FILLED[props.name])
   display: inline-block;
   vertical-align: -0.16em;
   flex-shrink: 0;
+  transform-box: view-box;
+  transform-origin: center;
+}
+.icon-part {
+  transform-box: fill-box;
+  transform-origin: center;
 }
 </style>

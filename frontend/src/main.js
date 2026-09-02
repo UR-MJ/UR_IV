@@ -6,16 +6,30 @@ import './style.css'
 import './styles/panels.css'
 import './styles/editorPanels.css'
 import './styles/galleryShared.css'
+import './styles/iconMotion.css'
 import App from './App.vue'
 import router from './router.js'
 import Icon from './components/Icon.vue'
+import { onBackendEvent } from './bridge.js'
 import { bootTheme } from './theme/applyTheme'
+import {
+  applyIconAnimationStyle,
+  DEFAULT_ICON_ANIMATION_STYLE,
+} from './theme/iconAnimationPreference'
 
 // 색은 첫 페인트 전에 넣는다. 영속 설정(config/ui_prefs.json)은 브리지로
 // uiPrefsLoaded 가 와야 읽히는데 그건 Vue 가 뜬 뒤라, 그때 칠하면 기본 테마가
 // 한 번 번쩍인 뒤 바뀐다. bootTheme() 은 localStorage 만 읽어 동기로 끝난다.
 // (디스크 값과의 차이는 App.vue 의 uiPrefsLoaded 에서 reconcileTheme 이 맞춘다.)
 bootTheme()
+
+// 아이콘 모션은 설정이 도착하기 전까지 반드시 정적이다. 영속 설정이 오면 루트의
+// data 속성 하나만 바뀌고, 300여 Icon 호출부는 같은 Interface를 그대로 쓴다.
+applyIconAnimationStyle(DEFAULT_ICON_ANIMATION_STYLE)
+onBackendEvent('uiPrefsLoaded', (json) => {
+  try { applyIconAnimationStyle(JSON.parse(json || '{}').iconAnimationStyle) }
+  catch { applyIconAnimationStyle(DEFAULT_ICON_ANIMATION_STYLE) }
+})
 
 // 아이콘은 30개 파일에서 쓰는 원시 요소라 전역으로 등록한다 —
 // 파일마다 import 를 넣으면 아이콘 하나 바꿀 때마다 import 줄부터 손봐야 한다.

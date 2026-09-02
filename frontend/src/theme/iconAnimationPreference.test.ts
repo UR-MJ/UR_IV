@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyIconAnimationStyle,
   DEFAULT_ICON_ANIMATION_STYLE,
+  ICON_ANIMATION_ATTRIBUTE,
   ICON_ANIMATION_OPTIONS,
   normalizeIconAnimationStyle,
 } from './iconAnimationPreference'
@@ -22,5 +24,18 @@ describe('icon animation preference contract', () => {
     expect(normalizeIconAnimationStyle('')).toBe('none')
     expect(normalizeIconAnimationStyle('surprise')).toBe('none')
     expect(normalizeIconAnimationStyle(null)).toBe('none')
+  })
+
+  it('applies the closed preference contract to the document root seam', () => {
+    const attributes = new Map<string, string>()
+    const root = {
+      setAttribute(name: string, value: string) { attributes.set(name, value) },
+    }
+
+    expect(applyIconAnimationStyle('gpt', root)).toBe('gpt')
+    expect(attributes.get(ICON_ANIMATION_ATTRIBUTE)).toBe('gpt')
+
+    expect(applyIconAnimationStyle('surprise', root)).toBe('none')
+    expect(attributes.get(ICON_ANIMATION_ATTRIBUTE)).toBe('none')
   })
 })

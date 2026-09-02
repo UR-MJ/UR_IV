@@ -644,11 +644,11 @@
           <div class="glass-card mt-16 icon-animation-card">
             <div class="theme-card-head">
               <label>아이콘 애니메이션</label>
-              <span class="icon-animation-stage">선택값만 저장</span>
+              <span class="icon-animation-stage">선택 즉시 적용</span>
             </div>
             <p class="theme-note">
-              이후 아이콘 효과를 연결할 때 사용할 스타일을 미리 선택합니다.
-              지금은 설정만 저장되며 실제 아이콘 애니메이션은 적용되지 않습니다.
+              없음은 아이콘을 정적으로 유지하고, GPT는 의미별 마이크로 모션을 적용합니다.
+              Claude는 별도 효과를 비교하기 위한 예약 선택입니다.
             </p>
             <div class="icon-animation-options" role="group" aria-label="아이콘 애니메이션 스타일">
               <button
@@ -955,7 +955,7 @@ import { getThemeState, reconcileTheme, resolveTheme, setTheme } from '../theme/
 import {
   DEFAULT_ICON_ANIMATION_STYLE,
   ICON_ANIMATION_OPTIONS,
-  normalizeIconAnimationStyle,
+  applyIconAnimationStyle,
   type IconAnimationStyle,
 } from '../theme/iconAnimationPreference'
 import type { ActionName } from '../types/bridge'
@@ -1522,7 +1522,7 @@ function saveHistoryBlink() {
 }
 
 function setIconAnimationStyle(value: unknown) {
-  const next = normalizeIconAnimationStyle(value)
+  const next = applyIconAnimationStyle(value)
   iconAnimationStyle.value = next
   requestAction('save_ui_prefs', { iconAnimationStyle: next })
 }
@@ -1534,7 +1534,7 @@ const schedulerList = computed(() => wStore.getProperty('scheduler_combo', 'item
 
 function applyUiPrefs(prefs: any) {
   if (!prefs || typeof prefs !== 'object') return
-  iconAnimationStyle.value = normalizeIconAnimationStyle(prefs.iconAnimationStyle)
+  iconAnimationStyle.value = applyIconAnimationStyle(prefs.iconAnimationStyle)
   if (typeof prefs.tagBlockMode === 'boolean') { defaultBlockMode.value = prefs.tagBlockMode; window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode)) }
   if (typeof prefs.cleanDuplicates === 'boolean') cleanDuplicates.value = prefs.cleanDuplicates
   if (typeof prefs.cleanSpaces === 'boolean') cleanSpaces.value = prefs.cleanSpaces
