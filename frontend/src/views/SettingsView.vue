@@ -641,6 +641,31 @@
             </div>
           </div>
 
+          <div class="glass-card mt-16 icon-animation-card">
+            <div class="theme-card-head">
+              <label>아이콘 애니메이션</label>
+              <span class="icon-animation-stage">선택값만 저장</span>
+            </div>
+            <p class="theme-note">
+              이후 아이콘 효과를 연결할 때 사용할 스타일을 미리 선택합니다.
+              지금은 설정만 저장되며 실제 아이콘 애니메이션은 적용되지 않습니다.
+            </p>
+            <div class="icon-animation-options" role="group" aria-label="아이콘 애니메이션 스타일">
+              <button
+                v-for="option in ICON_ANIMATION_OPTIONS" :key="option.id" type="button"
+                class="icon-animation-option" :class="{ selected: iconAnimationStyle === option.id }"
+                :aria-pressed="iconAnimationStyle === option.id"
+                @click="setIconAnimationStyle(option.id)"
+              >
+                <span class="icon-animation-option-head">
+                  <strong>{{ option.label }}</strong>
+                  <span v-if="iconAnimationStyle === option.id" class="icon-animation-selected">선택됨</span>
+                </span>
+                <small>{{ option.description }}</small>
+              </button>
+            </div>
+          </div>
+
           <div class="glass-card mt-16">
             <div class="theme-card-head">
               <label>색 직접 바꾸기</label>
@@ -927,6 +952,12 @@ import ToggleSwitch from '../components/ToggleSwitch.vue'
 import ColorField from '../components/ColorField.vue'
 import { DEFAULT_PRESET, EDITABLE_KEYS, PRESETS, PRESET_IDS, type EditableKey } from '../theme/presets'
 import { getThemeState, reconcileTheme, resolveTheme, setTheme } from '../theme/applyTheme'
+import {
+  DEFAULT_ICON_ANIMATION_STYLE,
+  ICON_ANIMATION_OPTIONS,
+  normalizeIconAnimationStyle,
+  type IconAnimationStyle,
+} from '../theme/iconAnimationPreference'
 import type { ActionName } from '../types/bridge'
 
 interface SubTab {
@@ -1024,7 +1055,7 @@ const subTabs: SubTab[] = [
   { id: 'forge',     label: 'Forge',      icon: 'package', keywords: 'forge neo checkpoint model lora vae te text encoder 경로 폴더 모델 로라' },
   { id: 'prompt',    label: '로직',       icon: 'pencil', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
   { id: 'tabs',      label: '워크스페이스', icon: 'layers', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
-  { id: 'theme',     label: '테마',       icon: 'palette', keywords: 'theme 테마 색 컬러 다크 라이트 강조색 accent color dark light' },
+  { id: 'theme',     label: '테마',       icon: 'palette', keywords: 'theme 테마 색 컬러 다크 라이트 강조색 accent color dark light icon 아이콘 animation 애니메이션 claude 클로드 gpt' },
   { id: 'shortcuts', label: '단축키',     icon: 'keyboard', keywords: 'hotkeys shortcuts 단축키 키보드 ctrl shift z y s g' },
   { id: 'guard',     label: '가드',       icon: 'shield', keywords: 'anima guard 가드 자동 해상도 제한 최대 면적 픽셀 긴 변 resolution cap vram oom' },
   { id: 'defaults',  label: '기본값',     icon: 'sliders', keywords: 'defaults 기본값 t2i i2i inpaint 해상도 steps cfg sampler 시드' },
@@ -1438,6 +1469,7 @@ const defaultBlockMode = ref(window.localStorage.getItem('tagBlockMode') === 'tr
 const galleryMetadata = ref(window.localStorage.getItem('galleryShowMetadata') !== 'false')
 const autoAddCopyright = ref(window.localStorage.getItem('autoAddCopyright') !== 'false')   // ③ 기본 on
 const historyJumpModifier = ref(window.localStorage.getItem('historyJumpModifier') || 'shiftKey')
+const iconAnimationStyle = ref<IconAnimationStyle>(DEFAULT_ICON_ANIMATION_STYLE)
 const animaGuardEnabled = ref(true)
 const animaGuardMaxAreaSide = ref(1536)
 const animaGuardMaxSide = ref(2048)
@@ -1489,6 +1521,12 @@ function saveHistoryBlink() {
   try { window.dispatchEvent(new CustomEvent('historyBlinkChanged', { detail: { value: historyBlink.value } })) } catch {}
 }
 
+function setIconAnimationStyle(value: unknown) {
+  const next = normalizeIconAnimationStyle(value)
+  iconAnimationStyle.value = next
+  requestAction('save_ui_prefs', { iconAnimationStyle: next })
+}
+
 // API에서 sampler/scheduler 목록 가져오기
 const wStore = useWidgetStore()
 const samplerList = computed(() => wStore.getProperty('sampler_combo', 'items') || [])
@@ -1496,6 +1534,7 @@ const schedulerList = computed(() => wStore.getProperty('scheduler_combo', 'item
 
 function applyUiPrefs(prefs: any) {
   if (!prefs || typeof prefs !== 'object') return
+  iconAnimationStyle.value = normalizeIconAnimationStyle(prefs.iconAnimationStyle)
   if (typeof prefs.tagBlockMode === 'boolean') { defaultBlockMode.value = prefs.tagBlockMode; window.localStorage.setItem('tagBlockMode', String(prefs.tagBlockMode)) }
   if (typeof prefs.cleanDuplicates === 'boolean') cleanDuplicates.value = prefs.cleanDuplicates
   if (typeof prefs.cleanSpaces === 'boolean') cleanSpaces.value = prefs.cleanSpaces
@@ -2285,6 +2324,7 @@ const act = (name: ActionName) => {
       autoAddCopyright: autoAddCopyright.value,
       historyJumpModifier: historyJumpModifier.value,
       historyBlinkSelected: historyBlink.value,
+      iconAnimationStyle: iconAnimationStyle.value,
       uiScale: uiScale.value,
       editorSidePanelWidth: editorSidePanelWidth.value,
       tabOrder: tabOrder.value,
@@ -2777,6 +2817,22 @@ function handleOllamaModels(json: string) {
 /* Theme */
 .theme-note { margin: 8px 0 0; color: var(--text-muted); font-size: var(--fs-label); line-height: 1.55; }
 .theme-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.icon-animation-stage {
+  padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold);
+}
+.icon-animation-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 14px; }
+.icon-animation-option {
+  min-width: 0; min-height: 76px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 12px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--bg-input); color: var(--text-secondary); text-align: left; cursor: pointer;
+}
+.icon-animation-option:hover { border-color: var(--edge); color: var(--text-primary); }
+.icon-animation-option.selected { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+.icon-animation-option-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.icon-animation-selected { font-size: var(--fs-label); font-weight: var(--fw-bold); }
+.icon-animation-option strong { font-size: var(--fs-body); font-weight: var(--fw-bold); }
+.icon-animation-option small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.45; }
 .theme-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .theme-preset {
   min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-base);
@@ -2915,6 +2971,7 @@ kbd {
   .nav-item { height: 38px; padding: 0 10px; }
   .nav-item .label { font-size: var(--fs-label); letter-spacing: 0; }
   .theme-preset-grid { grid-template-columns: 1fr; }
+  .icon-animation-options { grid-template-columns: 1fr; }
   .settings-body { padding: 16px 12px 28px; }
   .glass-card { padding: 17px; }
   .generation-api-header { flex-direction: column; }

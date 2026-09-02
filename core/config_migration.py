@@ -24,6 +24,28 @@ _UI_PREFS_MIGRATIONS: dict[int, Callable[[dict], dict]] = {
 }
 UI_PREFS_CURRENT_VERSION = 1
 
+ICON_ANIMATION_STYLE_DEFAULT = "none"
+ICON_ANIMATION_STYLES = frozenset({"none", "claude", "gpt"})
+
+
+def normalize_icon_animation_style(value: object) -> str:
+    """Return the closed icon-animation preference contract.
+
+    The preference exists before any animation implementation, so an unknown
+    value must stay inert instead of enabling an effect in an older app build.
+    """
+    if isinstance(value, str) and value in ICON_ANIMATION_STYLES:
+        return value
+    return ICON_ANIMATION_STYLE_DEFAULT
+
+
+def _normalize_ui_prefs(data: dict) -> dict:
+    normalized = dict(data)
+    normalized["iconAnimationStyle"] = normalize_icon_animation_style(
+        normalized.get("iconAnimationStyle")
+    )
+    return normalized
+
 
 def load_and_migrate(
     path: str,
@@ -96,8 +118,13 @@ def save_with_version(path: str, data: dict, schema_version: int) -> None:
 
 
 def load_ui_prefs(path: str) -> dict:
-    return load_and_migrate(path, _UI_PREFS_MIGRATIONS, UI_PREFS_CURRENT_VERSION)
+    data = load_and_migrate(path, _UI_PREFS_MIGRATIONS, UI_PREFS_CURRENT_VERSION)
+    return _normalize_ui_prefs(data)
 
 
 def save_ui_prefs(path: str, data: dict) -> None:
-    save_with_version(path, data, UI_PREFS_CURRENT_VERSION)
+    save_with_version(
+        path,
+        _normalize_ui_prefs(data),
+        UI_PREFS_CURRENT_VERSION,
+    )

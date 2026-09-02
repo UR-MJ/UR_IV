@@ -37,7 +37,7 @@ ALLOWED_CAPS = {
     # ③ 약어 · 규격 · 코드
     # VRAM 은 하단 계기 스트립(StatusStrip)의 칸 이름. '비디오 메모리'로 풀면
     # 오히려 못 알아본다 — CFG·VAE 와 같은 ③ 약어다.
-    "CFG", "VAE", "T2I", "I2I", "T2V", "I2V", "V2V", "NSFW", "SAM3", "API URL", "VRAM",
+    "CFG", "VAE", "T2I", "I2I", "T2V", "I2V", "V2V", "NSFW", "SAM3", "API URL", "VRAM", "GPT",
     "GEN", "SENS", "QUES", "EXPL", "AND", "OR",
     "DCW / RDC / DAVE / CNS",
 }
