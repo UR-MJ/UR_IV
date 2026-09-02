@@ -1,15 +1,5 @@
 <template>
   <div class="i2i-root">
-    <!-- 하위 탭: img2img / Refine -->
-    <div class="sub-tabs">
-      <button class="sub-tab" :class="{ active: subTab === 'i2i' }" @click="subTab = 'i2i'">
-        img2img
-      </button>
-      <button class="sub-tab" :class="{ active: subTab === 'refine' }" @click="subTab = 'refine'">
-        SAM3 정밀화
-      </button>
-    </div>
-
     <RefinePanel v-if="subTab === 'refine'" ref="refineRef"
       :image-path="imagePath"
       :sampler-options="samplerOptions"
@@ -156,10 +146,10 @@ import { onBackendEvent } from '../bridge.js'
 import { mediaUrl } from '../utils/media.js'
 import CustomSelect from '../components/CustomSelect.vue'
 import RefinePanel from '../components/RefinePanel.vue'
+import { useViewMode } from '../composables/useViewMode'
 
-// 하위 탭 — 마지막 선택을 기억한다
-const subTab = ref(localStorage.getItem('i2i.subTab') || 'i2i')
-watch(subTab, (v) => { try { localStorage.setItem('i2i.subTab', v) } catch {} })
+/** 하위 탭(img2img / SAM3 정밀화)은 왼쪽 레일의 서랍이 정한다 — `useViewMode` 참조. */
+const { mode: subTab } = useViewMode('i2i')
 const refineRef = ref<any>(null)
 
 // Refine 패널 드롭다운 — t2i가 쓰는 것과 같은 위젯 property를 읽는다.
@@ -282,19 +272,7 @@ function generate() {
 
 <style scoped>
 .i2i-root { height: 100%; display: flex; flex-direction: column; background: var(--bg-primary); min-height: 0; }
-.sub-tabs {
-  display: flex; gap: 4px; padding: 8px 12px 0;
-  background: var(--bg-secondary); border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.sub-tab {
-  padding: 8px 18px; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
-  background: transparent; border: none; border-bottom: 2px solid transparent;
-  color: var(--text-muted); cursor: pointer; transition: var(--transition);
-}
-.sub-tab:hover { color: var(--text-primary); }
-.sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.i2i-root > :not(.sub-tabs) { flex: 1; min-height: 0; }
+.i2i-root > * { flex: 1; min-height: 0; }
 
 .i2i-workspace { height: 100%; display: flex; background: var(--bg-primary); }
 

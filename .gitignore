@@ -47,6 +47,7 @@ config/gen_stats.json
 config/queue_state.json
 config/cond_rules.json
 config/ui_prefs.json
+config/chat_threads.json
 config/tab_defaults.json
 config/prompt_order.json
 config/profiles/

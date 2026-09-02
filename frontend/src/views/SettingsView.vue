@@ -472,6 +472,69 @@
                 </div>
               </section>
 
+              <section class="runtime-subsection runtime-extra-args">
+                <div class="runtime-subheading">
+                  <div>
+                    <h3>추가 실행 인자</h3>
+                    <p>
+                      엔진을 시작할 때 명령줄 맨 뒤에 붙습니다. 예: <code>--xformers --medvram</code>.
+                      이미 실행 중이면 <b>다음 시작부터</b> 적용됩니다.
+                    </p>
+                  </div>
+                  <span v-if="runtimeExtraArgsDirty[engineId]" class="runtime-unsaved">저장 안 됨</span>
+                </div>
+                <div class="runtime-path-control">
+                  <input
+                    v-model="runtimeExtraArgsDrafts[engineId]"
+                    spellcheck="false"
+                    placeholder="--xformers --medvram"
+                    :disabled="runtimeMutationDisabled(engineId)"
+                    @input="runtimeExtraArgsDirty[engineId] = true"
+                    @keydown.enter="saveRuntimeExtraArgs(engineId)"
+                  />
+                  <button
+                    class="btn-pill compact primary"
+                    :disabled="runtimeMutationDisabled(engineId) || !runtimeExtraArgsDirty[engineId]"
+                    :title="runtimeMutationTitle"
+                    @click="saveRuntimeExtraArgs(engineId)"
+                  >저장</button>
+                </div>
+              </section>
+
+              <section class="runtime-subsection runtime-launch-options" v-if="runtimeEngines[engineId].sourceMode === 'existing' || engineId === 'comfyui'">
+                <div class="runtime-subheading">
+                  <div>
+                    <h3>실행 옵션</h3>
+                    <p v-if="runtimeEngines[engineId].sourceMode === 'existing'">
+                      연결한 설치의 실행 배치 파일 인자를 그대로 씁니다. 앱이 직접 정하는 것
+                      (<code>--port</code> <code>--data-dir</code> <code>--api</code> <code>--theme</code> <code>--uv</code> 등)은 뺍니다.
+                      위의 추가 실행 인자와 겹치면 추가 실행 인자가 이깁니다.
+                    </p>
+                    <p v-else>ComfyUI 실행 방식.</p>
+                  </div>
+                </div>
+                <label class="runtime-toggle-row" v-if="runtimeEngines[engineId].sourceMode === 'existing'">
+                  <ToggleSwitch :model-value="runtimeEngines[engineId].importLaunchArgs" :disabled="runtimeMutationDisabled(engineId)"
+                    @update:model-value="setRuntimeLaunchOption(engineId, 'importLaunchArgs', $event)" />
+                  <span>실행 배치 파일의 인자 자동 사용
+                    <small v-if="runtimeEngines[engineId].detectedArgsSource">· {{ fileName(runtimeEngines[engineId].detectedArgsSource) }}</small>
+                    <small v-else-if="runtimeEngines[engineId].importLaunchArgs">· 배치 파일을 찾지 못했습니다 (webui-user.bat / run_nvidia_gpu.bat)</small>
+                  </span>
+                </label>
+                <label class="runtime-toggle-row" v-if="engineId === 'comfyui'">
+                  <ToggleSwitch :model-value="runtimeEngines[engineId].fastFp16" :disabled="runtimeMutationDisabled(engineId)"
+                    @update:model-value="setRuntimeLaunchOption(engineId, 'fastFp16', $event)" />
+                  <span>fp16 accumulation 빠른 실행 <code>--fast fp16_accumulation</code>
+                    <small>· run_nvidia_gpu_fast_fp16_accumulation.bat 와 같은 실행</small>
+                  </span>
+                </label>
+                <div class="runtime-detected-args" v-if="runtimeEngines[engineId].detectedArgs">
+                  <span class="runtime-detected-label">가져온 인자</span>
+                  <code>{{ runtimeEngines[engineId].detectedArgs }}</code>
+                  <small v-if="runtimeEngines[engineId].detectedArgsDropped">뺀 것: {{ runtimeEngines[engineId].detectedArgsDropped }}</small>
+                </div>
+              </section>
+
               <div class="runtime-action-grid">
                 <button class="btn-pill primary" :disabled="runtimeActionDisabled(engineId, 'install')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'install')">설치</button>
                 <button class="btn-pill" :disabled="runtimeActionDisabled(engineId, 'update')" :title="runtimeMutationTitle" @click="runRuntimeOperation(engineId, 'update')">업데이트</button>
@@ -960,7 +1023,7 @@
               <div class="input-unit mt-12">
                 <span class="unit-label">모델</span>
                 <CustomSelect v-if="ollamaModels.length" v-model="ollamaModel" :options="ollamaModels" placeholder="모델 선택..." @update:modelValue="saveOllamaSettings" />
-                <input v-else v-model="ollamaModel" @change="saveOllamaSettings" placeholder="llama3.1, gemma3 등" />
+                <input v-else v-model="ollamaModel" @change="saveOllamaSettings" placeholder="gemma4:e4b, qwen3.5:9b 등" />
               </div>
               <label class="ollama-unload-row mt-12">
                 <input type="checkbox" v-model="ollamaUnloadOnGen" @change="saveOllamaSettings" />
@@ -977,36 +1040,21 @@
             </div>
           </div>
           <div class="glass-card mt-16">
-            <label>추천 모델</label>
+            <label>추천 모델 — 전부 이미지를 보는(vision) 모델</label>
             <div class="recommend-grid">
-              <div class="rec-item best">
-                <span class="rec-name">gemma3:4b</span>
-                <span class="rec-desc">가장 추천 — 빠르고 태그 품질 우수, VRAM 3GB</span>
-              </div>
-              <div class="rec-item">
-                <span class="rec-name">llama3.1:8b</span>
-                <span class="rec-desc">범용 고품질, 영어 태그 강점, VRAM 5GB</span>
-              </div>
-              <div class="rec-item">
-                <span class="rec-name">mistral:7b</span>
-                <span class="rec-desc">빠른 응답, 창의적 태그 변형에 강함, VRAM 5GB</span>
-              </div>
-              <div class="rec-item">
-                <span class="rec-name">phi4-mini:3.8b</span>
-                <span class="rec-desc">초경량, VRAM 부족 시 대안, VRAM 2.5GB</span>
-              </div>
-              <div class="rec-item">
-                <span class="rec-name">qwen3:8b</span>
-                <span class="rec-desc">다국어+태그 강점, thinking 모드, VRAM 5GB</span>
-              </div>
-              <div class="rec-item">
-                <span class="rec-name">gemma3:12b</span>
-                <span class="rec-desc">최고 품질, 여유 VRAM 시 추천, VRAM 8GB</span>
-              </div>
+              <button v-for="rec in OLLAMA_RECOMMENDED" :key="rec.name" type="button" class="rec-item"
+                :class="{ best: rec.best, installed: isOllamaModelInstalled(rec.name), selected: ollamaModel === rec.name }"
+                :title="isOllamaModelInstalled(rec.name) ? '설치됨 — 눌러서 선택' : `설치 안 됨 — ollama pull ${rec.name}`"
+                @click="pickRecommendedOllamaModel(rec.name)">
+                <span class="rec-name">{{ rec.name }}<span v-if="isOllamaModelInstalled(rec.name)" class="rec-tag">설치됨</span></span>
+                <span class="rec-desc">{{ rec.desc }}</span>
+                <span class="rec-vram">{{ rec.vram }}</span>
+              </button>
             </div>
             <div class="rec-note mt-12">
-              SD 이미지 생성과 동시 사용 시 VRAM을 공유하므로 4b 이하 경량 모델 권장.<br/>
-              <code>ollama pull gemma3:4b</code> 로 설치
+              대화 탭에서 이미지를 첨부하거나 캡션을 뽑으려면 이미지를 보는 모델이어야 합니다.
+              SD 와 VRAM 을 나눠 쓰면 4b~8b 급을, 24GB 급 GPU 면 27b·32b 도 됩니다.<br/>
+              설치는 <code>ollama pull {{ ollamaModel || 'gemma4:e4b' }}</code>
             </div>
           </div>
           <div class="glass-card mt-16">
@@ -1063,7 +1111,7 @@ interface ForgePathEntry {
 type RuntimeEngineId = 'forge' | 'comfyui'
 type RuntimeAction = 'install' | 'update' | 'check_update' | 'start' | 'stop' | 'use'
 type RuntimeConfigAction = 'set_auto_start' | 'save_extension_dir' | 'install_extension'
-  | 'set_install_root' | 'use_managed_install' | 'set_primary_model_engine'
+  | 'set_install_root' | 'use_managed_install' | 'set_primary_model_engine' | 'set_extra_args' | 'set_launch_options'
 type RuntimeExtensionAction = 'check_extension' | 'update_extension'
 
 interface RuntimeExtensionState {
@@ -1102,6 +1150,16 @@ interface RuntimeEngineState {
   extensionWritable: boolean | null
   extensions: RuntimeExtensionState[]
   message: string
+  /** 사용자가 덧붙이는 실행 인자 — 한 줄 문자열. 기동 직전에 쪼개진다. */
+  extraArgs: string
+  /** 연결한 설치의 실행 배치 파일(webui-user.bat / run_nvidia_gpu*.bat) 인자를 자동으로 가져올지 */
+  importLaunchArgs: boolean
+  /** ComfyUI: `--fast fp16_accumulation` 빠른 실행 */
+  fastFp16: boolean
+  /** 배치 파일에서 가져와 실제로 붙는 인자 (앱이 정하는 것은 뺀 뒤) */
+  detectedArgs: string
+  detectedArgsSource: string
+  detectedArgsDropped: string
 }
 
 type GenerationApiEngine = 'webui' | 'comfyui'
@@ -1512,6 +1570,7 @@ function createRuntimeEngine(engine: RuntimeEngineId, name: string): RuntimeEngi
     pythonPath: '', dataRoot: '', modelPaths: {}, apiUrl: '', version: '',
     updateAvailable: false, updateStatus: 'Not checked',
     extensionDir: '', extensionDirExternal: false, extensionWritable: null, extensions: [], message: '',
+    extraArgs: '', importLaunchArgs: true, fastFp16: false, detectedArgs: '', detectedArgsSource: '', detectedArgsDropped: '',
   }
 }
 
@@ -1524,6 +1583,8 @@ const runtimeExtensionDrafts = reactive<Record<RuntimeEngineId, string>>({ forge
 const runtimeExtensionFolderDirty = reactive<Record<RuntimeEngineId, boolean>>({ forge: false, comfyui: false })
 const runtimeInstallRootDrafts = reactive<Record<RuntimeEngineId, string>>({ forge: '', comfyui: '' })
 const runtimeInstallRootDirty = reactive<Record<RuntimeEngineId, boolean>>({ forge: false, comfyui: false })
+const runtimeExtraArgsDrafts = reactive<Record<RuntimeEngineId, string>>({ forge: '', comfyui: '' })
+const runtimeExtraArgsDirty = reactive<Record<RuntimeEngineId, boolean>>({ forge: false, comfyui: false })
 const runtimeRepoUrls = reactive<Record<RuntimeEngineId, string>>({ forge: '', comfyui: '' })
 const primaryModelEngine = ref<RuntimeEngineId | ''>('')
 const runtimeNativeOperations = ref(false)
@@ -1798,6 +1859,12 @@ function applyRuntimeEngineState(engineId: RuntimeEngineId, raw: any) {
       (updateAvailable ? `Update available${latestVersion ? ` · ${latestVersion}` : ''}` : current.updateStatus)
     ),
     extensionDir: extensionDir || current.extensionDir,
+    extraArgs: raw.extraArgs === undefined ? current.extraArgs : String(raw.extraArgs ?? ''),
+    importLaunchArgs: typeof raw.importLaunchArgs === 'boolean' ? raw.importLaunchArgs : current.importLaunchArgs,
+    fastFp16: typeof raw.fastFp16 === 'boolean' ? raw.fastFp16 : current.fastFp16,
+    detectedArgs: raw.detectedArgs === undefined ? current.detectedArgs : String(raw.detectedArgs ?? ''),
+    detectedArgsSource: raw.detectedArgsSource === undefined ? current.detectedArgsSource : String(raw.detectedArgsSource ?? ''),
+    detectedArgsDropped: raw.detectedArgsDropped === undefined ? current.detectedArgsDropped : String(raw.detectedArgsDropped ?? ''),
     extensionDirExternal: Boolean(raw.extensionDirExternal ?? current.extensionDirExternal),
     extensionWritable: typeof raw.extensionWritable === 'boolean'
       ? raw.extensionWritable
@@ -1812,6 +1879,7 @@ function applyRuntimeEngineState(engineId: RuntimeEngineId, raw: any) {
   if (!runtimeExtensionFolderDirty[engineId]) {
     runtimeExtensionDrafts[engineId] = current.extensionDir
   }
+  if (!runtimeExtraArgsDirty[engineId]) runtimeExtraArgsDrafts[engineId] = runtimeEngines[engineId].extraArgs
   if (existingRoot && runtimeInstallRootDirty[engineId]
     && existingRoot.trim() === runtimeInstallRootDrafts[engineId].trim()) {
     runtimeInstallRootDirty[engineId] = false
@@ -1953,6 +2021,23 @@ async function runRuntimeOperation(
 
 async function setRuntimeAutoStart(engineId: RuntimeEngineId, autoStart: boolean) {
   await runRuntimeOperation(engineId, 'set_auto_start', { autoStart })
+}
+
+async function saveRuntimeExtraArgs(engineId: RuntimeEngineId) {
+  const extraArgs = runtimeExtraArgsDrafts[engineId].trim()
+  const saved = await runRuntimeOperation(engineId, 'set_extra_args', { extraArgs })
+  if (saved) runtimeExtraArgsDirty[engineId] = false
+}
+
+/** 실행 옵션 토글 — 배치 파일 인자 자동 사용 / ComfyUI fp16. 저장만 하고, 돌고 있으면 다음 시작부터. */
+async function setRuntimeLaunchOption(engineId: RuntimeEngineId, key: 'importLaunchArgs' | 'fastFp16', value: boolean) {
+  const previous = runtimeEngines[engineId][key]
+  runtimeEngines[engineId][key] = value
+  const saved = await runRuntimeOperation(engineId, 'set_launch_options', { [key]: value })
+  if (!saved) runtimeEngines[engineId][key] = previous
+}
+function fileName(path: string): string {
+  return (path || '').replace(/\\/g, '/').split('/').pop() || path
 }
 
 async function browseRuntimeInstallDirectory(engineId: RuntimeEngineId) {
@@ -2522,8 +2607,33 @@ async function syncFromT2I() {
 }
 
 // Ollama
+/**
+ * 추천 모델 — 전부 **이미지를 보는** 모델만. 대화 탭의 이미지 첨부와 캡션이 이걸 전제한다.
+ * 이름은 Ollama 라이브러리 태그 그대로 (`ollama pull <name>`). VRAM 은 Q4 기준 대략치.
+ */
+const OLLAMA_RECOMMENDED: { name: string; best?: boolean; desc: string; vram: string }[] = [
+  { name: 'gemma4:e4b', best: true, desc: '가장 추천 — 가볍고 빠르며 이미지·소리까지 봄, 128k 문맥', vram: 'VRAM ≈4GB' },
+  { name: 'gemma4:12b', desc: '품질 우선. 여유 VRAM 이면 이걸로', vram: 'VRAM ≈8GB' },
+  { name: 'gemma4:26b', desc: '26B MoE(활성 4B) — 대형 품질을 중형 속도로', vram: 'VRAM ≈16GB' },
+  { name: 'qwen3.5:4b', desc: 'Qwen3.5 소형 비전 — 글자 읽기·태그 추출 강점', vram: 'VRAM ≈3GB' },
+  { name: 'qwen3.5:9b', desc: 'Qwen3.5 중형 비전. 세밀한 이미지 설명', vram: 'VRAM ≈6GB' },
+  { name: 'qwen3.8:27b', desc: 'Qwen 최신 27B 비전 — 가장 좋은 품질. 24GB 급 GPU', vram: 'VRAM ≈17GB' },
+  { name: 'minicpm-v4.5', desc: '8B 경량 비전 — 이미지·영상 이해에 특화', vram: 'VRAM ≈5.5GB' },
+  { name: 'muse-glimmer', desc: 'Meta 30B 멀티모달, 상시 로컬 에이전트용', vram: 'VRAM ≈18GB' },
+]
+function isOllamaModelInstalled(name: string): boolean {
+  const base = (s: string) => (s || '').split(':')[0].toLowerCase()
+  return ollamaModels.value.some((m) => m === name || base(m) === base(name))
+}
+function pickRecommendedOllamaModel(name: string) {
+  // 설치된 태그가 있으면 그 정확한 이름으로 — 없으면 이름만 적어 두고 pull 안내가 뜬다
+  const base = (s: string) => (s || '').split(':')[0].toLowerCase()
+  const installed = ollamaModels.value.find((m) => m === name) || ollamaModels.value.find((m) => base(m) === base(name))
+  ollamaModel.value = installed || name
+  saveOllamaSettings()
+}
 const ollamaUrl = ref(window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434')
-const ollamaModel = ref(window.localStorage.getItem('ollamaModel') || 'gemma3:4b')
+const ollamaModel = ref(window.localStorage.getItem('ollamaModel') || 'gemma4:e4b')
 const ollamaModels = ref<string[]>([])
 const ollamaUnloadOnGen = ref(window.localStorage.getItem('ollamaUnloadOnGen') === 'true')
 
@@ -2896,6 +3006,13 @@ function handleOllamaModels(json: string) {
   color: var(--state-warn-fg); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
 .runtime-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; }
+.runtime-toggle-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: var(--fs-body); color: var(--text-primary); cursor: pointer; }
+.runtime-toggle-row small { display: block; margin-top: 2px; color: var(--text-muted); font-size: var(--fs-label); }
+.runtime-toggle-row code { padding: 1px 5px; border-radius: 4px; background: var(--bg-input); font-size: var(--fs-meta); }
+.runtime-detected-args { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.runtime-detected-label { font-size: var(--fs-label); color: var(--text-muted); }
+.runtime-detected-args code { padding: 4px 8px; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border); font-size: var(--fs-meta); color: var(--text-primary); word-break: break-all; }
+.runtime-detected-args small { flex-basis: 100%; color: var(--text-muted); font-size: var(--fs-label); }
 .runtime-install-path-control { grid-template-columns: minmax(0, 1fr) auto auto auto; }
 .runtime-repo-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .runtime-path-control input, .runtime-repo-control input {
@@ -3140,6 +3257,11 @@ kbd {
 }
 .rec-item:hover { border-color: var(--border-strong); }
 .rec-item.best { border-color: var(--accent-dim); background: rgba(250, 204, 21, 0.03); }
+.rec-item { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.rec-item.installed { border-color: var(--state-ok-fg); }
+.rec-item.selected { background: var(--accent-dim); border-color: var(--accent); }
+.rec-tag { margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: var(--state-ok); color: var(--state-ok-fg); font-size: var(--fs-label); font-weight: var(--fw-medium); }
+.rec-vram { display: block; margin-top: 4px; color: var(--text-muted); font-size: var(--fs-label); }
 .rec-name { font-size: 13px; font-weight: var(--fw-bold); color: var(--text-primary); min-width: 120px; font-family: 'Consolas', monospace; }
 .rec-item.best .rec-name { color: var(--accent); }
 .rec-desc { font-size: 11px; color: var(--text-muted); text-align: right; }

@@ -31,6 +31,7 @@ const routes = [
   { path: '/settings', name: 'settings', component: SettingsView, meta: { title: 'Settings' } },
   { path: '/editor', name: 'editor', component: EditorView, meta: { title: 'Editor' } },
   { path: '/creator', name: 'creator', component: CreatorStudioView, meta: { title: 'Creator' } },
+  { path: '/chat', name: 'chat', component: () => import('./views/ChatView.vue'), meta: { title: '대화' } },
 ]
 
 const router = createRouter({

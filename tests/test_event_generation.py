@@ -58,6 +58,9 @@ class _Harness:
     def _handle_creator_action(self, _action, _payload):
         return False
 
+    def _handle_chat_action(self, _action, _payload):
+        return False
+
     def receive_event_scenarios(self, scenarios):
         self.received.append(scenarios)
 

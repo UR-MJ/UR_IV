@@ -513,6 +513,77 @@ class OllamaClient:
         except Exception as e:
             raise RuntimeError(f"캡션 오류: {e}")
 
+    def chat_stream(self, messages, *, model=None, options=None, think=None,
+                    on_token=None, on_thinking=None, should_stop=None, timeout=600):
+        """`/api/chat` 을 스트리밍으로. 조각마다 ``on_token(text)``, 끝나면 dict 를 돌려준다.
+
+        ``think`` — thinking 모델(Gemma 4·Qwen3.x)은 기본으로 생각부터 하느라 첫 글자가 한참 뒤에
+        온다. False 면 바로 답하게 하고, True 면 생각 조각을 ``on_thinking(text)`` 으로 따로 흘린다.
+        thinking 을 모르는 모델이 400 으로 거부하면 플래그 없이 한 번 더 요청한다.
+
+        ``should_stop()`` 이 참이 되면 응답을 닫고 그때까지의 본문을 돌려준다 — 서버 쪽
+        생성도 연결이 끊기면 멈춘다(Ollama 는 클라이언트가 떠나면 요청을 버린다).
+        메시지의 ``images`` 는 접두사 없는 base64 여야 한다(core/chat_store.strip_data_url).
+        """
+        payload = {"model": model or self.model, "messages": messages, "stream": True}
+        if options:
+            payload["options"] = dict(options)
+        if think is not None:
+            payload["think"] = bool(think)
+        pieces = []
+        thoughts = []
+        resp = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True, timeout=(10, timeout))
+        if resp.status_code == 400 and "think" in payload:
+            detail = ""
+            try:
+                detail = str(resp.json().get("error", ""))
+            except Exception:
+                detail = (resp.text or "")[:200]
+            if "think" in detail.lower():
+                resp.close()
+                payload.pop("think", None)
+                resp = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True, timeout=(10, timeout))
+        with resp:
+            if resp.status_code != 200:
+                detail = ""
+                try:
+                    detail = str(resp.json().get("error", ""))
+                except Exception:
+                    detail = (resp.text or "")[:200]
+                raise RuntimeError(f"Ollama {resp.status_code}: {detail or 'chat 요청 실패'}")
+            for line in resp.iter_lines(decode_unicode=True):
+                if should_stop is not None and should_stop():
+                    resp.close()
+                    return {"content": "".join(pieces), "thinking": "".join(thoughts), "stopped": True}
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(data, dict) and data.get("error"):
+                    raise RuntimeError(str(data["error"]))
+                message = (data.get("message") or {}) if isinstance(data, dict) else {}
+                thought = message.get("thinking") or ""
+                if thought:
+                    thoughts.append(thought)
+                    if on_thinking is not None:
+                        on_thinking(thought)
+                piece = message.get("content") or ""
+                if piece:
+                    pieces.append(piece)
+                    if on_token is not None:
+                        on_token(piece)
+                if isinstance(data, dict) and data.get("done"):
+                    return {
+                        "content": "".join(pieces), "thinking": "".join(thoughts), "stopped": False,
+                        "eval_count": data.get("eval_count"),
+                        "total_duration": data.get("total_duration"),
+                        # 'length' 면 num_predict 에 걸려 잘린 것 — 화면에 그렇게 알린다
+                        "done_reason": data.get("done_reason"),
+                    }
+        return {"content": "".join(pieces), "thinking": "".join(thoughts), "stopped": False}
+
     def unload(self) -> bool:
         """모델을 VRAM에서 즉시 언로드 (keep_alive=0). best-effort."""
         try:

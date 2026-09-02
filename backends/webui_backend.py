@@ -9,7 +9,7 @@ import logging
 import threading
 import time
 import requests
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Optional, Any
 from PIL import Image
 
 from backends.base import (
@@ -384,9 +384,35 @@ class WebUIBackend(AbstractBackend):
             logger.warning("get_loras failed: %s", e)
         return []
 
-    def _switch_model_if_needed(self, model_name: str):
-        """필요 시 모델 전환"""
-        if not model_name:
+    @staticmethod
+    def _module_names(values) -> list[str]:
+        """옵션의 전체 경로든 요청의 파일명이든 파일명만 — 비교는 이걸로 한다."""
+        names = []
+        for value in values or []:
+            if isinstance(value, str) and value.strip():
+                names.append(value.replace('\\', '/').rsplit('/', 1)[-1].strip())
+        return sorted(names)
+
+    def _desired_forge_modules(self, current_options: dict, modules) -> Optional[list[str]]:
+        """옵션에 넣어야 할 모듈 목록. 바꿀 필요가 없으면 None.
+
+        Forge classic 은 요청 본문의 ``forge_additional_modules`` 를 **읽지 않는다** —
+        ``shared.opts.forge_additional_modules`` 만 본다(processing.py / main_entry.py).
+        그래서 본문에만 넣으면 Anima 처럼 VAE·TE 가 따로인 모델은
+        "You do not have VAE state dict!" 로 500 이 난다. 옵션 API 는 파일명을 받아
+        ``modules_change`` 로 경로에 매핑하고 로딩 파라미터를 갱신·저장한다.
+        A1111 처럼 이 옵션이 없는 백엔드는 건드리지 않는다.
+        """
+        if modules is None or 'forge_additional_modules' not in current_options:
+            return None
+        wanted = self._module_names(modules)
+        if wanted == self._module_names(current_options.get('forge_additional_modules')):
+            return None
+        return wanted
+
+    def _switch_model_if_needed(self, model_name: str, modules=None):
+        """필요 시 모델 전환 + VAE/TE 모듈 동기화 (한 번의 옵션 POST)."""
+        if not model_name and modules is None:
             return
         current_response = requests.get(
             url=f'{self.api_url}/sdapi/v1/options',
@@ -395,13 +421,23 @@ class WebUIBackend(AbstractBackend):
         current_response.raise_for_status()
         current_options = current_response.json()
 
-        if current_options.get('sd_model_checkpoint') != model_name:
-            switch_response = requests.post(
-                url=f'{self.api_url}/sdapi/v1/options',
-                json={'sd_model_checkpoint': model_name},
-                headers=_HEADERS, timeout=60
-            )
-            switch_response.raise_for_status()
+        changes: Dict[str, Any] = {}
+        # 모듈을 체크포인트보다 먼저 — Forge 가 순서대로 처리하고 마지막에 한 번 로딩 파라미터를 갱신한다
+        wanted = self._desired_forge_modules(current_options, modules)
+        if wanted is not None:
+            changes['forge_additional_modules'] = wanted
+        if model_name and current_options.get('sd_model_checkpoint') != model_name:
+            changes['sd_model_checkpoint'] = model_name
+        if not changes:
+            return
+        if 'forge_additional_modules' in changes:
+            logger.info("Forge modules → %s", changes['forge_additional_modules'] or '(없음)')
+        switch_response = requests.post(
+            url=f'{self.api_url}/sdapi/v1/options',
+            json=changes,
+            headers=_HEADERS, timeout=60
+        )
+        switch_response.raise_for_status()
 
     def cleanup_models(self, full_reload: bool = False) -> bool:
         """LoRA patches + 캐시 정리.
@@ -479,7 +515,7 @@ class WebUIBackend(AbstractBackend):
         try:
             if cancel_check and cancel_check():
                 return GenerationResult(success=False, error="사용자가 작업을 취소했습니다")
-            self._switch_model_if_needed(model_name)
+            self._switch_model_if_needed(model_name, payload.get('forge_additional_modules'))
             if cancel_check and cancel_check():
                 return GenerationResult(success=False, error="사용자가 작업을 취소했습니다")
 

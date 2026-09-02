@@ -90,12 +90,20 @@ class BrowserTab(QWidget):
         profile.setCachePath(cache_path)
         profile.setPersistentStoragePath(cache_path)
         
-        self.web_view.setUrl(QUrl(self.default_url))
+        # 첫 URL 은 탭을 열 때 싣는다 — 앱을 켤 때마다 외부 사이트가 뒤에서 뜨면
+        # 백엔드를 켠 것과 무관하게 '웹이 따로 켜진' 것처럼 보인다.
+        self._loaded_once = False
         layout.addWidget(self.web_view)
         
         self.web_view.urlChanged.connect(
             lambda u: self.url_input.setText(u.toString())
         )
+
+    def ensure_loaded(self):
+        """탭을 열 때 부른다. 처음 한 번만 홈 URL 을 싣는다."""
+        if not getattr(self, '_loaded_once', False):
+            self._loaded_once = True
+            self.web_view.setUrl(QUrl(self.home_url))
 
     def set_home_url(self, url):
         """홈 URL 설정"""

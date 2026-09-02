@@ -87,6 +87,10 @@ class SearchDeckStateTests(unittest.TestCase):
             def _handle_creator_action(_action, _payload):
                 return False
 
+            @staticmethod
+            def _handle_chat_action(_action, _payload):
+                return False
+
             def _persist_search_results(self, active, full=None):
                 self.persisted.append((active, full))
 
@@ -123,6 +127,10 @@ class SearchDeckStateTests(unittest.TestCase):
 
             @staticmethod
             def _handle_creator_action(_action, _payload):
+                return False
+
+            @staticmethod
+            def _handle_chat_action(_action, _payload):
                 return False
 
             @staticmethod
@@ -172,6 +180,10 @@ class SearchDeckStateTests(unittest.TestCase):
 
             @staticmethod
             def _handle_creator_action(_action, _payload):
+                return False
+
+            @staticmethod
+            def _handle_chat_action(_action, _payload):
                 return False
 
             def _persist_search_results(self, active, full=None):
@@ -230,6 +242,10 @@ class SearchDeckStateTests(unittest.TestCase):
 
             @staticmethod
             def _handle_creator_action(_action, _payload):
+                return False
+
+            @staticmethod
+            def _handle_chat_action(_action, _payload):
                 return False
 
             def _persist_search_results(self, active, full=None, **kwargs):

@@ -343,6 +343,81 @@ class BackendRuntimeTestCase(unittest.TestCase):
         return self.manager.execute(engine, "install")
 
 
+class BackendRuntimeExtraArgsTests(BackendRuntimeTestCase):
+    """Settings 에서 덧붙이는 실행 인자 — 저장 · 검증 · 기동 명령줄 반영.
+
+    인자는 명령줄 **맨 뒤**에 붙는다. 같은 플래그가 겹치면 대개 뒤의 것이 이기므로
+    사용자가 앱의 기본값(--theme dark 등)을 덮어쓸 수 있어야 한다.
+    """
+
+    def test_saved_args_are_appended_to_the_launch_argv(self):
+        self.manager.execute("forge", "install")
+        result = self.manager.execute(
+            "forge", "set_extra_args", {"extraArgs": '  --xformers   --medvram "C:/my path/x"  '}
+        )
+        self.assertIn("실행 인자를 저장했습니다", result["message"])
+        self.assertEqual(
+            result["snapshot"]["engines"]["forge"]["extraArgs"],
+            '--xformers --medvram "C:/my path/x"',
+            "공백은 하나로 접히고 따옴표 경로는 살아야 한다",
+        )
+        self.manager.execute("forge", "start")
+        argv = self.adapter.start_calls[-1]["argv"]
+        self.assertEqual(argv[-3:], ["--xformers", "--medvram", '"C:/my path/x"'])
+        # 앱의 기본 인자는 그대로 앞에 있다
+        self.assertIn("--api", argv)
+        self.assertLess(argv.index("--theme"), argv.index("--xformers"))
+
+    def test_unparseable_args_are_rejected_at_save_time(self):
+        """기동 직전이 아니라 저장할 때 걸려야 사용자가 그 자리에서 고친다."""
+        self.manager.execute("forge", "install")
+        with self.assertRaises(BackendRuntimeError) as ctx:
+            self.manager.execute("forge", "set_extra_args", {"extraArgs": '--opt "unterminated'})
+        self.assertEqual(ctx.exception.code, "INVALID_EXTRA_ARGS")
+        self.assertEqual(self.manager.snapshot()["engines"]["forge"]["extraArgs"], "")
+
+    def test_args_survive_a_reload_from_disk(self):
+        self.manager.execute("forge", "set_extra_args", {"extraArgs": "--medvram"})
+        reloaded = self.make_manager()
+        self.assertEqual(reloaded.snapshot()["engines"]["forge"]["extraArgs"], "--medvram")
+
+    def test_empty_args_clear_the_setting(self):
+        self.manager.execute("forge", "set_extra_args", {"extraArgs": "--medvram"})
+        self.manager.execute("forge", "set_extra_args", {"extraArgs": "   "})
+        self.assertEqual(self.manager.snapshot()["engines"]["forge"]["extraArgs"], "")
+
+    def test_forge_launch_disables_browser_auto_open(self):
+        """Forge 는 기본값(auto_launch_browser=Local)으로 기동할 때마다 OS 브라우저를 연다.
+
+        앱은 API 만 쓴다 — 기동마다 낯선 브라우저 탭이 하나 뜨는 건 '웹이 따로 켜진다' 로
+        보인다. --data-dir 의 config.json 에 Disable 을 적어 두되 다른 설정은 보존한다.
+        """
+        self.manager.execute("forge", "install")
+        argv0, _cwd, _env = self.manager._launch_argv("forge", 17860)
+        data_dir = Path(argv0[argv0.index("--data-dir") + 1])
+        config_path = data_dir / "config.json"
+        self.assertEqual(json.loads(config_path.read_text(encoding="utf-8"))["auto_launch_browser"], "Disable")
+        # 사용자의 다른 설정은 살아야 하고, 사용자가 켜 두었어도 앱 기동에선 다시 끈다
+        config_path.write_text(json.dumps({"auto_launch_browser": "Local", "samples_save": False}), encoding="utf-8")
+        self.manager._launch_argv("forge", 17860)
+        saved = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["auto_launch_browser"], "Disable")
+        self.assertFalse(saved["samples_save"])
+        # 깨진 파일은 손대지 않는다
+        config_path.write_text("{not json", encoding="utf-8")
+        self.manager._launch_argv("forge", 17860)
+        self.assertEqual(config_path.read_text(encoding="utf-8"), "{not json")
+
+    def test_saving_while_running_does_not_restart(self):
+        """인자를 바꿨다고 백엔드를 말없이 재시작하면 진행 중인 생성이 죽는다."""
+        self.manager.execute("forge", "install")
+        self.manager.execute("forge", "start")
+        starts_before = len(self.adapter.start_calls)
+        result = self.manager.execute("forge", "set_extra_args", {"extraArgs": "--lowvram"})
+        self.assertEqual(len(self.adapter.start_calls), starts_before)
+        self.assertIn("다음 시작부터", result["message"])
+
+
 class BackendRuntimeConfigurationTests(BackendRuntimeTestCase):
     def test_default_root_is_project_user_data_unless_explicitly_overridden(self):
         fake_project = self.temp / "project"
@@ -401,6 +476,19 @@ class BackendRuntimeConfigurationTests(BackendRuntimeTestCase):
                 self.assertIn(str(expected.resolve()), model_paths[category])
         for category, expected in shared_paths.items():
             self.assertEqual(combined[category].count(str(expected.resolve())), 1)
+
+    def test_forge_unet_only_checkpoints_are_visible_to_comfy_unet_loader(self):
+        """Forge 는 Anima·Krea2 UNET 전용 파일을 Stable-diffusion 에 둔다 — ComfyUI 쪽 diffusion_models 에도 보여야 한다."""
+        self.install()
+        location = self.manager._runtime_location("forge")
+        sd_dir = location.source_root / "models" / "Stable-diffusion"
+        sd_dir.mkdir(parents=True, exist_ok=True)
+        (sd_dir / "anima_baseV10.safetensors").write_bytes(b"x")
+
+        combined = self.manager._combined_model_paths()
+        self.assertIn(str(sd_dir), combined["checkpoints"])
+        self.assertIn(str(sd_dir), combined["diffusion_models"], "UNETLoader 가 볼 수 있어야 한다")
+        self.assertEqual(combined["diffusion_models"].count(str(sd_dir)), 1)
 
     def test_configure_persists_atomically_and_aliases_forge_neo(self):
         external_extensions = self.temp / "external-forge" / "extensions"
@@ -1472,6 +1560,145 @@ class BackendRuntimeExtensionTests(BackendRuntimeTestCase):
             self.manager.execute("forge", "update_extension", {"id": "dirty-plugin"})
 
         self.assertEqual(caught.exception.code, "EXTENSION_DIRTY")
+
+
+class BackendRuntimeProcessGuardTests(BackendRuntimeTestCase):
+    """앱이 띄운 백엔드가 앱보다 오래 살지 않게 — PID 파일과 시작 전 청소."""
+
+    def _pid_file(self):
+        return self.runtime_root / "forge" / "app_process.pid"
+
+    def test_start_records_pid_with_data_dir_marker_and_stop_clears_it(self):
+        from core.process_guard import read_pid_file
+
+        self.install()
+        self.manager.execute("forge", "start")
+        entry = read_pid_file(self._pid_file())
+        self.assertIsNotNone(entry, "시작하면 PID 파일이 생겨야 다음 실행이 고아를 알아본다")
+        pid, marker = entry
+        self.assertEqual(pid, self.adapter.start_calls[-1]["process"].pid)
+        data_root = str(self.runtime_root / "forge" / "data")
+        self.assertEqual(marker, data_root)
+        self.assertIn(marker, self.adapter.start_calls[-1]["argv"], "표식은 실제 argv 에 있어야 명령줄로 확인된다")
+
+        self.manager.execute("forge", "stop")
+        self.assertFalse(self._pid_file().exists(), "정상 중지 뒤엔 청소할 것이 없다")
+
+    def test_our_orphan_from_a_force_killed_run_is_swept_before_start(self):
+        """강제 종료로 남은 우리 Forge(표식 일치) 는 시작 전에 트리째 끝낸다."""
+        from core import process_guard as pg
+
+        self.install()
+        data_root = str(self.runtime_root / "forge" / "data")
+        pg.write_pid_file(self._pid_file(), 31337, data_root)
+        killed = []
+
+        def fake_sweep(path, marker):
+            return pg.sweep_orphan(
+                path, marker,
+                is_alive=lambda pid: True,
+                command_line=lambda pid: f'python launch.py --api --data-dir "{data_root}" --port 17860',
+                kill_tree=killed.append,
+            )
+
+        with patch("core.backend_runtime.sweep_orphan", side_effect=fake_sweep), \
+             patch("core.backend_runtime.time.sleep"):
+            self.manager.execute("forge", "start")
+        self.assertEqual(killed, [31337])
+        pid, _ = pg.read_pid_file(self._pid_file())
+        self.assertEqual(pid, self.adapter.start_calls[-1]["process"].pid, "새 프로세스의 PID 로 갱신")
+
+    def test_a_users_own_forge_on_another_port_is_never_touched(self):
+        """같은 launch.py 라도 우리 data-dir 이 명령줄에 없으면 남의 것 — 7860 으로 직접 띄운 Forge."""
+        from core import process_guard as pg
+
+        self.install()
+        data_root = str(self.runtime_root / "forge" / "data")
+        pg.write_pid_file(self._pid_file(), 4242, data_root)   # PID 가 재사용된 상황
+        killed = []
+
+        def fake_sweep(path, marker):
+            return pg.sweep_orphan(
+                path, marker,
+                is_alive=lambda pid: True,
+                command_line=lambda pid: "python C:/sd-webui-forge-classic/launch.py --api --port 7860",
+                kill_tree=killed.append,
+            )
+
+        with patch("core.backend_runtime.sweep_orphan", side_effect=fake_sweep):
+            self.manager.execute("forge", "start")
+        self.assertEqual(killed, [])
+
+
+class BackendRuntimeLaunchArgsImportTests(BackendRuntimeTestCase):
+    """연결한 설치의 실행 배치 파일 인자가 앱 기동 명령줄에 실린다 — 앱이 정하는 것과 겹치는 건 빼고."""
+
+    make_linked_forge = BackendRuntimeLinkedInstallTests.make_linked_forge
+    make_linked_comfy = BackendRuntimeLinkedInstallTests.make_linked_comfy
+
+    FORGE_BAT = (
+        "@echo off\nset COMMANDLINE_ARGS= --sage --uv --cuda-malloc --theme dark --api --flash\n"
+        ":: --xformers\ncall webui.bat\n"
+    )
+    COMFY_FAST_BAT = ".\\python_embeded\\python.exe -s ComfyUI\\main.py --windows-standalone-build --fast fp16_accumulation --use-sage-attention\npause\n"
+
+    def test_linked_forge_imports_webui_user_bat_minus_app_owned_flags(self):
+        root = self.make_linked_forge()
+        (root / "webui-user.bat").write_text(self.FORGE_BAT, encoding="utf-8")
+        self.manager.execute("forge", "set_install_root", {"existingRoot": str(root)})
+        snapshot = self.manager.snapshot()["engines"]["forge"]
+        self.assertEqual(snapshot["detectedArgs"], "--sage --cuda-malloc --flash")
+        self.assertTrue(snapshot["detectedArgsSource"].endswith("webui-user.bat"))
+        self.assertEqual(snapshot["detectedArgsDropped"], "--uv --theme --api")
+
+        self.manager.execute("forge", "start")
+        argv = self.adapter.start_calls[-1]["argv"]
+        self.assertEqual(argv[-3:], ["--sage", "--cuda-malloc", "--flash"])
+        self.assertEqual(argv.count("--theme"), 1, "앱의 --theme 하나만 남는다")
+        self.assertNotIn("--uv", argv)
+        self.assertLess(argv.index("--skip-prepare-environment"), argv.index("--sage"))
+
+    def test_import_toggle_off_leaves_only_user_args_and_user_args_win(self):
+        root = self.make_linked_forge()
+        (root / "webui-user.bat").write_text(self.FORGE_BAT, encoding="utf-8")
+        self.manager.execute("forge", "set_install_root", {"existingRoot": str(root)})
+        self.manager.execute("forge", "set_extra_args", {"extraArgs": "--sage --medvram"})
+        self.manager.execute("forge", "start")
+        argv = self.adapter.start_calls[-1]["argv"]
+        self.assertEqual(argv[-4:], ["--cuda-malloc", "--flash", "--sage", "--medvram"], "겹치는 --sage 는 한 번, 사용자 것이 뒤에")
+
+        self.manager.execute("forge", "stop")
+        result = self.manager.execute("forge", "set_launch_options", {"importLaunchArgs": False})
+        self.assertIn("실행 옵션을 저장했습니다", result["message"])
+        self.assertFalse(result["state"]["engines"]["forge"]["importLaunchArgs"])
+        self.assertEqual(result["state"]["engines"]["forge"]["detectedArgs"], "")
+        self.manager.execute("forge", "start")
+        argv = self.adapter.start_calls[-1]["argv"]
+        self.assertEqual(argv[-2:], ["--sage", "--medvram"])
+        self.assertNotIn("--cuda-malloc", argv)
+
+    def test_comfy_fast_fp16_toggle_uses_the_fast_bat_or_appends_the_flag(self):
+        root = self.make_linked_comfy()
+        (root / "run_nvidia_gpu_fast_fp16_accumulation.bat").write_text(self.COMFY_FAST_BAT, encoding="utf-8")
+        self.manager.execute("comfyui", "set_install_root", {"existingRoot": str(root)})
+        self.manager.execute("comfyui", "start")
+        argv = self.adapter.start_calls[-1]["argv"]
+        self.assertNotIn("--fast", argv, "토글이 꺼져 있으면 fp16 배치는 읽지 않는다")
+
+        self.manager.execute("comfyui", "stop")
+        self.manager.execute("comfyui", "set_launch_options", {"fastFp16": True})
+        self.manager.execute("comfyui", "start")
+        argv = self.adapter.start_calls[-1]["argv"]
+        self.assertEqual(argv[-3:], ["--fast", "fp16_accumulation", "--use-sage-attention"])
+        self.assertEqual(argv.count("--windows-standalone-build"), 0, "배치의 standalone 플래그는 앱이 정한다")
+
+    def test_managed_comfy_fast_fp16_appends_flag_without_any_bat(self):
+        self.manager.execute("comfyui", "install")
+        self.manager.execute("comfyui", "set_launch_options", {"fastFp16": True})
+        self.manager.execute("comfyui", "start")
+        argv = self.adapter.start_calls[-1]["argv"]
+        self.assertEqual(argv[-2:], ["--fast", "fp16_accumulation"])
+        self.assertTrue(self.manager.snapshot()["engines"]["comfyui"]["fastFp16"])
 
 
 if __name__ == "__main__":

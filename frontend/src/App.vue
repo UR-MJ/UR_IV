@@ -19,12 +19,12 @@
       @dismiss="onGateDismiss"
     />
 
-    <NavRail @tab-changed="onTabChanged" @go-section="goToNavSection" />
+    <NavRail @tab-changed="onTabChanged" />
 
-    <main class="main-workspace">
+    <main class="main-workspace" :data-tab="activeTabName">
       <!-- Left Panel -->
       <aside class="side-panel left" v-show="showLeftPanel">
-        <div class="panel-scroll" v-scroll-memory="'leftPanel'">
+        <div class="panel-scroll" v-show="panelMode === 'prompt'" v-scroll-memory="'leftPanel'">
           <PromptPanel @toggle-extend="showExtendPanel = !showExtendPanel"
             @open-wildcard="openWildcardByName" />
           <!-- 워크플로우 프로파일 -->
@@ -55,74 +55,16 @@
           </div>
 
         </div>
-        <div class="gen-footer">
-          <div class="gen-actions">
-            <button class="action-btn" :class="{ active: autoMode }" @click="autoMode = !autoMode; action('toggle_automation', { checked: autoMode })">
-              <Icon :name="autoMode ? 'refresh' : 'pause'" /> {{ autoMode ? '자동 켬' : '자동 꺼짐' }}
-            </button>
-            <button class="action-btn highlight" @click="action('random_prompt')"><Icon name="dice" /> 무작위</button>
-          </div>
-          <!-- 자동화 — 멈춰 있으면 설정, 돌면 조종석. 한 자리를 두 모드가 번갈아 쓴다.
-               (예전엔 설정·상태·덱이 서로 다른 조건으로 겹쳐 그려져 푸터가 두 배가 됐다) -->
-          <AutomationPanel
-            v-if="autoMode"
-            :settings="autoSettings"
-            :running="isAutomating"
-            :paused="autoPaused"
-            :count="autoGenCount"
-            :waiting="autoWaiting"
-            :wait-remaining-ms="waitRemainingMs"
-            :wait-total-ms="waitTotalMs"
-            :deck-total="deckTotal"
-            :deck-remaining="deckRemaining"
-            :deck-used="deckUsed"
-            :deck-allow-dup="deckAllowDup"
-            :next-prompt="autoNextPrompt"
-            @update:settings="applyAutoSettings"
-            @reset-deck="resetDeck"
-            @pause="pauseAutomation"
-            @resume="resumeAutomation"
-            @stop="stopAutomation"
-            @override="overrideNextPrompt"
-          />
-          <label class="auto-nl-toggle" :class="{ on: autoNlGen }" title="생성 시 메인 프롬프트의 태그를 자연어 문장으로 자동 변환한 뒤 생성합니다 (Flux/SD3/NAI 등 자연어 모델용). Ollama 필요.">
-            <ToggleSwitch v-model="autoNlGen" size="sm" />
-            <span>생성 시 태그를 자연어로 변환</span>
-          </label>
-          <!-- 자동화 중엔 멈추기가 조종석 안에 있다 — 같은 일을 하는 버튼을 두 개 두지 않는다. -->
-          <div class="generate-row" v-if="!isAutomating">
-            <button class="btn-generate" :class="{ converting: nlConverting }" @click="doGenerate" :disabled="isGenerating || nlConverting">
-              <Icon v-if="autoMode && !isGenerating && !nlConverting" name="play" />
-              {{ nlConverting ? '자연어 변환 중…' : isGenerating ? '생성 중…' : autoMode ? '자동 생성 시작' : 'GENERATE IMAGE' }}
-            </button>
-            <button v-if="isGenerating" class="btn-cancel" @click="cancelGeneration" title="생성 취소"><Icon name="close" /></button>
-          </div>
-          <div class="gen-eta" v-if="isGenerating && genEta">{{ genEta }}</div>
-        </div>
-      </aside>
-
-      <!-- 반달 화살표 (좌측 패널 옆, 항상 표시) -->
-      <div class="half-moon" v-if="showLeftPanel" @click="showExtendPanel = !showExtendPanel"
-        :class="{ open: showExtendPanel }">
-        <span><Icon :name="showExtendPanel ? 'chevron-left' : 'chevron-right'" /></span>
-      </div>
-
-      <!-- Extended Panel backdrop (외부 클릭 시 닫기) -->
-      <div class="extend-backdrop" v-if="showExtendPanel && showLeftPanel"
-        @click="showExtendPanel = false"></div>
-
-      <!-- Extended Panel — 뷰어 위에 오버레이 -->
-      <transition name="slide">
-        <aside class="extend-overlay" v-if="showExtendPanel && showLeftPanel" @click.stop>
+        <!-- 파라미터 — 프롬프트와 같은 열을 번갈아 쓴다. 예전엔 오른쪽으로 열리는
+             오버레이였다: 값을 바꾸며 결과를 보는 데는 좋았지만, 왼쪽 열 옆에 열이
+             하나 더 서서 무대를 가렸다. v-show 라 `#sec-params` 는 늘 DOM 에 있다. -->
+        <div class="extend-overlay" v-show="panelMode === 'params'">
           <div class="extend-header">
-            <h3>고급 설정</h3>
-            <button class="close-btn" @click="showExtendPanel = false" title="닫기 (ESC)"><Icon name="close" /></button>
+            <h3>파라미터</h3>
+            <button class="close-btn" @click="showExtendPanel = false" title="프롬프트로 (ESC)"><Icon name="close" /></button>
           </div>
           <div class="extend-scroll" v-scroll-memory="'extendPanel'">
             <!-- Parameters (기본) -->
-            <!-- id 는 세로 레일 서랍의 스크롤 대상 — `utils/navSections.ts` 참조.
-                 이 카드는 오버레이 안이라 닫혀 있으면 DOM 에 없다(v-if).
-                 그래서 레일이 먼저 오버레이를 열고 한 틱 뒤에 스크롤한다. -->
             <div id="sec-params" class="ext-card">
               <div class="ext-title">파라미터</div>
               <div class="ext-field">
@@ -487,13 +429,63 @@
               </div>
             </div>
           </div>
-        </aside>
-      </transition>
+        </div>
+        <div class="gen-footer">
+          <div class="gen-actions">
+            <button class="action-btn" :class="{ active: autoMode }" @click="onAutoModeClick">
+              <Icon :name="autoMode ? 'refresh' : 'pause'" /> {{ autoMode ? '자동 켬' : '자동 꺼짐' }}
+            </button>
+            <button class="action-btn highlight" @click="action('random_prompt')"><Icon name="dice" /> 무작위</button>
+          </div>
+          <!-- 자동화 — 멈춰 있으면 설정, 돌면 조종석. 한 자리를 두 모드가 번갈아 쓴다.
+               (예전엔 설정·상태·덱이 서로 다른 조건으로 겹쳐 그려져 푸터가 두 배가 됐다) -->
+          <AutomationPanel
+            v-if="autoMode"
+            :settings="autoSettings"
+            :running="isAutomating"
+            :paused="autoPaused"
+            :count="autoGenCount"
+            :waiting="autoWaiting"
+            :wait-remaining-ms="waitRemainingMs"
+            :wait-total-ms="waitTotalMs"
+            :deck-total="deckTotal"
+            :deck-remaining="deckRemaining"
+            :deck-used="deckUsed"
+            :deck-allow-dup="deckAllowDup"
+            :next-prompt="autoNextPrompt"
+            @update:settings="applyAutoSettings"
+            @reset-deck="resetDeck"
+            @pause="pauseAutomation"
+            @resume="resumeAutomation"
+            @stop="stopAutomation"
+            @override="overrideNextPrompt"
+          />
+          <label class="auto-nl-toggle" :class="{ on: autoNlGen }" title="생성 시 메인 프롬프트의 태그를 자연어 문장으로 자동 변환한 뒤 생성합니다 (Flux/SD3/NAI 등 자연어 모델용). Ollama 필요.">
+            <ToggleSwitch v-model="autoNlGen" size="sm" />
+            <span>생성 시 태그를 자연어로 변환</span>
+          </label>
+          <!-- 자동화 중엔 멈추기가 조종석 안에 있다 — 같은 일을 하는 버튼을 두 개 두지 않는다. -->
+          <div class="generate-row" v-if="!isAutomating">
+            <button class="btn-generate" :class="{ converting: nlConverting }" @click="doGenerate" :disabled="isGenerating || nlConverting">
+              <Icon v-if="autoMode && !isGenerating && !nlConverting" name="play" />
+              {{ nlConverting ? '자연어 변환 중…' : isGenerating ? '생성 중…' : autoMode ? '자동 생성 시작' : 'GENERATE IMAGE' }}
+            </button>
+            <button v-if="isGenerating" class="btn-cancel" @click="cancelGeneration" title="생성 취소"><Icon name="close" /></button>
+          </div>
+          <div class="gen-eta" v-if="isGenerating && genEta">{{ genEta }}</div>
+        </div>
+      </aside>
+
 
       <!-- Center: Viewport + EXIF Bar -->
       <section class="viewport-area">
         <div class="viewport-main">
           <router-view v-slot="{ Component, route }">
+            <!-- 탭이 바뀌었다는 걸 무대도 말한다 — 레일 표시만 바뀌면 같은 화면으로 읽힌다.
+                 **들어올 때만** 움직인다. 나가는 전환(out-in)을 두면 새 화면이 그 전환이
+                 끝날 때까지 마운트되지 않는데, 창이 가려져 프레임이 멈추면 그 '끝'이
+                 오지 않는다 — 화면이 통째로 비는 것보다 살짝 늦게 떠오르는 편이 낫다. -->
+            <transition name="stage">
             <keep-alive>
               <component :is="Component"
                 :key="route.name"
@@ -503,6 +495,7 @@
                 :status="status"
               />
             </keep-alive>
+            </transition>
           </router-view>
         </div>
         <!-- EXIF Info Bar (Positive / Negative / Parameters 3탭) -->
@@ -1056,7 +1049,7 @@ import PromptPanel from './components/PromptPanel.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import NavRail from './components/NavRail.vue'
 import BackendGate from './components/BackendGate.vue'
-import type { NavScrollSection } from './utils/navSections'
+import { viewMode, setViewMode } from './composables/useViewMode'
 import QueuePanel from './components/QueuePanel.vue'
 import StatusStrip from './components/StatusStrip.vue'
 import CharacterPresetModal from './components/CharacterPresetModal.vue'
@@ -1110,7 +1103,16 @@ const vScrollMemory = {
     if (el.__onScroll) el.removeEventListener('scroll', el.__onScroll)
   },
 }
-const showExtendPanel = ref(false)
+/**
+ * 왼쪽 열의 모드 — 프롬프트 / 파라미터. 레일 서랍이 정하고 여기선 같은 ref 를 본다.
+ * `showExtendPanel` 은 옛 이름을 지키는 **쓰기 가능한 computed** — ESC · 닫기 버튼 ·
+ * loraInserted 같은 기존 호출부가 `showExtendPanel.value = …` 그대로 산다.
+ */
+const panelMode = viewMode('panel')
+const showExtendPanel = computed({
+  get: () => panelMode.value === 'params',
+  set: (open: boolean) => setViewMode('panel', open ? 'params' : 'prompt'),
+})
 const historyImages = ref<string[]>([])
 const histPage = ref(0)
 const histPerPage = 5
@@ -1133,6 +1135,12 @@ const exifContent = computed(() => {
 
 const autoMode = ref(false)
 const isAutomating = ref(false)
+function onAutoModeClick() {
+  // 생성 중엔 여기서 막는다 — Python 도 거절하지만, 화면의 켬/꺼짐이 실제와 어긋나지 않게 왕복 자체를 안 한다
+  if (isGenerating.value) { addToast('warning', '이미지 생성 중에는 자동화 모드를 바꿀 수 없습니다'); return }
+  autoMode.value = !autoMode.value
+  action('toggle_automation', { checked: autoMode.value })
+}
 // 생성 시 태그→자연어 자동 변환 토글
 const autoNlGen = ref(window.localStorage.getItem('autoNlGen') === 'true')
 const nlConverting = ref(false)
@@ -1188,13 +1196,15 @@ function overrideNextPrompt(prompt: string) {
 // 하단 계기 스트립이 그리는 백엔드 상태. null = 아직 신호 없음(= '연결 안 됨').
 // 파이썬이 backendStatus 를 짧게 몇 번 되풀이 보내므로 늦게 붙어도 곧 채워진다.
 const backendStatus = ref<{ kind?: string; label?: string; url?: string; connected?: boolean; error?: string } | null>(null)
-const vramInfo = ref({ used: 0, total: 0, pct: 0 })
+// source: 'nvml' | 'nvidia-smi' = GPU 전체(모든 프로세스, 작업 관리자와 같은 숫자) / 'backend' = 백엔드 자기 메모리만
+const vramInfo = ref({ used: 0, total: 0, pct: 0, source: '' })
 const vramClass = computed(() => vramInfo.value.pct > 90 ? 'critical' : vramInfo.value.pct > 70 ? 'warn' : 'ok')
 const vramTooltip = computed(() => {
   const v = vramInfo.value
   if (!v.total) return ''
   const free = (v.total - v.used).toFixed(1)
   let msg = `사용: ${v.used}GB / 전체: ${v.total}GB (여유: ${free}GB)`
+  msg += v.source === 'backend' ? '\n백엔드가 잡은 메모리만 — Ollama 등 다른 프로세스는 빠짐' : '\nGPU 전체 (모든 프로세스 · 5초마다 갱신)'
   if (vramClass.value === 'critical') msg += '\n⚠ VRAM 부족 — 해상도/배치 크기를 줄이거나 모델 unload 권장'
   else if (vramClass.value === 'warn') msg += '\n▲ 70% 초과 — 추가 작업 시 OOM 가능성'
   msg += '\n\n클릭하여 백엔드 모델 unload 요청'
@@ -1826,34 +1836,16 @@ function onDragStart(e: DragEvent, path: string) {
   e.dataTransfer!.effectAllowed = 'copy'
 }
 
+/** 지금 탭 — `.main-workspace[data-tab]` 로 노출돼 화면·테스트가 '어느 탭인가'를 읽는다. */
+const activeTabName = ref('t2i')
+
 function onTabChanged(tabName: string) {
+  activeTabName.value = tabName
   showLeftPanel.value = ['t2i', 'i2i', 'inpaint'].includes(tabName)
   showExtendPanel.value = false
   hideCtxMenu()
 }
 
-/**
- * 세로 레일의 하위 항목 → 왼쪽 패널의 그 섹션으로 이동.
- *
- * 두 가지를 먼저 치워야 스크롤이 닿는다:
- *  1) '고급 설정' 오버레이는 `v-if` 라 닫혀 있으면 요소가 **DOM 에 없다** — 먼저 연다.
- *  2) 섹션이 접힌 `<details>` 안에 있으면 높이가 0 이라 스크롤해도 안 보인다 — 편다.
- * id 는 `utils/navSections.ts` 가 단일 출처이고, 실제로 존재하는지는
- * tests/test_nav_rail_contract.py 가 정적으로 검증한다.
- */
-async function goToNavSection(section: NavScrollSection) {
-  if (section.panel === 'extend') {
-    showExtendPanel.value = true
-    await nextTick()
-  }
-  await nextTick()
-  const el = document.getElementById(section.id)
-  if (!el) return
-  for (let node: HTMLElement | null = el; node; node = node.parentElement) {
-    if (node instanceof HTMLDetailsElement) node.open = true
-  }
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
 
 async function loadHistory() {
   const backend = await getBackend()
@@ -2002,7 +1994,7 @@ onMounted(async () => {
       if (showProfileManager.value)   { showProfileManager.value = false; return }
       if (showInstantWcManager.value) { showInstantWcManager.value = false; return }
       if (showStatsModal.value)       { showStatsModal.value = false; return }
-      // 2) 확장 패널 오버레이 (z-index 50)
+      // 2) 파라미터 열 → 프롬프트로
       if (showExtendPanel.value)      { showExtendPanel.value = false; return }
     }
     // History ↑/↓ 네비게이션 — 입력 필드/모달 포커스 중이 아닐 때만
@@ -2010,7 +2002,7 @@ onMounted(async () => {
       const ae = document.activeElement as HTMLElement | null
       const tag = (ae?.tagName || '').toLowerCase()
       const editable = tag === 'input' || tag === 'textarea' || tag === 'select' || ae?.isContentEditable
-      const anyModal = showExtendPanel.value || showPresetManager.value || showWeightManager.value
+      const anyModal = showPresetManager.value || showWeightManager.value
         || showWcManager.value || showOrderManager.value || showProfileManager.value
         || showInstantWcManager.value || showStatsModal.value
       if (!editable && !anyModal && historyImages.value.length) {
@@ -2257,34 +2249,9 @@ onMounted(async () => {
 .side-panel.right { width: 220px; border-right: none; border-left: 1px solid var(--border); }
 .panel-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 
-/* 반달 화살표 */
-.half-moon {
-  position: absolute; left: 360px; top: 50%; transform: translateY(-50%);
-  width: 20px; height: 60px; background: var(--bg-secondary);
-  border: 1px solid var(--border); border-left: none;
-  border-radius: 0 30px 30px 0; cursor: pointer; z-index: 10;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--text-muted); font-size: var(--fs-label); transition: all 0.2s;
-}
-.half-moon:hover { background: var(--bg-card); color: var(--accent); width: 24px; }
-.half-moon.open { background: var(--accent-dim); color: var(--accent); left: 800px; z-index: 51; }
-
-/* Extended Panel Backdrop — 외부 클릭으로 닫기 */
-.extend-backdrop {
-  /* 왼쪽 패널(360px)은 덮지 않음 — inset:0이면 왼쪽 checkpoint/프롬프트 영역까지
-     가려 wheel을 가로채 스크롤이 동결됐음. left:360부터 덮어 왼쪽 패널은 ADVANCED가
-     열린 상태에서도 스크롤/조작 가능. 오버레이(360~680)는 위(z-index 50)라 클릭이
-     오버레이로 가고, 그 바깥(680~)을 클릭하면 닫힘. */
-  position: absolute; left: 360px; right: 0; top: 0; bottom: 0; background: transparent;
-  z-index: 45; cursor: pointer;
-}
-/* Extended Panel Overlay */
-.extend-overlay {
-  position: absolute; left: 360px; top: 0; bottom: 0; width: 440px;
-  background: var(--bg-secondary); border-right: 1px solid var(--border);
-  z-index: 50; display: flex; flex-direction: column;
-  box-shadow: 8px 0 32px rgba(0,0,0,0.5);
-}
+/* 파라미터 — 왼쪽 열 안에서 .panel-scroll 과 자리를 번갈아 쓴다.
+   (예전엔 left:360px 에 440px 폭으로 무대 위에 떠 있었다) */
+.extend-overlay { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .extend-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .extend-header h3 { font-size: 11px; letter-spacing: 0; color: var(--text-muted); }
 .close-btn { width: 28px; height: 28px; background: var(--bg-button); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text-secondary); font-size: 16px; cursor: pointer; }
@@ -2410,8 +2377,13 @@ onMounted(async () => {
 .lora-check input { accent-color: var(--accent); }
 .lora-empty { font-size: 11px; color: var(--text-muted); text-align: center; padding: 12px; }
 
-.slide-enter-active, .slide-leave-active { transition: transform 0.25s ease, opacity 0.25s ease; }
-.slide-enter-from, .slide-leave-to { transform: translateX(-20px); opacity: 0; }
+/* 무대 전환 — 탭이 바뀌면 새 화면이 살짝 떠오른다. 길면 매번 기다리게 되고 없으면 못 알아챈다.
+   나가는 쪽 규칙은 일부러 없다 (위 주석). */
+.stage-enter-active { transition: opacity .16s ease, transform .16s ease; }
+.stage-enter-from { opacity: 0; transform: translateY(6px); }
+@media (prefers-reduced-motion: reduce) {
+  .stage-enter-active { transition: none; }
+}
 
 /* Tool Card */
 .tool-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }

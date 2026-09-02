@@ -140,6 +140,18 @@ class BackendUITab(QWidget):
                 return
             parent = parent.parent()
 
+    def mark_backend_changed(self):
+        """백엔드가 바뀌었다 — 탭이 보이는 중이면 바로 갈아입히고, 아니면 다음에 열 때."""
+        self._stale = True
+        if self.isVisible():
+            self.ensure_loaded()
+
+    def ensure_loaded(self):
+        """탭을 열 때 부른다. 로드가 필요할 때만 실제로 로드한다."""
+        if getattr(self, '_stale', True) or not getattr(self, '_current_url', ''):
+            self._stale = False
+            self.load_backend_ui()
+
     def load_backend_ui(self):
         """현재 백엔드에 맞는 UI를 로드"""
         from backends import get_backend, get_backend_type, BackendType

@@ -249,7 +249,7 @@ import {
   verifyComicRecoveryMirror,
 } from '../utils/comicRecovery'
 import { mediaUrl } from '../utils/media.js'
-import { useCreatorMode } from '../composables/useCreatorMode'
+import { useViewMode } from '../composables/useViewMode'
 
 type VideoMode = 't2v' | 'i2v' | 'v2v'
 type BubbleKind = 'speech' | 'thought' | 'narration'
@@ -280,8 +280,8 @@ const layouts = [
 ]
 const comicStyles = ['Anime', 'Manga', 'Webtoon', 'Cinematic', 'Painterly', 'Graphic Novel']
 
-/** 모드는 왼쪽 레일이 정한다 — 여기선 읽기만 한다. `useCreatorMode` 참조. */
-const { mode: creatorMode } = useCreatorMode()
+/** 모드는 왼쪽 레일이 정한다 — 여기선 읽기만 한다. `useViewMode` 참조. */
+const { mode: creatorMode } = useViewMode('creator')
 const creatorState = ref<any>({ status: 'idle', ready: false })
 const lastResult = ref<CreatorResult | null>(null)
 const progress = ref({ visible: false, percent: 0, stage: '', message: '' })

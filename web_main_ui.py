@@ -184,6 +184,7 @@ _WEB_SIGNALS = frozenset({
     "yoloModelUpdated", "condRulesLoaded", "batchFilesSelected", "ollamaResult",
     "genNlResult", "globalWeightsLoaded", "uiPrefsLoaded", "compareImageLoaded",
     "galleryImagesReady", "thumbnailReady", "upscalersReady", "ollamaModelsReady",
+    "chatToken", "chatDone", "chatThreads",
     "adetailerModelsReady", "queueUpdated", "queueItemAdded", "queueCompleted",
     "showNotification", "adetailerResult", "adetailerProgress", "sam3Result",
     "sam3Progress", "eventSearchProgress", "eventSearchResults", "eventImportResults",

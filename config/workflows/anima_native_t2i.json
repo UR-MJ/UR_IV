@@ -1,0 +1,50 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": { "unet_name": "anima_baseV10.safetensors", "weight_dtype": "default" },
+    "_meta": { "title": "Anima UNET (Forge models/Stable-diffusion 공유)" }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": { "clip_name": "qwen_3_06b_base.safetensors", "type": "stable_diffusion", "device": "default" },
+    "_meta": { "title": "Qwen3 0.6B 텍스트 인코더 (ComfyUI 가 Anima 로 자동 인식)" }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": { "vae_name": "qwen_image_vae.safetensors" },
+    "_meta": { "title": "Qwen-Image VAE" }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "masterpiece, best quality, 1girl, simple background", "clip": ["2", 0] },
+    "_meta": { "title": "Positive — 앱이 최종 프롬프트로 덮어씀" }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "worst quality, low quality, lowres, watermark, signature", "clip": ["2", 0] },
+    "_meta": { "title": "Negative — 앱이 네거티브로 덮어씀" }
+  },
+  "6": {
+    "class_type": "EmptyLatentImage",
+    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 },
+    "_meta": { "title": "Latent — 앱이 해상도·배치로 덮어씀" }
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["1", 0], "positive": ["4", 0], "negative": ["5", 0], "latent_image": ["6", 0],
+      "seed": 1, "steps": 30, "cfg": 5.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0
+    },
+    "_meta": { "title": "KSampler — 앱이 시드·스텝·CFG·샘플러로 덮어씀" }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["7", 0], "vae": ["3", 0] },
+    "_meta": { "title": "VAE Decode" }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": { "images": ["8", 0], "filename_prefix": "AIStudio/anima" },
+    "_meta": { "title": "Save" }
+  }
+}

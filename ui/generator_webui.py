@@ -1065,9 +1065,13 @@ class WebUIMixin:
         # ComfyUI 모드일 때 미지원 기능 비활성화
         self._update_backend_ui_state()
 
-        # Backend UI 탭 로드
+        # Backend UI 탭은 여기서 **로드하지 않는다**. 예전엔 백엔드가 준비되는 순간
+        # Forge/Comfy 웹 UI 전체를 숨은 웹뷰에 띄웠다 — 사용자는 앱 화면만 쓰는데
+        # Gradio 페이지가 뒤에서 통째로 돌았다. 이제 탭을 실제로 열 때 로드한다
+        # (generator_main `native_tab_switch`). 이미 열려 있던 페이지는 새 엔드포인트로
+        # 갈아입힌다.
         if hasattr(self, 'backend_ui_tab'):
-            self.backend_ui_tab.load_backend_ui()
+            self.backend_ui_tab.mark_backend_changed()
 
         # 시작 게이트는 여기서 걷힌다 — 목록이 다 채워진 뒤라 오버레이가 사라지는
         # 순간 빈 패널이 보이지 않는다.
@@ -1110,9 +1114,9 @@ class WebUIMixin:
         if getattr(self, 'btn_api_manager', None):
             self.btn_api_manager.set_failed(backend_name)
 
-        # 연결 실패해도 Backend UI 탭은 전환 (웹 인터페이스 직접 접근용)
+        # 연결 실패 시에도 탭을 열면 그때 시도한다 (웹 인터페이스 직접 접근용)
         if hasattr(self, 'backend_ui_tab'):
-            self.backend_ui_tab.load_backend_ui()
+            self.backend_ui_tab.mark_backend_changed()
 
         # 게이트가 기다리던 연결이면 결과를 오버레이로 돌려준다(게이트는 계속 떠 있다).
         self._resolve_backend_gate(False, error_msg)

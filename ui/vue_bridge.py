@@ -103,6 +103,9 @@ class VueBridge(QObject):
     galleryImagesReady = pyqtSignal(str) # JSON {folder, files}
     upscalersReady = pyqtSignal(str)      # JSON [name]
     ollamaModelsReady = pyqtSignal(str)   # JSON {url, models}
+    chatToken = pyqtSignal(str)          # JSON {id, text} — 대화 탭 스트리밍 조각(모아 보냄)
+    chatDone = pyqtSignal(str)           # JSON {id, ok, content, stopped, error?}
+    chatThreads = pyqtSignal(str)        # JSON [threads] — 저장된 대화 목록
     adetailerModelsReady = pyqtSignal(str) # JSON [name]
     queueItemAdded = pyqtSignal(str)     # JSON {prompt, ...}
     queueCompleted = pyqtSignal(str)     # JSON {total}
@@ -639,7 +642,7 @@ class VueBridge(QObject):
                 'set_auto_start', 'save_extension_dir', 'install_extension',
                 'update_extension', 'check_extension', 'check_extensions',
                 'set_install_root', 'use_managed_install',
-                'set_primary_model_engine', 'set_extra_args',
+                'set_primary_model_engine', 'set_extra_args', 'set_launch_options',
             }
             if action not in allowed:
                 raise ValueError(f'지원하지 않는 runtime 작업입니다: {action}')

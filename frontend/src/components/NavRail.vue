@@ -35,26 +35,34 @@
 
                접히면 '찾아가기' 항목은 숨지만 **모드 항목은 남는다** — 모드는
                그 화면에 가는 유일한 길이라, 접었다고 사라지면 기능이 없어진다. -->
-          <template v-if="currentTab === tab.name">
-            <button
-              v-for="section in visibleSections"
-              :key="section.id"
-              type="button"
-              class="sub"
-              :class="{ open: isSectionOpen(section), mode: isModeSection(section) }"
-              :aria-current="isModeSection(section) && isSectionOpen(section) ? 'true' : undefined"
-              :aria-label="section.label"
-              @click="goSection(section)"
-              @pointerenter="showTip(section.label, $event)"
-              @pointerleave="hideTip"
-              @focus="showTip(section.label, $event)"
-              @blur="hideTip"
-            >
-              <span v-if="isModeSection(section)" class="ico"><Icon :name="section.icon" size="15" /></span>
-              <span v-if="!collapsed" class="t">{{ section.label }}</span>
-              <span v-if="!collapsed && badgeText(section)" class="n">{{ badgeText(section) }}</span>
-            </button>
-          </template>
+          <!-- 서랍은 **열린다** — 높이 0 에서 제 높이로. 목록이 툭 나타나면 위치가
+               바뀐 걸 눈이 못 따라가서, 아래 항목들이 왜 밀렸는지 모른다.
+               grid-template-rows 0fr → 1fr 는 내용 높이를 재지 않고도 부드럽게 열린다.
+               접혀도 서랍은 남는다(아이콘만) — 항목이 전부 그 화면에 가는 유일한 길이다. -->
+          <Transition name="drawer">
+            <div v-if="currentTab === tab.name && drawerFor(tab).length" class="drawer">
+              <div class="drawer-in">
+                <button
+                  v-for="section in drawerFor(tab)"
+                  :key="section.id"
+                  type="button"
+                  class="sub"
+                  :class="{ open: isSectionOpen(section) }"
+                  :aria-current="isSectionOpen(section) ? 'true' : undefined"
+                  :aria-label="section.label"
+                  @click="goSection(section)"
+                  @pointerenter="showTip(section.label, $event)"
+                  @pointerleave="hideTip"
+                  @focus="showTip(section.label, $event)"
+                  @blur="hideTip"
+                >
+                  <span class="ico"><Icon :name="section.icon" size="15" /></span>
+                  <span v-if="!collapsed" class="t">{{ section.label }}</span>
+                  <span v-if="!collapsed && badgeText(section)" class="n">{{ badgeText(section) }}</span>
+                </button>
+              </div>
+            </div>
+          </Transition>
         </template>
       </template>
     </div>
@@ -101,8 +109,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { routes } from '../router.js'
 import { requestAction, state } from '../stores/widgetStore.js'
-import { sectionsFor, isModeSection, type NavSection, type NavScrollSection } from '../utils/navSections'
-import { useCreatorMode } from '../composables/useCreatorMode'
+import { sectionsFor, type NavSection } from '../utils/navSections'
+import { viewMode, setViewMode } from '../composables/useViewMode'
 
 interface RailTab {
   /** route name, 또는 네이티브 탭 id */
@@ -121,7 +129,7 @@ interface RailTab {
  */
 const ICON_BY_TAB: Record<string, string> = {
   t2i: 'type', i2i: 'image', inpaint: 'brush', event: 'sparkles',
-  search: 'search', xyz: 'grid', creator: 'cards',
+  search: 'search', xyz: 'grid', creator: 'cards', chat: 'message',
   editor: 'pencil', batch: 'layers',
   gallery: 'folder', fav: 'star', png: 'info',
   settings: 'settings', web: 'globe', backend: 'cpu',
@@ -140,7 +148,7 @@ const NATIVE_TABS: RailTab[] = [
  * `names` 는 사용자가 순서를 안 건드렸을 때의 **기본 순서**이기도 하다.
  */
 const GROUPS: { id: string; label: string; names: string[] }[] = [
-  { id: 'make', label: '생성', names: ['t2i', 'i2i', 'inpaint', 'event', 'search', 'xyz', 'creator'] },
+  { id: 'make', label: '생성', names: ['t2i', 'i2i', 'inpaint', 'event', 'search', 'xyz', 'creator', 'chat'] },
   { id: 'edit', label: '편집', names: ['editor', 'batch'] },
   { id: 'lib', label: '라이브러리', names: ['gallery', 'fav', 'png'] },
   { id: 'sys', label: '시스템', names: ['settings', 'web', 'backend'] },
@@ -206,13 +214,10 @@ const groups = computed(() => {
 // ── 전환 ───────────────────────────────────────────────────────────────
 const emit = defineEmits<{
   'tab-changed': [name: string]
-  /** 찾아가기 항목만 밖으로 나간다 — 모드 항목은 레일이 직접 처리한다. */
-  'go-section': [section: NavScrollSection]
 }>()
 
 function switchTo(tab: RailTab) {
   currentTab.value = tab.name
-  openSection.value = ''
   if (tab.native) {
     requestAction('native_tab_switch', { tab: tab.name })
   } else {
@@ -236,43 +241,26 @@ function _onNavigate(e: Event) {
 }
 
 // ── 서랍 ───────────────────────────────────────────────────────────────
-const sections = computed(() => sectionsFor(currentTab.value))
 /**
- * 접힌 레일(52px)에는 모드 항목만 남긴다.
- * '찾아가기'는 편의라 숨겨도 되지만, 모드는 그 화면에 가는 **유일한 길**이다.
+ * 서랍은 **그 탭의** 목록을 그린다 — '지금 탭'의 목록이 아니라.
+ * 둘은 평소엔 같지만 탭이 바뀌는 순간엔 다르다: 닫히는 서랍이 220ms 동안 남아 있는데,
+ * 그때 '지금 탭' 목록을 보면 닫히는 서랍에 새 탭의 항목이 잠깐 비쳐 보인다.
  */
-const visibleSections = computed(() =>
-  collapsed.value ? sections.value.filter(isModeSection) : sections.value)
-
-/** 지금 열려 있는(= 방금 찾아간) 섹션. 탭이 바뀌면 초기화된다. */
-const openSection = ref('')
-watch(currentTab, () => { openSection.value = '' })
+function drawerFor(tab: RailTab): NavSection[] {
+  return sectionsFor(tab.name)
+}
 
 /**
- * Creator 의 모드는 화면(`CreatorStudioView`)과 **같은 ref** 를 본다.
- * 둘은 형제라 props 로 못 잇는다 — `composables/useCreatorMode.ts` 참조.
- */
-const { mode: creatorMode, setMode: setCreatorMode } = useCreatorMode()
-
-/**
- * 활성 표시.
- *
- * 모드 항목은 클릭 기록(`openSection`)이 아니라 **실제 모드 값**에서 나와야 한다.
- * 탭을 떠났다 돌아오면 `openSection` 은 지워지지만(위 watch) keep-alive 덕에
- * 화면은 원래 모드 그대로다 — 클릭 기록을 믿으면 그 순간 표시가 어긋난다.
+ * 활성 표시는 클릭 기록이 아니라 **실제 모드 값**에서 나온다.
+ * 모드 값은 화면과 같은 ref 다(`composables/useViewMode.ts`) — 화면 쪽에서 바뀌어도
+ * (ESC 로 프롬프트로 돌아가기 등) 레일 표시가 그대로 따라온다.
  */
 function isSectionOpen(section: NavSection): boolean {
-  if (isModeSection(section)) return creatorMode.value === section.mode
-  return openSection.value === section.id
+  return viewMode(section.scope).value === section.mode
 }
 
 function goSection(section: NavSection) {
-  if (isModeSection(section)) {
-    setCreatorMode(section.mode)
-    return
-  }
-  openSection.value = section.id
-  emit('go-section', section)
+  setViewMode(section.scope, section.mode)
 }
 
 /**
@@ -293,7 +281,6 @@ function approxTokens(text: unknown): number {
 }
 
 function badgeText(section: NavSection): string {
-  if (isModeSection(section)) return ''
   if (section.badge === 'tokens') {
     const n = approxTokens(state.values.total_prompt_display)
     return n ? String(n) : ''
@@ -438,11 +425,23 @@ onUnmounted(() => {
   justify-content: center;
 }
 
+/* ── 서랍 여닫힘 ── */
+.drawer { display: grid; grid-template-rows: 1fr; }
+.drawer-in { min-height: 0; overflow: hidden; }
+.drawer-enter-active, .drawer-leave-active {
+  transition: grid-template-rows 220ms cubic-bezier(.22, .61, .36, 1), opacity 180ms ease;
+}
+.drawer-enter-from, .drawer-leave-to { grid-template-rows: 0fr; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .drawer-enter-active, .drawer-leave-active { transition: none; }
+}
+
 /* ── 하위 행(서랍) ── */
 .sub {
   position: relative;
   display: flex; align-items: center; gap: var(--sp-3);
-  height: 26px; padding: 0 var(--sp-3) 0 40px;
+  /* 왼쪽 여백은 글자 시작점이 탭 행의 글자(40px)와 맞도록 역산한 값 — 17 + 아이콘 15 + gap 8 */
+  height: 26px; padding: 0 var(--sp-3) 0 17px;
   margin: 0 var(--sp-2);
   width: calc(100% - var(--sp-4));
   border: none; border-radius: var(--radius-base);
@@ -457,23 +456,16 @@ onUnmounted(() => {
 /* 지금 보고 있는 섹션임을 왼쪽 막대로 — 배경만으로는 '선택'과 '호버'가 헷갈린다 */
 .sub.open::before {
   content: '';
-  position: absolute; left: 24px; top: 6px; bottom: 6px;
+  position: absolute; left: 7px; top: 6px; bottom: 6px;
   width: 2px; border-radius: 1px;
   background: var(--accent);
 }
 .sub .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-/* 막대 위치(24px)는 들여쓰기 40px 인 찾아가기 행에 맞춘 값이다. 모드 행은 그 자리에
-   아이콘이 있어서 글자 위에 줄이 그어진 것처럼 보인다 — 아이콘 왼쪽으로 옮긴다. */
-.sub.mode.open::before { left: 7px; }
+.sub .ico { display: flex; color: var(--text-muted); }
+.sub.open .ico { color: var(--accent); }
 
-/* 모드 항목은 화면을 바꾼다 — 아이콘을 준다. 접히면 이것만 남으므로 아이콘이
-   없으면 빈 칸을 누르게 된다. 왼쪽 여백은 글자 시작점이 '찾아가기' 항목(40px)과
-   맞도록 역산한 값이다(17 + 아이콘 15 + gap 8). */
-.sub.mode { padding-left: 17px; }
-.sub.mode .ico { display: flex; color: var(--text-muted); }
-.sub.mode.open .ico { color: var(--accent); }
-
-.nav-rail.collapsed .sub.mode {
+/* 접히면 아이콘만 — 항목이 그 화면에 가는 유일한 길이라 접었다고 숨기지 않는다 */
+.nav-rail.collapsed .sub {
   width: 26px; height: 26px;
   margin: 0 13px; padding: 0;
   justify-content: center;

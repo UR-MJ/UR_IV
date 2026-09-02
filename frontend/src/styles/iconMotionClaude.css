@@ -3,18 +3,25 @@
  *
  * 원리 하나로 요약된다: **아이콘은 자기 몸을 흔들지 않는다. 누르면 일어날 일의
  * 첫 프레임을 보여준다.** 휴지통은 뚜껑이 열리기 시작하고, 내려받기는 화살이
- * 트레이 쪽으로 내려가고, 자물쇠는 고리가 들린다. 틀(바깥 형태)은 가만히 있고
+ * 트레이로 떨어지고, 자물쇠는 고리가 내려앉는다. 틀(바깥 형태)은 가만히 있고
  * 움직이는 것은 **의미를 지는 조각**뿐이다.
  *
- * 그래서 세 가지가 따라온다.
+ * 두 가지 예외를 둔다.
  *
- * 1) 글리프 전체에 rotate·scale 을 걸지 않는다(누를 때의 눌림 하나만 예외).
- *    15px 로 그려지는 1.6px 스트로크를 통째로 돌리면 획이 흐려지고, 무엇보다
- *    아이콘 70개가 전부 '조금씩 꿈틀'해서 어느 것도 뜻을 갖지 못한다.
- * 2) 기계 장치가 없는 아이콘(이미지·지구본·사각형 같은 '명사')은 **가만히 둔다.**
- *    누를 때의 눌림만 있다. 움직임이 뜻이 되려면, 안 움직이는 것도 있어야 한다.
- * 3) 선택 상태는 그 장치가 **열린 채로 머문다**. 뚜껑이 열려 있고 고리가 들려 있다 —
- *    크기를 키우는 대신 아이콘이 그 상태 자체가 된다.
+ * 1) **일이 '계속되는' 아이콘은 호버 중 반복한다.** 내려받기·새로고침·반짝임·
+ *    종·가위·음표·지구본은 한 프레임으로 뜻이 안 선다 — 떨어지고, 돌고, 깜빡이는
+ *    것이 그 낱말이다. 그래서 이들은 호버하는 동안 짧은 주기로 되풀이한다.
+ *    반복은 호버 안에서만 산다. 손을 떼면 멈춘다.
+ * 2) **전부 움직인다.** 예전엔 '기계 장치가 없는 명사(이미지·지구본·사각형)는
+ *    가만히 둔다' 였는데, 그러면 화면 위에서 "아무것도 안 움직인다" 로 읽혔다.
+ *    이제는 명사에도 장치를 준다 — 사진은 해가 뜨고, 책은 표지가 열리고, 도장은
+ *    찍힌다. 별로인 것은 **보고 나서** 뺀다. 안 움직이게 두려면 그 아이콘 규칙을
+ *    지우면 되고, 그 결정은 tests/test_icon_motion_claude_contract.py 의
+ *    `DELIBERATELY_STILL` 에 이름을 적어 남긴다.
+ *
+ * 글리프 전체에 rotate·scale 을 거는 것은 여전히 눌림 하나뿐이다. 15px 로
+ * 그려지는 1.6px 스트로크를 통째로 돌리면 획이 흐려진다. 다만 새로고침의 회전과
+ * 경고의 흔들림처럼 전체가 움직여야 뜻이 되는 것은 `animation` 으로 따로 둔다.
  *
  * 이음매는 `Icon.vue` 가 이미 붙여 둔 것을 그대로 쓴다(`data-icon-name`,
  * `.icon-part-N`, `data-icon-motion`). 그래서 이 파일 하나만 더해지고 컴포넌트와
@@ -24,10 +31,29 @@
  * 회귀 가드: tests/test_icon_motion_claude_contract.py
  */
 
+/* ── 진폭 — 이 세 숫자가 프리셋 전체의 세기다 ─────────────────────────
+ * 각 아이콘의 값은 **서로의 비율**만 담고 있고, 실제 크기는 여기서 정해진다.
+ * 그래서 '조금 더 크게/작게'는 60개 규칙이 아니라 이 셋만 고치면 된다.
+ *
+ * 왜 셋인가: 평행이동 · 회전 · 확대는 같은 배율로 키우면 안 된다. 이동을 3배
+ * 하면 잘 읽히지만, `scale(1.2)` 를 3배 하면 1.6 이 되어 아이콘이 튀어나온다.
+ *
+ * 단위 주의 — 이 px 는 화면 픽셀이 아니라 **SVG viewBox 단위(24 기준)**다.
+ * 앱 아이콘은 17px 로 그려지므로 화면상 크기는 값 × 17/24 ≈ 0.71 배가 된다.
+ * 처음 값(이동 0.9)이 화면에서 0.64px 였던 이유이고, 그래서 안 보였다.
+ *
+ * 읽는 법: `calc(1px * var(--ic-amp-move))` 가 '한 걸음'(≈ 3.6 단위 ≈ 2.5px).
+ * 새 규칙은 이 걸음의 분수로 적는다.
+ * ------------------------------------------------------------------ */
+:root[data-icon-animation='claude'] {
+  --ic-amp-move: 3.6;
+  --ic-amp-turn: 2.8;
+  --ic-amp-size: 2.4;
+}
+
 /* ── 공통 — 상태 변수의 기본값과 전이 ─────────────────────────────────── */
 
 :root[data-icon-animation='claude'] .icon[data-icon-motion] {
-  /* 기본은 '움직이지 않음'. 뜻이 있는 아이콘만 아래에서 값을 채운다. */
   --ic-press: scale(.94);
   --ic-hover-ms: 170ms;
   --ic-press-ms: 100ms;
@@ -38,8 +64,10 @@
   transition: transform var(--ic-ms, var(--ic-press-ms)) var(--ic-ease);
 }
 
+/* `--ic-rest` 는 **쉼 상태의 자리**다. 대부분 없지만, 자물쇠처럼 '전 → 후' 를
+   보여야 하는 것은 쉼 자리부터 옮겨 둔다(잠그기는 열린 채 쉬고, 풀기는 잠긴 채 쉰다). */
 :root[data-icon-animation='claude'] .icon[data-icon-motion] .icon-part {
-  transform: var(--ic-part, none);
+  transform: var(--ic-part, var(--ic-rest, none));
   transition: transform var(--ic-ms, var(--ic-hover-ms)) var(--ic-ease),
               opacity var(--ic-ms, var(--ic-hover-ms)) var(--ic-ease);
 }
@@ -53,14 +81,14 @@
     [role='tab'][aria-selected='true'],
     [role='option'][aria-selected='true'],
     [aria-current='page'],
-    :where(button, [role='button'], [role='tab'], .nav-item, .tool-chip, .chip-btn, .sub-tab, .bar-btn, .tb-btn):is(.active, .selected, .on, .locked)
+    .active, .selected, .on
   ) .icon[data-icon-motion] .icon-part {
   --ic-part: var(--ic-hold, none);
   --ic-ms: var(--ic-hold-ms);
   --ic-ease: cubic-bezier(.16, 1, .3, 1);
 }
 
-/* 키보드 포커스 — 호버와 같은 장치를 쓰되 계속 떠 있으므로 폭을 줄인다. */
+/* 키보드 포커스 — 호버보다 조금 작게. 포커스 링이 이미 '여기' 를 말하고 있다. */
 :root[data-icon-animation='claude']
   :where(
     button:not(:disabled), a[href], summary,
@@ -71,7 +99,7 @@
   --ic-ms: var(--ic-hold-ms);
 }
 
-/* 호버 — 마우스가 있는 기기에서만. 터치에서는 :hover 가 탭 후에 눌어붙는다. */
+/* 호버 — 마우스가 있을 때만. 터치는 호버가 눌림과 겹쳐 두 번 움직인다. */
 @media (hover: hover) and (pointer: fine) {
   :root[data-icon-animation='claude']
     :where(
@@ -80,20 +108,16 @@
       [role='tab']:not([aria-disabled='true']),
       [role='option']:not([aria-disabled='true']),
       [role='menuitem']:not([aria-disabled='true']),
-      label:has(input:not(:disabled)), .ctx-item, .hist-card
+      .ctx-item, .hist-card
     ):hover .icon[data-icon-motion] .icon-part {
     --ic-part: var(--ic-open, none);
     --ic-ms: var(--ic-hover-ms);
   }
 }
 
-/* 누름 — 유일하게 글리프 전체가 움직이는 자리다. 아이콘의 뜻이 아니라 '버튼을
-   눌렀다'는 촉감이라 모든 아이콘이 같아도 된다. 장치는 쉼 자리로 돌아가 동작이
-   '착지'한 것처럼 보인다.
-
-   **이 묶음은 반드시 호버·선택보다 뒤에 있어야 한다.** 넷 다 특정성이 같아
-   (0,6,0) 순서가 승자를 정하는데, 앞에 두면 마우스로 누르는 동안 호버가 이겨
-   '착지'가 한 번도 일어나지 않는다. 실제로 그랬다. */
+/* 눌림 — 글리프 전체가 살짝 눌리고, 조각은 쉼 자리로 돌아가 **착지**한다.
+   상태 규칙 넷은 특정성이 같아 순서가 승자를 정한다 — 이 규칙이 맨 뒤여야
+   마우스로 누르는 동안 호버를 이긴다. */
 :root[data-icon-animation='claude']
   :where(
     button:not(:disabled), a[href], summary,
@@ -101,7 +125,7 @@
     [role='tab']:not([aria-disabled='true']),
     [role='option']:not([aria-disabled='true']),
     [role='menuitem']:not([aria-disabled='true']),
-    label:has(input:not(:disabled)), .ctx-item, .hist-card
+    .ctx-item, .hist-card
   ):active .icon[data-icon-motion] {
   --ic-glyph: var(--ic-press);
   --ic-ms: var(--ic-press-ms);
@@ -120,129 +144,171 @@
 /* ── 아이콘별 장치 ────────────────────────────────────────────────────
  * 조각 번호는 `icons/index.ts` 의 path 순서다. 순서가 바뀌면 엉뚱한 조각이
  * 움직이므로 `ICON_PART_MINIMUMS` 와 대조 테스트가 그것을 잡는다.
+ *
+ * 축(transform-origin) 규칙 — `transform-box: fill-box` 는 조각마다 **제**
+ * 경계상자를 쓴다. 조각 둘 이상이 한 축을 나눠야 하면(가위 · 종 · 회전) 반드시
+ * `transform-box: view-box` 로 바꿔 24×24 격자의 절대 좌표를 준다.
  * ------------------------------------------------------------------ */
 
-/* 뚜껑이 열린다 — 휴지통(1=테두리선, 2=손잡이)·폴더 덮개 */
-/* 뚜껑은 '들린다' — 기울이지 않는다. `transform-box: fill-box` 는 조각마다 제
-   경계상자를 쓰므로 두 조각에 같은 origin 을 줘도 회전축이 갈린다(테두리선은
-   높이 0 이라 축이 아예 성립하지 않는다). 같은 만큼 평행이동하면 둘이 붙어 움직인다. */
+/* 뚜껑이 들린다 — 휴지통(1=테두리선, 2=손잡이). 기울이지 않고 평행이동한다:
+   테두리선은 높이 0 이라 회전축이 성립하지 않는다. */
 :root[data-icon-animation='claude'] .icon[data-icon-name='trash'] :where(.icon-part-1, .icon-part-2) {
-  --ic-open: translateY(-.9px);
-  --ic-hold: translateY(-.6px);
-  --ic-focus: translateY(-.45px);
-}
-:root[data-icon-animation='claude'] .icon[data-icon-name='folder-open'] .icon-part-2 {
-  --ic-open: rotate(-4deg) translateY(-.4px);
-  --ic-hold: rotate(-3deg);
-  --ic-focus: rotate(-2deg);
-  transform-origin: left top;
+  --ic-open: translateY(calc(-.9px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(-.6px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(-.45px * var(--ic-amp-move)));
 }
 
-/* 화살이 목적지로 간다 — 몸통과 촉만 움직이고 트레이/바닥은 붙어 있는다 */
+/* 폴더 — 닫힌 폴더는 집어 든다. 열린 폴더는 **뒷판**(1)이 올라가 입이 벌어진다.
+   앞 덮개(2)를 들면 종이가 올라가는 것처럼 보였다 — 열리는 건 뒤쪽이다. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='folder'] .icon-part-1 {
+  --ic-open: translateY(calc(-.55px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(-.35px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(-.3px * var(--ic-amp-move)));
+}
+:root[data-icon-animation='claude'] .icon[data-icon-name='folder-open'] .icon-part-1 {
+  --ic-open: translateY(calc(-.6px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(-.4px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(-.3px * var(--ic-amp-move)));
+}
+
+/* 파일 — 접힌 귀(2)가 바깥 모서리(18.5,3.5)를 축으로 커진다: 귀퉁이가 말린다. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='file'] .icon-part-2 {
+  transform-box: view-box; transform-origin: 18.5px 3.5px;
+  --ic-open: scale(calc(1 + .2 * var(--ic-amp-size)));
+  --ic-hold: scale(calc(1 + .12 * var(--ic-amp-size)));
+}
+
+/* 사진 — 해(3)가 뜬다. 틀과 산은 그대로. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='image'] .icon-part-3 {
+  --ic-open: translateY(calc(-.5px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(-.35px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(-.3px * var(--ic-amp-move)));
+}
+
+/* 내려받기 · 올리기 — 호버 중엔 화살이 **계속** 떨어지고/오른다(아래 반복 절).
+   선택 상태는 화살이 도착한 자리(트레이 쪽)에 머문다. */
 :root[data-icon-animation='claude'] .icon[data-icon-name='download'] :where(.icon-part-1, .icon-part-2) {
-  --ic-open: translateY(.9px);
-  --ic-hold: translateY(.6px);
-  --ic-focus: translateY(.45px);
+  --ic-hold: translateY(calc(.5px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(.4px * var(--ic-amp-move)));
 }
 :root[data-icon-animation='claude'] .icon[data-icon-name='upload'] :where(.icon-part-1, .icon-part-2) {
-  --ic-open: translateY(-.9px);
-  --ic-hold: translateY(-.6px);
-  --ic-focus: translateY(-.45px);
+  --ic-hold: translateY(calc(-.5px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(-.4px * var(--ic-amp-move)));
 }
 
 /* 방향 지시 — 가리키는 쪽으로 한 걸음 */
 :root[data-icon-animation='claude'] .icon:is([data-icon-name='arrow-up'], [data-icon-name='chevron-up']) .icon-part {
-  --ic-open: translateY(-.8px);
-  --ic-hold: translateY(-.5px);
-  --ic-focus: translateY(-.4px);
+  --ic-open: translateY(calc(-.8px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(-.5px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(-.4px * var(--ic-amp-move)));
 }
 :root[data-icon-animation='claude'] .icon:is([data-icon-name='arrow-down'], [data-icon-name='chevron-down']) .icon-part {
-  --ic-open: translateY(.8px);
-  --ic-hold: translateY(.5px);
-  --ic-focus: translateY(.4px);
+  --ic-open: translateY(calc(.8px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(.5px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(.4px * var(--ic-amp-move)));
 }
 :root[data-icon-animation='claude'] .icon:is([data-icon-name='arrow-left'], [data-icon-name='chevron-left']) .icon-part {
-  --ic-open: translateX(-.8px);
-  --ic-hold: translateX(-.5px);
-  --ic-focus: translateX(-.4px);
+  --ic-open: translateX(calc(-.8px * var(--ic-amp-move)));
+  --ic-hold: translateX(calc(-.5px * var(--ic-amp-move)));
+  --ic-focus: translateX(calc(-.4px * var(--ic-amp-move)));
 }
 :root[data-icon-animation='claude'] .icon:is([data-icon-name='arrow-right'], [data-icon-name='chevron-right']) .icon-part {
-  --ic-open: translateX(.8px);
-  --ic-hold: translateX(.5px);
-  --ic-focus: translateX(.4px);
+  --ic-open: translateX(calc(.8px * var(--ic-amp-move)));
+  --ic-hold: translateX(calc(.5px * var(--ic-amp-move)));
+  --ic-focus: translateX(calc(.4px * var(--ic-amp-move)));
 }
 /* 양쪽으로 벌어진다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='arrows-horizontal'] .icon-part-2 { --ic-open: translateX(-.7px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='arrows-horizontal'] .icon-part-3 { --ic-open: translateX(.7px); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='arrows-horizontal'] .icon-part-2 { --ic-open: translateX(calc(-.7px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='arrows-horizontal'] .icon-part-3 { --ic-open: translateX(calc(.7px * var(--ic-amp-move))); }
 
 /* 넣는다 — 저장 라벨이 몸통으로 들어간다 */
 :root[data-icon-animation='claude'] .icon[data-icon-name='save'] .icon-part-3 {
-  --ic-open: translateY(-.6px);
-  --ic-hold: translateY(-.4px);
-  --ic-focus: translateY(-.3px);
+  --ic-open: translateY(calc(-.6px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(-.4px * var(--ic-amp-move)));
+  --ic-focus: translateY(calc(-.3px * var(--ic-amp-move)));
 }
 
-/* 잠금 고리가 들린다 — 잠글 수 있다는 뜻 */
-:root[data-icon-animation='claude'] .icon:is([data-icon-name='lock'], [data-icon-name='unlock']) .icon-part-2 {
-  --ic-open: translateY(-.8px);
-  --ic-hold: translateY(-.55px);
-  --ic-focus: translateY(-.4px);
+/* 자물쇠 — '전 → 후' 를 보여준다. 고리(2)만 움직인다.
+   lock 은 **열린 채** 쉬다가(고리가 들려 있다) 호버하면 내려앉아 잠긴다.
+   unlock 은 **잠긴 채** 쉬다가 호버하면 열린다 — 고리를 아래로 밀어 넣으면 발이
+   몸통 밖으로 삐져나와 보였다. 대신 왼발(8.5,10.5)을 경첩 삼아 고리를 안쪽으로
+   돌려 두면 자유단이 몸통 오른쪽 위에 닿아 '잠김' 이 되고, 호버하면 원래 그림
+   (열린 호)으로 되돌아온다.
+   `none` 은 '쉼 자리 오프셋을 버리고 원래 그림으로' 라는 뜻이다. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='lock'] .icon-part-2 {
+  --ic-rest: translateY(calc(-.45px * var(--ic-amp-move)));
+  --ic-open: none;
+  --ic-hold: none;
+  --ic-focus: translateY(calc(-.3px * var(--ic-amp-move)));
+}
+:root[data-icon-animation='claude'] .icon[data-icon-name='unlock'] .icon-part-2 {
+  transform-box: view-box; transform-origin: 8.5px 10.5px;
+  --ic-rest: rotate(calc(10deg * var(--ic-amp-turn)));
+  --ic-open: none;
+  --ic-hold: none;
+  --ic-focus: rotate(calc(4deg * var(--ic-amp-turn)));
 }
 
-/* 종은 몸이 아니라 추가 흔들린다 */
+/* 종 — 호버 중엔 계속 흔들린다(아래 반복 절). 선택은 추가 한쪽으로 기운 채. */
 :root[data-icon-animation='claude'] .icon[data-icon-name='bell'] .icon-part-2 {
-  --ic-open: rotate(7deg);
-  --ic-hold: rotate(4deg);
-  --ic-focus: rotate(3deg);
-  transform-origin: center top;
+  transform-box: view-box; transform-origin: 12px 5px;
+  --ic-hold: rotate(calc(4deg * var(--ic-amp-turn)));
+  --ic-focus: rotate(calc(3deg * var(--ic-amp-turn)));
 }
 
-/* 날이 맞물린다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='scissors'] .icon-part-1 { --ic-open: rotate(3deg); --ic-hold: rotate(2deg); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='scissors'] .icon-part-2 { --ic-open: rotate(-3deg); --ic-hold: rotate(-2deg); }
+/* 가위 — 호버 중엔 싹둑싹둑(아래 반복 절). 선택은 날이 살짝 물린 채.
+   날(1)과 그 손잡이(4), 날(2)과 손잡이(3)가 한 몸이다. 축은 날이 교차하는
+   아이콘 중심 — fill-box 로는 두 조각이 같은 축을 못 가진다. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='scissors'] :where(.icon-part-1, .icon-part-4) {
+  transform-box: view-box; transform-origin: center;
+  --ic-hold: rotate(calc(-2deg * var(--ic-amp-turn)));
+}
+:root[data-icon-animation='claude'] .icon[data-icon-name='scissors'] :where(.icon-part-2, .icon-part-3) {
+  transform-box: view-box; transform-origin: center;
+  --ic-hold: rotate(calc(2deg * var(--ic-amp-turn)));
+}
 
 /* 톱니만 돈다 — 가운데 축은 붙어 있어 '기계'로 읽힌다 */
 :root[data-icon-animation='claude'] .icon[data-icon-name='settings'] .icon-part-2 {
-  --ic-open: rotate(14deg);
-  --ic-hold: rotate(9deg);
-  --ic-focus: rotate(7deg);
+  --ic-open: rotate(calc(10deg * var(--ic-amp-turn)));
+  --ic-hold: rotate(calc(7deg * var(--ic-amp-turn)));
+  --ic-focus: rotate(calc(5deg * var(--ic-amp-turn)));
   --ic-hover-ms: 190ms;
 }
 /* 슬라이더 손잡이가 자리를 옮긴다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='sliders'] .icon-part-5 { --ic-open: translateX(-1px); --ic-hold: translateX(-.6px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='sliders'] .icon-part-6 { --ic-open: translateX(1px); --ic-hold: translateX(.6px); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='sliders'] .icon-part-5 { --ic-open: translateX(calc(-1px * var(--ic-amp-move))); --ic-hold: translateX(calc(-.6px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='sliders'] .icon-part-6 { --ic-open: translateX(calc(1px * var(--ic-amp-move))); --ic-hold: translateX(calc(.6px * var(--ic-amp-move))); }
 
 /* 렌즈가 당겨진다 — 손잡이는 그대로라 '들여다본다'가 된다 */
 :root[data-icon-animation='claude'] .icon[data-icon-name='search'] .icon-part-1 {
-  --ic-open: scale(1.07);
-  --ic-hold: scale(1.045);
-  --ic-focus: scale(1.035);
+  --ic-open: scale(calc(1 + 0.07 * var(--ic-amp-size)));
+  --ic-hold: scale(calc(1 + 0.045 * var(--ic-amp-size)));
+  --ic-focus: scale(calc(1 + 0.035 * var(--ic-amp-size)));
 }
 /* 조준이 좁혀진다 */
 :root[data-icon-animation='claude'] .icon[data-icon-name='target'] .icon-part-1 {
-  --ic-open: scale(.93);
-  --ic-hold: scale(.95);
-  --ic-focus: scale(.96);
+  --ic-open: scale(calc(1 - 0.07 * var(--ic-amp-size)));
+  --ic-hold: scale(calc(1 - 0.05 * var(--ic-amp-size)));
+  --ic-focus: scale(calc(1 - 0.04 * var(--ic-amp-size)));
 }
 
 /* 끝이 내려앉는다 — 찍는 도구들 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='eyedropper'] .icon-part-2 { --ic-open: translate(-.45px, .45px); --ic-hold: translate(-.3px, .3px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='pencil'] .icon-part-1 { --ic-open: translate(-.4px, .4px); --ic-hold: translate(-.3px, .3px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='brush'] .icon-part-1 { --ic-open: translate(-.45px, .45px); --ic-hold: translate(-.3px, .3px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='eraser'] .icon-part-2 { --ic-open: translate(-.45px, .45px); --ic-hold: translate(-.3px, .3px); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='eyedropper'] .icon-part-2 { --ic-open: translate(calc(-.45px * var(--ic-amp-move)), calc(.45px * var(--ic-amp-move))); --ic-hold: translate(calc(-.3px * var(--ic-amp-move)), calc(.3px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='pencil'] .icon-part-1 { --ic-open: translate(calc(-.4px * var(--ic-amp-move)), calc(.4px * var(--ic-amp-move))); --ic-hold: translate(calc(-.3px * var(--ic-amp-move)), calc(.3px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='brush'] .icon-part-1 { --ic-open: translate(calc(-.45px * var(--ic-amp-move)), calc(.45px * var(--ic-amp-move))); --ic-hold: translate(calc(-.3px * var(--ic-amp-move)), calc(.3px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='eraser'] .icon-part-2 { --ic-open: translate(calc(-.45px * var(--ic-amp-move)), calc(.45px * var(--ic-amp-move))); --ic-hold: translate(calc(-.3px * var(--ic-amp-move)), calc(.3px * var(--ic-amp-move))); }
 /* 물감 한 방울이 떨어진다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='bucket'] .icon-part-3 { --ic-open: translateY(.7px); --ic-hold: translateY(.45px); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='bucket'] .icon-part-3 { --ic-open: translateY(calc(.7px * var(--ic-amp-move))); --ic-hold: translateY(calc(.45px * var(--ic-amp-move))); }
 
-/* 반짝임은 작은 별이 먼저 켜진다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='sparkles'] .icon-part-2 {
-  opacity: .68;
-  --ic-open: scale(1.2);
-  --ic-hold: scale(1.12);
-}
+/* 마술봉 — 작은 별들이 먼저 켜진다. 반짝임(sparkles)은 호버 중 계속 깜빡인다(아래). */
 :root[data-icon-animation='claude'] .icon[data-icon-name='wand'] :where(.icon-part-2, .icon-part-3, .icon-part-4, .icon-part-5) {
   opacity: .66;
-  --ic-open: scale(1.16);
-  --ic-hold: scale(1.1);
+  --ic-open: scale(calc(1 + 0.26 * var(--ic-amp-size)));
+  --ic-hold: scale(calc(1 + 0.1 * var(--ic-amp-size)));
+}
+:root[data-icon-animation='claude'] .icon[data-icon-name='sparkles'] .icon-part-2 {
+  opacity: .68;
+  --ic-hold: scale(calc(1 + 0.12 * var(--ic-amp-size)));
 }
 @media (hover: hover) and (pointer: fine) {
   :root[data-icon-animation='claude']
@@ -250,67 +316,85 @@
     .icon:is([data-icon-name='sparkles'], [data-icon-name='wand']) .icon-part { opacity: 1; }
 }
 
+/* 카드 — 앞장(1)이 왼쪽 아래 모서리(8.5,19.5)를 축으로 부채꼴로 펼쳐진다.
+   뒷장을 옮기면 '떨어져 나간' 것처럼 보였다 — 부채는 붙은 채 벌어져야 한다. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='cards'] .icon-part-1 {
+  transform-box: view-box; transform-origin: 8.5px 19.5px;
+  --ic-open: rotate(calc(3deg * var(--ic-amp-turn)));
+  --ic-hold: rotate(calc(2deg * var(--ic-amp-turn)));
+}
 /* 겹친 것이 펼쳐진다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='cards'] .icon-part-2 { --ic-open: translate(-.7px, -.7px); --ic-hold: translate(-.45px, -.45px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='layers'] .icon-part-2 { --ic-open: translateY(.45px); --ic-hold: translateY(.3px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='layers'] .icon-part-3 { --ic-open: translateY(.9px); --ic-hold: translateY(.6px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='package'] .icon-part-2 { --ic-open: translateY(-.45px); --ic-hold: translateY(-.3px); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='layers'] .icon-part-2 { --ic-open: translateY(calc(.45px * var(--ic-amp-move))); --ic-hold: translateY(calc(.3px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='layers'] .icon-part-3 { --ic-open: translateY(calc(.9px * var(--ic-amp-move))); --ic-hold: translateY(calc(.6px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='package'] .icon-part-2 { --ic-open: translateY(calc(-.45px * var(--ic-amp-move))); --ic-hold: translateY(calc(-.3px * var(--ic-amp-move))); }
 
-/* 재생 · 정지 — 진행 방향으로 한 걸음, 멈춤은 두 막대가 벌어진다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='play'] .icon-part-1 { --ic-open: translateX(.6px); --ic-hold: translateX(.4px); }
-/* 0.3 유닛 아래는 15px 로 그려지면 0.2 픽셀이라 보이지 않는다 — 보일 만큼만 준다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='pause'] .icon-part-1 { --ic-open: translateX(-.6px); --ic-hold: translateX(-.4px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='pause'] .icon-part-2 { --ic-open: translateX(.6px); --ic-hold: translateX(.4px); }
+/* 재생 · 멈춤 · 정지 — 진행 방향으로 한 걸음 / 두 막대가 벌어진다 / 네모가 죈다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='play'] .icon-part-1 { --ic-open: translateX(calc(.6px * var(--ic-amp-move))); --ic-hold: translateX(calc(.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='pause'] .icon-part-1 { --ic-open: translateX(calc(-.6px * var(--ic-amp-move))); --ic-hold: translateX(calc(-.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='pause'] .icon-part-2 { --ic-open: translateX(calc(.6px * var(--ic-amp-move))); --ic-hold: translateX(calc(.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='stop'] .icon-part-1 { --ic-open: scale(calc(1 - 0.06 * var(--ic-amp-size))); --ic-hold: scale(calc(1 - 0.04 * var(--ic-amp-size))); }
 
 /* 되돌리기·다시 — 촉이 호를 따라 한 칸 간다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='undo'] .icon-part-1 { --ic-open: translateX(-.7px); --ic-hold: translateX(-.45px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='redo'] .icon-part-1 { --ic-open: translateX(.7px); --ic-hold: translateX(.45px); }
-/* 촉이 호를 따라 한 칸 나아간다. 축은 조각의 제 중심이 아니라 **아이콘 중심**이다 —
-   제 중심으로 돌리면 화살촉이 제자리에서 갸웃할 뿐 '진행'이 안 읽힌다.
-   `view-box` 로 바꾸면 24×24 의 한가운데(12,12)가 축이 되고, 그게 곧 호의 중심이다. */
-:root[data-icon-animation='claude'] .icon:is([data-icon-name='rotate-cw'], [data-icon-name='loop']) .icon-part-2 {
+:root[data-icon-animation='claude'] .icon[data-icon-name='undo'] .icon-part-1 { --ic-open: translateX(calc(-.7px * var(--ic-amp-move))); --ic-hold: translateX(calc(-.45px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='redo'] .icon-part-1 { --ic-open: translateX(calc(.7px * var(--ic-amp-move))); --ic-hold: translateX(calc(.45px * var(--ic-amp-move))); }
+
+/* 회전 — 호(1)와 촉(2)이 **함께** 아이콘 중심을 돈다.
+   촉만 돌리면 화살머리가 호에서 떨어져 나가 기괴했다. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='rotate-cw'] .icon-part {
   transform-box: view-box; transform-origin: center;
-  --ic-open: rotate(9deg); --ic-hold: rotate(6deg);
+  --ic-open: rotate(calc(12deg * var(--ic-amp-turn)));
+  --ic-hold: rotate(calc(8deg * var(--ic-amp-turn)));
 }
-:root[data-icon-animation='claude'] .icon[data-icon-name='rotate-ccw'] .icon-part-2 {
+:root[data-icon-animation='claude'] .icon[data-icon-name='rotate-ccw'] .icon-part {
   transform-box: view-box; transform-origin: center;
-  --ic-open: rotate(-9deg); --ic-hold: rotate(-6deg);
+  --ic-open: rotate(calc(-12deg * var(--ic-amp-turn)));
+  --ic-hold: rotate(calc(-8deg * var(--ic-amp-turn)));
 }
-:root[data-icon-animation='claude'] .icon[data-icon-name='refresh'] :where(.icon-part-3, .icon-part-4) {
+/* 새로고침 — 호버 중엔 통째로 돈다(아래 반복 절). 선택은 한 칸 돈 채. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='refresh'] .icon-part {
   transform-box: view-box; transform-origin: center;
-  --ic-open: rotate(8deg); --ic-hold: rotate(5deg);
+  --ic-hold: rotate(calc(10deg * var(--ic-amp-turn)));
 }
-/* 시곗바늘 — 아이콘 중심이 곧 시계 중심이다 */
+/* 되풀이(loop) — 호버 중엔 선 위를 빈 자리가 달린다(아래 반복 절). */
+
+/* 시곗바늘 — 호버 중엔 **거꾸로 계속** 돈다(아래 반복 절). 기록(history)은 되감는
+   것이라 정방향이면 말과 반대다. 선택은 한 칸 되감긴 채.
+   축은 조각의 제 중심이 아니라 아이콘 중심 = 시계 중심. */
 :root[data-icon-animation='claude'] .icon[data-icon-name='history'] .icon-part-3 {
   transform-box: view-box; transform-origin: center;
-  --ic-open: rotate(10deg); --ic-hold: rotate(7deg);
+  --ic-hold: rotate(calc(-6deg * var(--ic-amp-turn)));
 }
 
 /* 더하기는 뻗고, 닫기는 조인다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='plus'] .icon-part-1 { --ic-open: scaleY(1.14); --ic-hold: scaleY(1.08); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='plus'] .icon-part-2 { --ic-open: scaleX(1.14); --ic-hold: scaleX(1.08); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='minus'] .icon-part-1 { --ic-open: scaleX(1.14); --ic-hold: scaleX(1.08); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='close'] .icon-part { --ic-open: scale(.9); --ic-hold: scale(.93); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='plus'] .icon-part-1 { --ic-open: scaleY(calc(1 + 0.14 * var(--ic-amp-size))); --ic-hold: scaleY(calc(1 + 0.08 * var(--ic-amp-size))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='plus'] .icon-part-2 { --ic-open: scaleX(calc(1 + 0.14 * var(--ic-amp-size))); --ic-hold: scaleX(calc(1 + 0.08 * var(--ic-amp-size))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='minus'] .icon-part-1 { --ic-open: scaleX(calc(1 + 0.14 * var(--ic-amp-size))); --ic-hold: scaleX(calc(1 + 0.08 * var(--ic-amp-size))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='close'] .icon-part { --ic-open: scale(calc(1 - 0.1 * var(--ic-amp-size))); --ic-hold: scale(calc(1 - 0.07 * var(--ic-amp-size))); }
 
 /* 깔때기가 좁아진다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='filter'] .icon-part-1 { --ic-open: scaleY(.94); --ic-hold: scaleY(.96); transform-origin: center top; }
+:root[data-icon-animation='claude'] .icon[data-icon-name='filter'] .icon-part-1 { --ic-open: scaleY(calc(1 - 0.06 * var(--ic-amp-size))); --ic-hold: scaleY(calc(1 - 0.04 * var(--ic-amp-size))); transform-origin: center top; }
 /* 자석이 끌어당긴다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='magnet'] .icon-part-3 { --ic-open: translateX(.5px); --ic-hold: translateX(.3px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='magnet'] .icon-part-4 { --ic-open: translateX(-.5px); --ic-hold: translateX(-.3px); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='magnet'] .icon-part-3 { --ic-open: translateX(calc(.5px * var(--ic-amp-move))); --ic-hold: translateX(calc(.3px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='magnet'] .icon-part-4 { --ic-open: translateX(calc(-.5px * var(--ic-amp-move))); --ic-hold: translateX(calc(-.3px * var(--ic-amp-move))); }
 /* 클립이 들린다 — 끼울 수 있다는 뜻 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='clipboard'] .icon-part-1 { --ic-open: translateY(-.6px); --ic-hold: translateY(-.4px); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='clipboard'] .icon-part-1 { --ic-open: translateY(calc(-.6px * var(--ic-amp-move))); --ic-hold: translateY(calc(-.4px * var(--ic-amp-move))); }
 /* 자르기 틀이 안쪽으로 좁혀진다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='crop'] .icon-part { --ic-open: scale(.95); --ic-hold: scale(.97); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='crop'] .icon-part { --ic-open: scale(calc(1 - 0.05 * var(--ic-amp-size))); --ic-hold: scale(calc(1 - 0.03 * var(--ic-amp-size))); }
 /* 네 방향 화살이 바깥으로 벌어진다 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='move'] .icon-part-3 { --ic-open: translateY(-.6px); --ic-hold: translateY(-.4px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='move'] .icon-part-4 { --ic-open: translateY(.6px); --ic-hold: translateY(.4px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='move'] .icon-part-5 { --ic-open: translateX(-.6px); --ic-hold: translateX(-.4px); }
-:root[data-icon-animation='claude'] .icon[data-icon-name='move'] .icon-part-6 { --ic-open: translateX(.6px); --ic-hold: translateX(.4px); }
-/* 분사가 세진다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='move'] .icon-part-3 { --ic-open: translateY(calc(-.6px * var(--ic-amp-move))); --ic-hold: translateY(calc(-.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='move'] .icon-part-4 { --ic-open: translateY(calc(.6px * var(--ic-amp-move))); --ic-hold: translateY(calc(.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='move'] .icon-part-5 { --ic-open: translateX(calc(-.6px * var(--ic-amp-move))); --ic-hold: translateX(calc(-.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='move'] .icon-part-6 { --ic-open: translateX(calc(.6px * var(--ic-amp-move))); --ic-hold: translateX(calc(.4px * var(--ic-amp-move))); }
+
+/* 로켓 — 떠오른다. 몸통(1)·창(2)이 먼저 뜨고 분사(3·4)는 반 걸음 뒤처져 불이 세진다. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='rocket'] :where(.icon-part-1, .icon-part-2) {
+  --ic-open: translateY(calc(-.6px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(-.4px * var(--ic-amp-move)));
+}
 :root[data-icon-animation='claude'] .icon[data-icon-name='rocket'] :where(.icon-part-3, .icon-part-4) {
   opacity: .7;
-  --ic-open: scale(1.14);
-  --ic-hold: scale(1.08);
+  --ic-open: translateY(calc(-.4px * var(--ic-amp-move)));
+  --ic-hold: scale(calc(1 + 0.08 * var(--ic-amp-size)));
 }
 @media (hover: hover) and (pointer: fine) {
   :root[data-icon-animation='claude']
@@ -318,11 +402,132 @@
     .icon[data-icon-name='rocket'] .icon-part { opacity: 1; }
 }
 
-/* 별은 장치가 없다 — 유일하게 조각 하나가 살짝 부푸는 예외 */
-:root[data-icon-animation='claude'] .icon[data-icon-name='star'] .icon-part-1 { --ic-open: scale(1.08); --ic-hold: scale(1.05); }
+/* 별은 장치가 없다 — 조각 하나가 살짝 부푼다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='star'] .icon-part-1 { --ic-open: scale(calc(1 + 0.08 * var(--ic-amp-size))); --ic-hold: scale(calc(1 + 0.05 * var(--ic-amp-size))); }
+
+/* ── 명사들 — 그래도 장치가 있다 ─────────────────────────────────────── */
+
+/* 카메라 — 옆 렌즈(2)가 밀려 나온다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='video'] .icon-part-2 {
+  --ic-open: translateX(calc(.4px * var(--ic-amp-move)));
+  --ic-hold: translateX(calc(.3px * var(--ic-amp-move)));
+}
+/* 책 — 표지(1)가 책등(17.5,12)을 축으로 접힌다: 열린다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='book'] .icon-part-1 {
+  transform-box: view-box; transform-origin: 17.5px 12px;
+  --ic-open: scaleX(calc(1 - 0.12 * var(--ic-amp-size)));
+  --ic-hold: scaleX(calc(1 - 0.07 * var(--ic-amp-size)));
+}
+/* 이름표 — 구멍(7.5,7.5)에 매달려 있다. 호버는 한 번 흔들리고(아래) 선택은 기운 채. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='tag'] .icon-part {
+  transform-box: view-box; transform-origin: 7.5px 7.5px;
+  --ic-hold: rotate(calc(3deg * var(--ic-amp-turn)));
+}
+/* 칩 — 핀이 바깥으로 뻗는다: 연산이 밖으로 나간다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='cpu'] :where(.icon-part-2, .icon-part-3) { --ic-open: translateX(calc(-.4px * var(--ic-amp-move))); --ic-hold: translateX(calc(-.3px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='cpu'] :where(.icon-part-4, .icon-part-5) { --ic-open: translateX(calc(.4px * var(--ic-amp-move))); --ic-hold: translateX(calc(.3px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='cpu'] :where(.icon-part-6, .icon-part-7) { --ic-open: translateY(calc(-.4px * var(--ic-amp-move))); --ic-hold: translateY(calc(-.3px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='cpu'] :where(.icon-part-8, .icon-part-9) { --ic-open: translateY(calc(.4px * var(--ic-amp-move))); --ic-hold: translateY(calc(.3px * var(--ic-amp-move))); }
+/* 방패 · 도장(원 · 네모 · 막대) — 살짝 부푼다: 찍힌다 */
+:root[data-icon-animation='claude'] .icon:is([data-icon-name='shield'], [data-icon-name='circle'], [data-icon-name='square'], [data-icon-name='bar']) .icon-part-1 {
+  --ic-open: scale(calc(1 + 0.05 * var(--ic-amp-size)));
+  --ic-hold: scale(calc(1 + 0.03 * var(--ic-amp-size)));
+}
+/* 격자 — 안쪽 선들이 가운데로 모인다: 죈다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='grid'] .icon-part-2 { --ic-open: translateY(calc(.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='grid'] .icon-part-3 { --ic-open: translateY(calc(-.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='grid'] .icon-part-4 { --ic-open: translateX(calc(.4px * var(--ic-amp-move))); }
+:root[data-icon-animation='claude'] .icon[data-icon-name='grid'] .icon-part-5 { --ic-open: translateX(calc(-.4px * var(--ic-amp-move))); }
+/* 글자 — T 의 기둥(2)이 바닥에서 위로 자란다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='type'] .icon-part-2 {
+  transform-origin: center bottom;
+  --ic-open: scaleY(calc(1 + 0.12 * var(--ic-amp-size)));
+  --ic-hold: scaleY(calc(1 + 0.07 * var(--ic-amp-size)));
+}
+/* 그러데이션 — 경계선(2)이 아래로 쓸린다 */
+:root[data-icon-animation='claude'] .icon[data-icon-name='gradient'] .icon-part-2 {
+  --ic-open: translateY(calc(.45px * var(--ic-amp-move)));
+  --ic-hold: translateY(calc(.3px * var(--ic-amp-move)));
+}
+/* 전구 — 켜진다(아래 한 번 절). 선택은 켜진 채로 조금 크다. */
+:root[data-icon-animation='claude'] .icon[data-icon-name='bulb'] .icon-part-3 {
+  transform-origin: center bottom;
+  --ic-hold: scale(calc(1 + 0.05 * var(--ic-amp-size)));
+}
+
+/* ── 호버 중 반복 — 일이 '계속되는' 아이콘 ────────────────────────────
+ * 한 프레임으로 뜻이 안 서는 것들. 손을 올리는 동안만 돌고, 떼면 멈춘다.
+ * 주기는 0.6~1.4s — 더 빠르면 초조하고, 더 느리면 멈춘 줄 안다.
+ * ------------------------------------------------------------------ */
+@media (hover: hover) and (pointer: fine) {
+    /* 내려받기 · 올리기 — 화살이 트레이로 떨어져 사라지고 위에서 다시 온다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='download'] :where(.icon-part-1, .icon-part-2) { animation: ic-drop 900ms ease-in infinite; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='upload'] :where(.icon-part-1, .icon-part-2) { animation: ic-rise 900ms ease-out infinite; }
+    /* 새로고침 — 두 화살이 서로의 꼬리를 문다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='refresh'] { animation: ic-spin 1100ms linear infinite; }
+    /* 되풀이 — 선 위를 빈 자리 하나가 화살촉 쪽으로 달린다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='loop'] .icon-part-1 { stroke-dasharray: 29 7; animation: ic-run 900ms linear infinite; }
+    /* 반짝임 — 큰 별과 작은 별이 엇박으로 깜빡인다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='sparkles'] .icon-part-1 { animation: ic-twinkle 1100ms ease-in-out infinite; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='sparkles'] .icon-part-2 { animation: ic-twinkle 1100ms ease-in-out -550ms infinite; }
+    /* 종 — 몸통과 추가 좌우로, 추는 한 박자 늦게 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='bell'] .icon-part-1 { transform-box: view-box; transform-origin: 12px 5px; animation: ic-ring 1100ms ease-in-out infinite; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='bell'] .icon-part-2 { animation: ic-ring 1100ms ease-in-out 70ms infinite; }
+    /* 가위 — 싹둑싹둑. 날마다 제 손잡이가 붙어 돈다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='scissors'] :where(.icon-part-1, .icon-part-4) { animation: ic-snip-a 650ms ease-in-out infinite; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='scissors'] :where(.icon-part-2, .icon-part-3) { animation: ic-snip-b 650ms ease-in-out infinite; }
+    /* 음표 — 두 머리가 엇박으로 뛴다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='music'] .icon-part-2 { animation: ic-beat 600ms ease-in-out infinite; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='music'] .icon-part-3 { animation: ic-beat 600ms ease-in-out -300ms infinite; }
+    /* 모래시계 — 계속 뒤집힌다. 위아래 대칭이라 180° 에서 원래 그림과 같아 이음매가 없다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='hourglass'] { animation: ic-flip 1600ms cubic-bezier(.6, 0, .4, 1) infinite; }
+    /* 기록 — 시곗바늘(3)이 거꾸로 계속 돈다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='history'] .icon-part-3 { animation: ic-rewind 1400ms linear infinite; }
+    /* 지구본 — 자오선(3)이 납작해졌다 펴지면 도는 것처럼 보인다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='globe'] .icon-part-3 { animation: ic-turn 1400ms ease-in-out infinite; }
+    /* 선택 도구 — 점선이 기어간다(marching ants) */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='marquee'] .icon-part-1,
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='lasso'] .icon-part-1 { stroke-dasharray: 3 3; animation: ic-ants 600ms linear infinite; }
+}
+
+/* ── 호버 시 한 번 — 짧게 일어나고 끝나는 것 ───────────────────────────
+ * 반복하면 초조해지는 동작. 한 번 하고 멈추며, 손을 떼면 즉시 쉼으로 돌아간다.
+ * ------------------------------------------------------------------ */
+@media (hover: hover) and (pointer: fine) {
+    /* 확인 — 체크가 왼쪽에서 그어진다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='check'] .icon-part-1 { stroke-dasharray: 24; animation: ic-tick 320ms cubic-bezier(.2, .8, .2, 1) both; }
+    /* 번개 — 번쩍 두 번 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='zap'] .icon-part-1 { animation: ic-flash 520ms ease-out both; }
+    /* 경고 — 좌우로 흔든다. 삼각형 통째로 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='alert'] { animation: ic-shake 420ms ease-in-out both; }
+    /* 안내 — i 의 점(3)이 한 번 튄다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='info'] .icon-part-3 { animation: ic-bob 380ms ease-out both; }
+    /* 말풍선 — 한 번 튄다: 새 메시지 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='message'] .icon-part-1 { animation: ic-bob 380ms ease-out both; }
+    /* 전구 — 깜빡이며 켜진다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='bulb'] .icon-part-3 { transform-origin: center bottom; animation: ic-lit 520ms ease-out both; }
+    /* 팔레트 — 물감 점 셋이 차례로 부푼다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='palette'] .icon-part-2 { animation: ic-dot 360ms ease-out both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='palette'] .icon-part-3 { animation: ic-dot 360ms ease-out 90ms both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='palette'] .icon-part-4 { animation: ic-dot 360ms ease-out 180ms both; }
+    /* 이름표 — 구멍에 매달린 채 한 번 흔들린다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='tag'] .icon-part { animation: ic-swing 700ms ease-in-out both; }
+    /* 주사위 — 눈이 사라졌다 차례로 다시 박힌다: 다시 굴린다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='dice'] .icon-part-2 { animation: ic-reroll 420ms ease-out both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='dice'] .icon-part-3 { animation: ic-reroll 420ms ease-out 40ms both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='dice'] .icon-part-4 { animation: ic-reroll 420ms ease-out 80ms both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='dice'] .icon-part-5 { animation: ic-reroll 420ms ease-out 120ms both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='dice'] .icon-part-6 { animation: ic-reroll 420ms ease-out 160ms both; }
+    /* 키보드 — 키가 차례로 눌린다 */
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='keyboard'] .icon-part-2 { animation: ic-keypress 300ms ease-out both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='keyboard'] .icon-part-3 { animation: ic-keypress 300ms ease-out 50ms both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='keyboard'] .icon-part-4 { animation: ic-keypress 300ms ease-out 100ms both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='keyboard'] .icon-part-5 { animation: ic-keypress 300ms ease-out 150ms both; }
+:root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='keyboard'] .icon-part-6 { animation: ic-keypress 300ms ease-out 200ms both; }
+}
 
 /* ── 짧은 피드백 · 지속 상태 ──────────────────────────────────────────
- * 반복은 '지금 계속되고 있다'를 말할 때만 쓴다. 그 외에는 한 번 돌고 멈춘다.
+ * 호버와 무관하게 상태가 말하는 것. 무한 반복은 '지금 계속되고 있다' 일 때만.
  * ------------------------------------------------------------------ */
 
 /* 읽지 않은 알림이 생긴 순간 한 번 — 추만 흔들린다(몸통은 가만히). */
@@ -347,19 +552,113 @@
   animation: ic-flip 1600ms cubic-bezier(.6, 0, .4, 1) infinite;
 }
 
-@keyframes ic-bell-tap {
-  0%, 100% { transform: rotate(0); }
-  32% { transform: rotate(8deg); }
-  66% { transform: rotate(-5deg); }
+/* ── 키프레임 ─────────────────────────────────────────────────────────
+ * 이동량은 위의 진폭 변수를 그대로 쓴다 — 키프레임도 세 숫자로 같이 조절된다.
+ * ------------------------------------------------------------------ */
+@keyframes ic-drop {
+  0%   { transform: translateY(calc(-.7px * var(--ic-amp-move))); opacity: 0; }
+  20%  { opacity: 1; }
+  75%  { transform: translateY(calc(.6px * var(--ic-amp-move))); opacity: 1; }
+  100% { transform: translateY(calc(.9px * var(--ic-amp-move))); opacity: 0; }
+}
+@keyframes ic-rise {
+  0%   { transform: translateY(calc(.7px * var(--ic-amp-move))); opacity: 0; }
+  20%  { opacity: 1; }
+  75%  { transform: translateY(calc(-.6px * var(--ic-amp-move))); opacity: 1; }
+  100% { transform: translateY(calc(-.9px * var(--ic-amp-move))); opacity: 0; }
 }
 @keyframes ic-spin { to { transform: rotate(360deg); } }
+/* 선 길이 ≈ 28.6(9 + π·4 + 7). dasharray 29 7 이면 빈 자리 7 이 한 바퀴에 36 을 간다. */
+@keyframes ic-run { to { stroke-dashoffset: 36; } }
+@keyframes ic-ants { to { stroke-dashoffset: -6; } }
+@keyframes ic-twinkle {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(calc(1 - 0.08 * var(--ic-amp-size))); opacity: .5; }
+}
+@keyframes ic-ring {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(calc(4deg * var(--ic-amp-turn))); }
+  40% { transform: rotate(calc(-3.5deg * var(--ic-amp-turn))); }
+  65% { transform: rotate(calc(2.5deg * var(--ic-amp-turn))); }
+  85% { transform: rotate(calc(-1.5deg * var(--ic-amp-turn))); }
+}
+/* 날(1)은 왼쪽 끝이 (7,6.5) 라 음의 회전이 아래로 = 닫힘. 날(2)은 반대. */
+@keyframes ic-snip-a {
+  0%, 100% { transform: rotate(0); }
+  50%      { transform: rotate(calc(-3.5deg * var(--ic-amp-turn))); }
+}
+@keyframes ic-snip-b {
+  0%, 100% { transform: rotate(0); }
+  50%      { transform: rotate(calc(3.5deg * var(--ic-amp-turn))); }
+}
+@keyframes ic-beat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(calc(-.45px * var(--ic-amp-move))); }
+}
+@keyframes ic-turn {
+  0%, 100% { transform: scaleX(1); }
+  50%      { transform: scaleX(.15); }
+}
+@keyframes ic-tick {
+  from { stroke-dashoffset: 24; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes ic-rewind { to { transform: rotate(-360deg); } }
+@keyframes ic-flash {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  20%      { opacity: .25; }
+  35%      { opacity: 1; transform: scale(calc(1 + 0.04 * var(--ic-amp-size))); }
+  55%      { opacity: .4; }
+  70%      { opacity: 1; }
+}
+@keyframes ic-shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(calc(-.5px * var(--ic-amp-move))); }
+  45%      { transform: translateX(calc(.5px * var(--ic-amp-move))); }
+  70%      { transform: translateX(calc(-.3px * var(--ic-amp-move))); }
+}
+@keyframes ic-bob {
+  0%, 100% { transform: translateY(0); }
+  45%      { transform: translateY(calc(-.45px * var(--ic-amp-move))); }
+}
+@keyframes ic-lit {
+  0%   { opacity: .55; transform: scale(1); }
+  30%  { opacity: 1;   transform: scale(calc(1 + 0.05 * var(--ic-amp-size))); }
+  50%  { opacity: .7; }
+  100% { opacity: 1;   transform: scale(calc(1 + 0.05 * var(--ic-amp-size))); }
+}
+/* 점(`v.01`)은 경계상자가 0 이라 scale 이 안 먹는다 — 선 굵기로 부풀린다. */
+@keyframes ic-dot {
+  0%, 100% { stroke-width: 1.6; }
+  50%      { stroke-width: 3.4; }
+}
+@keyframes ic-swing {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(calc(2.5deg * var(--ic-amp-turn))); }
+  55% { transform: rotate(calc(-1.8deg * var(--ic-amp-turn))); }
+  80% { transform: rotate(calc(1deg * var(--ic-amp-turn))); }
+}
+@keyframes ic-reroll {
+  0%   { opacity: 1; }
+  30%  { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes ic-keypress {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(calc(.4px * var(--ic-amp-move))); }
+}
+@keyframes ic-bell-tap {
+  0%, 100% { transform: rotate(0); }
+  32% { transform: rotate(calc(8deg * var(--ic-amp-turn))); }
+  66% { transform: rotate(calc(-5deg * var(--ic-amp-turn))); }
+}
 @keyframes ic-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: .5; }
 }
 @keyframes ic-nudge {
   0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(.7px); }
+  50% { transform: translateX(calc(.7px * var(--ic-amp-move))); }
 }
 @keyframes ic-flip {
   0%, 45% { transform: rotate(0); }
@@ -367,7 +666,7 @@
 }
 
 /* ── 이동을 줄이는 사용자 ─────────────────────────────────────────────
- * 위치·회전·확대를 전부 없앤다. 뜻은 사라지지 않는다 — 선택·포커스·비활성은
+ * 위치·회전·확대·반복을 전부 없앤다. 뜻은 사라지지 않는다 — 선택·포커스·비활성은
  * 원래 버튼의 색과 테두리가 지고 있었고, 여기서는 옅기 차이만 남긴다.
  * ------------------------------------------------------------------ */
 @media (prefers-reduced-motion: reduce) {
@@ -375,6 +674,7 @@
   :root[data-icon-animation='claude'] .icon.icon[data-icon-motion] .icon-part {
     animation: none !important;
     transform: none !important;
+    stroke-dasharray: none !important;
     transition: opacity 100ms linear !important;
   }
   :root[data-icon-animation='claude'] .icon.icon[data-icon-motion] { opacity: .9; }

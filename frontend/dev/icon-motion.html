@@ -134,19 +134,26 @@ document.querySelector('.bar').addEventListener('click', (e) => {
 setPreset('claude')
 setMode('dark')
 
-// 어떤 아이콘이 조용한지 한눈에 — 움직임이 뜻이 되려면 안 움직이는 것도 있어야 한다.
+// 어떤 아이콘이 아직 조용한지 한눈에 — 원칙은 '전부 움직이고, 별로면 뺀다' 다.
+// 여기 남는 이름은 규칙이 빠진 것이지 의도된 침묵이 아니다.
 requestAnimationFrame(() => {
   const quiet = []
   for (const name of Object.keys(ICONS)) {
     const icon = document.querySelector(`.icon[data-icon-name="${name}"]`)
-    const moves = [...icon.querySelectorAll('.icon-part')]
-      .some(p => getComputedStyle(p).getPropertyValue('--ic-open').trim())
+    const parts = [...icon.querySelectorAll('.icon-part')]
+    const moves = parts.some(p => {
+      const cs = getComputedStyle(p)
+      return cs.getPropertyValue('--ic-open').trim() || cs.getPropertyValue('--ic-rest').trim()
+    })
     if (!moves) quiet.push(name)
   }
+  const loops = 'download upload refresh loop sparkles bell scissors music globe marquee lasso hourglass history'.split(' ')
+  const once = 'check zap alert info message bulb palette tag dice keyboard'.split(' ')
   document.getElementById('legend').innerHTML =
-    `<b>장치가 있는 아이콘</b> ${Object.keys(ICONS).length - quiet.length}개 — 호버하면 누르면 일어날 일의 첫 프레임을 보여준다.<br>` +
-    `<b>조용한 아이콘</b> ${quiet.length}개 — 눌림(<code>scale(.94)</code>)만 있다. ` +
-    `기계 장치가 없는 '명사'라 억지로 움직이지 않는다: <code>${quiet.join(', ')}</code>`
+    `<b>호버 중 반복</b> ${loops.length}개 — 떨어지고, 돌고, 깜빡이는 것이 그 낱말이라 손을 올린 동안 되풀이한다: <code>${loops.join(', ')}</code><br>` +
+    `<b>호버 시 한 번</b> ${once.length}개 — 짧게 일어나고 멈춘다: <code>${once.join(', ')}</code><br>` +
+    `<b>나머지</b> — 누르면 일어날 일의 첫 프레임을 보여주고 머문다.` +
+    (quiet.length ? `<br><b>규칙 없음</b> ${quiet.length}개: <code>${quiet.join(', ')}</code>` : '')
 })
 </script>
 </body>

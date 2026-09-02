@@ -34,6 +34,7 @@ from ui.generator_gallery import GalleryMixin
 from ui.generator_webui import WebUIMixin
 from ui.generator_search import SearchMixin
 from ui.creator_actions import CreatorActionsMixin
+from ui.chat_actions import ChatActionsMixin
 from widgets.queue_panel import QueuePanel
 from widgets.queue_manager import QueueManager
 from utils.prompt_cleaner import get_prompt_cleaner
@@ -61,7 +62,7 @@ class GeneratorMainUI(
     GalleryMixin,
     WebUIMixin,
     SearchMixin,
-    CreatorActionsMixin,
+    CreatorActionsMixin, ChatActionsMixin,
 ):
     _IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.webp', '.bmp')
     animaForgeImportReady = pyqtSignal(object)
@@ -124,10 +125,13 @@ class GeneratorMainUI(
             # 미연결/건너뛰기 상태에선 VRAM 폴링·LoRA 프리로드가 헛되이 백엔드를 두드리지
             # 않게 한다. on_webui_info_loaded에서 True, 실패/건너뛰기에서 False.
             self._backend_connected = False
+            # VRAM 은 NVML 로 장치 전체를 직접 잰다(마이크로초) — 5초면 Ollama 가 모델을
+            # 올리고 내리는 것이 바로 보인다. 예전 30초 + Forge 자기 메모리는 12.1 에 멈춰 있었다.
             self._vram_timer = QTimer()
-            self._vram_timer.setInterval(30000)
+            self._vram_timer.setInterval(5000)
             self._vram_timer.timeout.connect(self._update_vram_status)
             self._vram_timer.start()
+            QTimer.singleShot(1500, self._update_vram_status)
 
             self._clean_timer = QTimer()
             self._clean_timer.setSingleShot(True)
@@ -189,6 +193,8 @@ class GeneratorMainUI(
 
         # Creator Studio는 별도 deep module에서 처리한다. 이 seam을 먼저
         # 통과시켜 아래의 거대한 레거시 문자열 라우터를 더 키우지 않는다.
+        if self._handle_chat_action(action, payload):
+            return
         if self._handle_creator_action(action, payload):
             return
         
@@ -199,6 +205,11 @@ class GeneratorMainUI(
                 tab_map = {'web': 1, 'backend': 2}
                 idx = tab_map.get(tab_id, 0)
                 if hasattr(self, '_main_stack'): self._main_stack.setCurrentIndex(idx)
+                # 네이티브 웹뷰는 탭을 열 때 싣는다 — 안 보는 페이지를 뒤에서 돌리지 않는다.
+                if tab_id == 'backend' and hasattr(self, 'backend_ui_tab'):
+                    self.backend_ui_tab.ensure_loaded()
+                elif tab_id == 'web' and hasattr(self, 'web_tab'):
+                    self.web_tab.ensure_loaded()
                 self.show_status(f"Workspace Switched: {tab_id}")
 
             elif action == 'vue_tab_switch':
@@ -2385,31 +2396,34 @@ class GeneratorMainUI(
             print(f"[Search] 시작 시 덱 복원 실패: {e}")
 
     def _update_vram_status(self):
-        # 백엔드 미연결(건너뛰기/연결 실패) 상태면 폴링 자체를 건너뛴다 —
-        # get_backend()는 항상 객체를 돌려줘 매 30초 연결거부로 WARNING이 쌓이고
-        # 헛수고만 했었다. 연결되면(on_webui_info_loaded) 다음 틱부터 자동 재개.
-        if not getattr(self, '_backend_connected', False):
-            return
-        # 백엔드 HTTP(get_system_stats, timeout=3)를 워커 스레드에서 수행.
-        # 메인(GUI) 스레드에서 직접 호출하면 백엔드 응답이 느릴 때(예: 같은 GPU에서
-        # LoRA 학습이 도는 중) 30초마다 최대 3초씩 UI가 얼던 '묘한 프리징' 발생.
-        # vramUpdated는 Qt 시그널 → 워커 스레드에서 emit해도 queued connection으로 안전.
+        """하단 VRAM 바 — 장치 전체 사용량(모든 프로세스).
+
+        1순위 core.gpu_stats.read_vram(NVML → nvidia-smi): 백엔드 연결과 무관하게 잰다.
+        2순위(GPU 툴이 전혀 없을 때) 연결된 백엔드의 /memory — 그 값은 백엔드 자신의
+        메모리라 Ollama 등은 안 잡히지만, 없는 것보다 낫다.
+        워커 스레드에서 수행(백엔드 HTTP 는 timeout=3 이라 메인 스레드면 UI 가 언다).
+        vramUpdated 는 Qt 시그널 → 워커에서 emit 해도 queued connection 으로 안전.
+        """
         import threading
 
         def _work():
             try:
-                from backends import get_backend
-                backend = get_backend()
-                if not backend:
-                    return
-                stats = backend.get_system_stats()
+                from core.gpu_stats import read_vram
+                stats = read_vram()
+                if not stats and getattr(self, '_backend_connected', False):
+                    from backends import get_backend
+                    backend = get_backend()
+                    stats = backend.get_system_stats() if backend else None
+                    if stats:
+                        stats = dict(stats, source='backend')
                 if stats and stats.get('vram_total', 0) > 0:
                     used = stats['vram_used'] / (1024**3)
                     total = stats['vram_total'] / (1024**3)
                     pct = int(used / total * 100) if total > 0 else 0
                     if hasattr(self, 'vue_bridge'):
                         self.vue_bridge.vramUpdated.emit(json.dumps({
-                            'used': round(used, 1), 'total': round(total, 1), 'pct': pct
+                            'used': round(used, 1), 'total': round(total, 1), 'pct': pct,
+                            'source': stats.get('source', ''),
                         }))
             except Exception:
                 pass  # VRAM 모니터링은 비핵심 — GPU 미탑재/백엔드 미응답 시 무시

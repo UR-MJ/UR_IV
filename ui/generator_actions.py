@@ -205,10 +205,18 @@ class ActionsMixin:
     
     def toggle_automation_ui(self, checked):
         """자동화 모드 토글 (ON/OFF만 — 패널 표시는 별도 접이식)"""
-        # 생성 중이면 토글 무시
+        # 생성 중이면 토글 무시하고 되돌린다.
+        # 되돌리는 setChecked 는 toggled 를 다시 쏘고 그게 곧 이 함수다 — 시그널을 막지 않으면
+        # 되돌림 → 이 함수 → 되돌림 … 재귀가 한도까지 쌓였다가 풀리며 경고창이 수백 번 떴고,
+        # 생성이 끝난 뒤에도 계속 떠서 강제 종료해야 했다. 경고도 모달 대신 토스트 한 번.
         if hasattr(self, 'gen_worker') and self.gen_worker and self.gen_worker.isRunning():
-            self.btn_auto_toggle.setChecked(not checked)
-            QMessageBox.warning(self, "알림", "이미지 생성 중에는 자동화 모드를 변경할 수 없습니다.")
+            btn = self.btn_auto_toggle
+            was_blocked = btn.blockSignals(True)
+            try:
+                btn.setChecked(not checked)
+            finally:
+                btn.blockSignals(was_blocked)
+            self._notify_automation_locked()
             return
 
         if checked:
@@ -228,6 +236,20 @@ class ActionsMixin:
             self.btn_auto_toggle.setStyleSheet("")  # 테마 기본 스타일 복원
             self.btn_generate.setText("이미지 생성")
             
+    def _notify_automation_locked(self):
+        """'생성 중엔 못 바꾼다' 알림 — 토스트 한 번, 1.5초 안엔 반복하지 않는다."""
+        import time as _t
+        now = _t.monotonic()
+        if now - float(getattr(self, '_auto_lock_notified_at', 0.0) or 0.0) < 1.5:
+            return
+        self._auto_lock_notified_at = now
+        message = "이미지 생성 중에는 자동화 모드를 바꿀 수 없습니다"
+        bridge = getattr(self, 'vue_bridge', None)
+        if bridge is not None and hasattr(bridge, 'showNotification'):
+            bridge.showNotification.emit('warning', message)
+        else:
+            QMessageBox.warning(self, "알림", message)
+
     def toggle_random_resolution_editor(self, checked):
         """랜덤 해상도 편집기 토글"""
         if checked:

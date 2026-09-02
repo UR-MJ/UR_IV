@@ -14,6 +14,7 @@ from __future__ import annotations
 import configparser
 import json
 import os
+import shlex
 import queue
 import re
 import shutil
@@ -29,6 +30,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
+from core.process_guard import app_job, clear_pid_file, marker_for, sweep_orphan, write_pid_file
+from core.launch_args import LaunchArgsImport, discover_launch_args, merge_args
 from core.storage_paths import config_file
 from utils.atomic_json import atomic_write_json, load_json_safe
 
@@ -474,6 +477,13 @@ class BackendRuntimeManager:
             "remoteCommit": "",
             "lastChecked": "",
             "lastError": "",
+            # 사용자가 Settings 에서 덧붙이는 실행 인자 (예: "--xformers --medvram").
+            # 문자열 하나로 저장하고 기동 직전에 shlex 로 쪼갠다 — 따옴표 경로도 산다.
+            "extraArgs": "",
+            # 연결한 설치의 실행 배치 파일(webui-user.bat / run_nvidia_gpu*.bat) 인자를 자동으로 가져올지.
+            "importLaunchArgs": True,
+            # ComfyUI 만: `--fast fp16_accumulation` (run_nvidia_gpu_fast_fp16_accumulation.bat 와 같은 실행).
+            "fastFp16": False,
         }
 
     def _load_state(self) -> dict[str, Any]:
@@ -561,6 +571,13 @@ class BackendRuntimeManager:
                     item["lastError"] = "유효하지 않은 확장 폴더 설정을 무시했습니다"
             item["extensionDirApproved"] = bool(item.get("extensionDirApproved"))
             item["autoStart"] = bool(item["autoStart"])
+            item["importLaunchArgs"] = bool(item.get("importLaunchArgs", True))
+            item["fastFp16"] = bool(item.get("fastFp16", False))
+            try:
+                item["extraArgs"] = self._normalise_extra_args(item.get("extraArgs", ""))
+            except BackendRuntimeError:
+                item["extraArgs"] = ""
+                item["lastError"] = "해석할 수 없는 실행 인자 설정을 무시했습니다"
             normalised["engines"][key] = item
         forge_extension = Path(
             normalised["engines"]["forge"].get("extensionDir")
@@ -1239,8 +1256,12 @@ class BackendRuntimeManager:
                 self._append_existing_paths(
                     paths["checkpoints"], model_root, ("Stable-diffusion", "checkpoints")
                 )
+                # Forge 는 Anima·Krea2·Flux 같은 UNET 전용 파일도 Stable-diffusion 에 둔다.
+                # ComfyUI 의 UNETLoader 는 diffusion_models 만 보므로 그 폴더를 여기에도 비춘다 —
+                # 안 그러면 ComfyUI 워크플로에서 같은 파일이 '없는 모델' 이 된다.
                 self._append_existing_paths(
-                    paths["diffusion_models"], model_root, ("diffusion_models", "unet", "UNET")
+                    paths["diffusion_models"], model_root,
+                    ("diffusion_models", "unet", "UNET", "Stable-diffusion"),
                 )
                 self._append_existing_paths(paths["loras"], model_root, ("Lora", "loras", "LoRA"))
                 self._append_existing_paths(paths["vae"], model_root, ("VAE", "vae"))
@@ -1297,6 +1318,7 @@ class BackendRuntimeManager:
                 source_mode = str(saved.get("sourceMode", "managed") or "managed")
                 existing_root = str(saved.get("existingRoot", "") or "")
                 location = self._runtime_location(key)
+                detected = self._detected_launch_args(key, location, saved)
                 source = location.source_root if location is not None else Path()
                 python_path = location.python_path if location is not None else Path()
                 installed = bool(
@@ -1365,6 +1387,12 @@ class BackendRuntimeManager:
                     "extensions": self._extension_state(key),
                     "message": self._last_messages.get(key) or str(saved.get("lastError", "") or ""),
                     "logPath": str(owned_process.log_path) if owned_process else "",
+                    "extraArgs": str(saved.get("extraArgs", "") or ""),
+                    "importLaunchArgs": bool(saved.get("importLaunchArgs", True)),
+                    "fastFp16": bool(saved.get("fastFp16", False)),
+                    "detectedArgs": " ".join(detected.args),
+                    "detectedArgsSource": detected.source,
+                    "detectedArgsDropped": " ".join(detected.dropped),
                 }
             return {
                 "ok": True,
@@ -1469,10 +1497,34 @@ class BackendRuntimeManager:
                     self._validate_extension_root(
                         self._default_extension_root(key), create_managed=True, engine=key
                     )
+            if "extraArgs" in patch:
+                saved["extraArgs"] = self._normalise_extra_args(patch.get("extraArgs", ""))
+            if "importLaunchArgs" in patch:
+                saved["importLaunchArgs"] = bool(patch.get("importLaunchArgs"))
+            if "fastFp16" in patch:
+                saved["fastFp16"] = bool(patch.get("fastFp16"))
             if patch.get("active") is True:
                 self._state["activeEngine"] = key
             self._save_state()
         return self.snapshot()
+
+    @staticmethod
+    def _normalise_extra_args(value: object) -> str:
+        """실행 인자 문자열을 다듬는다 — 쪼개지지 않는 값(짝 안 맞는 따옴표)은 거부한다.
+
+        기동 직전이 아니라 **저장할 때** 검사해야 사용자가 그 자리에서 고칠 수 있다.
+        줄바꿈은 공백으로 — 인자 하나가 줄을 넘는 일은 없고, 붙여넣기에 흔히 섞인다.
+        """
+        text = " ".join(str(value or "").split())
+        if not text:
+            return ""
+        if len(text) > 2000:
+            raise BackendRuntimeError("INVALID_EXTRA_ARGS", "실행 인자가 너무 깁니다 (2000자 제한)")
+        try:
+            shlex.split(text, posix=False)
+        except ValueError as exc:
+            raise BackendRuntimeError("INVALID_EXTRA_ARGS", f"실행 인자를 해석할 수 없습니다: {exc}") from exc
+        return text
 
     def _ensure_primary_model_engine(self, preferred: str = "") -> str:
         """Keep primary independent from active while preferring a usable source."""
@@ -1695,6 +1747,27 @@ class BackendRuntimeManager:
             elif action_name == "set_auto_start":
                 state = self.configure(key, {"autoStart": bool(payload.get("autoStart"))})
                 result = {"message": "자동 시작 설정을 저장했습니다", "state": state}
+            elif action_name == "set_launch_options":
+                option_patch = {
+                    name: bool(payload.get(name))
+                    for name in ("importLaunchArgs", "fastFp16")
+                    if name in payload
+                }
+                state = self.configure(key, option_patch)
+                running = self._process_running(key)
+                result = {
+                    "message": "실행 옵션을 저장했습니다" + (" — 다음 시작부터 적용됩니다" if running else ""),
+                    "state": state,
+                }
+            elif action_name == "set_extra_args":
+                # 저장만 한다. 돌고 있는 프로세스엔 다음 기동부터 적용된다 —
+                # 인자를 바꿨다고 백엔드를 말없이 재시작하면 진행 중인 생성이 죽는다.
+                state = self.configure(key, {"extraArgs": payload.get("extraArgs", "")})
+                running = self._process_running(key)
+                result = {
+                    "message": "실행 인자를 저장했습니다" + (" — 다음 시작부터 적용됩니다" if running else ""),
+                    "state": state,
+                }
             elif action_name == "set_install_root":
                 install_root = str(
                     payload.get("existingRoot")
@@ -2202,6 +2275,32 @@ class BackendRuntimeManager:
         os.replace(tmp, output)
         return output
 
+    @staticmethod
+    def _disable_forge_browser_launch(data_root: Path) -> None:
+        """`<data>/config.json` 의 auto_launch_browser 를 Disable 로. 다른 키는 건드리지 않는다.
+
+        사용자가 설정 화면에서 값을 바꿔 두었더라도 되돌린다 — 이 프로세스는 앱이
+        띄우는 것이라 브라우저가 열려야 할 이유가 없다. 파일이 깨져 있으면 손대지 않는다:
+        Forge 가 스스로 고치게 두는 편이 조용히 덮어쓰는 것보다 낫다.
+        """
+        path = data_root / "config.json"
+        current: dict[str, Any] = {}
+        if path.is_file():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return
+            if not isinstance(loaded, dict):
+                return
+            current = loaded
+        if current.get("auto_launch_browser") == "Disable":
+            return
+        current["auto_launch_browser"] = "Disable"
+        try:
+            atomic_write_json(str(path), current)
+        except OSError:
+            pass
+
     def _launch_argv(self, engine: str, port: int) -> tuple[list[str], Path, dict[str, str]]:
         definition = ENGINE_DEFINITIONS[engine]
         location = self._runtime_location(engine, require_valid=True)
@@ -2215,6 +2314,10 @@ class BackendRuntimeManager:
         env["AISTUDIO_LAUNCH_NONCE"] = uuid.uuid4().hex
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         if engine == "forge":
+            # Forge 의 `auto_launch_browser` 기본값은 "Local" — 서버가 로컬이면 기동할 때마다
+            # OS 브라우저를 연다. 앱은 API 만 쓰므로 그 창은 매번 낯선 탭 하나일 뿐이다.
+            # 설정 파일은 --data-dir 아래 것을 읽으니 거기에 Disable 을 적어 둔다.
+            self._disable_forge_browser_launch(data)
             argv = [
                 str(python), str(source / definition.entrypoint),
                 "--api", "--api-server-stop", "--port", str(port),
@@ -2260,7 +2363,28 @@ class BackendRuntimeManager:
             # bypassing this manager's explicit external-folder approval boundary.
             if self._state["engines"][engine].get("sourceMode") == "managed":
                 argv.append("--enable-manager")
+        # 배치 파일에서 가져온 인자 → 사용자 인자 순으로 맨 뒤에. 같은 플래그가 겹치면 대개
+        # 뒤의 것이 이기므로 사용자가 앱의 기본값도, 배치 파일 값도 덮어쓸 수 있다.
+        saved = self._state["engines"][engine]
+        imported = self._detected_launch_args(engine, location, saved).args
+        extra = str(saved.get("extraArgs", "") or "")
+        user_args = shlex.split(extra, posix=False) if extra else []
+        argv.extend(merge_args(imported, user_args))
         return argv, source, env
+
+    def _detected_launch_args(self, engine: str, location: RuntimeLocation | None, saved: Mapping[str, Any]) -> LaunchArgsImport:
+        """연결 모드면 설치 루트의 실행 배치 파일을 읽는다. 관리형은 배치 파일이 없다 — ComfyUI fp16 토글만."""
+        fast_fp16 = engine == "comfyui" and bool(saved.get("fastFp16"))
+        roots: list[Path] = []
+        if (
+            location is not None
+            and str(saved.get("sourceMode", "managed") or "managed") == "existing"
+            and bool(saved.get("importLaunchArgs", True))
+        ):
+            roots = [location.install_root, location.source_root]
+        if not roots and not fast_fp16:
+            return LaunchArgsImport()
+        return discover_launch_args(engine, roots, fast_fp16=fast_fp16)
 
     def _start(
         self,
@@ -2354,6 +2478,12 @@ class BackendRuntimeManager:
                 self._stop(other, on_progress)
                 replaced_engine = other
         self._ensure_extension_mount(engine)
+        # 지난 실행이 강제 종료돼 남긴 *우리* 프로세스(표식 = data-dir)가 포트를 쥐고 있으면
+        # 먼저 치운다 — 안 치우면 포트가 17863 처럼 밀리고 GPU 를 둘이 나눠 쓴다.
+        swept = sweep_orphan(self._pid_file(engine), marker_for(self._data_root(engine)))
+        if swept.startswith("killed-orphan"):
+            self._progress(on_progress, engine, "start", "cleanup", "지난 실행이 남긴 백엔드 프로세스를 정리했습니다", 10)
+            time.sleep(1.5)   # 포트가 돌아올 시간
         port = self._choose_port(engine)
         argv, cwd, env = self._launch_argv(engine, port)
         log_dir = self._engine_root(engine) / "logs"
@@ -2370,6 +2500,7 @@ class BackendRuntimeManager:
                 "PROCESS_START_FAILED", "백엔드 프로세스를 시작하지 못했습니다",
                 stage="launch", retryable=True, details={"reason": str(exc)},
             ) from exc
+        self._guard_process(engine, process, argv)
         endpoint = f"http://127.0.0.1:{port}"
         owned = _OwnedProcess(
             process=process,
@@ -2432,6 +2563,28 @@ class BackendRuntimeManager:
             "ENGINE_HEALTH_TIMEOUT", "백엔드 API가 제한 시간 내 준비되지 않았습니다",
             stage="health", retryable=True, details={"logPath": str(log_path)},
         )
+
+    def _pid_file(self, engine: str) -> Path:
+        """지난 실행의 PID 와 표식 — data-dir 바깥(엔진 루트)에 둔다. Forge 가 만질 일이 없게."""
+        return self._engine_root(engine) / "app_process.pid"
+
+    def _guard_process(self, engine: str, process: ProcessHandle, argv: Sequence[str]) -> None:
+        """앱이 어떻게 죽든 자식이 따라 죽게(Job Object) + 다음 시작 청소용 PID 파일.
+
+        둘 다 실패해도 시작은 계속된다 — 안전장치가 없다고 백엔드를 못 쓰게 하진 않는다.
+        PID 파일은 표식(data-dir)이 실제 argv 에 있을 때만 쓴다: 그래야 청소 때 명령줄로
+        우리 것임을 확인할 수 있다.
+        """
+        job = app_job()
+        if not job.assign(process) and job.error:
+            print(f"[Runtime] Job Object 미적용 — 강제 종료 시 {engine} 가 남을 수 있음: {job.error}")
+        marker = marker_for(self._data_root(engine))
+        pid = getattr(process, "pid", None)
+        if pid and any(str(item) == marker for item in argv):
+            try:
+                write_pid_file(self._pid_file(engine), int(pid), marker)
+            except OSError as exc:
+                print(f"[Runtime] PID 파일 기록 실패: {exc}")
 
     @staticmethod
     def _close_process_log(process: ProcessHandle) -> None:
@@ -2499,6 +2652,7 @@ class BackendRuntimeManager:
                     self._processes.setdefault(engine, owned)
             else:
                 self._close_process_log(process)
+                clear_pid_file(self._pid_file(engine))
         if not stopped:
             raise BackendRuntimeError(
                 "PROCESS_STOP_FAILED",

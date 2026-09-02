@@ -1,13 +1,5 @@
 <template>
   <div class="batch-view">
-    <!-- 서브탭 -->
-    <div class="sub-tabs">
-      <button class="sub-tab" :class="{ active: subTab === 'batch' }" @click="subTab = 'batch'">일괄</button>
-      <button class="sub-tab" :class="{ active: subTab === 'upscale' }" @click="subTab = 'upscale'">업스케일</button>
-      <button class="sub-tab" :class="{ active: subTab === 'adetailer' }" @click="subTab = 'adetailer'">ADetailer</button>
-      <button class="sub-tab" :class="{ active: subTab === 'sam3' }" @click="subTab = 'sam3'">SAM3</button>
-      <button class="sub-tab" :class="{ active: subTab === 'caption' }" @click="subTab = 'caption'">캡션</button>
-    </div>
 
     <!-- Batch 탭 — 듀얼 패널 (좌측 설정 / 우측 썸네일 그리드) -->
     <div v-if="subTab === 'batch'" class="tab-body ad-layout">
@@ -449,6 +441,7 @@ import {
   matchesCaptionIdentity,
 } from '../utils/captionSession'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
+import { useViewMode } from '../composables/useViewMode'
 import CustomSelect from '../components/CustomSelect.vue'
 import type {
   ActionName,
@@ -471,7 +464,8 @@ interface CaptionItem {
 
 const router = useRouter()
 const widgets = useWidgetStore()
-const subTab = ref('batch')
+/** 서브탭은 왼쪽 레일의 서랍이 정한다 — 여기선 읽기만 한다. `useViewMode` 참조. */
+const { mode: subTab } = useViewMode('batch')
 const action = (name: ActionName, payload: any = {}) => requestAction(name, payload)
 const basename = (p: any) => typeof p === 'string' ? p.split('/').pop()!.split('\\').pop() : p.name || p
 
@@ -1546,14 +1540,6 @@ onUnmounted(() => {
 
 <style scoped>
 .batch-view { width: 100%; height: 100%; display: flex; flex-direction: column; }
-/* 오른쪽 여백은 알림 종 자리다 (style.css --notif-gutter) */
-.sub-tabs { display: flex; gap: 0; padding-right: var(--notif-gutter); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.sub-tab {
-  flex: 1; padding: 8px; background: transparent; border: none; border-bottom: 2px solid transparent;
-  color: var(--text-muted); font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; text-align: center;
-  letter-spacing: 0;
-}
-.sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* CAPTION 탭 */
 .s-textarea { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.4; }

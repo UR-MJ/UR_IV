@@ -219,6 +219,40 @@ const viewerParams = computed(() => {
 })
 
 const galleryContentRef = ref<HTMLElement | null>(null)
+
+/**
+ * 넘칠 때까지 채운다.
+ *
+ * '더 보기'는 스크롤 이벤트로만 발동한다. 그런데 첫 40장이 화면에 다 들어가면
+ * (넓은 모니터 + 작은 썸네일) 컨테이너가 넘치지 않아 스크롤 자체가 생기지 않고,
+ * "N / M — 스크롤하여 더 보기" 만 떠 있는 채 영영 안 채워졌다. 목록·크기가 바뀔
+ * 때마다 컨테이너가 넘칠 때까지 30장씩 더 보인다. 스크롤이 생기는 순간 멈춘다.
+ */
+function fillViewport() {
+  const el = galleryContentRef.value
+  const total = exifFiltered.value ? filteredImages.value.length : images.value.length
+  if (!el || visibleCount.value >= total) return
+  // keep-alive 로 떼어졌거나 아직 레이아웃이 없으면 높이가 0 이라 '안 찼다' 로 읽힌다 — 그때 늘리면 전부 펼쳐진다
+  if (!el.isConnected || el.clientHeight === 0) return
+  // 1) 기하 추정 — 썸네일이 뜨기 전엔 카드 높이가 0 이라 scrollHeight 로는 알 수 없다.
+  //    열 수 × (뷰포트를 덮는 행 수 + 1) 만큼은 먼저 보인다.
+  const cell = Math.max(60, thumbSize.value)
+  const need = Math.min(total, Math.max(1, Math.floor(el.clientWidth / cell)) * (Math.ceil(el.clientHeight / cell) + 1))
+  if (need > visibleCount.value) { visibleCount.value = need; return }
+  // 2) 실측 — 썸네일이 다 떴는데도 안 넘치면(가로로 긴 그림들) 한 페이지 더. 그리드가 자라면 관찰자가 다시 부른다.
+  if (el.scrollHeight <= el.clientHeight + 1) visibleCount.value = Math.min(total, visibleCount.value + 30)
+}
+let _fillObserver: ResizeObserver | null = null
+onMounted(() => {
+  const el = galleryContentRef.value
+  if (typeof ResizeObserver === 'undefined' || !el) return
+  // 콜백 안에서 바로 늘리면 같은 프레임에 크기가 또 바뀌어 'ResizeObserver loop' 경고가 난다 — 다음 프레임에
+  _fillObserver = new ResizeObserver(() => { requestAnimationFrame(fillViewport) })
+  _fillObserver.observe(el)                                              // 창 크기
+  if (el.firstElementChild) _fillObserver.observe(el.firstElementChild)  // 그리드 — 썸네일이 뜨며 자란다
+})
+onUnmounted(() => { _fillObserver?.disconnect(); _fillObserver = null })
+watch([images, filteredImages, exifFiltered, thumbSize], () => { fillViewport() }, { flush: 'post' })
 const sortBy = ref('date')
 const sortOptions = [{ label: '날짜', val: 'date' }, { label: '이름', val: 'name' }]
 const ctxMenu = ref({ show: false, x: 0, y: 0, path: '' })
@@ -349,7 +383,7 @@ onMounted(() => {
 // 갤러리에서 즐겨찾기를 더하고 이 탭으로 오면 옛 목록이 그대로 보였다 —
 // 목록을 밀어 주는 이벤트가 따로 없어서, 들어올 때마다 다시 읽는다.
 // (GalleryView 가 같은 이유로 onActivated 에서 loadImages 를 부른다.)
-onActivated(() => loadFavorites())
+onActivated(() => { loadFavorites(); fillViewport() })
 
 onUnmounted(() => {
   document.removeEventListener('click', hideMenu)
