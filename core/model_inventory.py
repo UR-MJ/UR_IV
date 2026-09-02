@@ -377,10 +377,6 @@ class ModelInventory:
         data = self.engines.get(engine, {})
         return str(data.get("name") or _DEFAULT_SOURCE_NAMES.get(engine) or engine)
 
-    def _group_label(self, engine: str, primary: bool) -> str:
-        source_name = self._source_name(engine)
-        return f"{source_name} (메인)" if primary else f"{source_name} 전용"
-
     def _engine_order(self) -> list[str]:
         order = list(self.engines)
         if self.primary_engine in order:

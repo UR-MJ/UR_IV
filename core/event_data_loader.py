@@ -197,15 +197,6 @@ class EventDataLoader:
         )
 
     @staticmethod
-    def _jaccard(set_a: set, set_b: set) -> float:
-        """Jaccard 유사도 (0.0 ~ 1.0)"""
-        if not set_a or not set_b:
-            return 0.0
-        intersection = len(set_a & set_b)
-        union = len(set_a | set_b)
-        return intersection / union if union > 0 else 0.0
-
-    @staticmethod
     def _overlap_ratio(query: set, target: set) -> float:
         """쿼리 태그 중 target에 포함된 비율 (0.0 ~ 1.0), 부분 문자열 매칭 지원"""
         if not query:

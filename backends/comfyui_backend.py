@@ -1045,10 +1045,6 @@ class ComfyUIBackend(AbstractBackend):
             artifacts=artifacts,
         )
 
-    def _fetch_result_image(self, prompt_id: str) -> GenerationResult:
-        """이전 private 호출부 호환용 별칭."""
-        return self._fetch_result_artifacts(prompt_id)
-
     # ── 공개 API ──
 
     def run_workflow(self, workflow: Dict,

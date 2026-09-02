@@ -82,15 +82,6 @@ class CropWidget(QWidget):
             int(pt.y() * self._scale + self._display_rect.y()),
         )
 
-    def _screen_to_img(self, pt: QPoint) -> QPoint:
-        """스크린 좌표 → 이미지 좌표"""
-        if self._scale == 0:
-            return QPoint(0, 0)
-        return QPoint(
-            int((pt.x() - self._display_rect.x()) / self._scale),
-            int((pt.y() - self._display_rect.y()) / self._scale),
-        )
-
     def _sel_screen_rect(self) -> QRect:
         """선택 영역의 스크린 좌표 QRect"""
         tl = self._img_to_screen(self._sel.topLeft())

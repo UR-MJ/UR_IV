@@ -287,41 +287,6 @@ class ActionsMixin:
         else:
             self.random_res_label.setText("등록된 해상도가 없습니다.")
     
-    def _apply_next_automation_prompt(self) -> bool:
-        """자동화용 다음 프롬프트 적용 (apply_random_prompt와 동일한 로직 사용)"""
-        import random
-        
-        settings = self.auto_settings
-        
-        # 덱이 비었으면 리필
-        if not self.shuffled_prompt_deck:
-            if settings.get('allow_duplicates', False) or settings.get('auto_reset_deck', False):
-                # 중복 허용 / 덱 소진 시 자동 초기화: 덱 리필
-                self.shuffled_prompt_deck = self.filtered_results.copy()
-                random.shuffle(self.shuffled_prompt_deck)
-                self.show_status("🔄 덱을 다시 섞었습니다.")
-                self._save_deck_state()
-            else:
-                # 중복 불허: 종료
-                return False
-
-        # 덱에서 프롬프트 가져오기
-        if settings.get('allow_duplicates', False):
-            # 중복 허용: 랜덤 선택 (덱에서 제거 안 함)
-            bundle = random.choice(self.shuffled_prompt_deck)
-        else:
-            # 중복 불허: 덱에서 제거
-            bundle = self.shuffled_prompt_deck.pop()
-            remaining = len(self.shuffled_prompt_deck)
-            self.btn_random_prompt.setText(f"🎲 랜덤 프롬프트 ({remaining})")
-            self._save_deck_state()  # 진행도 저장 (재시작 시 복원)
-        
-        # ★★★ 핵심: apply_prompt_from_data 호출 ★★★
-        # 이게 UI 업데이트 + 토글 적용 + 필터링 전부 처리함
-        self.apply_prompt_from_data(bundle)
-
-        return True
-
     # ── 덱 진행도 영속 (재시작 시 '얼마나 뽑았는지' 복원) ────────────────
     def _deck_state_path(self):
         from core.storage_paths import cache_file
@@ -990,30 +955,6 @@ class ActionsMixin:
             f"{added_count}개의 이벤트가 대기열에 추가되었습니다."
         )
 
-    def _on_center_tab_changed(self, index):
-        """중앙 탭 전환 시 처리"""
-        if not hasattr(self, 'center_tabs'):
-            return
-        current_widget = self.center_tabs.widget(index)
-
-        # 탭에 따라 왼쪽 패널 전환
-        if hasattr(self, 'left_stack'):
-            if hasattr(self, 'mosaic_editor') and current_widget == self.mosaic_editor:
-                self.left_stack.setFixedWidth(460)
-                self.left_stack.setCurrentIndex(1)  # 에디터 도구
-            else:
-                # Vue 탭이면 _handle_vue_action에서 처리
-                pass
-
-        # 즐겨찾기 탭으로 전환 시 자동 새로고침
-        if hasattr(self, 'fav_tab') and current_widget == self.fav_tab:
-            self.refresh_favorites()
-
-        # Gallery 탭 전환 시 저장된 폴더 자동 로드
-        if hasattr(self, 'gallery_tab') and current_widget == self.gallery_tab:
-            if not self.gallery_tab._all_paths and self.gallery_tab._current_folder:
-                self.gallery_tab.load_folder(self.gallery_tab._current_folder)
-                
     def _greedy_merge_words(self, words):
         """공백 구분 단어들을 알려진 다중단어 태그로 greedy 결합 (최장 우선).
         예: [tokyo, afterschool, summoners] → [tokyo afterschool summoners].

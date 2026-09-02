@@ -1241,10 +1241,6 @@ class GalleryTab(QWidget):
         self._display_current_page()
 
     # ── 페이지 크기 / 썸네일 크기 계산 ──
-    def _calc_items_per_page(self) -> int:
-        """고정 10열 × 4행 = 40"""
-        return self.COLS * self.ROWS
-
     def _calc_thumb_size(self) -> int:
         """뷰포트 너비에 맞춰 10개가 들어가는 썸네일 크기 계산"""
         vp = self.scroll_area.viewport().size()

@@ -326,10 +326,6 @@ class TagClassifier:
             return True
         return "art_style" in self._categories_for_tag(tag)
 
-    def _tag_variants(self, tag: str) -> list[str]:
-        """Compatibility helper returning space/underscore/parenthesis forms."""
-        return list(_variants(tag))
-
     def _direct_categories(self, tag: object) -> list[str]:
         categories: list[str] = []
         for variant in _variants(tag):
