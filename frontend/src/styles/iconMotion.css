@@ -28,155 +28,155 @@
 /* ── 의미별 motion profiles ───────────────────────────────────────────── */
 
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='dismiss'] {
-  --icon-hover-transform: none;
-  --icon-press-transform: scale(.95);
+  --icon-hover-transform: rotate(-6deg) scale(.96);
+  --icon-press-transform: scale(.93);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='confirm'] {
-  --icon-hover-transform: none;
-  --icon-press-transform: scale(.95);
+  --icon-hover-transform: translateY(-1.3px) rotate(-5deg);
+  --icon-press-transform: scale(.93);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='add'] {
-  --icon-hover-transform: rotate(2deg) scale(1.025);
+  --icon-hover-transform: rotate(7deg) scale(1.05);
   --icon-press-transform: rotate(-1deg) scale(.95);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='inspect'] {
-  --icon-hover-transform: translate(1px, -1px);
+  --icon-hover-transform: translate(1.5px, -1.5px);
   --icon-press-transform: scale(.97);
   --icon-hover-duration: 160ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='configure'] {
-  --icon-hover-transform: rotate(8deg);
+  --icon-hover-transform: rotate(12deg);
   --icon-press-transform: rotate(3deg) scale(.96);
   --icon-hover-duration: 190ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='store'] {
-  --icon-hover-transform: translateY(-1px);
+  --icon-hover-transform: translateY(-1.4px) scale(.98);
   --icon-press-transform: scale(.97);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='travel-up'] {
-  --icon-hover-transform: translateY(-1px);
+  --icon-hover-transform: translateY(-1.6px);
   --icon-press-transform: scale(.97);
   --icon-hover-duration: 160ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='travel-down'] {
-  --icon-hover-transform: translateY(1px);
+  --icon-hover-transform: translateY(1.6px);
   --icon-press-transform: scale(.97);
   --icon-hover-duration: 160ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='travel-left'] {
-  --icon-hover-transform: translateX(-1px);
+  --icon-hover-transform: translateX(-1.6px);
   --icon-press-transform: scale(.97);
   --icon-hover-duration: 160ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='travel-right'] {
-  --icon-hover-transform: translateX(1px);
+  --icon-hover-transform: translateX(1.6px);
   --icon-press-transform: scale(.97);
   --icon-hover-duration: 160ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='spread'] {
-  --icon-hover-transform: scaleX(1.035);
+  --icon-hover-transform: scaleX(1.08);
   --icon-press-transform: scaleX(.96);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='cycle-cw'] {
-  --icon-hover-transform: rotate(14deg);
+  --icon-hover-transform: rotate(18deg);
   --icon-press-transform: rotate(5deg) scale(.96);
   --icon-hover-duration: 190ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='cycle-ccw'] {
-  --icon-hover-transform: rotate(-14deg);
+  --icon-hover-transform: rotate(-18deg);
   --icon-press-transform: rotate(-5deg) scale(.96);
   --icon-hover-duration: 190ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='delete'] {
-  --icon-hover-transform: translateY(-.5px) rotate(-1deg);
+  --icon-hover-transform: translateY(-1.4px) rotate(-5deg);
   --icon-press-transform: scale(.96);
   --icon-hover-duration: 180ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='edit'] {
-  --icon-hover-transform: translate(.75px, -.75px) rotate(-1deg);
+  --icon-hover-transform: translate(1.4px, -1.4px) rotate(-4deg);
   --icon-press-transform: scale(.96);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='cut'] {
-  --icon-hover-transform: rotate(-2deg) scale(1.015);
+  --icon-hover-transform: rotate(-8deg) scale(1.04);
   --icon-press-transform: scale(.96);
   --icon-hover-duration: 180ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='magic'] {
-  --icon-hover-transform: translateY(-.75px) rotate(2deg);
+  --icon-hover-transform: translateY(-1.5px) rotate(7deg);
   --icon-press-transform: scale(.96);
   --icon-hover-duration: 180ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='color'] {
-  --icon-hover-transform: rotate(-2deg) scale(1.015);
+  --icon-hover-transform: rotate(-9deg) scale(1.035);
   --icon-press-transform: scale(.96);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='attract'] {
-  --icon-hover-transform: translateX(.75px);
+  --icon-hover-transform: translateX(1.5px) scaleX(.96);
   --icon-press-transform: scale(.96);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='shape'] {
-  --icon-hover-transform: none;
+  --icon-hover-transform: scale(1.065) rotate(5deg);
   --icon-press-transform: scale(.97);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='signal'] {
-  --icon-hover-transform: none;
+  --icon-hover-transform: translateY(-1.3px) scale(1.035);
   --icon-press-transform: scale(.97);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='notify'] {
-  --icon-hover-transform: rotate(2deg);
+  --icon-hover-transform: rotate(10deg);
   --icon-press-transform: scale(.96);
   --icon-hover-duration: 170ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='compute'] {
-  --icon-hover-transform: none;
+  --icon-hover-transform: scale(1.07) rotate(5deg);
   --icon-press-transform: scale(.97);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='launch'] {
-  --icon-hover-transform: translate(.75px, -1px);
+  --icon-hover-transform: translate(1.4px, -1.8px) rotate(5deg);
   --icon-press-transform: scale(.96);
   --icon-hover-duration: 160ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='play'] {
-  --icon-hover-transform: translateX(.75px);
+  --icon-hover-transform: translateX(1.55px) scale(1.045);
   --icon-press-transform: scale(.95);
   --icon-hover-duration: 160ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='pause'] {
-  --icon-hover-transform: none;
+  --icon-hover-transform: scaleX(1.075) scaleY(.97);
   --icon-press-transform: scale(.95);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='stop'] {
-  --icon-hover-transform: none;
-  --icon-press-transform: scale(.94);
+  --icon-hover-transform: scale(.92) rotate(-5deg);
+  --icon-press-transform: scale(.91);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='wait'] {
-  --icon-hover-transform: rotate(4deg);
+  --icon-hover-transform: rotate(13deg) scale(.97);
   --icon-press-transform: scale(.96);
   --icon-hover-duration: 180ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='media'] {
-  --icon-hover-transform: none;
+  --icon-hover-transform: translateY(-1.35px) rotate(5deg);
   --icon-press-transform: scale(.97);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='random'] {
-  --icon-hover-transform: translateY(-.5px) rotate(4deg);
+  --icon-hover-transform: translateY(-1.25px) rotate(12deg);
   --icon-press-transform: scale(.96);
   --icon-hover-duration: 180ms;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='stack'] {
-  --icon-hover-transform: translateY(-.5px);
+  --icon-hover-transform: translateY(-1.45px) rotate(-5deg);
   --icon-press-transform: scale(.97);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='security'] {
-  --icon-hover-transform: none;
+  --icon-hover-transform: translateY(-1.25px) scale(1.04);
   --icon-press-transform: scale(.97);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='content'] {
-  --icon-hover-transform: none;
+  --icon-hover-transform: translateY(-1.3px) rotate(5deg);
   --icon-press-transform: scale(.97);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-motion='favorite'] {
-  --icon-hover-transform: rotate(-1deg) scale(1.035);
+  --icon-hover-transform: rotate(-7deg) scale(1.08);
   --icon-press-transform: scale(.95);
   --icon-hover-duration: 180ms;
 }
@@ -201,7 +201,8 @@
       [role='menuitem']:not([aria-disabled='true']),
       label:has(input:not(:disabled)),
       .ctx-item,
-      .hist-card
+      .hist-card,
+      :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
     ):hover .icon[data-icon-motion] {
     --icon-state-transform: var(--icon-hover-transform, none);
     --icon-duration: var(--icon-hover-duration);
@@ -219,7 +220,8 @@
       [role='menuitem']:not([aria-disabled='true']),
       label:has(input:not(:disabled)),
       .ctx-item,
-      .hist-card
+      .hist-card,
+      :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
     ):hover .icon[data-icon-motion] .icon-part {
     --icon-part-transform: var(--icon-part-hover-transform, none);
   }
@@ -235,7 +237,8 @@
       [role='menuitem']:not([aria-disabled='true']),
       label:has(input:not(:disabled)),
       .ctx-item,
-      .hist-card
+      .hist-card,
+      :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
     ):hover
     .icon[data-icon-name='sparkles'] :where(.icon-part-2),
   :root[data-icon-animation='gpt']
@@ -249,7 +252,8 @@
       [role='menuitem']:not([aria-disabled='true']),
       label:has(input:not(:disabled)),
       .ctx-item,
-      .hist-card
+      .hist-card,
+      :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
     ):hover
     .icon[data-icon-name='wand'] :where(.icon-part-2, .icon-part-3, .icon-part-4) {
     opacity: 1;
@@ -267,7 +271,8 @@
     [role='menuitem']:not([aria-disabled='true']),
     label:has(input:not(:disabled)),
     .ctx-item,
-    .hist-card
+    .hist-card,
+    :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
   ):active .icon[data-icon-motion] {
   --icon-state-transform: var(--icon-press-transform, scale(.97));
   --icon-duration: var(--icon-press-duration);
@@ -285,7 +290,8 @@
     [role='menuitem']:not([aria-disabled='true']),
     label:has(input:not(:disabled)),
     .ctx-item,
-    .hist-card
+    .hist-card,
+    :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
   ):active
   .icon[data-icon-motion] .icon-part {
   --icon-part-transform: var(--icon-part-press-transform, none);
@@ -296,11 +302,14 @@
 /* 내부 part 자체가 의미를 전달하는 아이콘은 외곽 전체 이동을 줄인다. */
 :root[data-icon-animation='gpt']
   .icon:is(
-    [data-icon-name='save'],
+    [data-icon-name='search'],
     [data-icon-name='folder-open'],
     [data-icon-name='trash'],
+    [data-icon-name='upload'],
+    [data-icon-name='download'],
     [data-icon-name='scissors'],
     [data-icon-name='sparkles'],
+    [data-icon-name='bell'],
     [data-icon-name='cards'],
     [data-icon-name='layers'],
     [data-icon-name='lock'],
@@ -308,73 +317,91 @@
     [data-icon-name='wand'],
     [data-icon-name='sliders'],
     [data-icon-name='target'],
+    [data-icon-name='pause'],
     [data-icon-name='move']
   ) {
   --icon-hover-transform: none;
 }
 
-:root[data-icon-animation='gpt'] .icon[data-icon-name='upload'] {
-  --icon-hover-transform: translateY(-.5px);
+:root[data-icon-animation='gpt'] .icon[data-icon-name='search'] .icon-part-1 {
+  --icon-part-hover-transform: scale(1.1);
 }
-:root[data-icon-animation='gpt'] .icon[data-icon-name='download'] {
-  --icon-hover-transform: translateY(.5px);
-}
-
 :root[data-icon-animation='gpt'] .icon[data-icon-name='search'] .icon-part-2 {
-  --icon-part-hover-transform: translate(.35px, .35px);
+  --icon-part-hover-transform: translate(1.6px, 1.6px);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='folder-open'] .icon-part-2 {
-  --icon-part-hover-transform: translateY(-.5px) rotate(-1deg);
+  --icon-part-hover-transform: translateY(-1.6px) rotate(-7deg);
   --icon-part-press-transform: translateY(.25px);
   transform-origin: center top;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='trash'] :where(.icon-part-1, .icon-part-2) {
-  --icon-part-hover-transform: translateY(-.6px);
+  --icon-part-hover-transform: translateY(-1.7px);
   --icon-part-press-transform: translateY(.3px);
   transform-origin: center bottom;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='upload'] :where(.icon-part-1, .icon-part-2) {
-  --icon-part-hover-transform: translateY(-.5px);
+  --icon-part-hover-transform: translateY(-1.8px);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='download'] :where(.icon-part-1, .icon-part-2) {
-  --icon-part-hover-transform: translateY(.5px);
+  --icon-part-hover-transform: translateY(1.8px);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='scissors'] .icon-part-1 {
-  --icon-part-hover-transform: rotate(2deg);
+  --icon-part-hover-transform: rotate(8deg);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='scissors'] .icon-part-2 {
-  --icon-part-hover-transform: rotate(-2deg);
+  --icon-part-hover-transform: rotate(-8deg);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='sparkles'] .icon-part-2 {
-  --icon-part-hover-transform: translate(.25px, -.25px) scale(1.04);
-  opacity: .78;
+  --icon-part-hover-transform: translate(1px, -1px) scale(1.12);
+  opacity: .7;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='wand'] :where(.icon-part-2, .icon-part-3, .icon-part-4) {
-  --icon-part-hover-transform: scale(1.04);
-  opacity: .78;
+  --icon-part-hover-transform: scale(1.12);
+  opacity: .7;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='bell'] .icon-part-2 {
-  --icon-part-hover-transform: translateX(.3px) rotate(2deg);
+  --icon-part-hover-transform: translateX(.8px) rotate(10deg);
   transform-origin: center top;
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='cards'] .icon-part-2 {
-  --icon-part-hover-transform: translate(-.35px, -.35px);
+  --icon-part-hover-transform: translate(-1.6px, -1.6px);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='layers'] .icon-part-2 {
-  --icon-part-hover-transform: translateY(.35px);
+  --icon-part-hover-transform: translateY(1.6px);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='layers'] .icon-part-3 {
-  --icon-part-hover-transform: translateY(.7px);
+  --icon-part-hover-transform: translateY(2.4px);
 }
 :root[data-icon-animation='gpt'] .icon:is([data-icon-name='lock'], [data-icon-name='unlock']) .icon-part-2 {
-  --icon-part-hover-transform: translateY(-.5px);
+  --icon-part-hover-transform: translateY(-1.7px);
   --icon-part-press-transform: translateY(.25px);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='pause'] .icon-part-1 {
-  --icon-part-hover-transform: translateX(-.2px);
+  --icon-part-hover-transform: translateX(-1.6px);
 }
 :root[data-icon-animation='gpt'] .icon[data-icon-name='pause'] .icon-part-2 {
-  --icon-part-hover-transform: translateX(.2px);
+  --icon-part-hover-transform: translateX(1.6px);
+}
+:root[data-icon-animation='gpt'] .icon[data-icon-name='sliders'] .icon-part-5 {
+  --icon-part-hover-transform: translateX(-1.7px);
+}
+:root[data-icon-animation='gpt'] .icon[data-icon-name='sliders'] .icon-part-6 {
+  --icon-part-hover-transform: translateX(1.7px);
+}
+:root[data-icon-animation='gpt'] .icon[data-icon-name='target'] .icon-part-1 {
+  --icon-part-hover-transform: scale(.9);
+}
+:root[data-icon-animation='gpt'] .icon[data-icon-name='move'] .icon-part-3 {
+  --icon-part-hover-transform: translateY(-1.6px);
+}
+:root[data-icon-animation='gpt'] .icon[data-icon-name='move'] .icon-part-4 {
+  --icon-part-hover-transform: translateY(1.6px);
+}
+:root[data-icon-animation='gpt'] .icon[data-icon-name='move'] .icon-part-5 {
+  --icon-part-hover-transform: translateX(-1.6px);
+}
+:root[data-icon-animation='gpt'] .icon[data-icon-name='move'] .icon-part-6 {
+  --icon-part-hover-transform: translateX(1.6px);
 }
 
 /* ── 짧은 상태 피드백과 실제 지속 상태 ──────────────────────────────── */

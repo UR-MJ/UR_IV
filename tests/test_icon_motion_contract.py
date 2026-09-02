@@ -11,6 +11,39 @@ ICON_MOTION_CSS = (
 ).read_text(encoding="utf-8")
 
 
+def _semantic_hover_profiles() -> dict[str, str]:
+    profiles: dict[str, str] = {}
+    for kind, body in re.findall(
+        r"data-icon-motion='([a-z-]+)'\]\s*\{(.*?)\}",
+        ICON_MOTION_CSS,
+        re.DOTALL,
+    ):
+        match = re.search(r"--icon-hover-transform:\s*([^;]+)", body)
+        if match:
+            profiles[kind] = match.group(1).strip()
+    return profiles
+
+
+def _gesture_is_perceptible(transform: str, *, min_translation: float = 1.25) -> bool:
+    translations = [
+        abs(float(value))
+        for value in re.findall(r"(?<![a-z])(-?\d*\.?\d+)px", transform)
+    ]
+    rotations = [
+        abs(float(value))
+        for value in re.findall(r"rotate\((-?\d*\.?\d+)deg\)", transform)
+    ]
+    scales = [
+        abs(float(value) - 1.0)
+        for value in re.findall(r"scale(?:X|Y)?\((\d*\.?\d+)\)", transform)
+    ]
+    return bool(
+        (translations and max(translations) >= min_translation)
+        or (rotations and max(rotations) >= 5.0)
+        or (scales and max(scales) >= 0.06)
+    )
+
+
 class IconMotionContractTests(unittest.TestCase):
     def test_only_the_implemented_gpt_profile_activates_motion(self):
         self.assertIn(":root[data-icon-animation='gpt']", ICON_MOTION_CSS)
@@ -38,6 +71,23 @@ class IconMotionContractTests(unittest.TestCase):
             ICON_MOTION_CSS, r"transition:\s*opacity 100ms linear !important"
         )
 
+    def test_all_existing_clickable_icon_hosts_receive_motion(self):
+        """Icon을 직접 품은 비버튼 클릭 호스트도 공통 상태 연결에서 빠지지 않는다."""
+        for class_name in (
+            "half-moon",
+            "cpm-item",
+            "q-row",
+            "file-item",
+            "folder-info",
+            "gallery-card",
+            "exif-close",
+            "exif-preview",
+            "drop-empty",
+            "compare-container",
+            "image-area",
+        ):
+            self.assertIn(f".{class_name}", ICON_MOTION_CSS)
+
     def test_interaction_motion_stays_inside_release_quality_limits(self):
         interaction_css = ICON_MOTION_CSS.split("@keyframes", 1)[0]
         rotations = [
@@ -58,12 +108,77 @@ class IconMotionContractTests(unittest.TestCase):
         ]
 
         self.assertTrue(rotations)
-        self.assertLessEqual(max(rotations), 14)
+        self.assertLessEqual(max(rotations), 18)
         self.assertTrue(scales)
-        self.assertGreaterEqual(min(scales), 0.94)
-        self.assertLessEqual(max(scales), 1.04)
+        self.assertGreaterEqual(min(scales), 0.90)
+        self.assertLessEqual(max(scales), 1.12)
         self.assertLessEqual(max(hover_durations), 190)
         self.assertLessEqual(max(press_durations), 100)
+
+    def test_every_semantic_profile_has_a_perceptible_hover_gesture(self):
+        """Enabled motion must be visible before the shared press feedback.
+
+        When a semantic profile has no hover gesture, the only remaining
+        transform is the common press scale.  A screen full of those icons
+        therefore feels both motionless and mechanically identical.
+        """
+
+        profiles = _semantic_hover_profiles()
+        active = {kind: value for kind, value in profiles.items() if kind != "quiet"}
+        missing = sorted(kind for kind, value in active.items() if value == "none")
+        faint = sorted(
+            kind
+            for kind, value in active.items()
+            if value != "none" and not _gesture_is_perceptible(value)
+        )
+        self.assertEqual(missing, [], f"hover 동작이 없는 의미군: {missing}")
+        self.assertEqual(faint, [], f"눈에 잘 안 보이는 의미군: {faint}")
+
+    def test_semantic_profiles_do_not_collapse_into_one_motion(self):
+        profiles = _semantic_hover_profiles()
+        active = {
+            kind: value
+            for kind, value in profiles.items()
+            if kind != "quiet" and value != "none"
+        }
+        for left, right in (
+            ("travel-up", "travel-down"),
+            ("travel-left", "travel-right"),
+            ("cycle-cw", "cycle-ccw"),
+            ("inspect", "configure"),
+            ("play", "pause"),
+            ("store", "delete"),
+            ("signal", "compute"),
+        ):
+            self.assertNotEqual(active[left], active[right], f"{left}/{right} 동작이 같습니다")
+
+        operators = {
+            operator
+            for transform in active.values()
+            for operator in ("translate", "translateX", "translateY", "rotate", "scale")
+            if f"{operator}(" in transform
+        }
+        self.assertEqual(
+            operators,
+            {"translate", "translateX", "translateY", "rotate", "scale"},
+        )
+        repeated = {
+            transform
+            for transform in set(active.values())
+            if list(active.values()).count(transform) > 3
+        }
+        self.assertEqual(repeated, set(), f"너무 많은 의미군이 같은 동작을 공유합니다: {repeated}")
+
+    def test_internal_part_gestures_are_not_subpixel_only(self):
+        gestures = re.findall(
+            r"--icon-part-hover-transform:\s*([^;]+)", ICON_MOTION_CSS
+        )
+        faint = [
+            value.strip()
+            for value in gestures
+            if not _gesture_is_perceptible(value, min_translation=1.6)
+        ]
+        self.assertEqual(faint, [], f"눈에 잘 안 보이는 SVG 파츠 동작: {faint}")
 
     def test_active_and_focus_do_not_leave_persistent_icon_transforms(self):
         self.assertNotIn("--icon-selected-transform", ICON_MOTION_CSS)
@@ -83,6 +198,18 @@ class IconMotionContractTests(unittest.TestCase):
         self.assertIsNotNone(quiet_whole_icons)
         for icon_name in ("wand", "sliders", "target", "move"):
             self.assertIn(f"[data-icon-name='{icon_name}']", quiet_whole_icons.group(1))
+
+        suppressed_names = set(re.findall(r"data-icon-name='([a-z-]+)'", quiet_whole_icons.group(1)))
+        part_driven_names: set[str] = set()
+        for chunk in ICON_MOTION_CSS.split("}"):
+            if "--icon-part-hover-transform" not in chunk:
+                continue
+            part_driven_names.update(re.findall(r"data-icon-name='([a-z-]+)'", chunk))
+        self.assertEqual(
+            suppressed_names - part_driven_names,
+            set(),
+            "whole-icon hover를 끈 아이콘에는 보이는 part 동작이 있어야 합니다",
+        )
 
         self.assertNotRegex(
             ICON_MOTION_CSS,
