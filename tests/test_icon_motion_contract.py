@@ -38,6 +38,57 @@ class IconMotionContractTests(unittest.TestCase):
             ICON_MOTION_CSS, r"transition:\s*opacity 100ms linear !important"
         )
 
+    def test_interaction_motion_stays_inside_release_quality_limits(self):
+        interaction_css = ICON_MOTION_CSS.split("@keyframes", 1)[0]
+        rotations = [
+            abs(float(value))
+            for value in re.findall(r"rotate\((-?\d+(?:\.\d+)?)deg\)", interaction_css)
+        ]
+        scales = [
+            float(value)
+            for value in re.findall(r"scale(?:X|Y)?\((\d*\.\d+|\d+)\)", interaction_css)
+        ]
+        hover_durations = [
+            int(value)
+            for value in re.findall(r"--icon-hover-duration:\s*(\d+)ms", ICON_MOTION_CSS)
+        ]
+        press_durations = [
+            int(value)
+            for value in re.findall(r"--icon-press-duration:\s*(\d+)ms", ICON_MOTION_CSS)
+        ]
+
+        self.assertTrue(rotations)
+        self.assertLessEqual(max(rotations), 14)
+        self.assertTrue(scales)
+        self.assertGreaterEqual(min(scales), 0.94)
+        self.assertLessEqual(max(scales), 1.04)
+        self.assertLessEqual(max(hover_durations), 190)
+        self.assertLessEqual(max(press_durations), 100)
+
+    def test_active_and_focus_do_not_leave_persistent_icon_transforms(self):
+        self.assertNotIn("--icon-selected-transform", ICON_MOTION_CSS)
+        self.assertNotIn("--icon-focus-transform", ICON_MOTION_CSS)
+        self.assertNotRegex(ICON_MOTION_CSS, r"animation:[^;]*\bboth\b")
+
+        hover_position = ICON_MOTION_CSS.index("@media (hover: hover) and (pointer: fine)")
+        press_position = ICON_MOTION_CSS.index("):active .icon[data-icon-motion]")
+        self.assertLess(hover_position, press_position)
+
+    def test_refined_semantic_overrides_avoid_misaligned_whole_icon_motion(self):
+        quiet_whole_icons = re.search(
+            r"\.icon:is\((.*?)\)\s*\{\s*--icon-hover-transform:\s*none;",
+            ICON_MOTION_CSS,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(quiet_whole_icons)
+        for icon_name in ("wand", "sliders", "target", "move"):
+            self.assertIn(f"[data-icon-name='{icon_name}']", quiet_whole_icons.group(1))
+
+        self.assertNotRegex(
+            ICON_MOTION_CSS,
+            r"data-icon-name='save'[^\{]*\.icon-part-3\s*\{",
+        )
+
     def test_motion_styles_do_not_mutate_layout_or_hit_area_properties(self):
         layout_declaration = re.compile(
             r"^\s*(?:display|position|inset|top|right|bottom|left|width|height|"
@@ -47,13 +98,14 @@ class IconMotionContractTests(unittest.TestCase):
         self.assertIsNone(layout_declaration.search(ICON_MOTION_CSS))
 
     def test_infinite_motion_is_limited_to_running_or_loading_states(self):
-        self.assertEqual(len(re.findall(r"\binfinite\b", ICON_MOTION_CSS)), 4)
+        self.assertEqual(len(re.findall(r"\binfinite\b", ICON_MOTION_CSS)), 3)
         self.assertIn(
-            ":where([aria-busy='true'], .is-loading, .loading, .busy.on)",
+            ":where([aria-busy='true'], .is-loading, .busy.on)",
             ICON_MOTION_CSS,
         )
-        self.assertIn(".ai-loading .icon[data-icon-motion='compute']", ICON_MOTION_CSS)
-        self.assertIn(":where(.running-badge, .queue-pin.running)", ICON_MOTION_CSS)
+        self.assertNotIn(".ai-loading .icon[data-icon-motion='compute']", ICON_MOTION_CSS)
+        self.assertNotIn(".running-badge", ICON_MOTION_CSS)
+        self.assertIn(".queue-pin.running .icon[data-icon-motion='play']", ICON_MOTION_CSS)
         self.assertIn(".q-row.active .icon[data-icon-motion='wait']", ICON_MOTION_CSS)
 
 
