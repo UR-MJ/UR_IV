@@ -18,7 +18,7 @@ export type ActionName =
   | 'run_adetailer_single' | 'run_adetailer_batch' | 'stop_adetailer_batch'
   | 'run_sam3_single' | 'run_sam3_batch' | 'run_refine' | 'open_ad_files' | 'open_ad_folder'
   | 'open_batch_files' | 'open_upscale_files'
-  | 'caption_pick_files' | 'caption_pick_folder' | 'caption_pick_outdir'
+  | 'caption_pick_files' | 'caption_pick_folder' | 'caption_pick_outdir' | 'caption_pick_caformer_dir'
   | 'apply_search_result' | 'add_search_to_queue' | 'export_search_results' | 'import_search_results'
   | 'reset_prompt_deck'
   | 'search_events' | 'select_event' | 'event_add_to_queue' | 'event_generate_now'
@@ -56,6 +56,7 @@ export type BackendEvent =
   | 'upscalersReady' | 'ollamaModelsReady' | 'adetailerModelsReady'
   | 'batchFilesSelected' | 'adetailerResult' | 'adetailerProgress' | 'sam3Result' | 'sam3Progress'
   | 'captionFilesSelected' | 'captionProgress' | 'captionDone' | 'captionOutDirSelected'
+  | 'captionModelDirSelected' | 'captionRuntimeReady'
   | 'eventSearchProgress' | 'eventSearchResults' | 'eventImportResults'
   | 'ollamaResult' | 'genNlResult' | 'vramUpdated' | 'showNotification' | 'tabChanged'
   | 'backendSelectionRequired' | 'backendProbeResult' | 'backendSelected' | 'comfyWorkflowPicked'
@@ -63,6 +64,66 @@ export type BackendEvent =
   | 'creatorStateChanged' | 'creatorProgress' | 'creatorResult' | 'creatorMediaSelected'
   | 'comicStoryboardReady' | 'comicDocumentChanged'
   | 'loraManagerUrlReady' | 'refineResult'
+
+// ── Batch / Caption ──
+
+export type CaptionEngineMode = 'caformer' | 'torii' | 'combined' | 'ollama'
+
+export interface CaptionRuntimeSnapshot {
+  clientToken: string
+  requestId: number
+  caformer?: { available?: boolean; modelDir?: string; error?: string }
+  torii?: { available?: boolean; model?: string; error?: string }
+  onnxruntime?: boolean
+  error?: string
+}
+
+export interface CaptionProgressEvent {
+  clientToken: string
+  jobId: string
+  index: number
+  total: number
+  path: string
+  caption?: string
+  txtPath?: string
+  skipped?: boolean
+  error?: string
+}
+
+export interface CaptionDoneEvent {
+  clientToken: string
+  jobId: string
+  total: number
+  ok: number
+  failed: number
+  skipped?: number
+  error?: string
+  status?: 'done'
+}
+
+export interface CaptionJobStatus {
+  clientToken: string
+  jobId: string
+  status: 'idle' | 'running' | 'done'
+  total?: number
+  ok?: number
+  failed?: number
+  skipped?: number
+  error?: string
+  current?: number
+  processed?: number
+  succeeded?: number
+  engine?: CaptionEngineMode
+  items?: Array<CaptionProgressEvent | null>
+}
+
+export interface CaptionStartResponse {
+  clientToken: string
+  jobId: string
+  started?: boolean
+  total?: number
+  error?: string
+}
 
 /** show_toast 페이로드 */
 export interface ShowToastPayload { type: 'success' | 'error' | 'info' | 'warning'; msg: string }

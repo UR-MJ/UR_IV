@@ -169,7 +169,8 @@ _WEB_METHODS = frozenset({
     "exportCompareGif", "getTabDefaults", "getADetailerModels",
     "requestADetailerModels", "getYoloModelLabel", "refreshYoloModels",
     "getTagSuggestions", "generateXYZCombinations", "captionImage",
-    "startCaptionBatch", "loadCaption", "saveCaption", "getImageExif",
+    "startCaptionBatch", "requestCaptionRuntime", "getCaptionJobStatus",
+    "loadCaption", "saveCaption", "getImageExif",
     # sam-extra 임베드 LoRA Manager 주소 조회 (워크플로 4)
     "requestLoraManagerUrl",
 })
@@ -177,7 +178,8 @@ _WEB_METHODS = frozenset({
 _WEB_SIGNALS = frozenset({
     "imageGenerated", "generationStarted", "generationError", "generationProgress",
     "editorImageLoaded", "editorResult", "captionFilesSelected", "captionProgress",
-    "captionDone", "captionOutDirSelected", "i2iImageLoaded", "galleryFolderLoaded",
+    "captionDone", "captionOutDirSelected", "captionModelDirSelected", "captionRuntimeReady",
+    "i2iImageLoaded", "galleryFolderLoaded",
     "inpaintImageLoaded", "searchStatus", "searchResultLineage", "loraInserted", "loraStackLoaded",
     "yoloModelUpdated", "condRulesLoaded", "batchFilesSelected", "ollamaResult",
     "genNlResult", "globalWeightsLoaded", "uiPrefsLoaded", "compareImageLoaded",

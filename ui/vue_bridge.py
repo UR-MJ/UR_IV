@@ -80,9 +80,11 @@ class VueBridge(QObject):
     editorImageLoaded = pyqtSignal(str)   # file path
     editorWatermarkImageLoaded = pyqtSignal(str)   # 워터마크로 쓸 이미지 파일 경로
     captionFilesSelected = pyqtSignal(str)  # JSON [path] — 캡션 대상 이미지
-    captionProgress = pyqtSignal(str)       # JSON {index,total,path,caption,error}
-    captionDone = pyqtSignal(str)           # JSON {total,ok,failed}
+    captionProgress = pyqtSignal(str)       # JSON {clientToken,jobId,index,total,path,caption,error}
+    captionDone = pyqtSignal(str)           # JSON {clientToken,jobId,total,ok,failed,skipped}
     captionOutDirSelected = pyqtSignal(str)  # 캡션 저장 폴더 경로
+    captionModelDirSelected = pyqtSignal(str)  # CAFormer model.onnx 폴더
+    captionRuntimeReady = pyqtSignal(str)    # JSON {caformer,torii,onnxruntime}
     i2iImageLoaded = pyqtSignal(str)     # file path
     galleryFolderLoaded = pyqtSignal(str)  # folder path
     inpaintImageLoaded = pyqtSignal(str)   # file path (PngInfo + InpaintView 공용)
@@ -191,6 +193,12 @@ class VueBridge(QObject):
         self._backend_runtime_lock = threading.Lock()
         self._generation_api_inflight = None
         self._generation_api_lock = threading.Lock()
+        self._caption_job_lock = threading.Lock()
+        # Caption signals are broadcast by QWebChannel.  Keep a small keyed
+        # journal so the initiating Vue client can ignore another client's job
+        # and recover state after a transient WebChannel reconnect.
+        self._caption_state_lock = threading.Lock()
+        self._caption_job_states = {}
         self.adetailerModelsReady.connect(self._apply_adetailer_models_json)
 
     def _run_async_lookup(self, key, loader, signal):
@@ -631,7 +639,7 @@ class VueBridge(QObject):
                 'set_auto_start', 'save_extension_dir', 'install_extension',
                 'update_extension', 'check_extension', 'check_extensions',
                 'set_install_root', 'use_managed_install',
-                'set_primary_model_engine',
+                'set_primary_model_engine', 'set_extra_args',
             }
             if action not in allowed:
                 raise ValueError(f'지원하지 않는 runtime 작업입니다: {action}')
@@ -3598,7 +3606,78 @@ class VueBridge(QObject):
         except Exception as e:
             return json.dumps({'error': str(e)})
 
-    # ── 이미지 캡션 (Ollama 비전 모델, taggui 방식 .txt 사이드카) ──
+    # ── 이미지 캡션 (CAFormer 태그 + ToriiGate/Ollama 자연어) ──
+    @staticmethod
+    def _caption_identifier(value, *, fallback: str = '') -> str:
+        """Return a bounded identifier safe to echo through broadcast signals."""
+        import re
+        cleaned = re.sub(r'[^A-Za-z0-9_.-]', '', str(value or ''))[:128]
+        return cleaned or fallback
+
+    @staticmethod
+    def _caption_job_key(client_token: str, job_id: str) -> str:
+        return f'{client_token}\x1f{job_id}'
+
+    def _begin_caption_job_state(self, payload: dict, total: int) -> None:
+        """Create the reconnect journal entry before the worker thread starts."""
+        import time
+        key = self._caption_job_key(payload['clientToken'], payload['jobId'])
+        state = {
+            'status': 'running',
+            'clientToken': payload['clientToken'],
+            'jobId': payload['jobId'],
+            'engine': payload['engine'],
+            'total': int(total),
+            'ok': 0,
+            'succeeded': 0,
+            'failed': 0,
+            'skipped': 0,
+            'processed': 0,
+            'error': '',
+            'items': [None] * int(total),
+            'updatedAt': time.time(),
+        }
+        with self._caption_state_lock:
+            self._caption_job_states[key] = state
+            # Results can contain captions, so retain only a small recovery window.
+            if len(self._caption_job_states) > 8:
+                oldest = sorted(
+                    self._caption_job_states,
+                    key=lambda item: self._caption_job_states[item].get('updatedAt', 0),
+                )
+                for stale_key in oldest[:-8]:
+                    self._caption_job_states.pop(stale_key, None)
+
+    def _update_caption_job_state(
+        self,
+        payload: dict,
+        *,
+        item: dict | None = None,
+        **updates,
+    ) -> None:
+        """Update counts/result journal without exposing mutable state across threads."""
+        import time
+        key = self._caption_job_key(payload['clientToken'], payload['jobId'])
+        with self._caption_state_lock:
+            state = self._caption_job_states.get(key)
+            if state is None:
+                return
+            if item is not None:
+                index = item.get('index')
+                if isinstance(index, int) and 0 <= index < len(state['items']):
+                    # Recovery needs the rendered text/status, not duplicate tag
+                    # score metadata that can make large batch journals enormous.
+                    state['items'][index] = {
+                        key: item[key]
+                        for key in (
+                            'clientToken', 'jobId', 'index', 'total', 'path',
+                            'caption', 'error', 'skipped', 'engine', 'txtPath',
+                        )
+                        if key in item
+                    }
+            state.update(updates)
+            state['updatedAt'] = time.time()
+
     def _caption_txt_path(self, image_path: str, out_dir: str = '') -> str:
         """캡션 .txt 경로. out_dir 지정+유효 시 그 폴더에 {basename}.txt, 아니면 이미지 옆."""
         import os
@@ -3607,127 +3686,623 @@ class VueBridge(QObject):
             return os.path.join(out_dir, base + '.txt')
         return os.path.splitext(image_path)[0] + '.txt'
 
+    @staticmethod
+    def _caption_mode(payload: dict) -> str:
+        """신규 engine 키와 기존 Ollama 전용 payload를 함께 수용한다."""
+        mode = str(payload.get('engine') or payload.get('mode') or 'ollama').strip().lower()
+        if mode not in {'ollama', 'caformer', 'torii', 'combined'}:
+            raise ValueError('지원하지 않는 캡션 처리 방식입니다')
+        return mode
+
+    @staticmethod
+    def _caption_caformer_options(payload: dict) -> dict:
+        return {
+            'includeCharacters': bool(payload.get('includeCharacters', True)),
+            'includeRating': bool(payload.get('includeRating', False)),
+            'thresholdMode': (
+                'best' if bool(payload.get('useBestThresholds', True))
+                else str(payload.get('thresholdMode') or 'category')
+            ),
+            'generalThreshold': payload.get('generalThreshold', 0.35),
+            'characterThreshold': payload.get('characterThreshold', 0.43),
+            'ratingThreshold': payload.get('ratingThreshold', 0.38),
+        }
+
+    @staticmethod
+    def _caption_result_payload(result) -> dict:
+        return {
+            'caption': result.text,
+            'engine': result.mode,
+            'naturalCaption': result.natural_caption,
+            'tags': [
+                {'name': item.name, 'score': round(float(item.score), 6), 'category': item.category}
+                for item in result.tags
+            ],
+        }
+
+    @staticmethod
+    def _write_caption_atomic(path: str, text: str) -> None:
+        """중단 시 반쪽짜리 sidecar를 남기지 않는 동일 폴더 원자 저장."""
+        import os
+        tmp = path + '.tmp'
+        try:
+            with open(tmp, 'w', encoding='utf-8', newline='') as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, path)
+        finally:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError:
+                pass
+
+    def _prepare_caption_payload(self, raw_payload: dict, *, batch: bool) -> tuple[dict, list[str]]:
+        """외부 payload의 경로·모드·숫자를 검증하고 정규화한다."""
+        import math
+        import os
+        import uuid
+        from core.path_safety import safe_output_dir
+
+        payload = dict(raw_payload or {})
+        payload['clientToken'] = self._caption_identifier(
+            payload.get('clientToken'), fallback='legacy')
+        payload['jobId'] = self._caption_identifier(
+            payload.get('jobId'), fallback=uuid.uuid4().hex)
+        mode = self._caption_mode(payload)
+        raw_files = payload.get('files') if batch else [payload.get('path')]
+        if isinstance(raw_files, str):
+            raw_files = [raw_files]
+        files, seen = [], set()
+        for raw in (raw_files or []):
+            clean = _normalize_vue_path(str(raw or ''))
+            if not clean:
+                continue
+            key = os.path.normcase(os.path.abspath(clean))
+            if key not in seen:
+                seen.add(key)
+                files.append(clean)
+        if not files:
+            raise ValueError('대상 이미지가 없습니다')
+
+        model = str(payload.get('model') or '').strip()
+        if mode == 'ollama' and not model:
+            raise ValueError('Ollama 비전 모델을 지정하세요')
+        if mode in {'torii', 'combined'} and model and 'toriigate' not in model.casefold():
+            raise ValueError('ToriiGate 처리에는 ToriiGate Ollama 모델을 지정하세요')
+
+        payload['engine'] = mode
+        payload['model'] = model
+        payload['url'] = str(payload.get('url') or 'http://localhost:11434').strip().rstrip('/')
+        payload['prompt'] = str(payload.get('prompt') or '')[:20000]
+        def _bool_value(value, default: bool) -> bool:
+            if value is None:
+                return default
+            if isinstance(value, str):
+                return value.strip().lower() not in {'', '0', 'false', 'no', 'off'}
+            return bool(value)
+
+        payload['save'] = _bool_value(payload.get('save'), True)
+        payload['overwrite'] = _bool_value(payload.get('overwrite'), False)
+        payload['includeCharacters'] = _bool_value(payload.get('includeCharacters'), True)
+        payload['includeRating'] = _bool_value(payload.get('includeRating'), False)
+        payload['useBestThresholds'] = _bool_value(payload.get('useBestThresholds'), True)
+        payload['timeout'] = max(30, min(900, int(payload.get('timeout') or 300)))
+        separator = str(payload.get('separator') or '\n\n').replace('\r', '')
+        payload['separator'] = separator[:32] or '\n\n'
+        payload['caformerModelDir'] = str(payload.get('caformerModelDir') or '').strip()
+
+        if mode in {'caformer', 'combined'}:
+            for key, default in (
+                ('generalThreshold', 0.35),
+                ('characterThreshold', 0.43),
+                ('ratingThreshold', 0.38),
+            ):
+                try:
+                    value = float(payload.get(key, default))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f'{key} 값이 올바르지 않습니다') from exc
+                if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+                    raise ValueError(f'{key} 값은 0과 1 사이여야 합니다')
+                payload[key] = value
+
+        out_dir = str(payload.get('outDir') or '').strip()
+        if out_dir and payload['save']:
+            out_dir = safe_output_dir(out_dir, create=True)
+        payload['outDir'] = out_dir
+
+        if payload['save']:
+            targets: dict[str, str] = {}
+            for image_path in files:
+                target = self._caption_txt_path(image_path, out_dir)
+                key = os.path.normcase(os.path.abspath(target))
+                previous = targets.get(key)
+                if previous and os.path.normcase(previous) != os.path.normcase(image_path):
+                    raise ValueError(
+                        '서로 다른 동명 이미지가 같은 캡션 파일에 충돌합니다. '
+                        '한 종류씩 처리하거나 이미지 이름을 구분하세요.'
+                    )
+                targets[key] = image_path
+        return payload, files
+
+    @staticmethod
+    def _create_caption_engine(payload: dict):
+        from core.image_captioning import ImageCaptioningEngine
+        return ImageCaptioningEngine(
+            caformer_model_dir=(payload.get('caformerModelDir') or None),
+            # 태그 추론은 warm 0.1초 미만이라 CPU로 고정해 Forge/Comfy/Torii VRAM과
+            # 경쟁하지 않는다. core API 자체는 명시 provider가 없으면 GPU도 지원한다.
+            caformer_providers=('CPUExecutionProvider',),
+            ollama_base_url=payload.get('url') or 'http://localhost:11434',
+            ollama_model=(payload.get('model') or None),
+            torii_model=(payload.get('model') or None),
+            max_caption_pixels=1_000_000,
+        )
+
+    def _run_caption_inference(self, engine, image_path: str, payload: dict):
+        return engine.caption_result(
+            image_path,
+            payload['engine'],
+            caformer_options=self._caption_caformer_options(payload),
+            prompt=payload.get('prompt', ''),
+            separator=payload.get('separator', '\n\n'),
+            ollama_model=(payload.get('model') or None),
+            ollama_base_url=payload.get('url') or 'http://localhost:11434',
+            timeout=payload.get('timeout', 300),
+        )
+
+    def _caption_runtime_snapshot(self, payload: dict) -> str:
+        """디스크 복제나 다운로드 없이 현재 로컬 추론 준비 상태만 확인한다."""
+        import importlib.util
+        from core.error_handler import sanitize_for_ui
+        from core.image_captioning import (
+            TORIIGATE_BF16_MODEL,
+            discover_caformer_model,
+            select_toriigate_model,
+        )
+        from core.ollama_client import OllamaClient
+
+        try:
+            request_id = int(payload.get('requestId') or 0)
+        except (TypeError, ValueError):
+            request_id = 0
+        result = {
+            'clientToken': self._caption_identifier(payload.get('clientToken')),
+            'requestId': request_id,
+            'onnxruntime': importlib.util.find_spec('onnxruntime') is not None,
+        }
+        try:
+            model_dir = discover_caformer_model(payload.get('caformerModelDir') or None)
+            result['caformer'] = {
+                'available': result['onnxruntime'],
+                'modelDir': str(model_dir).replace('\\', '/'),
+            }
+            if not result['onnxruntime']:
+                result['caformer']['error'] = 'onnxruntime가 설치되지 않았습니다.'
+        except Exception as exc:
+            logger.warning('CAFormer runtime discovery failed: %s', exc)
+            result['caformer'] = {'available': False, 'modelDir': '', 'error': sanitize_for_ui(exc)}
+
+        url = str(payload.get('url') or 'http://localhost:11434').rstrip('/')
+        requested = str(payload.get('toriiModel') or '').strip()
+        try:
+            models = OllamaClient(url, TORIIGATE_BF16_MODEL).list_models()
+            selected = requested or select_toriigate_model(models)
+            matches = {model.casefold() for model in models}
+            available = selected.casefold() in matches and 'toriigate' in selected.casefold()
+            result['torii'] = {
+                'available': available,
+                'model': selected,
+            }
+            if not available:
+                result['torii']['error'] = 'Ollama에서 ToriiGate 모델을 찾지 못했습니다.'
+        except Exception as exc:
+            logger.warning('ToriiGate runtime discovery failed: %s', exc)
+            result['torii'] = {
+                'available': False,
+                'model': requested or TORIIGATE_BF16_MODEL,
+                'error': sanitize_for_ui(exc),
+            }
+        return json.dumps(result, ensure_ascii=False)
+
+    @pyqtSlot(str)
+    def requestCaptionRuntime(self, payload_json: str):
+        """CAFormer/Ollama 상태 확인은 GUI 스레드 밖에서 수행한다."""
+        try:
+            payload = json.loads(payload_json) if payload_json else {}
+        except (TypeError, json.JSONDecodeError):
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        payload['clientToken'] = self._caption_identifier(payload.get('clientToken'))
+        import hashlib
+        lookup_key = 'caption-runtime-' + hashlib.sha1(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode('utf-8')
+        ).hexdigest()[:10]
+        self._run_async_lookup(
+            lookup_key,
+            lambda: self._caption_runtime_snapshot(payload),
+            self.captionRuntimeReady,
+        )
+
     @pyqtSlot(str, result=str)
     def captionImage(self, payload_json: str) -> str:
-        """단일 이미지 캡션. payload {path, prompt, model, url, save, outDir}. → {caption, txtPath, saved}."""
+        """하위 호환 단일 호출. 제품 UI는 startCaptionBatch의 비동기 1장 경로를 쓴다."""
+        acquired = False
         try:
-            import os
-            from core.ollama_client import OllamaClient
-            p = json.loads(payload_json) if payload_json else {}
-            path = p.get('path', '')
-            if not path or not os.path.exists(path):
-                return json.dumps({"error": "이미지 경로 없음"})
-            model = (p.get('model') or '').strip()
-            if not model:
-                return json.dumps({"error": "캡션 모델을 지정하세요"})
-            url = p.get('url') or 'http://localhost:11434'
-            cap = OllamaClient(url, model).caption_image(path, p.get('prompt', ''))
-            txt = self._caption_txt_path(path, p.get('outDir', ''))
+            from contextlib import nullcontext
+            from core.resource_coordinator import get_generation_coordinator
+            p, files = self._prepare_caption_payload(
+                json.loads(payload_json) if payload_json else {}, batch=False)
+            acquired = self._caption_job_lock.acquire(blocking=False)
+            if not acquired:
+                return json.dumps({'error': '다른 캡션 작업이 이미 실행 중입니다'}, ensure_ascii=False)
+            lease = (
+                get_generation_coordinator().reserve('caption', unload_llm=False, timeout=0)
+                if p['engine'] != 'caformer' else nullcontext()
+            )
+            with lease:
+                try:
+                    result = self._run_caption_inference(
+                        self._create_caption_engine(p), files[0], p)
+                finally:
+                    if p['engine'] != 'caformer' and (
+                        p['engine'] in {'torii', 'combined'}
+                        or bool(p.get('unloadAfter', False))
+                    ):
+                        try:
+                            from core.image_captioning import TORIIGATE_BF16_MODEL
+                            from core.ollama_client import OllamaClient
+                            OllamaClient(
+                                p.get('url') or 'http://localhost:11434',
+                                p.get('model') or TORIIGATE_BF16_MODEL,
+                            ).unload()
+                        except Exception:
+                            logger.debug('single caption Ollama unload failed', exc_info=True)
+            cap = result.text
+            if not cap.strip():
+                raise RuntimeError('모델이 빈 캡션을 반환했습니다')
+            txt = self._caption_txt_path(files[0], p.get('outDir', ''))
             saved = False
             if p.get('save', True):
-                with open(txt, 'w', encoding='utf-8') as f:
-                    f.write(cap)
+                self._write_caption_atomic(txt, cap)
                 saved = True
-            return json.dumps({"caption": cap, "txtPath": txt.replace('\\', '/'), "saved": saved},
-                              ensure_ascii=False)
+            response = self._caption_result_payload(result)
+            response.update({'txtPath': txt.replace('\\', '/'), 'saved': saved})
+            return json.dumps(response, ensure_ascii=False)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            logger.exception('single caption failed')
+            from core.error_handler import sanitize_for_ui
+            return json.dumps({'error': sanitize_for_ui(e)}, ensure_ascii=False)
+        finally:
+            if acquired:
+                self._caption_job_lock.release()
 
     @pyqtSlot(str, result=str)
     def startCaptionBatch(self, payload_json: str) -> str:
-        """여러 이미지 일괄 캡션 (백그라운드 스레드). payload {files,prompt,model,url,save,overwrite}.
-        진행 상황은 captionProgress 시그널, 완료는 captionDone 시그널로 통지."""
+        """단일/여러 이미지의 CAFormer/ToriiGate 캡션을 백그라운드에서 직렬 실행."""
+        job_locked = False
+        thread_started = False
+        p = None
+        files = []
         try:
-            import os
-            import threading
-            from core.ollama_client import OllamaClient
-            p = json.loads(payload_json) if payload_json else {}
-            files = [f for f in (p.get('files') or []) if f and os.path.exists(f)]
-            if not files:
-                return json.dumps({"error": "대상 이미지 없음"})
-            model = (p.get('model') or '').strip()
-            if not model:
-                return json.dumps({"error": "캡션 모델을 지정하세요"})
-            url = p.get('url') or 'http://localhost:11434'
-            prompt = p.get('prompt', '')
-            save = bool(p.get('save', True))
-            overwrite = bool(p.get('overwrite', False))
-            out_dir = p.get('outDir', '') or ''
-            if out_dir:
-                try:
-                    os.makedirs(out_dir, exist_ok=True)
-                except Exception:
-                    pass
+            p, files = self._prepare_caption_payload(
+                json.loads(payload_json) if payload_json else {}, batch=True)
+            if not self._caption_job_lock.acquire(blocking=False):
+                return json.dumps({
+                    'clientToken': p['clientToken'],
+                    'jobId': p['jobId'],
+                    'error': '다른 캡션 작업이 이미 실행 중입니다',
+                }, ensure_ascii=False)
+            job_locked = True
+            self._begin_caption_job_state(p, len(files))
 
-            def _emit(d):
-                self.captionProgress.emit(json.dumps(d, ensure_ascii=False))
+            def _emit(d, **state_updates):
+                event = {
+                    'clientToken': p['clientToken'],
+                    'jobId': p['jobId'],
+                }
+                event.update(d)
+                self._update_caption_job_state(p, item=event, **state_updates)
+                try:
+                    self.captionProgress.emit(json.dumps(event, ensure_ascii=False))
+                except RuntimeError:
+                    # The WebChannel can disappear while a daemon worker is still
+                    # finishing.  The journal remains queryable after reconnect.
+                    logger.debug('caption progress receiver is unavailable', exc_info=True)
 
             def _run():
-                client = OllamaClient(url, model)
-                total, ok, failed = len(files), 0, 0
-                for i, path in enumerate(files):
-                    txt = self._caption_txt_path(path, out_dir)
-                    pn = path.replace('\\', '/')
-                    if save and not overwrite and os.path.exists(txt):
-                        try:
-                            with open(txt, encoding='utf-8') as f:
-                                existing = f.read().strip()
-                        except Exception:
-                            existing = ''
-                        ok += 1
-                        _emit({"index": i, "total": total, "path": pn, "caption": existing, "skipped": True})
-                        continue
-                    try:
-                        cap = client.caption_image(path, prompt)
-                        if save:
-                            with open(txt, 'w', encoding='utf-8') as f:
-                                f.write(cap)
-                        ok += 1
-                        _emit({"index": i, "total": total, "path": pn, "caption": cap})
-                    except Exception as e:
-                        failed += 1
-                        _emit({"index": i, "total": total, "path": pn, "error": str(e)})
-                self.captionDone.emit(json.dumps({"total": total, "ok": ok, "failed": failed}))
+                import os
+                from contextlib import nullcontext
+                from core.error_handler import sanitize_for_ui
+                from core.resource_coordinator import get_generation_coordinator
 
-            threading.Thread(target=_run, daemon=True).start()
-            return json.dumps({"started": True, "total": len(files)})
+                total = len(files)
+                succeeded = failed = skipped = processed = 0
+                first_error = ''
+                job_error = ''
+                try:
+                    lease = (
+                        get_generation_coordinator().reserve(
+                            'caption', unload_llm=False, timeout=0)
+                        if p['engine'] != 'caformer' else nullcontext()
+                    )
+                    with lease:
+                        try:
+                            engine = self._create_caption_engine(p)
+                            for i, path in enumerate(files):
+                                public_path = path.replace('\\', '/')
+                                public_txt = ''
+                                try:
+                                    txt = self._caption_txt_path(path, p.get('outDir', ''))
+                                    public_txt = txt.replace('\\', '/')
+                                    if p['save'] and not p['overwrite'] and os.path.exists(txt):
+                                        with open(txt, encoding='utf-8') as handle:
+                                            existing = handle.read().strip()
+                                        # 0바이트/공백 파일은 실패 중단 흔적일 수 있으므로 재생성한다.
+                                        if existing:
+                                            skipped += 1
+                                            processed = i + 1
+                                            _emit(
+                                                {'index': i, 'total': total, 'path': public_path,
+                                                 'txtPath': public_txt, 'caption': existing,
+                                                 'skipped': True},
+                                                status='running',
+                                                ok=succeeded + skipped,
+                                                succeeded=succeeded,
+                                                failed=failed,
+                                                skipped=skipped,
+                                                processed=processed,
+                                            )
+                                            continue
+                                    result = self._run_caption_inference(engine, path, p)
+                                    caption = result.text
+                                    if not caption.strip():
+                                        raise RuntimeError('모델이 빈 캡션을 반환했습니다')
+                                    if p['save']:
+                                        self._write_caption_atomic(txt, caption)
+                                    succeeded += 1
+                                    processed = i + 1
+                                    event = {
+                                        'index': i,
+                                        'total': total,
+                                        'path': public_path,
+                                        'txtPath': public_txt,
+                                    }
+                                    event.update(self._caption_result_payload(result))
+                                    _emit(
+                                        event,
+                                        status='running',
+                                        ok=succeeded + skipped,
+                                        succeeded=succeeded,
+                                        failed=failed,
+                                        skipped=skipped,
+                                        processed=processed,
+                                    )
+                                except Exception as exc:
+                                    logger.exception('caption failed for %s', path)
+                                    failed += 1
+                                    processed = i + 1
+                                    error = sanitize_for_ui(exc)
+                                    if not first_error:
+                                        first_error = error
+                                    failed_event = {
+                                        'index': i,
+                                        'total': total,
+                                        'path': public_path,
+                                        'error': error,
+                                    }
+                                    if public_txt:
+                                        failed_event['txtPath'] = public_txt
+                                    _emit(
+                                        failed_event,
+                                        status='running',
+                                        ok=succeeded + skipped,
+                                        succeeded=succeeded,
+                                        failed=failed,
+                                        skipped=skipped,
+                                        processed=processed,
+                                        error=first_error,
+                                    )
+                        finally:
+                            # Keep the shared generation lease until model cleanup
+                            # completes. Otherwise a newly-started generation could
+                            # acquire the lease and have its Ollama model unloaded.
+                            if p['engine'] != 'caformer' and (
+                                p['engine'] in {'torii', 'combined'}
+                                or bool(p.get('unloadAfter', False))
+                            ):
+                                try:
+                                    from core.image_captioning import TORIIGATE_BF16_MODEL
+                                    from core.ollama_client import OllamaClient
+                                    OllamaClient(
+                                        p.get('url') or 'http://localhost:11434',
+                                        p.get('model') or TORIIGATE_BF16_MODEL,
+                                    ).unload()
+                                except Exception:
+                                    logger.debug('caption Ollama unload failed', exc_info=True)
+                except Exception as exc:
+                    logger.exception('caption job failed')
+                    job_error = sanitize_for_ui(exc)
+                    if not first_error:
+                        first_error = job_error
+                    for i in range(processed, total):
+                        path = files[i]
+                        failed += 1
+                        processed = i + 1
+                        _emit(
+                            {'index': i, 'total': total, 'path': path.replace('\\', '/'),
+                             'error': job_error},
+                            status='running',
+                            ok=succeeded + skipped,
+                            succeeded=succeeded,
+                            failed=failed,
+                            skipped=skipped,
+                            processed=processed,
+                            error=first_error,
+                        )
+                finally:
+                    done_payload = {
+                        'clientToken': p['clientToken'],
+                        'jobId': p['jobId'],
+                        'total': total,
+                        # ok retains the legacy invariant ok + failed == total;
+                        # succeeded/skipped make the two successful outcomes explicit.
+                        'ok': succeeded + skipped,
+                        'succeeded': succeeded,
+                        'failed': failed,
+                        'skipped': skipped,
+                        'processed': processed,
+                        'engine': p['engine'],
+                        'error': job_error or first_error,
+                    }
+                    self._update_caption_job_state(p, status='done', **{
+                        key: done_payload[key]
+                        for key in (
+                            'ok', 'succeeded', 'failed', 'skipped', 'processed', 'error'
+                        )
+                    })
+                    try:
+                        self.captionDone.emit(json.dumps(done_payload, ensure_ascii=False))
+                    except RuntimeError:
+                        logger.debug('caption completion receiver is unavailable', exc_info=True)
+                    finally:
+                        self._caption_job_lock.release()
+
+            threading.Thread(
+                target=_run,
+                daemon=True,
+                name='caption-inference',
+            ).start()
+            thread_started = True
+            return json.dumps({
+                'started': True,
+                'clientToken': p['clientToken'],
+                'jobId': p['jobId'],
+                'total': len(files),
+                'engine': p['engine'],
+            })
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            if job_locked and not thread_started:
+                self._caption_job_lock.release()
+            if p is not None:
+                error = str(e)
+                try:
+                    from core.error_handler import sanitize_for_ui
+                    error = sanitize_for_ui(e)
+                except Exception:
+                    pass
+                for index, path in enumerate(files):
+                    event = {
+                        'clientToken': p['clientToken'],
+                        'jobId': p['jobId'],
+                        'index': index,
+                        'total': len(files),
+                        'path': path.replace('\\', '/'),
+                        'error': error,
+                    }
+                    self._update_caption_job_state(p, item=event)
+                self._update_caption_job_state(
+                    p,
+                    status='done',
+                    ok=0,
+                    succeeded=0,
+                    failed=len(files),
+                    skipped=0,
+                    processed=len(files),
+                    error=error,
+                )
+            logger.exception('unable to start caption job')
+            from core.error_handler import sanitize_for_ui
+            response = {'error': sanitize_for_ui(e)}
+            if p is not None:
+                response.update({
+                    'clientToken': p['clientToken'],
+                    'jobId': p['jobId'],
+                })
+            return json.dumps(response, ensure_ascii=False)
 
     @pyqtSlot(str, result=str)
-    def loadCaption(self, path: str) -> str:
-        """이미지 옆 .txt 사이드카 캡션 읽기 → {caption}."""
+    def getCaptionJobStatus(self, payload_json: str = '') -> str:
+        """Return a journaled caption job so Vue can recover missed Qt signals."""
         try:
-            import os
-            txt = os.path.splitext(path)[0] + '.txt'
+            payload = json.loads(payload_json) if payload_json else {}
+        except (TypeError, json.JSONDecodeError):
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        client_token = self._caption_identifier(payload.get('clientToken'))
+        job_id = self._caption_identifier(payload.get('jobId'))
+        with self._caption_state_lock:
+            if client_token and job_id:
+                key = self._caption_job_key(client_token, job_id)
+                state = self._caption_job_states.get(key)
+                if state is not None:
+                    return json.dumps(state, ensure_ascii=False)
+        return json.dumps({
+            'status': 'idle',
+            'clientToken': client_token,
+            'jobId': job_id,
+        }, ensure_ascii=False)
+
+    @pyqtSlot(str, result=str)
+    def loadCaption(self, payload_or_path: str) -> str:
+        """이미지 옆 또는 선택 출력 폴더의 .txt 사이드카를 안전하게 읽는다."""
+        try:
+            from core.path_safety import safe_output_dir
+            try:
+                payload = json.loads(payload_or_path)
+            except (TypeError, json.JSONDecodeError):
+                payload = {'path': payload_or_path}
+            if not isinstance(payload, dict):
+                payload = {'path': payload_or_path}
+            path = _normalize_vue_path(str(payload.get('path') or ''))
+            if not path:
+                raise ValueError('허용되지 않은 이미지 경로입니다')
+            out_dir = str(payload.get('outDir') or '').strip()
+            if out_dir:
+                out_dir = safe_output_dir(out_dir, create=False)
+            txt = self._caption_txt_path(path, out_dir)
+            public_txt = txt.replace('\\', '/')
             if os.path.exists(txt):
                 with open(txt, encoding='utf-8') as f:
-                    return json.dumps({"caption": f.read().strip()}, ensure_ascii=False)
-            return json.dumps({"caption": ""})
+                    return json.dumps({
+                        "caption": f.read().strip(),
+                        "txtPath": public_txt,
+                    }, ensure_ascii=False)
+            return json.dumps({"caption": "", "txtPath": public_txt}, ensure_ascii=False)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            logger.warning('caption sidecar load failed: %s', e)
+            from core.error_handler import sanitize_for_ui
+            return json.dumps({'error': sanitize_for_ui(e)}, ensure_ascii=False)
 
     @pyqtSlot(str, result=str)
     def saveCaption(self, payload_json: str) -> str:
         """캡션을 .txt 사이드카로 저장. payload {path, caption, outDir}. → {ok, txtPath}."""
+        save_locked = False
         try:
-            import os
+            from core.path_safety import safe_output_dir
             p = json.loads(payload_json) if payload_json else {}
-            path = p.get('path', '')
+            path = _normalize_vue_path(str(p.get('path') or ''))
             if not path:
-                return json.dumps({"error": "경로 없음"})
-            out_dir = p.get('outDir', '') or ''
+                raise ValueError('허용되지 않은 이미지 경로입니다')
+            save_locked = self._caption_job_lock.acquire(blocking=False)
+            if not save_locked:
+                raise RuntimeError('캡션 작업 중에는 수동 저장할 수 없습니다')
+            out_dir = str(p.get('outDir') or '').strip()
             if out_dir:
-                try:
-                    os.makedirs(out_dir, exist_ok=True)
-                except Exception:
-                    pass
+                out_dir = safe_output_dir(out_dir, create=True)
             txt = self._caption_txt_path(path, out_dir)
-            with open(txt, 'w', encoding='utf-8') as f:
-                f.write(p.get('caption', '') or '')
+            self._write_caption_atomic(txt, str(p.get('caption') or ''))
             return json.dumps({"ok": True, "txtPath": txt.replace('\\', '/')}, ensure_ascii=False)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            logger.exception('caption sidecar save failed')
+            from core.error_handler import sanitize_for_ui
+            return json.dumps({'error': sanitize_for_ui(e)}, ensure_ascii=False)
+        finally:
+            if save_locked:
+                self._caption_job_lock.release()
 
     @pyqtSlot(str, result=str)
     def getImageExif(self, filepath: str) -> str:

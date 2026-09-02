@@ -463,13 +463,19 @@ class OllamaClient:
         except Exception as e:
             raise RuntimeError(f"Ollama 오류: {e}")
 
-    def caption_image(self, image_path: str, prompt: str = '', timeout: int = 180) -> str:
+    def caption_image(
+        self,
+        image_path: str,
+        prompt: str = '',
+        timeout: int = 180,
+        system_prompt: str | None = None,
+    ) -> str:
         """비전 모델(qwen2-vl 등)로 이미지 캡션 생성. self.model 이 비전 모델이어야 함."""
         import base64
         import re
         with open(image_path, 'rb') as f:
             b64 = base64.b64encode(f.read()).decode('utf-8')
-        system = (
+        default_system = (
             "You are an expert image-captioning engine. Look at the image and write ONE flowing "
             "English paragraph that vividly describes it, as if describing the scene to someone who "
             "cannot see it. "
@@ -483,6 +489,7 @@ class OllamaClient:
             "Output the caption only — one coherent paragraph, no tag list, no bullet points, no "
             "preface, no notes about what you are doing."
         )
+        system = (system_prompt or '').strip() or default_system
         user_prompt = (prompt or '').strip() or "Describe this image in detail."
         payload = {
             "model": self.model,

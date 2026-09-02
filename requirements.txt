@@ -27,6 +27,8 @@ exifread>=3.3.0
 Pillow>=11.0.0
 opencv-python>=4.12.0
 numpy>=2.2.0
+# Batch/Caption의 CAFormer ONNX 태거 (CPU provider 기본, GPU 빌드도 같은 API 사용)
+onnxruntime>=1.22.0
 
 # Creator 영상/오디오 디코딩 및 Living Comic MP4 출력
 av>=16.0.0

@@ -1009,6 +1009,10 @@ class GeneratorMainUI(
                 folder = QFileDialog.getExistingDirectory(self, "캡션 저장 폴더 선택")
                 if folder:
                     self.vue_bridge.captionOutDirSelected.emit(folder.replace('\\', '/'))
+            elif action == 'caption_pick_caformer_dir':
+                folder = QFileDialog.getExistingDirectory(self, "CAFormer 모델 폴더 선택")
+                if folder:
+                    self.vue_bridge.captionModelDirSelected.emit(folder.replace('\\', '/'))
 
             # ═══════ 클립보드 복사 ═══════
             elif action == 'copy_to_clipboard':

@@ -321,22 +321,73 @@
       </div>
     </div>
 
-    <!-- CAPTION 탭 — Ollama 비전 모델 캡션 (taggui 방식 .txt 사이드카) -->
+    <!-- CAPTION 탭 — CAFormer 태그 + ToriiGate/Ollama 자연어 캡션 -->
     <div v-if="subTab === 'caption'" class="tab-body ad-layout">
-      <div class="ad-settings">
+      <div class="ad-settings caption-settings">
         <h3>이미지 캡션</h3>
-        <label class="s-label">캡션 모델 (Ollama 비전)</label>
-        <div class="cap-model-row">
-          <CustomSelect v-if="ollamaModels.length" v-model="captionModel" :options="ollamaModels"
-            placeholder="모델 선택..." @update:modelValue="saveCaptionModel" />
-          <input v-else class="s-input" v-model="captionModel" @change="saveCaptionModel" placeholder="모델 로딩 중..." />
-          <button class="cap-refresh" @click="loadCaptionModels" title="모델 목록 새로고침"><Icon name="refresh" /></button>
+        <fieldset class="cap-controls" :disabled="captionRunning">
+        <label class="s-label" for="caption-engine">처리 방식</label>
+        <select id="caption-engine" class="s-select" v-model="captionEngine" @change="onCaptionEngineChanged">
+          <option value="caformer">CAFormer · Danbooru 태그</option>
+          <option value="torii">ToriiGate · 자연어 캡션</option>
+          <option value="combined">CAFormer + ToriiGate · 태그 + 자연어</option>
+          <option value="ollama">기타 Ollama 비전 모델 · 자연어</option>
+        </select>
+
+        <div class="cap-runtime-card" :class="{ warning: captionRuntimeError }">
+          <div class="cap-runtime-head">
+            <span>{{ captionRuntimeSummary }}</span>
+            <button class="cap-inline-btn" @click="loadCaptionRuntime" :disabled="captionRuntimeLoading">
+              {{ captionRuntimeLoading ? '확인 중' : '다시 확인' }}
+            </button>
+          </div>
+          <div v-if="needsCaformer" class="cap-runtime-path" :title="activeCaformerDir || '자동 탐색'">
+            {{ activeCaformerDir || 'Hugging Face 캐시에서 자동 탐색' }}
+          </div>
+          <div v-if="captionRuntimeError" class="cap-runtime-error">{{ captionRuntimeError }}</div>
         </div>
-        <label class="s-label">프롬프트</label>
-        <textarea class="s-textarea" v-model="captionPrompt" @change="saveCaptionPrompt" rows="4"></textarea>
+
+        <template v-if="needsCaformer">
+          <label class="s-label">CAFormer 모델 폴더</label>
+          <div class="cap-outdir">
+            <input class="s-input cap-path-input" v-model="captionCaformerDir" @change="saveCaptionPrefs"
+              :placeholder="detectedCaformerDir || 'model.onnx 폴더 자동 탐색'" />
+            <button class="cap-refresh" @click="action('caption_pick_caformer_dir')" title="CAFormer 모델 폴더 선택"><Icon name="folder" /></button>
+            <button v-if="captionCaformerDir" class="cap-refresh" @click="clearCaptionCaformerDir" title="자동 탐색 사용"><Icon name="rotate-ccw" /></button>
+          </div>
+          <div class="cap-opts cap-tag-opts">
+            <label><input type="checkbox" v-model="captionIncludeCharacters" @change="saveCaptionPrefs" /> 캐릭터 태그</label>
+            <label><input type="checkbox" v-model="captionIncludeRating" @change="saveCaptionPrefs" /> 등급 태그</label>
+          </div>
+          <label class="cap-best-toggle">
+            <input type="checkbox" v-model="captionUseBestThresholds" @change="saveCaptionPrefs" />
+            태그별 최적 임계값 사용
+          </label>
+          <div v-if="!captionUseBestThresholds" class="cap-threshold-grid">
+            <label>일반 <input class="s-input" type="number" min="0.05" max="0.95" step="0.01" v-model.number="captionGeneralThreshold" @change="saveCaptionPrefs" /></label>
+            <label>캐릭터 <input class="s-input" type="number" min="0.05" max="0.95" step="0.01" v-model.number="captionCharacterThreshold" @change="saveCaptionPrefs" /></label>
+            <label v-if="captionIncludeRating">등급 <input class="s-input" type="number" min="0.05" max="0.95" step="0.01" v-model.number="captionRatingThreshold" @change="saveCaptionPrefs" /></label>
+          </div>
+        </template>
+
+        <template v-if="needsNaturalCaption">
+          <label class="s-label">{{ captionEngine === 'ollama' ? 'Ollama 비전 모델' : 'ToriiGate 모델 (Ollama)' }}</label>
+          <div class="cap-model-row">
+            <CustomSelect v-if="visibleCaptionModels.length" v-model="activeCaptionModel" :options="visibleCaptionModels"
+              placeholder="모델 선택..." @update:modelValue="saveCaptionPrefs" />
+            <input v-else class="s-input" v-model="activeCaptionModel" @change="saveCaptionPrefs" placeholder="모델 이름 입력..." />
+            <button class="cap-refresh" @click="loadCaptionModels" title="Ollama 모델 목록 새로고침"><Icon name="refresh" /></button>
+          </div>
+          <label class="s-label">자연어 캡션 지시</label>
+          <textarea class="s-textarea" v-model="captionPrompt" @change="saveCaptionPrefs" rows="4"></textarea>
+          <div v-if="captionEngine === 'combined'" class="cap-combined-hint">
+            CAFormer 태그를 ToriiGate에 시각 근거로 전달하고, 저장할 때 태그와 자연어 사이에 빈 줄을 넣습니다.
+          </div>
+        </template>
+
         <div class="cap-opts">
-          <label><input type="checkbox" v-model="captionSave" /> .txt 저장</label>
-          <label><input type="checkbox" v-model="captionOverwrite" /> 기존 덮어쓰기</label>
+          <label><input type="checkbox" v-model="captionSave" @change="saveCaptionPrefs" /> .txt 저장</label>
+          <label><input type="checkbox" v-model="captionOverwrite" @change="saveCaptionPrefs" /> 기존 덮어쓰기</label>
         </div>
         <label class="s-label">저장 위치</label>
         <div class="cap-outdir">
@@ -348,17 +399,18 @@
           <button class="link-btn" @click="action('caption_pick_files')"><Icon name="file" /> 파일 선택</button>
           <button class="link-btn" @click="action('caption_pick_folder')"><Icon name="folder" /> 폴더 선택</button>
         </div>
+        </fieldset>
         <div class="file-count" v-if="captionItems.length">{{ captionItems.length }}개 이미지</div>
         <button class="btn-start" @click="captionAll" :disabled="!captionItems.length || captionRunning">
-          {{ captionRunning ? `캡션 중... ${captionCur}/${captionTotal}` : `전체 캡션 (${captionItems.length})` }}
+          {{ captionRunning ? `처리 중... ${captionCur}/${captionTotal}` : `전체 처리 (${captionItems.length})` }}
         </button>
-        <button v-if="captionItems.length" class="link-btn cap-clear" @click="clearCaption">목록 비우기</button>
+        <button v-if="captionItems.length" class="link-btn cap-clear" @click="clearCaption" :disabled="captionRunning">목록 비우기</button>
       </div>
       <div class="ad-compare">
         <div v-if="!captionItems.length" class="grid-empty">
           <div class="grid-empty-ico"><Icon name="tag" /></div>
           <div class="grid-empty-title">파일 또는 폴더를 선택하세요</div>
-          <div class="grid-empty-sub">Ollama 비전 모델로 캡션을 만들고 이미지 옆에 .txt로 저장합니다</div>
+          <div class="grid-empty-sub">{{ captionEmptyHint }}</div>
         </div>
         <div v-else class="cap-list">
           <div v-for="it in captionItems" :key="it.path" class="cap-item">
@@ -368,11 +420,15 @@
                 {{ basename(it.path) }}
                 <span class="cap-status" :class="it.status">{{ statusLabel(it.status) }}</span>
               </div>
-              <textarea class="cap-text" v-model="it.caption" placeholder="캡션 (편집 가능)..." rows="3"></textarea>
+              <div class="cap-sidecar" :title="it.txtPath || resolvedCaptionSidecarPath(it.path)">
+                TXT · {{ it.txtPath || resolvedCaptionSidecarPath(it.path) }}
+              </div>
+              <textarea class="cap-text" v-model="it.caption" placeholder="캡션 (편집 가능)..." rows="3" :disabled="captionRunning"></textarea>
+              <div v-if="it.error" class="cap-item-error">{{ it.error }}</div>
               <div class="cap-actions">
-                <button class="cap-btn" @click="captionSingle(it)" :disabled="captionRunning"><Icon name="tag" /> 캡션</button>
-                <button class="cap-btn" @click="saveCaptionItem(it)"><Icon name="save" /> 저장</button>
-                <button class="cap-btn t2i" @click="sendCaptionToT2I(it)" :disabled="!it.caption" title="이 캡션을 T2I 메인 프롬프트에 추가하고 이동">→ T2I</button>
+                <button class="cap-btn" @click="captionSingle(it)" :disabled="captionRunning"><Icon name="tag" /> 처리</button>
+                <button class="cap-btn" @click="saveCaptionItem(it)" :disabled="captionRunning"><Icon name="save" /> 저장</button>
+                <button class="cap-btn t2i" @click="sendCaptionToT2I(it)" :disabled="captionRunning || !it.caption" title="이 캡션을 T2I 메인 프롬프트에 추가하고 이동">→ T2I</button>
               </div>
             </div>
           </div>
@@ -383,18 +439,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { mediaUrl } from '../utils/media.js'
+import {
+  captionSidecarPath,
+  hasUnresolvedCaptionItems,
+  matchesCaptionIdentity,
+} from '../utils/captionSession'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
-import type { ActionName } from '../types/bridge'
+import type {
+  ActionName,
+  CaptionDoneEvent,
+  CaptionEngineMode,
+  CaptionJobStatus,
+  CaptionProgressEvent,
+  CaptionRuntimeSnapshot,
+  CaptionStartResponse,
+} from '../types/bridge'
 
 interface CaptionItem {
   path: string
   caption: string
   status: string
+  error?: string
+  txtPath?: string
   [k: string]: any
 }
 
@@ -441,29 +512,222 @@ function startUpscale() {
   })
 }
 
-// ── Caption (Ollama 비전 모델, taggui 방식 .txt 사이드카) ──
+// ── Caption (CAFormer 태그 + ToriiGate/Ollama 자연어, .txt 사이드카) ──
 const captionItems = ref<CaptionItem[]>([])   // [{path, caption, status}]
+const captionEngine = ref<CaptionEngineMode>('combined')
 const captionModel = ref(window.localStorage.getItem('ollamaCaptionModel')
   || window.localStorage.getItem('ollamaModel') || '')
+const captionToriiModel = ref('hf.co/DraconicDragon/ToriiGate-0.5-GGUF:BF16')
 const captionPrompt = ref(window.localStorage.getItem('captionPrompt')
-  || 'Describe this image in detail, naming the main subject and listing appearance, clothing, pose, and background.')
+  || 'Write a factual natural-language caption. Cover the main subject, appearance, clothing, pose, action, composition, and visible background without inventing details.')
 const captionSave = ref(true)
 const captionOverwrite = ref(false)
 const captionOutDir = ref(window.localStorage.getItem('captionOutDir') || '')
-function clearCaptionOutDir() { captionOutDir.value = ''; window.localStorage.removeItem('captionOutDir') }
+const captionCaformerDir = ref('')
+const captionIncludeCharacters = ref(true)
+const captionIncludeRating = ref(false)
+const captionUseBestThresholds = ref(true)
+const captionGeneralThreshold = ref(0.35)
+const captionCharacterThreshold = ref(0.43)
+const captionRatingThreshold = ref(0.38)
+const captionRuntime = ref<Partial<CaptionRuntimeSnapshot>>({})
+const captionRuntimeLoading = ref(false)
+let captionRuntimeRequestId = 0
 const captionRunning = ref(false)
 const captionCur = ref(0)
 const captionTotal = ref(0)
 const ollamaModels = ref<string[]>([])
 
+const CAPTION_BACKEND_WAIT_MS = 8_000
+const CAPTION_BRIDGE_CALL_MS = 10_000
+const CAPTION_RUNTIME_WAIT_MS = 15_000
+const CAPTION_RUNTIME_DEBOUNCE_MS = 300
+const CAPTION_JOB_POLL_MS = 1_500
+const CAPTION_JOB_LOST_MS = 45_000
+
+function makeCaptionToken(scope: string) {
+  try {
+    if (typeof crypto?.randomUUID === 'function') return `${scope}-${crypto.randomUUID()}`
+  } catch {}
+  return `${scope}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+const captionClientToken = makeCaptionToken('caption-client')
+let activeCaptionJobId = ''
+let activeCaptionPaths = new Set<string>()
+let captionRuntimeResponseTimer: ReturnType<typeof setTimeout> | null = null
+let captionRuntimeDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let captionJobPollTimer: ReturnType<typeof setTimeout> | null = null
+let captionJobPollInFlight = false
+let captionJobLastContactAt = 0
+let captionJobIdlePolls = 0
+let captionSidecarGeneration = 0
+let captionSidecarErrorGeneration = -1
+let captionDisposed = false
+const captionEventUnsubs: Array<() => void> = []
+
+function captionToast(type: 'success' | 'error' | 'info' | 'warning', msg: string) {
+  requestAction('show_toast', { type, msg })
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message
+  const text = String(error || '').trim()
+  return text || fallback
+}
+
+function waitForCaptionBackend(timeoutMs = CAPTION_BACKEND_WAIT_MS): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error('백엔드 연결 대기 시간이 초과되었습니다.')), timeoutMs)
+    getBackend().then(
+      backend => { window.clearTimeout(timer); resolve(backend) },
+      error => { window.clearTimeout(timer); reject(error) },
+    )
+  })
+}
+
+function invokeCaptionJson<T>(
+  backend: any,
+  method: string,
+  payload: Record<string, unknown>,
+  timeoutMs = CAPTION_BRIDGE_CALL_MS,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const fn = backend?.[method]
+    if (typeof fn !== 'function') {
+      reject(new Error(`${method} 기능을 사용할 수 없습니다.`))
+      return
+    }
+    let settled = false
+    const timer = window.setTimeout(() => {
+      if (settled) return
+      settled = true
+      reject(new Error(`${method} 응답 시간이 초과되었습니다.`))
+    }, timeoutMs)
+    try {
+      fn(JSON.stringify(payload), (raw: unknown) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        try {
+          const parsed = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw
+          if (!parsed || typeof parsed !== 'object') throw new Error('잘못된 백엔드 응답입니다.')
+          resolve(parsed as T)
+        } catch (error) {
+          reject(error)
+        }
+      })
+    } catch (error) {
+      settled = true
+      window.clearTimeout(timer)
+      reject(error)
+    }
+  })
+}
+
+const needsCaformer = computed(() => captionEngine.value === 'caformer' || captionEngine.value === 'combined')
+const needsNaturalCaption = computed(() => captionEngine.value !== 'caformer')
+const detectedCaformerDir = computed(() => captionRuntime.value.caformer?.modelDir || '')
+const activeCaformerDir = computed(() => captionCaformerDir.value.trim() || detectedCaformerDir.value)
+const toriiModels = computed(() => ollamaModels.value.filter(model => /toriigate/i.test(model)))
+const visibleCaptionModels = computed(() => captionEngine.value === 'ollama' ? ollamaModels.value : toriiModels.value)
+const activeCaptionModel = computed<string>({
+  get: () => captionEngine.value === 'ollama' ? captionModel.value : captionToriiModel.value,
+  set: value => {
+    if (captionEngine.value === 'ollama') captionModel.value = String(value || '')
+    else captionToriiModel.value = String(value || '')
+  },
+})
+const captionRuntimeError = computed(() => {
+  if (captionRuntime.value.error) return captionRuntime.value.error
+  if (needsCaformer.value && captionRuntime.value.caformer?.error) return captionRuntime.value.caformer.error
+  if (needsNaturalCaption.value && captionEngine.value !== 'ollama' && captionRuntime.value.torii?.error) return captionRuntime.value.torii.error
+  return ''
+})
+const captionRuntimeSummary = computed(() => {
+  const parts: string[] = []
+  if (needsCaformer.value) parts.push(captionRuntime.value.caformer?.available ? 'CAFormer 준비됨' : 'CAFormer 확인 필요')
+  if (needsNaturalCaption.value) {
+    if (captionEngine.value === 'ollama') parts.push('Ollama 비전 모델 사용')
+    else parts.push(captionRuntime.value.torii?.available ? 'ToriiGate 준비됨' : 'ToriiGate 확인 필요')
+  }
+  return parts.join(' · ') || '런타임 확인 전'
+})
+const captionEmptyHint = computed(() => {
+  const action = captionSave.value ? '.txt 사이드카로 저장합니다' : '화면에서 검토할 수 있습니다'
+  if (captionEngine.value === 'caformer') return `CAFormer로 Danbooru 태그를 만들고 ${action}`
+  if (captionEngine.value === 'torii') return `ToriiGate로 자연어 캡션을 만들고 ${action}`
+  if (captionEngine.value === 'ollama') return `선택한 Ollama 비전 모델로 자연어 캡션을 만들고 ${action}`
+  return `CAFormer 태그와 ToriiGate 자연어 캡션을 만들고 ${action}`
+})
+
 const captionUrl = () => window.localStorage.getItem('ollamaUrl') || 'http://localhost:11434'
-function saveCaptionModel() { window.localStorage.setItem('ollamaCaptionModel', captionModel.value) }
+function saveCaptionPrefs() {
+  requestAction('save_ui_prefs', {
+    captionEngine: captionEngine.value,
+    captionModel: captionModel.value,
+    captionToriiModel: captionToriiModel.value,
+    captionPrompt: captionPrompt.value,
+    captionSave: captionSave.value,
+    captionOverwrite: captionOverwrite.value,
+    captionOutDir: captionOutDir.value,
+    captionCaformerDir: captionCaformerDir.value,
+    captionIncludeCharacters: captionIncludeCharacters.value,
+    captionIncludeRating: captionIncludeRating.value,
+    captionUseBestThresholds: captionUseBestThresholds.value,
+    captionGeneralThreshold: captionGeneralThreshold.value,
+    captionCharacterThreshold: captionCharacterThreshold.value,
+    captionRatingThreshold: captionRatingThreshold.value,
+  })
+}
+function applyCaptionPrefs(prefs: Record<string, any>) {
+  const previousOutDir = captionOutDir.value
+  if (['caformer', 'torii', 'combined', 'ollama'].includes(prefs.captionEngine)) captionEngine.value = prefs.captionEngine
+  if (typeof prefs.captionModel === 'string') captionModel.value = prefs.captionModel
+  if (typeof prefs.captionToriiModel === 'string' && prefs.captionToriiModel) captionToriiModel.value = prefs.captionToriiModel
+  if (typeof prefs.captionPrompt === 'string') captionPrompt.value = prefs.captionPrompt
+  if (typeof prefs.captionSave === 'boolean') captionSave.value = prefs.captionSave
+  if (typeof prefs.captionOverwrite === 'boolean') captionOverwrite.value = prefs.captionOverwrite
+  if (typeof prefs.captionOutDir === 'string') captionOutDir.value = prefs.captionOutDir
+  if (typeof prefs.captionCaformerDir === 'string') captionCaformerDir.value = prefs.captionCaformerDir
+  if (typeof prefs.captionIncludeCharacters === 'boolean') captionIncludeCharacters.value = prefs.captionIncludeCharacters
+  if (typeof prefs.captionIncludeRating === 'boolean') captionIncludeRating.value = prefs.captionIncludeRating
+  if (typeof prefs.captionUseBestThresholds === 'boolean') captionUseBestThresholds.value = prefs.captionUseBestThresholds
+  if (Number.isFinite(Number(prefs.captionGeneralThreshold))) captionGeneralThreshold.value = Number(prefs.captionGeneralThreshold)
+  if (Number.isFinite(Number(prefs.captionCharacterThreshold))) captionCharacterThreshold.value = Number(prefs.captionCharacterThreshold)
+  if (Number.isFinite(Number(prefs.captionRatingThreshold))) captionRatingThreshold.value = Number(prefs.captionRatingThreshold)
+  if (captionItems.value.length && previousOutDir !== captionOutDir.value) reloadCaptionSidecars()
+}
+function onCaptionOutDirChanged(next: string) {
+  if (captionRunning.value) return
+  captionOutDir.value = next
+  saveCaptionPrefs()
+  reloadCaptionSidecars()
+}
+function clearCaptionOutDir() { onCaptionOutDirChanged('') }
+function clearCaptionCaformerDir() { captionCaformerDir.value = ''; saveCaptionPrefs() }
+function onCaptionEngineChanged() {
+  choosePreferredToriiModel()
+  saveCaptionPrefs()
+}
+function choosePreferredToriiModel() {
+  if (captionEngine.value !== 'torii' && captionEngine.value !== 'combined') return
+  const preferred = toriiModels.value.find(model => /:bf16$/i.test(model)) || toriiModels.value[0]
+  if (preferred && !toriiModels.value.includes(captionToriiModel.value)) {
+    captionToriiModel.value = preferred
+    saveCaptionPrefs()
+  }
+}
 async function loadCaptionModels() {
-  const backend: any = await getBackend()
-  if (backend.requestOllamaModels) {
-    backend.requestOllamaModels(captionUrl())
-  } else if (backend.ollamaListModels) {
-    backend.ollamaListModels(captionUrl(), applyCaptionModels)
+  try {
+    const backend = await waitForCaptionBackend()
+    if (backend.requestOllamaModels) {
+      backend.requestOllamaModels(captionUrl())
+    } else if (backend.ollamaListModels) {
+      backend.ollamaListModels(captionUrl(), applyCaptionModels)
+    }
+  } catch (error) {
+    captionToast('error', errorMessage(error, 'Ollama 모델 목록을 불러오지 못했습니다.'))
   }
 }
 function applyCaptionModels(json: string) {
@@ -473,8 +737,75 @@ function applyCaptionModels(json: string) {
     if (!Array.isArray(models)) return
     if (!Array.isArray(payload) && payload.url && payload.url !== captionUrl()) return
     ollamaModels.value = models
-    if (!captionModel.value && models.length) { captionModel.value = models[0]; saveCaptionModel() }
+    if (!captionModel.value && models.length) captionModel.value = models[0]
+    choosePreferredToriiModel()
   } catch {}
+}
+
+function scheduleCaptionRuntimeProbe() {
+  if (captionDisposed || subTab.value !== 'caption' || captionRunning.value) return
+  if (captionRuntimeDebounceTimer) window.clearTimeout(captionRuntimeDebounceTimer)
+  captionRuntimeDebounceTimer = window.setTimeout(() => {
+    captionRuntimeDebounceTimer = null
+    void loadCaptionRuntime()
+  }, CAPTION_RUNTIME_DEBOUNCE_MS)
+}
+
+function invalidateCaptionRuntimeSnapshot() {
+  // 입력이 바뀐 순간 기존 요청/결과를 폐기한다. 다음 debounce probe 전 실행해도
+  // 이전 explicit 경로나 모델을 준비 완료로 표시하거나 payload에 재사용하지 않는다.
+  captionRuntimeRequestId += 1
+  if (captionRuntimeResponseTimer) window.clearTimeout(captionRuntimeResponseTimer)
+  captionRuntimeResponseTimer = null
+  captionRuntimeLoading.value = false
+  captionRuntime.value = {}
+}
+
+async function loadCaptionRuntime() {
+  if (captionDisposed) return
+  if (captionRuntimeDebounceTimer) {
+    window.clearTimeout(captionRuntimeDebounceTimer)
+    captionRuntimeDebounceTimer = null
+  }
+  if (captionRuntimeResponseTimer) {
+    window.clearTimeout(captionRuntimeResponseTimer)
+    captionRuntimeResponseTimer = null
+  }
+  captionRuntimeLoading.value = true
+  const requestId = ++captionRuntimeRequestId
+  captionRuntime.value = {}
+  try {
+    const backend = await waitForCaptionBackend()
+    if (captionDisposed || requestId !== captionRuntimeRequestId) return
+    if (typeof backend.requestCaptionRuntime !== 'function') {
+      throw new Error('캡션 런타임 확인 기능을 사용할 수 없습니다.')
+    }
+    backend.requestCaptionRuntime(JSON.stringify({
+      clientToken: captionClientToken,
+      requestId,
+      url: captionUrl(),
+      caformerModelDir: captionCaformerDir.value,
+      toriiModel: captionToriiModel.value,
+    }))
+    captionRuntimeResponseTimer = window.setTimeout(() => {
+      if (captionDisposed || requestId !== captionRuntimeRequestId) return
+      captionRuntimeResponseTimer = null
+      captionRuntimeLoading.value = false
+      captionRuntime.value = {
+        clientToken: captionClientToken,
+        requestId,
+        error: '캡션 런타임 확인 시간이 초과되었습니다.',
+      }
+    }, CAPTION_RUNTIME_WAIT_MS)
+  } catch (error) {
+    if (captionDisposed || requestId !== captionRuntimeRequestId) return
+    captionRuntimeLoading.value = false
+    captionRuntime.value = {
+      clientToken: captionClientToken,
+      requestId,
+      error: errorMessage(error, '캡션 런타임을 확인하지 못했습니다.'),
+    }
+  }
 }
 function applyUpscalers(json: string) {
   try {
@@ -488,59 +819,334 @@ function applyADetailerModels(json: string) {
     if (models.length) { adModelItems.value = models; adModel.value = models[0] }
   } catch {}
 }
-function saveCaptionPrompt() { window.localStorage.setItem('captionPrompt', captionPrompt.value) }
-function clearCaption() { captionItems.value = [] }
+function resolvedCaptionSidecarPath(imagePath: string) {
+  return captionSidecarPath(imagePath, captionOutDir.value)
+}
+
+function invalidateCaptionSidecarLoads() {
+  captionSidecarGeneration += 1
+  captionSidecarErrorGeneration = -1
+}
+
+function clearCaption() {
+  if (captionRunning.value) return
+  invalidateCaptionSidecarLoads()
+  captionItems.value = []
+}
 function statusLabel(s: string) {
   return ({ pending: '생성 중', done: '✓ 완료', error: '⚠ 실패', skip: '건너뜀' } as Record<string, string>)[s] || ''
 }
 
-async function loadCaptionFor(item: CaptionItem) {
-  const backend: any = await getBackend()
-  if (!backend.loadCaption) return
-  backend.loadCaption(item.path, (json: string) => {
-    try { const d = JSON.parse(json); if (d.caption) item.caption = d.caption } catch {}
-  })
+function reloadCaptionSidecars() {
+  if (captionRunning.value) return
+  invalidateCaptionSidecarLoads()
+  const generation = captionSidecarGeneration
+  const outDir = captionOutDir.value
+  for (const item of captionItems.value) {
+    item.caption = ''
+    item.status = ''
+    item.error = ''
+    item.txtPath = ''
+    void loadCaptionFor(item, generation, outDir)
+  }
+}
+
+function showSidecarLoadErrorOnce(generation: number, message: string) {
+  if (generation !== captionSidecarGeneration || captionSidecarErrorGeneration === generation) return
+  captionSidecarErrorGeneration = generation
+  captionToast('error', `캡션 파일 불러오기 실패: ${message}`)
+}
+
+async function loadCaptionFor(
+  item: CaptionItem,
+  generation = captionSidecarGeneration,
+  outDir = captionOutDir.value,
+) {
+  try {
+    const backend = await waitForCaptionBackend()
+    const data = await invokeCaptionJson<{ caption?: string; txtPath?: string; error?: string }>(
+      backend,
+      'loadCaption',
+      { path: item.path, outDir },
+    )
+    if (
+      generation !== captionSidecarGeneration
+      || outDir !== captionOutDir.value
+      || !captionItems.value.includes(item)
+    ) return
+    if (data.error) throw new Error(data.error)
+    item.caption = typeof data.caption === 'string' ? data.caption : ''
+    item.txtPath = typeof data.txtPath === 'string' ? data.txtPath : resolvedCaptionSidecarPath(item.path)
+    item.error = ''
+  } catch (error) {
+    if (generation !== captionSidecarGeneration || !captionItems.value.includes(item)) return
+    const message = errorMessage(error, '사이드카를 읽지 못했습니다.')
+    item.error = message
+    showSidecarLoadErrorOnce(generation, message)
+  }
 }
 
 async function captionSingle(item: CaptionItem) {
-  if (!captionModel.value.trim()) { requestAction('show_toast', { type: 'error', msg: '캡션 모델을 입력하세요' }); return }
+  if (captionRunning.value) return
+  if (!validateCaptionConfig()) return
+  captionRunning.value = true; captionCur.value = 0; captionTotal.value = 1
   item.status = 'pending'
-  const backend: any = await getBackend()
-  if (!backend.captionImage) { item.status = ''; return }
-  backend.captionImage(JSON.stringify({
-    path: item.path, prompt: captionPrompt.value, model: captionModel.value,
-    url: captionUrl(), save: captionSave.value, outDir: captionOutDir.value,
-  }), (json: string) => {
-    try {
-      const d = JSON.parse(json)
-      if (d.error) { item.status = 'error'; requestAction('show_toast', { type: 'error', msg: '캡션 실패: ' + d.error }); return }
-      item.caption = d.caption; item.status = 'done'
-    } catch { item.status = 'error' }
-  })
+  item.error = ''
+  await startCaptionJob([item.path], captionOverwrite.value)
 }
 
 async function captionAll() {
-  if (!captionItems.value.length) return
-  if (!captionModel.value.trim()) { requestAction('show_toast', { type: 'error', msg: '캡션 모델을 입력하세요' }); return }
+  if (captionRunning.value || !captionItems.value.length) return
+  if (!validateCaptionConfig()) return
   captionRunning.value = true; captionCur.value = 0; captionTotal.value = captionItems.value.length
-  for (const it of captionItems.value) it.status = ''
-  const backend: any = await getBackend()
-  if (!backend.startCaptionBatch) { captionRunning.value = false; return }
-  backend.startCaptionBatch(JSON.stringify({
-    files: captionItems.value.map(i => i.path), prompt: captionPrompt.value,
-    model: captionModel.value, url: captionUrl(), save: captionSave.value,
-    overwrite: captionOverwrite.value, outDir: captionOutDir.value,
-  }), (json: string) => {
-    try { const d = JSON.parse(json); if (d.error) { requestAction('show_toast', { type: 'error', msg: d.error }); captionRunning.value = false } } catch {}
-  })
+  for (const it of captionItems.value) { it.status = ''; it.error = '' }
+  await startCaptionJob(captionItems.value.map(i => i.path), captionOverwrite.value)
+}
+function validateCaptionConfig() {
+  if (needsNaturalCaption.value && !activeCaptionModel.value.trim()) {
+    requestAction('show_toast', { type: 'error', msg: 'Ollama 비전 모델을 입력하세요' })
+    return false
+  }
+  return true
+}
+function captionPayload(files: string[], overwrite: boolean, jobId: string) {
+  return {
+    clientToken: captionClientToken,
+    jobId,
+    files,
+    engine: captionEngine.value,
+    prompt: captionPrompt.value,
+    model: activeCaptionModel.value,
+    url: captionUrl(),
+    save: captionSave.value,
+    overwrite,
+    outDir: captionOutDir.value,
+    caformerModelDir: activeCaformerDir.value,
+    includeCharacters: captionIncludeCharacters.value,
+    includeRating: captionIncludeRating.value,
+    useBestThresholds: captionUseBestThresholds.value,
+    generalThreshold: captionGeneralThreshold.value,
+    characterThreshold: captionCharacterThreshold.value,
+    ratingThreshold: captionRatingThreshold.value,
+    separator: '\n\n',
+  }
+}
+
+function isActiveCaptionJob(payload: { clientToken?: string; jobId?: string }, expectedJobId = activeCaptionJobId) {
+  return Boolean(
+    matchesCaptionIdentity(payload, captionClientToken, expectedJobId)
+    && activeCaptionJobId === expectedJobId,
+  )
+}
+
+function clearCaptionJobPolling() {
+  if (captionJobPollTimer) window.clearTimeout(captionJobPollTimer)
+  captionJobPollTimer = null
+}
+
+function applyCaptionProgress(data: CaptionProgressEvent) {
+  if (!isActiveCaptionJob(data)) return false
+  captionJobLastContactAt = Date.now()
+  captionJobIdlePolls = 0
+  if (Number.isFinite(Number(data.index))) captionCur.value = Number(data.index) + 1
+  if (Number.isFinite(Number(data.total))) captionTotal.value = Number(data.total)
+  const item = captionItems.value.find(candidate => candidate.path === data.path)
+  if (!item) return true
+  if (data.error) {
+    item.status = 'error'
+    item.error = data.error
+    return true
+  }
+  if (typeof data.caption === 'string') item.caption = data.caption
+  if (typeof data.txtPath === 'string') item.txtPath = data.txtPath
+  item.error = ''
+  item.status = data.skipped ? 'skip' : 'done'
+  return true
+}
+
+function failActiveCaptionJob(jobId: string, message: string) {
+  if (jobId !== activeCaptionJobId) return
+  clearCaptionJobPolling()
+  captionRunning.value = false
+  for (const item of captionItems.value) {
+    if (!activeCaptionPaths.has(item.path) || (item.status && item.status !== 'pending')) continue
+    item.status = 'error'
+    item.error = message
+  }
+  activeCaptionPaths = new Set()
+  activeCaptionJobId = ''
+  captionToast('error', `캡션 실패: ${message}`)
+  scheduleCaptionRuntimeProbe()
+}
+
+function finishCaptionJob(data: CaptionDoneEvent | CaptionJobStatus) {
+  if (!isActiveCaptionJob(data)) return
+  clearCaptionJobPolling()
+  captionRunning.value = false
+  if (Number.isFinite(Number(data.total))) captionTotal.value = Number(data.total)
+  const finished = Number(data.ok || 0) + Number(data.failed || 0)
+  if (finished > captionCur.value) captionCur.value = Math.min(captionTotal.value || finished, finished)
+  activeCaptionPaths = new Set()
+  activeCaptionJobId = ''
+
+  const detail = data.error ? ` · ${data.error}` : ''
+  if (data.error && !data.ok) {
+    captionToast('error', `캡션 실패: ${data.error}`)
+  } else {
+    captionToast(
+      data.failed || data.error ? 'warning' : 'success',
+      `캡션 완료: ${data.ok}/${data.total}${data.failed ? ` (실패 ${data.failed})` : ''}${detail}`,
+    )
+  }
+  scheduleCaptionRuntimeProbe()
+}
+
+function handleCaptionDone(data: CaptionDoneEvent) {
+  if (!isActiveCaptionJob(data)) return
+  captionJobLastContactAt = Date.now()
+  if (!hasUnresolvedCaptionItems(captionItems.value, activeCaptionPaths)) {
+    finishCaptionJob(data)
+    return
+  }
+  // 재연결 중 progress만 놓치고 done을 받은 경우, 완료 신호만으로 닫으면
+  // 항목 텍스트가 빈 채 남는다. 저널을 먼저 받아 applyCaptionProgress로 복원한다.
+  scheduleCaptionJobPoll(0)
+}
+
+function scheduleCaptionJobPoll(delay = CAPTION_JOB_POLL_MS) {
+  clearCaptionJobPolling()
+  if (captionDisposed || !captionRunning.value || !activeCaptionJobId) return
+  const jobId = activeCaptionJobId
+  captionJobPollTimer = window.setTimeout(() => {
+    captionJobPollTimer = null
+    void pollCaptionJob(jobId)
+  }, delay)
+}
+
+async function pollCaptionJob(jobId: string) {
+  if (captionDisposed || !captionRunning.value || jobId !== activeCaptionJobId || captionJobPollInFlight) return
+  captionJobPollInFlight = true
+  try {
+    const backend = await waitForCaptionBackend()
+    if (captionDisposed || jobId !== activeCaptionJobId) return
+    const status = await invokeCaptionJson<CaptionJobStatus>(
+      backend,
+      'getCaptionJobStatus',
+      { clientToken: captionClientToken, jobId },
+    )
+    if (!isActiveCaptionJob(status, jobId)) {
+      throw new Error('다른 캡션 작업의 상태 응답을 받았습니다.')
+    }
+    captionJobLastContactAt = Date.now()
+    if (Number.isFinite(Number(status.total))) captionTotal.value = Number(status.total)
+    if (Array.isArray(status.items)) {
+      for (const item of status.items) {
+        if (item) applyCaptionProgress(item)
+      }
+    }
+    if (status.status === 'done') {
+      finishCaptionJob(status)
+      return
+    }
+    if (status.status === 'running') {
+      captionJobIdlePolls = 0
+      const current = Number(
+        status.current
+        ?? status.processed
+        ?? (Number(status.ok || 0) + Number(status.failed || 0)),
+      )
+      if (Number.isFinite(current)) captionCur.value = Math.max(captionCur.value, current)
+    } else if (status.status === 'idle') {
+      captionJobIdlePolls += 1
+      if (captionJobIdlePolls >= 2) {
+        failActiveCaptionJob(jobId, status.error || '백엔드에서 실행 중인 캡션 작업을 찾지 못했습니다.')
+        return
+      }
+    }
+  } catch (error) {
+    if (captionDisposed || jobId !== activeCaptionJobId) return
+    if (Date.now() - captionJobLastContactAt >= CAPTION_JOB_LOST_MS) {
+      failActiveCaptionJob(
+        jobId,
+        `${errorMessage(error, '작업 상태를 확인하지 못했습니다.')} 백엔드 작업은 계속 실행 중일 수 있습니다.`,
+      )
+      return
+    }
+  } finally {
+    captionJobPollInFlight = false
+    if (!captionDisposed && captionRunning.value && jobId === activeCaptionJobId) scheduleCaptionJobPoll()
+  }
+}
+
+async function startCaptionJob(files: string[], overwrite: boolean) {
+  invalidateCaptionSidecarLoads()
+  const jobId = makeCaptionToken('caption-job')
+  activeCaptionJobId = jobId
+  activeCaptionPaths = new Set(files)
+  captionJobLastContactAt = Date.now()
+  captionJobIdlePolls = 0
+  let backend: any
+  try {
+    backend = await waitForCaptionBackend()
+  } catch (error) {
+    failActiveCaptionJob(jobId, errorMessage(error, '캡션 백엔드에 연결하지 못했습니다.'))
+    return
+  }
+  if (jobId !== activeCaptionJobId) return
+  try {
+    const response = await invokeCaptionJson<CaptionStartResponse>(
+      backend,
+      'startCaptionBatch',
+      captionPayload(files, overwrite, jobId),
+    )
+    if (jobId !== activeCaptionJobId) return
+    // 메서드 반환 콜백은 이 호출에만 귀속된다. 준비 단계에서 실패하면 백엔드가
+    // 식별자를 정규화하기 전일 수 있으므로, 명시적 오류를 먼저 전달한다.
+    if (response.error) {
+      failActiveCaptionJob(jobId, response.error)
+      return
+    }
+    if (!isActiveCaptionJob(response, jobId)) {
+      failActiveCaptionJob(jobId, '다른 캡션 작업의 시작 응답을 받았습니다.')
+      return
+    }
+    if (!response.started) {
+      failActiveCaptionJob(jobId, '캡션 작업이 시작되지 않았습니다.')
+      return
+    }
+    captionJobLastContactAt = Date.now()
+    scheduleCaptionJobPoll(500)
+  } catch (error) {
+    if (jobId !== activeCaptionJobId) return
+    // 콜백만 유실되고 작업은 시작됐을 수 있으므로 상태 조회를 통해 한 번 더 판정한다.
+    captionJobLastContactAt = Math.min(
+      captionJobLastContactAt,
+      Date.now() - CAPTION_JOB_LOST_MS + CAPTION_JOB_POLL_MS,
+    )
+    scheduleCaptionJobPoll(0)
+    console.warn('[caption] start response unavailable; reconciling job status', error)
+  }
 }
 
 async function saveCaptionItem(item: CaptionItem) {
-  const backend: any = await getBackend()
-  if (!backend.saveCaption) return
-  backend.saveCaption(JSON.stringify({ path: item.path, caption: item.caption, outDir: captionOutDir.value }), (json: string) => {
-    try { const d = JSON.parse(json); if (d.ok) requestAction('show_toast', { type: 'success', msg: '캡션 저장됨' }) } catch {}
-  })
+  if (captionRunning.value) return
+  try {
+    const backend = await waitForCaptionBackend()
+    const data = await invokeCaptionJson<{ ok?: boolean; txtPath?: string; error?: string }>(
+      backend,
+      'saveCaption',
+      { path: item.path, caption: item.caption, outDir: captionOutDir.value },
+    )
+    if (data.error) throw new Error(data.error)
+    if (!data.ok) throw new Error('캡션 파일을 저장하지 못했습니다.')
+    item.txtPath = data.txtPath || resolvedCaptionSidecarPath(item.path)
+    item.error = ''
+    captionToast('success', `캡션 저장됨: ${item.txtPath}`)
+  } catch (error) {
+    const message = errorMessage(error, '캡션 파일을 저장하지 못했습니다.')
+    item.error = message
+    captionToast('error', `캡션 저장 실패: ${message}`)
+  }
 }
 
 // 캡션을 T2I 메인 프롬프트에 추가하고 T2I 탭으로 이동
@@ -743,15 +1349,49 @@ function runSam3Batch() {
 // 외부에서 이미지 수신 (History/Gallery 우클릭 → "ADetailer 적용")
 withDefaults(defineProps<{ initialAdPath?: string }>(), { initialAdPath: '' })
 
-// 캡션 탭을 열 때마다 모델 목록 새로고침
-watch(subTab, (v) => { if (v === 'caption') loadCaptionModels() })
+// 캡션 화면/모델 경로가 바뀌면 마지막 값 하나만 검사한다.
+watch(subTab, (value) => {
+  if (value === 'caption' && !captionRunning.value) {
+    void loadCaptionModels()
+    scheduleCaptionRuntimeProbe()
+  }
+})
+watch(
+  [captionEngine, captionCaformerDir, captionToriiModel],
+  () => {
+    invalidateCaptionRuntimeSnapshot()
+    scheduleCaptionRuntimeProbe()
+  },
+)
+
+// BatchView는 keep-alive라 Settings에서 Ollama URL을 바꾼 뒤 돌아오는 경우도 새로 확인해야 한다.
+onActivated(() => {
+  if (subTab.value !== 'caption' || captionRunning.value) return
+  void loadCaptionModels()
+  scheduleCaptionRuntimeProbe()
+})
 
 onMounted(async () => {
-  onBackendEvent('ollamaModelsReady', applyCaptionModels)
+  captionDisposed = false
+  captionEventUnsubs.push(onBackendEvent('ollamaModelsReady', applyCaptionModels))
   onBackendEvent('upscalersReady', applyUpscalers)
   onBackendEvent('adetailerModelsReady', applyADetailerModels)
 
   const backend: any = await getBackend()
+  if (captionDisposed) return
+
+  if (backend.getUiPrefs) {
+    backend.getUiPrefs((json: string) => {
+      try {
+        const prefs = JSON.parse(json || '{}')
+        const needsMigration = !Object.prototype.hasOwnProperty.call(prefs, 'captionEngine')
+        applyCaptionPrefs(prefs)
+        choosePreferredToriiModel()
+        if (needsMigration) saveCaptionPrefs()
+        scheduleCaptionRuntimeProbe()
+      } catch {}
+    })
+  }
 
   // 캡션 모델 드롭다운 — UI 시작 시 자동 새로고침
   loadCaptionModels()
@@ -845,34 +1485,62 @@ onMounted(async () => {
   })
 
   // 캡션 대상 선택 (파일/폴더)
-  onBackendEvent('captionFilesSelected', (json: string) => {
+  captionEventUnsubs.push(onBackendEvent('captionFilesSelected', (json: string) => {
     try {
       const paths = JSON.parse(json)
+      if (captionRunning.value || !Array.isArray(paths)) return
       captionItems.value = paths.map((p: string) => ({ path: p, caption: '', status: '' }))
-      captionItems.value.forEach(loadCaptionFor)   // 기존 .txt 있으면 불러오기
+      reloadCaptionSidecars()
     } catch {}
-  })
+  }))
   // 캡션 배치 진행
-  onBackendEvent('captionProgress', (json: string) => {
+  captionEventUnsubs.push(onBackendEvent('captionProgress', (json: string) => {
     try {
-      const d = JSON.parse(json)
-      captionCur.value = (typeof d.index === 'number' ? d.index : 0) + 1
-      captionTotal.value = d.total || captionTotal.value
-      const it = captionItems.value.find(i => i.path === d.path)
-      if (it) {
-        if (d.error) it.status = 'error'
-        else { it.caption = d.caption || it.caption; it.status = d.skipped ? 'skip' : 'done' }
-      }
+      applyCaptionProgress(JSON.parse(json) as CaptionProgressEvent)
     } catch {}
-  })
-  onBackendEvent('captionOutDirSelected', (p: string) => {
-    captionOutDir.value = p
-    window.localStorage.setItem('captionOutDir', p)
-  })
-  onBackendEvent('captionDone', (json: string) => {
-    captionRunning.value = false
-    try { const d = JSON.parse(json); requestAction('show_toast', { type: 'success', msg: `캡션 완료: ${d.ok}/${d.total}${d.failed ? ` (실패 ${d.failed})` : ''}` }) } catch {}
-  })
+  }))
+  captionEventUnsubs.push(onBackendEvent('captionOutDirSelected', (p: string) => {
+    if (!captionRunning.value) onCaptionOutDirChanged(p)
+  }))
+  captionEventUnsubs.push(onBackendEvent('captionModelDirSelected', (p: string) => {
+    if (captionRunning.value) return
+    captionCaformerDir.value = p
+    saveCaptionPrefs()
+  }))
+  captionEventUnsubs.push(onBackendEvent('captionRuntimeReady', (json: string) => {
+    try {
+      const next = JSON.parse(json || '{}') as CaptionRuntimeSnapshot
+      if (next.clientToken !== captionClientToken) return
+      if (Number(next.requestId || 0) !== captionRuntimeRequestId) return
+      if (captionRuntimeResponseTimer) window.clearTimeout(captionRuntimeResponseTimer)
+      captionRuntimeResponseTimer = null
+      captionRuntimeLoading.value = false
+      captionRuntime.value = next
+      const detectedTorii = captionRuntime.value.torii?.model
+      if (detectedTorii && !captionToriiModel.value) captionToriiModel.value = detectedTorii
+    } catch (error) {
+      console.warn('[caption] malformed runtime response', error)
+    }
+  }))
+  scheduleCaptionRuntimeProbe()
+  captionEventUnsubs.push(onBackendEvent('captionDone', (json: string) => {
+    try {
+      handleCaptionDone(JSON.parse(json) as CaptionDoneEvent)
+    } catch {}
+  }))
+})
+
+onUnmounted(() => {
+  captionDisposed = true
+  captionRuntimeRequestId += 1
+  for (const unsubscribe of captionEventUnsubs.splice(0)) unsubscribe()
+  if (captionRuntimeResponseTimer) window.clearTimeout(captionRuntimeResponseTimer)
+  if (captionRuntimeDebounceTimer) window.clearTimeout(captionRuntimeDebounceTimer)
+  clearCaptionJobPolling()
+  activeCaptionJobId = ''
+  activeCaptionPaths = new Set()
+  captionRunning.value = false
+  invalidateCaptionSidecarLoads()
 })
 </script>
 
@@ -890,11 +1558,30 @@ onMounted(async () => {
 /* CAPTION 탭 */
 .s-textarea { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.4; }
 .s-textarea:focus { outline: none; border-color: var(--accent); }
+.caption-settings { width: 370px; }
+.cap-controls { min-width: 0; margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 10px; }
+.cap-controls:disabled button, .cap-controls:disabled input, .cap-controls:disabled select,
+.cap-controls:disabled textarea, .cap-controls:disabled :deep(.csel-display) { opacity: .55; cursor: not-allowed; }
 .cap-model-row { display: flex; gap: 6px; align-items: center; }
 .cap-model-row > :first-child { flex: 1; min-width: 0; }
 .cap-refresh { flex-shrink: 0; width: 32px; height: 32px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
 .cap-refresh:hover { color: var(--accent); border-color: var(--accent); }
 .cap-opts { display: flex; gap: 14px; margin: 8px 0; }
+.cap-runtime-card { padding: 8px 9px; border: 1px solid rgba(74,222,128,.28); border-radius: 7px; background: rgba(74,222,128,.07); }
+.cap-runtime-card.warning { border-color: rgba(248,113,113,.32); background: rgba(248,113,113,.07); }
+.cap-runtime-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-secondary); font-size: 10px; font-weight: var(--fw-bold); }
+.cap-inline-btn { padding: 2px 5px; border: 0; background: transparent; color: var(--accent); font-size: 9px; cursor: pointer; }
+.cap-inline-btn:disabled { opacity: .5; cursor: default; }
+.cap-runtime-path { margin-top: 5px; color: var(--text-muted); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap-runtime-error { margin-top: 5px; color: var(--state-alert-fg); font-size: 9px; line-height: 1.35; }
+.cap-path-input { flex: 1; min-width: 0; }
+.cap-tag-opts { margin-bottom: 2px; }
+.cap-best-toggle { display: flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 10px; cursor: pointer; }
+.cap-best-toggle input, .cap-tag-opts input { accent-color: var(--accent); }
+.cap-threshold-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.cap-threshold-grid label { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 5px; color: var(--text-muted); font-size: 9px; white-space: nowrap; }
+.cap-threshold-grid input { min-width: 0; width: 100%; padding: 5px 6px; }
+.cap-combined-hint { padding: 7px 8px; border-radius: 6px; background: var(--accent-dim); color: var(--text-secondary); font-size: 9px; line-height: 1.4; }
 .cap-outdir { display: flex; gap: 6px; align-items: center; }
 .cap-outdir-path { flex: 1; min-width: 0; font-size: 11px; color: var(--text-secondary); background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cap-opts label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
@@ -905,6 +1592,8 @@ onMounted(async () => {
 .cap-thumb { width: 110px; height: 110px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: var(--bg-input); }
 .cap-body { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .cap-name { font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-sidecar { color: var(--text-muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-item-error { color: var(--state-alert-fg); font-size: 9px; line-height: 1.35; }
 .cap-status { font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 1px 6px; border-radius: 7px; flex-shrink: 0; }
 /* 옅은 틴트 위의 '글자'라 채움용(--state-*)이 아니라 글자용(--state-*-fg) */
 .cap-status.pending { background: rgba(251,191,36,0.18); color: var(--state-warn-fg); }
@@ -913,6 +1602,7 @@ onMounted(async () => {
 .cap-status.skip { background: var(--bg-button); color: var(--text-muted); }
 .cap-text { flex: 1; min-height: 56px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.45; }
 .cap-text:focus { outline: none; border-color: var(--accent); }
+.cap-text:disabled { opacity: .65; cursor: not-allowed; }
 .cap-actions { display: flex; gap: 6px; }
 .cap-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 4px 10px; cursor: pointer; }
 .cap-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
@@ -930,6 +1620,7 @@ onMounted(async () => {
 }
 .drop-hint { color: var(--text-muted); font-size: 12px; text-align: center; }
 .link-btn { min-height: 28px; padding: 0 4px; background: none; border: none; color: var(--accent); cursor: pointer; text-decoration: underline; font-size: var(--fs-meta); }
+.link-btn:disabled { opacity: .45; cursor: not-allowed; }
 .file-list { width: 100%; max-height: 200px; overflow-y: auto; }
 .file-item {
   display: flex; align-items: center; gap: 6px;
