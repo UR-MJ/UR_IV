@@ -47,7 +47,7 @@ export type ActionName =
 
 /** Python이 vue_bridge에서 emit하고 Vue가 onBackendEvent()로 받는 시그널 이름. */
 export type BackendEvent =
-  | 'imageGenerated' | 'generationStarted' | 'generationError' | 'generationProgress'
+  | 'imageGenerated' | 'generationStarted' | 'generationError' | 'generationProgress' | 'generationPreview'
   | 'automationStatus' | 'automationSettingsLoaded'
   | 'searchResultsReady' | 'searchResultLineage' | 'searchStatus' | 'queueUpdated' | 'queueItemAdded' | 'queueCompleted'
   | 'uiPrefsLoaded' | 'condRulesLoaded' | 'loraStackLoaded' | 'loraInserted' | 'globalWeightsLoaded'

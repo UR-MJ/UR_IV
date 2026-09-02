@@ -146,6 +146,9 @@ class GenerationMixin:
         _logger.debug(f"프롬프트: {payload['prompt'][:100]}...")
 
         selected_model = self.model_combo.currentText()
+        if not str(selected_model or '').strip() and self._backend_needs_checkpoint():
+            self._abort_generation("체크포인트가 아직 선택되지 않았습니다 — 목록이 로딩 중이면 잠시 후 다시 누르세요")
+            return
         self._cleanup_gen_worker()
         self.gen_worker = GenerationFlowWorker(selected_model, payload)
         self.gen_worker.finished.connect(self.on_generation_finished)
@@ -158,6 +161,15 @@ class GenerationMixin:
         self.gen_progress_bar.show()
 
         self.gen_worker.start()
+
+    @staticmethod
+    def _backend_needs_checkpoint() -> bool:
+        """Forge/A1111 은 요청에 체크포인트가 있어야 한다. ComfyUI 는 워크플로가 모델을 정하므로 비어도 된다."""
+        try:
+            from backends import BackendType, get_backend_type
+            return get_backend_type() == BackendType.WEBUI
+        except Exception:
+            return True
 
     def _abort_generation(self, msg: str):
         """생성 시작 실패 — UI 복구 + 에러 통지 + 자동화 명시적 중지.
@@ -455,9 +467,11 @@ class GenerationMixin:
         )
         self.show_status(f"🎨 생성 중... {step}/{total} steps ({pct}%){eta_str}")
 
-        # Vue에 진행률 전달
+        # Vue에 진행률 전달 + 라이브 프리뷰(바뀐 것만 — 백엔드가 이미 같은 그림은 None 으로 준다)
         if hasattr(self, 'vue_bridge'):
             self.vue_bridge.generationProgress.emit(step, total)
+            if isinstance(preview, str) and preview:
+                self.vue_bridge.generationPreview.emit(preview)
 
     def _restore_generate_button(self):
         """생성 버튼/타이틀을 idle 상태로 복구 (완료/취소 공용)."""
@@ -671,6 +685,9 @@ class GenerationMixin:
             payload["_generation_family"] = "krea2"
         
         selected_model = self.model_combo.currentText()
+        if not str(selected_model or '').strip() and self._backend_needs_checkpoint():
+            self._abort_generation("체크포인트가 아직 선택되지 않았습니다 — 목록이 로딩 중이면 잠시 후 다시 누르세요")
+            return
         
         _logger.info("Immediate Generation from EXIF")
         self.btn_generate.setText("생성 중...")

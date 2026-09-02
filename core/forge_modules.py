@@ -366,3 +366,28 @@ def list_sam3_checkpoints() -> list[str]:
             pass
 
     return result or ["sam3.pt"]
+
+
+def resolve_sam3_checkpoint(name: str) -> str:
+    """SAM3 체크포인트 이름 → 앱이 스캔한 폴더의 **절대 경로**. 못 찾으면 그대로.
+
+    관리형 Forge 는 `--data-dir` 아래 models 를 보므로 이름만 보내면 확장이
+    `<data>/models/sam3/<name>` 을 찾다 'SAM3 checkpoint not found' 로 죽는다. 파일은
+    사용자의 Forge `models/sam3` 에 있고, 확장은 절대 경로면 그대로 쓴다
+    (sam3ext/core.py::resolve_checkpoint_path). 'auto'/'huggingface' 는 확장의 키워드다.
+    """
+    value = str(name or "").strip() or "sam3.pt"
+    if value.lower() in {"auto", "huggingface"}:
+        return value
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return value
+    root = get_forge_root()
+    for folder in (root / SAM3_SUBDIR, root):
+        target = folder / candidate.name
+        try:
+            if target.is_file():
+                return str(target.resolve())
+        except OSError:
+            continue
+    return value

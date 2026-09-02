@@ -174,6 +174,14 @@ def build_state(settings=None, *, prompt: str = '', negative_prompt: str = '') -
     if not str(state['sam3_negative_prompt']).strip() and negative_prompt:
         state['sam3_negative_prompt'] = negative_prompt
 
+    # 체크포인트는 절대 경로로 — 관리형 Forge(--data-dir) 의 확장은 data/models 만 보는데
+    # 파일은 사용자의 Forge models/sam3 에 있다. 절대 경로는 확장이 그대로 쓴다.
+    try:
+        from core.forge_modules import resolve_sam3_checkpoint
+        state['sam3_checkpoint'] = resolve_sam3_checkpoint(state['sam3_checkpoint'])
+    except Exception:
+        pass
+
     # 활성화 플래그 — Sam3Args 스키마 밖의 키. 확장 process()가 따로 읽는다.
     state['sam3_enable'] = True
     state['enabled'] = True

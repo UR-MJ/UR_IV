@@ -226,7 +226,12 @@ class SettingsMixin:
             
             # 생성 파라미터
             model_text = settings.get("model", "")
-            idx = self.model_combo.findText(model_text)
+            # 해시 유무·대소문자가 달라도 같은 파일을 고른다 — Forge 는 "[hash]" 를 붙이고 ComfyUI 는 안 붙인다.
+            # 예전엔 findText 실패 → 첫 항목(krea2)으로 떨어져 엉뚱한 모델로 생성이 나갔다.
+            from core.model_names import match_checkpoint
+            idx = match_checkpoint(model_text, list(getattr(self.model_combo, '_items', []) or []))
+            if idx < 0:
+                idx = self.model_combo.findText(model_text)
             if idx >= 0:
                 self.model_combo.setCurrentIndex(idx)
 
@@ -301,7 +306,10 @@ class SettingsMixin:
             self._sync_slider(self.hires_cfg_input)
 
             hr_ckpt = settings.get("hires_checkpoint", "")
-            idx = self.hires_checkpoint_combo.findText(hr_ckpt)
+            from core.model_names import match_checkpoint
+            idx = match_checkpoint(hr_ckpt, list(getattr(self.hires_checkpoint_combo, '_items', []) or []))
+            if idx < 0:
+                idx = self.hires_checkpoint_combo.findText(hr_ckpt)
             if idx >= 0:
                 self.hires_checkpoint_combo.setCurrentIndex(idx)
 

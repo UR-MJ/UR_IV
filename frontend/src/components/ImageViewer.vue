@@ -1,16 +1,20 @@
 <template>
-  <div class="viewer">
+  <div class="viewer" :class="{ generating }">
     <!-- 이미지 표시 영역 -->
     <div class="image-area">
-      <template v-if="imageUrl">
-        <img :key="imageSrc" :src="imageSrc" alt="Generated" class="generated-image" />
+      <!-- 생성 중 + 중간 그림이 오면 그걸 보여 준다 — 보던 옛 그림이 아니라 지금 만들어지는 것 -->
+      <template v-if="generating && previewUrl">
+        <img :src="previewUrl" alt="생성 중 미리보기" class="generated-image preview" />
+      </template>
+      <template v-else-if="imageUrl">
+        <img :key="imageSrc" :src="imageSrc" alt="Generated" class="generated-image" :class="{ dimmed: generating }" />
       </template>
       <template v-else>
         <div class="placeholder">
-          <div v-if="status && status.includes('생성 중')" class="generating">
+          <div v-if="generating" class="generating-block">
             <div class="spinner" />
-            <div class="gen-text">{{ status }}</div>
-            <div class="progress-bar" v-if="status.includes('/')">
+            <div class="gen-text">{{ statusLine }}</div>
+            <div class="progress-bar">
               <div class="progress-fill" :style="{ width: progressPct + '%' }" />
             </div>
           </div>
@@ -21,6 +25,17 @@
           </template>
         </div>
       </template>
+
+      <!-- 진행 카드 — 그림이 떠 있어도 항상 위에. 예전엔 그림이 있으면 창 맨 위 3px 선뿐이라
+           생성 중인지 알 수 없었다. -->
+      <div v-if="generating && (imageUrl || previewUrl)" class="gen-overlay" role="status" aria-live="polite">
+        <div class="spinner small" />
+        <div class="gen-overlay-text">
+          <span class="gen-overlay-title">{{ previewUrl ? '생성 중 · 미리보기' : '생성 중' }}</span>
+          <span class="gen-overlay-sub">{{ statusLine }}</span>
+        </div>
+        <div class="gen-overlay-bar"><div class="progress-fill" :style="{ width: progressPct + '%' }" /></div>
+      </div>
     </div>
 
     <!-- 하단 정보 바 -->
@@ -42,11 +57,23 @@ const props = withDefaults(defineProps<{
   resolution?: string
   seed?: string
   status?: string
+  /** 생성 중인가 — App 의 isGenerating. status 문자열을 파싱하던 예전 방식보다 확실하다. */
+  generating?: boolean
+  /** 0~100 */
+  progress?: number
+  /** "ETA 12s" 같은 문자열 (없으면 빈 값) */
+  eta?: string
+  /** 생성 중 중간 그림 (data URL). 없으면 옛 그림을 흐리게 두고 카드만 띄운다. */
+  previewUrl?: string
 }>(), {
   imageUrl: '',
   resolution: '',
   seed: '',
   status: '',
+  generating: false,
+  progress: 0,
+  eta: '',
+  previewUrl: '',
 })
 
 function exploreSeed() {
@@ -65,9 +92,18 @@ const imageSrc = computed(() => {
 })
 
 const progressPct = computed(() => {
+  if (typeof props.progress === 'number' && props.progress > 0) return Math.max(0, Math.min(100, Math.round(props.progress)))
   const m = props.status?.match(/(\d+)\/(\d+)/)
   if (m) return Math.round(parseInt(m[1]) / parseInt(m[2]) * 100)
   return 0
+})
+
+const statusLine = computed(() => {
+  const m = props.status?.match(/(\d+)\/(\d+)/)
+  const steps = m ? `${m[1]} / ${m[2]} 스텝` : (props.status || '준비 중…')
+  const pct = progressPct.value ? ` · ${progressPct.value}%` : ''
+  const eta = props.eta ? ` · ${props.eta}` : ''
+  return `${steps}${pct}${eta}`
 })
 </script>
 
@@ -81,6 +117,7 @@ const progressPct = computed(() => {
 }
 
 .image-area {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
@@ -94,7 +131,28 @@ const progressPct = computed(() => {
   max-height: 100%;
   object-fit: contain;
   border-radius: 4px;
+  transition: opacity .25s ease, filter .25s ease;
 }
+/* 생성 중에 남아 있는 옛 그림 — '지금 결과' 로 읽히지 않게 한 단계 물린다 */
+.generated-image.dimmed { opacity: .45; filter: saturate(.6); }
+/* Forge 의 중간 그림은 저해상도다 — 원래 크기로 두면 손톱만 하게 뜬다. 결과가 뜰 자리를 그대로 채운다. */
+.generated-image.preview { width: 100%; height: 100%; opacity: .95; }
+
+.gen-overlay {
+  position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+  display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 8px; align-items: center;
+  min-width: 260px; max-width: min(520px, calc(100% - 40px));
+  padding: 10px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.gen-overlay-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gen-overlay-title { font-size: var(--fs-body); font-weight: var(--fw-bold); color: var(--accent); }
+.gen-overlay-sub { font-size: var(--fs-meta); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gen-overlay-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
 
 .placeholder {
   text-align: center;
@@ -135,13 +193,14 @@ const progressPct = computed(() => {
   border-radius: 4px; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer;
 }
 .explore-btn:hover { background: var(--accent-dim); border-color: var(--accent); }
-.generating { text-align: center; }
+.generating-block { text-align: center; }
 .spinner {
   width: 40px; height: 40px; margin: 0 auto 12px;
   /* 진행 표시의 '빈 부분'은 구분선 역할이라 --rule (라이트에서도 보이는 값) */
   border: 3px solid var(--rule); border-top: 3px solid var(--accent);
   border-radius: 50%; animation: spin 0.8s linear infinite;
 }
+.spinner.small { width: 22px; height: 22px; margin: 0; border-width: 2.5px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .gen-text { color: var(--accent); font-size: 14px; font-weight: var(--fw-bold); }
 .progress-bar {

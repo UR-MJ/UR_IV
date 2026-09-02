@@ -493,6 +493,7 @@
                 :resolution="resolution"
                 :seed="seed"
                 :status="status"
+                v-bind="route.name === 't2i' ? { generating: isGenerating, progress: progressVal, eta: genEta, previewUrl: livePreview } : {}"
               />
             </keep-alive>
             </transition>
@@ -1074,6 +1075,8 @@ const seed = ref('')
 const status = ref('')
 const isGenerating = ref(false)
 const progressVal = ref(0)
+// 생성 중 중간 그림(data URL) — Forge live preview. 그림을 보고 있어도 생성 중임이 보이게 뷰어가 이걸 띄운다.
+const livePreview = ref('')
 const genStartTime = ref(0)
 const genEta = ref('')
 const showLeftPanel = ref(true)
@@ -2034,6 +2037,7 @@ onMounted(async () => {
     const parsed = JSON.parse(data)
     if (parsed.path) imageVersions[parsed.path] = Date.now()
     isGenerating.value = false
+    livePreview.value = ''
     genEta.value = ''
     status.value = ''
     // History에서 옛 이미지를 보던 중(브라우징)이면 뷰를 뺏지 않음 — '최신'(또는
@@ -2066,7 +2070,12 @@ onMounted(async () => {
       }
     }
   })
-  onBackendEvent('generationStarted', () => { isGenerating.value = true; autoWaiting.value = false; progressVal.value = 0; genStartTime.value = Date.now(); genEta.value = '' })
+  onBackendEvent('generationStarted', () => { isGenerating.value = true; autoWaiting.value = false; progressVal.value = 0; genStartTime.value = Date.now(); genEta.value = ''; livePreview.value = '' })
+  onBackendEvent('generationPreview', (b64: string) => {
+    if (!isGenerating.value || typeof b64 !== 'string' || !b64) return
+    const mime = b64.startsWith('/9j/') ? 'image/jpeg' : b64.startsWith('UklGR') ? 'image/webp' : 'image/png'
+    livePreview.value = `data:${mime};base64,${b64}`
+  })
   onBackendEvent('automationStatus', (json: string) => {
     try {
       const d = JSON.parse(json)
@@ -2134,7 +2143,7 @@ onMounted(async () => {
         : `ETA ${remaining.toFixed(0)}s`
     }
   })
-  onBackendEvent('generationError', (msg: string) => { isGenerating.value = false; genEta.value = ''; status.value = `Error: ${msg}` })
+  onBackendEvent('generationError', (msg: string) => { isGenerating.value = false; livePreview.value = ''; genEta.value = ''; status.value = `Error: ${msg}` })
 
   // 글로벌 가중치 로드
   onBackendEvent('globalWeightsLoaded', (json: string) => {

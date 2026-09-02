@@ -176,7 +176,7 @@ _WEB_METHODS = frozenset({
 })
 
 _WEB_SIGNALS = frozenset({
-    "imageGenerated", "generationStarted", "generationError", "generationProgress",
+    "imageGenerated", "generationStarted", "generationError", "generationProgress", "generationPreview",
     "editorImageLoaded", "editorResult", "captionFilesSelected", "captionProgress",
     "captionDone", "captionOutDirSelected", "captionModelDirSelected", "captionRuntimeReady",
     "i2iImageLoaded", "galleryFolderLoaded",

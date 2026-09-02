@@ -485,11 +485,28 @@ class WebUIBackend(AbstractBackend):
     def unload_models(self):
         return self.cleanup_models(full_reload=True)
 
+    @staticmethod
+    def _progress_preview(response: Any) -> Optional[str]:
+        """/sdapi/v1/progress 의 current_image — 접두사 없는 base64. 없거나 이상하면 None.
+
+        Forge 는 live preview 가 켜져 있으면(기본) 몇 스텝마다 중간 그림을 base64 로 준다.
+        예전엔 이걸 버려서, 이미지를 보고 있는 동안엔 생성 중인지 화면에서 알 수 없었다.
+        """
+        if not isinstance(response, dict):
+            return None
+        raw = response.get('current_image')
+        if not isinstance(raw, str) or not raw:
+            return None
+        if raw.startswith('data:'):
+            raw = raw.split(',', 1)[-1]
+        return raw if len(raw) > 64 else None
+
     def _start_progress_polling(self, callback: Optional[ProgressCallback],
                                 stop_event: threading.Event):
         """별도 스레드에서 /sdapi/v1/progress 폴링"""
         if callback is None:
             return
+        last_preview = None
         while not stop_event.is_set():
             try:
                 r = requests.get(
@@ -499,10 +516,16 @@ class WebUIBackend(AbstractBackend):
                 step = r.get('state', {}).get('sampling_step', 0)
                 total = r.get('state', {}).get('sampling_steps', 0)
                 progress_val = r.get('progress', 0)
+                # 라이브 프리뷰 — 같은 그림을 매 폴링마다 다시 보내지 않는다 (base64 수십~수백 KB)
+                preview = self._progress_preview(r)
+                if preview == last_preview:
+                    preview = None
+                elif preview is not None:
+                    last_preview = preview
                 if total > 0:
-                    callback(step, total, None)
+                    callback(step, total, preview)
                 elif progress_val > 0:
-                    callback(int(progress_val * 100), 100, None)
+                    callback(int(progress_val * 100), 100, preview)
             except Exception as e:
                 # 진행률 폴링은 반복 호출 — 노이즈 방지 위해 debug 로그만
                 logger.debug("progress poll failed: %s", e)

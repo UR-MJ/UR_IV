@@ -174,8 +174,12 @@ class ComboBoxProxy(_ProxyBase):
         fb = getattr(self, '_fallback_text', '')
         if fb and fb in self._items:
             self._index = self._items.index(fb)
+            self._bridge.pushWidgetValue(self._id, self._items[self._index])
         elif self._items and self._index < 0:
+            # 저장값이 목록에 없으면 첫 항목 — Vue 에도 알려야 한다. 안 알리면 화면은 '선택…' 인데
+            # Python 은 첫 항목으로 생성해 엉뚱한 모델(예: krea2)로 요청이 나간다.
             self._index = 0
+            self._bridge.pushWidgetValue(self._id, self._items[0])
 
     def addItem(self, item: str):
         self._items.append(item)

@@ -1646,6 +1646,7 @@ class VueBridge(QObject):
     queueUpdated = pyqtSignal(str)         # JSON queue state
     eventSearchResults = pyqtSignal(str)   # JSON event results
     generationProgress = pyqtSignal(int, int)  # current, total steps
+    generationPreview = pyqtSignal(str)   # 생성 중 중간 그림 — 접두사 없는 base64 (Forge current_image)
 
     @pyqtSlot(str)
     def searchDanbooru(self, query_json: str):

@@ -83,5 +83,42 @@ class ForgeModuleSyncTests(unittest.TestCase):
         self.assertEqual(seen, {"model": "Anima-3.8B-v1.1.safetensors", "modules": ANIMA_MODULES})
 
 
+class ProgressPreviewTests(unittest.TestCase):
+    """/progress 의 current_image 는 접두사 없는 base64 로, 없으면 None 으로."""
+
+    def test_plain_and_data_url_forms(self):
+        b64 = "A" * 100
+        self.assertEqual(WebUIBackend._progress_preview({"current_image": b64}), b64)
+        self.assertEqual(WebUIBackend._progress_preview({"current_image": "data:image/png;base64," + b64}), b64)
+
+    def test_missing_or_tiny_is_none(self):
+        self.assertIsNone(WebUIBackend._progress_preview({"current_image": None}))
+        self.assertIsNone(WebUIBackend._progress_preview({"current_image": ""}))
+        self.assertIsNone(WebUIBackend._progress_preview({"current_image": "short"}))
+        self.assertIsNone(WebUIBackend._progress_preview("not a dict"))
+
+    def test_polling_forwards_a_preview_only_when_it_changes(self):
+        import threading
+        backend = WebUIBackend("http://127.0.0.1:17860")
+        b64 = "B" * 100
+        responses = [
+            {"state": {"sampling_step": 1, "sampling_steps": 4}, "current_image": b64},
+            {"state": {"sampling_step": 2, "sampling_steps": 4}, "current_image": b64},
+            {"state": {"sampling_step": 3, "sampling_steps": 4}, "current_image": "C" * 100},
+        ]
+        seen = []
+        stop = threading.Event()
+
+        def fake_get(url, timeout=3):
+            data = responses.pop(0)
+            if not responses:
+                stop.set()
+            return _Resp(data)
+
+        with patch("backends.webui_backend.requests.get", side_effect=fake_get):
+            backend._start_progress_polling(lambda step, total, preview: seen.append((step, preview)), stop)
+        self.assertEqual(seen, [(1, b64), (2, None), (3, "C" * 100)])
+
+
 if __name__ == "__main__":
     unittest.main()
