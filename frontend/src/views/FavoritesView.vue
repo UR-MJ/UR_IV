@@ -154,6 +154,7 @@ import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import { mediaUrl, thumbnailUrl } from '../utils/media.js'
+import type { ActionName } from '../types/bridge'
 
 interface ViewerData {
   filename?: string
@@ -310,10 +311,10 @@ const viewImage = async (path: string) => {
 }
 
 function showMenu(e: MouseEvent, path: string) { ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, path } }
-function ctx(actionName: string) {
+function ctx(actionName: ActionName | 'gallery_load_exif') {
   const path = ctxMenu.value.path
-  requestAction(actionName, { path })
   if (actionName === 'gallery_load_exif') viewImage(path)
+  else requestAction(actionName, { path })
   ctxMenu.value.show = false
 }
 function removeFav(path: string) {
@@ -324,10 +325,10 @@ function removeFav(path: string) {
 }
 function ctxRemoveFav() { removeFav(ctxMenu.value.path); ctxMenu.value.show = false }
 
-const quickAction = (name: string, path: string) => requestAction(name, { path })
+const quickAction = (name: ActionName, path: string) => requestAction(name, { path })
 const sendToCompare = (slot: string) => { requestAction('send_to_compare', { path: ctxMenu.value.path, slot }); ctxMenu.value.show = false }
 const sendExifToT2I = () => { if (exifData.value) requestAction('gallery_send_exif_to_t2i', { exif: exifData.value.raw || '', path: exifData.value.path }) }
-const action = (name: string, payload: Record<string, any> = {}) => requestAction(name, payload)
+const action = (name: ActionName, payload: Record<string, any> = {}) => requestAction(name, payload)
 const hideMenu = () => ctxMenu.value.show = false
 
 async function copySection(text: string, label: string) {

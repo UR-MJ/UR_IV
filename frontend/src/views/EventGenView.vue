@@ -318,7 +318,6 @@ function selectEvent(i: number) {
   // 전체 선택 초기화
   Object.keys(selectedSteps).forEach(k => delete selectedSteps[k])
   steps.value.forEach((_, idx) => { selectedSteps[idx] = true })
-  requestAction('select_event', { index: i })
 }
 
 function toggleStep(i: number) { selectedSteps[i] = !selectedSteps[i] }

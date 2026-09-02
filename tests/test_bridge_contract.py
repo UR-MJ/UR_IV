@@ -28,6 +28,7 @@ _EQ = re.compile(r"action\s*==\s*['\"]([a-zA-Z_]\w*)['\"]")
 _IN = re.compile(r"action\s+in\s*\(([^)]*)\)")
 _LIT = re.compile(r"['\"]([a-zA-Z_]\w*)['\"]")
 _SIG = re.compile(r"^\s*([a-zA-Z_]\w*)\s*=\s*pyqtSignal", re.M)
+_TS_LITERAL = re.compile(r"['\"]([a-zA-Z_]\w*)['\"]")
 
 
 def _read_all(folder, exts):
@@ -67,13 +68,30 @@ def _python_actions(texts):
     return names
 
 
+def _typescript_union(text, name):
+    """bridge.d.ts의 문자열 literal union만 추출한다."""
+    match = re.search(
+        rf"export\s+type\s+{re.escape(name)}\s*=\s*(.*?)"
+        rf"(?=\n\s*(?:/\*\*|export\s+(?:type|interface))|\Z)",
+        text,
+        re.S,
+    )
+    if not match:
+        return set()
+    return set(_TS_LITERAL.findall(match.group(1)))
+
+
 class TestBridgeContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.front = _read_all(FRONT, ('.vue', '.js'))
+        cls.front = _read_all(FRONT, ('.vue', '.js', '.ts'))
         cls.ui = _read_all(UI, ('.py',))
         with open(os.path.join(UI, 'vue_bridge.py'), encoding='utf-8') as f:
             cls.signals = _SIG.findall(f.read())
+        with open(os.path.join(FRONT, 'types', 'bridge.d.ts'), encoding='utf-8') as f:
+            cls.bridge_types = f.read()
+        cls.typed_actions = _typescript_union(cls.bridge_types, 'ActionName')
+        cls.typed_events = _typescript_union(cls.bridge_types, 'BackendEvent')
 
     def test_extraction_not_empty(self):
         # 안전장치 — 추출 0건이면 경로/정규식이 깨진 것(거짓 통과 방지)
@@ -81,6 +99,8 @@ class TestBridgeContract(unittest.TestCase):
         self.assertGreater(len(_python_actions(self.ui)), 20)
         self.assertGreater(len(self.signals), 20)
         self.assertGreater(len(_frontend_events(self.front)), 20)
+        self.assertGreater(len(self.typed_actions), 20)
+        self.assertGreater(len(self.typed_events), 20)
 
     def test_every_frontend_action_has_python_handler(self):
         emitted = _frontend_actions(self.front)
@@ -97,6 +117,49 @@ class TestBridgeContract(unittest.TestCase):
         self.assertEqual(
             missing, set(),
             f"프론트가 onBackendEvent로 듣지만 pyqtSignal이 없는 이벤트: {sorted(missing)}")
+
+    def test_bridge_types_are_strict_and_cover_frontend_usage(self):
+        self.assertNotIn(
+            '(string & {})',
+            self.bridge_types,
+            '알 수 없는 bridge 이름을 허용하면 TypeScript 계약 드리프트를 잡을 수 없습니다.',
+        )
+
+        missing_actions = _frontend_actions(self.front) - self.typed_actions
+        missing_events = _frontend_events(self.front) - self.typed_events
+        self.assertEqual(
+            missing_actions,
+            set(),
+            f"frontend 사용 액션이 ActionName union에 없습니다: {sorted(missing_actions)}",
+        )
+        self.assertEqual(
+            missing_events,
+            set(),
+            f"frontend 사용 이벤트가 BackendEvent union에 없습니다: {sorted(missing_events)}",
+        )
+
+    def test_typed_names_exist_in_python_contract(self):
+        handled = _python_actions(self.ui)
+        signals = set(self.signals)
+        self.assertEqual(
+            self.typed_actions - handled - ACTION_ALLOWLIST,
+            set(),
+            'ActionName union에 Python 핸들러가 없는 이름이 있습니다.',
+        )
+        self.assertEqual(
+            self.typed_events - signals - EVENT_ALLOWLIST,
+            set(),
+            'BackendEvent union에 Python signal이 없는 이름이 있습니다.',
+        )
+
+    def test_show_toast_payload_includes_warning(self):
+        match = re.search(
+            r"interface\s+ShowToastPayload\s*\{(.*?)\}",
+            self.bridge_types,
+            re.S,
+        )
+        self.assertIsNotNone(match)
+        self.assertIn("'warning'", match.group(1))
 
 
 if __name__ == "__main__":

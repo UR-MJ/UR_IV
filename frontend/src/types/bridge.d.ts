@@ -1,9 +1,8 @@
 /**
  * 브리지 계약 타입 (Vue ↔ PyQt) — App.vue 분할/TypeScript 기반(②).
  *
- * 에디터 전용 타입(빌드는 esbuild가 무시). 액션/이벤트 이름 자동완성 + 페이로드 형태 힌트.
- * `(string & {})` 덕분에 알려진 이름은 자동완성되고, 모르는 문자열도 허용 → 이 파일이
- * 살짝 드리프트해도 에러는 안 남. **이름 정합성의 강제 소스는 tests/test_bridge_contract.py**.
+ * 액션/이벤트 이름과 페이로드의 강제 계약이다. 새 이름은 Python handler/signal과
+ * 이 파일을 함께 갱신해야 하며 tests/test_bridge_contract.py가 양쪽 드리프트를 잡는다.
  */
 
 /** Vue가 requestAction()/action()으로 호출하는 백엔드 액션 이름. */
@@ -17,10 +16,11 @@ export type ActionName =
   | 'send_to_i2i' | 'send_to_inpaint' | 'send_to_editor' | 'send_to_compare'
   | 'generate_i2i' | 'generate_inpaint' | 'start_batch' | 'start_upscale' | 'start_xyz_plot'
   | 'run_adetailer_single' | 'run_adetailer_batch' | 'stop_adetailer_batch'
-  | 'run_sam3_single' | 'run_sam3_batch' | 'open_ad_files' | 'open_ad_folder'
+  | 'run_sam3_single' | 'run_sam3_batch' | 'run_refine' | 'open_ad_files' | 'open_ad_folder'
   | 'open_batch_files' | 'open_upscale_files'
   | 'caption_pick_files' | 'caption_pick_folder' | 'caption_pick_outdir'
   | 'apply_search_result' | 'add_search_to_queue' | 'export_search_results' | 'import_search_results'
+  | 'reset_prompt_deck'
   | 'search_events' | 'select_event' | 'event_add_to_queue' | 'event_generate_now'
   | 'export_event_results' | 'import_event_results'
   | 'start_queue' | 'stop_queue' | 'pause_queue' | 'resume_queue' | 'clear_queue'
@@ -39,7 +39,9 @@ export type ActionName =
   | 'import_anima_from_forge' | 'unload_model_request' | 'show_toast'
   | 'native_tab_switch' | 'vue_tab_switch'
   | 'probe_backend' | 'select_backend' | 'pick_comfy_workflow'
-  | (string & {})
+  | 'creator_get_state' | 'creator_select_media' | 'creator_generate' | 'creator_cancel'
+  | 'comic_plan' | 'comic_generate_all' | 'comic_animate_all'
+  | 'comic_export_page' | 'comic_export_living' | 'comic_save'
 
 /** Python이 vue_bridge에서 emit하고 Vue가 onBackendEvent()로 받는 시그널 이름. */
 export type BackendEvent =
@@ -56,10 +58,13 @@ export type BackendEvent =
   | 'eventSearchProgress' | 'eventSearchResults' | 'eventImportResults'
   | 'ollamaResult' | 'genNlResult' | 'vramUpdated' | 'showNotification' | 'tabChanged'
   | 'backendSelectionRequired' | 'backendProbeResult' | 'backendSelected' | 'comfyWorkflowPicked'
-  | (string & {})
+  | 'backendRuntimeEvent' | 'generationApiEvent'
+  | 'creatorStateChanged' | 'creatorProgress' | 'creatorResult' | 'creatorMediaSelected'
+  | 'comicStoryboardReady' | 'comicDocumentChanged'
+  | 'loraManagerUrlReady' | 'refineResult'
 
 /** show_toast 페이로드 */
-export interface ShowToastPayload { type: 'success' | 'error' | 'info'; msg: string }
+export interface ShowToastPayload { type: 'success' | 'error' | 'info' | 'warning'; msg: string }
 
 /** set_rating_filter 페이로드 — g/s/q/e 중 활성 등급 */
 export interface SetRatingFilterPayload { ratings: string[] }

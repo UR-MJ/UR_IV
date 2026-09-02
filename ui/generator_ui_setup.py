@@ -183,7 +183,6 @@ class UISetupMixin:
 
         # 기존 PyQt 탭 인스턴스 (Python 백엔드에서 참조)
         from tabs.settings_tab import SettingsTab
-        from tabs.search_tab import SearchTab
         from tabs.event_gen_tab import EventGenTab
         from tabs.editor_tab import MosaicEditor
         from tabs.i2i_tab import Img2ImgTab
@@ -198,8 +197,6 @@ class UISetupMixin:
 
         self.settings_tab = SettingsTab(self)
         self.settings_tab.setParent(None)
-        self.search_tab = SearchTab(self)
-        self.search_tab.setParent(None)
         self.event_gen_tab = EventGenTab(self)
         self.event_gen_tab.setParent(None)
         self.mosaic_editor = MosaicEditor()

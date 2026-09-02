@@ -927,6 +927,7 @@ import ToggleSwitch from '../components/ToggleSwitch.vue'
 import ColorField from '../components/ColorField.vue'
 import { DEFAULT_PRESET, EDITABLE_KEYS, PRESETS, PRESET_IDS, type EditableKey } from '../theme/presets'
 import { getThemeState, reconcileTheme, resolveTheme, setTheme } from '../theme/applyTheme'
+import type { ActionName } from '../types/bridge'
 
 interface SubTab {
   id: string
@@ -2272,7 +2273,7 @@ function resetThemeOverrides() {
   requestAction('show_toast', { type: 'success', msg: '직접 바꾼 색을 모두 프리셋 기본값으로 되돌렸습니다' })
 }
 
-const act = (name: string) => {
+const act = (name: ActionName) => {
   // SAVE GLOBAL 시 localStorage 설정도 함께 저장
   if (name === 'save_settings') {
     requestAction('save_ui_prefs', {

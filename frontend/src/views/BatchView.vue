@@ -389,6 +389,7 @@ import { getBackend, onBackendEvent } from '../bridge.js'
 import { mediaUrl } from '../utils/media.js'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import CustomSelect from '../components/CustomSelect.vue'
+import type { ActionName } from '../types/bridge'
 
 interface CaptionItem {
   path: string
@@ -400,7 +401,7 @@ interface CaptionItem {
 const router = useRouter()
 const widgets = useWidgetStore()
 const subTab = ref('batch')
-const action = (name: string, payload: any = {}) => requestAction(name, payload)
+const action = (name: ActionName, payload: any = {}) => requestAction(name, payload)
 const basename = (p: any) => typeof p === 'string' ? p.split('/').pop()!.split('\\').pop() : p.name || p
 
 // ── Batch ──

@@ -10,9 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
+import hashlib
 import json
 import os
 import re
+import threading
 import time
 import uuid
 
@@ -27,6 +29,26 @@ VALID_LAYOUTS = {"auto", "grid", "vertical", "horizontal", "hero", "strip", "foc
 
 class ComicDocumentError(ValueError):
     """Raised when a Comic document violates the public interface."""
+
+
+class ComicRevisionConflict(ComicDocumentError):
+    """Raised when a writer is based on an older authoritative revision."""
+
+    def __init__(
+        self,
+        expected_revision: int,
+        actual_revision: int,
+        current_document=None,
+        conflict_path: str = "",
+    ):
+        super().__init__(
+            f"Comic 문서가 다른 곳에서 변경되었습니다 "
+            f"(요청 revision {expected_revision}, 현재 revision {actual_revision})"
+        )
+        self.expected_revision = expected_revision
+        self.actual_revision = actual_revision
+        self.current_document = current_document
+        self.conflict_path = conflict_path
 
 
 @dataclass
@@ -68,9 +90,11 @@ class ComicDocument:
     character_lock: str = ""
     panels: List[ComicPanel] = field(default_factory=list)
     bubbles: List[ComicBubble] = field(default_factory=list)
+    revision: int = 0
     updated_at: float = field(default_factory=time.time)
+    content_hash: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def _content_dict(self) -> Dict[str, Any]:
         bubbles_by_panel: Dict[int, List[Dict[str, Any]]] = {}
         serialized_bubbles = []
         for bubble in self.bubbles:
@@ -130,8 +154,49 @@ class ComicDocument:
             "height": 2100,
             "panels": panels,
             "bubbles": serialized_bubbles,
-            "updated_at": self.updated_at,
         }
+
+    def compute_content_hash(self) -> str:
+        encoded = json.dumps(
+            self._content_dict(),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload = self._content_dict()
+        content_hash = self.compute_content_hash()
+        payload.update(
+            {
+                "revision": self.revision,
+                "updatedAt": self.updated_at,
+                "updated_at": self.updated_at,
+                "contentHash": content_hash,
+                "content_hash": content_hash,
+            }
+        )
+        return payload
+
+
+@dataclass(frozen=True)
+class ComicReconcileResult:
+    """Observable outcome of reconciling the disk document and recovery mirror."""
+
+    document: Optional[ComicDocument]
+    status: str
+    conflict_path: str = ""
+
+
+_STATE_LOCKS: Dict[str, threading.RLock] = {}
+_STATE_LOCKS_GUARD = threading.Lock()
+
+
+def _state_lock(path: Path) -> threading.RLock:
+    key = str(path.resolve(strict=False)).casefold()
+    with _STATE_LOCKS_GUARD:
+        return _STATE_LOCKS.setdefault(key, threading.RLock())
 
 
 def _text(value: Any, limit: int) -> str:
@@ -158,6 +223,23 @@ def _id(value: Any, prefix: str) -> str:
     return cleaned or f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
+def _revision(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, parsed)
+
+
+def _updated_at(raw: Dict[str, Any]) -> float:
+    value = raw.get("updated_at", raw.get("updatedAt"))
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return time.time()
+    return parsed if parsed > 0 else time.time()
+
+
 class ComicStudio:
     """Validate, plan, save, and load one editable Comic document.
 
@@ -174,6 +256,7 @@ class ComicStudio:
     ) -> None:
         self.state_path = Path(state_path)
         self._complete_json = complete_json
+        self._state_lock = _state_lock(self.state_path)
 
     def normalize(self, raw: Dict[str, Any]) -> ComicDocument:
         if not isinstance(raw, dict):
@@ -268,8 +351,10 @@ class ComicStudio:
             character_lock=_text(raw.get("character_lock", raw.get("characterLock")), 3000),
             panels=panels,
             bubbles=bubbles,
-            updated_at=time.time(),
+            revision=_revision(raw.get("revision")),
+            updated_at=_updated_at(raw),
         )
+        document.content_hash = document.compute_content_hash()
         self._check_size(document)
         return document
 
@@ -308,8 +393,140 @@ class ComicStudio:
             raise ComicDocumentError(f"콘티 응답에는 정확히 {panel_count}개의 컷이 필요합니다")
         return self.normalize(raw)
 
-    def save(self, raw: Dict[str, Any] | ComicDocument) -> ComicDocument:
-        document = raw if isinstance(raw, ComicDocument) else self.normalize(raw)
+    def save(
+        self,
+        raw: Dict[str, Any] | ComicDocument,
+        expected_revision: Optional[int] = None,
+    ) -> ComicDocument:
+        """Atomically persist a document with compare-and-swap semantics.
+
+        ``expected_revision`` is the revision the caller edited.  Omitting it
+        uses the revision carried by ``raw``.  An identical retry is idempotent
+        so a lost acknowledgement never creates a false conflict.
+        """
+        with self._state_lock:
+            current = self._load_unlocked()
+            document = raw if isinstance(raw, ComicDocument) else self.normalize(raw)
+            document.content_hash = document.compute_content_hash()
+
+            if current and current.content_hash == document.content_hash:
+                return current
+
+            expected = document.revision if expected_revision is None else _revision(expected_revision)
+            actual = current.revision if current else 0
+            if expected != actual:
+                conflict_path = self._preserve_conflict_unlocked(document, "stale-write")
+                raise ComicRevisionConflict(expected, actual, current, str(conflict_path))
+
+            document.revision = actual + 1
+            document.updated_at = time.time()
+            document.content_hash = document.compute_content_hash()
+            self._write_document_unlocked(document)
+            return document
+
+    def load(self) -> Optional[ComicDocument]:
+        with self._state_lock:
+            return self._load_unlocked()
+
+    def _load_unlocked(self) -> Optional[ComicDocument]:
+        if not self.state_path.is_file():
+            return None
+        if self.state_path.stat().st_size > MAX_DOCUMENT_BYTES:
+            raise ComicDocumentError("저장된 Comic 문서가 크기 제한을 초과했습니다")
+        try:
+            raw = json.loads(self.state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ComicDocumentError(f"Comic 문서를 읽을 수 없습니다: {exc}") from exc
+        document = self.normalize(raw)
+        stored_hash = str(raw.get("contentHash", raw.get("content_hash", "")) or "")
+        if stored_hash and not re.fullmatch(r"[0-9a-f]{64}", stored_hash):
+            raise ComicDocumentError("저장된 Comic 문서의 content hash가 올바르지 않습니다")
+        if stored_hash and stored_hash != document.content_hash:
+            raise ComicDocumentError("저장된 Comic 문서의 content hash가 일치하지 않습니다")
+        return document
+
+    def reconcile(self, recovery: Any = None) -> ComicReconcileResult:
+        """Choose one authoritative document without silently losing recovery data.
+
+        Disk is authoritative.  A dirty schema-2 recovery mirror may advance it
+        only when its base revision and hash still match.  Legacy localStorage
+        documents are imported when disk is empty (or when they carry a clearly
+        newer timestamp); ambiguous divergent data is preserved as a conflict
+        copy next to the authoritative document.
+        """
+        with self._state_lock:
+            current = self._load_unlocked()
+            if recovery in (None, "", {}):
+                return ComicReconcileResult(current, "current" if current else "missing")
+
+            try:
+                candidate, metadata = self._decode_recovery(recovery)
+            except ComicDocumentError:
+                conflict_path = self._preserve_raw_recovery_unlocked(recovery, "invalid-recovery")
+                return ComicReconcileResult(current, "invalid-recovery", str(conflict_path))
+            if current is None:
+                saved = self.save(candidate, expected_revision=0)
+                return ComicReconcileResult(saved, "recovered")
+            if candidate.content_hash == current.content_hash:
+                return ComicReconcileResult(current, "current")
+
+            if metadata["kind"] == "mirror":
+                if not metadata["dirty"]:
+                    return ComicReconcileResult(current, "current")
+                if (
+                    metadata["base_revision"] == current.revision
+                    and metadata["base_content_hash"] == current.content_hash
+                ):
+                    saved = self.save(candidate, expected_revision=current.revision)
+                    return ComicReconcileResult(saved, "recovered")
+            elif metadata["has_updated_at"] and candidate.updated_at > current.updated_at:
+                saved = self.save(candidate, expected_revision=current.revision)
+                return ComicReconcileResult(saved, "recovered")
+
+            conflict_path = self._preserve_conflict_unlocked(candidate, metadata["kind"])
+            return ComicReconcileResult(current, "conflict", str(conflict_path))
+
+    def _decode_recovery(self, recovery: Any) -> tuple[ComicDocument, Dict[str, Any]]:
+        if not isinstance(recovery, dict):
+            raise ComicDocumentError("Comic 복구 데이터는 객체여야 합니다")
+        if recovery.get("schema") == 2:
+            document_json = recovery.get("documentJson")
+            if not isinstance(document_json, str):
+                raise ComicDocumentError("Comic 복구 mirror에 documentJson이 없습니다")
+            encoded = document_json.encode("utf-8")
+            if len(encoded) > MAX_DOCUMENT_BYTES:
+                raise ComicDocumentError("Comic 복구 mirror가 크기 제한을 초과했습니다")
+            expected_hash = str(recovery.get("recoveryHash", "") or "").lower()
+            actual_hash = hashlib.sha256(encoded).hexdigest()
+            if not re.fullmatch(r"[0-9a-f]{64}", expected_hash) or expected_hash != actual_hash:
+                raise ComicDocumentError("Comic 복구 mirror hash가 일치하지 않습니다")
+            try:
+                raw = json.loads(document_json)
+            except json.JSONDecodeError as exc:
+                raise ComicDocumentError(f"Comic 복구 mirror를 읽을 수 없습니다: {exc}") from exc
+            if not isinstance(raw, dict):
+                raise ComicDocumentError("Comic 복구 mirror 문서는 객체여야 합니다")
+            base_hash = str(recovery.get("baseContentHash", "") or "").lower()
+            if base_hash and not re.fullmatch(r"[0-9a-f]{64}", base_hash):
+                raise ComicDocumentError("Comic 복구 mirror의 base hash가 올바르지 않습니다")
+            return self.normalize(raw), {
+                "kind": "mirror",
+                "dirty": bool(recovery.get("dirty", False)),
+                "base_revision": _revision(recovery.get("baseRevision")),
+                "base_content_hash": base_hash,
+                "has_updated_at": recovery.get("updatedAt") is not None,
+            }
+
+        has_updated_at = "updated_at" in recovery or "updatedAt" in recovery
+        return self.normalize(recovery), {
+            "kind": "legacy",
+            "dirty": True,
+            "base_revision": 0,
+            "base_content_hash": "",
+            "has_updated_at": has_updated_at,
+        }
+
+    def _write_document_unlocked(self, document: ComicDocument) -> None:
         payload = document.to_dict()
         encoded = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
         if len(encoded) > MAX_DOCUMENT_BYTES:
@@ -321,18 +538,50 @@ class ComicStudio:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, self.state_path)
-        return document
 
-    def load(self) -> Optional[ComicDocument]:
-        if not self.state_path.is_file():
-            return None
-        if self.state_path.stat().st_size > MAX_DOCUMENT_BYTES:
-            raise ComicDocumentError("저장된 Comic 문서가 크기 제한을 초과했습니다")
-        try:
-            raw = json.loads(self.state_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise ComicDocumentError(f"Comic 문서를 읽을 수 없습니다: {exc}") from exc
-        return self.normalize(raw)
+    def _preserve_conflict_unlocked(self, document: ComicDocument, source: str) -> Path:
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        path = self.state_path.with_name(
+            f"{self.state_path.stem}.recovery-conflict-{stamp}-{uuid.uuid4().hex[:8]}.json"
+        )
+        payload = {
+            "schema": 1,
+            "source": source,
+            "preservedAt": time.time(),
+            "document": document.to_dict(),
+        }
+        encoded = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        temporary = path.with_suffix(path.suffix + ".writing")
+        with temporary.open("wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        return path
+
+    def _preserve_raw_recovery_unlocked(self, recovery: Any, source: str) -> Path:
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        path = self.state_path.with_name(
+            f"{self.state_path.stem}.recovery-conflict-{stamp}-{uuid.uuid4().hex[:8]}.json"
+        )
+        payload = {
+            "schema": 1,
+            "source": source,
+            "preservedAt": time.time(),
+            "recovery": recovery,
+        }
+        encoded = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        if len(encoded) > MAX_DOCUMENT_BYTES + 64 * 1024:
+            raise ComicDocumentError("손상된 Comic 복구본이 보관 한도를 초과했습니다")
+        temporary = path.with_suffix(path.suffix + ".writing")
+        with temporary.open("wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        return path
 
     @staticmethod
     def _parse_json_response(text: str) -> Dict[str, Any]:

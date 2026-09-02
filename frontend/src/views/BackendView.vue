@@ -21,10 +21,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
+import type { ActionName } from '../types/bridge'
 
 const backendUrl = ref('http://127.0.0.1:7860')
 
-function action(name: string) { requestAction(name) }
+function action(name: ActionName) { requestAction(name) }
 function openInBrowser() {
   requestAction('open_url', { url: backendUrl.value })
 }

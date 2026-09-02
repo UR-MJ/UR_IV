@@ -196,8 +196,6 @@ class SettingsMixin:
             # Inpaint 탭 설정
             "inpaint_settings": self._get_inpaint_settings() if hasattr(self, 'inpaint_tab') else {},
 
-            # Search 탭 설정
-            "search_criteria": self.search_tab._get_criteria_dict() if hasattr(self, 'search_tab') else {},
         }
         return settings
     
@@ -493,11 +491,6 @@ class SettingsMixin:
             inp_s = settings.get("inpaint_settings", {})
             if inp_s and hasattr(self, 'inpaint_tab'):
                 self._apply_inpaint_settings(inp_s)
-
-            # Search 탭 복원
-            search_s = settings.get("search_criteria", {})
-            if search_s and hasattr(self, 'search_tab'):
-                self.search_tab._apply_criteria_dict(search_s)
 
             # 백엔드 설정 복원
             if "backend_type" in settings:

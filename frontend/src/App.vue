@@ -989,6 +989,7 @@ import { useHighRes } from './composables/useHighRes.js'
 import { useRatingFilter } from './composables/useRatingFilter.js'
 import { useBackendGate } from './composables/useBackendGate'
 import { reconcileTheme } from './theme/applyTheme'
+import type { ActionName } from './types/bridge'
 
 const wStore = useWidgetStore()
 const storeWidgets = wStore.widgets
@@ -1672,7 +1673,7 @@ function openWildcardByName(name: string) {
   selectWildcard(name)
 }
 
-function action(name: string, payload: any = {}) { requestAction(name, payload) }
+function action(name: ActionName, payload: any = {}) { requestAction(name, payload) }
 
 function insertWildcardTag(tag: string) {
   const cur = storeWidgets.main_prompt_text || ''

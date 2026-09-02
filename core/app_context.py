@@ -50,6 +50,11 @@ class Events:
     GENERATION_FINISHED = "generation_finished"  # data: {image_data, info}
     GENERATION_FAILED = "generation_failed"      # data: error str
 
+    # 자동화 흐름 (실제 상태 머신은 GeneratorActionsMixin이 소유)
+    AUTOMATION_STARTED = "automation_started"        # data: {mode, limit, delay}
+    AUTOMATION_ITERATION_END = "automation_iter_end"  # data: {iter, waiting, running}
+    AUTOMATION_STOPPED = "automation_stopped"        # data: {reason, completed}
+
     # 프롬프트 파이프라인
     PROMPT_GENERATED = "prompt_generated"        # data: final prompt str
     PROMPT_CONTEXT_READY = "prompt_context_ready"  # data: PromptContext

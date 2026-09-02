@@ -152,12 +152,7 @@ class GeneratorMainUI(
             # vue_bridge가 준비되고 Vue가 시그널 받을 준비 끝난 후 (1.5초 후) 적용
             QTimer.singleShot(1500, self.automation_persistence.initialize)
 
-            # 12. PR 2 — GenerationQueueV2 이벤트 브리지
-            #     기존 queue_panel은 그대로, V2는 AppContext 서비스로 노출
-            #     queue_panel.queue_changed → V2.publish → 다른 모듈 구독 가능
-            self._setup_queue_v2_bridge()
-
-            # 13. PR 1 — PromptPipeline 표준 훅 등록
+            # 12. PR 1 — PromptPipeline 표준 훅 등록
             #     기존 처리 뒤에 호출되어 비파괴적 — 회귀 위험 없음
             try:
                 from core.standard_hooks import register_standard_hooks
@@ -906,28 +901,16 @@ class GeneratorMainUI(
                 self._import_event_results()
 
             elif action == 'select_event':
-                idx = payload.get('index', 0)
-                if hasattr(self, 'event_gen_tab') and hasattr(self.event_gen_tab, 'result_list'):
-                    if 0 <= idx < self.event_gen_tab.result_list.count():
-                        self.event_gen_tab.result_list.setCurrentRow(idx)
-                        self.event_gen_tab._on_result_clicked(idx)
+                # Event selection is owned by EventGenView.  Keep this as a
+                # compatibility no-op for older frontend builds instead of
+                # mutating the hidden legacy PyQt result list.
+                pass
 
             elif action == 'event_add_to_queue':
-                if hasattr(self, 'event_gen_tab'):
-                    scenarios = payload.get('scenarios', [])
-                    if scenarios:
-                        self.receive_event_scenarios(scenarios)
-                    elif hasattr(self.event_gen_tab, '_build_scenarios'):
-                        scenarios = self.event_gen_tab._build_scenarios()
-                        self.receive_event_scenarios(scenarios)
+                self._handle_event_generation_request(payload, start_immediately=False)
 
             elif action == 'event_generate_now':
-                if hasattr(self, 'event_gen_tab'):
-                    if hasattr(self.event_gen_tab, '_build_scenarios'):
-                        scenarios = self.event_gen_tab._build_scenarios()
-                        self.receive_event_scenarios(scenarios)
-                        if hasattr(self, 'queue_manager'):
-                            self.queue_manager.start()
+                self._handle_event_generation_request(payload, start_immediately=True)
 
             # ═══════ PNG Info 전송/생성 ═══════
             elif action == 'pnginfo_send_prompt':
@@ -2441,24 +2424,54 @@ class GeneratorMainUI(
         else:
             event.ignore()
 
-    # ── 이벤트 검색 (비동기) ──
+    # ── 이벤트 생성 / 검색 ──
+
+    def _handle_event_generation_request(self, payload, *, start_immediately):
+        """Validate the Vue-owned selection and enqueue that exact snapshot."""
+        from core.event_generation import (
+            EventGenerationPlanError,
+            plan_event_generation,
+        )
+
+        try:
+            plan = plan_event_generation(payload)
+        except EventGenerationPlanError as exc:
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.showNotification.emit('warning', str(exc))
+            self.show_status(str(exc))
+            return 0
+
+        self.receive_event_scenarios(list(plan.scenarios))
+        if start_immediately and hasattr(self, 'queue_manager'):
+            self.queue_manager.start()
+        return plan.count
 
     def _start_event_search(self, payload):
         """이벤트 검색을 비동기 워커로 실행 (진행도 포함)"""
-        loader = getattr(self.event_gen_tab, 'event_loader', None) if hasattr(self, 'event_gen_tab') else None
+        raw_ratings = payload.get('ratings', ['g'])
+        ratings = tuple(
+            rating for rating in raw_ratings
+            if isinstance(rating, str) and rating in {'g', 's', 'q', 'e'}
+        ) if isinstance(raw_ratings, list) else ('g',)
+        if not ratings:
+            ratings = ('g',)
 
-        if loader is None:
+        loader = getattr(self, '_event_loader', None)
+        loaded_ratings = getattr(self, '_event_loader_ratings', ())
+
+        if loader is None or frozenset(loaded_ratings) != frozenset(ratings):
             # 데이터 자동 로드 후 검색
             self._pending_event_payload = payload
-            self._auto_load_event_data(payload.get('ratings', ['g']))
+            self._pending_event_ratings = ratings
+            self._auto_load_event_data(ratings)
             return
 
         self._run_event_search_worker(loader, payload)
 
     def _auto_load_event_data(self, ratings):
         """이벤트 데이터 자동 로드 (Vue 진행도 표시)"""
-        from tabs.event_gen_tab import EventDataLoadWorker
         from config import EVENT_PARQUET_DIR
+        from workers.event_data_load_worker import EventDataLoadWorker
 
         self.vue_bridge.searchStatus.emit('데이터 로딩 중...')
 
@@ -2471,16 +2484,21 @@ class GeneratorMainUI(
     def _on_event_data_loaded(self, result):
         """데이터 로드 완료 → 검색 시작"""
         if isinstance(result, str):
+            self._pending_event_payload = {}
+            self._pending_event_ratings = ()
             self.vue_bridge.eventSearchResults.emit(json.dumps({'error': result}))
             return
 
-        if hasattr(self, 'event_gen_tab'):
-            self.event_gen_tab.event_loader = result
+        self._event_loader = result
+        self._event_loader_ratings = tuple(
+            getattr(self, '_pending_event_ratings', ('g',))
+        )
 
         payload = getattr(self, '_pending_event_payload', {})
         if payload:
             self._run_event_search_worker(result, payload)
             self._pending_event_payload = {}
+            self._pending_event_ratings = ()
 
     def _export_event_results(self, payload):
         """이벤트 검색 결과를 .parquet로 내보내기"""
@@ -2757,54 +2775,6 @@ class GeneratorMainUI(
             )
         except Exception:
             pass
-
-    # ── PR 2: Queue v2 이벤트 브리지 ───────────────────────
-    def _setup_queue_v2_bridge(self) -> None:
-        """기존 queue_panel과 GenerationQueueV2 사이의 이벤트 브리지.
-
-        설계:
-        - V2를 실제 작업 처리에 쓰지 않음 (기존 queue_panel + workers가 담당)
-        - V2는 AppContext "queue_v2" 서비스로 노출 — 다른 모듈이 queue 상태를
-          구조화된 형태로 조회 / 이벤트 구독 가능
-        - queue_panel.queue_changed 시그널 → V2를 미러링 + AppContext 이벤트 발행
-        """
-        try:
-            from core.generation_queue_v2 import GenerationQueueV2, QueueEvents
-            from core.app_context import get_context
-
-            # V2 인스턴스 — processor는 사용 안 함 (no-op), 워커도 시작 안 함
-            qv2 = GenerationQueueV2(
-                processor=lambda payload: None,
-                publish_events=True,
-            )
-            get_context().register_service("queue_v2", qv2)
-            self._queue_v2 = qv2
-
-            qp = getattr(self, "queue_panel", None)
-            if qp is None or not hasattr(qp, "queue_changed"):
-                return
-
-            def _sync_to_v2(count: int) -> None:
-                """queue_panel 상태를 V2에 미러링 + 이벤트 발행."""
-                try:
-                    # V2 비우기
-                    qv2.clear_pending()
-                    # queue_panel 아이템을 우선순위 순으로 enqueue (인덱스가 priority)
-                    items = getattr(qp, "queue_items", []) or []
-                    for idx, item in enumerate(items):
-                        qv2.enqueue(
-                            payload=dict(item),
-                            priority=idx,
-                            label=item.get("id", f"item-{idx}"),
-                        )
-                except Exception:
-                    pass
-
-            qp.queue_changed.connect(_sync_to_v2)
-            # 초기 1회 동기화
-            _sync_to_v2(len(getattr(qp, "queue_items", []) or []))
-        except Exception as e:
-            print(f"[Warning] queue v2 bridge setup 실패: {e}")
 
     # ── PR 8: Instant Wildcards ────────────────────────────
     def _get_instant_wildcards(self):

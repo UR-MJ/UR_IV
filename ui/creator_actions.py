@@ -141,7 +141,7 @@ class CreatorActionsMixin:
 
     # ── Creator state and generic generation ──────────────────────────────
 
-    def _creator_request_state(self, _payload: dict) -> None:
+    def _creator_request_state(self, payload: dict) -> None:
         def _work():
             state = {
                 "running": self._creator_running,
@@ -170,11 +170,13 @@ class CreatorActionsMixin:
 
             comic = self._comic_studio()
             try:
-                document = comic.load()
-                if document:
-                    self._creator_emit("comicDocumentChanged", document.to_dict())
+                reconciled = comic.reconcile(payload.get("comicRecovery"))
+                persistence = {"status": reconciled.status, "source": "backend"}
+                if reconciled.conflict_path:
+                    persistence["conflictPath"] = reconciled.conflict_path
+                self._comic_emit_document(reconciled.document, **persistence)
             except Exception as exc:
-                self._creator_emit("comicDocumentChanged", {"error": str(exc)})
+                self._comic_emit_document(None, status="error", error=str(exc))
 
         threading.Thread(target=_work, daemon=True, name="creator-state").start()
 
@@ -465,17 +467,57 @@ class CreatorActionsMixin:
             str(payload.get("style", payload.get("artStyle", "manga"))),
             str(payload.get("characterLock", payload.get("character_lock", ""))),
         )
-        studio.save(document)
+        expected = payload.get("expectedRevision")
+        document = studio.save(
+            document,
+            expected_revision=int(expected) if expected is not None else None,
+        )
         self._creator_emit("comicStoryboardReady", document.to_dict())
-        self._creator_emit("comicDocumentChanged", document.to_dict())
+        self._comic_emit_document(document, status="saved", source="plan")
         self._creator_emit("creatorResult", {"ok": True, "mode": "comic_plan"})
 
     def _comic_save(self, payload: dict) -> None:
+        from core.comic_studio import ComicRevisionConflict
+
+        request_id = str(payload.get("requestId", ""))[:100]
         try:
-            document = self._comic_studio().save(payload.get("document", payload))
-            self._creator_emit("comicDocumentChanged", document.to_dict())
+            expected = payload.get("expectedRevision")
+            document = self._comic_studio().save(
+                payload.get("document", payload),
+                expected_revision=int(expected) if expected is not None else None,
+            )
+            self._comic_emit_document(
+                document,
+                status="saved",
+                source="backend",
+                requestId=request_id,
+            )
+        except ComicRevisionConflict as exc:
+            self._comic_emit_document(
+                exc.current_document,
+                status="conflict",
+                source="backend",
+                requestId=request_id,
+                expectedRevision=exc.expected_revision,
+                actualRevision=exc.actual_revision,
+                conflictPath=exc.conflict_path,
+                error=str(exc),
+            )
         except Exception as exc:
-            self._creator_emit("comicDocumentChanged", {"error": str(exc)})
+            self._comic_emit_document(
+                None,
+                status="error",
+                source="backend",
+                requestId=request_id,
+                error=str(exc),
+            )
+
+    def _comic_emit_document(self, document, *, status: str, **persistence) -> None:
+        payload = {
+            "document": document.to_dict() if document is not None else None,
+            "persistence": {"status": status, **persistence},
+        }
+        self._creator_emit("comicDocumentChanged", payload)
 
     def _comic_start_generate_all(self, payload: dict) -> None:
         self._creator_run_thread("comic_generate", self._comic_generate_all, payload)
@@ -524,8 +566,8 @@ class CreatorActionsMixin:
                     result.image_data, f"comic_panel_{index + 1}.png", "comic"
                 )
                 document.panels[index].image_path = path
-                studio.save(document)
-                self._creator_emit("comicDocumentChanged", document.to_dict())
+                document = studio.save(document)
+                self._comic_emit_document(document, status="saved", source="generation")
 
         last_path = document.panels[-1].image_path if document.panels else ""
         self._creator_emit(
@@ -575,8 +617,8 @@ class CreatorActionsMixin:
             result.image_data, f"comic_panel_{panel_index + 1}.png", "comic"
         )
         document.panels[panel_index].image_path = path
-        studio.save(document)
-        self._creator_emit("comicDocumentChanged", document.to_dict())
+        document = studio.save(document)
+        self._comic_emit_document(document, status="saved", source="generation")
         self._creator_emit(
             "creatorResult",
             {
@@ -647,8 +689,8 @@ class CreatorActionsMixin:
                 if not video:
                     raise RuntimeError(f"컷 {index + 1} 영상 결과가 없습니다")
                 panel.video_path = video["path"]
-                studio.save(document)
-                self._creator_emit("comicDocumentChanged", document.to_dict())
+                document = studio.save(document)
+                self._comic_emit_document(document, status="saved", source="generation")
         last_path = document.panels[-1].video_path if document.panels else ""
         self._creator_emit(
             "creatorResult",
@@ -675,7 +717,8 @@ class CreatorActionsMixin:
                 raise ValueError("Comic 이미지가 비어 있거나 50MB 제한을 초과했습니다")
             path = self._creator_write_bytes(data, f"comic_page.{fmt}", "comic")
             if payload.get("document"):
-                self._comic_studio().save(payload["document"])
+                document = self._comic_studio().save(payload["document"])
+                self._comic_emit_document(document, status="saved", source="export")
             self._creator_emit(
                 "creatorResult",
                 {

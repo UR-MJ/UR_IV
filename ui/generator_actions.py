@@ -432,9 +432,8 @@ class ActionsMixin:
 
         # PR 3: 시작 이벤트 발행
         try:
-            from core.app_context import get_context
-            from core.automation_controller import AutomationEvents
-            get_context().publish(AutomationEvents.STARTED, {
+            from core.app_context import Events, get_context
+            get_context().publish(Events.AUTOMATION_STARTED, {
                 'mode': settings.get('termination_mode', 'count'),
                 'limit': settings.get('termination_limit', 0),
                 'delay': settings.get('delay', 1.0),
@@ -705,9 +704,8 @@ class ActionsMixin:
             }))
         # PR 3: AppContext에도 발행 (다른 모듈이 구독 가능 — 큐, 통계 등)
         try:
-            from core.app_context import get_context
-            from core.automation_controller import AutomationEvents
-            get_context().publish(AutomationEvents.ITERATION_END, {
+            from core.app_context import Events, get_context
+            get_context().publish(Events.AUTOMATION_ITERATION_END, {
                 'iter': getattr(self, 'auto_gen_count', 0),
                 'waiting': waiting,
                 'running': self.is_automating,
@@ -736,9 +734,8 @@ class ActionsMixin:
         # PR 3: 중지 이벤트 발행
         if was_running:
             try:
-                from core.app_context import get_context
-                from core.automation_controller import AutomationEvents
-                get_context().publish(AutomationEvents.STOPPED, {
+                from core.app_context import Events, get_context
+                get_context().publish(Events.AUTOMATION_STOPPED, {
                     'reason': message or 'user_stop',
                     'completed': getattr(self, 'auto_gen_count', 0),
                 })

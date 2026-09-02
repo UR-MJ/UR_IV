@@ -254,6 +254,15 @@
 import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
+import {
+  createComicRecoveryMirror,
+  parseComicRecovery,
+  prepareComicDocumentForBackend,
+  recoveryDocument,
+  saveConflictDecision,
+  shouldAcceptAuthoritativeRevision,
+  verifyComicRecoveryMirror,
+} from '../utils/comicRecovery'
 import { mediaUrl } from '../utils/media.js'
 
 type CreatorMode = 'video' | 'comic' | 'krea'
@@ -265,6 +274,8 @@ interface ComicPanel { id: string; prompt: string; negative: string; motion: str
 interface ComicDocument {
   version: number; id: string; title: string; scene: string; style: string; layout: string
   width: number; height: number; panels: ComicPanel[]
+  revision: number; contentHash: string; updatedAt: number
+  [key: string]: any
 }
 interface CreatorResult { path?: string; url?: string; mediaType?: string; type?: string; thumbnail?: string; [key: string]: any }
 
@@ -316,18 +327,32 @@ const kreaForm = ref({
 })
 
 const planner = ref({ scene: '', panelCount: 4, style: 'Anime' })
-const comicDoc = ref<ComicDocument>(normalizeDocument(loadJson(STORAGE_KEY, null)))
+const storedComicRecoveryRaw = window.localStorage.getItem(STORAGE_KEY)
+const storedComicRecovery = parseComicRecovery(storedComicRecoveryRaw)
+const initialRecoveryDocument = storedComicRecovery?.schema === 2
+  ? null
+  : recoveryDocument(storedComicRecovery)
+const comicDoc = ref<ComicDocument>(normalizeDocument(initialRecoveryDocument))
 planner.value.scene = comicDoc.value.scene
 planner.value.panelCount = comicDoc.value.panels.length || 4
 planner.value.style = comicDoc.value.style
 const selectedPanelId = ref(comicDoc.value.panels[0]?.id || '')
-const saveStatus = ref('LOCAL AUTOSAVE')
+const saveStatus = ref('백엔드 확인 중')
 const historyEntries = ref<string[]>([snapshot(comicDoc.value)])
 const historyIndex = ref(0)
 let historyTimer: ReturnType<typeof setTimeout> | null = null
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let formsTimer: ReturnType<typeof setTimeout> | null = null
 let restoringHistory = false
+let applyingBackendDocument = false
+let persistenceReady = false
+let authoritativeRevision = comicDoc.value.revision
+let authoritativeContentHash = comicDoc.value.contentHash
+let documentChangeSequence = 0
+let mirrorWriteSequence = 0
+let saveRequestSequence = 0
+let activeSave: { requestId: string; changeSequence: number } | null = null
+let pendingSave = false
 
 /** 상태 문자열은 백엔드가 영어 코드로 준다 — 화면에는 한국어로 옮긴다. */
 const STATE_LABELS: Record<string, string> = {
@@ -378,16 +403,58 @@ const OutputPreview = defineComponent({
 })
 
 watch(comicDoc, () => {
+  if (applyingBackendDocument) return
+  documentChangeSequence += 1
   saveStatus.value = 'SAVING...'
+  pendingSave = true
+  void persistComicRecovery(true)
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    try { window.localStorage.setItem(STORAGE_KEY, snapshot(comicDoc.value)); saveStatus.value = 'SAVED LOCALLY' }
-    catch { saveStatus.value = 'SAVE FAILED' }
-  }, 280)
+  saveTimer = setTimeout(sendComicSave, 280)
   if (restoringHistory) return
   if (historyTimer) clearTimeout(historyTimer)
   historyTimer = setTimeout(pushHistory, 420)
 }, { deep: true })
+
+async function persistComicRecovery(dirty: boolean, document = comicDoc.value) {
+  const sequence = ++mirrorWriteSequence
+  try {
+    const mirror = await createComicRecoveryMirror(backendComicDocument(document), {
+      baseRevision: dirty ? authoritativeRevision : document.revision,
+      baseContentHash: dirty ? authoritativeContentHash : document.contentHash,
+      updatedAt: Date.now() / 1000,
+      dirty,
+    })
+    if (sequence !== mirrorWriteSequence) return
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mirror))
+    if (dirty && !persistenceReady) saveStatus.value = '복구본 보관됨'
+  } catch {
+    if (sequence === mirrorWriteSequence) saveStatus.value = '복구본 저장 실패'
+  }
+}
+
+function sendComicSave() {
+  saveTimer = null
+  if (!persistenceReady || activeSave) return
+  const requestId = `comic-save-${++saveRequestSequence}`
+  activeSave = { requestId, changeSequence: documentChangeSequence }
+  pendingSave = false
+  saveStatus.value = '백엔드 저장 중'
+  requestAction('comic_save', {
+    document: backendComicDocument(),
+    expectedRevision: authoritativeRevision,
+    requestId,
+  })
+}
+
+function schedulePendingComicSave() {
+  if (!pendingSave || !persistenceReady || activeSave) return
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(sendComicSave, 0)
+}
+
+function backendComicDocument(document: ComicDocument = comicDoc.value) {
+  return prepareComicDocumentForBackend(JSON.parse(snapshot(document)))
+}
 
 watch([videoForm, kreaForm], () => {
   if (formsTimer) clearTimeout(formsTimer)
@@ -412,6 +479,7 @@ function makePanel(index = 0): ComicPanel {
 }
 function normalizeBubble(raw: any): ComicBubble {
   return {
+    ...(raw && typeof raw === 'object' ? raw : {}),
     id: String(raw?.id || uid('bubble')), text: String(raw?.text || ''),
     kind: ['speech', 'thought', 'narration'].includes(raw?.kind) ? raw.kind : 'speech',
     x: clamp(Number(raw?.x), 0, 100, 8), y: clamp(Number(raw?.y), 0, 100, 8),
@@ -421,6 +489,7 @@ function normalizeBubble(raw: any): ComicBubble {
 function normalizePanel(raw: any, index: number): ComicPanel {
   const source = raw || makePanel(index)
   return {
+    ...(source && typeof source === 'object' ? source : {}),
     id: String(source.id || uid('panel')), prompt: String(source.prompt || source.description || ''),
     negative: String(source.negative || ''), motion: String(source.motion || source.camera || ''),
     imagePath: String(source.imagePath || source.image_path || source.path || ''),
@@ -432,10 +501,14 @@ function normalizeDocument(raw: any): ComicDocument {
   const panelRaw = Array.isArray(raw?.panels) ? raw.panels.slice(0, 6) : [makePanel(0), makePanel(1), makePanel(2), makePanel(3)]
   if (!panelRaw.length) panelRaw.push(makePanel(0))
   return {
+    ...(raw && typeof raw === 'object' ? raw : {}),
     version: 1, id: String(raw?.id || uid('comic')), title: String(raw?.title || 'Untitled Comic'),
     scene: String(raw?.scene || ''), style: String(raw?.style || 'Anime'),
     layout: layouts.some(l => l.id === raw?.layout) ? raw.layout : 'auto',
     width: 1400, height: 2100, panels: panelRaw.map(normalizePanel),
+    revision: Math.max(0, Math.trunc(Number(raw?.revision) || 0)),
+    contentHash: String(raw?.contentHash || raw?.content_hash || ''),
+    updatedAt: Number(raw?.updatedAt || raw?.updated_at) || 0,
   }
 }
 function clamp(value: number, min: number, max: number, fallback: number) {
@@ -474,20 +547,25 @@ function generateKrea() {
   })
 }
 function planComic() {
-  requestAction('comic_plan', { scene: planner.value.scene.trim(), panelCount: planner.value.panelCount, style: planner.value.style })
+  requestAction('comic_plan', {
+    scene: planner.value.scene.trim(),
+    panelCount: planner.value.panelCount,
+    style: planner.value.style,
+    expectedRevision: authoritativeRevision,
+  })
 }
-function generateAllPanels() { requestAction('comic_generate_all', { document: JSON.parse(snapshot(comicDoc.value)) }) }
+function generateAllPanels() { requestAction('comic_generate_all', { document: backendComicDocument() }) }
 function animateAllPanels() {
   requestAction('comic_animate_all', {
-    document: JSON.parse(snapshot(comicDoc.value)),
+    document: backendComicDocument(),
     videoSettings: { width: 608, height: 352, frames: 124, fps: 24, includeAudio: true },
   })
 }
 function exportLivingComic() {
-  requestAction('comic_export_living', { document: JSON.parse(snapshot(comicDoc.value)), fps: 8, seconds: 4 })
+  requestAction('comic_export_living', { document: backendComicDocument(), fps: 8, seconds: 4 })
 }
 function generatePanel(panel: ComicPanel) {
-  requestAction('creator_generate', { mode: 'comic_panel', panel: JSON.parse(snapshot(panel)), document: JSON.parse(snapshot(comicDoc.value)) })
+  requestAction('creator_generate', { mode: 'comic_panel', panel: JSON.parse(snapshot(panel)), document: backendComicDocument() })
 }
 function addBubble() {
   if (!selectedPanel.value) return
@@ -537,10 +615,130 @@ function undo() { restoreHistory(historyIndex.value - 1) }
 function redo() { restoreHistory(historyIndex.value + 1) }
 function replaceDocument(raw: any) {
   const normalized = normalizeDocument(raw?.document || raw)
+  applyingBackendDocument = true
   comicDoc.value = normalized
   planner.value = { scene: normalized.scene, panelCount: normalized.panels.length, style: normalized.style }
   selectedPanelId.value = normalized.panels[0]?.id || ''
-  nextTick(pushHistory)
+  void nextTick(() => {
+    applyingBackendDocument = false
+    pushHistory()
+  })
+}
+
+function updateAuthoritativeMetadata(raw: any) {
+  const normalized = normalizeDocument(raw)
+  authoritativeRevision = normalized.revision
+  authoritativeContentHash = normalized.contentHash
+  applyingBackendDocument = true
+  comicDoc.value.revision = normalized.revision
+  comicDoc.value.contentHash = normalized.contentHash
+  comicDoc.value.content_hash = normalized.contentHash
+  comicDoc.value.updatedAt = normalized.updatedAt
+  comicDoc.value.updated_at = normalized.updatedAt
+  void nextTick(() => { applyingBackendDocument = false })
+}
+
+function handleComicDocumentChanged(raw: any) {
+  const data = decodePayload(raw)
+  const persistence = data?.persistence || { status: 'saved', source: 'legacy-event' }
+  const status = String(persistence.status || 'saved')
+  const requestId = String(persistence.requestId || '')
+  const authoritative = data?.document || (data?.panels ? data : null)
+  const matchingSave = !!activeSave && !!requestId && activeSave.requestId === requestId
+  const wasPersistenceReady = persistenceReady
+
+  if (wasPersistenceReady && authoritative) {
+    const incomingRevision = normalizeDocument(authoritative).revision
+    if (!shouldAcceptAuthoritativeRevision(authoritativeRevision, incomingRevision)) {
+      if (matchingSave) activeSave = null
+      schedulePendingComicSave()
+      return
+    }
+  }
+
+  if (status === 'error') {
+    if (matchingSave) activeSave = null
+    persistenceReady = true
+    pendingSave = true
+    saveStatus.value = '백엔드 저장 실패'
+    toast('error', String(persistence.error || 'Comic 문서를 저장하지 못했습니다'))
+    return
+  }
+
+  persistenceReady = true
+  if (matchingSave) {
+    const sentSequence = activeSave!.changeSequence
+    activeSave = null
+    if (status === 'conflict') {
+      if (saveConflictDecision(sentSequence, documentChangeSequence) === 'preserve-newer-local') {
+        pendingSave = true
+        saveStatus.value = '최신 로컬 편집 충돌본 보관 중'
+        void persistComicRecovery(true)
+        schedulePendingComicSave()
+        return
+      }
+      if (authoritative) {
+        const normalized = normalizeDocument(authoritative)
+        authoritativeRevision = normalized.revision
+        authoritativeContentHash = normalized.contentHash
+        replaceDocument(normalized)
+        pendingSave = false
+        void persistComicRecovery(false, normalized)
+      }
+      const location = persistence.conflictPath ? ` (${persistence.conflictPath})` : ''
+      saveStatus.value = '저장 충돌 · 백엔드 버전 복원'
+      toast('error', `동시 편집 충돌본을 별도 보관했습니다${location}`)
+      return
+    }
+    if (authoritative) {
+      if (sentSequence === documentChangeSequence) {
+        const normalized = normalizeDocument(authoritative)
+        authoritativeRevision = normalized.revision
+        authoritativeContentHash = normalized.contentHash
+        replaceDocument(normalized)
+        pendingSave = false
+        saveStatus.value = '백엔드 저장됨'
+        void persistComicRecovery(false, normalized)
+      } else {
+        updateAuthoritativeMetadata(authoritative)
+        pendingSave = true
+        void persistComicRecovery(true)
+      }
+    }
+    schedulePendingComicSave()
+    return
+  }
+
+  // 시작 응답 또는 생성 작업의 문서 갱신이 도착하기 전에 사용자가 편집했다면,
+  // 보이는 초안을 덮지 않는다. 기존 base revision으로 저장을 시도해 백엔드가
+  // 안전하게 수락하거나 conflict copy로 보존하도록 한다.
+  if ((!wasPersistenceReady && documentChangeSequence > 0) || pendingSave) {
+    pendingSave = true
+    schedulePendingComicSave()
+    return
+  }
+
+  if (authoritative) {
+    const normalized = normalizeDocument(authoritative)
+    authoritativeRevision = normalized.revision
+    authoritativeContentHash = normalized.contentHash
+    replaceDocument(normalized)
+    saveStatus.value = status === 'conflict'
+      ? '충돌본 별도 보관됨'
+      : status === 'invalid-recovery' ? '손상 복구본 격리 · 백엔드 복원' : '백엔드 저장됨'
+    void persistComicRecovery(false, normalized)
+    if (status === 'conflict' || status === 'invalid-recovery') {
+      const location = persistence.conflictPath ? ` (${persistence.conflictPath})` : ''
+      const message = status === 'invalid-recovery'
+        ? '손상된 로컬 복구본을 격리하고 백엔드 문서를 복원했습니다'
+        : '로컬 복구본과 달라 별도 보관했습니다'
+      toast('info', `${message}${location}`)
+    }
+  } else if (status === 'missing' || status === 'invalid-recovery') {
+    pendingSave = true
+    saveStatus.value = '새 문서 저장 중'
+    schedulePendingComicSave()
+  }
 }
 
 function getPanelRects(count: number, layout: string, width: number, height: number) {
@@ -633,7 +831,7 @@ async function renderComic(format: 'png' | 'webp') {
 async function exportComic(format: 'png' | 'webp') {
   try {
     const dataUrl = await renderComic(format)
-    requestAction('comic_export_page', { format, dataUrl, document: JSON.parse(snapshot(comicDoc.value)) })
+    requestAction('comic_export_page', { format, dataUrl, document: backendComicDocument() })
   } catch (error: any) { toast('error', `Comic export failed: ${error?.message || error}`) }
 }
 
@@ -670,14 +868,25 @@ function handleMediaSelected(raw: any) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   unsubscribers.push(onBackendEvent('creatorStateChanged', handleCreatorState))
   unsubscribers.push(onBackendEvent('creatorProgress', handleProgress))
   unsubscribers.push(onBackendEvent('creatorResult', handleResult))
   unsubscribers.push(onBackendEvent('creatorMediaSelected', handleMediaSelected))
-  unsubscribers.push(onBackendEvent('comicStoryboardReady', (raw: any) => replaceDocument(decodePayload(raw))))
-  unsubscribers.push(onBackendEvent('comicDocumentChanged', (raw: any) => replaceDocument(decodePayload(raw))))
-  requestAction('creator_get_state', {})
+  unsubscribers.push(onBackendEvent('comicStoryboardReady', handleComicDocumentChanged))
+  unsubscribers.push(onBackendEvent('comicDocumentChanged', handleComicDocumentChanged))
+  let recoveryForBackend = storedComicRecovery
+  const malformedStoredRecovery = !!storedComicRecoveryRaw && !storedComicRecovery
+  const invalidMirror = storedComicRecovery?.schema === 2
+    && !(await verifyComicRecoveryMirror(storedComicRecovery))
+  if (malformedStoredRecovery || invalidMirror) {
+    try {
+      window.localStorage.setItem(`${STORAGE_KEY}.invalid.${Date.now()}`, storedComicRecoveryRaw || '')
+      window.localStorage.removeItem(STORAGE_KEY)
+    } catch {}
+    recoveryForBackend = null
+  }
+  requestAction('creator_get_state', { comicRecovery: recoveryForBackend })
 })
 onUnmounted(() => {
   unsubscribers.splice(0).forEach(off => { try { off() } catch {} })

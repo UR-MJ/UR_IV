@@ -177,6 +177,7 @@ import { requestAction } from '../stores/widgetStore.js'
 import { mediaUrl } from '../utils/media.js'
 import CompareSlider from '../components/CompareSlider.vue'
 import CustomSelect from '../components/CustomSelect.vue'
+import type { ActionName } from '../types/bridge'
 
 interface ExifParams {
   generation?: string
@@ -293,7 +294,7 @@ async function copySection(text: string, label: string) {
 }
 function sendPrompt() { requestAction('pnginfo_send_prompt', { prompt: exif.value.prompt || '', negative: exif.value.negative || '' }) }
 function sendGenerate() { requestAction('pnginfo_generate', exif.value) }
-function action(name: string, payload: Record<string, any> = {}) { requestAction(name, payload) }
+function action(name: ActionName, payload: Record<string, any> = {}) { requestAction(name, payload) }
 
 function sendToCompare() {
   if (!compareBefore.value) {

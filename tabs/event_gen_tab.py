@@ -21,43 +21,12 @@ from PyQt6.QtWidgets import (
     QFrame, QComboBox, QMessageBox, QProgressBar, QTabWidget,
     QGridLayout
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QThread
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
-from core.event_data_loader import EventDataLoader
+from workers.event_data_load_worker import EventDataLoadWorker
 from widgets.common_widgets import NoScrollSpinBox
 from utils.theme_manager import get_color
-
-
-# ──────────────────────────────────────────────────────
-#  F. 백그라운드 데이터 로딩 워커
-# ──────────────────────────────────────────────────────
-
-class EventDataLoadWorker(QThread):
-    """Parquet 데이터를 백그라운드에서 로드"""
-    finished = pyqtSignal(object)  # EventDataLoader 또는 에러 문자열
-    progress = pyqtSignal(str)
-
-    def __init__(self, parquet_dir, ratings):
-        super().__init__()
-        self.parquet_dir = parquet_dir
-        self.ratings = ratings
-
-    def run(self):
-        try:
-            self.progress.emit("데이터 로딩 중...")
-            loader = EventDataLoader(self.parquet_dir)
-            loader.load_parquets_by_rating(
-                self.ratings,
-                progress_callback=lambda cur, total, name: self.progress.emit(
-                    f"로딩 중... ({cur}/{total}) {name}"
-                )
-            )
-            self.finished.emit(loader)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.finished.emit(f"오류: {e}")
 
 
 # ──────────────────────────────────────────────────────

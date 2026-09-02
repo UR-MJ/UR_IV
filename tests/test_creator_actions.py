@@ -1,8 +1,11 @@
+import json
 import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
+from types import SimpleNamespace
 
+from core.comic_studio import ComicRevisionConflict
 from ui.creator_actions import CreatorActionsMixin
 
 
@@ -13,6 +16,41 @@ class _UploadBackend:
     def upload_media(self, data, filename, mime):
         self.uploads.append((data, filename, mime))
         return f"studio/{filename}"
+
+
+class _Signal:
+    def __init__(self):
+        self.values = []
+
+    def emit(self, value):
+        self.values.append(json.loads(value))
+
+
+class _Bridge:
+    def __init__(self):
+        self.comicDocumentChanged = _Signal()
+
+
+class _Document:
+    def __init__(self, revision=3, title="saved"):
+        self.revision = revision
+        self.title = title
+
+    def to_dict(self):
+        return {
+            "title": self.title,
+            "revision": self.revision,
+            "contentHash": "a" * 64,
+            "panels": [{"id": "panel-1", "prompt": "ok"}],
+        }
+
+
+class _ImmediateThread:
+    def __init__(self, target, **_kwargs):
+        self.target = target
+
+    def start(self):
+        self.target()
 
 
 class CreatorActionAdapterTests(unittest.TestCase):
@@ -130,6 +168,77 @@ class CreatorActionAdapterTests(unittest.TestCase):
             built["workflow"]["7"]["inputs"]["model_name"],
             "RealESRGAN_x4plus.pth",
         )
+
+    def test_comic_save_forwards_expected_revision_and_returns_ack_metadata(self):
+        bridge = _Bridge()
+        self.actions.vue_bridge = bridge
+        studio = mock.Mock()
+        studio.save.return_value = _Document(revision=8)
+        self.actions._comic_studio = lambda: studio
+
+        self.actions._comic_save(
+            {
+                "document": {"title": "edit", "panels": [{}]},
+                "expectedRevision": 7,
+                "requestId": "save-42",
+            }
+        )
+
+        studio.save.assert_called_once_with(
+            {"title": "edit", "panels": [{}]}, expected_revision=7
+        )
+        emitted = bridge.comicDocumentChanged.values[-1]
+        self.assertEqual(emitted["document"]["revision"], 8)
+        self.assertEqual(emitted["persistence"]["status"], "saved")
+        self.assertEqual(emitted["persistence"]["requestId"], "save-42")
+
+    def test_comic_save_conflict_returns_authoritative_document(self):
+        bridge = _Bridge()
+        self.actions.vue_bridge = bridge
+        studio = mock.Mock()
+        studio.save.side_effect = ComicRevisionConflict(2, 3, _Document(revision=3, title="newer"))
+        self.actions._comic_studio = lambda: studio
+
+        self.actions._comic_save(
+            {
+                "document": {"title": "stale", "panels": [{}]},
+                "expectedRevision": 2,
+                "requestId": "save-stale",
+            }
+        )
+
+        emitted = bridge.comicDocumentChanged.values[-1]
+        self.assertEqual(emitted["document"]["title"], "newer")
+        self.assertEqual(emitted["persistence"]["status"], "conflict")
+        self.assertEqual(emitted["persistence"]["actualRevision"], 3)
+
+    def test_creator_state_reconciles_frontend_recovery_before_emitting_document(self):
+        bridge = _Bridge()
+        bridge.creatorStateChanged = _Signal()
+        self.actions.vue_bridge = bridge
+        self.actions._creator_running = False
+        self.actions._creator_mode = ""
+        recovery = {"schema": 2, "documentJson": "{}"}
+        studio = mock.Mock()
+        studio.reconcile.return_value = SimpleNamespace(
+            document=_Document(revision=5),
+            status="recovered",
+            conflict_path="",
+        )
+        self.actions._comic_studio = lambda: studio
+
+        with (
+            mock.patch("ui.creator_actions.threading.Thread", _ImmediateThread),
+            mock.patch("backends.get_backend"),
+            mock.patch("backends.get_backend_type") as get_backend_type,
+        ):
+            get_backend_type.return_value.value = "forge"
+            self.actions._creator_request_state({"comicRecovery": recovery})
+
+        studio.reconcile.assert_called_once_with(recovery)
+        emitted = bridge.comicDocumentChanged.values[-1]
+        self.assertEqual(emitted["document"]["revision"], 5)
+        self.assertEqual(emitted["persistence"]["status"], "recovered")
 
 
 class CreatorOllamaUnloadTests(unittest.TestCase):
