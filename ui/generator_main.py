@@ -2948,6 +2948,12 @@ class GeneratorMainUI(
         except Exception:
             pass
         self._stop_owned_backend_runtimes()
+        try:
+            from core.app_instance import unregister_app_instance
+
+            unregister_app_instance()
+        except Exception:
+            pass
         # 최종 종료는 os._exit 유지 — QApplication.quit()은 QWebEngineProfile/Page 해체 순서
         # 크래시·행이 재발함(커밋 24d7856d6, e6f964c6f 이력). 위에서 설정 저장 + QThread
         # 정지·대기 + DB close를 마쳤고, 에디터/캡션/영속 쓰기는 Python 데몬 스레드라 안전.

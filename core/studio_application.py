@@ -100,6 +100,8 @@ _OPERATIONS: dict[str, dict[str, Any]] = {
     "runtime.execute": {"kind": "job", "native": True},
     "generation_api.snapshot": {"kind": "query", "native": False},
     "generation_api.execute": {"kind": "job", "native": True},
+    "app_update.snapshot": {"kind": "query", "native": False},
+    "app_update.execute": {"kind": "job", "native": True},
     "model_paths.snapshot": {"kind": "query", "native": False},
     "model_paths.save": {"kind": "command", "native": True},
     "model_paths.reset": {"kind": "command", "native": True},
@@ -121,10 +123,12 @@ class StudioApplication:
         host: Any = None,
         runtime_manager: Any = None,
         generation_api_manager: Any = None,
+        app_update_manager: Any = None,
     ) -> None:
         self._host = host
         self._runtime_manager = runtime_manager
         self._generation_api_manager = generation_api_manager
+        self._app_update_manager = app_update_manager
         self._dependency_lock = threading.Lock()
 
         self._lock = threading.RLock()
@@ -136,6 +140,8 @@ class StudioApplication:
         self._workers: set[threading.Thread] = set()
         self._generation_job_lock = threading.Lock()
         self._generation_job_id = ""
+        self._app_update_job_lock = threading.Lock()
+        self._app_update_job_id = ""
 
     # ------------------------------------------------------------------ Interface
 
@@ -161,6 +167,7 @@ class StudioApplication:
             "topics": [
                 "runtime.operation",
                 "generation_api.operation",
+                "app_update.operation",
                 "model_paths.changed",
             ],
             "operations": [
@@ -204,6 +211,7 @@ class StudioApplication:
                     "description": self.describe(context),
                     "runtime": self._runtime_snapshot(context),
                     "generationApi": self._generation_api_snapshot(context),
+                    "appUpdate": self._app_update_snapshot(context),
                     "modelPaths": self._model_paths_snapshot(context),
                 }
                 return self._reply(request_id, "ok", data=data)
@@ -242,6 +250,24 @@ class StudioApplication:
                 action = self._required_text(values, "action", limit=100)
                 payload = self._mapping_value(values, "payload", default={})
                 return self._start_generation_api_job(
+                    context, request_id, action, payload
+                )
+
+            if operation == "app_update.snapshot":
+                self._require_input_keys(values)
+                return self._reply(
+                    request_id, "ok", data=self._app_update_snapshot(context)
+                )
+
+            if operation == "app_update.execute":
+                self._require_input_keys(
+                    values,
+                    allowed={"action", "payload"},
+                    required={"action"},
+                )
+                action = self._required_text(values, "action", limit=100)
+                payload = self._mapping_value(values, "payload", default={})
+                return self._start_app_update_job(
                     context, request_id, action, payload
                 )
 
@@ -508,6 +534,15 @@ class StudioApplication:
                     self._generation_api_manager = get_generation_api_manager()
         return self._generation_api_manager
 
+    def _get_app_update_manager(self) -> Any:
+        if self._app_update_manager is None:
+            with self._dependency_lock:
+                if self._app_update_manager is None:
+                    from core.app_updater import get_app_update_manager
+
+                    self._app_update_manager = get_app_update_manager()
+        return self._app_update_manager
+
     def _runtime_snapshot(self, context: CallContext) -> dict[str, Any]:
         manager = self._get_runtime_manager()
         snapshot = manager.snapshot()
@@ -528,6 +563,14 @@ class StudioApplication:
                 "INTERNAL", "generation API snapshot 형식이 올바르지 않습니다"
             )
         return self._public_generation_api(dict(snapshot), context)
+
+    def _app_update_snapshot(self, context: CallContext) -> dict[str, Any]:
+        snapshot = self._get_app_update_manager().snapshot()
+        if not isinstance(snapshot, Mapping):
+            raise StudioApplicationError(
+                "INTERNAL", "app update snapshot 형식이 올바르지 않습니다"
+            )
+        return self._public_app_update(dict(snapshot), context)
 
     def _model_paths_snapshot(self, context: CallContext) -> dict[str, Any]:
         return self._public_model_paths(self._raw_model_paths_snapshot(), context)
@@ -973,6 +1016,152 @@ class StudioApplication:
             if self._generation_job_id == job_id:
                 self._generation_job_id = ""
 
+    def _start_app_update_job(
+        self,
+        context: CallContext,
+        request_id: str,
+        action: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        job_id = uuid.uuid4().hex
+        with self._app_update_job_lock:
+            active_job_id = self._app_update_job_id
+            if active_job_id:
+                raise StudioApplicationError(
+                    "OPERATION_BUSY",
+                    "업데이트 작업이 이미 진행 중입니다",
+                    retryable=True,
+                    details={"activeJobId": active_job_id},
+                )
+            self._app_update_job_id = job_id
+
+        def work_body() -> None:
+            manager = self._get_app_update_manager()
+            self._publish(
+                topic="app_update.operation",
+                event_type="started",
+                operation="app_update.execute",
+                job_id=job_id,
+                request_id=request_id,
+                data={"action": action, "snapshot": self._safe_app_update_snapshot()},
+            )
+
+            def progress(update: Any) -> None:
+                data = dict(update) if isinstance(update, Mapping) else {"message": str(update)}
+                self._publish(
+                    topic="app_update.operation",
+                    event_type="progress",
+                    operation="app_update.execute",
+                    job_id=job_id,
+                    request_id=request_id,
+                    data={
+                        "action": action,
+                        "update": data,
+                        "snapshot": self._safe_app_update_snapshot(),
+                    },
+                )
+
+            try:
+                result = manager.execute(action, payload, on_progress=progress)
+                if isinstance(result, Mapping) and result.get("ok") is False:
+                    raise StudioApplicationError(
+                        "OPERATION_FAILED",
+                        str(result.get("message") or result.get("error") or "업데이트 작업 실패"),
+                    )
+                snapshot = self._safe_app_update_snapshot()
+                result_mapping = copy.deepcopy(dict(result)) if isinstance(result, Mapping) else {}
+                self._publish(
+                    topic="app_update.operation",
+                    event_type="completed",
+                    operation="app_update.execute",
+                    job_id=job_id,
+                    request_id=request_id,
+                    data={"action": action, "result": result_mapping, "snapshot": snapshot},
+                )
+                if bool(result_mapping.get("restartRequired")):
+                    self._request_app_update_restart(result_mapping)
+            except Exception as exc:
+                error = self._normalise_error(exc, context)
+                self._publish(
+                    topic="app_update.operation",
+                    event_type="error",
+                    operation="app_update.execute",
+                    job_id=job_id,
+                    request_id=request_id,
+                    data={
+                        "action": action,
+                        "error": error.as_dict(),
+                        "snapshot": self._safe_app_update_snapshot(),
+                    },
+                )
+
+        def work() -> None:
+            try:
+                work_body()
+            except Exception as exc:
+                error = self._normalise_error(exc, context)
+                self._publish(
+                    topic="app_update.operation",
+                    event_type="error",
+                    operation="app_update.execute",
+                    job_id=job_id,
+                    request_id=request_id,
+                    data={
+                        "action": action,
+                        "error": error.as_dict(),
+                        "snapshot": self._safe_app_update_snapshot(),
+                    },
+                )
+            finally:
+                self._release_app_update_job(job_id)
+
+        try:
+            release_worker = self._launch_worker(f"studio-app-update-{action}", work)
+        except Exception:
+            self._release_app_update_job(job_id)
+            raise
+        try:
+            accepted = self._publish(
+                topic="app_update.operation",
+                event_type="accepted",
+                operation="app_update.execute",
+                job_id=job_id,
+                request_id=request_id,
+                data={"action": action},
+            )
+        except Exception:
+            release_worker(False)
+            self._release_app_update_job(job_id)
+            raise
+        release_worker(True)
+        reply = self._reply(
+            request_id,
+            "accepted",
+            data={"jobId": job_id, "topic": "app_update.operation"},
+            seq=accepted["seq"],
+        )
+        reply["job"] = {
+            "id": job_id,
+            "operation": "app_update.execute",
+            "state": "queued",
+        }
+        return reply
+
+    def _release_app_update_job(self, job_id: str) -> None:
+        with self._app_update_job_lock:
+            if self._app_update_job_id == job_id:
+                self._app_update_job_id = ""
+
+    def _request_app_update_restart(self, result: Mapping[str, Any]) -> None:
+        callback = getattr(self._host, "request_app_restart", None)
+        if not callable(callback):
+            logger.warning("App update completed without a native restart host")
+            return
+        try:
+            callback(copy.deepcopy(dict(result)))
+        except Exception:
+            logger.exception("Studio app update restart callback failed")
+
     def _launch_worker(
         self, name: str, target: Callable[[], None]
     ) -> Callable[[bool], None]:
@@ -1021,12 +1210,23 @@ class StudioApplication:
         except Exception as exc:
             return {"ok": False, "error": self._normalise_error(exc, None).as_dict()}
 
+    def _safe_app_update_snapshot(self) -> dict[str, Any]:
+        try:
+            return self._snapshot_app_update_manager(self._get_app_update_manager())
+        except Exception as exc:
+            return {"ok": False, "error": self._normalise_error(exc, None).as_dict()}
+
     @staticmethod
     def _snapshot_generation_manager(manager: Any, *, include_secret: bool) -> dict[str, Any]:
         try:
             value = manager.snapshot(include_secret=include_secret)
         except TypeError:
             value = manager.snapshot(include_secret)
+        return copy.deepcopy(dict(value)) if isinstance(value, Mapping) else {}
+
+    @staticmethod
+    def _snapshot_app_update_manager(manager: Any) -> dict[str, Any]:
+        value = manager.snapshot()
         return copy.deepcopy(dict(value)) if isinstance(value, Mapping) else {}
 
     # ------------------------------------------------------------ ordered events
@@ -1175,6 +1375,43 @@ class StudioApplication:
             config["targets"] = safe_targets
         return self._redact_generic(snapshot)
 
+    def _public_app_update(
+        self, raw: Mapping[str, Any], context: CallContext
+    ) -> dict[str, Any]:
+        snapshot = copy.deepcopy(dict(raw))
+        native = self._has_capability(context, NATIVE_CAPABILITY)
+        snapshot["nativeOperations"] = native
+        if native:
+            return self._redact_generic(snapshot)
+
+        # Web transports only need release presentation state.  Use an
+        # allowlist so future native fields (commit ids, helper process ids,
+        # checkout paths) cannot become public by accident.
+        public_keys = {
+            "ok", "repository", "repositoryUrl", "releasesUrl",
+            "currentVersion", "developmentBuild", "latestVersion", "tagName",
+            "releaseName", "releaseUrl", "publishedAt", "notes",
+            "updateAvailable", "notificationAvailable", "skipped",
+            "skippedVersion", "autoCheck", "intervalHours", "lastCheckedAt",
+            "shouldAutoCheck", "busy", "busyAction", "installReason", "lastResult",
+        }
+        public = {
+            key: copy.deepcopy(value)
+            for key, value in snapshot.items()
+            if key in public_keys
+        }
+        version = str(public.get("currentVersion") or "0.0.0")
+        public["currentDisplay"] = (
+            f"v{version} · 개발 빌드"
+            if bool(public.get("developmentBuild"))
+            else f"v{version}"
+        )
+        public["nativeOperations"] = False
+        public["canInstall"] = False
+        if public.get("updateAvailable"):
+            public["installReason"] = "업데이트 설치는 데스크톱 앱에서만 사용할 수 있습니다."
+        return self._redact_generic(public)
+
     def _public_model_paths(
         self, raw: Mapping[str, Any], context: CallContext
     ) -> dict[str, Any]:
@@ -1204,6 +1441,8 @@ class StudioApplication:
             result["data"] = self._redact_runtime_event_data(data, context)
         elif topic == "generation_api.operation":
             result["data"] = self._redact_generation_event_data(data, context)
+        elif topic == "app_update.operation":
+            result["data"] = self._public_app_update_event_data(data, context)
         elif topic == "model_paths.changed":
             mapped = copy.deepcopy(dict(data))
             if isinstance(mapped.get("snapshot"), Mapping):
@@ -1212,6 +1451,38 @@ class StudioApplication:
         else:
             result["data"] = self._redact_generic(data)
         return result
+
+    def _public_app_update_event_data(
+        self, data: Mapping[str, Any], context: CallContext
+    ) -> dict[str, Any]:
+        """Project updater events to presentation-only fields for web clients."""
+
+        mapped: dict[str, Any] = {}
+        action = str(data.get("action") or "")
+        if action:
+            mapped["action"] = action
+        if isinstance(data.get("snapshot"), Mapping):
+            mapped["snapshot"] = self._public_app_update(data["snapshot"], context)
+        update = data.get("update")
+        if isinstance(update, Mapping):
+            mapped["update"] = {
+                key: copy.deepcopy(update[key])
+                for key in ("stage", "message")
+                if key in update
+            }
+        result = data.get("result")
+        if isinstance(result, Mapping):
+            safe_result = {
+                key: copy.deepcopy(result[key])
+                for key in ("ok", "action", "message", "restartRequired", "targetVersion")
+                if key in result
+            }
+            if isinstance(result.get("snapshot"), Mapping):
+                safe_result["snapshot"] = self._public_app_update(result["snapshot"], context)
+            mapped["result"] = safe_result
+        if isinstance(data.get("error"), Mapping):
+            mapped["error"] = self._redact_event_result(data["error"])
+        return self._redact_generic(mapped)
 
     def _redact_runtime_event_data(
         self, data: Mapping[str, Any], context: CallContext
@@ -1279,6 +1550,7 @@ class StudioApplication:
                             "host", "port", "address", "args", "apikey", "clientsecret",
                             "token", "secret", "cookie", "cookies", "credential",
                             "credentials", "session", "sessionid",
+                            "pid", "processid",
                         )
                     )
                 )

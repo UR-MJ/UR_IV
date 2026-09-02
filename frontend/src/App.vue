@@ -957,6 +957,7 @@
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { initBridge, onBackendEvent, getBackend } from './bridge.js'
 import { requestAction, useWidgetStore } from './stores/widgetStore.js'
+import { initialiseAppUpdates } from './stores/appUpdateStore'
 import { mediaUrl } from './utils/media.js'
 import { useLoraStack } from './composables/useLoraStack.js'
 import { useHighRes } from './composables/useHighRes.js'
@@ -2165,6 +2166,8 @@ onMounted(async () => {
 
   // Global Toast 알림 (Python → Vue)
   onBackendEvent('showNotification', (type: string, msg: string) => { addToast(type, msg) })
+  // 업데이트 알림도 같은 전역 토스트를 사용하므로 listener 등록 뒤 시작한다.
+  void initialiseAppUpdates(true)
 
   onBackendEvent('uiPrefsLoaded', (json: string) => {
     try {

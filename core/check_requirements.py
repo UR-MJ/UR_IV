@@ -1,5 +1,5 @@
 """
-requirements.txt를 빠르게 검사하여 미설치 패키지만 설치.
+requirements.txt를 빠르게 검사하여 누락되거나 버전이 맞지 않는 패키지를 설치.
 
 검사: importlib.metadata (pip resolve보다 훨씬 빠름)
 설치: uv가 있으면 `uv pip install`, 없으면 `python -m pip install` 폴백.
@@ -17,6 +17,11 @@ try:
     from importlib.metadata import PackageNotFoundError, version
 except ImportError:  # 3.7 이하 호환 (실제로는 사용 안 함)
     from importlib_metadata import PackageNotFoundError, version  # type: ignore
+
+try:
+    from packaging.requirements import InvalidRequirement, Requirement
+except ImportError:  # pip is bootstrapped by every launcher before this script.
+    from pip._vendor.packaging.requirements import InvalidRequirement, Requirement  # type: ignore
 
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,14 +63,26 @@ def _parse_requirements(path: str) -> list[tuple[str, str]]:
 
 
 def find_missing(req_path: str = _REQ_FILE) -> list[str]:
-    """누락된 패키지의 spec 문자열 목록 반환 (e.g. ['Pillow>=9.0.0', ...])"""
+    """누락되었거나 version spec을 만족하지 않는 requirement를 반환."""
     missing: list[str] = []
     for name, spec in _parse_requirements(req_path):
-        try:
-            version(name)
-        except PackageNotFoundError:
+        if not _requirement_satisfied(name, spec):
             missing.append(spec)
     return missing
+
+
+def _requirement_satisfied(name: str, spec: str) -> bool:
+    try:
+        requirement = Requirement(spec)
+    except InvalidRequirement:
+        return False
+    if requirement.marker is not None and not requirement.marker.evaluate():
+        return True
+    try:
+        installed = version(name)
+    except PackageNotFoundError:
+        return False
+    return not requirement.specifier or requirement.specifier.contains(installed, prereleases=True)
 
 
 def _uv_executable() -> str | None:
@@ -104,13 +121,10 @@ def install_missing(missing: list[str], prefer_uv: bool = True) -> int:
     print(f"[deps] Bulk install failed (rc={rc}) - retrying one-by-one...")
     failed: list[str] = []
     for spec in missing:
-        # 이미 설치되었을 수도 있으니 재확인
+        # 일괄 설치에서 이미 충족되었을 수도 있으니 버전 조건까지 재확인
         head = _SPEC_SPLIT.split(spec, 1)[0].strip()
-        try:
-            version(head)
-            continue  # 1단계에서 일부 성공했을 수 있음
-        except PackageNotFoundError:
-            pass
+        if _requirement_satisfied(head, spec):
+            continue
         rc1 = subprocess.call(base_cmd + [spec])
         if rc1 != 0:
             failed.append(spec)

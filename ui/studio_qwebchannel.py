@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QFileDialog
 
 from core.studio_application import (
@@ -66,6 +66,7 @@ class DesktopNativeHost(QObject):
 
     _refreshRequested = pyqtSignal()
     _runtimeEventRequested = pyqtSignal(str)
+    _appRestartRequested = pyqtSignal(str)
 
     def __init__(self, window: QObject, vue_bridge: QObject):
         super().__init__(window)
@@ -73,6 +74,7 @@ class DesktopNativeHost(QObject):
         self._vue_bridge = vue_bridge
         self._refreshRequested.connect(self._refresh_model_widgets_on_qt_thread)
         self._runtimeEventRequested.connect(self._forward_runtime_event_on_qt_thread)
+        self._appRestartRequested.connect(self._restart_app_on_qt_thread)
 
     @staticmethod
     def _start_directory(current: str) -> str:
@@ -128,6 +130,14 @@ class DesktopNativeHost(QObject):
         except (RuntimeError, TypeError, ValueError):
             logger.warning("Studio runtime event could not reach the Qt bridge", exc_info=True)
 
+    def request_app_restart(self, payload: Mapping[str, Any]) -> None:
+        """Schedule the established clean shutdown path after UI event delivery."""
+
+        try:
+            self._appRestartRequested.emit(_json_text(dict(payload)))
+        except (RuntimeError, TypeError, ValueError):
+            logger.warning("App update restart request could not reach Qt", exc_info=True)
+
     @pyqtSlot()
     def _refresh_model_widgets_on_qt_thread(self) -> None:
         refresh = getattr(self._vue_bridge, "_refresh_forge_module_widgets", None)
@@ -145,6 +155,15 @@ class DesktopNativeHost(QObject):
         except RuntimeError:
             # The bridge may already be gone while a daemon worker is finishing.
             logger.debug("Vue runtime event signal is already disposed", exc_info=True)
+
+    @pyqtSlot(str)
+    def _restart_app_on_qt_thread(self, _payload_json: str) -> None:
+        quit_app = getattr(self._window, "_quit_app", None)
+        if not callable(quit_app):
+            logger.error("App update restart requested without _quit_app host")
+            return
+        # Let the completed event and its final toast render before shutdown.
+        QTimer.singleShot(1200, quit_app)
 
 
 class StudioQWebChannelAdapter(QObject):

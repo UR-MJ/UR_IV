@@ -8,6 +8,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$n='Local\AIStudioPro.UR_IV.Update'; try{$m=[Threading.Mutex]::OpenExisting($n)}catch [Threading.WaitHandleCannotBeOpenedException]{exit 0}; $owned=$false; try{try{$owned=$m.WaitOne(120000)}catch [Threading.AbandonedMutexException]{$owned=$true}; if(-not $owned){exit 2}}finally{if($owned){$m.ReleaseMutex()};$m.Dispose()}"
+if errorlevel 1 (
+    echo [run] An application update is still running. Try again in a moment.
+    pause
+    exit /b 1
+)
+
 set "VENV_DIR=%~dp0venv"
 set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
 
@@ -49,22 +56,6 @@ if errorlevel 1 (
         pause
         exit /b 1
     )
-)
-
-echo [run] Checking and installing dependencies...
-"%VENV_PYTHON%" "core\check_requirements.py"
-if errorlevel 1 (
-    echo [run] Dependency check/install failed. See log above.
-    pause
-    exit /b 1
-)
-
-echo [run] Checking application data...
-"%VENV_PYTHON%" "core\fetch_data.py"
-if errorlevel 1 (
-    echo [run] Data fetch failed. See log above.
-    pause
-    exit /b 1
 )
 
 if not exist logs mkdir logs

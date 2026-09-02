@@ -27,6 +27,7 @@ type BootstrapRecovery = {
   snapshots: {
     runtime: unknown
     generationApi: unknown
+    appUpdate: unknown
     modelPaths: unknown
   }
 }
@@ -37,6 +38,8 @@ const ALL_OPERATIONS: StudioOperation[] = [
   'runtime.execute',
   'generation_api.snapshot',
   'generation_api.execute',
+  'app_update.snapshot',
+  'app_update.execute',
   'model_paths.snapshot',
   'model_paths.save',
   'model_paths.reset',
@@ -498,7 +501,7 @@ class NativeStudioClient implements StudioClient {
     if (!Number.isSafeInteger(eventCursor) || eventCursor < 0) {
       throw protocolError('sync.bootstrap description.eventCursor가 올바르지 않습니다.')
     }
-    for (const key of ['runtime', 'generationApi', 'modelPaths']) {
+    for (const key of ['runtime', 'generationApi', 'appUpdate', 'modelPaths']) {
       if (!data[key] || typeof data[key] !== 'object' || Array.isArray(data[key])) {
         throw protocolError(`sync.bootstrap ${key} snapshot이 올바르지 않습니다.`)
       }
@@ -510,6 +513,7 @@ class NativeStudioClient implements StudioClient {
       snapshots: {
         runtime: data.runtime,
         generationApi: data.generationApi,
+        appUpdate: data.appUpdate,
         modelPaths: data.modelPaths,
       },
     }
@@ -540,6 +544,11 @@ class NativeStudioClient implements StudioClient {
       ...base,
       topic: 'generation_api.operation',
       data: { snapshot: state.snapshots.generationApi, source: 'sync.bootstrap' },
+    })
+    this.dispatchEvent({
+      ...base,
+      topic: 'app_update.operation',
+      data: { snapshot: state.snapshots.appUpdate, source: 'sync.bootstrap' },
     })
     this.dispatchEvent({
       ...base,
@@ -641,6 +650,8 @@ function legacyCall(operation: StudioOperation, input: StudioOperationInputMap[S
       method: 'runGenerationApiOperation',
       args: [values.action, JSON.stringify(values.payload || {})],
     }
+    case 'app_update.snapshot': throw unavailableError('legacy backend은 앱 업데이트 조회를 지원하지 않습니다.')
+    case 'app_update.execute': throw unavailableError('legacy backend은 앱 업데이트 작업을 지원하지 않습니다.')
     case 'model_paths.snapshot': return { method: 'getForgeModelPaths', args: [] }
     case 'model_paths.save': return { method: 'saveForgeModelPaths', args: [JSON.stringify(values.paths || {})] }
     case 'model_paths.reset': return { method: 'resetForgeModelPaths', args: [] }

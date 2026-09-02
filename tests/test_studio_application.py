@@ -193,11 +193,54 @@ class BlockingGenerationApiManager(FakeGenerationApiManager):
         }
 
 
+class FakeAppUpdateManager:
+    def __init__(self):
+        self.calls = []
+        self.fail = False
+
+    def snapshot(self):
+        return {
+            "ok": True,
+            "repository": "UR-al/UR_IV",
+            "currentVersion": "2.6.0",
+            "currentDisplay": "v2.6.0 + 41개 변경 (abcdef123)",
+            "currentRevision": "abcdef123",
+            "developmentBuild": True,
+            "mode": "git",
+            "branch": "main",
+            "pendingVersion": "2.7.0",
+            "latestVersion": "2.7.0",
+            "tagName": "v2.7.0",
+            "releaseName": "v2.7.0",
+            "releaseUrl": "https://github.com/UR-al/UR_IV/releases/tag/v2.7.0",
+            "notes": "changes",
+            "updateAvailable": True,
+            "notificationAvailable": True,
+            "canInstall": True,
+        }
+
+    def execute(self, action, payload, on_progress=None):
+        self.calls.append((action, dict(payload)))
+        if on_progress:
+            on_progress({"stage": "checking", "message": "checking"})
+        if self.fail:
+            raise RuntimeError("update failed")
+        return {
+            "ok": True,
+            "action": action,
+            "message": "done",
+            "restartRequired": action == "install",
+            "helperPid": 98765,
+            "targetVersion": "2.7.0",
+        }
+
+
 class FakeHost:
     def __init__(self):
         self.picks = []
         self.refresh_count = 0
         self.runtime_events = []
+        self.restart_events = []
         self.next_path = "C:/selected"
 
     def pick_directory(self, kind, selector, current):
@@ -210,16 +253,21 @@ class FakeHost:
     def handle_runtime_event(self, payload):
         self.runtime_events.append(payload)
 
+    def request_app_restart(self, payload):
+        self.restart_events.append(payload)
+
 
 class StudioApplicationContractTests(unittest.TestCase):
     def setUp(self):
         self.runtime = FakeRuntimeManager()
         self.generation = FakeGenerationApiManager()
+        self.updates = FakeAppUpdateManager()
         self.host = FakeHost()
         self.app = StudioApplication(
             host=self.host,
             runtime_manager=self.runtime,
             generation_api_manager=self.generation,
+            app_update_manager=self.updates,
         )
 
     def test_describe_advertises_one_version_and_native_availability(self):
@@ -242,6 +290,8 @@ class StudioApplicationContractTests(unittest.TestCase):
         self.assertTrue(native_ops["runtime.execute"]["available"])
         self.assertFalse(web_ops["runtime.execute"]["available"])
         self.assertTrue(web_ops["runtime.snapshot"]["available"])
+        self.assertTrue(web_ops["app_update.snapshot"]["available"])
+        self.assertFalse(web_ops["app_update.execute"]["available"])
 
     def test_invoke_requires_the_exact_envelope(self):
         missing = self.app.invoke(WEB, {"version": 1})
@@ -303,6 +353,39 @@ class StudioApplicationContractTests(unittest.TestCase):
         self.assertEqual(blocked["error"]["code"], "FORBIDDEN")
         self.assertEqual(self.runtime.calls, [])
 
+        update = self.app.invoke(WEB, request("update", "app_update.snapshot"))
+        self.assertEqual(update["status"], "ok")
+        self.assertFalse(update["data"]["nativeOperations"])
+        self.assertFalse(update["data"]["canInstall"])
+        self.assertNotIn("branch", update["data"])
+        self.assertNotIn("currentRevision", update["data"])
+        self.assertNotIn("mode", update["data"])
+        self.assertNotIn("pendingVersion", update["data"])
+        self.assertNotIn("abcdef123", update["data"]["currentDisplay"])
+
+        projected = self.app._public_event({
+            "topic": "app_update.operation",
+            "data": {
+                "action": "install",
+                "result": {
+                    "ok": True,
+                    "message": "done",
+                    "helperPid": 98765,
+                    "targetVersion": "2.7.0",
+                    "snapshot": self.updates.snapshot(),
+                },
+                "error": {
+                    "code": "UPDATE_LOCAL_CHANGES",
+                    "message": "conflict",
+                    "details": {"paths": ["config/private.json"]},
+                },
+            },
+        }, WEB)
+        projected_text = repr(projected)
+        self.assertNotIn("98765", projected_text)
+        self.assertNotIn("abcdef123", projected_text)
+        self.assertNotIn("config/private.json", projected_text)
+
     def test_bootstrap_returns_coherent_read_models(self):
         state = {
             "paths": {"lora_dir": "C:/private/Lora"},
@@ -322,8 +405,44 @@ class StudioApplicationContractTests(unittest.TestCase):
         )
         self.assertIn("runtime", reply["data"])
         self.assertIn("generationApi", reply["data"])
+        self.assertIn("appUpdate", reply["data"])
         self.assertNotIn("paths", reply["data"]["modelPaths"])
         self.assertTrue(reply["data"]["modelPaths"]["configured"]["lora_dir"])
+
+    def test_app_update_job_publishes_progress_and_requests_restart_after_completion(self):
+        events = []
+        terminal = threading.Event()
+        stop = self.app.subscribe(
+            NATIVE,
+            lambda event: (
+                events.append(event),
+                terminal.set()
+                if event["topic"] == "app_update.operation"
+                and event["type"] in {"completed", "error"}
+                else None,
+            ),
+        )
+
+        reply = self.app.invoke(
+            NATIVE,
+            request("app-update", "app_update.execute", {
+                "action": "install",
+                "payload": {},
+            }),
+        )
+
+        self.assertEqual(reply["status"], "accepted")
+        self.assertEqual(reply["job"]["operation"], "app_update.execute")
+        self.assertTrue(terminal.wait(2))
+        stop()
+        job_events = [event for event in events if event.get("jobId") == reply["job"]["id"]]
+        self.assertEqual(job_events[0]["type"], "accepted")
+        self.assertEqual(job_events[1]["type"], "started")
+        self.assertIn("progress", [event["type"] for event in job_events])
+        self.assertEqual(job_events[-1]["type"], "completed")
+        self.assertEqual(self.updates.calls, [("install", {})])
+        self.assertEqual(len(self.host.restart_events), 1)
+        self.assertTrue(self.host.restart_events[0]["restartRequired"])
 
     def test_runtime_job_has_one_id_and_monotonic_generic_events(self):
         events = []

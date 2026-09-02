@@ -108,6 +108,7 @@ config/char_global_prefs.json
 config/prompt_settings.json
 config/backend_runtime.json
 config/forge_model_paths.json
+config/app_update.json
 config/automation/
 config/state/
 

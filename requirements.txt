@@ -18,6 +18,7 @@ requests>=2.32.0
 websocket-client>=1.9.0
 
 # 데이터 / 메타데이터
+packaging>=24.0
 pandas>=2.3.0
 pyarrow>=21.0.0
 exifread>=3.3.0

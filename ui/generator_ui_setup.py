@@ -2,6 +2,9 @@
 """
 GeneratorMainUI의 UI 구성 부분 (전체)
 """
+from enum import Enum, auto
+from pathlib import Path
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QLineEdit, QGroupBox, QCheckBox, QTabWidget,
@@ -20,6 +23,51 @@ from config import OUTPUT_DIR
 from widgets.tag_input import TagInputWidget
 from utils.theme_manager import get_color
 
+
+class _VueNavigationDecision(Enum):
+    """Native QWebChannel이 붙은 페이지의 탐색 결정."""
+
+    ALLOW = auto()
+    OPEN_EXTERNALLY = auto()
+    BLOCK = auto()
+
+
+class _VueNavigationPolicy:
+    """Vue 메인 문서를 정확한 로컬 빌드 진입점으로 고정한다.
+
+    CSS/JS/이미지 등의 하위 리소스 로드는 navigation이 아니므로 영향을
+    받지 않는다. 대신 iframe 같은 다른 문서는 로컬 파일이라도 차단해,
+    QWebChannel이 실제 SPA 문서 외의 origin에 노출되지 않게 한다.
+    """
+
+    _EXTERNAL_SCHEMES = frozenset({"http", "https", "mailto"})
+
+    def __init__(self, frontend_index: str | Path):
+        self._frontend_index = Path(frontend_index).resolve(strict=False)
+
+    def decide(self, url, *, is_main_frame: bool) -> _VueNavigationDecision:
+        if not is_main_frame:
+            return _VueNavigationDecision.BLOCK
+
+        try:
+            if url.isLocalFile():
+                requested_path = Path(url.toLocalFile()).resolve(strict=False)
+                if requested_path == self._frontend_index:
+                    return _VueNavigationDecision.ALLOW
+                return _VueNavigationDecision.BLOCK
+
+            scheme = str(url.scheme()).lower()
+            if url.isValid() and scheme in self._EXTERNAL_SCHEMES:
+                if scheme in {"http", "https"} and not url.host():
+                    return _VueNavigationDecision.BLOCK
+                return _VueNavigationDecision.OPEN_EXTERNALLY
+        except (OSError, RuntimeError, TypeError, ValueError):
+            # 잘못된 URL/파일 경로는 fail closed.
+            pass
+
+        return _VueNavigationDecision.BLOCK
+
+
 class UISetupMixin:
     """UI 구성을 담당하는 Mixin 클래스"""
     
@@ -35,6 +83,10 @@ class UISetupMixin:
         from PyQt6.QtWebChannel import QWebChannel
         from PyQt6.QtCore import QUrl
         import os
+
+        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        frontend_path = os.path.join(app_root, 'frontend_dist', 'index.html')
+        navigation_policy = _VueNavigationPolicy(frontend_path)
 
         self.vue_bridge = VueBridge(self)
         from core.studio_application import CallContext, StudioApplication
@@ -55,9 +107,32 @@ class UISetupMixin:
             self,
         )
 
+        from PyQt6.QtGui import QDesktopServices
+
+        class _ExternalNavigationPage(QWebEnginePage):
+            """target=_blank/window.open을 메인 페이지와 채널에서 격리한다."""
+
+            def acceptNavigationRequest(self, url, navigation_type, is_main_frame):
+                decision = navigation_policy.decide(url, is_main_frame=is_main_frame)
+                if decision is _VueNavigationDecision.OPEN_EXTERNALLY:
+                    QDesktopServices.openUrl(url)
+                # 팝업용 WebEngine 문서는 절대 로드하지 않는다.
+                return False
+
         class _DebugPage(QWebEnginePage):
             def javaScriptConsoleMessage(self, level, message, line, source):
                 print(f"[Vue] {message}")
+
+            def acceptNavigationRequest(self, url, navigation_type, is_main_frame):
+                decision = navigation_policy.decide(url, is_main_frame=is_main_frame)
+                if decision is _VueNavigationDecision.OPEN_EXTERNALLY:
+                    QDesktopServices.openUrl(url)
+                    return False
+                return decision is _VueNavigationDecision.ALLOW
+
+            def createWindow(self, window_type):
+                # 새 창에 native channel을 상속시키지 않고, 외부 URL만 OS에 위임한다.
+                return _ExternalNavigationPage(self.profile(), self)
 
         from PyQt6.QtWebEngineCore import QWebEngineProfile
         
@@ -67,7 +142,7 @@ class UISetupMixin:
         # temp에 옛 PID 폴더가 누적됐음. 단일 인스턴스 전제로 repo/web_profile 고정 →
         # 모든 UI 설정이 재시작 후에도 유지. (2개 동시 실행 시에만 프로파일 락 위험)
         base_cache_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'web_profile')
+            app_root, 'web_profile')
         os.makedirs(base_cache_path, exist_ok=True)
         
         # 독립적인 프로필 생성 (defaultProfile 대신 사용)
@@ -100,6 +175,7 @@ class UISetupMixin:
         qwc.setSourceUrl(QUrl("qrc:///qtwebchannel/qwebchannel.js"))
         qwc.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
         qwc.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        qwc.setRunsOnSubFrames(False)
         page.scripts().insert(qwc)
 
         settings = page.settings()
@@ -109,7 +185,6 @@ class UISetupMixin:
         # Vue 로드(setUrl)는 백엔드 선택 *후* _load_vue_ui()에서 시작한다.
         # (다이얼로그가 떠 있는 동안 Vue/Chromium 로딩이 CPU를 경쟁해 선택이 버벅이던 문제 방지 —
         #  '백엔드 선택 → 로드 → UI' 순서)
-        frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend_dist', 'index.html')
         self._pending_vue_url = QUrl.fromLocalFile(frontend_path) if os.path.exists(frontend_path) else None
 
         # QStackedWidget: 0=Vue SPA, 1=Web, 2=Backend

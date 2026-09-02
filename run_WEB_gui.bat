@@ -6,6 +6,12 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$n='Local\AIStudioPro.UR_IV.Update'; try{$m=[Threading.Mutex]::OpenExisting($n)}catch [Threading.WaitHandleCannotBeOpenedException]{exit 0}; $owned=$false; try{try{$owned=$m.WaitOne(120000)}catch [Threading.AbandonedMutexException]{$owned=$true}; if(-not $owned){exit 2}}finally{if($owned){$m.ReleaseMutex()};$m.Dispose()}"
+if errorlevel 1 (
+    echo [run] 앱 업데이트가 진행 중입니다. 잠시 후 다시 실행하세요.
+    pause
+    exit /b 1
+)
 REM ── 웹 모드 (브라우저로 접속, A1111 처럼 포트 오픈) ──
 REM   기본: http://localhost:7800  (WebSocket 7801)
 REM   기본은 이 PC에서만 접속 가능. LAN 공유가 필요하면 실행 전에
@@ -16,20 +22,6 @@ REM 로컬 창 모드는 run_gui.bat 참고.
 call venv\Scripts\activate.bat
 if errorlevel 1 (
     echo [run] venv 활성화 실패: venv\Scripts\activate.bat
-    pause
-    exit /b 1
-)
-
-python core\check_requirements.py
-if errorlevel 1 (
-    echo [run] 의존성 점검/설치 실패. 위 로그 확인.
-    pause
-    exit /b 1
-)
-
-python core\fetch_data.py
-if errorlevel 1 (
-    echo [run] 데이터 페치 실패. 위 로그 확인.
     pause
     exit /b 1
 )

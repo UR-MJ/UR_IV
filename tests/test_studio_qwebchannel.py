@@ -80,6 +80,15 @@ class _Bridge(QObject):
         self.refreshes += 1
 
 
+class _RestartWindow(_Bridge):
+    def __init__(self) -> None:
+        super().__init__()
+        self.quit_count = 0
+
+    def _quit_app(self):
+        self.quit_count += 1
+
+
 class StudioQWebChannelAdapterTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -269,6 +278,30 @@ class StudioQWebChannelAdapterTests(unittest.TestCase):
             self.qt_app.processEvents()
 
         self.assertEqual(bridge.runtime_events, [payload])
+
+    def test_desktop_native_host_schedules_clean_restart_on_qt_thread(self):
+        window = _RestartWindow()
+        host = DesktopNativeHost(window, window)
+        scheduled = []
+
+        with patch(
+            "ui.studio_qwebchannel.QTimer.singleShot",
+            side_effect=lambda delay, callback: scheduled.append((delay, callback)),
+        ):
+            worker = threading.Thread(
+                target=host.request_app_restart,
+                args=({"restartRequired": True},),
+            )
+            worker.start()
+            worker.join(1)
+            deadline = time.monotonic() + 1
+            while not scheduled and time.monotonic() < deadline:
+                self.qt_app.processEvents()
+
+        self.assertEqual(len(scheduled), 1)
+        self.assertGreaterEqual(scheduled[0][0], 1000)
+        scheduled[0][1]()
+        self.assertEqual(window.quit_count, 1)
 
     def test_web_context_cannot_reach_native_host(self):
         class NativeHostSpy:

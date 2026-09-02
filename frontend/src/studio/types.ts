@@ -6,13 +6,15 @@ export type StudioOperation =
   | 'runtime.execute'
   | 'generation_api.snapshot'
   | 'generation_api.execute'
+  | 'app_update.snapshot'
+  | 'app_update.execute'
   | 'model_paths.snapshot'
   | 'model_paths.save'
   | 'model_paths.reset'
   | 'model_paths.refresh'
   | 'native.pick_directory'
 
-export type StudioTopic = 'runtime' | 'generation_api' | 'model_paths'
+export type StudioTopic = 'runtime' | 'generation_api' | 'app_update' | 'model_paths'
 
 export interface StudioOperationInputMap {
   'sync.bootstrap': Record<string, never>
@@ -25,6 +27,11 @@ export interface StudioOperationInputMap {
   'generation_api.snapshot': Record<string, never>
   'generation_api.execute': {
     action: string
+    payload?: Record<string, unknown>
+  }
+  'app_update.snapshot': Record<string, never>
+  'app_update.execute': {
+    action: 'check' | 'configure' | 'skip' | 'install'
     payload?: Record<string, unknown>
   }
   'model_paths.snapshot': Record<string, never>

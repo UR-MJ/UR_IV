@@ -29,7 +29,7 @@
             <label>시스템 상태</label>
             <div class="info-row">
               <span class="desc">코어 버전</span>
-              <span class="val-badge">v2.0.0 PRO</span>
+              <span class="val-badge">{{ appUpdate.currentDisplay || '확인 중…' }}</span>
             </div>
             <div class="info-row mt-12">
               <span class="desc">API 오케스트레이터</span>
@@ -38,7 +38,87 @@
           </div>
         </div>
 
-        <!-- 2. Network & API -->
+        <!-- 2. Application updates -->
+        <div v-show="currentTab === 'updates'" class="section-fade app-update-section">
+          <div v-if="!appUpdate.available" class="hint-banner update-readonly">
+            <strong>업데이트 연결 대기</strong>
+            {{ appUpdate.statusMessage || '현재 실행 환경에서 업데이트 정보를 불러오지 못했습니다.' }}
+          </div>
+
+          <section class="glass-card app-update-card">
+            <header class="app-update-header">
+              <div>
+                <div class="app-update-eyebrow">GitHub 릴리스</div>
+                <h2>AI Studio Pro 업데이트</h2>
+                <p>공식 <b>UR-al/UR_IV</b> 릴리스를 확인합니다.</p>
+              </div>
+              <span class="app-update-state" :class="appUpdateStatusClass">{{ appUpdateStatusLabel }}</span>
+            </header>
+
+            <div class="app-update-version-grid mt-16">
+              <div class="app-update-version">
+                <span>현재 앱</span>
+                <strong>{{ appUpdate.currentDisplay || '—' }}</strong>
+                <small>{{ appUpdate.mode === 'git' ? 'Git 소스 설치' : '일반 복사본' }}</small>
+              </div>
+              <div class="app-update-version">
+                <span>최신 안정판</span>
+                <strong>{{ appUpdate.latestVersion ? `v${appUpdate.latestVersion}` : '확인 전' }}</strong>
+                <small>{{ appUpdatePublishedLabel }}</small>
+              </div>
+            </div>
+
+            <div class="app-update-toggle mt-16">
+              <div>
+                <strong>시작 후 자동 확인</strong>
+                <small>12시간 간격으로 확인하며 앱 시작을 막지 않습니다.</small>
+              </div>
+              <ToggleSwitch
+                :model-value="appUpdate.autoCheck"
+                :disabled="appUpdate.busy || !appUpdate.nativeOperations"
+                @update:model-value="setAppUpdateAutoCheck"
+              />
+            </div>
+
+            <div v-if="appUpdate.installReason" class="app-update-notice mt-12">
+              {{ appUpdate.installReason }} 기존 파일과 설정은 자동으로 덮어쓰지 않습니다.
+            </div>
+            <div v-if="appUpdate.lastResult?.finishedAt" class="app-update-receipt mt-12" :class="{ failed: appUpdate.lastResult.ok === false }">
+              <strong>{{ appUpdate.lastResult.ok ? '최근 업데이트 완료' : '최근 업데이트 실패' }}</strong>
+              <span>{{ appUpdate.lastResult.message }}</span>
+            </div>
+            <div v-else-if="appUpdate.developmentBuild && !appUpdate.updateAvailable" class="app-update-notice development mt-12">
+              현재 앱은 최신 공개 릴리스 이후의 개발 변경을 포함합니다.
+            </div>
+
+            <div class="app-update-actions mt-16">
+              <button class="btn-pill" :disabled="appUpdate.busy || !appUpdate.nativeOperations" @click="checkAppUpdate">
+                {{ appUpdate.busyAction === 'check' ? '확인 중…' : '업데이트 확인' }}
+              </button>
+              <button class="btn-pill primary" :disabled="appUpdate.busy || !appUpdate.canInstall" @click="installAppUpdate">
+                {{ appUpdate.busyAction === 'install' ? '준비 중…' : '업데이트 후 재시작' }}
+              </button>
+              <button class="btn-pill" @click="openAppRelease">GitHub에서 보기</button>
+              <button v-if="appUpdate.updateAvailable" class="btn-pill" :disabled="appUpdate.busy || !appUpdate.nativeOperations" @click="toggleSkipAppUpdate">
+                {{ appUpdate.skipped ? '알림 다시 받기' : '이번 버전 알림 끄기' }}
+              </button>
+            </div>
+            <p v-if="appUpdate.statusMessage" class="app-update-message">{{ appUpdate.statusMessage }}</p>
+            <div v-if="appUpdate.lastCheckedAt" class="app-update-checked">마지막 확인 {{ appUpdateCheckedLabel }}</div>
+          </section>
+
+          <section class="glass-card app-update-card mt-16">
+            <header class="app-update-notes-head">
+              <div>
+                <div class="app-update-eyebrow">패치 노트</div>
+                <h2>{{ appUpdate.releaseName || (appUpdate.latestVersion ? `v${appUpdate.latestVersion}` : '릴리스 노트') }}</h2>
+              </div>
+            </header>
+            <pre class="app-update-notes">{{ appUpdate.notes || '업데이트를 확인하면 최신 패치노트가 여기에 표시됩니다.' }}</pre>
+          </section>
+        </div>
+
+        <!-- 3. Network & API -->
         <div v-show="currentTab === 'api'" class="section-fade generation-api-section">
           <div class="hint-banner generation-api-security">
             <strong>인증 생성 게이트웨이</strong>
@@ -946,6 +1026,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
+import {
+  appUpdateState,
+  initialiseAppUpdates,
+  openAppRelease,
+  runAppUpdateAction,
+} from '../stores/appUpdateStore'
 import { getStudioClient, replyData, StudioClientError, type StudioClient } from '../studio/client'
 import CustomSelect from '../components/CustomSelect.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
@@ -1050,6 +1136,7 @@ async function studioClient(): Promise<StudioClient> {
 const subTabs: SubTab[] = [
   // keywords: 사용자 검색 시 라벨 외에도 매칭할 한/영 키워드들
   { id: 'general',   label: '일반',       icon: 'settings', keywords: 'general 일반 시스템 코어 버전' },
+  { id: 'updates',   label: '앱 업데이트', icon: 'download', keywords: 'update 업데이트 github release 릴리스 패치노트 버전 알림 재시작' },
   { id: 'api',       label: '네트워크',   icon: 'globe', keywords: 'network api 네트워크 webui comfy url 백엔드 연결' },
   { id: 'runtimes',  label: '런타임 · 엔진', icon: 'cpu', keywords: 'runtime engine forge neo comfyui install update start stop extension 확장 설치 업데이트 실행' },
   { id: 'forge',     label: 'Forge',      icon: 'package', keywords: 'forge neo checkpoint model lora vae te text encoder 경로 폴더 모델 로라' },
@@ -1081,6 +1168,42 @@ watch(filteredSubTabs, (val) => {
 function focusSearch() {
   searchInputRef.value?.focus()
   searchInputRef.value?.select()
+}
+const appUpdate = appUpdateState
+const appUpdateStatusLabel = computed(() => {
+  if (appUpdate.busy) return '확인 중'
+  if (appUpdate.updateAvailable) return '업데이트 있음'
+  if (appUpdate.developmentBuild && appUpdate.latestVersion) return '개발 빌드'
+  if (appUpdate.latestVersion) return '최신 상태'
+  return '확인 전'
+})
+const appUpdateStatusClass = computed(() => ({
+  available: appUpdate.updateAvailable,
+  current: Boolean(appUpdate.latestVersion && !appUpdate.updateAvailable),
+  busy: appUpdate.busy,
+}))
+function formatUpdateDate(value: string): string {
+  if (!value) return '날짜 정보 없음'
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('ko-KR')
+}
+const appUpdatePublishedLabel = computed(() => formatUpdateDate(appUpdate.publishedAt))
+const appUpdateCheckedLabel = computed(() => formatUpdateDate(appUpdate.lastCheckedAt))
+async function setAppUpdateAutoCheck(value: boolean) {
+  try { await runAppUpdateAction('configure', { autoCheck: value }) } catch {}
+}
+async function checkAppUpdate() {
+  try { await runAppUpdateAction('check') } catch {}
+}
+async function installAppUpdate() {
+  try { await runAppUpdateAction('install') } catch {}
+}
+async function toggleSkipAppUpdate() {
+  try {
+    await runAppUpdateAction('skip', {
+      version: appUpdate.skipped ? '' : appUpdate.latestVersion,
+    })
+  } catch {}
 }
 const generationApi = reactive({
   enabled: false,
@@ -2111,6 +2234,7 @@ let disconnectUiPrefsEvent: (() => void) | null = null
 let settingsDisposed = false
 onMounted(async () => {
   settingsDisposed = false
+  void initialiseAppUpdates(false)
   disconnectOllamaModelsEvent = onBackendEvent('ollamaModelsReady', handleOllamaModels)
   let studio: StudioClient
   try {
@@ -2513,6 +2637,79 @@ function handleOllamaModels(json: string) {
 .info-row { display: flex; justify-content: space-between; align-items: center; }
 .desc { font-size: 12px; font-weight: var(--fw-bold); color: var(--text-secondary); }
 .val-badge { background: var(--border); padding: 4px 12px; border-radius: var(--radius-pill); font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); }
+
+/* Application updates */
+.app-update-section { width: 100%; container-type: inline-size; }
+.update-readonly {
+  background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.3); color: var(--text-secondary);
+}
+.update-readonly strong { color: var(--state-warn-fg); margin-right: 5px; }
+.app-update-card { border-color: color-mix(in srgb, var(--accent) 24%, var(--border)); }
+.app-update-header, .app-update-notes-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 18px;
+}
+.app-update-eyebrow {
+  color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: .04em;
+}
+.app-update-header h2, .app-update-notes-head h2 {
+  margin: 4px 0 0; color: var(--text-primary); font-size: 18px;
+}
+.app-update-header p { margin: 7px 0 0; color: var(--text-muted); font-size: var(--fs-label); }
+.app-update-header p b { color: var(--text-secondary); }
+.app-update-state {
+  flex-shrink: 0; padding: 5px 9px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold);
+}
+.app-update-state.available { border-color: rgba(251,191,36,.42); background: rgba(251,191,36,.1); color: var(--state-warn-fg); }
+.app-update-state.current { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.09); color: var(--state-ok-fg); }
+.app-update-state.busy { border-color: rgba(96,165,250,.42); background: rgba(96,165,250,.09); color: var(--state-info-fg); }
+.app-update-version-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.app-update-version {
+  min-width: 0; padding: 13px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-input); display: flex; flex-direction: column; gap: 5px;
+}
+.app-update-version span, .app-update-version small { color: var(--text-muted); font-size: var(--fs-label); }
+.app-update-version strong {
+  overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); font-size: 12px; white-space: nowrap;
+}
+.app-update-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 12px 14px; border-radius: 8px; background: var(--bg-input);
+}
+.app-update-toggle > div { display: flex; flex-direction: column; gap: 3px; }
+.app-update-toggle strong { color: var(--text-secondary); font-size: var(--fs-label); }
+.app-update-toggle small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.4; }
+.app-update-notice {
+  padding: 10px 12px; border: 1px solid rgba(251,191,36,.3); border-radius: 7px;
+  background: rgba(251,191,36,.07); color: var(--state-warn-fg); font-size: var(--fs-label); line-height: 1.55;
+}
+.app-update-notice.development { border-color: rgba(96,165,250,.3); background: rgba(96,165,250,.07); color: var(--state-info-fg); }
+.app-update-receipt {
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid rgba(74,222,128,.3);
+  border-radius: 7px; background: rgba(74,222,128,.07); color: var(--state-ok-fg); font-size: var(--fs-label); line-height: 1.5;
+}
+.app-update-receipt.failed { border-color: rgba(248,113,113,.32); background: rgba(248,113,113,.07); color: var(--state-alert-fg); }
+.app-update-receipt span { color: var(--text-secondary); }
+.app-update-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.app-update-message {
+  margin: 12px 0 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--bg-input); color: var(--text-secondary); font-size: var(--fs-label); line-height: 1.5;
+}
+.app-update-checked { margin-top: 9px; color: var(--text-muted); font-size: var(--fs-label); text-align: right; }
+.app-update-notes {
+  max-height: 420px; margin: 16px 0 0; padding: 14px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text-secondary);
+  font-family: inherit; font-size: var(--fs-label); line-height: 1.65;
+}
+
+@container (max-width: 460px) {
+  .app-update-card { padding: 16px; }
+  .app-update-header, .app-update-notes-head { flex-direction: column; gap: 10px; }
+  .app-update-version-grid { grid-template-columns: 1fr; }
+  .app-update-toggle { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .app-update-actions .btn-pill { flex: 1 1 100%; }
+  .app-update-checked { text-align: left; }
+}
 
 .input-stack { display: flex; flex-direction: column; gap: 16px; }
 .input-unit { position: relative; }

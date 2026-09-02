@@ -6,6 +6,52 @@ AI Studio - Pro
 import sys
 import os
 
+# Do not import project code while the detached updater is replacing the
+# checkout.  A Windows kernel mutex is process-owned, so a crashed helper can
+# never leave a stale startup block behind.
+def _acquire_detached_update_gate(timeout_ms: int = 120_000):
+    if os.name != "nt":
+        return None
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+    kernel32.CreateMutexW.argtypes = (ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p)
+    kernel32.WaitForSingleObject.restype = ctypes.c_ulong
+    kernel32.WaitForSingleObject.argtypes = (ctypes.c_void_p, ctypes.c_ulong)
+    kernel32.ReleaseMutex.argtypes = (ctypes.c_void_p,)
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    handle = kernel32.CreateMutexW(None, False, r"Local\AIStudioPro.UR_IV.Update")
+    if not handle:
+        raise RuntimeError("앱 업데이트 시작 잠금을 확인하지 못했습니다.")
+    result = int(kernel32.WaitForSingleObject(handle, timeout_ms))
+    if result not in {0x00000000, 0x00000080}:
+        kernel32.CloseHandle(handle)
+        raise RuntimeError("앱 업데이트가 아직 진행 중입니다. 잠시 후 다시 실행하세요.")
+    return kernel32, handle
+
+
+_startup_update_gate = _acquire_detached_update_gate() if __name__ == "__main__" else None
+try:
+    if __name__ == "__main__":
+        from core.app_instance import register_app_instance
+
+        register_app_instance(update_guarded=_startup_update_gate is not None)
+finally:
+    if _startup_update_gate is not None:
+        _startup_update_gate[0].ReleaseMutex(_startup_update_gate[1])
+        _startup_update_gate[0].CloseHandle(_startup_update_gate[1])
+
+if __name__ == "__main__":
+    from core.app_startup import prepare_application
+
+    _prepare_result = prepare_application()
+    if _prepare_result:
+        from core.app_instance import unregister_app_instance
+
+        unregister_app_instance()
+        raise SystemExit(_prepare_result)
+
 # Chromium/QtWebEngine 네이티브 로그 억제 (QApplication 생성 전에 설정)
 os.environ.setdefault(
     "QTWEBENGINE_CHROMIUM_FLAGS",
@@ -46,6 +92,11 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("AI Studio Pro")
     app.setOrganizationName("AI Studio")
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "VERSION"), encoding="utf-8") as version_file:
+            app.setApplicationVersion(version_file.read().strip())
+    except OSError:
+        app.setApplicationVersion("0.0.0")
 
     # 앱 전역 아이콘 설정 (작업 표시줄 및 트레이 기본값)
     from PyQt6.QtGui import QIcon
