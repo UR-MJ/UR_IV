@@ -25,6 +25,8 @@ APP = SRC / "App.vue"
 PROMPT_PANEL = SRC / "components" / "PromptPanel.vue"
 ROUTER = SRC / "router.js"
 ICONS = SRC / "icons" / "index.ts"
+CREATOR_MODE_TS = SRC / "composables" / "useCreatorMode.ts"
+CREATOR_VIEW = SRC / "views" / "CreatorStudioView.vue"
 
 #: 레일이 라우트가 아니라 PyQt 화면으로 보내는 탭. 라우터에는 없다.
 NATIVE_TABS = ("web", "backend")
@@ -211,6 +213,140 @@ class NavRailTests(unittest.TestCase):
         # 은 라이트에서 안 보인다.
         self.assertRegex(self.rail, r"\.nav\.on\s*\{[^}]*background:\s*var\(--bg-button\)")
         self.assertRegex(self.rail, r"\.sub\.open\s*\{[^}]*background:\s*var\(--accent-dim\)")
+
+
+_CREATOR_MODE = re.compile(
+    r"\{\s*id:\s*'(?P<id>[a-z0-9]+)'\s*,"
+    r"\s*label:\s*'(?P<label>[^']+)'\s*,"
+    r"\s*icon:\s*'(?P<icon>[a-z0-9-]+)'\s*\}"
+)
+
+
+class CreatorModeSectionTests(unittest.TestCase):
+    """Creator 의 모드(영상 · 만화 · Krea2)는 레일의 하위 항목이다.
+
+    예전엔 화면 안에 알약 줄이 따로 있어 레일 → 알약 → T2V/I2V/V2V 로 내비게이션이
+    3층이었다. 모드를 레일로 올려 2층으로 만들었고, 그 대가로 **찾아가기 항목과
+    성격이 다른 하위 항목**이 생겼다 — 모드 항목은 스크롤 대상이 아니라 화면을
+    바꾼다. 둘이 섞이면서 조용히 깨질 수 있는 자리를 여기서 지킨다.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.modes = [m.groupdict() for m in _CREATOR_MODE.finditer(_read(CREATOR_MODE_TS))]
+        cls.rail = _read(RAIL)
+        cls.registry = _read(SECTIONS_TS)
+        cls.view = _read(CREATOR_VIEW)
+        cls.icons = _read(ICONS)
+
+    def test_mode_list_is_readable(self):
+        self.assertGreaterEqual(
+            len(self.modes), 3,
+            "useCreatorMode.ts 의 CREATOR_MODES 를 읽지 못했다 — 선언 형태가 바뀌었는지 확인",
+        )
+
+    def test_mode_ids_match_the_type_union(self):
+        """union 과 목록이 갈라지면 한쪽에만 있는 모드가 조용히 생긴다."""
+        union = re.search(r"export type CreatorMode\s*=\s*(.+)", _read(CREATOR_MODE_TS))
+        self.assertIsNotNone(union, "CreatorMode 타입 선언을 찾지 못했다")
+        declared = set(re.findall(r"'([a-z0-9]+)'", union.group(1)))
+        self.assertEqual(
+            declared, {m["id"] for m in self.modes},
+            "CreatorMode union 과 CREATOR_MODES 의 id 가 다르다",
+        )
+
+    def test_every_mode_icon_exists_in_the_registry(self):
+        """접힌 레일(52px)에서는 아이콘만 남는다 — 없는 이름은 빈 칸이 된다."""
+        for mode in self.modes:
+            icon = mode["icon"]
+            key = f"'{icon}':" if "-" in icon else f"{icon}:"
+            self.assertIn(
+                key, self.icons,
+                f"모드 '{mode['id']}' 의 아이콘 '{icon}' 이 icons/index.ts 에 없다",
+            )
+
+    def test_every_mode_has_a_screen(self):
+        """레일에 항목만 생기고 화면이 없으면 눌러도 빈 화면이 된다."""
+        for mode in self.modes:
+            self.assertIn(
+                f"creatorMode === '{mode['id']}'", self.view,
+                f"CreatorStudioView 에 '{mode['id']}' 모드 화면이 없다",
+            )
+
+    def test_registry_derives_modes_from_the_composable(self):
+        """목록을 두 곳에 적으면 레일과 화면이 갈라진다.
+
+        주석에 `CREATOR_MODES` 라고 **적혀 있기만** 해도 통과하면 안 된다 —
+        실제로 그 배열에서 만들어 내는 식이 있는지를 본다.
+        """
+        self.assertIn(
+            "CREATOR_MODES.map(", self.registry,
+            "navSections 가 CREATOR_MODES 에서 유도하지 않는다 — 목록을 베껴 적었을 가능성",
+        )
+        self.assertIn("route: 'creator'", self.registry, "creator 탭이 레지스트리에 없다")
+        # 객체 리터럴로 모드 항목을 손으로 적어 넣으면 `kind: 'mode',` 가 map 바깥에도
+        # 생긴다. (인터페이스의 `kind: 'mode'` 는 뒤에 쉼표가 없어 안 걸린다.)
+        self.assertEqual(
+            self.registry.count("kind: 'mode',"), 1,
+            "모드 항목을 만드는 자리가 둘 이상이다 — 목록이 두 벌이 되면 레일과 화면이 갈라진다",
+        )
+
+    def test_mode_sections_are_not_scroll_targets(self):
+        """모드 항목의 id 는 목록 안 이름표일 뿐 DOM 대상이 아니다.
+
+        같은 id 가 마크업에 있으면 다른 개발자가 스크롤 항목으로 착각한다.
+        """
+        # 모드를 그리는 파일도 같이 본다 — id 를 붙일 사람은 여기다.
+        markup = chr(10).join((_read(APP), _read(PROMPT_PANEL), self.view))
+        for mode in self.modes:
+            self.assertNotIn(
+                f'id="creator-mode-{mode["id"]}"', markup,
+                f"creator-mode-{mode['id']} 가 마크업에 있다 — 모드 항목은 스크롤 대상이 아니다",
+            )
+
+    def test_collapsed_rail_still_reaches_the_modes(self):
+        """접었다고 모드가 사라지면 그 화면에 갈 길이 아예 없어진다.
+
+        '찾아가기' 항목은 편의라 숨겨도 되지만 모드는 유일한 길이다.
+        """
+        self.assertIn(
+            "sections.value.filter(isModeSection)", self.rail,
+            "접힌 레일에서 모드 항목만 남기는 필터가 없다",
+        )
+        self.assertNotIn(
+            '<template v-if="!collapsed && currentTab === tab.name">', self.rail,
+            "서랍이 아직 접힘 여부로 통째로 가려진다 — 모드까지 같이 사라진다",
+        )
+        self.assertRegex(
+            self.rail, r"\.nav-rail\.collapsed \.sub\.mode\s*\{",
+            "접힌 상태의 모드 항목 CSS 가 없다 — 196px 폭 그대로 삐져나온다",
+        )
+
+    def test_mode_highlight_comes_from_the_real_mode(self):
+        """클릭 기록으로 칠하면 탭을 떠났다 오는 순간 표시가 어긋난다.
+
+        `openSection` 은 탭이 바뀌면 지워지지만 화면은 keep-alive 라 모드를 기억한다.
+        """
+        self.assertIn(
+            "creatorMode.value === section.mode", self.rail,
+            "모드 활성 표시가 실제 모드 값에서 나오지 않는다",
+        )
+
+    def test_mode_survives_a_restart(self):
+        """레일이 모드를 보여 주는데 앱을 껐다 켜면 영상으로 돌아가면 거짓말이 된다."""
+        source = _read(CREATOR_MODE_TS)
+        # 읽기만 있으면 '저장된 값을 읽기는 하는데 쓰지는 않는' 상태로도 통과한다 —
+        # 그러면 모드가 영원히 처음 값에 못 박힌다. 왕복 양쪽을 다 본다.
+        self.assertIn("localStorage.getItem", source, "저장된 모드를 읽지 않는다")
+        self.assertIn("localStorage.setItem", source, "고른 모드를 저장하지 않는다")
+
+    def test_view_no_longer_carries_its_own_switcher(self):
+        """모드 줄이 화면에도 남으면 같은 것을 두 군데서 고르게 된다(내비 3층으로 복귀)."""
+        for gone in ("creator-tabs", "AI STUDIO PRO", "CREATOR STUDIO"):
+            self.assertNotIn(
+                gone, self.view,
+                f"CreatorStudioView 에 '{gone}' 이 남아 있다 — 레일과 중복된다",
+            )
 
 
 if __name__ == "__main__":

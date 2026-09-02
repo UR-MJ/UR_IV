@@ -878,7 +878,8 @@ onMounted(async () => {
 
 <style scoped>
 .batch-view { width: 100%; height: 100%; display: flex; flex-direction: column; }
-.sub-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+/* 오른쪽 여백은 알림 종 자리다 (style.css --notif-gutter) */
+.sub-tabs { display: flex; gap: 0; padding-right: var(--notif-gutter); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .sub-tab {
   flex: 1; padding: 8px; background: transparent; border: none; border-bottom: 2px solid transparent;
   color: var(--text-muted); font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; text-align: center;

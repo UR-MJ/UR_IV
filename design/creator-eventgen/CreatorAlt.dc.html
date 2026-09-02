@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .num { font-family: 'IBM Plex Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .cap { font-size: 11px; font-weight: 500; color: #8A8A8A; }
+    .shell { display: flex; background: #0A0A0A; border: 1px solid #242424; }
+    .rail { width: 50px; background: #0A0A0A; border-right: 1px solid #242424; flex-shrink: 0; padding: 8px 6px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px; }
+    .rdot { height: 9px; background: #1E1E1E; border-radius: 2px; }
+    .rdot.on { background: rgba(201,162,39,.18); }
+    .lbl { font-size: 10px; color: #8A8A8A; }
+    .fld { height: 22px; background: #131313; border: 1px solid #242424; border-radius: 5px; }
+    .primary { height: 26px; background: #C9A227; border-radius: 5px; }
+    .chip { height: 21px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+    .chip.on { background: rgba(201,162,39,.14); border: 1px solid #C9A227; color: #C9A227; }
+    .chip.off { background: #1E1E1E; border: 1px solid #242424; color: #A2A2A2; }
+  </style>
+</helmet>
+
+<div style="width: 900px; height: 900px; background: #060606; box-sizing: border-box; padding: 24px 30px; display: flex; flex-direction: column; gap: 16px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div class="cap">대안</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">Creator 를 탭 하나로 두고 안에서만 정리한다</div>
+    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.6; max-width: 740px;">
+      레일 항목을 늘리지 않는 쪽. 자체 헤더를 없애고 <b style="color:#E4E4E4;">모드 전환을 설정 열 맨 위</b>로 내린다.
+      내비는 여전히 <span class="num">2.5</span> 층이지만(레일 → 모드 → T2V/I2V/V2V) 위쪽 가로줄이 사라져서
+      세로 <span class="num">30px</span> 를 되찾고, 눈이 왼쪽 한 줄만 훑으면 된다.
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="cap">영상 모드 — 모드 · 방식이 설정 열 머리에 겹쳐 놓인다</div>
+    <div class="shell" style="height: 236px;">
+      <div class="rail">
+        <div class="rdot"></div><div class="rdot"></div><div class="rdot"></div>
+        <div style="height: 1px; background: #242424; margin: 3px 0;"></div>
+        <div class="rdot on"></div><div class="rdot"></div>
+      </div>
+      <div style="width: 232px; border-right: 1px solid #242424; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 9px;">
+        <div style="display: flex; gap: 5px;">
+          <span class="chip on" style="flex:1;">영상</span>
+          <span class="chip off" style="flex:1;">만화</span>
+          <span class="chip off" style="flex:1;">Krea2</span>
+        </div>
+        <div style="display: flex; gap: 5px;">
+          <span class="chip on" style="flex:1; height: 18px; font-size: 9px;">T2V</span>
+          <span class="chip off" style="flex:1; height: 18px; font-size: 9px;">I2V</span>
+          <span class="chip off" style="flex:1; height: 18px; font-size: 9px;">V2V</span>
+        </div>
+        <div style="height: 1px; background: #242424;"></div>
+        <div style="display: flex; flex-direction: column; gap: 5px;"><span class="lbl">모델</span><div class="fld"></div></div>
+        <div style="display: flex; flex-direction: column; gap: 5px;"><span class="lbl">프롬프트</span><div style="height: 44px; background: #131313; border: 1px solid #242424; border-radius: 5px;"></div></div>
+        <div style="display: flex; gap: 6px;">
+          <div style="flex:1; display:flex; flex-direction:column; gap:4px"><span class="lbl">프레임</span><div class="fld"></div></div>
+          <div style="flex:1; display:flex; flex-direction:column; gap:4px"><span class="lbl">FPS</span><div class="fld"></div></div>
+        </div>
+        <div class="primary" style="margin-top: auto;"></div>
+      </div>
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #585858;">영상 결과</div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.55;">
+      설정 열은 다른 탭과 같은 <span class="num" style="color:#A2A2A2;">360</span>. 모드 칩(굵게)과 방식 칩(얇게)의 크기를 달리해
+      <b style="color:#A2A2A2;">둘이 같은 층이 아님</b>을 보여 준다.
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="cap">만화 모드 — 같은 탭인데 열이 셋으로 바뀐다</div>
+    <div class="shell" style="height: 194px;">
+      <div class="rail">
+        <div class="rdot"></div><div class="rdot"></div><div class="rdot"></div>
+        <div style="height: 1px; background: #242424; margin: 3px 0;"></div>
+        <div class="rdot on"></div><div class="rdot"></div>
+      </div>
+      <div style="width: 168px; border-right: 1px solid #242424; padding: 11px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; gap: 5px;">
+          <span class="chip off" style="flex:1; font-size: 9px;">영상</span>
+          <span class="chip on" style="flex:1; font-size: 9px;">만화</span>
+          <span class="chip off" style="flex:1; font-size: 9px;">Krea2</span>
+        </div>
+        <div style="height: 1px; background: #242424;"></div>
+        <span class="lbl">스토리보드</span>
+        <div style="height: 40px; background: #131313; border: 1px solid #242424; border-radius: 5px;"></div>
+        <div style="display: flex; gap: 5px;"><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div></div>
+        <div style="height: 22px; background: rgba(201,162,39,.14); border: 1px solid #C9A227; border-radius: 5px;"></div>
+      </div>
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 12px;">
+        <div style="width: 122px; height: 100%; background: #F4F4F2; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 6px; box-sizing: border-box;">
+          <div style="background:#DCDCD7;outline:1.5px solid #C9A227;outline-offset:-1px"></div><div style="background:#DCDCD7"></div>
+          <div style="background:#DCDCD7"></div><div style="background:#DCDCD7"></div>
+        </div>
+      </div>
+      <div style="width: 168px; border-left: 1px solid #242424; padding: 11px; box-sizing: border-box; display: flex; flex-direction: column; gap: 7px;">
+        <span class="lbl">패널 1</span>
+        <div style="height: 40px; background: #131313; border: 1px solid #242424; border-radius: 5px;"></div>
+        <div class="fld"></div>
+        <div class="fld"></div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.55;">
+      <b style="color:#E0B341;">여기가 이 안의 값이다</b> — 같은 탭에 머무는데 왼쪽 열이 <span class="num">360 → 168</span> 로 줄고
+      오른쪽에 열이 하나 생긴다. 칩을 눌렀을 뿐인데 화면 골격이 바뀐다.
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 28px; font-size: 12px; color: #A2A2A2; line-height: 1.6;">
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+      <div style="color: #4ADE80; font-weight: 500;">얻는 것</div>
+      <div>· 레일이 <span class="num">15</span> 개 그대로 — 손에 익은 위치가 안 바뀐다</div>
+      <div>· 자체 헤더가 사라져 세로 <span class="num">30px</span> 를 되찾는다</div>
+      <div>· 고칠 곳이 <span class="num">CreatorView.vue</span> 한 파일 안이다</div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+      <div style="color: #F87171; font-weight: 500;">치르는 것</div>
+      <div>· 한 탭이 두 골격을 오간다 — 어디에 있는지 감이 흐려진다</div>
+      <div>· 만화 모드 열은 <span class="num">360</span> 을 못 쓴다(가운데 지면을 지켜야 해서)</div>
+      <div>· 내비 층수가 <b style="color:#E4E4E4;">그대로</b> — 원인은 안 없앤다</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

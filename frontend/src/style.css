@@ -197,6 +197,14 @@ label {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ── Keycap — 기계식 키보드 키캡 스타일 ── */
+/* ── 알림 종 자리 ─────────────────────────────────────────────────────── */
+/* App.vue 의 `.notif-bell` 은 창 오른쪽 위에 position:fixed 로 떠 있어 어떤       */
+/* 화면 위로도 지나간다. 화면 상단 도구줄이 오른쪽 끝까지 차면 마지막 버튼이     */
+/* 종 밑에 깔려 **눌리지 않는다** — 보이기는 하므로 조용히 안 되는 쪽이다.       */
+/* 종 크기(34px)와 여백(오른쪽 18px)에서 나온 값이고, 종을 옮기거나 키우면       */
+/* 여기 한 곳만 고치면 된다.                                                    */
+:root { --notif-gutter: 56px; }
+
 /* 사용: <kbd class="keycap">Ctrl</kbd> + <kbd class="keycap">Z</kbd>          */
 /* SettingsView 등 단축키 표시 일관성용. var(--keycap-*) 토큰으로 라이트테마 */
 /* 전환 시 한 곳만 바꾸면 됨.                                                  */

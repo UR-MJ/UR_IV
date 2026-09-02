@@ -1,0 +1,84 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 900,
+      "h": 900,
+      "title": "확정 — B와 C 혼합"
+    },
+    {
+      "file": "Now.dc.html",
+      "x": 0,
+      "y": 1040,
+      "w": 900,
+      "h": 900,
+      "title": "지금"
+    },
+    {
+      "file": "OptionA.dc.html",
+      "x": 980,
+      "y": 1040,
+      "w": 480,
+      "h": 760,
+      "title": "A — 한 벌"
+    },
+    {
+      "file": "OptionB.dc.html",
+      "x": 1540,
+      "y": 1040,
+      "w": 480,
+      "h": 760,
+      "title": "B — 세 벌"
+    },
+    {
+      "file": "OptionC.dc.html",
+      "x": 2100,
+      "y": 1040,
+      "w": 480,
+      "h": 760,
+      "title": "C — 무대 우선"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "measured",
+      "x": 980,
+      "y": 0,
+      "w": 300,
+      "text": "실제 앱에서 잰 값 (1345×595)\n\n좌우 패널을 쓰는 탭 3 / 13\n나머지 열 개는 전폭 하나\n\n같은 셀렉트·입력의 폭\n  T2I·Inpaint  187~323\n  Batch        279\n  XYZ          287\n  Event Gen    345\n  Creator      109~228\n\n열 개 탭 모두 가장 큰 놀고 있는\n블록이 1149×567 — 화면 전체"
+    },
+    {
+      "id": "scope",
+      "x": 980,
+      "y": 420,
+      "w": 300,
+      "text": "이번 범위\n\n대상 11개 — I2I · Inpaint · Event Gen ·\nSearch · Batch · XYZ · Gallery ·\nFavorites · PNG Info · Creator · Settings\n\nWeb 과 Backend 는 PyQt 네이티브 탭이라\nVue 리디자인 대상이 아니다.\nT2I 와 Editor 는 이미 끝났다."
+    },
+    {
+      "id": "why",
+      "x": 2640,
+      "y": 1040,
+      "w": 280,
+      "text": "셋은 배타적이지 않다.\n\nA(한 벌)는 가장 외우기 쉽지만\n갤러리에 빈 열이 남는다.\nC(서랍)는 무대가 가장 넓지만\n값과 결과를 같이 못 본다.\nB 는 그 둘의 중간이고, 레일의\n묶음과 이미 거의 겹친다.\n\n추천은 B. C 의 서랍은 나중에\n좁은 창에서 옵션으로 얹으면 된다."
+    },
+    {
+      "id": "decision",
+      "x": 980,
+      "y": 760,
+      "w": 300,
+      "text": "확정 (사용자 판단)\n\n\"배치/업스케일은 B가 낫고, 갤러리는\n어차피 클릭 시 확대하고 우측에 EXIF\n정보가 뜨니까 C안이 나을거 같은데\"\n\n확인함 — GalleryView 의 viewImage 가\nlargeView 오버레이를 열고 거기에\n프롬프트·네거티브·파라미터와\n'프롬프트 사용'·'EXIF 저장' 이 있다.\nFavoritesView 도 같은 확대뷰를 쓴다.\n\n그래서 규칙은 '탭의 성격' 이 아니라\n'결과를 어떻게 보는가' 다."
+    },
+    {
+      "id": "decision2",
+      "x": 1340,
+      "y": 760,
+      "w": 300,
+      "text": "확정 2 (사용자 판단)\n\n\"360으로 통일, creator, Event gen은\n따로 시안 뽑아줘, 히스토리는\nT2i, i2i에만 보이면됨\"\n\n· 설정 열 폭 = 360, 전 탭 동일\n· 히스토리 열 = T2I · I2I 만.\n  Inpaint 의 220px 레일도 뺀다\n· Creator · Event Gen 은 별도 캔버스\n  (골격이 서로 달라 한 규칙으로\n   안 묶인다)"
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

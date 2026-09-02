@@ -1055,7 +1055,7 @@ import PromptPanel from './components/PromptPanel.vue'
 import CustomSelect from './components/CustomSelect.vue'
 import NavRail from './components/NavRail.vue'
 import BackendGate from './components/BackendGate.vue'
-import type { NavSection } from './utils/navSections'
+import type { NavScrollSection } from './utils/navSections'
 import QueuePanel from './components/QueuePanel.vue'
 import StatusStrip from './components/StatusStrip.vue'
 import CharacterPresetModal from './components/CharacterPresetModal.vue'
@@ -1840,7 +1840,7 @@ function onTabChanged(tabName: string) {
  * id 는 `utils/navSections.ts` 가 단일 출처이고, 실제로 존재하는지는
  * tests/test_nav_rail_contract.py 가 정적으로 검증한다.
  */
-async function goToNavSection(section: NavSection) {
+async function goToNavSection(section: NavScrollSection) {
   if (section.panel === 'extend') {
     showExtendPanel.value = true
     await nextTick()

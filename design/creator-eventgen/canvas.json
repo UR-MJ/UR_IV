@@ -1,0 +1,11 @@
+{
+  "artboards": [
+    { "file": "Now.dc.html",        "x": 0,    "y": 0, "w": 880, "h": 880, "title": "지금 — 진단" },
+    { "file": "Main.dc.html",       "x": 980,  "y": 0, "w": 900, "h": 900, "title": "추천" },
+    { "file": "CreatorAlt.dc.html", "x": 1980, "y": 0, "w": 900, "h": 900, "title": "Creator 대안" }
+  ],
+  "annotations": [
+    { "id": "brief", "x": 0, "y": -150, "w": 300, "text": "Creator · Event Gen 시안. 나머지 탭은 design/tab-layout 에서 B/C 로 확정됨 — 설정 열 360, 히스토리는 T2I·I2I 만." }
+  ],
+  "launch": { "view": "canvas" }
+}

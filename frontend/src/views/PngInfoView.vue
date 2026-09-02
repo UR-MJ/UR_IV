@@ -366,7 +366,8 @@ onUnmounted(() => {
 
 <style scoped>
 .pnginfo-view { width: 100%; height: 100%; display: flex; flex-direction: column; }
-.sub-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+/* 오른쪽 여백은 알림 종 자리다 (style.css --notif-gutter) */
+.sub-tabs { display: flex; gap: 0; padding-right: var(--notif-gutter); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .sub-tab {
   flex: 1; padding: 8px; background: transparent; border: none; border-bottom: 2px solid transparent;
   color: var(--text-muted); font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; text-align: center;
@@ -381,7 +382,8 @@ onUnmounted(() => {
 .drop-hint { text-align: center; color: var(--text-muted); user-select: none; }
 .drop-hint .icon { font-size: 48px; opacity: 0.3; margin-bottom: 12px; }
 .info-panel { width: 400px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; }
-.info-header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; flex-shrink: 0; }
+/* 오른쪽 여백은 알림 종 자리다 (style.css --notif-gutter) — 이 줄은 창 오른쪽 끝까지 찬다 */
+.info-header { display: flex; align-items: center; gap: 6px; padding: 8px var(--notif-gutter) 8px 12px; flex-shrink: 0; }
 .info-header h3 { color: var(--text-primary); font-size: 14px; margin: 0; flex: 1; }
 .btn { height: 28px; padding: 0 12px; background: var(--bg-button); border: none; border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-meta); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
 .btn:hover { background: var(--bg-button-hover); color: var(--text-primary); }

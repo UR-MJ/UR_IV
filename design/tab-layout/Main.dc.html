@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .num { font-family: 'IBM Plex Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .cap { font-size: 11px; font-weight: 500; color: #8A8A8A; }
+    .shell { display: flex; background: #0A0A0A; border: 1px solid #242424; height: 236px; position: relative; }
+    .rail { width: 50px; background: #0A0A0A; border-right: 1px solid #242424; flex-shrink: 0; padding: 8px 6px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px; }
+    .rdot { height: 9px; background: #1E1E1E; border-radius: 2px; }
+    .rdot.on { background: rgba(201,162,39,.18); }
+    .lbl { font-size: 10px; color: #8A8A8A; }
+    .fld { height: 24px; background: #131313; border: 1px solid #242424; border-radius: 5px; }
+    .primary { height: 28px; background: #C9A227; border-radius: 6px; }
+    .chip { height: 22px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+    .chip.on { background: rgba(201,162,39,.14); border: 1px solid #C9A227; color: #C9A227; }
+    .chip.off { background: #1E1E1E; border: 1px solid #242424; color: #A2A2A2; }
+    td, th { padding: 4px 10px 4px 0; text-align: left; font-size: 12px; }
+    th { color: #8A8A8A; font-weight: 500; }
+    td { color: #A2A2A2; }
+  </style>
+</helmet>
+
+<div style="width: 900px; height: 900px; background: #060606; box-sizing: border-box; padding: 24px 30px; display: flex; flex-direction: column; gap: 16px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div class="cap" style="color:#C9A227;">확정 — 탭마다 B 또는 C</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">결과를 어떻게 보느냐가 골격을 정한다</div>
+    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.6; max-width: 730px;">
+      한 벌로 통일하지 않는다. 갈림길은 하나다 —
+      <b style="color:#E4E4E4;">클릭하면 상세가 열리는가.</b>
+      갤러리·즐겨찾기는 이미 그렇다(확대 화면에 프롬프트·파라미터와 '프롬프트 사용'·'EXIF 저장'이 다 있다).
+      거기에 상시 정보 열을 또 두면 <b style="color:#E4E4E4;">같은 것을 두 군데</b> 두는 셈이다.
+      반대로 배치·XYZ 는 값을 바꿔 가며 결과를 확인해야 해서 설정이 늘 보여야 한다.
+    </div>
+  </div>
+
+  <!-- B — Batch -->
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="cap"><b style="color:#C9A227;">B</b> · 설정을 보며 결과를 확인하는 탭 — Batch / Upscale</div>
+    <div class="shell">
+      <div class="rail">
+        <div class="rdot"></div><div class="rdot"></div><div class="rdot"></div>
+        <div style="height: 1px; background: #242424; margin: 3px 0;"></div>
+        <div class="rdot on"></div><div class="rdot"></div>
+      </div>
+      <div style="width: 240px; border-right: 1px solid #242424; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; gap: 5px;">
+          <span class="chip on" style="flex:1;">일괄</span>
+          <span class="chip off" style="flex:1;">업스케일</span>
+          <span class="chip off" style="flex:1;">ADetailer</span>
+        </div>
+        <div style="height: 48px; border: 1px dashed #666; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #8A8A8A;">이미지를 끌어 놓으세요</div>
+        <div style="display: flex; flex-direction: column; gap: 5px;"><span class="lbl">작업</span><div class="fld"></div></div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <span class="lbl">크기</span>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <div class="fld" style="flex:1"></div><span style="font-size: 10px; color: #8A8A8A;">×</span><div class="fld" style="flex:1"></div>
+          </div>
+        </div>
+        <div class="primary" style="margin-top: auto;"></div>
+      </div>
+      <div style="flex: 1; padding: 12px; box-sizing: border-box; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 58px; gap: 7px; align-content: start;">
+        <div style="background:#1E1E1E;border-radius:5px;border:1px solid #242424"></div>
+        <div style="background:#1E1E1E;border-radius:5px;border:1px solid #242424"></div>
+        <div style="background:#1E1E1E;border-radius:5px;border:1px solid #C9A227"></div>
+        <div style="background:#1E1E1E;border-radius:5px;border:1px solid #242424"></div>
+        <div style="background:#1E1E1E;border-radius:5px;border:1px solid #242424"></div>
+        <div style="background:#131313;border-radius:5px;border:1px dashed #333"></div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.55;">
+      서브탭 5개가 <b style="color:#A2A2A2;">설정 열 안의 칩</b>이 된다 — 상단에 두 번째 내비게이션 줄을 만들지 않는다.
+      설정 열은 <span class="num" style="color:#A2A2A2;">360</span>, 히스토리 열은 <b style="color:#A2A2A2;">없다</b> — 결과 격자가 그만큼 넓어진다.
+    </div>
+  </div>
+
+  <!-- C — Gallery -->
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="cap"><b style="color:#C9A227;">C</b> · 클릭하면 상세가 열리는 탭 — Gallery · Favorites</div>
+    <div class="shell" style="height: 200px;">
+      <div class="rail">
+        <div class="rdot"></div><div class="rdot"></div>
+        <div style="height: 1px; background: #242424; margin: 3px 0;"></div>
+        <div class="rdot on"></div><div class="rdot"></div><div class="rdot"></div>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column;">
+        <div style="height: 32px; border-bottom: 1px solid #242424; display: flex; align-items: center; gap: 10px; padding: 0 12px;">
+          <span style="font-size: 11px; color: #A2A2A2;">2026-09 · 1,294장</span>
+          <div style="width: 140px; height: 22px; background: #131313; border: 1px solid #242424; border-radius: 5px;"></div>
+          <span style="margin-left: auto; display: flex; gap: 5px;">
+            <span class="chip on" style="width: 34px;"></span><span class="chip off" style="width: 34px;"></span>
+          </span>
+          <span style="width: 60px; height: 4px; background: #242424; border-radius: 2px;"></span>
+        </div>
+        <div style="flex: 1; padding: 10px; box-sizing: border-box; display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: 52px; gap: 6px; align-content: start;">
+          <div style="background:#1E1E1E;border-radius:4px"></div><div style="background:#1E1E1E;border-radius:4px"></div>
+          <div style="background:#1E1E1E;border-radius:4px"></div><div style="background:#1E1E1E;border-radius:4px"></div>
+          <div style="background:#1E1E1E;border-radius:4px"></div><div style="background:#1E1E1E;border-radius:4px"></div>
+          <div style="background:#1E1E1E;border-radius:4px"></div><div style="background:#1E1E1E;border-radius:4px"></div>
+          <div style="background:#1E1E1E;border-radius:4px"></div><div style="background:#1E1E1E;border-radius:4px"></div>
+          <div style="background:#1E1E1E;border-radius:4px"></div><div style="background:#1E1E1E;border-radius:4px"></div>
+          <div style="background:#1E1E1E;border-radius:4px"></div><div style="background:#1E1E1E;border-radius:4px"></div>
+          <div style="background:#1E1E1E;border-radius:4px"></div><div style="background:#1E1E1E;border-radius:4px"></div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.55;">
+      격자가 <b style="color:#A2A2A2;">한 줄에 6칸 → 8칸</b>이 된다(178px 를 안 잃는다). 폴더·검색·정렬·크기는 얇은 도구줄에 남고,
+      고른 것으로 할 일은 <b style="color:#A2A2A2;">이미 있는 확대 화면</b>이 맡는다.
+    </div>
+  </div>
+
+  <!-- 배정 -->
+  <div style="display: flex; gap: 28px;">
+    <table style="border-collapse: collapse;">
+      <tr><th>골격</th><th>탭</th></tr>
+      <tr><td style="color:#C9A227;">B</td><td>Batch / Upscale · XYZ Plot · Search · I2I · Inpaint</td></tr>
+      <tr><td style="color:#C9A227;">C</td><td>Gallery · Favorites</td></tr>
+      <tr><td style="color:#8A8A8A;">그대로</td><td>PNG Info · Settings</td></tr>
+      <tr><td style="color:#8A8A8A;">별도</td><td>Creator · Event Gen — 골격이 달라 따로 뽑았다</td></tr>
+    </table>
+  </div>
+
+  <div style="display: flex; gap: 28px; font-size: 12px; color: #A2A2A2; line-height: 1.6;">
+    <div style="flex: 1;">
+      <b style="color:#8A8A8A;">PNG Info 를 그대로 두는 이유</b> — 오른쪽 메타데이터가 중복이 아니라 <b style="color:#E4E4E4;">목적</b>이다.
+      격자를 훑는 탭이 아니라 한 장을 뜯어보는 탭이라 지금 2단이 맞다.
+    </div>
+    <div style="flex: 1;">
+      <b style="color:#4ADE80;">확정</b> — 설정 열은 모든 탭 <span class="num" style="color:#E4E4E4;">360</span> 통일 ·
+      히스토리 열은 <b style="color:#E4E4E4;">T2I · I2I 에만</b>(Inpaint 도 뺀다) ·
+      Creator · Event Gen 은 별도 시안으로 분리.
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

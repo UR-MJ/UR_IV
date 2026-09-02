@@ -1,23 +1,5 @@
 <template>
   <div class="creator-studio">
-    <header class="creator-header">
-      <div>
-        <div class="eyebrow">AI STUDIO PRO</div>
-        <h2>CREATOR STUDIO</h2>
-      </div>
-      <div class="creator-tabs" role="tablist" aria-label="Creator mode">
-        <button v-for="tab in modeTabs" :key="tab.id" class="creator-tab"
-          :class="{ active: activeMode === tab.id }" role="tab"
-          :aria-selected="activeMode === tab.id" @click="activeMode = tab.id">
-          <span>{{ tab.icon }}</span>{{ tab.label }}
-        </button>
-      </div>
-      <div class="backend-state" :class="stateClass">
-        <span class="state-dot" />
-        {{ stateLabel }}
-      </div>
-    </header>
-
     <div v-if="progress.visible" class="global-progress" aria-live="polite">
       <div class="progress-copy">
         <strong>{{ progress.stage || 'Preparing' }}</strong>
@@ -28,8 +10,9 @@
       <button class="danger-button compact" @click="cancelCreator">취소</button>
     </div>
 
-    <main v-if="activeMode === 'video'" class="creator-body two-column">
+    <main v-if="creatorMode === 'video'" class="creator-body two-column">
       <section class="settings-pane scroll-pane">
+        <div class="pane-state" :class="stateClass"><span class="state-dot" />{{ stateLabel }}</div>
         <div class="section-heading">
           <div><span class="section-kicker">MiniMax H3</span><h3>영상 생성</h3></div>
           <div class="segmented">
@@ -97,8 +80,9 @@
       </section>
     </main>
 
-    <main v-else-if="activeMode === 'krea'" class="creator-body two-column">
+    <main v-else-if="creatorMode === 'krea'" class="creator-body two-column">
       <section class="settings-pane scroll-pane">
+        <div class="pane-state" :class="stateClass"><span class="state-dot" />{{ stateLabel }}</div>
         <div class="section-heading"><div><span class="section-kicker">Krea2</span><h3>아이덴티티 편집</h3></div></div>
         <label class="field wide"><span>편집 프롬프트</span>
           <textarea v-model="kreaForm.prompt" rows="6" placeholder="Describe the desired edit while preserving identity..." />
@@ -139,8 +123,9 @@
       </section>
     </main>
 
-    <main v-else class="creator-body comic-mode">
+    <main v-else-if="creatorMode === 'comic'" class="creator-body comic-mode">
       <aside class="comic-sidebar scroll-pane">
+        <div class="pane-state" :class="stateClass"><span class="state-dot" />{{ stateLabel }}</div>
         <div class="section-heading"><div><span class="section-kicker">스토리보드</span><h3>만화 문서</h3></div></div>
         <label class="field wide"><span>장면</span>
           <textarea v-model="planner.scene" rows="5" placeholder="Describe the scene, characters, conflict and ending..." />
@@ -264,8 +249,8 @@ import {
   verifyComicRecoveryMirror,
 } from '../utils/comicRecovery'
 import { mediaUrl } from '../utils/media.js'
+import { useCreatorMode } from '../composables/useCreatorMode'
 
-type CreatorMode = 'video' | 'comic' | 'krea'
 type VideoMode = 't2v' | 'i2v' | 'v2v'
 type BubbleKind = 'speech' | 'thought' | 'narration'
 
@@ -281,11 +266,6 @@ interface CreatorResult { path?: string; url?: string; mediaType?: string; type?
 
 const STORAGE_KEY = 'creatorStudioComicDocument.v1'
 const FORM_STORAGE_KEY = 'creatorStudioForms.v1'
-const modeTabs = [
-  { id: 'video' as CreatorMode, label: 'VIDEO', icon: '▶' },
-  { id: 'comic' as CreatorMode, label: 'COMIC', icon: '▦' },
-  { id: 'krea' as CreatorMode, label: 'KREA2', icon: '◆' },
-]
 const videoModes = [
   { id: 't2v' as VideoMode, label: 'T2V' },
   { id: 'i2v' as VideoMode, label: 'I2V' },
@@ -300,7 +280,8 @@ const layouts = [
 ]
 const comicStyles = ['Anime', 'Manga', 'Webtoon', 'Cinematic', 'Painterly', 'Graphic Novel']
 
-const activeMode = ref<CreatorMode>('video')
+/** 모드는 왼쪽 레일이 정한다 — 여기선 읽기만 한다. `useCreatorMode` 참조. */
+const { mode: creatorMode } = useCreatorMode()
 const creatorState = ref<any>({ status: 'idle', ready: false })
 const lastResult = ref<CreatorResult | null>(null)
 const progress = ref({ visible: false, percent: 0, stage: '', message: '' })
@@ -898,39 +879,35 @@ onUnmounted(() => {
 
 <style scoped>
 .creator-studio { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; color: var(--text-primary); background: var(--bg-primary); }
-.creator-header { min-height: 62px; display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); align-items: center; gap: 20px; padding: 9px 20px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); }
-.eyebrow, .section-kicker { display: block; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
-/* 화면 이름(AI STUDIO PRO / CREATOR STUDIO)만 영문 대문자다 — 대문자는 글자 사이가
-   좁아 보여 트래킹이 필요하다. 한글인 섹션 제목엔 붙이면 안 된다. */
-.eyebrow { letter-spacing: 0.08em; }
-.creator-header h2, .section-heading h3 { margin: 2px 0 0; font-size: 15px; font-weight: var(--fw-bold); letter-spacing: 0; }
-.creator-header h2 { letter-spacing: 0.08em; }
-.creator-tabs { display: flex; padding: 3px; gap: 3px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-input); }
-.creator-tab { min-width: 94px; min-height: 32px; padding: 8px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-bold); letter-spacing: 0; cursor: pointer; }
-.creator-tab span { margin-right: 6px; }
-.creator-tab:hover { color: var(--text-secondary); }
-.creator-tab.active { background: var(--accent-fill); color: var(--on-accent); box-shadow: 0 3px 12px rgba(250, 204, 21, .16); }
-.backend-state { justify-self: end; display: flex; align-items: center; gap: 7px; max-width: 190px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.section-kicker { display: block; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
+.section-heading h3 { margin: 2px 0 0; font-size: 15px; font-weight: var(--fw-bold); letter-spacing: 0; }
+/* Creator 백엔드 표시등. 아래 StatusStrip 이 보여 주는 이미지 백엔드와 **다른 것**이라
+   중복이 아니다. 자체 헤더가 사라졌으므로 각 설정 열 머리로 옮겼다. */
+.pane-state { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-bottom: 2px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 표시등 점은 배지가 아니다 — 위에 글자를 얹지 않고 배경 위에서 자기가 읽혀야 하므로
    채움색(--state-ok)이 아니라 글자색(--state-ok-fg)을 쓴다. 채움색을 쓰면 어두운 테마에서 점이 잠긴다. */
 .state-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--edge); box-shadow: 0 0 0 3px rgba(102,102,102,.12); }
-.backend-state.ready { color: var(--state-ok-fg); }.backend-state.ready .state-dot { background: var(--state-ok-fg); box-shadow: 0 0 0 3px rgba(74,222,128,.12); }
-.backend-state.error { color: var(--state-alert-fg); }.backend-state.error .state-dot { background: var(--state-alert-fg); }
-.global-progress { display: grid; grid-template-columns: minmax(170px, 260px) 1fr 50px auto; align-items: center; gap: 12px; padding: 8px 18px; border-bottom: 1px solid var(--accent-dim); background: rgba(250, 204, 21, .045); }
+.pane-state.ready { color: var(--state-ok-fg); }.pane-state.ready .state-dot { background: var(--state-ok-fg); box-shadow: 0 0 0 3px rgba(74,222,128,.12); }
+.pane-state.error { color: var(--state-alert-fg); }.pane-state.error .state-dot { background: var(--state-alert-fg); }
+/* 오른쪽 여백은 알림 종 자리다 (style.css --notif-gutter). 이 줄은 자체 헤더가 사라지면서
+   창 맨 위로 올라왔고, 마지막 칸이 취소 버튼이다 — 가리면 작업을 멈출 수 없다. */
+.global-progress { display: grid; grid-template-columns: minmax(170px, 260px) 1fr 50px auto; align-items: center; gap: 12px; padding: 8px var(--notif-gutter) 8px 18px; border-bottom: 1px solid var(--accent-dim); background: rgba(250, 204, 21, .045); }
 .progress-copy { min-width: 0; display: flex; flex-direction: column; }.progress-copy strong { color: var(--accent); font-size: var(--fs-meta); }.progress-copy span { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .progress-track { height: 6px; overflow: hidden; border-radius: 6px; background: var(--bg-button); }.progress-fill { height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
 .progress-value { color: var(--accent); font: 10px monospace; text-align: right; }
-.creator-body { flex: 1; min-height: 0; overflow: hidden; }.two-column { display: grid; grid-template-columns: minmax(390px, 520px) 1fr; }
+.creator-body { flex: 1; min-height: 0; overflow: hidden; }.two-column { display: grid; grid-template-columns: 360px 1fr; }
 .scroll-pane { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 .settings-pane { min-width: 0; padding: 22px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 2px; }.section-heading.compact { margin-bottom: 10px; }
+/* 검사기는 창 오른쪽 끝에 붙는다 — 첫 줄의 버튼이 알림 종 밑에 깔리지 않게 자리를 비운다 */
+.inspector .section-heading { padding-right: calc(var(--notif-gutter) - 18px); }
 .segmented { display: flex; padding: 2px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px; }
 .segmented button { min-height: 28px; padding: 5px 11px; border: 0; border-radius: var(--radius-base); color: var(--text-secondary); background: transparent; font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; }.segmented button.active { color: var(--on-accent); background: var(--accent-fill); }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }.field > span, .field-caption { color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .field input, .field textarea, .field select, .bubble-editor textarea, .bubble-editor select, .bubble-position input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; outline: 0; background: var(--bg-input); color: var(--text-primary); font: inherit; font-size: 11px; }
 .field textarea, .bubble-editor textarea { resize: vertical; line-height: 1.5; }.field input:focus, .field textarea:focus, .field select:focus, .bubble-editor textarea:focus { border-color: var(--accent); }
 .field select, .bubble-editor select { color-scheme: dark; }.field.wide { width: 100%; }
-.field-grid { display: grid; gap: 10px; }.field-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }.field-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }.span-two { grid-column: span 2; }
+.field-grid { display: grid; gap: 10px; }.field-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }.field-grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }.span-two { grid-column: span 2; }
 .toggle-field { min-height: 31px; display: flex; align-items: center; gap: 8px; padding-top: 14px; color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-medium); }.toggle-field input { width: 16px; height: 16px; accent-color: var(--accent); }
 .media-slot { min-height: 58px; display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-card); }.slot-preview { width: 64px; height: 46px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden; border-radius: 5px; background: var(--bg-primary); color: var(--text-muted); font-size: var(--fs-label); }.slot-preview img, .slot-preview video { width: 100%; height: 100%; object-fit: cover; }.slot-preview.audio { color: var(--accent); font-size: 20px; }
 .slot-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }.slot-info b { font-size: var(--fs-meta); letter-spacing: 0; }.slot-info small { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -943,7 +920,7 @@ button { font-family: inherit; }.primary-button, .secondary-button, .danger-butt
 :deep(.output-result) { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }:deep(.output-result img), :deep(.output-result video) { max-width: 100%; max-height: calc(100% - 52px); min-height: 0; object-fit: contain; border-radius: 9px; box-shadow: 0 12px 40px rgba(0,0,0,.45); }:deep(.result-meta) { width: min(720px, 100%); display: flex; align-items: center; gap: 10px; }:deep(.result-meta b) { color: var(--accent); font-size: var(--fs-label); }:deep(.result-meta small) { flex: 1; color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dual-media { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.media-tile { min-height: 190px; display: grid; grid-template-rows: 1fr auto auto; gap: 3px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--text-primary); cursor: pointer; overflow: hidden; }.media-tile:hover { border-color: var(--accent); }.media-tile img { width: 100%; height: 150px; object-fit: cover; border-radius: 6px; }.media-tile b { font-size: var(--fs-label); }.media-tile > small { color: var(--text-muted); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-empty { min-height: 145px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--accent); font-size: 28px; background: var(--bg-input); border-radius: 6px; }.media-empty small { color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 0; }
 .range-field { display: flex; flex-direction: column; gap: 7px; }.range-field > span { display: flex; justify-content: space-between; color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 0; }.range-field output { color: var(--accent); font: 11px monospace; }.range-field input { width: 100%; accent-color: var(--accent); }.range-field small { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.5; }
-.comic-mode { display: grid; grid-template-columns: 270px minmax(360px, 1fr) 300px; }.comic-sidebar, .inspector { min-width: 0; padding: 18px; border-right: 1px solid var(--border); background: var(--bg-secondary); }.inspector { border-right: 0; border-left: 1px solid var(--border); }
+.comic-mode { display: grid; grid-template-columns: 360px minmax(300px, 1fr) 320px; }.comic-sidebar, .inspector { min-width: 0; padding: 18px; border-right: 1px solid var(--border); background: var(--bg-secondary); }.inspector { border-right: 0; border-left: 1px solid var(--border); }
 .divider { height: 1px; flex: 0 0 auto; margin: 14px 0; background: var(--border); }.toolbar-row, .bubble-heading, .comic-stage-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 7px; }.tool-button { padding: 6px 9px; border: 1px solid var(--border); background: var(--bg-button); color: var(--text-muted); }.tool-button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }.save-state { margin-left: auto; color: var(--text-muted); font-size: var(--fs-label); }
 .layout-presets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 6px 0 12px; }.layout-presets button { min-width: 0; padding: 5px 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-input); color: var(--text-muted); font-size: 7px; cursor: pointer; }.layout-presets button.active { color: var(--accent); border-color: var(--accent); }.layout-icon { width: 22px; height: 18px; margin: 0 auto 3px; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }.layout-icon i { background: currentColor; opacity: .65; }.layout-icon.vertical { grid-template-columns: 1fr; }.layout-icon.horizontal { grid-template-columns: repeat(4,1fr); }.layout-icon.hero i:first-child { grid-column: 1 / -1; }
 .panel-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }.panel-list-item { width: 100%; min-height: 45px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; text-align: left; border: 1px solid transparent; border-radius: 6px; background: var(--bg-input); color: var(--text-secondary); cursor: pointer; }.panel-list-item.active { border-color: var(--accent); background: var(--accent-dim); }.panel-number { color: var(--accent); font: 10px monospace; }.panel-list-item > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 2px; }.panel-list-item b, .panel-list-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.panel-list-item b { font-size: var(--fs-label); }.panel-list-item small { color: var(--text-muted); font-size: var(--fs-label); }
@@ -959,13 +936,12 @@ button { font-family: inherit; }.primary-button, .secondary-button, .danger-butt
 .bubble-editor { margin-bottom: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-card); }.bubble-editor-head { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; margin-bottom: 5px; }.bubble-editor-head select { padding: 4px 6px; }.bubble-editor-head span { color: var(--text-muted); font-size: var(--fs-label); }.bubble-editor-head button { border: 0; background: transparent; color: var(--state-alert-fg); font-size: 15px; cursor: pointer; }.bubble-position { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 5px; }.bubble-position label { color: var(--text-muted); font-size: 7px; }.bubble-position input { padding: 4px; margin-top: 2px; }
 
 @media (max-width: 1150px) {
-  .creator-header { grid-template-columns: auto 1fr auto; }.creator-header > div:first-child { display: none; }
-  .comic-mode { grid-template-columns: 235px minmax(330px, 1fr) 260px; }
-  .field-grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .comic-mode { grid-template-columns: 320px minmax(280px, 1fr) 280px; }
 }
 @media (max-width: 860px) {
-  .creator-header { grid-template-columns: 1fr auto; }.creator-tabs { justify-self: start; }.backend-state { grid-column: 2; grid-row: 1; }.creator-tab { min-width: 72px; padding-inline: 8px; }
   .two-column { grid-template-columns: 1fr; overflow-y: auto; }.settings-pane { overflow: visible; border-right: 0; border-bottom: 1px solid var(--border); }.output-pane { min-height: 420px; }
+  /* 열이 전폭이 되면 오른쪽 끝 정렬인 표시등도 종 밑으로 들어간다 */
+  .pane-state { padding-right: calc(var(--notif-gutter) - 18px); }
   .comic-mode { display: flex; flex-direction: column; overflow-y: auto; }.comic-sidebar, .inspector { overflow: visible; border: 0; border-bottom: 1px solid var(--border); }.comic-canvas-pane { min-height: 650px; order: 2; }.inspector { order: 3; }.comic-sidebar { order: 1; }
   .global-progress { grid-template-columns: 1fr 44px auto; }.progress-copy { grid-column: 1 / -1; }
 }

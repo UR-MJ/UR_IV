@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .frame { display: flex; height: 132px; background: #0A0A0A; border: 1px solid #242424; }
+    .rail { width: 40px; background: #0A0A0A; border-right: 1px solid #242424; flex-shrink: 0; }
+    .cap { font-size: 11px; font-weight: 500; color: #8A8A8A; }
+    .fld { height: 18px; background: #131313; border: 1px solid #242424; border-radius: 4px; }
+    .kind { font-size: 10px; font-weight: 500; color: #C9A227; }
+  </style>
+</helmet>
+
+<div style="width: 480px; height: 760px; background: #060606; box-sizing: border-box; padding: 22px 26px; display: flex; flex-direction: column; gap: 12px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div class="cap" style="color:#C9A227;">B안</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">일의 종류로 세 벌</div>
+    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.55;">
+      탭 13개는 하는 일이 세 가지다 — <b style="color:#E4E4E4;">만든다 · 본다 · 정한다</b>. 골격도 셋이면 된다.
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div class="kind">만드는 탭 — T2I · I2I · Inpaint · XYZ · Batch · Event · Creator</div>
+    <div class="frame">
+      <div class="rail"></div>
+      <div style="width: 112px; border-right: 1px solid #242424; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;">
+        <div style="font-size: 9px; color: #A2A2A2;">설정</div>
+        <div class="fld"></div><div class="fld"></div><div class="fld" style="width:65%"></div>
+        <div style="height: 20px; background: #C9A227; border-radius: 4px; margin-top: auto;"></div>
+      </div>
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #585858;">무대</div>
+      <div style="width: 74px; border-left: 1px solid #242424; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 9px; color: #8A8A8A;">히스토리</div>
+        <div style="height: 24px; background: #1E1E1E; border-radius: 3px;"></div>
+        <div style="height: 24px; background: #1E1E1E; border-radius: 3px;"></div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.5;">지금 셋만 있는 히스토리가 <b style="color:#A2A2A2;">만드는 탭 전부</b>에 생긴다.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div class="kind">보는 탭 — Gallery · Favorites · PNG Info</div>
+    <div class="frame">
+      <div class="rail"></div>
+      <div style="flex: 1; display: flex; flex-direction: column;">
+        <div style="height: 22px; border-bottom: 1px solid #242424; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 9px; color: #8A8A8A;">
+          <span style="flex:1;">폴더 · 검색</span>
+          <span style="width:34px; height:12px; background:#1E1E1E; border:1px solid #242424; border-radius:3px;"></span>
+          <span style="width:34px; height:5px; background:#242424; border-radius:3px;"></span>
+        </div>
+        <div style="flex: 1; display: flex;">
+          <div style="flex: 1; padding: 7px; box-sizing: border-box; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;">
+            <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+            <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:rgba(201,162,39,.2);border:1px solid #C9A227;border-radius:3px"></div>
+            <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+            <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+            <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+          </div>
+          <div style="width: 96px; border-left: 1px solid #242424; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 9px; color: #A2A2A2;">고른 것</div>
+            <div style="height: 26px; background: #1E1E1E; border-radius: 3px;"></div>
+            <div style="height: 8px; background: #242424; border-radius: 2px;"></div>
+            <div style="height: 8px; background: #242424; border-radius: 2px; width: 70%;"></div>
+            <div style="height: 16px; background: rgba(201,162,39,.14); border: 1px solid #C9A227; border-radius: 3px; margin-top: auto;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.5;">지금 툴바에 몰려 있던 것이 <b style="color:#A2A2A2;">얇은 도구줄 + 정보 열</b>로 갈린다.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div class="kind">정하는 탭 — Settings</div>
+    <div class="frame" style="height: 96px;">
+      <div class="rail"></div>
+      <div style="width: 86px; border-right: 1px solid #242424; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px;">
+        <div style="height: 12px; background: rgba(201,162,39,.14); border-radius: 3px;"></div>
+        <div style="height: 12px; background: #1E1E1E; border-radius: 3px;"></div>
+        <div style="height: 12px; background: #1E1E1E; border-radius: 3px;"></div>
+      </div>
+      <div style="flex: 1; padding: 10px 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 7px;">
+        <div style="height: 10px; background: #242424; border-radius: 2px; width: 40%;"></div>
+        <div class="fld" style="width: 70%;"></div>
+        <div class="fld" style="width: 70%;"></div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.5;">이미 이 모양이다 — 그대로 둔다.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #A2A2A2; line-height: 1.6; margin-top: auto;">
+    <div style="color: #4ADE80; font-weight: 500;">얻는 것</div>
+    <div>각 성격에 맞는 자리가 생긴다. 격자는 폭을 안 잃고, 만드는 탭은 전부 히스토리를 얻는다.</div>
+    <div style="color: #E0B341; font-weight: 500; margin-top: 4px;">치르는 것</div>
+    <div>골격 셋을 익혀야 한다. 다만 레일의 묶음(생성·편집·라이브러리·시스템)과 거의 겹친다.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

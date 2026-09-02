@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .frame { display: flex; height: 150px; background: #0A0A0A; border: 1px solid #242424; }
+    .rail { width: 44px; background: #0A0A0A; border-right: 1px solid #242424; flex-shrink: 0; }
+    .cap { font-size: 11px; font-weight: 500; color: #8A8A8A; }
+    .fld { height: 20px; background: #131313; border: 1px solid #242424; border-radius: 4px; }
+    .set { width: 118px; border-right: 1px solid #242424; padding: 9px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  </style>
+</helmet>
+
+<div style="width: 480px; height: 760px; background: #060606; box-sizing: border-box; padding: 22px 26px; display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div class="cap" style="color:#C9A227;">A안</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">한 벌로 통일</div>
+    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.55;">
+      모든 탭이 <b style="color:#E4E4E4;">설정 열(320 고정) + 무대 + 정보 열</b>. T2I 가 이미 그 모양이니 나머지가 따라온다.
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div class="cap">XYZ Plot</div>
+    <div class="frame">
+      <div class="rail"></div>
+      <div class="set">
+        <div style="font-size: 10px; color: #A2A2A2;">축</div>
+        <div class="fld"></div><div class="fld"></div><div class="fld"></div>
+        <div style="height: 22px; background: #C9A227; border-radius: 4px; margin-top: auto;"></div>
+      </div>
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #585858;">격자</div>
+      <div style="width: 84px; border-left: 1px solid #242424; padding: 9px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;">
+        <div style="font-size: 10px; color: #8A8A8A;">정보</div>
+        <div style="height: 26px; background: #1E1E1E; border-radius: 4px;"></div>
+        <div style="height: 26px; background: #1E1E1E; border-radius: 4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div class="cap">Gallery — 설정이 거의 없는 탭</div>
+    <div class="frame">
+      <div class="rail"></div>
+      <div class="set">
+        <div style="font-size: 10px; color: #A2A2A2;">보기</div>
+        <div class="fld"></div>
+        <div class="fld" style="width: 70%;"></div>
+        <div style="flex: 1; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px;">
+          <span style="font-size: 9px; color: #D14141;">남는 자리</span>
+        </div>
+      </div>
+      <div style="flex: 1; padding: 8px; box-sizing: border-box; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;">
+        <div style="background:#1E1E1E; border-radius:3px;"></div><div style="background:#1E1E1E; border-radius:3px;"></div>
+        <div style="background:#1E1E1E; border-radius:3px;"></div><div style="background:#1E1E1E; border-radius:3px;"></div>
+        <div style="background:#1E1E1E; border-radius:3px;"></div><div style="background:#1E1E1E; border-radius:3px;"></div>
+        <div style="background:#1E1E1E; border-radius:3px;"></div><div style="background:#1E1E1E; border-radius:3px;"></div>
+      </div>
+      <div style="width: 84px; border-left: 1px solid #242424; padding: 9px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;">
+        <div style="font-size: 10px; color: #8A8A8A;">메타</div>
+        <div style="height: 12px; background: #1E1E1E; border-radius: 3px;"></div>
+        <div style="height: 12px; background: #1E1E1E; border-radius: 3px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #A2A2A2; line-height: 1.6; margin-top: auto;">
+    <div style="color: #4ADE80; font-weight: 500;">얻는 것</div>
+    <div>손이 위치를 외운다 — 설정은 늘 왼쪽 같은 폭, 정보는 늘 오른쪽. 컨트롤 폭이 한 값으로 정해진다.</div>
+    <div style="color: #E0B341; font-weight: 500; margin-top: 4px;">치르는 것</div>
+    <div>갤러리처럼 설정이 두어 개뿐인 탭엔 <b style="color:#E4E4E4;">빈 열</b>이 남는다. 격자가 320px 를 잃는다.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

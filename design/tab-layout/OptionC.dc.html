@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .frame { display: flex; height: 156px; background: #0A0A0A; border: 1px solid #242424; position: relative; }
+    .rail { width: 44px; background: #0A0A0A; border-right: 1px solid #242424; flex-shrink: 0; }
+    .cap { font-size: 11px; font-weight: 500; color: #8A8A8A; }
+    .fld { height: 20px; background: #0A0A0A; border: 1px solid #242424; border-radius: 4px; }
+  </style>
+</helmet>
+
+<div style="width: 480px; height: 760px; background: #060606; box-sizing: border-box; padding: 22px 26px; display: flex; flex-direction: column; gap: 14px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div class="cap" style="color:#C9A227;">C안</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">무대를 먼저, 설정은 서랍</div>
+    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.55;">
+      모든 탭이 결과를 최대로 보여주고, 설정은 레일에서 <b style="color:#E4E4E4;">서랍</b>으로 펼친다.
+      레일이 이미 쓰는 어휘라 새로 배울 것이 없다.
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div class="cap">닫힌 상태 — 무대가 가장 넓다</div>
+    <div class="frame">
+      <div class="rail"></div>
+      <div style="flex: 1; padding: 8px; box-sizing: border-box; display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 40px; gap: 5px;">
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div class="cap">열린 서랍 — 무대를 덮는다</div>
+    <div class="frame">
+      <div class="rail"></div>
+      <div style="width: 132px; background: #131313; border-right: 1px solid #747474; padding: 9px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; z-index: 2;">
+        <div style="font-size: 10px; color: #E4E4E4; font-weight: 500;">일괄 처리 설정</div>
+        <div class="fld" style="border-style: dashed;"></div>
+        <div class="fld"></div>
+        <div style="display: flex; gap: 4px;"><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div></div>
+        <div style="height: 22px; background: #C9A227; border-radius: 4px; margin-top: auto;"></div>
+      </div>
+      <div style="flex: 1; padding: 8px; box-sizing: border-box; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 40px; gap: 5px; opacity: .45;">
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+        <div style="background:#1E1E1E;border-radius:3px"></div><div style="background:#1E1E1E;border-radius:3px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #A2A2A2; line-height: 1.6; margin-top: auto;">
+    <div style="color: #4ADE80; font-weight: 500;">얻는 것</div>
+    <div>결과가 가장 크게 보인다. 1280px 창에서 특히 크다 — 지금은 크롬이 <b style="color:#E4E4E4;">776px</b> 를 먹는다.</div>
+    <div style="color: #E0B341; font-weight: 500; margin-top: 4px;">치르는 것</div>
+    <div>설정을 자주 만지는 탭(XYZ·Batch)에서 <b style="color:#E4E4E4;">매번 열어야 한다.</b> 값을 보면서 결과를 볼 수 없다 — 축을 바꾸며 격자를 확인하는 일이 특히 불편해진다.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

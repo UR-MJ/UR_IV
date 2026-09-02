@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .num { font-family: 'IBM Plex Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .cap { font-size: 11px; font-weight: 500; color: #8A8A8A; }
+    .shell { display: flex; background: #0A0A0A; border: 1px solid #242424; }
+    .rail { width: 50px; background: #0A0A0A; border-right: 1px solid #242424; flex-shrink: 0; padding: 8px 6px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; }
+    .rdot { height: 8px; background: #1E1E1E; border-radius: 2px; }
+    .rdot.on { background: rgba(201,162,39,.18); }
+    .rsub { height: 7px; background: #131313; border-radius: 2px; margin-left: 8px; }
+    .rsub.on { background: rgba(201,162,39,.14); }
+    .lbl { font-size: 10px; color: #8A8A8A; }
+    .fld { height: 22px; background: #131313; border: 1px solid #242424; border-radius: 5px; }
+    .primary { height: 26px; background: #C9A227; border-radius: 5px; }
+    .chip { height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+    .chip.on { background: rgba(201,162,39,.14); border: 1px solid #C9A227; color: #C9A227; }
+    .chip.off { background: #1E1E1E; border: 1px solid #242424; color: #A2A2A2; }
+  </style>
+</helmet>
+
+<div style="width: 900px; height: 900px; background: #060606; box-sizing: border-box; padding: 24px 30px; display: flex; flex-direction: column; gap: 16px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div class="cap" style="color:#C9A227;">추천</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">Event Gen 은 B로, Creator 는 모드를 레일로 올린다</div>
+    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.6; max-width: 740px;">
+      Event Gen 의 문제는 자리 배분이라 <b style="color:#E4E4E4;">설정 열 360</b> 하나로 풀린다.
+      Creator 는 다르다 — 모드 셋의 골격이 서로 달라서 한 탭에 우겨넣는 한 어떤 배치도 셋 중 둘에는 안 맞는다.
+      모드를 <b style="color:#E4E4E4;">레일의 항목</b>으로 올리면 각자 제 골격을 갖고 내비도 3층에서 2층이 된다.
+    </div>
+  </div>
+
+  <!-- Event Gen -->
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="cap"><b style="color:#C9A227;">Event Gen</b> · 질의가 남는다 — Search 와 같은 골격</div>
+    <div class="shell" style="height: 214px;">
+      <div class="rail">
+        <div class="rdot"></div><div class="rdot"></div><div class="rdot"></div>
+        <div class="rdot on"></div><div class="rdot"></div>
+      </div>
+      <div style="width: 232px; border-right: 1px solid #242424; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px;">
+        <div class="lbl">캐릭터 · 작품</div>
+        <div style="display: flex; gap: 6px;"><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div></div>
+        <div class="lbl">일반 태그</div>
+        <div class="fld"></div>
+        <div class="lbl">제외 태그</div>
+        <div class="fld"></div>
+        <div style="display: flex; gap: 5px;">
+          <span class="chip on" style="flex:1;">GEN</span><span class="chip off" style="flex:1;">SENS</span>
+          <span class="chip off" style="flex:1;">QUES</span><span class="chip off" style="flex:1;">EXPL</span>
+        </div>
+        <div class="primary" style="margin-top: auto;"></div>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column;">
+        <div style="height: 26px; border-bottom: 1px solid #242424; display: flex; align-items: center; padding: 0 12px; gap: 8px;">
+          <span style="font-size: 10px; color: #A2A2A2;">이벤트 <span class="num" style="color:#E4E4E4;">37</span></span>
+          <span style="font-size: 10px; color: #8A8A8A;">유사도순</span>
+        </div>
+        <div style="flex: 1; padding: 10px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;">
+          <div style="height: 26px; background: #1E1E1E; border-radius: 4px;"></div>
+          <div style="height: 26px; background: rgba(201,162,39,.12); border: 1px solid #C9A227; border-radius: 4px;"></div>
+          <div style="height: 26px; background: #1E1E1E; border-radius: 4px;"></div>
+          <div style="height: 26px; background: #1E1E1E; border-radius: 4px;"></div>
+          <div style="height: 26px; background: #1E1E1E; border-radius: 4px;"></div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.55;">
+      결과를 보며 태그를 고쳐 바로 다시 돌린다. 지금은 폼이 사라져서 되돌아가야 한다.
+      Search 도 같은 병이라 <b style="color:#A2A2A2;">둘이 같은 골격</b>이 되면 형제처럼 읽힌다.
+    </div>
+  </div>
+
+  <!-- Creator -->
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="cap"><b style="color:#C9A227;">Creator</b> · 모드가 레일 항목이 된다 — 탭 하나가 셋으로</div>
+    <div style="display: flex; gap: 12px;">
+
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
+        <div style="font-size: 10px; color: #A2A2A2;">영상 — 설정 360 + 결과</div>
+        <div class="shell" style="height: 150px;">
+          <div class="rail">
+            <div class="rdot"></div><div class="rdot"></div>
+            <div class="rdot on"></div>
+            <div class="rsub on"></div><div class="rsub"></div><div class="rsub"></div>
+          </div>
+          <div style="width: 118px; border-right: 1px solid #242424; padding: 9px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; gap: 4px;">
+              <span class="chip on" style="flex:1; font-size:8px;">T2V</span>
+              <span class="chip off" style="flex:1; font-size:8px;">I2V</span>
+              <span class="chip off" style="flex:1; font-size:8px;">V2V</span>
+            </div>
+            <div style="height: 28px; background: #131313; border: 1px solid #242424; border-radius: 4px;"></div>
+            <div class="fld" style="height: 18px;"></div>
+            <div style="display: flex; gap: 4px;"><div class="fld" style="flex:1; height:16px"></div><div class="fld" style="flex:1; height:16px"></div></div>
+            <div class="primary" style="height: 20px; margin-top: auto;"></div>
+          </div>
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #585858;">영상</div>
+        </div>
+      </div>
+
+      <div style="flex: 1.25; display: flex; flex-direction: column; gap: 5px;">
+        <div style="font-size: 10px; color: #A2A2A2;">만화 — 3열 문서 편집기 (에디터와 같은 어휘)</div>
+        <div class="shell" style="height: 150px;">
+          <div class="rail">
+            <div class="rdot"></div><div class="rdot"></div>
+            <div class="rdot on"></div>
+            <div class="rsub"></div><div class="rsub on"></div><div class="rsub"></div>
+          </div>
+          <div style="width: 92px; border-right: 1px solid #242424; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;">
+            <div style="font-size: 8px; color: #A2A2A2;">스토리보드</div>
+            <div style="height: 26px; background: #131313; border: 1px solid #242424; border-radius: 4px;"></div>
+            <div style="display: flex; gap: 3px;"><div class="fld" style="flex:1; height:14px"></div><div class="fld" style="flex:1; height:14px"></div></div>
+            <div style="height: 16px; background: rgba(201,162,39,.14); border: 1px solid #C9A227; border-radius: 4px;"></div>
+          </div>
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px;">
+            <div style="width: 78px; height: 100%; background: #F4F4F2; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 4px; box-sizing: border-box;">
+              <div style="background:#DCDCD7;outline:1.5px solid #C9A227;outline-offset:-1px"></div><div style="background:#DCDCD7"></div>
+              <div style="background:#DCDCD7"></div><div style="background:#DCDCD7"></div>
+            </div>
+          </div>
+          <div style="width: 92px; border-left: 1px solid #242424; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;">
+            <div style="font-size: 8px; color: #A2A2A2;">패널 1</div>
+            <div style="height: 24px; background: #131313; border: 1px solid #242424; border-radius: 4px;"></div>
+            <div class="fld" style="height: 16px;"></div>
+            <div class="fld" style="height: 16px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.55;">
+      레일에서 <b style="color:#A2A2A2;">Creator 아래 영상 · 만화 · Krea2</b> 로 펼친다 — 레일이 이미 쓰는 서랍 어휘 그대로다.
+      자체 헤더(<span class="num">30px</span>)와 가운데 모드 알약이 사라지고, 남은 <span class="num">T2V/I2V/V2V</span> 만
+      설정 열 맨 위 칩으로 간다. 내비가 <b style="color:#A2A2A2;">3층 → 2층</b>.
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 28px; font-size: 12px; color: #A2A2A2; line-height: 1.6;">
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+      <div style="color: #4ADE80; font-weight: 500;">얻는 것</div>
+      <div>· 만화 모드의 좁은 열(<span class="num">150/160</span>)이 제 폭을 갖는다</div>
+      <div>· 세 모드가 각자 맞는 골격을 갖는다 — 우겨넣지 않는다</div>
+      <div>· Event Gen 이 Search 와 같은 모양이 된다</div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+      <div style="color: #E0B341; font-weight: 500;">치르는 것 · 정할 것</div>
+      <div>· 레일 항목이 <span class="num">15 → 17</span> 개. 접힌 상태(52px)에서는 하위 항목을 어떻게 보일지</div>
+      <div>· 만화 모드는 문서라 히스토리가 필요 없다 — 확정대로 T2I·I2I 만</div>
+      <div>· Krea2 는 지금 화면을 못 봤다(백엔드 필요). 영상과 같은 골격으로 가정했다</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

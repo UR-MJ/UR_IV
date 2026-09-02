@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'IBM Plex Sans KR', 'Pretendard', system-ui, sans-serif; }
+    a { color: #C9B98A; } a:hover { color: #DCCB9C; }
+    .num { font-family: 'IBM Plex Mono', Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .cap { font-size: 11px; font-weight: 500; color: #8A8A8A; }
+    .shell { display: flex; background: #0A0A0A; border: 1px solid #242424; height: 168px; }
+    .rail { width: 44px; background: #0A0A0A; border-right: 1px solid #242424; flex-shrink: 0; }
+    .fld { height: 16px; background: #131313; border: 1px solid #242424; border-radius: 3px; }
+    .bad { color: #F87171; }
+  </style>
+</helmet>
+
+<div style="width: 880px; height: 880px; background: #060606; box-sizing: border-box; padding: 24px 30px; display: flex; flex-direction: column; gap: 16px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div class="cap">지금</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">둘 다 '질의와 결과가 자리를 번갈아 쓴다'</div>
+    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.6; max-width: 730px;">
+      나머지 탭과 문제가 다르다. 여기는 빈 무대가 아니라 <b style="color:#E4E4E4;">폼이 화면을 다 쓰고 있다가
+      결과가 나오면 통째로 바뀌는</b> 구조다. 그래서 결과를 보며 질의를 고칠 수 없다.
+      Creator 는 여기에 더해 <b style="color:#E4E4E4;">한 탭 안에 앱이 셋</b>이다.
+    </div>
+  </div>
+
+  <!-- Event Gen -->
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="cap">Event Gen — 폼 → (검색) → 결과. 폼은 사라진다</div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <div class="shell" style="flex: 1;">
+        <div class="rail"></div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: 12px; box-sizing: border-box; gap: 7px;">
+          <div style="font-size: 11px; color: #C9A227; letter-spacing: .06em;">EVENT GENERATOR</div>
+          <div style="width: 74%; display: flex; gap: 6px;"><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div></div>
+          <div style="width: 74%; display: flex; gap: 6px;"><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div></div>
+          <div style="width: 74%;" class="fld"></div>
+          <div style="width: 74%; display: flex; gap: 6px;"><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div></div>
+          <div style="width: 74%; height: 20px; background: #C9A227; border-radius: 4px; margin-top: 4px;"></div>
+        </div>
+      </div>
+      <div style="font-size: 18px; color: #585858;">→</div>
+      <div class="shell" style="flex: 1;">
+        <div class="rail"></div>
+        <div style="flex: 1; padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;">
+          <div style="font-size: 10px; color: #A2A2A2;">이벤트 목록</div>
+          <div style="height: 14px; background: #1E1E1E; border-radius: 3px;"></div>
+          <div style="height: 14px; background: #1E1E1E; border-radius: 3px;"></div>
+          <div style="height: 14px; background: rgba(201,162,39,.16); border: 1px solid #C9A227; border-radius: 3px;"></div>
+          <div style="height: 14px; background: #1E1E1E; border-radius: 3px;"></div>
+          <div style="margin-top: auto; font-size: 9px;" class="bad">질의가 안 보인다 — 고치려면 되돌아가야 한다</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Creator -->
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="cap">Creator — 한 탭에 앱이 셋. 내비게이션이 3층이다</div>
+
+    <div class="shell" style="height: 150px;">
+      <div class="rail"></div>
+      <div style="flex: 1; display: flex; flex-direction: column;">
+        <!-- 자체 헤더 + 모드 -->
+        <div style="height: 30px; border-bottom: 1px solid #242424; display: flex; align-items: center; padding: 0 10px; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 7px; color: #C9A227; letter-spacing: .08em;">AI STUDIO PRO</span>
+            <span style="font-size: 9px; color: #E4E4E4; letter-spacing: .06em;">CREATOR STUDIO</span>
+          </div>
+          <div style="margin: 0 auto; display: flex; gap: 5px;">
+            <span style="height: 16px; padding: 0 9px; border-radius: 4px; background: rgba(201,162,39,.16); border: 1px solid #C9A227; color: #C9A227; font-size: 8px; display: flex; align-items: center;">VIDEO</span>
+            <span style="height: 16px; padding: 0 9px; border-radius: 4px; background: #1E1E1E; border: 1px solid #242424; color: #A2A2A2; font-size: 8px; display: flex; align-items: center;">COMIC</span>
+            <span style="height: 16px; padding: 0 9px; border-radius: 4px; background: #1E1E1E; border: 1px solid #242424; color: #A2A2A2; font-size: 8px; display: flex; align-items: center;">KREA2</span>
+          </div>
+        </div>
+        <div style="flex: 1; display: flex;">
+          <div style="width: 190px; border-right: 1px solid #242424; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: flex; gap: 4px; align-self: flex-end;">
+              <span style="height: 13px; padding: 0 6px; border-radius: 3px; background: rgba(201,162,39,.16); border: 1px solid #C9A227; color:#C9A227; font-size: 7px; display: flex; align-items: center;">T2V</span>
+              <span style="height: 13px; padding: 0 6px; border-radius: 3px; background: #1E1E1E; border: 1px solid #242424; color:#A2A2A2; font-size: 7px; display: flex; align-items: center;">I2V</span>
+              <span style="height: 13px; padding: 0 6px; border-radius: 3px; background: #1E1E1E; border: 1px solid #242424; color:#A2A2A2; font-size: 7px; display: flex; align-items: center;">V2V</span>
+            </div>
+            <div style="height: 30px; background: #131313; border: 1px solid #242424; border-radius: 4px;"></div>
+            <div style="height: 20px; background: #131313; border: 1px solid #242424; border-radius: 4px;"></div>
+            <div style="display: flex; gap: 4px;"><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div></div>
+            <div style="height: 18px; background: #C9A227; border-radius: 4px; margin-top: auto;"></div>
+          </div>
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #585858;">결과</div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.55;">
+      영상 모드 — 설정 <span class="num bad">300</span> + 결과. 골격은 맞는데 폭이 <span class="num">360</span> 이 아니고,
+      <span class="bad">레일 → 모드(VIDEO/COMIC/KREA2) → T2V/I2V/V2V</span> 로 내비가 3층이다.
+      자체 헤더가 레일 브랜드와 겹치며 세로 <span class="num">30px</span> 를 먹는다.
+    </div>
+
+    <div class="shell" style="height: 150px;">
+      <div class="rail"></div>
+      <div style="flex: 1; display: flex; flex-direction: column;">
+        <div style="height: 30px; border-bottom: 1px solid #242424;"></div>
+        <div style="flex: 1; display: flex;">
+          <div style="width: 96px; border-right: 1px solid #242424; padding: 7px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 8px; color: #A2A2A2;">스토리보드</div>
+            <div style="height: 24px; background: #131313; border: 1px solid #242424; border-radius: 3px;"></div>
+            <div style="display: flex; gap: 3px;"><div class="fld" style="flex:1"></div><div class="fld" style="flex:1"></div></div>
+            <div style="height: 14px; background: rgba(201,162,39,.16); border: 1px solid #C9A227; border-radius: 3px;"></div>
+            <div class="fld"></div>
+          </div>
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px;">
+            <div style="width: 92px; height: 100%; background: #FFFFFF; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 4px; box-sizing: border-box;">
+              <div style="background:#2A2A2A;border:1px solid #C9A227"></div><div style="background:#2A2A2A"></div>
+              <div style="background:#2A2A2A"></div><div style="background:#2A2A2A"></div>
+            </div>
+          </div>
+          <div style="width: 104px; border-left: 1px solid #242424; padding: 7px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 8px; color: #A2A2A2;">PANEL 1 속성</div>
+            <div style="height: 26px; background: #131313; border: 1px solid #242424; border-radius: 3px;"></div>
+            <div style="height: 20px; background: #131313; border: 1px solid #242424; border-radius: 3px;"></div>
+            <div style="height: 20px; background: #131313; border: 1px solid #242424; border-radius: 3px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8A8A8A; line-height: 1.55;">
+      만화 모드 — <b style="color:#A2A2A2;">3열 문서 편집기</b>(도구 · 문서 · 선택한 패널 속성)다. 에디터와 같은 성격이고 그 자체는 맞다.
+      다만 열이 <span class="num bad">150 / 160</span> 이라 프롬프트 입력이 그 안에 갇힌다.
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #A2A2A2; line-height: 1.6;">
+    <div class="bad" style="font-weight: 500;">정리</div>
+    <div>· Event Gen — 질의와 결과가 <b style="color:#E4E4E4;">같은 자리를 번갈아</b> 쓴다. Search 도 같은 구조다</div>
+    <div>· Creator — 모드 셋의 <b style="color:#E4E4E4;">골격이 서로 다르다</b>(영상=설정+결과 · 만화=3열 문서 · Krea2=설정+결과)</div>
+    <div>· 그래서 이 둘만 "설정 열 360" 한 줄로 정리되지 않는다</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

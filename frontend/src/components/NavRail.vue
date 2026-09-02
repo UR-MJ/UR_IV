@@ -31,18 +31,28 @@
           </button>
 
           <!-- 서랍: **활성 탭만** 자기 하위 항목을 펼친다.
-               전부 펼치면 목록이 두 배가 되고, 그러면 세로 레일을 쓸 이유가 없다. -->
-          <template v-if="!collapsed && currentTab === tab.name">
+               전부 펼치면 목록이 두 배가 되고, 그러면 세로 레일을 쓸 이유가 없다.
+
+               접히면 '찾아가기' 항목은 숨지만 **모드 항목은 남는다** — 모드는
+               그 화면에 가는 유일한 길이라, 접었다고 사라지면 기능이 없어진다. -->
+          <template v-if="currentTab === tab.name">
             <button
-              v-for="section in sections"
+              v-for="section in visibleSections"
               :key="section.id"
               type="button"
               class="sub"
-              :class="{ open: openSection === section.id }"
+              :class="{ open: isSectionOpen(section), mode: isModeSection(section) }"
+              :aria-current="isModeSection(section) && isSectionOpen(section) ? 'true' : undefined"
+              :aria-label="section.label"
               @click="goSection(section)"
+              @pointerenter="showTip(section.label, $event)"
+              @pointerleave="hideTip"
+              @focus="showTip(section.label, $event)"
+              @blur="hideTip"
             >
-              <span class="t">{{ section.label }}</span>
-              <span v-if="badgeText(section)" class="n">{{ badgeText(section) }}</span>
+              <span v-if="isModeSection(section)" class="ico"><Icon :name="section.icon" size="15" /></span>
+              <span v-if="!collapsed" class="t">{{ section.label }}</span>
+              <span v-if="!collapsed && badgeText(section)" class="n">{{ badgeText(section) }}</span>
             </button>
           </template>
         </template>
@@ -91,7 +101,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { routes } from '../router.js'
 import { requestAction, state } from '../stores/widgetStore.js'
-import { sectionsFor, type NavSection } from '../utils/navSections'
+import { sectionsFor, isModeSection, type NavSection, type NavScrollSection } from '../utils/navSections'
+import { useCreatorMode } from '../composables/useCreatorMode'
 
 interface RailTab {
   /** route name, 또는 네이티브 탭 id */
@@ -195,7 +206,8 @@ const groups = computed(() => {
 // ── 전환 ───────────────────────────────────────────────────────────────
 const emit = defineEmits<{
   'tab-changed': [name: string]
-  'go-section': [section: NavSection]
+  /** 찾아가기 항목만 밖으로 나간다 — 모드 항목은 레일이 직접 처리한다. */
+  'go-section': [section: NavScrollSection]
 }>()
 
 function switchTo(tab: RailTab) {
@@ -225,11 +237,40 @@ function _onNavigate(e: Event) {
 
 // ── 서랍 ───────────────────────────────────────────────────────────────
 const sections = computed(() => sectionsFor(currentTab.value))
+/**
+ * 접힌 레일(52px)에는 모드 항목만 남긴다.
+ * '찾아가기'는 편의라 숨겨도 되지만, 모드는 그 화면에 가는 **유일한 길**이다.
+ */
+const visibleSections = computed(() =>
+  collapsed.value ? sections.value.filter(isModeSection) : sections.value)
+
 /** 지금 열려 있는(= 방금 찾아간) 섹션. 탭이 바뀌면 초기화된다. */
 const openSection = ref('')
 watch(currentTab, () => { openSection.value = '' })
 
+/**
+ * Creator 의 모드는 화면(`CreatorStudioView`)과 **같은 ref** 를 본다.
+ * 둘은 형제라 props 로 못 잇는다 — `composables/useCreatorMode.ts` 참조.
+ */
+const { mode: creatorMode, setMode: setCreatorMode } = useCreatorMode()
+
+/**
+ * 활성 표시.
+ *
+ * 모드 항목은 클릭 기록(`openSection`)이 아니라 **실제 모드 값**에서 나와야 한다.
+ * 탭을 떠났다 돌아오면 `openSection` 은 지워지지만(위 watch) keep-alive 덕에
+ * 화면은 원래 모드 그대로다 — 클릭 기록을 믿으면 그 순간 표시가 어긋난다.
+ */
+function isSectionOpen(section: NavSection): boolean {
+  if (isModeSection(section)) return creatorMode.value === section.mode
+  return openSection.value === section.id
+}
+
 function goSection(section: NavSection) {
+  if (isModeSection(section)) {
+    setCreatorMode(section.mode)
+    return
+  }
   openSection.value = section.id
   emit('go-section', section)
 }
@@ -252,6 +293,7 @@ function approxTokens(text: unknown): number {
 }
 
 function badgeText(section: NavSection): string {
+  if (isModeSection(section)) return ''
   if (section.badge === 'tokens') {
     const n = approxTokens(state.values.total_prompt_display)
     return n ? String(n) : ''
@@ -420,6 +462,24 @@ onUnmounted(() => {
   background: var(--accent);
 }
 .sub .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+/* 막대 위치(24px)는 들여쓰기 40px 인 찾아가기 행에 맞춘 값이다. 모드 행은 그 자리에
+   아이콘이 있어서 글자 위에 줄이 그어진 것처럼 보인다 — 아이콘 왼쪽으로 옮긴다. */
+.sub.mode.open::before { left: 7px; }
+
+/* 모드 항목은 화면을 바꾼다 — 아이콘을 준다. 접히면 이것만 남으므로 아이콘이
+   없으면 빈 칸을 누르게 된다. 왼쪽 여백은 글자 시작점이 '찾아가기' 항목(40px)과
+   맞도록 역산한 값이다(17 + 아이콘 15 + gap 8). */
+.sub.mode { padding-left: 17px; }
+.sub.mode .ico { display: flex; color: var(--text-muted); }
+.sub.mode.open .ico { color: var(--accent); }
+
+.nav-rail.collapsed .sub.mode {
+  width: 26px; height: 26px;
+  margin: 0 13px; padding: 0;
+  justify-content: center;
+}
+/* 접히면 왼쪽 막대를 그릴 자리가 없다 — 면과 아이콘 색만으로 표시한다 */
+.nav-rail.collapsed .sub.open::before { display: none; }
 
 /* 오른쪽 정렬 숫자 — 토큰 수 · 스텝·CFG 처럼 '지금 값'을 보여준다 */
 .nav .n, .sub .n {

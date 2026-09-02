@@ -1,189 +1,190 @@
 <template>
   <div class="eg-view">
-    <!-- 검색 전: 중앙 검색 폼 -->
-    <div v-if="events.length === 0 && !searching" class="welcome">
-      <div class="ws-header">
-        <div class="ws-icon"><Icon name="video" /></div>
-        <h1>EVENT GENERATOR</h1>
-        <p>Danbooru 데이터베이스에서 이벤트 시퀀스를 검색합니다</p>
+    <!-- 질의 열 — 결과가 나와도 사라지지 않는다.
+         예전엔 검색하면 폼이 통째로 결과로 바뀌어서, 태그를 고치려면 되돌아가야 했다.
+         결과를 보며 고쳐 바로 다시 돌리는 게 이 화면이 하는 일이다. -->
+    <aside class="eg-query">
+      <div class="q-head">
+        <span class="q-kicker">Danbooru</span>
+        <h3>이벤트 생성</h3>
       </div>
 
-      <div class="search-form">
-        <div class="form-section">
-          <div class="form-row">
-            <div class="form-field wide">
-              <label>캐릭터</label>
-              <input v-model="character" placeholder="e.g. hatsune_miku, raiden_shogun" @keydown.enter="searchEvents" />
-            </div>
-            <div class="form-field">
-              <label>작품</label>
-              <input v-model="copyright" placeholder="e.g. genshin_impact" @keydown.enter="searchEvents" />
-            </div>
+      <div class="q-scroll">
+        <div class="form-row">
+          <div class="form-field wide">
+            <label>캐릭터</label>
+            <input v-model="character" placeholder="hatsune_miku" @keydown.enter="searchEvents" />
           </div>
-          <div class="form-row">
-            <div class="form-field wide">
-              <label>일반 태그</label>
-              <input v-model="prompt" placeholder="e.g. 1girl, blue_hair, sword" @keydown.enter="searchEvents" />
-            </div>
-            <div class="form-field">
-              <label>작가</label>
-              <input v-model="artist" placeholder="Artist name..." @keydown.enter="searchEvents" />
-            </div>
+          <div class="form-field">
+            <label>작품</label>
+            <input v-model="copyright" placeholder="genshin_impact" @keydown.enter="searchEvents" />
           </div>
         </div>
 
-        <!-- Exclude -->
-        <details class="form-section exclude-section" open>
+        <div class="form-row">
+          <div class="form-field wide">
+            <label>일반 태그</label>
+            <input v-model="prompt" placeholder="1girl, blue_hair, sword" @keydown.enter="searchEvents" />
+          </div>
+          <div class="form-field">
+            <label>작가</label>
+            <input v-model="artist" placeholder="작가명" @keydown.enter="searchEvents" />
+          </div>
+        </div>
+
+        <details class="exclude-section" open>
           <summary class="exclude-toggle">제외 태그 <Icon name="chevron-down" size="12" /></summary>
-          <div class="form-row">
-            <div class="form-field"><label class="danger">태그</label><input v-model="excludeTags" placeholder="제외 태그..." @keydown.enter="searchEvents" /></div>
+          <div class="form-field">
+            <input v-model="excludeTags" placeholder="제외할 태그..." @keydown.enter="searchEvents" />
           </div>
         </details>
 
-        <!-- Event Length -->
-        <div class="form-section">
-          <div class="form-row">
-            <div class="form-field">
-              <label>최소 스텝</label>
-              <input type="number" v-model.number="minSteps" min="1" max="50" />
-            </div>
-            <div class="form-field">
-              <label>최대 스텝</label>
-              <input type="number" v-model.number="maxSteps" min="1" max="100" />
-            </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>최소 스텝</label>
+            <input type="number" v-model.number="minSteps" min="1" max="50" @keydown.enter="searchEvents" />
+          </div>
+          <div class="form-field">
+            <label>최대 스텝</label>
+            <input type="number" v-model.number="maxSteps" min="1" max="100" @keydown.enter="searchEvents" />
           </div>
         </div>
 
-        <!-- Rating + Options + Go -->
-        <div class="form-footer">
+        <div class="form-field">
+          <label>등급</label>
           <div class="rating-row">
             <button v-for="r in ratings" :key="r.key" class="rating-chip"
               :class="{ active: r.checked }" @click="r.checked = !r.checked">{{ r.label }}</button>
           </div>
-          <div class="opt-row-inline">
-            <label><input type="checkbox" v-model="limitResults" />상위 100개</label>
-            <label><input type="checkbox" v-model="fixSeed" />시드 고정</label>
-            <label><input type="checkbox" v-model="useT2ISettings" />T2I 설정</label>
+        </div>
+
+        <label class="opt-line"><input type="checkbox" v-model="limitResults" />상위 100개만</label>
+      </div>
+
+      <div class="q-foot">
+        <button class="go-btn" @click="searchEvents" :disabled="searching">
+          <Icon name="rocket" /> {{ searching ? '검색 중…' : '검색' }}
+        </button>
+        <button class="io-btn" @click="importEvents"><Icon name="download" /> .parquet 가져오기</button>
+      </div>
+    </aside>
+
+    <!-- 무대 — 검색 중 · 아직 없음 · 결과. 질의 열이 늘 떠 있으므로 이 셋은
+         '어느 화면인가'가 아니라 '무대에 무엇이 있는가'다. -->
+    <section class="eg-stage">
+      <div v-if="searching" class="loading">
+        <div class="spinner"></div>
+        <p>{{ loadingMsg || '이벤트 검색 중...' }}</p>
+        <div class="search-progress" v-if="searchTotal > 0">
+          <div class="sp-bar">
+            <div class="sp-fill" :style="{ width: searchPct + '%' }"></div>
           </div>
-          <button class="go-btn" @click="searchEvents" :disabled="searching"><Icon name="rocket" /> 검색</button>
-          <div class="io-row">
-            <button class="io-btn" @click="importEvents"><Icon name="download" /> .parquet 가져오기</button>
-          </div>
+          <span class="sp-text">{{ searchCur.toLocaleString() }} / {{ searchTotal.toLocaleString() }} ({{ searchPct }}%)</span>
         </div>
       </div>
 
-      <div class="hints">
-        <span>쉼표(,) = AND</span><span>[A|B] = OR</span><span>이벤트 = 연속 태그 변화 시퀀스</span>
-      </div>
-    </div>
-
-    <!-- 검색 중 -->
-    <div v-else-if="events.length === 0 && searching" class="loading">
-      <div class="spinner"></div>
-      <p>{{ loadingMsg || '이벤트 검색 중...' }}</p>
-      <div class="search-progress" v-if="searchTotal > 0">
-        <div class="sp-bar">
-          <div class="sp-fill" :style="{ width: searchPct + '%' }"></div>
+      <div v-else-if="events.length === 0" class="eg-blank">
+        <div class="eg-empty-icon"><Icon name="video" /></div>
+        <h2>이벤트를 검색하세요</h2>
+        <p>왼쪽에 캐릭터나 태그를 넣고 검색하면 연속 태그 변화 시퀀스를 찾습니다</p>
+        <div class="hints">
+          <span>쉼표(,) = AND</span><span>[A|B] = OR</span><span>이벤트 = 연속 태그 변화 시퀀스</span>
         </div>
-        <span class="sp-text">{{ searchCur.toLocaleString() }} / {{ searchTotal.toLocaleString() }} ({{ searchPct }}%)</span>
-      </div>
-    </div>
-
-    <!-- 결과 -->
-    <template v-else>
-      <!-- 상단 바 -->
-      <div class="result-bar">
-        <button class="bar-btn back" @click="events = []; steps = []; selectedIdx = -1">← BACK</button>
-        <span class="bar-count">{{ events.length }} EVENTS</span>
-        <div class="bar-spacer"></div>
-        <button class="bar-btn" @click="exportEvents"><Icon name="upload" /> 내보내기</button>
-        <button class="bar-btn" @click="importEvents"><Icon name="download" /> 가져오기</button>
       </div>
 
-      <div class="result-body">
-        <!-- 좌측: 이벤트 목록 -->
-        <div class="eg-list">
-          <div v-for="(ev, i) in events" :key="i" class="eg-list-item"
-            :class="{ active: selectedIdx === i }" @click="selectEvent(i)">
-            <span class="eg-idx">#{{ i + 1 }}</span>
-            <span class="eg-desc">{{ ev.character || ev.copyright || 'Event' }}</span>
-            <span class="eg-cnt">{{ ev.children_count || '?' }}</span>
-          </div>
+      <template v-else>
+        <div class="result-bar">
+          <span class="bar-count">이벤트 {{ events.length }}개</span>
+          <div class="bar-spacer"></div>
+          <button class="bar-btn" @click="exportEvents"><Icon name="upload" /> 내보내기</button>
+          <button class="bar-btn" @click="clearResults">결과 지우기</button>
         </div>
 
-        <!-- 우측: 스텝 상세 -->
-        <section class="eg-main">
-          <div v-if="steps.length === 0" class="eg-empty">
-            <div class="eg-empty-icon"><Icon name="video" /></div>
-            <h2>이벤트 시퀀스</h2>
-            <p>이벤트를 선택하면 스텝이 표시됩니다</p>
+        <div class="result-body">
+          <!-- 좌측: 이벤트 목록 -->
+          <div class="eg-list">
+            <div v-for="(ev, i) in events" :key="i" class="eg-list-item"
+              :class="{ active: selectedIdx === i }" @click="selectEvent(i)">
+              <span class="eg-idx">#{{ i + 1 }}</span>
+              <span class="eg-desc">{{ ev.character || ev.copyright || 'Event' }}</span>
+              <span class="eg-cnt">{{ ev.children_count || '?' }}</span>
+            </div>
           </div>
-          <template v-else>
-            <!-- 이벤트 정보 -->
-            <div class="eg-event-info" v-if="currentEvent">
-              <span class="ei-char" v-if="currentEvent.character">{{ currentEvent.character }}</span>
-              <span class="ei-copy" v-if="currentEvent.copyright">{{ currentEvent.copyright }}</span>
-              <span class="ei-sim" v-if="currentEvent.similarity">유사도: {{ (currentEvent.similarity * 100).toFixed(0) }}%</span>
-            </div>
 
-            <!-- 캐리 옵션 -->
-            <div class="eg-carry">
-              <div class="carry-opt">
-                <label><input type="checkbox" v-model="carryAppearance" />외모 유지</label>
-                <span class="carry-desc">머리색, 눈색 등 외모 태그를 전 스텝에 유지</span>
-              </div>
-              <div class="carry-opt">
-                <label><input type="checkbox" v-model="carryCostume" />의상 유지</label>
-                <span class="carry-desc">의상/복장 태그를 Parent 기준으로 유지</span>
-              </div>
-              <div class="carry-opt">
-                <label><input type="checkbox" v-model="carryBackground" />배경 유지</label>
-                <span class="carry-desc">배경/장소 태그를 변경하지 않음</span>
-              </div>
+          <!-- 우측: 스텝 상세 -->
+          <section class="eg-main">
+            <div v-if="steps.length === 0" class="eg-empty">
+              <div class="eg-empty-icon"><Icon name="video" /></div>
+              <h2>이벤트 시퀀스</h2>
+              <p>이벤트를 선택하면 스텝이 표시됩니다</p>
             </div>
+            <template v-else>
+              <!-- 이벤트 정보 -->
+              <div class="eg-event-info" v-if="currentEvent">
+                <span class="ei-char" v-if="currentEvent.character">{{ currentEvent.character }}</span>
+                <span class="ei-copy" v-if="currentEvent.copyright">{{ currentEvent.copyright }}</span>
+                <span class="ei-sim" v-if="currentEvent.similarity">유사도: {{ (currentEvent.similarity * 100).toFixed(0) }}%</span>
+              </div>
 
-            <!-- 전체/해제 -->
-            <div class="step-toolbar">
-              <button class="stb" @click="selectAllSteps">전체 선택</button>
-              <button class="stb" @click="clearAllSteps">전체 해제</button>
-              <span class="stb-count">{{ selectedCount }}개 선택</span>
-            </div>
-
-            <div class="eg-steps">
-              <div v-for="(step, i) in displaySteps" :key="i" class="eg-step"
-                :class="{ 'step-selected': selectedSteps[i] }"
-                @click="toggleStep(i)">
-                <div class="step-head">
-                  <input type="checkbox" :checked="selectedSteps[i]" @click.stop="toggleStep(i)" />
-                  <span class="step-no">Step {{ i + 1 }}</span>
-                  <span class="step-badge" :class="i === 0 ? 'parent' : 'child'">{{ i === 0 ? 'PARENT' : 'CHILD' }}</span>
-                  <span class="step-char" v-if="currentEvent?.character && i === 0">{{ currentEvent.character }}</span>
-                  <button class="step-send" @click.stop="sendStepToT2I(step)" title="T2I로 전송"><Icon name="upload" /></button>
+              <!-- 캐리 옵션 -->
+              <div class="eg-carry">
+                <div class="carry-opt">
+                  <label><input type="checkbox" v-model="carryAppearance" />외모 유지</label>
+                  <span class="carry-desc">머리색, 눈색 등 외모 태그를 전 스텝에 유지</span>
                 </div>
-                <div class="step-diff" v-if="i > 0 && (step.added?.length || step.removed?.length)">
-                  <span v-for="t in (step.added || [])" :key="'a'+t" class="diff-tag add">+ {{ t }}</span>
-                  <span v-for="t in (step.removed || [])" :key="'r'+t" class="diff-tag rm">- {{ t }}</span>
+                <div class="carry-opt">
+                  <label><input type="checkbox" v-model="carryCostume" />의상 유지</label>
+                  <span class="carry-desc">의상/복장 태그를 Parent 기준으로 유지</span>
                 </div>
-                <div class="step-prompt">{{ step.displayPrompt || step.prompt || '' }}</div>
+                <div class="carry-opt">
+                  <label><input type="checkbox" v-model="carryBackground" />배경 유지</label>
+                  <span class="carry-desc">배경/장소 태그를 변경하지 않음</span>
+                </div>
               </div>
-            </div>
 
-            <div class="eg-actions">
-              <div class="eg-row">
-                <span class="eg-mini">Repeat</span>
-                <input type="number" v-model.number="repeatCount" min="1" max="100" />
+              <!-- 전체/해제 -->
+              <div class="step-toolbar">
+                <button class="stb" @click="selectAllSteps">전체 선택</button>
+                <button class="stb" @click="clearAllSteps">전체 해제</button>
+                <span class="stb-count">{{ selectedCount }}개 선택</span>
               </div>
-              <button class="eg-btn" @click="addToQueue" :disabled="selectedCount === 0">
-                ADD TO QUEUE ({{ selectedCount }})
-              </button>
-              <button class="eg-btn primary" @click="generateNow" :disabled="selectedCount === 0">
-                GENERATE NOW ({{ selectedCount }})
-              </button>
-            </div>
-          </template>
-        </section>
-      </div>
-    </template>
+
+              <div class="eg-steps">
+                <div v-for="(step, i) in displaySteps" :key="i" class="eg-step"
+                  :class="{ 'step-selected': selectedSteps[i] }"
+                  @click="toggleStep(i)">
+                  <div class="step-head">
+                    <input type="checkbox" :checked="selectedSteps[i]" @click.stop="toggleStep(i)" />
+                    <span class="step-no">Step {{ i + 1 }}</span>
+                    <span class="step-badge" :class="i === 0 ? 'parent' : 'child'">{{ i === 0 ? 'PARENT' : 'CHILD' }}</span>
+                    <span class="step-char" v-if="currentEvent?.character && i === 0">{{ currentEvent.character }}</span>
+                    <button class="step-send" @click.stop="sendStepToT2I(step)" title="T2I로 전송"><Icon name="upload" /></button>
+                  </div>
+                  <div class="step-diff" v-if="i > 0 && (step.added?.length || step.removed?.length)">
+                    <span v-for="t in (step.added || [])" :key="'a'+t" class="diff-tag add">+ {{ t }}</span>
+                    <span v-for="t in (step.removed || [])" :key="'r'+t" class="diff-tag rm">- {{ t }}</span>
+                  </div>
+                  <div class="step-prompt">{{ step.displayPrompt || step.prompt || '' }}</div>
+                </div>
+              </div>
+
+              <div class="eg-actions">
+                <div class="eg-row">
+                  <span class="eg-mini">반복</span>
+                  <input type="number" v-model.number="repeatCount" min="1" max="100" />
+                </div>
+                <button class="eg-btn" @click="addToQueue" :disabled="selectedCount === 0">
+                  큐에 추가 ({{ selectedCount }})
+                </button>
+                <button class="eg-btn primary" @click="generateNow" :disabled="selectedCount === 0">
+                  지금 생성 ({{ selectedCount }})
+                </button>
+              </div>
+            </template>
+          </section>
+        </div>
+      </template>
+    </section>
   </div>
 </template>
 
@@ -214,8 +215,6 @@ const excludeTags = ref('')
 const minSteps = ref(1)
 const maxSteps = ref(50)
 const limitResults = ref(true)
-const fixSeed = ref(false)
-const useT2ISettings = ref(true)
 const repeatCount = ref(1)
 const searching = ref(false)
 const loadingMsg = ref('')
@@ -239,6 +238,7 @@ function _saveEventFields() {
       artist: artist.value, prompt: prompt.value,
       excludeTags: excludeTags.value,
       minSteps: minSteps.value, maxSteps: maxSteps.value,
+      limitResults: limitResults.value,
       ratings: ratings.map(r => ({ key: r.key, checked: r.checked })),
     }))
   } catch {}
@@ -305,6 +305,31 @@ const displaySteps = computed(() => {
     return { ...step, displayPrompt: tags.join(', ') }
   })
 })
+
+/**
+ * 결과 목록 갈아끼우기.
+ *
+ * 선택 상태를 **같이** 비워야 한다. 안 그러면 새 검색 뒤에도 `selectedSteps` 가
+ * 남아 `_buildScenarios` 가 이전 검색의 스텝을 큐에 넣는다. 예전엔 결과가 나오면
+ * 화면이 통째로 바뀌어 눈에 잘 안 띄었지만, 질의 열이 늘 떠 있는 지금은
+ * 같은 자리에서 바로 다시 검색하게 되므로 훨씬 자주 밟힌다.
+ */
+function _setEvents(list: EventItem[]) {
+  events.value = list
+  steps.value = []
+  selectedIdx.value = -1
+  Object.keys(selectedSteps).forEach((k) => delete selectedSteps[k])
+}
+
+/** 무대만 비운다 — 질의는 그대로 두어 바로 고쳐 다시 돌릴 수 있게. */
+function clearResults() {
+  _setEvents([])
+  loadingMsg.value = ''
+  searchCur.value = 0
+  searchTotal.value = 0
+  // 캐시를 안 지우면 앱을 다시 켰을 때 지운 결과가 되살아난다.
+  try { window.localStorage.removeItem('lastEventResults') } catch {}
+}
 
 function selectEvent(i: number) {
   selectedIdx.value = i
@@ -380,6 +405,7 @@ onMounted(() => {
       if (d.excludeTags) excludeTags.value = d.excludeTags
       if (d.minSteps) minSteps.value = d.minSteps
       if (d.maxSteps) maxSteps.value = d.maxSteps
+      if (typeof d.limitResults === 'boolean') limitResults.value = d.limitResults
       if (d.ratings) d.ratings.forEach((r: any) => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = r.checked })
     }
   } catch {}
@@ -388,7 +414,7 @@ onMounted(() => {
     const saved = window.localStorage.getItem('lastEventResults')
     if (saved) {
       const data = JSON.parse(saved)
-      if (Array.isArray(data) && data.length > 0) events.value = data
+      if (Array.isArray(data) && data.length > 0) _setEvents(data)
     }
   } catch {}
   onBackendEvent('searchStatus', (msg: string) => {
@@ -403,12 +429,17 @@ onMounted(() => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
-        events.value = data
+        _setEvents(data)
         if (data.length) {
           requestAction('show_toast', { type: 'success', msg: `${data.length}개 이벤트 발견` })
           try { window.localStorage.setItem('lastEventResults', JSON.stringify(data.slice(0, 200))) } catch {}
         }
-        else requestAction('show_toast', { type: 'info', msg: '검색 결과가 없습니다' })
+        else {
+          requestAction('show_toast', { type: 'info', msg: '검색 결과가 없습니다' })
+          // 0건인데 캐시를 남기면, 다음 실행 때 **새 질의 옆에 옛 결과**가 뜬다.
+          // 질의 열이 늘 보이므로 둘이 한 쌍처럼 읽혀 더 나쁘다.
+          try { window.localStorage.removeItem('lastEventResults') } catch {}
+        }
       }
       else if (data.error) { requestAction('show_toast', { type: 'error', msg: data.error }) }
     } catch {}
@@ -420,61 +451,69 @@ onMounted(() => {
     try {
       const data = JSON.parse(json)
       if (Array.isArray(data)) {
-        events.value = data
+        _setEvents(data)
         requestAction('show_toast', { type: 'success', msg: `${data.length}개 이벤트 불러옴` })
       }
     } catch {}
+    // 가져오기는 검색을 대신할 수 있다 — 스피너가 남아 무대를 가리면 안 된다.
+    searching.value = false
   })
 })
 </script>
 
 <style scoped>
-.eg-view { height: 100%; display: flex; flex-direction: column; background: var(--bg-primary); overflow: hidden; }
+/* 질의 열 + 무대. 세로가 아니라 **가로**다 — 질의가 결과에 자리를 내주지 않는다. */
+.eg-view { height: 100%; display: flex; background: var(--bg-primary); overflow: hidden; }
 
-/* ── Welcome / Search Form ── */
-.welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; overflow-y: auto; }
-.ws-header { text-align: center; margin-bottom: 32px; }
-.ws-icon { font-size: 48px; opacity: 0.6; margin-bottom: 8px; }
-.ws-header h1 { letter-spacing: 0.08em; font-size: 18px; letter-spacing: 0; color: var(--text-primary); margin-bottom: 6px; }
-.ws-header p { font-size: 12px; color: var(--text-muted); }
+/* ── 질의 열 ── */
+/* 360 은 다른 탭의 설정 열과 같은 값이다. 탭마다 다르면 탭을 옮길 때마다
+   눈이 기준선을 다시 찾는다. */
+.eg-query { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-secondary); }
+.q-head { padding: 14px 16px 10px; flex-shrink: 0; }
+.q-kicker { display: block; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
+.q-head h3 { margin: 2px 0 0; font-size: 15px; font-weight: var(--fw-bold); color: var(--text-primary); letter-spacing: 0; }
+.q-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 14px; display: flex; flex-direction: column; gap: 12px; }
+/* 검색 버튼은 늘 손 닿는 곳에 — 폼이 길어져도 스크롤 밖으로 나가지 않는다. */
+.q-foot { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
 
-.search-form { width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 12px; }
-.form-section { display: flex; flex-direction: column; gap: 8px; }
 .form-row { display: flex; gap: 10px; }
-.form-field { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.form-field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .form-field.wide { flex: 2; }
 .form-field label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-bottom: 0; }
-.form-field label.danger { color: var(--state-alert-fg); }
-.form-field input { padding: 10px 12px; font-size: 13px; }
+.form-field input { width: 100%; padding: 8px 10px; font-size: 12px; }
 
-.exclude-section { border: 1px solid rgba(248,113,113,0.1); border-radius: var(--radius-card); padding: 12px; }
-.exclude-toggle { font-size: 11px; font-weight: var(--fw-bold); color: var(--state-alert-fg); cursor: pointer; letter-spacing: 0; list-style: none; }
+.exclude-section { border: 1px solid rgba(248,113,113,0.1); border-radius: var(--radius-card); padding: 10px; }
+.exclude-toggle { font-size: 11px; font-weight: var(--fw-bold); color: var(--state-alert-fg); cursor: pointer; letter-spacing: 0; list-style: none; margin-bottom: 6px; }
 .exclude-toggle::-webkit-details-marker { display: none; }
 
-.form-footer { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-top: 4px; }
-.rating-row { display: flex; gap: 6px; }
+.rating-row { display: flex; gap: 5px; }
 .rating-chip {
-  height: 30px; padding: 0 16px; background: var(--bg-button); border: 1px solid var(--border);
-  border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold);
+  flex: 1; height: 28px; padding: 0 6px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold);
   cursor: pointer; letter-spacing: 0; transition: var(--transition);
 }
 .rating-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 
-.opt-row-inline { display: flex; gap: 16px; }
-.opt-row-inline label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+.opt-line { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
 
 .go-btn {
-  width: 100%; max-width: 400px; height: 44px; background: var(--accent-fill); border: none;
+  width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--accent-fill); border: none;
   border-radius: var(--radius-pill); color: var(--on-accent); font-weight: var(--fw-bold); font-size: 12px;
   letter-spacing: 0; cursor: pointer; transition: var(--transition);
 }
-.go-btn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(250,204,21,0.2); }
-.go-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
-.io-row { display: flex; gap: 8px; justify-content: center; }
-.io-btn { height: 30px; padding: 0 16px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; transition: var(--transition); }
+.go-btn:hover { background: var(--accent-hover); }
+.go-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.io-btn { width: 100%; height: 30px; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; transition: var(--transition); }
 .io-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
 
-.hints { display: flex; gap: 16px; margin-top: 20px; }
+/* ── 무대 ── */
+.eg-stage { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.eg-blank { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px; }
+.eg-blank .eg-empty-icon { font-size: 48px; opacity: 0.2; margin-bottom: 4px; }
+.eg-blank h2 { font-size: 16px; color: var(--text-secondary); letter-spacing: 0; }
+.eg-blank p { font-size: 12px; color: var(--text-muted); }
+.hints { display: flex; gap: 16px; margin-top: 12px; }
 .hints span { font-size: var(--fs-label); color: var(--text-muted); }
 
 /* ── Loading ── */
@@ -488,7 +527,8 @@ onMounted(() => {
 .sp-text { font-size: 11px; color: var(--text-muted); font-family: monospace; }
 
 /* ── Result Bar ── */
-.result-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+/* 오른쪽 여백은 알림 종 자리다 (style.css --notif-gutter) — 없으면 마지막 버튼이 안 눌린다 */
+.result-bar { display: flex; align-items: center; gap: 12px; padding: 8px var(--notif-gutter) 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .bar-btn { padding: 5px 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .bar-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
 .bar-count { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); letter-spacing: 0; }
@@ -498,7 +538,7 @@ onMounted(() => {
 .result-body { flex: 1; display: flex; overflow: hidden; }
 
 /* Event List */
-.eg-list { width: 240px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border); }
+.eg-list { width: 220px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border); }
 .eg-list-item { display: flex; align-items: center; gap: 6px; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 11px; transition: background 0.15s; }
 .eg-list-item:hover { background: rgba(255,255,255,0.02); }
 .eg-list-item.active { background: var(--accent-dim); border-left: 3px solid var(--accent); }
@@ -552,4 +592,18 @@ onMounted(() => {
 .eg-mini { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); }
 .eg-btn { padding: 8px 16px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; }
 .eg-btn.primary { background: var(--accent-fill); color: var(--on-accent); border: none; }
+
+/* ── 좁은 창 ───────────────────────────────────────────────────────────
+   이 화면은 질의(360) · 이벤트 목록(220) · 스텝 상세, 세 열이다. 창이 줄면
+   맨 오른쪽 상세가 먼저 짓눌린다 — 정작 일하는 자리가 거기다.
+   창은 1600 으로 열리지만 최소 크기 제한이 없어 사용자가 얼마든지 줄일 수 있다. */
+@media (max-width: 1200px) {
+  .eg-query { width: 300px; }
+  .eg-list { width: 180px; }
+}
+@media (max-width: 900px) {
+  /* 셋을 한 줄에 못 넣는다 — 목록을 상세 위로 눕혀 가로를 되찾는다 */
+  .result-body { flex-direction: column; }
+  .eg-list { width: auto; max-height: 132px; flex-shrink: 0; border-right: 0; border-bottom: 1px solid var(--border); }
+}
 </style>
