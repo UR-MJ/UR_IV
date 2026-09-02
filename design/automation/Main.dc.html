@@ -17,15 +17,16 @@
     .chip { height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-sizing: border-box; }
     .chip.off { background: #1E1E1E; border: 1px solid #242424; color: #A2A2A2; }
     .chip.on { background: rgba(201,162,39,0.14); border: 1px solid #C9A227; color: #C9A227; font-weight: 500; }
+    .tag { height: 22px; padding: 0 8px; border-radius: 4px; display: inline-flex; align-items: center; font-size: 11px; }
   </style>
 </helmet>
 
-<div style="width: 820px; height: 800px; background: #060606; box-sizing: border-box; padding: 24px 30px; display: flex; flex-direction: column; gap: 16px;">
+<div style="width: 860px; height: 940px; background: #060606; box-sizing: border-box; padding: 24px 30px; display: flex; flex-direction: column; gap: 16px;">
 
   <div style="display: flex; flex-direction: column; gap: 4px;">
     <div style="font-size: 11px; font-weight: 500; color: #C9A227;">추천 — B의 위계 + C의 전환</div>
-    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">멈춰 있을 땐 설정, 돌 땐 상태</div>
-    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.5; max-width: 640px;">한 자리를 두 모드가 번갈아 쓴다. 설정은 자주 쓰는 둘만 앞에 두고 나머지는 접는다. 돌기 시작하면 그 자리가 통째로 상태로 바뀐다 — 설정은 어차피 돌면서 못 바꾼다.</div>
+    <div style="font-size: 16px; font-weight: 600; color: #E4E4E4;">멈춰 있을 땐 설정, 돌 땐 조종석</div>
+    <div style="font-size: 12px; color: #A2A2A2; line-height: 1.5; max-width: 700px;">한 자리를 두 모드가 번갈아 쓴다. 돌기 시작하면 설정 자리가 통째로 <strong style="color:#E4E4E4;">다음에 나갈 프롬프트</strong>로 바뀐다 — 덱·와일드카드·조건식이 매번 프롬프트를 바꾸는데 지금은 그게 안 보인다.</div>
   </div>
 
   <div style="display: flex; gap: 40px;">
@@ -34,7 +35,7 @@
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div class="cap">멈춰 있을 때</div>
       <div class="panel">
-        <div style="height: 150px; border-bottom: 1px solid #242424; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+        <div style="height: 120px; border-bottom: 1px solid #242424; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
           <div style="font-size: 13px; font-weight: 500; color: #A2A2A2;">최종 프롬프트</div>
           <div style="flex: 1; background: #131313; border: 1px solid #242424; border-radius: 6px;"></div>
         </div>
@@ -45,14 +46,24 @@
             <span style="font-size: 13px; font-weight: 500; color: #E4E4E4;">자동 생성</span>
           </div>
 
+          <!-- 얼마나 — 칩 + 직접 입력 -->
           <div style="display: flex; flex-direction: column; gap: 6px;">
             <div class="cap">얼마나</div>
             <div style="display: flex; gap: 6px;">
               <span class="chip off" style="flex:1;">10장</span>
-              <span class="chip on" style="flex:1;">50장</span>
+              <span class="chip off" style="flex:1;">50장</span>
               <span class="chip off" style="flex:1;">1시간</span>
               <span class="chip off" style="flex:1;">무제한</span>
             </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="cap" style="width: 34px;">직접</span>
+              <div style="flex: 1; height: 30px; background: #131313; border: 1px solid #C9A227; border-radius: 6px; display: flex; align-items: center; padding: 0 10px; box-sizing: border-box; font-size: 12px; color: #E4E4E4;" class="num">120</div>
+              <div style="width: 78px; height: 30px; background: #1E1E1E; border: 1px solid #242424; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-sizing: border-box; font-size: 12px; color: #A2A2A2;">
+                장
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+            </div>
+            <div style="font-size: 11px; color: #8A8A8A;">칩은 자주 쓰는 값. 없는 값은 직접 친다 — 단위는 장 · 분 · 시간.</div>
           </div>
 
           <div style="display: flex; align-items: center; gap: 10px;">
@@ -72,11 +83,6 @@
             <span style="margin-left: auto; font-size: 11px; color: #8A8A8A;" class="num">반복 1 · 재시도 2 · 중복 끔</span>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #A2A2A2;">
-            <span style="width: 26px; height: 15px; background: #242424; border-radius: 8px;"></span>
-            <span>생성 시 태그를 자연어로 변환</span>
-          </div>
-
           <div style="height: 40px; background: #C9A227; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 600; color: #0A0A0A;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="#0A0A0A" stroke="none"><path d="M7 4l13 8-13 8z"/></svg>
             자동 생성 시작
@@ -85,11 +91,11 @@
       </div>
     </div>
 
-    <!-- ── 실행 중 ── -->
+    <!-- ── 실행 중 = 조종석 ── -->
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div class="cap">돌고 있을 때 — 같은 자리</div>
       <div class="panel">
-        <div style="height: 150px; border-bottom: 1px solid #242424; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+        <div style="height: 120px; border-bottom: 1px solid #242424; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
           <div style="font-size: 13px; font-weight: 500; color: #A2A2A2;">최종 프롬프트</div>
           <div style="flex: 1; background: #131313; border: 1px solid #242424; border-radius: 6px;"></div>
         </div>
@@ -97,35 +103,67 @@
         <div style="padding: 12px; display: flex; flex-direction: column; gap: 12px;">
           <div style="display: flex; align-items: baseline; gap: 8px;">
             <span style="width: 7px; height: 7px; border-radius: 50%; background: #4ADE80; align-self: center;"></span>
-            <span class="num" style="font-size: 30px; font-weight: 600; color: #E4E4E4; line-height: 1;">37</span>
-            <span style="font-size: 13px; color: #A2A2A2;">/ 50 장</span>
-            <span style="margin-left: auto; font-size: 12px; color: #8A8A8A;" class="num">12분 남음</span>
+            <span class="num" style="font-size: 26px; font-weight: 600; color: #E4E4E4; line-height: 1;">37</span>
+            <span style="font-size: 13px; color: #A2A2A2;">/ 120 장</span>
+            <span style="margin-left: auto; font-size: 12px; color: #8A8A8A;" class="num">28분 남음</span>
           </div>
 
           <div style="height: 4px; background: #242424; border-radius: 2px; overflow: hidden;">
-            <div style="width: 74%; height: 100%; background: #C9A227;"></div>
+            <div style="width: 31%; height: 100%; background: #C9A227;"></div>
+          </div>
+
+          <!-- ★ 다음에 나갈 프롬프트 -->
+          <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; background: #0D0D0D; border: 1px solid #242424; border-radius: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 12px; font-weight: 500; color: #E4E4E4;">다음 프롬프트</span>
+              <span style="font-size: 11px; color: #8A8A8A;">덱 #38</span>
+              <span style="margin-left: auto; font-size: 11px; color: #8A8A8A;">누르면 이번엔 빠짐</span>
+            </div>
+
+            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+              <span class="tag" style="background: rgba(142,173,225,0.16); color: #8EADE1;">1girl</span>
+              <span class="tag" style="background: rgba(142,173,225,0.16); color: #8EADE1;">blue eyes</span>
+              <span class="tag" style="background: rgba(186,142,225,0.16); color: #BA8EE1;">apron</span>
+              <span class="tag" style="background: rgba(142,225,156,0.16); color: #8EE19C;">sitting</span>
+              <!-- 뺀 태그 -->
+              <span class="tag" style="background: #131313; color: #585858; text-decoration: line-through;">looking at viewer</span>
+              <span class="tag" style="background: rgba(142,225,222,0.16); color: #8EE1DE;">detailed background</span>
+              <span class="tag" style="background: rgba(225,142,200,0.16); color: #E18EC8;">soft lighting</span>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="width: 14px; height: 14px; border: 1px dashed #747474; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #8A8A8A;">+</span>
+              <div style="flex: 1; height: 26px; background: #0A0A0A; border: 1px solid #242424; border-radius: 5px; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; font-size: 11px; color: #585858;">태그 추가 후 Enter</div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px; padding-top: 6px; border-top: 1px solid #242424;">
+              <span class="cap">적용</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #C9A227;">
+                <span style="width: 11px; height: 11px; border-radius: 50%; border: 1px solid #C9A227; display: flex; align-items: center; justify-content: center;"><span style="width: 5px; height: 5px; border-radius: 50%; background: #C9A227;"></span></span>
+                이번만
+              </span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8A8A8A;">
+                <span style="width: 11px; height: 11px; border-radius: 50%; border: 1px solid #585858;"></span>
+                남은 전부
+              </span>
+            </div>
           </div>
 
           <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #A2A2A2;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.6"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M7 4h14v12"/></svg>
             <span>덱 <strong class="num" style="color:#E4E4E4;">83</strong> / 120 남음</span>
+            <span style="margin-left: auto; font-size: 11px; color: #8A8A8A;">다음까지 <span class="num" style="color:#E4E4E4;">0.6</span>초</span>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #A2A2A2;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A8A8A" stroke-width="1.6" stroke-linecap="round"><path d="M6 3h12"/><path d="M6 21h12"/><path d="M8 3v4l4 5 4-5V3"/><path d="M8 21v-4l4-5 4 5v4"/></svg>
-            <span>다음까지 <span class="num" style="color:#E4E4E4;">0.6</span>초</span>
-            <span style="flex: 1; height: 3px; background: #242424; border-radius: 2px; overflow: hidden;"><span style="display: block; width: 40%; height: 100%; background: #8FB8E6;"></span></span>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid #242424;">
-            <span class="cap">사이 간격</span>
-            <span class="num" style="font-size: 12px; color: #E4E4E4;">1.0초</span>
-            <span style="margin-left: auto; font-size: 11px; color: #8A8A8A;">설정은 멈춘 뒤에</span>
-          </div>
-
-          <div style="height: 40px; background: #1E1E1E; border: 1px solid #D14141; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 600; color: #F87171;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F87171" stroke="none"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
-            멈추기
+          <div style="display: flex; gap: 8px;">
+            <div style="flex: 1; height: 36px; background: #1E1E1E; border: 1px solid #242424; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: #A2A2A2;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#A2A2A2" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              일시정지
+            </div>
+            <div style="flex: 1; height: 36px; background: #1E1E1E; border: 1px solid #D14141; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 600; color: #F87171;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#F87171" stroke="none"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+              멈추기
+            </div>
           </div>
         </div>
       </div>
@@ -135,14 +173,15 @@
   <div style="display: flex; gap: 40px; font-size: 12px; color: #A2A2A2; line-height: 1.55;">
     <div style="width: 360px; display: flex; flex-direction: column; gap: 4px;">
       <div style="color: #4ADE80; font-weight: 500;">달라지는 것</div>
-      <div>· 프롬프트 영역이 <span class="num" style="color:#E4E4E4;">199 → 302px</span> 로 돌아온다</div>
-      <div>· 컨트롤 높이 <span class="num" style="color:#E4E4E4;">25 → 30px</span> (최소 28px 규칙 충족)</div>
-      <div>· 덱을 한 번만 그린다</div>
+      <div>· 매번 나갈 프롬프트가 보인다 — 덱·와일드카드·조건식이 뭘 넣었는지</div>
+      <div>· 태그를 눌러 이번 장에서만 빼거나, 남은 전부에서 뺀다</div>
+      <div>· '얼마나' 는 칩 + 직접 입력(장 · 분 · 시간)</div>
+      <div>· 일시정지가 생겼다 — 지금은 멈추면 덱 진행이 끝난다</div>
     </div>
     <div style="width: 360px; display: flex; flex-direction: column; gap: 4px;">
-      <div style="color: #E0B341; font-weight: 500;">정해야 할 것</div>
-      <div>· '고급' 안에 넣을 넷의 라벨 — <span style="color:#E4E4E4;">cleanup 주기</span> 는 실은 "Forge LoRA 캐시 정리"다. 이름을 뜻대로 바꿀지</div>
-      <div>· 프리셋 칩 넷(10 / 50 / 1시간 / 무제한)이 실제 쓰는 값과 맞는지</div>
+      <div style="color: #E0B341; font-weight: 500;">필요한 것</div>
+      <div>· <span style="color:#E4E4E4;">automationStatus</span> 페이로드에 다음 프롬프트를 실어야 한다. 지금은 running · count · deck 만 온다 — 한 줄 추가.</div>
+      <div>· '남은 전부' 로 뺀 태그는 어디 저장할지 — 자동화 세션 한정인지, 제외 프롬프트로 굳힐지</div>
     </div>
   </div>
 

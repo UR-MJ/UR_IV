@@ -32,6 +32,17 @@
       <span class="ss-key">모델</span>
       <span class="ss-val ss-model">{{ modelText }}</span>
     </div>
+
+    <!-- 오른쪽 — 다음 생성이 어떤 값으로 나갈지. 왼쪽에만 몰아 두면 넓은 화면에서
+         바의 95% 가 빈 채로 남아 '넣다 만 줄' 처럼 보인다. 여기 값은 전부
+         이미 위젯 스토어에 있는 것이라 새로 물어오지 않는다. -->
+    <div class="ss-right">
+      <div class="ss-item"><span class="ss-key">출력</span><span class="ss-val">{{ sizeText }}</span></div>
+      <span class="ss-sep" aria-hidden="true"></span>
+      <div class="ss-item"><span class="ss-key">스텝</span><span class="ss-val">{{ stepsText }}</span></div>
+      <span class="ss-sep" aria-hidden="true"></span>
+      <div class="ss-item"><span class="ss-key">CFG</span><span class="ss-val">{{ cfgText }}</span></div>
+    </div>
   </footer>
 </template>
 
@@ -69,6 +80,22 @@ const emit = defineEmits<{ 'vram-click': [] }>()
 
 const wStore = useWidgetStore()
 const storeWidgets = wStore.widgets
+
+/** 위젯 값 하나를 문자열로. 비어 있으면 '—' — 빈 칸이 보이는 것보다 낫다. */
+function widgetText(id: string): string {
+  const raw = (storeWidgets as Record<string, unknown>)[id]
+  const value = String(raw ?? '').trim()
+  return value || '—'
+}
+
+// ── 다음 생성 파라미터 (오른쪽) ────────────────────────────────────────────
+const sizeText = computed(() => {
+  const w = widgetText('width_input')
+  const h = widgetText('height_input')
+  return w === '—' || h === '—' ? '—' : `${w}×${h}`
+})
+const stepsText = computed(() => widgetText('steps_input'))
+const cfgText = computed(() => widgetText('cfg_input'))
 
 // ── 백엔드 ────────────────────────────────────────────────────────────────
 const backendName = computed(() => {
@@ -139,17 +166,20 @@ const modelTitle = computed(() => modelRaw.value || '체크포인트 미선택')
 </script>
 
 <style scoped>
-/* 높이 24px 은 `.main-workspace { padding-bottom: 24px }` 와 짝이다 — 한쪽만 바꾸면
+/* 높이 28px 은 `.main-workspace { padding-bottom: 28px }` 와 짝이다 — 한쪽만 바꾸면
    워크스페이스 맨 아랫줄이 스트립 뒤로 숨는다. 우하단 큐 핀은 bottom:32px 이라
    이 24px 위로 8px 떠 있다(겹치지 않음). */
 .status-strip {
-  position: fixed; bottom: 0; left: 0; right: 0; height: 24px; z-index: 500;
-  display: flex; align-items: center; gap: 12px; padding: 0 12px;
+  position: fixed; bottom: 0; left: 0; right: 0; height: 28px; z-index: 500;
+  display: flex; align-items: center; gap: var(--sp-5); padding: 0 var(--sp-4);
   background: var(--bg-primary); border-top: 1px solid var(--rule);
   font-size: var(--fs-label); line-height: 1; white-space: nowrap; overflow: hidden;
 }
 .ss-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ss-sep { width: 1px; height: 12px; background: var(--rule); flex-shrink: 0; }
+/* 남은 폭을 전부 먹고 오른쪽 끝에 붙는다 — 두 묶음이 바의 양끝을 잡아야
+   줄이 '채워진 것' 으로 보인다. 좁아지면 이쪽이 먼저 잘린다(왼쪽이 더 중요). */
+.ss-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-4); min-width: 0; overflow: hidden; }
 
 .ss-name { color: var(--text-primary); font-weight: var(--fw-bold); }
 .ss-host { color: var(--text-muted); }

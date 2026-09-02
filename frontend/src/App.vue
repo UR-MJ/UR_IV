@@ -2248,7 +2248,7 @@ onMounted(async () => {
    콘텐츠가 화면 맨 아래까지 내려와 GENERATE 버튼이 VRAM 바에 잘리던 문제 수정) */
 /* min-width:0 이 없으면 안쪽 패널의 내용 폭이 flex 기본값(auto)을 밀어 올려
    레일이 눌리거나 가로 스크롤이 생긴다. */
-.main-workspace { flex: 1; min-width: 0; display: flex; overflow: hidden; position: relative; padding-bottom: 24px; }
+.main-workspace { flex: 1; min-width: 0; display: flex; overflow: hidden; position: relative; padding-bottom: 28px; }
 
 .side-panel { width: 360px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); z-index: 10; }
 .side-panel.right { width: 220px; border-right: none; border-left: 1px solid var(--border); }
