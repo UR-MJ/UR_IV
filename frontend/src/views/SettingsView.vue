@@ -647,8 +647,8 @@
               <span class="icon-animation-stage">선택 즉시 적용</span>
             </div>
             <p class="theme-note">
-              없음은 아이콘을 정적으로 유지하고, GPT는 의미별 마이크로 모션을 적용합니다.
-              Claude는 별도 효과를 비교하기 위한 예약 선택입니다.
+              없음은 아이콘을 정적으로 유지합니다. GPT는 아이콘 전체가 의미 방향으로 움직이고,
+              Claude는 틀을 고정한 채 장치(뚜껑·화살·고리)만 움직입니다.
             </p>
             <div class="icon-animation-options" role="group" aria-label="아이콘 애니메이션 스타일">
               <button

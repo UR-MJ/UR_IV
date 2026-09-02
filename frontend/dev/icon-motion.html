@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko" data-theme-mode="dark">
+<head>
+<meta charset="utf-8">
+<title>아이콘 모션 — 개발용 비교판</title>
+<!--
+  개발 전용. `npm run dev` 로만 열린다 (`/dev/icon-motion.html`).
+  vite.config.js 의 build 입력이 `index.html` 하나뿐이라 `npm run build` 산출물에
+  절대 들어가지 않는다 — 제품 코드에 개발 UI 를 남기지 않으려고 앱 라우터가 아니라
+  독립 페이지로 뒀다.
+
+  여기서 확인하는 것: 70여 개를 한 화면에 놓고 프리셋을 바꿔 가며
+  '어떤 아이콘이 무엇을 예고하는지' 와 '쉼 상태로 정확히 돌아오는지'.
+-->
+<link rel="stylesheet" href="/src/styles/theme-fallback.css">
+<link rel="stylesheet" href="/src/styles/iconMotion.css">
+<link rel="stylesheet" href="/src/styles/iconMotionClaude.css">
+<style>
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg-primary); color: var(--text-primary);
+    font-family: 'Pretendard', system-ui, sans-serif; font-size: 13px;
+  }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  p.lead { margin: 0 0 16px; color: var(--text-secondary); line-height: 1.6; max-width: 62ch; }
+  .bar { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .bar button {
+    height: 30px; padding: 0 12px; border-radius: 6px; cursor: pointer;
+    background: var(--bg-button); border: 1px solid var(--rule);
+    color: var(--text-secondary); font-size: 12px; font-family: inherit;
+  }
+  .bar button[aria-pressed='true'] {
+    background: var(--accent-dim); border-color: var(--accent); color: var(--accent);
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; }
+  .cell {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    height: 74px; justify-content: center; cursor: pointer;
+    background: var(--bg-card); border: 1px solid var(--rule); border-radius: 8px;
+    color: var(--text-secondary); font-family: inherit; font-size: 11px;
+  }
+  .cell:hover { color: var(--text-primary); border-color: var(--edge); }
+  .cell.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .cell .icon { font-size: 22px; }
+  .quiet-note { color: var(--text-muted); }
+  .legend { margin-top: 20px; color: var(--text-muted); line-height: 1.7; max-width: 72ch; }
+  .legend code { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<h1>아이콘 모션 — 개발용 비교판</h1>
+<p class="lead">
+  프리셋을 바꿔 가며 같은 아이콘을 호버·클릭해 본다. 카드를 누르면 <b>선택 상태</b>가 되어
+  장치가 열린 채 머무는지 볼 수 있다. Tab 키로 옮기면 <b>키보드 포커스</b> 폭(호버보다 작다)을 볼 수 있다.
+  <br><b>이동 줄이기</b>는 여기서 켤 수 없다 — OS 설정(Windows: 설정 › 접근성 › 시각 효과 › 애니메이션 효과)
+  이나 DevTools의 Rendering › Emulate CSS prefers-reduced-motion 으로 확인한다.
+</p>
+
+<div class="bar">
+  <span class="quiet-note">프리셋</span>
+  <button type="button" data-preset="none">없음</button>
+  <button type="button" data-preset="claude">Claude</button>
+  <button type="button" data-preset="gpt">GPT</button>
+  <span class="quiet-note" style="margin-left:12px">테마</span>
+  <button type="button" data-mode="dark">다크</button>
+  <button type="button" data-mode="light">라이트</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="legend" id="legend"></div>
+
+<script type="module">
+import { ICONS, FILLED } from '/src/icons/index.ts'
+import { motionForIcon } from '/src/icons/motion.ts'
+import { resolveTheme } from '/src/theme/applyTheme.ts'
+
+const root = document.documentElement
+const grid = document.getElementById('grid')
+
+function svg(name) {
+  const paths = ICONS[name] ?? []
+  const filled = !!FILLED[name]
+  return `<svg class="icon" data-icon-name="${name}" data-icon-motion="${motionForIcon(name)}"
+     width="1em" height="1em" viewBox="0 0 24 24"
+     fill="${filled ? 'currentColor' : 'none'}" stroke="${filled ? 'none' : 'currentColor'}"
+     stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+     aria-hidden="true" focusable="false"
+     style="transform-box: view-box; transform-origin: center;">
+   ${paths.map((d, i) => `<path class="icon-part icon-part-${i + 1}" data-icon-part="${i + 1}" d="${d}"
+       style="transform-box: fill-box; transform-origin: center;" />`).join('')}
+   </svg>`
+}
+
+grid.innerHTML = Object.keys(ICONS)
+  .map(name => `<button type="button" class="cell" aria-pressed="false">${svg(name)}<span>${name}</span></button>`)
+  .join('')
+
+grid.addEventListener('click', (e) => {
+  const cell = e.target.closest('.cell')
+  if (!cell) return
+  const on = cell.getAttribute('aria-pressed') === 'true'
+  cell.setAttribute('aria-pressed', on ? 'false' : 'true')
+  cell.classList.toggle('on', !on)
+})
+
+function setPreset(value) {
+  root.setAttribute('data-icon-animation', value)
+  for (const b of document.querySelectorAll('[data-preset]')) {
+    b.setAttribute('aria-pressed', String(b.dataset.preset === value))
+  }
+}
+function setMode(mode) {
+  const colors = resolveTheme(mode === 'light' ? 'light' : 'default', {})
+  for (const [k, v] of Object.entries(colors)) {
+    if (k !== 'mode' && k !== 'label') root.style.setProperty(`--${k}`, v)
+  }
+  root.setAttribute('data-theme-mode', mode)
+  for (const b of document.querySelectorAll('[data-mode]')) {
+    b.setAttribute('aria-pressed', String(b.dataset.mode === mode))
+  }
+}
+
+document.querySelector('.bar').addEventListener('click', (e) => {
+  const b = e.target.closest('button')
+  if (!b) return
+  if (b.dataset.preset) setPreset(b.dataset.preset)
+  if (b.dataset.mode) setMode(b.dataset.mode)
+})
+
+setPreset('claude')
+setMode('dark')
+
+// 어떤 아이콘이 조용한지 한눈에 — 움직임이 뜻이 되려면 안 움직이는 것도 있어야 한다.
+requestAnimationFrame(() => {
+  const quiet = []
+  for (const name of Object.keys(ICONS)) {
+    const icon = document.querySelector(`.icon[data-icon-name="${name}"]`)
+    const moves = [...icon.querySelectorAll('.icon-part')]
+      .some(p => getComputedStyle(p).getPropertyValue('--ic-open').trim())
+    if (!moves) quiet.push(name)
+  }
+  document.getElementById('legend').innerHTML =
+    `<b>장치가 있는 아이콘</b> ${Object.keys(ICONS).length - quiet.length}개 — 호버하면 누르면 일어날 일의 첫 프레임을 보여준다.<br>` +
+    `<b>조용한 아이콘</b> ${quiet.length}개 — 눌림(<code>scale(.94)</code>)만 있다. ` +
+    `기계 장치가 없는 '명사'라 억지로 움직이지 않는다: <code>${quiet.join(', ')}</code>`
+})
+</script>
+</body>
+</html>
