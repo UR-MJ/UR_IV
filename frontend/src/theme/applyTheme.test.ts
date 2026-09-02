@@ -51,6 +51,36 @@ describe('파이썬과 같은 결과', () => {
       resolveTheme('light', { accent: '#2563eb', 'state-ok': 'bad', 'bg-primary': '#FF0000' }),
     ).toEqual(golden.resolve_override)
   })
+
+  it('resolveTheme — 채움색을 바꾸면 글자용 변형이 따라온다', () => {
+    expect(resolveTheme('default', { 'state-info': '#1E3A8A', 'state-alert': '#7F1D1D' }))
+      .toEqual(golden.resolve_state_override.dark)
+    expect(resolveTheme('light', { 'state-ok': '#86EFAC' }))
+      .toEqual(golden.resolve_state_override.light)
+  })
+})
+
+describe('상태색을 바꿔도 문구가 읽힌다', () => {
+  it('어떤 채움색을 골라도 그 뜻의 글자색은 배경에서 4.5:1 이상', () => {
+    // 배지(채움)만 바뀌고 문구가 프리셋 색으로 남으면 둘이 따로 논다.
+    // 파랑 배지 옆 초록 글자 같은 상태가 되지 않는지 색상환을 돌며 확인한다.
+    for (const preset of ['default', 'dark', 'light']) {
+      for (let h = 0; h < 360; h += 11) {
+        for (const l of [18, 45, 82]) {
+          const fill = hslHex(h, 65, l)
+          const colors = resolveTheme(preset, { 'state-info': fill })
+          const ratio = contrastRatio(colors['state-info-fg'], colors['bg-primary'])
+          expect(ratio, `${preset} / 채움 ${fill} → 글자 ${colors['state-info-fg']}`)
+            .toBeGreaterThanOrEqual(4.5)
+        }
+      }
+    }
+  })
+
+  it('이미 읽히는 색은 그대로 쓴다 — 괜히 밀지 않는다', () => {
+    const colors = resolveTheme('default', { 'state-info': '#8FB8E6' })
+    expect(colors['state-info-fg']).toBe('#8FB8E6')
+  })
 })
 
 describe('사용자가 아무 색이나 골라도 읽을 수 있어야 한다', () => {

@@ -187,6 +187,25 @@ def readable_fill(color: str, on: str) -> str:
     return candidate
 
 
+def readable_text(color: str, background: str, minimum: float = MIN_ON_ACCENT_CONTRAST) -> str:
+    """``background`` 위에서 읽히도록 색의 명도만 민다 — 색상·채도는 그대로.
+
+    **왜 필요한가**: 사용자가 '선택'·'알림'·'연결' 색을 바꾸면 배지(채움)만 바뀌고
+    **같은 뜻의 글자는 프리셋 값 그대로** 남는다. 파란 배지 옆에 초록 글자가 남는 식이라
+    편집이 반쪽이 된다. 그래서 채움색을 바꾸면 글자용 변형(``state-x-fg``)을 여기서 만든다.
+    방향은 배경 밝기가 정한다 — 어두운 배경이면 밝게, 밝은 배경이면 어둡게.
+    """
+    if contrast_ratio(color, background) >= minimum:
+        return color
+    step = 0.02 if relative_luminance(background) < 0.5 else -0.02
+    candidate = color
+    for _ in range(60):
+        candidate = shift_lightness(candidate, step)
+        if contrast_ratio(candidate, background) >= minimum:
+            return candidate
+    return candidate
+
+
 def hover_fill(fill: str, on: str, mode: str) -> str:
     """글자를 얹는 면의 호버색 — **글자색에서 멀어지는** 쪽으로 민다.
 
@@ -240,6 +259,10 @@ def resolve(preset_name: str | None = None,
     for key, value in (overrides or {}).items():
         if key in EDITABLE_KEYS and is_valid_hex(value):
             colors[key] = normalize_hex(value)
+            # 채움색을 바꿨으면 같은 뜻의 글자색도 따라와야 한다 — 안 그러면
+            # 배지만 바뀌고 문구는 프리셋 색으로 남아 둘이 따로 논다.
+            if key.startswith('state-'):
+                colors[f'{key}-fg'] = readable_text(colors[key], colors['bg-primary'])
     colors.update(derive_accent(colors['accent'], colors['mode']))
     return colors
 

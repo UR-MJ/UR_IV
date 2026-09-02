@@ -49,13 +49,13 @@
     <p v-else-if="lowContrast" class="cf-note bad">
       <Icon name="alert" size="12" />
       <span>
-        배경 <code>{{ backgroundSwatch }}</code> 대비 <strong>{{ ratioText }}:1</strong> —
-        기준 {{ MIN_CONTRAST }}:1 에 못 미칩니다. 이 색으로 쓴 작은 글자·아이콘은 잘 안 보입니다.
+        {{ contrastLabel }} <strong>{{ ratioText }}:1</strong> —
+        기준 {{ MIN_CONTRAST }}:1 에 못 미칩니다. {{ contrastConsequence }}
       </span>
     </p>
     <p v-else class="cf-note ok">
       <Icon name="check" size="12" />
-      <span>배경 대비 <strong>{{ ratioText }}:1</strong></span>
+      <span>{{ contrastLabel }} <strong>{{ ratioText }}:1</strong></span>
     </p>
   </div>
 </template>
@@ -72,7 +72,9 @@
  * 무슨 색을 고르는 중인지 알 수 없다. 입력칸에만 남기고 테마에는 넣지 않는다.
  */
 import { computed, ref, watch } from 'vue'
-import { MIN_ON_ACCENT_CONTRAST, contrastRatio, isValidHex, normalizeHex } from '../theme/applyTheme'
+import {
+  MIN_ON_ACCENT_CONTRAST, contrastRatio, deriveAccent, isValidHex, normalizeHex,
+} from '../theme/applyTheme'
 
 const props = withDefaults(defineProps<{
   /** 현재 색(hex). 유효하지 않으면 검정으로 보여 준다. */
@@ -81,9 +83,17 @@ const props = withDefaults(defineProps<{
   hint?: string
   /** 프리셋이 정한 기본값 — '되돌리기' 의 목적지이자 덮어썼는지 판단 기준. */
   presetValue: string
-  /** 대비를 계산할 배경색(hex). 이 색이 실제로 얹히는 면을 넘긴다. */
-  background: string
-}>(), { hint: '' })
+  /**
+   * 이 색이 화면에서 하는 일. **판정 기준이 여기서 갈린다.**
+   * - `accent` — 주 버튼의 면. 그 위 글자가 읽히는지 본다(`on-accent` ↔ `accent-fill`).
+   * - `fill`   — 배지의 면. 그 위 흰 글자가 읽히는지 본다.
+   * 배경 대비로 재면 **채움색이 배경 위 글자인 척** 하게 되어, 기본 프리셋조차
+   * 경고가 뜬다(실제로 그랬다: 선택·알림·연결이 전부 3.9:1 로 빨갛게 떴다).
+   */
+  role?: 'accent' | 'fill'
+  /** 파생색 계산에 쓰는 테마 밝기. */
+  mode?: string
+}>(), { hint: '', role: 'fill', mode: 'dark' })
 
 const emit = defineEmits<{ 'update:modelValue': [value: string]; reset: [] }>()
 
@@ -104,16 +114,35 @@ watch(() => props.modelValue, (next) => {
 const draftValid = computed(() => isValidHex(draft.value))
 const applied = computed(() => (isValidHex(props.modelValue) ? normalizeHex(props.modelValue) : '#000000'))
 const presetSwatch = computed(() => (isValidHex(props.presetValue) ? normalizeHex(props.presetValue) : applied.value))
-const backgroundSwatch = computed(() => (isValidHex(props.background) ? normalizeHex(props.background) : '#000000'))
 const isOverridden = computed(() => applied.value !== presetSwatch.value)
 
 // 아직 부모에 올라가지 않은 유효한 입력도 미리 평가한다 — 경고가 한 박자 늦으면
 // 사용자는 이미 다음 색을 치고 있다.
-const ratio = computed(() =>
-  contrastRatio(draftValid.value ? normalizeHex(draft.value) : applied.value, backgroundSwatch.value),
+/** 지금 평가할 색 — 아직 부모에 안 올라간 유효한 입력도 포함. */
+const candidate = computed(() =>
+  draftValid.value ? normalizeHex(draft.value) : applied.value,
 )
+
+const ratio = computed(() => {
+  if (props.role === 'accent') {
+    // 주 버튼: 면(accent-fill)과 그 위 글자(on-accent). 둘 다 사용자의 색에서 파생된다.
+    const derived = deriveAccent(candidate.value, props.mode)
+    return contrastRatio(derived['on-accent'], derived['accent-fill'])
+  }
+  // 배지: 채움 위의 흰 글자.
+  return contrastRatio('#FFFFFF', candidate.value)
+})
 const ratioText = computed(() => ratio.value.toFixed(2))
 const lowContrast = computed(() => ratio.value < MIN_CONTRAST)
+
+const contrastLabel = computed(() =>
+  props.role === 'accent' ? '버튼 글자 대비' : '배지의 흰 글자 대비',
+)
+const contrastConsequence = computed(() =>
+  props.role === 'accent'
+    ? '주 버튼의 글자가 잘 안 보입니다.'
+    : '이 색으로 채운 배지 위의 글자가 잘 안 보입니다. (본문 글자색은 자동으로 맞춰집니다.)',
+)
 
 function onType(event: Event) {
   const value = (event.target as HTMLInputElement).value

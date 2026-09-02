@@ -657,7 +657,8 @@
                 :hint="field.hint"
                 :model-value="themeColor(field.key)"
                 :preset-value="themePresetColor(field.key)"
-                :background="themeColors['bg-card']"
+                :role="field.key === 'accent' ? 'accent' : 'fill'"
+                :mode="themeColors.mode"
                 @update:model-value="setThemeColor(field.key, $event)"
                 @reset="resetThemeColor(field.key)"
               />

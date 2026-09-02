@@ -135,6 +135,28 @@ export function readableFill(color: string, on: string): string {
  * 그래도 모자라면 `accent-fill` 이 면을 밀어 준다.
  */
 /**
+ * `background` 위에서 읽히도록 색의 명도만 민다 — 색상·채도는 그대로.
+ *
+ * **왜 필요한가**: 사용자가 '선택'·'알림'·'연결' 색을 바꾸면 배지(채움)만 바뀌고
+ * **같은 뜻의 글자는 프리셋 값 그대로** 남는다. 파란 배지 옆에 초록 글자가 남는 식이라
+ * 편집이 반쪽이 된다. 그래서 채움색을 바꾸면 글자용 변형(`state-x-fg`)을 여기서 만든다.
+ */
+export function readableText(
+  color: string,
+  background: string,
+  minimum = MIN_ON_ACCENT_CONTRAST,
+): string {
+  if (contrastRatio(color, background) >= minimum) return color
+  const step = relativeLuminance(background) < 0.5 ? 0.02 : -0.02
+  let candidate = color
+  for (let i = 0; i < 60; i++) {
+    candidate = shiftLightness(candidate, step)
+    if (contrastRatio(candidate, background) >= minimum) return candidate
+  }
+  return candidate
+}
+
+/**
  * 글자를 얹는 면의 호버색 — **글자색에서 멀어지는** 쪽으로 민다.
  *
  * **왜 방향을 글자에서 정하는가**: 예전에는 다크 테마면 무조건 밝게 밀었다.
@@ -176,7 +198,13 @@ export function resolveTheme(preset?: string, overrides?: Record<string, string>
   const colors: ThemeColors = { ...PRESETS[name] }
   for (const key of EDITABLE_KEYS) {
     const value = overrides?.[key]
-    if (isValidHex(value)) colors[key] = normalizeHex(value)
+    if (!isValidHex(value)) continue
+    colors[key] = normalizeHex(value)
+    // 채움색을 바꿨으면 같은 뜻의 글자색도 따라와야 한다 — 안 그러면
+    // 배지만 바뀌고 문구는 프리셋 색으로 남아 둘이 따로 논다.
+    if (key.startsWith('state-')) {
+      colors[`${key}-fg`] = readableText(colors[key], colors['bg-primary'])
+    }
   }
   return { ...colors, ...deriveAccent(colors.accent, colors.mode) }
 }

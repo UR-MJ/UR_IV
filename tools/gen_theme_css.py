@@ -115,6 +115,11 @@ def write_golden() -> pathlib.Path:
         'resolve_override': resolve(
             'light', {'accent': '#2563eb', 'state-ok': 'bad', 'bg-primary': '#FF0000'}
         ),
+        # 채움색을 바꾸면 글자용 변형이 따라오는지 — 두 구현이 갈라지기 쉬운 자리다
+        'resolve_state_override': {
+            'dark': resolve('default', {'state-info': '#1E3A8A', 'state-alert': '#7F1D1D'}),
+            'light': resolve('light', {'state-ok': '#86EFAC'}),
+        },
     }
     path = ROOT / 'frontend' / 'src' / 'theme' / '__golden__.json'
     path.write_text(
