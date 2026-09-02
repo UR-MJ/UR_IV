@@ -150,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onActivated, onMounted, onUnmounted } from 'vue'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import { mediaUrl, thumbnailUrl } from '../utils/media.js'
@@ -344,6 +344,13 @@ onMounted(() => {
   })
   loadFavorites()
 })
+
+// 라우터가 <keep-alive> 로 감싸므로 탭을 다시 열어도 onMounted 는 안 돈다.
+// 갤러리에서 즐겨찾기를 더하고 이 탭으로 오면 옛 목록이 그대로 보였다 —
+// 목록을 밀어 주는 이벤트가 따로 없어서, 들어올 때마다 다시 읽는다.
+// (GalleryView 가 같은 이유로 onActivated 에서 loadImages 를 부른다.)
+onActivated(() => loadFavorites())
+
 onUnmounted(() => {
   document.removeEventListener('click', hideMenu)
   if (_showMetaTimer) clearInterval(_showMetaTimer)
