@@ -1089,6 +1089,21 @@ class GeneratorMainUI(
                     self._api_manager_mode = False
                     self.vue_bridge.showNotification.emit('error', f'API 연결 실패: {e}')
 
+            # ═══════ 시작 백엔드 게이트 (창 위의 Vue 오버레이) ═══════
+            # 옛 QDialog 가 하던 세 가지 — 감지 / 확정 / 워크플로 고르기 — 를
+            # 그대로 액션으로 옮긴 것. 실제 로직은 WebUIMixin 이 갖고 있다.
+            elif action == 'probe_backend':
+                self._probe_backends_async(
+                    str(payload.get('webuiUrl') or '').strip(),
+                    str(payload.get('comfyUrl') or '').strip(),
+                )
+
+            elif action == 'select_backend':
+                self._select_backend_from_gate(payload)
+
+            elif action == 'pick_comfy_workflow':
+                self._pick_comfy_workflow()
+
             # ═══════ 탭 순서 설정 ═══════
             elif action == 'set_tab_order':
                 order = payload.get('order', [])
@@ -2223,18 +2238,27 @@ class GeneratorMainUI(
     def _run_startup_sequence(self, app):
         """스플래시 로딩 화면과 함께 시작 구동 (main()이 showMaximized 전에 호출).
 
-        순서: 백엔드 선택 → 스플래시 → Vue 로드(완료 대기) → 검색 덱 복원 →
-              백엔드 연결·모델 로딩(완료 대기) → 스플래시 닫고 메인 창 노출.
-        Vue를 (창 숨긴 채) 먼저 로드해 두므로, 이후 데이터 push가 도달해 패널이
-        '뒤에서 천천히'가 아니라 노출 시점에 채워진다.
+        순서: 스플래시 → Vue 로드(완료 대기) → 검색 덱 복원 →
+              (게이트) 창을 띄우고 그 위에 백엔드 선택 오버레이 → 고르면 연결
+              (게이트 아님: managed 자동 시작 등) → 백엔드 연결·모델 로딩(완료 대기)
+              → 스플래시 닫고 메인 창 노출.
 
-        안전망: 어느 단계가 실패해도 앱은 뜬다 — except에서 핵심 단계(Vue 로드/백엔드
-        적용/덱 복원)를 폴백 보장하고, 모든 대기는 타임아웃이 있어 무한 멈춤이 없다.
+        **왜 백엔드 선택이 뒤로 갔나**: 예전엔 이게 1번이었다 — 앱 창을 보기도 전에
+        별도 QDialog 가 떠서 결정을 요구했고, 시작 화면만 앱의 디자인 규칙 밖에 살았다.
+        지금은 창을 먼저 띄우고 Vue 오버레이로 묻는다. 연결·모델 로딩은 고른 *뒤에*
+        돌므로 이 함수는 게이트 경로에서 백엔드를 기다리지 않는다(그 대기는 오버레이가
+        자기 안에서 보여 준다).
+
+        안전망: 어느 단계가 실패해도 앱은 뜬다 — Vue 로드가 타임아웃이면 오버레이를
+        그릴 방법이 없으므로 그때만 옛 QDialog(`_show_startup_selector`)로 떨어진다.
+        except에서 핵심 단계(Vue 로드/백엔드 적용/덱 복원)를 폴백 보장하고, 모든 대기는
+        타임아웃이 있어 무한 멈춤이 없다.
         시작 다이얼로그 X(SystemExit)만 그대로 전파해 종료한다."""
         splash = None
         try:
-            # 1. 백엔드 선택 — 스플래시 전(다이얼로그 단독 노출, 깔끔)
+            # 1. 백엔드 선택 방식 결정 — 게이트면 플래그만 세우고 아무것도 안 띄운다.
             self._startup_backend_check()
+            gate = bool(getattr(self, '_backend_gate_pending', False))
 
             # 2. 스플래시 표시 (이후 로딩 단계 시각화)
             try:
@@ -2257,20 +2281,36 @@ class GeneratorMainUI(
             # 3. Vue UI 로드 + 완료 대기 (창은 아직 숨김 — push가 도달하도록 먼저 로드)
             _step("UI 로딩 중…", 20)
             self._load_vue_ui()
-            self._await_signal(getattr(self, 'vue_viewer', None), 'loadFinished', 12000, app)
+            vue_ready = self._await_signal(
+                getattr(self, 'vue_viewer', None), 'loadFinished', 12000, app)
 
             # 4. 검색 덱 디스크 복원은 무거운 JSON 파싱이라 시작(부트스트랩)을 막지 않게
             #    window 표시 *후*로 지연. (자동화는 즉시 필요 없고, 곧 준비되면 됨)
             from PyQt6.QtCore import QTimer as _QTimer
             _QTimer.singleShot(600, self._restore_search_deck)
 
-            # 5. 백엔드 연결 + 모델/샘플러/LoRA → Vue
-            _step("백엔드 연결 · 모델 로딩 중…", 60)
-            self._apply_backend_startup_result()
-            self._managed_runtime_startup_apply_done = True
-            self._await_signal(getattr(self, 'info_worker', None), 'info_ready', 8000, app,
-                               also='error_occurred')
-            _step("완료", 100)
+            if gate and not vue_ready:
+                # Vue 가 안 떴다 = 오버레이를 그릴 수 없다. 이때만 옛 모달로 떨어진다.
+                # 이 경로가 없으면 사용자는 백엔드를 고를 방법 자체를 잃는다.
+                print("[Startup] Vue 로드 실패 — 백엔드 선택을 비상 다이얼로그로 폴백")
+                self._backend_gate_pending = False
+                self._show_startup_selector()   # X 버튼 → SystemExit(종료)는 그대로
+                gate = False
+
+            if gate:
+                # 5-a. 게이트 경로 — 연결은 사용자가 고른 뒤. 여기서는 오버레이를
+                #      열라고만 알리고 시퀀스를 끝낸다(창은 main()이 곧 띄운다).
+                _step("백엔드 선택", 100)
+                self._managed_runtime_startup_apply_done = True
+                self._emit_backend_selection_required()
+            else:
+                # 5-b. 기존 경로 — managed 자동 시작 / 비상 다이얼로그로 이미 확정됨.
+                _step("백엔드 연결 · 모델 로딩 중…", 60)
+                self._apply_backend_startup_result()
+                self._managed_runtime_startup_apply_done = True
+                self._await_signal(getattr(self, 'info_worker', None), 'info_ready', 8000, app,
+                                   also='error_occurred')
+                _step("완료", 100)
         except SystemExit:
             if splash is not None:
                 try: splash.close()
@@ -2295,34 +2335,47 @@ class GeneratorMainUI(
                 try: splash.close()
                 except Exception: pass
 
-    def _await_signal(self, obj, signal_name, timeout_ms, app, also=None):
+    def _await_signal(self, obj, signal_name, timeout_ms, app, also=None) -> bool:
         """obj.<signal_name>(또는 also)이 올 때까지 로컬 이벤트루프로 대기.
         반드시 타임아웃이 있어 무한 대기하지 않는다. obj가 None이거나 이미 끝난
-        QThread면 즉시 반환. (app.exec() 진입 전 부트스트랩에서 쓰는 중첩 이벤트루프)"""
+        QThread면 즉시 반환. (app.exec() 진입 전 부트스트랩에서 쓰는 중첩 이벤트루프)
+
+        돌려주는 값: 시그널이 실제로 왔으면(또는 기다릴 필요가 없었으면) True,
+        타임아웃/대기 불가면 False. 시작 게이트가 "Vue 가 정말 떴는가"로 오버레이와
+        비상 다이얼로그를 가르기 때문에 둘을 구분해야 한다 — 예전엔 이 함수가
+        타임아웃과 성공을 똑같이 조용히 지나갔다."""
         if obj is None:
-            return
+            return False
         try:
             from PyQt6.QtCore import QEventLoop, QTimer
             sig = getattr(obj, signal_name, None)
             if sig is None:
-                return
+                return False
             # 이미 끝난 워커면 대기 불필요
             if hasattr(obj, 'isRunning') and not obj.isRunning():
-                return
+                return True
+            arrived = {'value': False}
+
+            def _on_signal(*_args):
+                arrived['value'] = True
+                loop.quit()
+
             loop = QEventLoop()
             try:
-                sig.connect(loop.quit)
+                sig.connect(_on_signal)
             except Exception:
-                return
+                return False
             if also:
                 alt = getattr(obj, also, None)
                 if alt is not None:
-                    try: alt.connect(loop.quit)
+                    try: alt.connect(_on_signal)
                     except Exception: pass
             QTimer.singleShot(max(500, int(timeout_ms)), loop.quit)  # 타임아웃 폴백
             loop.exec()
+            return arrived['value']
         except Exception as e:
             print(f"[Startup] await {signal_name} 실패(무시): {e}")
+            return False
 
     def _restore_search_deck(self):
         """검색 결과 덱 디스크 복원 — window 표시 후 1회 지연 실행.

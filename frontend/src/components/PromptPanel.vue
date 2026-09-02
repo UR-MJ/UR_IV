@@ -1,7 +1,9 @@
 <template>
   <div class="prompt-panel">
     <!-- 1. FINAL OUTPUT PROMPT -->
-    <div class="glass-card highlight">
+    <!-- id 는 세로 레일 서랍의 스크롤 대상이다 — `utils/navSections.ts` 와 글자 그대로
+         같아야 하고, tests/test_nav_rail_contract.py 가 그걸 지킨다. -->
+    <div id="sec-prompt" class="glass-card highlight">
       <div class="card-header">
         최종 프롬프트
         <span class="token-info">토큰 {{ tokenCount }}</span>
@@ -60,7 +62,7 @@
     </div>
 
     <!-- 2. CHARACTER & MODEL -->
-    <div class="glass-card">
+    <div id="sec-character" class="glass-card">
       <div class="card-header">캐릭터 · 모델</div>
       <div class="input-group">
         <label>글자 수</label>

@@ -38,6 +38,7 @@ export type ActionName =
   | 'show_prompt_history' | 'open_lora_manager' | 'show_api_manager' | 'open_url'
   | 'import_anima_from_forge' | 'unload_model_request' | 'show_toast'
   | 'native_tab_switch' | 'vue_tab_switch'
+  | 'probe_backend' | 'select_backend' | 'pick_comfy_workflow'
   | (string & {})
 
 /** Python이 vue_bridge에서 emit하고 Vue가 onBackendEvent()로 받는 시그널 이름. */
@@ -54,6 +55,7 @@ export type BackendEvent =
   | 'captionFilesSelected' | 'captionProgress' | 'captionDone' | 'captionOutDirSelected'
   | 'eventSearchProgress' | 'eventSearchResults' | 'eventImportResults'
   | 'ollamaResult' | 'genNlResult' | 'vramUpdated' | 'showNotification' | 'tabChanged'
+  | 'backendSelectionRequired' | 'backendProbeResult' | 'backendSelected' | 'comfyWorkflowPicked'
   | (string & {})
 
 /** show_toast 페이로드 */
@@ -76,3 +78,46 @@ export interface LoraEntry {
 
 /** set_lora_stack 페이로드 */
 export interface SetLoraStackPayload { entries: LoraEntry[] }
+
+// ── 시작 백엔드 게이트 ──
+// 창 위에 뜨는 Vue 오버레이. 예전의 별도 QDialog 를 대체하지만, Vue 가 못 뜨면
+// 그릴 방법이 없으므로 QDialog 는 비상 경로로 남아 있다(Python 쪽 폴백).
+
+/** probe_backend 페이로드 — 두 주소를 한 번에 감지 요청 */
+export interface ProbeBackendPayload { webuiUrl: string; comfyUrl: string }
+
+/** backendProbeResult 이벤트 — 각 백엔드의 응답 여부 */
+export interface BackendProbeResult { webui: 'ok' | 'fail'; comfy: 'ok' | 'fail' }
+
+/** backendSelectionRequired 이벤트 — 게이트를 열 때 쓸 현재 설정값 */
+export interface BackendSelectionRequired {
+  webuiUrl: string
+  comfyUrl: string
+  workflowPath: string
+}
+
+/** select_backend 페이로드 — url 은 고른 쪽 주소 하나만 보낸다 */
+export interface SelectBackendPayload {
+  type: 'webui' | 'comfyui'
+  url: string
+  workflowPath?: string
+}
+
+/** backendSelected 이벤트 — 실패해도 게이트는 떠 있어야 하므로 error 를 함께 싣는다 */
+export interface BackendSelectedResult { ok: boolean; error?: string }
+
+/** comfyWorkflowPicked 이벤트 — 경로 + analyze_workflow 요약 */
+export interface ComfyWorkflowPicked {
+  path: string
+  info: {
+    valid: boolean
+    error?: string
+    format?: string
+    node_count?: number
+    ksampler_type?: string
+    width?: number
+    height?: number
+    classification?: string
+    is_locked?: boolean
+  }
+}

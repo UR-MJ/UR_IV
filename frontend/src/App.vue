@@ -1,8 +1,25 @@
 <template>
   <div class="app-container">
-    <header class="app-header">
-      <TabBar @tab-changed="onTabChanged" />
-    </header>
+    <!-- 시작 백엔드 게이트 — 앱 전체를 덮는 불투명 화면(z-index 900 > 레일 100).
+         예전의 별도 QDialog 를 대신하므로, 시작할 때 사용자가 보는 창은 하나뿐이다.
+         맨 위에 두는 이유: 이걸 통과하기 전엔 뒤의 레일·패널이 쓸 수 없는 상태다. -->
+    <BackendGate
+      :open="gateOpen"
+      :webui-url="gateWebuiUrl"
+      :comfy-url="gateComfyUrl"
+      :workflow-path="gateWorkflowPath"
+      :probe="gateProbe"
+      :workflow-info="gateWorkflowInfo"
+      :busy="gateBusy"
+      :error="gateError"
+      :dismissible="gateDismissible"
+      @probe="onGateProbe"
+      @select="onGateSelect"
+      @pick-workflow="onGatePickWorkflow"
+      @dismiss="onGateDismiss"
+    />
+
+    <NavRail @tab-changed="onTabChanged" @go-section="goToNavSection" />
 
     <main class="main-workspace">
       <!-- Left Panel -->
@@ -125,7 +142,10 @@
           </div>
           <div class="extend-scroll" v-scroll-memory="'extendPanel'">
             <!-- Parameters (기본) -->
-            <div class="ext-card">
+            <!-- id 는 세로 레일 서랍의 스크롤 대상 — `utils/navSections.ts` 참조.
+                 이 카드는 오버레이 안이라 닫혀 있으면 DOM 에 없다(v-if).
+                 그래서 레일이 먼저 오버레이를 열고 한 틱 뒤에 스크롤한다. -->
+            <div id="sec-params" class="ext-card">
               <div class="ext-title">파라미터</div>
               <div class="ext-field">
                 <label>Resolution</label>
@@ -444,7 +464,7 @@
             <!-- NegPiP 상시 적용 / 조건부 프롬프트는 STUDIO TOOLS '조건부' 모달로 이동 -->
 
             <!-- LoRA Stack -->
-            <div class="ext-card">
+            <div id="sec-lora" class="ext-card">
               <div class="ext-title">LoRA 스택
                 <span v-if="loraStack.length" class="lora-tools">
                   <button class="lora-tool-btn" @click="toggleAllLoras(!allLorasOn)" :title="allLorasOn ? '전체 끄기' : '전체 켜기'">{{ allLorasOn ? '전체 OFF' : '전체 ON' }}</button>
@@ -627,7 +647,9 @@
     <CondPromptModal v-if="showCondModal" v-model:preventDupe="extWidgets.cond_prevent_dupe" @close="showCondModal = false" />
 
     <!-- 세션 복구 배너 (크래시/OOM 후) -->
-    <div v-if="sessionRestore" class="session-restore">
+    <!-- z-index 9999 라 게이트(900) 위로 뜬다. 시작 직후 1.2초 뒤에 나타나므로
+         게이트와 겹치기 딱 좋은 타이밍 — 백엔드를 고른 뒤에 묻는 게 순서다. -->
+    <div v-if="sessionRestore && !gateOpen" class="session-restore">
       <span class="sr-msg"><Icon name="history" /> 이전 세션의 작업이 남아 있습니다. 복원할까요?</span>
       <button class="sr-apply" @click="applySessionRestore">복원</button>
       <button class="sr-dismiss" @click="dismissSessionRestore">닫기</button>
@@ -915,7 +937,9 @@
 
     <!-- Global Toast Notifications -->
     <!-- 알림 벨 + 히스토리 패널 -->
-    <button class="notif-bell" @click.stop="toggleNotifPanel" title="알림 기록"><Icon name="bell" /><span v-if="unread > 0" class="notif-badge">{{ unread > 9 ? '9+' : unread }}</span>
+    <!-- 알림 벨도 z-index 2003 이라 게이트를 뚫고 뜬다. 게이트 동안엔 숨긴다 —
+         고를 것이 하나뿐인 화면에 눌러도 뒤가 안 보이는 버튼이 떠 있으면 안 된다. -->
+    <button v-if="!gateOpen" class="notif-bell" @click.stop="toggleNotifPanel" title="알림 기록"><Icon name="bell" /><span v-if="unread > 0" class="notif-badge">{{ unread > 9 ? '9+' : unread }}</span>
     </button>
     <div v-if="showNotifPanel" class="notif-overlay" @click="showNotifPanel = false"></div>
     <transition name="fade">
@@ -963,6 +987,7 @@ import { mediaUrl } from './utils/media.js'
 import { useLoraStack } from './composables/useLoraStack.js'
 import { useHighRes } from './composables/useHighRes.js'
 import { useRatingFilter } from './composables/useRatingFilter.js'
+import { useBackendGate } from './composables/useBackendGate'
 import { reconcileTheme } from './theme/applyTheme'
 
 const wStore = useWidgetStore()
@@ -1028,6 +1053,15 @@ const {
   restoreFromPrefs: restoreRatingFromPrefs,
 } = useRatingFilter({ saveUiPrefs })
 
+// 시작 백엔드 게이트 — composables/useBackendGate.ts (App.vue 분할 ④)
+// 템플릿이 쓰는 이름은 하나도 빠짐없이 여기서 꺼내야 한다(누락 시 빌드는 통과해도 런타임에 깨짐).
+const {
+  gateOpen, gateWebuiUrl, gateComfyUrl, gateWorkflowPath,
+  gateProbe, gateWorkflowInfo, gateBusy, gateError, gateDismissible,
+  bindBackendGate,
+  onGateProbe, onGateSelect, onGatePickWorkflow, onGateDismiss,
+} = useBackendGate()
+
 const removeArtist = computed({ get: () => storeWidgets.chk_remove_artist === 'true', set: v => { storeWidgets.chk_remove_artist = v ? 'true' : 'false' } })
 const removeCopyright = computed({ get: () => storeWidgets.chk_remove_copyright === 'true', set: v => { storeWidgets.chk_remove_copyright = v ? 'true' : 'false' } })
 const removeCharacter = computed({ get: () => storeWidgets.chk_remove_character === 'true', set: v => { storeWidgets.chk_remove_character = v ? 'true' : 'false' } })
@@ -1044,7 +1078,9 @@ const ad_s1_enabled = computed({ get: () => storeWidgets.ad_slot1_group === 'tru
 const ad_s2_enabled = computed({ get: () => storeWidgets.ad_slot2_group === 'true', set: v => { storeWidgets.ad_slot2_group = v ? 'true' : 'false' } })
 import PromptPanel from './components/PromptPanel.vue'
 import CustomSelect from './components/CustomSelect.vue'
-import TabBar from './components/TabBar.vue'
+import NavRail from './components/NavRail.vue'
+import BackendGate from './components/BackendGate.vue'
+import type { NavSection } from './utils/navSections'
 import QueuePanel from './components/QueuePanel.vue'
 import CharacterPresetModal from './components/CharacterPresetModal.vue'
 import ABTestModal from './components/ABTestModal.vue'
@@ -1797,6 +1833,29 @@ function onTabChanged(tabName: string) {
   hideCtxMenu()
 }
 
+/**
+ * 세로 레일의 하위 항목 → 왼쪽 패널의 그 섹션으로 이동.
+ *
+ * 두 가지를 먼저 치워야 스크롤이 닿는다:
+ *  1) '고급 설정' 오버레이는 `v-if` 라 닫혀 있으면 요소가 **DOM 에 없다** — 먼저 연다.
+ *  2) 섹션이 접힌 `<details>` 안에 있으면 높이가 0 이라 스크롤해도 안 보인다 — 편다.
+ * id 는 `utils/navSections.ts` 가 단일 출처이고, 실제로 존재하는지는
+ * tests/test_nav_rail_contract.py 가 정적으로 검증한다.
+ */
+async function goToNavSection(section: NavSection) {
+  if (section.panel === 'extend') {
+    showExtendPanel.value = true
+    await nextTick()
+  }
+  await nextTick()
+  const el = document.getElementById(section.id)
+  if (!el) return
+  for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+    if (node instanceof HTMLDetailsElement) node.open = true
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 async function loadHistory() {
   const backend = await getBackend()
   if (backend.requestGalleryImages) {
@@ -1877,6 +1936,9 @@ _applyUiScale(localStorage.getItem('ui.scale') || '1.0')
 
 onMounted(async () => {
   await initBridge()
+  // 게이트를 가장 먼저 붙인다. 파이썬은 Vue 로드 직후 backendSelectionRequired 를
+  // 보내기 시작하므로(0.3초 뒤 첫 재전송), 다른 구독보다 늦으면 첫 신호를 흘린다.
+  bindBackendGate()
   onBackendEvent('ollamaModelsReady', applyOllamaModels)
   onBackendEvent('adetailerModelsReady', (json: string) => { try { adModelItems.value = JSON.parse(json) } catch {} })
   storeWidgets.negpip_group = 'true'   // NegPiP 상시 적용 (UI 토글 제거)
@@ -1914,13 +1976,17 @@ onMounted(async () => {
   // 브라우저 기본 우클릭 메뉴 전역 차단
   document.addEventListener('contextmenu', (e) => { e.preventDefault() })
   document.addEventListener('keydown', (e) => {
+    // 게이트가 떠 있는 동안 전역 단축키는 전부 죽는다. 백엔드를 아직 안 골랐는데
+    // Ctrl+G 로 생성이 나가거나 F5 로 히스토리가 도는 건 보이지 않는 곳의 오작동이다.
+    // (게이트 안의 ESC·Tab 은 게이트가 직접 stopPropagation 으로 막는다.)
+    if (gateOpen.value) return
     if (e.ctrlKey && e.key === 'g') { e.preventDefault(); doGenerate() }
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); action('save_settings') }
     if (e.key === 'F5') { e.preventDefault(); loadHistory() }
     // Ctrl+Tab / Ctrl+Shift+Tab — 다음/이전 탭 탐색
     if (e.ctrlKey && e.key === 'Tab') {
       e.preventDefault()
-      try { window.dispatchEvent(new CustomEvent('tabBarNavigate', { detail: { direction: e.shiftKey ? -1 : 1 } })) } catch {}
+      try { window.dispatchEvent(new CustomEvent('navRailNavigate', { detail: { direction: e.shiftKey ? -1 : 1 } })) } catch {}
     }
     // ESC — 열려있는 오버레이/모달을 최상위 우선순위로 닫기
     if (e.key === 'Escape') {
@@ -2111,7 +2177,7 @@ onMounted(async () => {
       // tabOrder 복원 (Settings 탭 미방문 시에도 적용)
       if (Array.isArray(prefs.tabOrder) && prefs.tabOrder.length > 0) {
         window.localStorage.setItem('tabOrder', JSON.stringify(prefs.tabOrder))
-        // 항상 마운트돼 있는 TabBar는 같은 창 setItem을 못 받으므로 커스텀 이벤트로 재읽기 유도
+        // 항상 마운트돼 있는 NavRail은 같은 창 setItem을 못 받으므로 커스텀 이벤트로 재읽기 유도
         try { window.dispatchEvent(new CustomEvent('tabOrderChanged')) } catch {}
       }
       if (['shiftKey', 'ctrlKey', 'altKey'].includes(prefs.historyJumpModifier)) {
@@ -2165,13 +2231,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.app-container { width: 100%; height: 100vh; display: flex; flex-direction: column; background: var(--bg-primary); }
+/* 가로 배치 — 왼쪽에 세로 탭 레일(NavRail), 그 오른쪽이 작업 공간.
+   상단 60px 헤더(가로 탭 바)를 없앤 자리가 그대로 무대 세로로 간다.
+   형제인 진행바·VRAM 바·모달은 전부 position:fixed 라 흐름에서 빠져 있어
+   가로 배치로 바꿔도 옆으로 늘어서지 않는다. */
+.app-container { width: 100%; height: 100vh; display: flex; flex-direction: row; background: var(--bg-primary); }
 
-.app-header { height: 60px; display: flex; align-items: center; justify-content: center; background: var(--bg-primary); border-bottom: 1px solid var(--border); z-index: 100; }
 /* 하단 고정 VRAM 바(22px)에 콘텐츠가 가리지 않도록 여백 확보.
    (큐가 하단 도크였을 땐 그 도크가 스페이서 역할을 했으나, 우측 드로어로 옮기며
    콘텐츠가 화면 맨 아래까지 내려와 GENERATE 버튼이 VRAM 바에 잘리던 문제 수정) */
-.main-workspace { flex: 1; display: flex; overflow: hidden; position: relative; padding-bottom: 24px; }
+/* min-width:0 이 없으면 안쪽 패널의 내용 폭이 flex 기본값(auto)을 밀어 올려
+   레일이 눌리거나 가로 스크롤이 생긴다. */
+.main-workspace { flex: 1; min-width: 0; display: flex; overflow: hidden; position: relative; padding-bottom: 24px; }
 
 .side-panel { width: 360px; display: flex; flex-direction: column; background: var(--bg-secondary); border-right: 1px solid var(--border); z-index: 10; }
 .side-panel.right { width: 220px; border-right: none; border-left: 1px solid var(--border); }

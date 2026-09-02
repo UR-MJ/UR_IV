@@ -149,6 +149,11 @@ _WEB_SIGNALS = frozenset({
     "editorWatermarkImageLoaded",
     # 태그 검색 결과 — 누락되면 웹 모드에서 결과가 영영 도착하지 않는다.
     "searchResultsReady",
+    # 백엔드 선택 게이트 4종. 액션(probe_backend/select_backend/pick_comfy_workflow)은
+    # 이미 onAction 으로 열려 있으니 여기 빠지면 '요청은 가는데 답이 안 오는' 반쪽이
+    # 된다 — 게이트가 backendSelected 로만 닫히므로 웹 모드에서 영영 안 닫힌다.
+    "backendSelectionRequired", "backendProbeResult", "backendSelected",
+    "comfyWorkflowPicked",
 })
 
 

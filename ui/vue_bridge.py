@@ -134,6 +134,17 @@ class VueBridge(QObject):
     # operation id만 즉시 돌려주고 이 단일 JSON signal로 진행/완료를 보낸다.
     backendRuntimeEvent = pyqtSignal(str)
 
+    # ── 시작 백엔드 게이트 (앱 창 위의 Vue 오버레이) ──
+    # 왜 별도 채널인가: 예전엔 이 선택이 Vue보다 먼저 뜨는 별도 QDialog였다.
+    # 그래서 시작 화면만 앱의 나머지와 다른 규칙(QSS)으로 살았고, 스플래시가
+    # 뜨기도 전에 모달이 떠 "앱이 아직 안 켜졌는데 뭘 고르라는 거지"였다.
+    # 이제 창을 먼저 띄우고 그 위에 오버레이를 얹는다 — 아래 4개가 그 배선이다.
+    # (QDialog는 Vue가 못 뜬 경우의 비상 경로로 살아 있다.)
+    backendSelectionRequired = pyqtSignal(str)  # JSON {webuiUrl, comfyUrl, workflowPath}
+    backendProbeResult = pyqtSignal(str)        # JSON {webui: 'ok'|'fail', comfy: 'ok'|'fail'}
+    backendSelected = pyqtSignal(str)           # JSON {ok: bool, error?: str}
+    comfyWorkflowPicked = pyqtSignal(str)       # JSON {path, info}
+
     # 외부에 제공하는 생성 API 서버와 원격 WebUI/ComfyUI target 관리.
     # 민감한 token은 Web 모드에서 항상 제거된 snapshot만 전달한다.
     generationApiEvent = pyqtSignal(str)

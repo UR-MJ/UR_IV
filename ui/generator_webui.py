@@ -24,14 +24,42 @@ class WebUIMixin:
     # ── 시작 시 백엔드 확인 ──
 
     def _startup_backend_check(self):
-        """앱 시작 시 백엔드 선택 다이얼로그 표시"""
+        """앱 시작 시 백엔드를 어떻게 고를지 정한다 (여기서는 아무것도 띄우지 않는다).
+
+        **왜 모달을 안 띄우나**: 예전 순서는 '선택 모달 → 스플래시 → Vue 로드'라
+        사용자가 앱 창을 보기도 전에 결정을 요구했다. 지금은 창을 먼저 띄우고 그 위에
+        Vue 오버레이(게이트)를 얹는다 — 그래서 이 함수는 플래그만 세우고 즉시 돌아온다.
+        실제 게이트 열기는 Vue 로드가 끝난 뒤 `_emit_backend_selection_required()`.
+
+        **비상 경로는 그대로**: 아래 세 경우엔 예전처럼 QDialog(`_show_startup_selector`)
+        를 쓴다. 오버레이를 그릴 수 있다는 보장이 없거나, 게이트가 어울리지 않는 맥락이다.
+          - `_api_manager_mode` — 설정에서 연 API 관리자. 시작 게이트가 아니라 팝업이 맞다.
+          - `web_mode` — 호스트 창에 QWebEngineView가 없다(브라우저가 프론트).
+          - vue_bridge 부재 — 시그널을 보낼 곳이 없다.
+        Vue 로드 자체가 실패(타임아웃)한 경우도 `_run_startup_sequence`가 이 selector로
+        떨어뜨린다. 그 경로가 없으면 "Vue가 안 뜨면 백엔드를 영영 못 고른다"가 된다.
+        """
         # 명시적으로 API 관리자 팝업을 연 경우에는 기존 URL selector를 그대로
         # 보여준다. 일반 startup만, 이미 설치된 active managed runtime의
         # auto-start가 켜진 managed runtime이 있을 때에 한해 modal을 생략한다.
         if not getattr(self, '_api_manager_mode', False):
             if self._try_managed_backend_autostart():
                 return
+            if self._can_use_backend_gate():
+                self._backend_gate_pending = True
+                self._backend_gate_awaiting = False
+                self._backend_startup_result = 'gate_pending'
+                return
         self._show_startup_selector()
+
+    def _can_use_backend_gate(self) -> bool:
+        """Vue 오버레이로 백엔드를 고를 수 있는 맥락인지."""
+        if getattr(self, 'web_mode', False):
+            return False
+        if not hasattr(self, 'vue_bridge'):
+            return False
+        # setUrl 대상이 없으면 Vue가 아예 안 뜬다 → 오버레이도 못 그린다.
+        return getattr(self, '_pending_vue_url', None) is not None
 
     def _try_managed_backend_autostart(self) -> bool:
         """설치된 auto-start managed runtime만 조용히 시작한다.
@@ -362,27 +390,14 @@ class WebUIMixin:
 
         # ── 선택 = 확정 ──
         def choose_backend(backend_type: str):
-            if backend_type == 'comfyui':
-                url = comfyui_url_input.text().strip()
-                config.COMFYUI_API_URL = url
-                config.COMFYUI_WORKFLOW_PATH = workflow_input.text().strip()
-                set_backend(BackendType.COMFYUI, url)
-            else:
-                set_backend(BackendType.WEBUI, webui_url_input.text().strip())
-
-            # settings 탭 동기화 — 시작 화면에서 고른 값이 설정 화면과 어긋나면 안 된다.
-            if hasattr(self, 'settings_tab'):
-                st = self.settings_tab
-                if hasattr(st, 'radio_webui'):
-                    st.radio_webui.setChecked(backend_type == 'webui')
-                    st.radio_comfyui.setChecked(backend_type == 'comfyui')
-                if hasattr(st, 'api_input'):
-                    st.api_input.setText(webui_url_input.text().strip())
-                if hasattr(st, 'comfyui_api_input'):
-                    st.comfyui_api_input.setText(comfyui_url_input.text().strip())
-                if hasattr(st, 'comfyui_workflow_input'):
-                    st.comfyui_workflow_input.setText(workflow_input.text().strip())
-
+            # 확정 절차 자체는 게이트(오버레이)와 공유한다 — 두 벌로 두면
+            # 한쪽만 고쳐져 '고른 값과 설정 화면이 다른' 옛 버그가 돌아온다.
+            self._commit_backend_choice(
+                backend_type,
+                webui_url_input.text().strip(),
+                comfyui_url_input.text().strip(),
+                workflow_input.text().strip(),
+            )
             dialog.accept()
 
         btn_select_webui.clicked.connect(lambda: choose_backend('webui'))
@@ -490,10 +505,223 @@ class WebUIMixin:
                 import sys
                 sys.exit(0)
 
+    # ── 시작 백엔드 게이트 (창 위의 Vue 오버레이) ──
+    # QDialog 판과 같은 일을 하되, 결정 순간이 '앱을 보기 전'이 아니라
+    # '앱을 본 다음'으로 옮겨졌을 뿐이다. 확정 절차(_commit_backend_choice)와
+    # 감지(_quick_test)는 두 경로가 그대로 공유한다.
+
+    def _commit_backend_choice(self, backend_type: str, webui_url: str,
+                               comfy_url: str, workflow_path: str) -> None:
+        """고른 백엔드를 backends·config·settings 탭에 한 번에 반영한다.
+
+        set_backend()가 config.WEBUI_API_URL / COMFYUI_API_URL 을 이미 갱신하므로
+        여기서 따로 대입하는 건 워크플로 경로뿐이다(set_backend가 모르는 값).
+        settings 탭 동기화가 빠지면 "시작에서 고른 값과 설정 화면이 다르다"가 된다.
+        """
+        import config
+
+        backend_type = 'comfyui' if backend_type == 'comfyui' else 'webui'
+        webui_url = (webui_url or '').strip()
+        comfy_url = (comfy_url or '').strip()
+        workflow_path = (workflow_path or '').strip()
+
+        if backend_type == 'comfyui':
+            config.COMFYUI_WORKFLOW_PATH = workflow_path
+            set_backend(BackendType.COMFYUI, comfy_url)
+        else:
+            set_backend(BackendType.WEBUI, webui_url)
+
+        # settings 탭 동기화 — 고르지 않은 쪽 값도 같이 넣는다(설정 화면은 둘 다 보여준다).
+        if hasattr(self, 'settings_tab'):
+            st = self.settings_tab
+            if hasattr(st, 'radio_webui'):
+                st.radio_webui.setChecked(backend_type == 'webui')
+                st.radio_comfyui.setChecked(backend_type == 'comfyui')
+            if hasattr(st, 'api_input'):
+                st.api_input.setText(webui_url)
+            if hasattr(st, 'comfyui_api_input'):
+                st.comfyui_api_input.setText(comfy_url)
+            if hasattr(st, 'comfyui_workflow_input'):
+                st.comfyui_workflow_input.setText(workflow_path)
+
+    def _emit_backend_selection_required(self, attempt: int = 0) -> None:
+        """게이트를 열라고 Vue에 알린다 — 짧게 몇 번 되풀이해서.
+
+        **왜 되풀이하나**: loadFinished 는 '페이지가 떴다'까지만 보장한다.
+        QWebChannel 핸드셰이크와 Vue 마운트는 그 뒤에 비동기로 끝나므로, 딱 한 번
+        보내면 리스너가 붙기 전에 도착해 조용히 사라질 수 있다 — 그러면 게이트가
+        영영 안 뜨고 앱이 백엔드 없이 멈춘 것처럼 보인다. 이 이벤트는 '게이트를
+        열어라'라 여러 번 받아도 결과가 같으니(멱등) 재전송이 가장 싼 보험이다.
+        사용자가 고르는 순간 `_backend_gate_pending` 이 내려가며 체인이 끊긴다.
+        """
+        if not getattr(self, '_backend_gate_pending', False):
+            return  # 이미 골랐다 — 더 보낼 이유가 없다
+
+        # 연결 시도 중이면 재전송을 건너뛴다(게이트의 '연결 중' 표시를 되돌리지 않게).
+        if not getattr(self, '_backend_gate_awaiting', False):
+            import config
+
+            try:
+                self.vue_bridge.backendSelectionRequired.emit(json.dumps({
+                    'webuiUrl': getattr(config, 'WEBUI_API_URL', '') or '',
+                    'comfyUrl': getattr(config, 'COMFYUI_API_URL', '') or 'http://127.0.0.1:8188',
+                    'workflowPath': getattr(config, 'COMFYUI_WORKFLOW_PATH', '') or '',
+                }))
+            except Exception as exc:
+                print(f"[Backend] 게이트 열기 신호 실패: {exc}")
+
+        # 0.3s / 1.0s / 2.2s — Vue 마운트가 늦어도 세 번째 안에는 붙는다.
+        retry_delays = (300, 700, 1200)
+        if attempt < len(retry_delays):
+            QTimer.singleShot(
+                retry_delays[attempt],
+                lambda: self._emit_backend_selection_required(attempt + 1),
+            )
+
+    def _probe_backends_async(self, webui_url: str, comfy_url: str) -> None:
+        """두 백엔드 응답 여부를 백그라운드에서 확인하고 결과를 게이트로 보낸다.
+
+        UI 스레드를 막지 않는다(HTTP 2초 × 2 = 최대 4초 프리징이 된다). 또 URL을
+        연달아 고치면 늦게 끝난 옛 검사가 새 결과를 덮어쓰므로 세대 번호로 막는다 —
+        QDialog 판의 auto_detect 와 같은 이유, 같은 방식이다.
+        """
+        import threading
+
+        self._backend_probe_version = getattr(self, '_backend_probe_version', 0) + 1
+        current_v = self._backend_probe_version
+        results = {'done': False, 'w_ok': False, 'c_ok': False}
+
+        def _run():
+            try:
+                results['w_ok'] = WebUIMixin._quick_test(webui_url, '/sdapi/v1/samplers')
+                results['c_ok'] = WebUIMixin._quick_test(comfy_url, '/system_stats')
+            except Exception:
+                results['w_ok'] = False
+                results['c_ok'] = False
+            results['done'] = True
+
+        def _poll():
+            if current_v != getattr(self, '_backend_probe_version', 0):
+                return  # 더 새로운 검사가 시작됐다 — 이 결과는 버린다
+            if not results['done']:
+                QTimer.singleShot(100, _poll)
+                return
+            try:
+                self.vue_bridge.backendProbeResult.emit(json.dumps({
+                    'webui': 'ok' if results['w_ok'] else 'fail',
+                    'comfy': 'ok' if results['c_ok'] else 'fail',
+                }))
+            except Exception as exc:
+                print(f"[Backend] 감지 결과 전송 실패: {exc}")
+
+        threading.Thread(target=_run, daemon=True).start()
+        QTimer.singleShot(200, _poll)
+
+    def _pick_comfy_workflow(self) -> None:
+        """워크플로 JSON 을 고르고, 내용 요약까지 함께 게이트로 보낸다.
+
+        경로만 돌려주면 사용자는 '이 파일이 맞나'를 열어 보기 전엔 모른다.
+        QDialog 판이 미리보기 한 줄을 보여줬던 이유와 같아서 analyze_workflow 를
+        여기서 같이 돌린다(파일 파싱이라 게이트 쪽에서 다시 할 방법이 없다).
+        """
+        path, _ = QFileDialog.getOpenFileName(
+            self, "워크플로우 JSON 선택", "", "JSON Files (*.json);;All Files (*)"
+        )
+        if not path:
+            return
+        try:
+            from backends.comfyui_backend import analyze_workflow
+            info = analyze_workflow(path)
+        except Exception as exc:
+            info = {'valid': False, 'error': str(exc)}
+        try:
+            self.vue_bridge.comfyWorkflowPicked.emit(json.dumps({
+                'path': path, 'info': info,
+            }))
+        except Exception as exc:
+            print(f"[Backend] 워크플로 선택 전송 실패: {exc}")
+
+    def _select_backend_from_gate(self, payload: dict) -> None:
+        """게이트에서 고른 백엔드로 확정하고 연결을 시작한다.
+
+        연결 성공/실패는 여기서 알 수 없다 — info worker 가 스레드에서 돌기 때문.
+        그래서 `_backend_gate_awaiting` 표식만 세우고, on_webui_info_loaded /
+        on_webui_info_error 가 `_resolve_backend_gate()` 로 결론을 게이트에 돌려준다.
+        (worker.start() 뒤에 시그널을 연결하면 빠른 로컬 백엔드에서 결과를 놓칠 수 있다.)
+        """
+        import config
+
+        raw_type = str(payload.get('type') or 'webui').strip().lower()
+        if raw_type in ('none', 'skip', 'offline', ''):
+            # '백엔드 없이 시작' — 옛 QDialog 의 건너뛰기와 같은 결말. 연결을 시도할
+            # 것이 없으니 info worker 를 기다리지 않고 바로 게이트를 걷는다.
+            self._backend_gate_pending = False
+            self._backend_gate_awaiting = False
+            self._backend_startup_result = 'skipped'
+            self._apply_backend_startup_result()
+            self._emit_backend_selected(True)
+            return
+
+        backend_type = 'comfyui' if raw_type == 'comfyui' else 'webui'
+        url = str(payload.get('url') or '').strip()
+        workflow_path = str(payload.get('workflowPath') or '').strip()
+
+        # 고르지 않은 쪽은 현재 설정값을 유지한다(게이트는 고른 쪽 URL만 보낸다).
+        if backend_type == 'comfyui':
+            comfy_url = url or getattr(config, 'COMFYUI_API_URL', '')
+            webui_url = getattr(config, 'WEBUI_API_URL', '')
+        else:
+            webui_url = url or getattr(config, 'WEBUI_API_URL', '')
+            comfy_url = getattr(config, 'COMFYUI_API_URL', '')
+
+        try:
+            self._commit_backend_choice(backend_type, webui_url, comfy_url, workflow_path)
+        except Exception as exc:
+            self._backend_gate_awaiting = False
+            self._emit_backend_selected(False, f'백엔드 설정 실패: {exc}')
+            return
+
+        self._backend_gate_awaiting = True
+        try:
+            if hasattr(self, 'save_settings'):
+                self.save_settings()
+            self.load_webui_info()
+        except Exception as exc:
+            self._backend_gate_awaiting = False
+            self._emit_backend_selected(False, str(exc))
+
+    def _emit_backend_selected(self, ok: bool, error: str = '') -> None:
+        payload = {'ok': bool(ok)}
+        if not ok and error:
+            payload['error'] = str(error)
+        try:
+            self.vue_bridge.backendSelected.emit(json.dumps(payload))
+        except Exception as exc:
+            print(f"[Backend] 게이트 결과 전송 실패: {exc}")
+
+    def _resolve_backend_gate(self, ok: bool, error: str = '') -> bool:
+        """게이트가 기다리던 연결 결과를 돌려준다. 처리했으면 True.
+
+        실패해도 게이트는 **계속 떠 있어야 한다** — 그래야 주소를 고쳐 다시 시도할 수
+        있다. 그래서 `_backend_gate_pending` 은 성공했을 때만 내린다.
+        """
+        if not getattr(self, '_backend_gate_awaiting', False):
+            return False
+        self._backend_gate_awaiting = False
+        if ok:
+            self._backend_gate_pending = False
+            self._backend_startup_result = 'accepted'
+        self._emit_backend_selected(ok, error)
+        return True
+
     def _apply_backend_startup_result(self):
         """UI 생성 후 백엔드 선택 결과 적용"""
         result = getattr(self, '_backend_startup_result', None)
-        if result == 'accepted':
+        if result == 'gate_pending':
+            # 게이트가 뜬 상태 — 연결은 사용자가 고른 *뒤에* 돈다. 여기서 아무것도
+            # 하지 않는 게 정상 경로다(시작 시퀀스 예외 폴백에서도 안전하게 통과).
+            self._backend_connected = False
+        elif result == 'accepted':
             if hasattr(self, 'save_settings'):
                 self.save_settings()
             self.load_webui_info()
@@ -724,9 +952,14 @@ class WebUIMixin:
         if hasattr(self, 'backend_ui_tab'):
             self.backend_ui_tab.load_backend_ui()
 
+        # 시작 게이트는 여기서 걷힌다 — 목록이 다 채워진 뒤라 오버레이가 사라지는
+        # 순간 빈 패널이 보이지 않는다.
+        self._resolve_backend_gate(True)
+
     def on_webui_info_error(self, error_msg):
         """서버 정보 로드 실패"""
         managed_startup = bool(getattr(self, '_managed_runtime_startup_inflight', False))
+        gate_awaiting = bool(getattr(self, '_backend_gate_awaiting', False))
         self._managed_runtime_startup_inflight = False
         self._backend_connected = False  # 폴링 중단 (다음 연결 성공 시 재개)
         backend_name = "ComfyUI" if get_backend_type() == BackendType.COMFYUI else "WebUI"
@@ -764,8 +997,13 @@ class WebUIMixin:
         if hasattr(self, 'backend_ui_tab'):
             self.backend_ui_tab.load_backend_ui()
 
+        # 게이트가 기다리던 연결이면 결과를 오버레이로 돌려준다(게이트는 계속 떠 있다).
+        self._resolve_backend_gate(False, error_msg)
+
         # startup auto-start 실패는 modal/종료 없이 offline UI로 폴백한다.
-        if not managed_startup:
+        # 게이트 경로도 마찬가지 — 오버레이가 이미 오류를 보여주는데 그 위에
+        # QMessageBox 를 또 띄우면 사용자가 두 번 닫아야 다시 시도할 수 있다.
+        if not managed_startup and not gate_awaiting:
             QMessageBox.critical(
                 self, "연결 실패",
                 f"{backend_name} API 연결에 실패했습니다.\n\n"
