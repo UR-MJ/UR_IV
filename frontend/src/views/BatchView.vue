@@ -904,9 +904,10 @@ onMounted(async () => {
 .cap-body { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .cap-name { font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cap-status { font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 1px 6px; border-radius: 7px; flex-shrink: 0; }
-.cap-status.pending { background: rgba(251,191,36,0.18); color: #fbbf24; }
-.cap-status.done { background: rgba(74,222,128,0.18); color: #4ade80; }
-.cap-status.error { background: rgba(248,113,113,0.18); color: #f87171; }
+/* 옅은 틴트 위의 '글자'라 채움용(--state-*)이 아니라 글자용(--state-*-fg) */
+.cap-status.pending { background: rgba(251,191,36,0.18); color: var(--state-warn-fg); }
+.cap-status.done { background: rgba(74,222,128,0.18); color: var(--state-ok-fg); }
+.cap-status.error { background: rgba(248,113,113,0.18); color: var(--state-alert-fg); }
 .cap-status.skip { background: var(--bg-button); color: var(--text-muted); }
 .cap-text { flex: 1; min-height: 56px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; color: var(--text-primary); font-size: 12px; resize: vertical; line-height: 1.45; }
 .cap-text:focus { outline: none; border-color: var(--accent); }
@@ -915,7 +916,7 @@ onMounted(async () => {
 .cap-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .cap-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .cap-btn.t2i { color: var(--accent); border-color: rgba(226,179,64,0.4); }
-.cap-btn.t2i:hover:not(:disabled) { background: var(--accent); color: #000; }
+.cap-btn.t2i:hover:not(:disabled) { background: var(--accent-fill); color: var(--on-accent); }
 .tab-body { flex: 1; overflow-y: auto; padding: 20px; }
 
 .panel { max-width: 500px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
@@ -936,8 +937,8 @@ onMounted(async () => {
 .file-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-item.active { background: var(--accent-dim); color: var(--accent); }
 .file-item.done { opacity: 0.6; }
-.done-badge { color: #4ade80; font-weight: var(--fw-bold); flex: 0 !important; }
-.rm-btn { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; flex-shrink: 0; }
+.done-badge { color: var(--state-ok-fg); font-weight: var(--fw-bold); flex: 0 !important; }
+.rm-btn { background: none; border: none; color: var(--state-alert-fg); cursor: pointer; font-size: 14px; flex-shrink: 0; }
 .file-count { font-size: var(--fs-label); color: var(--text-muted); }
 
 .s-label { color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
@@ -952,13 +953,16 @@ onMounted(async () => {
 .slider-row input { flex: 1; accent-color: var(--accent); }
 .slider-row span { color: var(--text-secondary); font-size: 12px; min-width: 30px; font-family: monospace; }
 .op-settings { display: flex; flex-direction: column; gap: 4px; }
+/* 주 버튼: 면은 --accent-fill(글자가 4.5:1 로 읽히게 민 값), 글자는 --on-accent */
 .btn-start {
-  padding: 10px; background: var(--accent); border: none; border-radius: 8px;
-  color: #000; font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; letter-spacing: 0;
+  padding: 10px; background: var(--accent-fill); border: none; border-radius: 8px;
+  color: var(--on-accent); font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; letter-spacing: 0;
 }
 .btn-start:disabled { opacity: 0.3; cursor: not-allowed; }
 .btn-start.batch { background: var(--bg-button); color: var(--accent); border: 1px solid var(--accent-dim); }
-.btn-stop { padding: 10px; background: #f87171; border: none; border-radius: 8px; color: #000; font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; }
+/* 정지 버튼은 '채움'이라 --state-alert(글자용 -fg 아님). 그 위 글자는 흰색 고정 —
+   상태 채움색이 흰 글자와 4.5:1 을 맞춘 값이고, --text-primary 는 라이트에서 검정이 된다. */
+.btn-stop { padding: 10px; background: var(--state-alert); border: none; border-radius: 8px; color: #FFFFFF; font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; }
 
 /* ADetailer Layout */
 .ad-layout { display: flex; gap: 0; padding: 0 !important; }
@@ -1018,7 +1022,7 @@ onMounted(async () => {
 .thumb-card img {
   flex: 1; min-height: 0;
   width: 100%; object-fit: cover;
-  background: #000;
+  background: var(--bg-primary);
 }
 .thumb-name {
   font-size: var(--fs-label); color: var(--text-secondary);
@@ -1027,6 +1031,9 @@ onMounted(async () => {
   background: var(--bg-card);
   border-top: 1px solid var(--border);
 }
+/* 이 두 색은 토큰화하지 않는다: 바탕이 테마를 안 타는 검정 오버레이라
+   --state-alert-fg 로 바꾸면 라이트에서 어두운 빨강이 검은 원 위에 얹혀 안 보인다.
+   hover 도 채움(밝은 빨강)과 글자(검정)가 짝으로 맞춰진 값이다. */
 .thumb-rm {
   position: absolute; top: 4px; right: 4px;
   width: 22px; height: 22px;

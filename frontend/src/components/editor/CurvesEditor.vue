@@ -82,6 +82,8 @@ const emit = defineEmits<{
   change: [curves: Curves]
 }>()
 
+/** 채널을 가리키는 고정색 — 테마 토큰이 아니다. R 커브는 어느 테마에서도 빨강이어야
+ *  뜻이 통한다(데이터 계열색과 같은 성격). */
 const CHANNEL_OPTIONS: { channel: CurveChannel; label: string; color: string; title: string }[] = [
   { channel: 'rgb', label: 'RGB', color: '#C6C6C6', title: '세 채널 전체 (다른 채널 커브 위에 얹힌다)' },
   { channel: 'r', label: 'R', color: '#D95C5C', title: '빨강 채널' },

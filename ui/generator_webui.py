@@ -98,134 +98,208 @@ class WebUIMixin:
             return False
 
     def _show_startup_selector(self):
+        """앱 시작 화면 — 백엔드를 고르면 그것으로 확정한다.
+
+        **왜 다시 그렸나**: 옛 화면은 카드마다 다른 색(WebUI 초록·ComfyUI 파랑)과
+        이모지로 상태를 말했고, 버튼을 누르면 확인 상자가 한 번 더 떴다. 디자인
+        시스템과 무관한 색이었고, 두 선택지가 서로 다른 색을 쓸 이유도 없었다.
+        지금은 앱의 다른 화면과 같은 규칙이다 — 상자 대신 1px 헤어라인, 글자 크기
+        16/13/12/11, 굵기 400·500·600, 간격은 4의 배수, 상태는 이모지가 아니라
+        '연결됨'/'응답 없음' 같은 **글자**(색은 거들 뿐).
+
+        **확인 상자를 없앤 이유**: 선택 자체가 확정이다. 대신 카드가 연결 상태를
+        계속 보여주고, 연결된 쪽 버튼만 강조면(accent_fill)으로 칠해 어느 쪽이
+        준비됐는지 눈으로도 알 수 있게 했다. 연결이 안 돼도 그대로 시작할 수 있는
+        건 예전과 같다(오프라인 작업).
+
+        색은 전부 get_color() 를 거친다 — 사용자가 고른 테마가 시작 화면에도 온다.
+        """
         import config
 
+        # 한 번만 읽어 아래 인라인 스타일에서 재사용 (다이얼로그가 떠 있는 동안 테마는 안 바뀐다)
+        c_bg = get_color('bg_primary')
+        c_text = get_color('text_primary')
+        c_sub = get_color('text_secondary')
+        c_muted = get_color('text_muted')
+        c_rule = get_color('rule')
+        c_edge = get_color('edge')
+        c_border = get_color('border')
+        c_input = get_color('bg_input')
+        c_accent = get_color('accent')
+        c_fill = get_color('accent_fill')
+        c_fill_hover = get_color('accent_fill_hover')
+        c_on_accent = get_color('on_accent')
+        c_button = get_color('bg_button')
+        c_button_hover = get_color('bg_button_hover')
+        # 상태색은 배지 채움이 아니라 '글자'로 쓰므로 -fg 계열(get_color 의 success/error/warning).
+        c_state_ok = get_color('success')
+        c_state_alert = get_color('error')
+        c_state_warn = get_color('warning')
+
         dialog = QDialog(self)
-        dialog.setWindowTitle("API 백엔드 선택")
-        dialog.setFixedSize(560, 620)
+        dialog.setWindowTitle("백엔드 선택")
+        dialog.setFixedSize(520, 540)
         dialog.setWindowFlags(
             dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )
         dialog.setStyleSheet(f"""
-            QDialog {{ background-color: {get_color('bg_primary')}; color: {get_color('text_primary')}; }}
-            QGroupBox {{
-                border: 1px solid {get_color('border')}; border-radius: 8px;
-                margin-top: 12px; padding: 16px; padding-top: 28px;
-                font-weight: bold; color: {get_color('text_secondary')};
-            }}
-            QGroupBox::title {{
-                subcontrol-origin: margin; left: 16px; padding: 0 8px;
-            }}
+            QDialog {{ background-color: {c_bg}; }}
+            QLabel {{ color: {c_sub}; background: transparent; }}
             QLineEdit {{
-                background: {get_color('bg_input')}; border: 1px solid {get_color('border')}; border-radius: 4px;
-                padding: 6px 10px; color: {get_color('text_primary')};
+                background: {c_input}; border: 1px solid {c_border}; border-radius: 4px;
+                padding: 7px 10px; color: {c_text}; font-size: 12px;
             }}
-            QLineEdit:focus {{ border: 1px solid {get_color('accent')}; }}
-            QLabel {{ color: {get_color('text_secondary')}; }}
+            QLineEdit:focus {{ border: 1px solid {c_accent}; }}
         """)
 
+        # 간격은 addSpacing 으로 직접 준다 — setSpacing 을 쓰면 4의 배수 리듬이
+        # 위젯마다 섞여서 눈에 보이는 간격이 제각각이 된다.
         layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(28, 24, 28, 20)
+        layout.setSpacing(0)
 
-        # 헤더
-        header = QLabel("🚀 AI Studio Pro")
-        header.setStyleSheet(f"color: {get_color('text_primary')}; font-size: 18px; font-weight: bold;")
-        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(header)
+        def hairline() -> QFrame:
+            """섹션 구분 — 테두리 상자 대신 1px 선 하나."""
+            line = QFrame()
+            line.setFixedHeight(1)
+            line.setStyleSheet(f"background-color: {c_rule}; border: none;")
+            return line
 
-        sub_header = QLabel("사용할 이미지 생성 백엔드를 선택하세요")
-        sub_header.setStyleSheet(f"color: {get_color('text_secondary')}; font-size: 13px;")
-        sub_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(sub_header)
+        def caption(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setStyleSheet(f"color: {c_muted}; font-size: 11px;")
+            return lbl
 
-        # URL 설정
+        def make_header(name: str):
+            """섹션 제목 + 상태 한 줄. (레이아웃, 상태 라벨)을 돌려준다."""
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(8)
+            name_label = QLabel(name)
+            name_label.setStyleSheet(f"color: {c_text}; font-size: 13px; font-weight: 500;")
+            status = QLabel("확인 중")
+            status.setStyleSheet(f"color: {c_muted}; font-size: 12px; font-weight: 500;")
+            row.addWidget(name_label)
+            row.addStretch()
+            row.addWidget(status)
+            return row, status
+
+        def field_row(label_text: str, editor, trailing=None) -> QHBoxLayout:
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(8)
+            label = caption(label_text)
+            label.setFixedWidth(48)
+            row.addWidget(label)
+            row.addWidget(editor)
+            if trailing is not None:
+                row.addWidget(trailing)
+            return row
+
+        def set_status(label: QLabel, text: str, color: str):
+            label.setText(text)
+            label.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: 500;")
+
+        def style_action(button: QPushButton, ready: bool):
+            """연결된 쪽만 강조면으로. 색만으로 말하지 않도록 상태 글자와 함께 쓴다."""
+            if ready:
+                button.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {c_fill}; color: {c_on_accent};
+                        border: 1px solid {c_fill}; border-radius: 6px;
+                        font-size: 13px; font-weight: 600;
+                    }}
+                    QPushButton:hover {{ background: {c_fill_hover}; border-color: {c_fill_hover}; }}
+                """)
+            else:
+                button.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {c_button}; color: {c_text};
+                        border: 1px solid {c_border}; border-radius: 6px;
+                        font-size: 13px; font-weight: 500;
+                    }}
+                    QPushButton:hover {{ background: {c_button_hover}; border-color: {c_edge}; }}
+                """)
+
+        # ── 헤더 ──
+        # 전각 대문자 영문은 이 화면에서 여기 하나뿐. 나머지는 한국어.
+        title = QLabel("AI STUDIO PRO")
+        title.setStyleSheet(f"color: {c_text}; font-size: 16px; font-weight: 600;")
+        # letter-spacing 은 QSS 에 없는 속성이라 QFont 로 준다.
+        title_font = title.font()
+        title_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.0)
+        title.setFont(title_font)
+        layout.addWidget(title)
+
+        layout.addSpacing(4)
+        subtitle = QLabel("이미지 생성에 쓸 백엔드를 고르세요 (설정에서 변경 가능)")
+        subtitle.setStyleSheet(f"color: {c_sub}; font-size: 12px;")
+        subtitle.setWordWrap(True)
+        layout.addWidget(subtitle)
+
+        layout.addSpacing(20)
+        layout.addWidget(hairline())
+        layout.addSpacing(20)
+
         webui_url = config.WEBUI_API_URL
         comfyui_url = getattr(config, 'COMFYUI_API_URL', 'http://127.0.0.1:8188')
+        icon_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icons')
 
-        # 선택 상태 저장
-        selected_backend = {'type': None}
+        # ── WebUI ──
+        webui_header, webui_status = make_header("WebUI (A1111 / Forge)")
+        layout.addLayout(webui_header)
+        layout.addSpacing(12)
 
-        # ── WebUI 카드 ──
-        webui_group = QGroupBox("WebUI (A1111 / Forge)")
-        wg_layout = QVBoxLayout(webui_group)
-
-        webui_status = QLabel("⏳ 자동 감지 중...")
-        webui_status.setStyleSheet("color: #fbbf24; font-weight: bold; font-size: 12px;")
-        wg_layout.addWidget(webui_status)
-
-        h_webui = QHBoxLayout()
-        h_webui.addWidget(QLabel("URL:"))
         webui_url_input = QLineEdit(webui_url)
         webui_url_input.setPlaceholderText("http://127.0.0.1:7860")
-        h_webui.addWidget(webui_url_input)
-        wg_layout.addLayout(h_webui)
+        layout.addLayout(field_row("주소", webui_url_input))
+        layout.addSpacing(12)
 
-        # WebUI 선택 버튼
-        btn_select_webui = QPushButton("  WebUI 사용하기")
-        btn_select_webui.setFixedHeight(50)
+        btn_select_webui = QPushButton("WebUI 로 시작")
+        btn_select_webui.setFixedHeight(40)
         btn_select_webui.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        # Gradio 아이콘 로드
-        icon_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icons')
         gradio_icon_path = os.path.join(icon_dir, 'gradio.png')
         if os.path.exists(gradio_icon_path):
             btn_select_webui.setIcon(QIcon(gradio_icon_path))
-            btn_select_webui.setIconSize(QSize(28, 28))
+            btn_select_webui.setIconSize(QSize(20, 20))
+        style_action(btn_select_webui, False)
+        layout.addWidget(btn_select_webui)
 
-        btn_select_webui.setStyleSheet("""
-            QPushButton {
-                background: #2d4a2d; border: 2px solid #4a9f4a; border-radius: 8px;
-                color: #8eff8e; font-weight: bold; font-size: 14px;
-                padding-left: 10px; text-align: left;
-            }
-            QPushButton:hover {
-                background: #3d6a3d; border: 2px solid #6fbf6f;
-            }
-            QPushButton:pressed {
-                background: #1d3a1d; border: 2px solid #3a8f3a;
-            }
-        """)
-        wg_layout.addWidget(btn_select_webui)
-        layout.addWidget(webui_group)
+        layout.addSpacing(20)
+        layout.addWidget(hairline())
+        layout.addSpacing(20)
 
-        # ── ComfyUI 카드 ──
-        comfyui_group = QGroupBox("ComfyUI")
-        cg_layout = QVBoxLayout(comfyui_group)
+        # ── ComfyUI ──
+        comfyui_header, comfyui_status = make_header("ComfyUI")
+        layout.addLayout(comfyui_header)
+        layout.addSpacing(12)
 
-        comfyui_status = QLabel("⏳ 자동 감지 중...")
-        comfyui_status.setStyleSheet("color: #fbbf24; font-weight: bold; font-size: 12px;")
-        cg_layout.addWidget(comfyui_status)
-
-        h_comfy_url = QHBoxLayout()
-        h_comfy_url.addWidget(QLabel("URL:"))
         comfyui_url_input = QLineEdit(comfyui_url)
         comfyui_url_input.setPlaceholderText("http://127.0.0.1:8188")
-        h_comfy_url.addWidget(comfyui_url_input)
-        cg_layout.addLayout(h_comfy_url)
+        layout.addLayout(field_row("주소", comfyui_url_input))
+        layout.addSpacing(8)
 
-        h_wf = QHBoxLayout()
-        h_wf.addWidget(QLabel("워크플로우:"))
         workflow_input = QLineEdit(getattr(config, 'COMFYUI_WORKFLOW_PATH', ''))
         workflow_input.setPlaceholderText("JSON 파일 경로 (API Format)")
-        h_wf.addWidget(workflow_input)
-        btn_browse = QPushButton("...")
-        btn_browse.setFixedWidth(36)
+        btn_browse = QPushButton("찾아보기")
+        btn_browse.setFixedHeight(32)
+        btn_browse.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_browse.setStyleSheet(f"""
             QPushButton {{
-                background: {get_color('bg_button')}; border: 1px solid {get_color('border')}; border-radius: 4px; color: {get_color('text_primary')};
+                background: {c_button}; border: 1px solid {c_border}; border-radius: 4px;
+                color: {c_sub}; font-size: 12px; padding: 0 12px;
             }}
-            QPushButton:hover {{ background: {get_color('bg_button_hover')}; }}
+            QPushButton:hover {{ background: {c_button_hover}; color: {c_text}; }}
         """)
-        h_wf.addWidget(btn_browse)
-        cg_layout.addLayout(h_wf)
+        layout.addLayout(field_row("워크플로", workflow_input, btn_browse))
+        layout.addSpacing(8)
 
-        # 워크플로우 미리보기
+        # 워크플로 미리보기 — 파일을 열기 전에 뭐가 들었는지 알려 준다.
         startup_wf_preview = QLabel("")
         startup_wf_preview.setWordWrap(True)
-        startup_wf_preview.setStyleSheet("font-size: 10px; padding: 4px;")
+        startup_wf_preview.setStyleSheet(f"color: {c_sub}; font-size: 11px;")
         startup_wf_preview.hide()
-        cg_layout.addWidget(startup_wf_preview)
+        layout.addWidget(startup_wf_preview)
 
         def update_startup_wf_preview(path: str):
             path = path.strip()
@@ -236,25 +310,27 @@ class WebUIMixin:
             info = analyze_workflow(path)
             if info.get('valid'):
                 w, h = info.get('width', '?'), info.get('height', '?')
-                # 3-state 분류 아이콘 (모델 콤보 잠금 여부 시각화)
-                lock_icon = '🔒' if info.get('is_locked') else '🔓'
                 cls = info.get('classification', 'unknown')
                 cls_label = {
                     'native_checkpoint': 'Checkpoint',
                     'native_unet': 'UNet',
                     'locked_unknown': '커스텀',
                     'no_sampler': '샘플러 없음',
-                    'unknown': '?',
+                    'unknown': '알 수 없음',
                 }.get(cls, cls)
+                # 모델 콤보가 잠기는지는 자물쇠 아이콘이 아니라 글자로 말한다.
+                locked = info.get('is_locked')
+                lock_label = '워크플로가 모델 고정' if locked else '모델 선택 가능'
                 startup_wf_preview.setText(
-                    f"✅ {info['format'].upper()} | 노드 {info['node_count']}개 | "
-                    f"{info.get('ksampler_type', '?')} | {w}x{h} | {lock_icon} {cls_label}"
+                    f"{info['format'].upper()} · 노드 {info['node_count']}개 · "
+                    f"{info.get('ksampler_type', '?')} · {w}×{h} · {cls_label} · {lock_label}"
                 )
-                color = "#facc15" if info.get('is_locked') else "#4ade80"
-                startup_wf_preview.setStyleSheet(f"font-size: 10px; padding: 4px; color: {color};")
+                startup_wf_preview.setStyleSheet(
+                    f"color: {c_state_warn if locked else c_sub}; font-size: 11px;"
+                )
             else:
-                startup_wf_preview.setText(f"❌ {info.get('error', '알 수 없는 오류')}")
-                startup_wf_preview.setStyleSheet("font-size: 10px; padding: 4px; color: #f87171;")
+                startup_wf_preview.setText(f"읽을 수 없음 — {info.get('error', '알 수 없는 오류')}")
+                startup_wf_preview.setStyleSheet(f"color: {c_state_alert}; font-size: 11px;")
             startup_wf_preview.show()
 
         def browse_wf():
@@ -271,100 +347,49 @@ class WebUIMixin:
         if workflow_input.text().strip():
             update_startup_wf_preview(workflow_input.text())
 
-        # ComfyUI 선택 버튼
-        btn_select_comfyui = QPushButton("  ComfyUI 사용하기")
-        btn_select_comfyui.setFixedHeight(50)
-        btn_select_comfyui.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout.addSpacing(12)
 
-        # ComfyUI 아이콘 로드 (초기: 연결 전 기본 아이콘)
+        btn_select_comfyui = QPushButton("ComfyUI 로 시작")
+        btn_select_comfyui.setFixedHeight(40)
+        btn_select_comfyui.setCursor(Qt.CursorShape.PointingHandCursor)
+        # 연결 전 기본 아이콘 — 감지가 끝나면 연결됨 아이콘으로 바뀐다.
         comfyui_icon_path = os.path.join(icon_dir, 'comfyui.png')
         if os.path.exists(comfyui_icon_path):
             btn_select_comfyui.setIcon(QIcon(comfyui_icon_path))
-            btn_select_comfyui.setIconSize(QSize(28, 28))
+            btn_select_comfyui.setIconSize(QSize(20, 20))
+        style_action(btn_select_comfyui, False)
+        layout.addWidget(btn_select_comfyui)
 
-        btn_select_comfyui.setStyleSheet("""
-            QPushButton {
-                background: #2d3a5a; border: 2px solid #4a6f9f; border-radius: 8px;
-                color: #8ec8ff; font-weight: bold; font-size: 14px;
-                padding-left: 10px; text-align: left;
-            }
-            QPushButton:hover {
-                background: #3d5a7a; border: 2px solid #6f9fbf;
-            }
-            QPushButton:pressed {
-                background: #1d2a4a; border: 2px solid #3a5f8f;
-            }
-        """)
-        cg_layout.addWidget(btn_select_comfyui)
-        layout.addWidget(comfyui_group)
-
-        # 연결 확인 다이얼로그
-        def confirm_and_connect(backend_type: str):
-            if backend_type == 'webui':
-                url = webui_url_input.text().strip()
-                name = "WebUI (A1111/Forge)"
-                is_ok = self._quick_test(url, '/sdapi/v1/samplers')
-            else:
+        # ── 선택 = 확정 ──
+        def choose_backend(backend_type: str):
+            if backend_type == 'comfyui':
                 url = comfyui_url_input.text().strip()
-                name = "ComfyUI"
-                is_ok = self._quick_test(url, '/system_stats')
+                config.COMFYUI_API_URL = url
+                config.COMFYUI_WORKFLOW_PATH = workflow_input.text().strip()
+                set_backend(BackendType.COMFYUI, url)
+            else:
+                set_backend(BackendType.WEBUI, webui_url_input.text().strip())
 
-            # 확인 다이얼로그
-            confirm = QMessageBox(dialog)
-            confirm.setWindowTitle("연결 확인")
-            confirm.setIcon(QMessageBox.Icon.Question)
-            confirm.setWindowFlags(confirm.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            # settings 탭 동기화 — 시작 화면에서 고른 값이 설정 화면과 어긋나면 안 된다.
+            if hasattr(self, 'settings_tab'):
+                st = self.settings_tab
+                if hasattr(st, 'radio_webui'):
+                    st.radio_webui.setChecked(backend_type == 'webui')
+                    st.radio_comfyui.setChecked(backend_type == 'comfyui')
+                if hasattr(st, 'api_input'):
+                    st.api_input.setText(webui_url_input.text().strip())
+                if hasattr(st, 'comfyui_api_input'):
+                    st.comfyui_api_input.setText(comfyui_url_input.text().strip())
+                if hasattr(st, 'comfyui_workflow_input'):
+                    st.comfyui_workflow_input.setText(workflow_input.text().strip())
 
-            status_text = "🟢 연결 가능" if is_ok else "🔴 연결되지 않음"
-            confirm.setText(f"<b>{name}</b>에 연결하시겠습니까?")
-            confirm.setInformativeText(f"URL: {url}\n상태: {status_text}")
-            confirm.setStandardButtons(
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            confirm.setDefaultButton(QMessageBox.StandardButton.Yes)
+            dialog.accept()
 
-            # 버튼 스타일
-            confirm.setStyleSheet(f"""
-                QMessageBox {{ background-color: {get_color('bg_primary')}; color: {get_color('text_primary')}; }}
-                QLabel {{ color: {get_color('text_primary')}; font-size: 13px; }}
-                QPushButton {{
-                    background: {get_color('bg_button')}; border: 1px solid {get_color('border')}; border-radius: 4px;
-                    padding: 8px 20px; color: {get_color('text_primary')}; min-width: 80px;
-                }}
-                QPushButton:hover {{ background: {get_color('bg_button_hover')}; }}
-                QPushButton:default {{
-                    background: {get_color('accent')}; border: none; color: white;
-                }}
-            """)
+        btn_select_webui.clicked.connect(lambda: choose_backend('webui'))
+        btn_select_comfyui.clicked.connect(lambda: choose_backend('comfyui'))
 
-            if confirm.exec() == QMessageBox.StandardButton.Yes:
-                selected_backend['type'] = backend_type
-                if backend_type == 'comfyui':
-                    config.COMFYUI_API_URL = url
-                    config.COMFYUI_WORKFLOW_PATH = workflow_input.text().strip()
-                    set_backend(BackendType.COMFYUI, url)
-                else:
-                    set_backend(BackendType.WEBUI, url)
-
-                # settings 탭 동기화
-                if hasattr(self, 'settings_tab'):
-                    st = self.settings_tab
-                    if hasattr(st, 'radio_webui'):
-                        st.radio_webui.setChecked(backend_type == 'webui')
-                        st.radio_comfyui.setChecked(backend_type == 'comfyui')
-                    if hasattr(st, 'api_input'):
-                        st.api_input.setText(webui_url_input.text().strip())
-                    if hasattr(st, 'comfyui_api_input'):
-                        st.comfyui_api_input.setText(comfyui_url_input.text().strip())
-                    if hasattr(st, 'comfyui_workflow_input'):
-                        st.comfyui_workflow_input.setText(workflow_input.text().strip())
-
-                dialog.accept()
-
-        btn_select_webui.clicked.connect(lambda: confirm_and_connect('webui'))
-        btn_select_comfyui.clicked.connect(lambda: confirm_and_connect('comfyui'))
-
-        # 자동 감지 함수 (비동기 — UI 스레드 차단 방지)
+        # ── 자동 감지 (비동기 — UI 스레드를 막지 않는다) ──
+        # _detect_version: URL 을 연달아 고치면 늦게 끝난 옛 검사가 새 결과를 덮어쓴다.
         import threading
         _detect_version = {'v': 0}
 
@@ -372,8 +397,8 @@ class WebUIMixin:
             _detect_version['v'] += 1
             current_v = _detect_version['v']
 
-            webui_status.setText("⏳ 감지 중...")
-            comfyui_status.setText("⏳ 감지 중...")
+            set_status(webui_status, "확인 중", c_muted)
+            set_status(comfyui_status, "확인 중", c_muted)
 
             w_url = webui_url_input.text().strip()
             c_url = comfyui_url_input.text().strip()
@@ -395,14 +420,12 @@ class WebUIMixin:
                     QTimer.singleShot(100, _poll)
                     return
                 w_ok, c_ok = results['w_ok'], results['c_ok']
-                webui_status.setText('🟢 연결 가능' if w_ok else '🔴 연결 안됨')
-                webui_status.setStyleSheet(
-                    f"color: {'#4ade80' if w_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
-                )
-                comfyui_status.setText('🟢 연결 가능' if c_ok else '🔴 연결 안됨')
-                comfyui_status.setStyleSheet(
-                    f"color: {'#4ade80' if c_ok else '#f87171'}; font-weight: bold; font-size: 12px;"
-                )
+                set_status(webui_status, '연결됨' if w_ok else '응답 없음',
+                           c_state_ok if w_ok else c_state_alert)
+                set_status(comfyui_status, '연결됨' if c_ok else '응답 없음',
+                           c_state_ok if c_ok else c_state_alert)
+                style_action(btn_select_webui, w_ok)
+                style_action(btn_select_comfyui, c_ok)
                 # ComfyUI 아이콘: 연결 가능 → comfyui_icon.png, 연결 안됨 → comfyui.png
                 icon_name = 'comfyui_icon.png' if c_ok else 'comfyui.png'
                 new_icon_path = os.path.join(icon_dir, icon_name)
@@ -412,28 +435,29 @@ class WebUIMixin:
             threading.Thread(target=_run, daemon=True).start()
             QTimer.singleShot(200, _poll)
 
-        # URL 변경 시 자동 감지
         webui_url_input.editingFinished.connect(auto_detect)
         comfyui_url_input.editingFinished.connect(auto_detect)
-
-        # 다이얼로그 표시 직후 자동 감지 실행
         QTimer.singleShot(100, auto_detect)
 
         layout.addStretch()
 
-        # 하단 건너뛰기 버튼
-        btn_row = QHBoxLayout()
-        btn_skip = QPushButton("⏭️ 건너뛰기")
-        btn_skip.setToolTip("백엔드 연결 없이 UI 시작")
+        # ── 건너뛰기 ──
+        layout.addSpacing(20)
+        layout.addWidget(hairline())
+        layout.addSpacing(16)
+
+        btn_skip = QPushButton("백엔드 없이 시작")
+        btn_skip.setToolTip("백엔드에 연결하지 않고 UI만 엽니다")
+        btn_skip.setFixedHeight(32)
+        btn_skip.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_skip.setStyleSheet(f"""
             QPushButton {{
-                background: {get_color('bg_tertiary')}; border: 1px solid {get_color('border')}; border-radius: 6px;
-                padding: 10px 24px; color: {get_color('text_muted')};
+                background: transparent; border: none; color: {c_muted};
+                font-size: 12px; padding: 0 8px;
             }}
-            QPushButton:hover {{ background: {get_color('bg_button')}; color: {get_color('text_secondary')}; }}
+            QPushButton:hover {{ color: {c_text}; }}
         """)
 
-        # 건너뛰기 플래그
         skip_clicked = {'value': False}
 
         def on_skip():
@@ -441,12 +465,12 @@ class WebUIMixin:
             dialog.reject()
 
         btn_skip.clicked.connect(on_skip)
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
         btn_row.addStretch()
         btn_row.addWidget(btn_skip)
-        btn_row.addStretch()
         layout.addLayout(btn_row)
 
-        # 다이얼로그 활성화
         dialog.raise_()
         dialog.activateWindow()
 

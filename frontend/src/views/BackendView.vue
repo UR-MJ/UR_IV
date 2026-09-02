@@ -35,26 +35,28 @@ function openInBrowser() {
 .toolbar {
   display: flex; align-items: center; gap: 8px; padding: 8px 12px;
 }
-.label { color: #787878; font-size: 13px; font-weight: var(--fw-bold); }
+.label { color: var(--text-muted); font-size: 13px; font-weight: var(--fw-bold); }
 .btn {
-  padding: 6px 14px; background: #181818; border: none; border-radius: 6px;
-  color: #787878; font-size: 12px; cursor: pointer;
+  padding: 6px 14px; background: var(--bg-button); border: none; border-radius: 6px;
+  color: var(--text-muted); font-size: 12px; cursor: pointer;
 }
-.btn:hover { background: #222; color: #E8E8E8; }
+.btn:hover { background: var(--bg-button-hover); color: var(--text-primary); }
 .info {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 16px;
-  color: #585858; font-size: 13px;
+  color: var(--text-muted); font-size: 13px;
 }
 .url-display {
-  font-family: 'Consolas', monospace; font-size: 15px; color: #E2B340;
-  padding: 10px 20px; background: #131313; border-radius: 6px;
+  font-family: 'Consolas', monospace; font-size: 15px; color: var(--accent);
+  padding: 10px 20px; background: var(--bg-secondary); border-radius: 6px;
 }
+/* 주 버튼이라 면은 --accent 가 아니라 --accent-fill 이다. 사용자가 고른 강조색이
+   중간 밝기면 그 위 글자가 안 읽혀서, 면만 밀어 4.5:1 을 맞춘 값이 --accent-fill. */
 .open-btn {
-  padding: 12px 32px; background: #E2B340; border: none; border-radius: 8px;
-  color: #000; font-weight: var(--fw-bold); font-size: 14px; cursor: pointer;
+  padding: 12px 32px; background: var(--accent-fill); border: none; border-radius: 8px;
+  color: var(--on-accent); font-weight: var(--fw-bold); font-size: 14px; cursor: pointer;
 }
-.open-btn:hover { background: #F0C850; }
-.open-btn.secondary { background: #181818; color: #787878; }
-.open-btn.secondary:hover { background: #222; color: #E8E8E8; }
+.open-btn:hover { background: var(--accent-fill-hover); }
+.open-btn.secondary { background: var(--bg-button); color: var(--text-muted); }
+.open-btn.secondary:hover { background: var(--bg-button-hover); color: var(--text-primary); }
 </style>

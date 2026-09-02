@@ -195,7 +195,7 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
 .csel-dropdown {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
   max-height: 240px; overflow-y: auto;
-  background: #1A1A1A; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
   margin-top: 2px; box-shadow: 0 12px 32px rgba(0,0,0,0.7);
 }
 .csel-option {
@@ -204,16 +204,17 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
 }
 .csel-option:hover { background: var(--accent-dim); color: var(--accent); }
 .csel-option.active:not(.selected) { background: var(--accent-dim); color: var(--accent); }
-.csel-option.selected { background: var(--accent); color: #000; font-weight: var(--fw-bold); }
+/* 선택된 항목은 글자를 얹는 면이라 --accent-fill + --on-accent */
+.csel-option.selected { background: var(--accent-fill); color: var(--on-accent); font-weight: var(--fw-bold); }
 .csel-group + .csel-group { border-top: 1px solid var(--border); }
 .csel-group-header {
   position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px;
-  padding: 7px 11px; background: #141414; color: var(--text-muted);
+  padding: 7px 11px; background: var(--bg-secondary); color: var(--text-muted);
   font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; cursor: default;
 }
 .csel-group-main, .csel-group-source {
   padding: 2px 5px; border: 1px solid rgba(96,165,250,.35); border-radius: 7px;
-  background: rgba(96,165,250,.1); color: #60a5fa; font-size: 7px; letter-spacing: 0;
+  background: rgba(96,165,250,.1); color: var(--state-info-fg); font-size: 7px; letter-spacing: 0;
 }
 .csel-group-source { border-color: var(--border); background: var(--bg-input); color: var(--text-muted); }
 .csel-group-option { padding-left: 17px; }

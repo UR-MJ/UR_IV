@@ -153,13 +153,13 @@ function switchToNative(id: string) {
   display: flex; align-items: center; gap: 3px; padding: 3px;
   /* 창이 좁아지면 잘리는 대신 줄을 바꾼다 — 13개를 숨기지 않기로 한 대가다 */
   flex-wrap: wrap; justify-content: center;
-  background: #0A0A0A; border: 1px solid var(--border);
+  background: var(--bg-primary); border: 1px solid var(--border);
   border-radius: 28px;
 }
-.pill-sep { width: 1px; background: #2A2A2A; margin: 4px 2px; }
+.pill-sep { width: 1px; background: var(--rule); margin: 4px 2px; }
 .group-label {
   padding: 0 var(--sp-1);
-  color: #585858;
+  color: var(--text-muted);
   font-size: var(--fs-label);
   font-weight: var(--fw-bold);
   letter-spacing: 0;
@@ -168,12 +168,14 @@ function switchToNative(id: string) {
 }
 .tab-pill {
   height: 30px; padding: 0 11px; background: transparent; border: none;
-  border-radius: 22px; color: #9A9A9A; font-size: var(--fs-meta); font-weight: var(--fw-bold);
+  /* 비활성 탭은 muted, hover 에서 한 단계 밝아진다(secondary) — 두 단 관계를 유지 */
+  border-radius: 22px; color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-bold);
   cursor: pointer; transition: all 0.2s; white-space: nowrap;
 }
-.tab-pill:hover { color: #B0B0B0; background: rgba(255,255,255,0.03); }
+.tab-pill:hover { color: var(--text-secondary); background: rgba(255,255,255,0.03); }
 .tab-pill.active {
-  background: var(--accent); color: #000; font-weight: var(--fw-bold);
+  /* 글자를 얹는 면이라 --accent 가 아니라 --accent-fill + --on-accent */
+  background: var(--accent-fill); color: var(--on-accent); font-weight: var(--fw-bold);
   box-shadow: 0 2px 8px rgba(250, 204, 21, 0.25);
 }
 .tab-pill.native { font-style: italic; opacity: 0.7; }

@@ -615,9 +615,10 @@ onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKe
 .cpm-list { flex: 1; overflow-y: auto; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-base); padding: 4px; }
 .cpm-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 9px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text-primary); }
 .cpm-item:hover { background: var(--bg-button); }
-.cpm-item.active { background: var(--accent); color: #000; font-weight: var(--fw-bold); }
+/* 글자를 얹는 면이라 --accent 가 아니라 --accent-fill + --on-accent */
+.cpm-item.active { background: var(--accent-fill); color: var(--on-accent); font-weight: var(--fw-bold); }
 .cpm-item-count { font-size: var(--fs-label); color: var(--text-muted); }
-.cpm-item.active .cpm-item-count { color: rgba(0,0,0,0.6); }
+.cpm-item.active .cpm-item-count { color: var(--on-accent); opacity: 0.65; }
 .cpm-empty { padding: 16px; text-align: center; color: var(--text-muted); font-size: 12px; }
 
 .cpm-right { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -628,39 +629,45 @@ onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKe
 .cpm-pstatus { font-size: 11px; color: var(--accent); }
 
 .cpm-copyrow { padding-bottom: 8px; }
-.cpm-copychip { background: rgba(139,92,246,0.16); border: 1px solid #8b5cf6; border-radius: 12px; color: #a78bfa; font-size: 11px; font-weight: var(--fw-bold); padding: 4px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.cpm-copychip:hover { background: rgba(139,92,246,0.28); }
+.cpm-copychip { background: color-mix(in srgb, var(--state-info-fg) 16%, transparent); border: 1px solid var(--state-info-fg); border-radius: 12px; color: var(--state-info-fg); font-size: 11px; font-weight: var(--fw-bold); padding: 4px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.cpm-copychip:hover { background: color-mix(in srgb, var(--state-info-fg) 28%, transparent); }
 .cpm-copychip.off { background: var(--bg-button); border-color: var(--border); color: var(--text-muted); text-decoration: line-through; }
 .cpm-copytag { font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 1px 6px; border-radius: 8px; background: rgba(0,0,0,0.25); text-decoration: none; }
 
 .cpm-selrow { display: flex; gap: 6px; padding-bottom: 8px; flex-wrap: wrap; }
-.cpm-sel.db { color: #60a5fa; border-color: #60a5fa; }
-.cpm-sel.db:hover { color: #93c5fd; }
+.cpm-sel.db { color: var(--state-info-fg); border-color: var(--state-info-fg); }
+.cpm-sel.db:hover { color: var(--text-primary); }
 .cpm-sel:disabled { opacity: 0.5; cursor: wait; }
 .cpm-sel { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; padding: 5px 12px; cursor: pointer; }
 .cpm-sel:hover { color: var(--text-primary); }
-.cpm-sel.warn:hover { color: #f87171; border-color: #f87171; }
+.cpm-sel.warn:hover { color: var(--state-alert-fg); border-color: var(--state-alert-fg); }
 
 .cpm-tagscroll { flex: 1; overflow-y: auto; min-height: 80px; border: 1px solid var(--border); border-radius: var(--radius-base); padding: 10px; background: var(--bg-primary); }
 .cpm-section-label { font-size: 11px; font-weight: var(--fw-bold); padding: 6px 0 4px; }
 .cpm-section-label.core { color: var(--accent); }
-.cpm-section-label.costume { color: #fb923c; }
-.cpm-section-label.etc { color: #94a3b8; }
-.cpm-section-label.aux { color: #38bdf8; }
+/* 섹션 색은 태그 6색에 '뜻'으로 맞췄다 — 의상=wear · 기타(사물)=neutral ·
+   보조(헤어·체형·피부)=person. 커스텀은 6분류 어디도 아니라, 이 화면에 fx 태그가
+   없어 색이 겹치지 않는 자리를 빌려 쓴다. */
+.cpm-section-label.costume { color: var(--tag-wear); }
+.cpm-section-label.etc { color: var(--tag-neutral); }
+.cpm-section-label.aux { color: var(--tag-person); }
 .cpm-etc-hint { font-size: var(--fs-label); font-weight: var(--fw-normal); color: var(--text-muted); margin-left: 4px; }
-.cpm-section-label.custom { color: #f59e0b; }
+.cpm-section-label.custom { color: var(--tag-fx); }
 .cpm-regiontoggle { float: right; background: var(--bg-button); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); padding: 2px 8px; cursor: pointer; }
-.cpm-regiontoggle:hover { color: #fb923c; border-color: #fb923c; }
+.cpm-regiontoggle:hover { color: var(--tag-wear); border-color: var(--tag-wear); }
 .cpm-region-grp { margin: 2px 0 6px; }
-.cpm-region-label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: #fb923c; opacity: 0.85; padding: 4px 0 3px; border-top: 1px dashed rgba(251,146,60,0.25); }
+.cpm-region-label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--tag-wear); opacity: 0.85; padding: 4px 0 3px; border-top: 1px dashed color-mix(in srgb, var(--tag-wear) 25%, transparent); }
 .cpm-region-n { color: var(--text-muted); font-weight: var(--fw-bold); }
 .cpm-chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .cpm-none { font-size: 11px; color: var(--text-muted); }
-.cpm-chip { background: var(--accent); color: #000; border: none; border-radius: 12px; padding: 4px 11px; font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; }
+/* 태그로 채운 칩의 글자는 '바탕색 뒤집기'(--bg-primary). 태그 6색은 다크에서 밝고
+   라이트에서 어두워, 바탕색을 글자로 쓰면 두 모드 모두 5:1 이상이 나온다.
+   --on-accent 는 사용자가 고른 강조색에 묶인 값이라 태그 칩에는 못 쓴다. */
+.cpm-chip { background: var(--accent-fill); color: var(--on-accent); border: none; border-radius: 12px; padding: 4px 11px; font-size: 11px; font-weight: var(--fw-bold); cursor: pointer; }
 .cpm-chip.off { background: var(--bg-button); color: var(--text-muted); text-decoration: line-through; }
-.cpm-chip.costume:not(.off) { background: #fb923c; }
-.cpm-chip.etc:not(.off) { background: #64748b; }
-.cpm-chip.aux:not(.off) { background: #38bdf8; color: #03263a; }
+.cpm-chip.costume:not(.off) { background: var(--tag-wear); color: var(--bg-primary); }
+.cpm-chip.etc:not(.off) { background: var(--tag-neutral); color: var(--bg-primary); }
+.cpm-chip.aux:not(.off) { background: var(--tag-person); color: var(--bg-primary); }
 
 /* 전역(모든 캐릭터) 설정 바 */
 .cpm-global { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
@@ -668,27 +675,27 @@ onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKe
 .cpm-global-cats { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 7px; }
 .cpm-global-words { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 .cpm-global-sub { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-right: 2px; }
-.cpm-gcat { padding: 4px 10px; border-radius: 12px; border: 1px solid #4ade80; background: rgba(74,222,128,0.18); color: #4ade80; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
+.cpm-gcat { padding: 4px 10px; border-radius: 12px; border: 1px solid var(--state-ok-fg); background: rgba(74,222,128,0.18); color: var(--state-ok-fg); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .cpm-gcat.off { border-color: var(--border); background: var(--bg-button); color: var(--text-muted); }
 .cpm-gword-in { flex: 0 1 170px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; color: var(--text-primary); font-size: 11px; }
 .cpm-gword-add { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg-button); color: var(--accent); font-weight: var(--fw-bold); cursor: pointer; flex-shrink: 0; }
-.cpm-gword-chip { padding: 4px 8px; border-radius: 12px; border: 1px solid #f87171; background: rgba(248,113,113,0.15); color: #fca5a5; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
+.cpm-gword-chip { padding: 4px 8px; border-radius: 12px; border: 1px solid var(--state-alert-fg); background: rgba(248,113,113,0.15); color: var(--state-alert-fg); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .cpm-gword-chip:hover { background: rgba(248,113,113,0.3); }
-.cpm-chip.cust:not(.off) { background: #f59e0b; color: #000; }
+.cpm-chip.cust:not(.off) { background: var(--tag-fx); color: var(--bg-primary); }
 .cpm-chip.existing { background: var(--bg-button); color: var(--text-muted); border: 1px dashed var(--border); cursor: default; text-decoration: none; }
 .cpm-exist { margin-left: 4px; opacity: 0.7; }
 
 .cpm-addrow { display: flex; gap: 6px; padding-top: 8px; }
 .cpm-addinput { flex: 1; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; color: var(--text-primary); font-size: 12px; }
 .cpm-addinput:focus { outline: none; border-color: var(--accent); }
-.cpm-add { background: #fb923c; color: #000; border: none; border-radius: 6px; font-weight: var(--fw-bold); font-size: 11px; padding: 0 14px; cursor: pointer; }
+.cpm-add { background: var(--accent-fill); color: var(--on-accent); border: none; border-radius: 6px; font-weight: var(--fw-bold); font-size: 11px; padding: 0 14px; cursor: pointer; }
 
 .cpm-presetrow { display: flex; gap: 6px; padding-top: 8px; }
 .cpm-psave { background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 6px; color: var(--accent); font-size: 11px; font-weight: var(--fw-bold); padding: 6px 12px; cursor: pointer; }
-.cpm-pdel { background: rgba(248,113,113,0.1); border: 1px solid #f87171; border-radius: 6px; color: #f87171; font-size: 11px; font-weight: var(--fw-bold); padding: 6px 12px; cursor: pointer; }
+.cpm-pdel { background: rgba(248,113,113,0.1); border: 1px solid var(--state-alert-fg); border-radius: 6px; color: var(--state-alert-fg); font-size: 11px; font-weight: var(--fw-bold); padding: 6px 12px; cursor: pointer; }
 
 .cpm-cond { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius-base); }
-.cpm-cond > summary { padding: 8px 12px; font-size: 11px; font-weight: var(--fw-bold); color: #fbbf24; cursor: pointer; }
+.cpm-cond > summary { padding: 8px 12px; font-size: 11px; font-weight: var(--fw-bold); color: var(--accent); cursor: pointer; }
 .cpm-condbody { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
 .cpm-rule { display: flex; gap: 4px; align-items: center; }
 .cpm-r-cond { width: 110px; }
@@ -696,15 +703,17 @@ onUnmounted(() => { _saveCharState(); window.removeEventListener('keydown', onKe
 .cpm-rule input { background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 5px 7px; color: var(--text-primary); font-size: 11px; }
 .cpm-rule input:focus { outline: none; border-color: var(--accent); }
 .cpm-r-sel { background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 5px 4px; color: var(--text-primary); font-size: 11px; }
-.cpm-r-del { background: transparent; border: none; color: #f87171; cursor: pointer; font-size: 12px; }
+.cpm-r-del { background: transparent; border: none; color: var(--state-alert-fg); cursor: pointer; font-size: 12px; }
 .cpm-r-add { align-self: flex-start; background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); font-size: 11px; padding: 5px 12px; cursor: pointer; }
 
 .cpm-footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
 .cpm-foot-status { font-size: 11px; color: var(--text-muted); }
 .cpm-foot-spacer { flex: 1; }
 .cpm-apply { border: none; border-radius: var(--radius-base); font-weight: var(--fw-bold); font-size: 12px; padding: 9px 16px; cursor: pointer; }
-.cpm-apply.both { background: var(--accent); color: #000; }
-.cpm-apply.feat { background: #22c55e; color: #000; }
+.cpm-apply.both { background: var(--accent-fill); color: var(--on-accent); }
+/* 채움용 --state-ok 는 '흰 글자와 4.6:1' 로 맞춘 값이라 그 위 글자는 흰색 고정이다
+   (--text-primary 로 두면 라이트 모드에서 검정 글자가 얹혀 2.6:1 로 무너진다) */
+.cpm-apply.feat { background: var(--state-ok); color: #fff; }
 .cpm-apply.close { background: var(--bg-button); border: 1px solid var(--border); color: var(--text-secondary); }
 .cpm-apply:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

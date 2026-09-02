@@ -396,10 +396,10 @@ onBeforeUnmount(() => {
 }
 
 .clip-shadow {
-  color: var(--state-info);
+  color: var(--state-info-fg);
 }
 .clip-highlight {
-  color: var(--state-alert);
+  color: var(--state-alert-fg);
 }
 
 .log-btn {

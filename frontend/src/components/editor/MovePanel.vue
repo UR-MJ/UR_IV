@@ -205,43 +205,43 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
 .section-header {
-  color: #585858;
+  color: var(--text-muted);
   font-size: 18px;
   font-weight: var(--fw-bold);
   padding: 2px;
 }
 
 .small-header {
-  color: #585858;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: var(--fw-bold);
 }
 
 .status-label {
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 12px;
   padding: 6px;
-  background-color: #111;
+  background-color: var(--bg-secondary);
   border-radius: 4px;
   word-wrap: break-word;
 }
 
 .divider {
   height: 1px;
-  background-color: #2A2A2A;
+  background-color: var(--rule);
   margin: 4px 0;
 }
 
 .select-input {
   height: 34px;
-  background-color: #1A1A1A;
-  color: #B0B0B0;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 4px;
   font-size: 13px;
@@ -256,7 +256,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 .slider-label {
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 12px;
   min-width: 60px;
   white-space: nowrap;
@@ -264,14 +264,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .slider {
   flex: 1;
-  accent-color: #E2B340;
+  accent-color: var(--accent);
   height: 4px;
-  background: #2A2A2A;
+  background: var(--rule);
   border-radius: 2px;
 }
 
 .slider-value {
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 12px;
   min-width: 30px;
   text-align: right;
@@ -285,31 +285,31 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .action-btn {
   flex: 1;
   height: 40px;
-  background-color: #1A1A1A;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-button);
+  border: 1px solid var(--rule);
   border-radius: 6px;
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: var(--fw-bold);
   padding: 8px 12px;
   cursor: pointer;
 }
 .action-btn:hover:not(:disabled) {
-  border-color: #585858;
-  background-color: #222;
+  border-color: var(--edge);
+  background-color: var(--bg-button-hover);
 }
 .action-btn:disabled {
-  color: #2A2A2A;
-  background-color: #111;
+  color: var(--text-muted);
+  background-color: var(--bg-secondary);
   cursor: default;
 }
 
 .accent-btn {
   height: 40px;
-  background-color: #E2B340;
-  border: 1px solid #E2B340;
+  background-color: var(--accent-fill);
+  border: 1px solid var(--accent-fill);
   border-radius: 6px;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 13px;
   font-weight: var(--fw-bold);
   padding: 8px 12px;
@@ -317,40 +317,44 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   width: 100%;
 }
 .accent-btn:hover:not(:disabled) {
-  background-color: #c9a038;
+  background-color: var(--accent-fill-hover);
 }
 .accent-btn:disabled {
-  background-color: #333;
-  color: #585858;
-  border-color: #333;
+  background-color: var(--bg-button);
+  color: var(--text-muted);
+  border-color: var(--border);
   cursor: default;
 }
 
 .inpaint-btn {
   height: 40px;
-  background-color: #e67e22;
-  border: 1px solid #e67e22;
+  background-color: var(--state-warn);
+  border: 1px solid var(--state-warn);
   border-radius: 6px;
-  color: #fff;
+  /* 상태 채움색은 세 프리셋 모두 흰 글자 기준으로 잡은 값이라 흰색을 유지한다 */
+  color: #FFFFFF;
   font-size: 13px;
   font-weight: var(--fw-bold);
   padding: 8px 12px;
   cursor: pointer;
   width: 100%;
 }
+/* 상태색에는 hover 파생 토큰이 없다 — 사용자가 색을 바꿔도 따라오게 밝기로 민다 */
 .inpaint-btn:hover:not(:disabled) {
-  background-color: #f39c12;
+  filter: brightness(1.15);
 }
+/* 상태색에는 dim 파생 토큰이 없다 — 색은 활성과 같게 두고 흐림은 위의
+   button:disabled(opacity .45)가 준다 */
 .inpaint-btn:disabled {
-  background-color: #5C4A2C;
-  color: #777;
+  background-color: var(--state-warn);
+  color: var(--text-muted);
   cursor: default;
 }
 
 .prompt-input {
-  background-color: #111;
-  color: #B0B0B0;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 4px;
   font-size: 12px;
@@ -360,7 +364,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   font-family: inherit;
 }
 .prompt-input::placeholder {
-  color: #585858;
+  color: var(--text-muted);
 }
 .prompt-input.small {
   min-height: 35px;

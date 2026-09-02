@@ -52,6 +52,8 @@ function endDrag() { dragging.value = false }
 <style scoped>
 .compare-container {
   position: relative; width: 100%; height: 100%;
+  /* 이미지 레터박스 받침이라 UI 크롬이 아니다. 위에 얹힌 라벨이 '흰 글자/검은 판'
+     고정이라 여길 테마색으로 바꾸면 그 라벨이 먼저 깨진다. */
   overflow: hidden; cursor: col-resize; background: #000;
   display: flex; align-items: center; justify-content: center;
 }
@@ -66,9 +68,11 @@ function endDrag() { dragging.value = false }
 }
 .slider-handle {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 36px; height: 36px; background: var(--accent); border-radius: 50%;
+  /* 아이콘을 얹는 면이라 --accent 가 아니라 --accent-fill (사용자가 어떤 강조색을
+     골라도 --on-accent 아이콘이 읽히도록 명도를 민 값) */
+  width: 36px; height: 36px; background: var(--accent-fill); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  color: #000; font-size: var(--fs-label); font-weight: var(--fw-bold);
+  color: var(--on-accent); font-size: var(--fs-label); font-weight: var(--fw-bold);
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
 .compare-label {

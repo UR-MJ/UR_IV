@@ -108,13 +108,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .abt-group { display: flex; flex-direction: column; gap: 5px; }
 .abt-label { font-size: 12px; font-weight: var(--fw-bold); }
 .abt-label.a { color: var(--accent); }
-.abt-label.b { color: #60a5fa; }
-.abt-label.neg { color: #f87171; }
+.abt-label.b { color: var(--state-info-fg); }
+.abt-label.neg { color: var(--state-alert-fg); }
 .abt-text { background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text-primary); font-size: 12px; resize: vertical; font-family: inherit; }
 .abt-text:focus { outline: none; border-color: var(--accent); }
 .abt-footer { display: flex; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
 .abt-status { font-size: 11px; color: var(--text-muted); }
 .abt-spacer { flex: 1; }
-.abt-run { background: var(--accent); color: #000; border: none; border-radius: var(--radius-base); font-weight: var(--fw-bold); font-size: 13px; padding: 9px 18px; cursor: pointer; }
+/* 주 버튼: 글자를 얹는 면이라 --accent 가 아니라 --accent-fill + --on-accent */
+.abt-run { background: var(--accent-fill); color: var(--on-accent); border: none; border-radius: var(--radius-base); font-weight: var(--fw-bold); font-size: 13px; padding: 9px 18px; cursor: pointer; }
 .abt-cancel { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-weight: var(--fw-bold); font-size: 13px; padding: 9px 16px; cursor: pointer; }
 </style>

@@ -17,8 +17,10 @@ defineEmits<{ 'update:modelValue': [value: boolean] }>()
 <style scoped>
 .tsw { width: 36px; height: 20px; border-radius: 11px; background: var(--bg-button); border: 1px solid var(--border); position: relative; cursor: pointer; transition: background .18s, border-color .18s; padding: 0; flex-shrink: 0; display: inline-block; vertical-align: middle; }
 .tsw-knob { position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-muted); transition: left .18s, background .18s; }
-.tsw.on { background: rgba(74,222,128,0.28); border-color: #4ade80; }
-.tsw.on .tsw-knob { left: 17px; background: #4ade80; }
+/* 켜짐 표시는 '면'이 아니라 표시등이라 --state-ok(어두운 채움) 이 아닌 -fg 를 쓴다.
+   초록 틴트 트랙 위에서 채움색 노브는 대비가 죽어 상태가 안 보인다. */
+.tsw.on { background: rgba(74,222,128,0.28); border-color: var(--state-ok-fg); }
+.tsw.on .tsw-knob { left: 17px; background: var(--state-ok-fg); }
 .tsw.sm { width: 30px; height: 17px; border-radius: 9px; }
 .tsw.sm .tsw-knob { width: 13px; height: 13px; }
 .tsw.sm.on .tsw-knob { left: 14px; }

@@ -175,7 +175,7 @@ function clearFilterSelection() {
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
@@ -186,7 +186,7 @@ function clearFilterSelection() {
 }
 
 .slider-label {
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 12px;
   min-width: 70px;
   white-space: nowrap;
@@ -194,14 +194,14 @@ function clearFilterSelection() {
 
 .slider {
   flex: 1;
-  accent-color: #E2B340;
+  accent-color: var(--accent);
   height: 4px;
-  background: #2A2A2A;
+  background: var(--rule);
   border-radius: 2px;
 }
 
 .slider-value {
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 12px;
   min-width: 30px;
   text-align: right;
@@ -214,8 +214,8 @@ function clearFilterSelection() {
 
 .accent-btn {
   height: 35px;
-  background-color: #E2B340;
-  color: #fff;
+  background-color: var(--accent-fill);
+  color: var(--on-accent);
   border: none;
   border-radius: 4px;
   font-size: 13px;
@@ -223,38 +223,40 @@ function clearFilterSelection() {
   cursor: pointer;
 }
 .accent-btn:hover {
-  background-color: #c9a038;
+  background-color: var(--accent-fill-hover);
 }
 
 .reset-btn {
   height: 35px;
-  background-color: #222;
-  color: #B0B0B0;
+  background-color: var(--bg-button);
+  color: var(--text-secondary);
   border: none;
   border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
 }
 .reset-btn:hover {
-  background-color: #2A2A2A;
+  background-color: var(--bg-button-hover);
 }
 
 .auto-correct-btn {
   height: 35px;
-  background-color: #2D8C4E;
-  color: #fff;
+  background-color: var(--state-ok);
+  /* 상태 채움색은 세 프리셋 모두 흰 글자 기준으로 잡은 값이라 흰색을 유지한다 */
+  color: #FFFFFF;
   border: none;
   border-radius: 4px;
   font-size: 13px;
   font-weight: var(--fw-bold);
   cursor: pointer;
 }
+/* 상태색에는 hover 파생 토큰이 없다 — 사용자가 state-ok 를 바꿔도 따라오게 밝기로 민다 */
 .auto-correct-btn:hover {
-  background-color: #3AA05E;
+  filter: brightness(1.15);
 }
 
 .section-label {
-  color: #585858;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: var(--fw-bold);
 }
@@ -267,36 +269,38 @@ function clearFilterSelection() {
 
 .preset-btn {
   height: 35px;
-  background-color: #1A1A1A;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-button);
+  color: var(--text-primary);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   font-size: 12px;
   font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .preset-btn:hover {
-  background-color: #222;
-  border-color: #585858;
+  background-color: var(--bg-button-hover);
+  border-color: var(--edge);
 }
 .preset-btn.active {
-  background-color: #E2B340;
-  color: #fff;
-  border-color: #E2B340;
+  background-color: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
 }
 
 .filter-cancel-btn {
   height: 35px;
-  background-color: #8B0000;
-  color: #fff;
+  background-color: var(--state-alert);
+  /* 상태 채움색은 세 프리셋 모두 흰 글자 기준으로 잡은 값이라 흰색을 유지한다 */
+  color: #FFFFFF;
   border: none;
   border-radius: 4px;
   font-size: 13px;
   font-weight: var(--fw-bold);
   cursor: pointer;
 }
+/* 상태색에는 hover 파생 토큰이 없다 — 사용자가 state-alert 를 바꿔도 따라오게 밝기로 민다 */
 .filter-cancel-btn:hover {
-  background-color: #A52A2A;
+  filter: brightness(1.15);
 }
 
 .flex-1 { flex: 1; }

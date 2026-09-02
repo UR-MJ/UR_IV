@@ -148,7 +148,7 @@ function hideTip() {
   align-items: center;
   gap: 2px var(--sp-2);
   padding: var(--sp-1) var(--sp-2);
-  background: #1A1A1A;
+  background: var(--bg-card);
   border: 1px solid var(--edge);
   border-radius: var(--radius-base);
   white-space: nowrap;

@@ -568,20 +568,24 @@ onUnmounted(() => {
 .folder-info .path { font-size: var(--fs-meta); color: var(--text-muted); max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
 
 .gallery-card img, .gallery-card > video { width: 100%; display: block; transition: var(--transition); }
-.gallery-card > video { min-height: 120px; max-height: 320px; object-fit: contain; background: #050505; }
+/* contain 여백(레터박스)은 카드 안의 '파인 면'이라 --bg-primary — 라이트에서도 카드보다 한 단 어둡다 */
+.gallery-card > video { min-height: 120px; max-height: 320px; object-fit: contain; background: var(--bg-primary); }
 
 .gallery-card:hover img, .gallery-card:hover > video { filter: brightness(0.7); }
-.audio-card { min-height: 128px; padding: 20px 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(145deg, #151b22, #0b0d11); }
+/* 원래 푸른기 도는 고정 어두운 그라디언트였다 — 테마를 안 타서 라이트에서 이 카드만 검게 남는다.
+   기울기(밝은 면 → 파인 면)만 살려 토큰으로 옮겼다. */
+.audio-card { min-height: 128px; padding: 20px 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(145deg, var(--bg-card), var(--bg-primary)); }
 .audio-icon { font-size: 34px; color: var(--accent); }
 .audio-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: var(--fs-label); color: var(--text-muted); }
 .audio-card audio { width: 100%; height: 32px; }
+/* 흰 글자를 그대로 둔다: 배지 바탕이 테마를 안 타는 검정 오버레이라 --text-primary 로 바꾸면 라이트에서 검정 위 검정이 된다 */
 .media-kind-badge { position: absolute; left: 8px; top: 8px; padding: 3px 7px; border-radius: 999px; background: rgba(0,0,0,0.72); color: #fff; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; pointer-events: none; }
 
 .exif-close { position: absolute; top: 20px; left: -20px; width: 40px; height: 40px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transform: rotate(0deg); }
 
 .exif-preview { width: 100%; aspect-ratio: 1; overflow: hidden; }
-.exif-preview img, .exif-preview video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-.sidebar-audio-preview { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: #07090c; color: var(--accent); font-size: 42px; }
+.exif-preview img, .exif-preview video { width: 100%; height: 100%; object-fit: contain; background: var(--bg-primary); }
+.sidebar-audio-preview { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: var(--bg-primary); color: var(--accent); font-size: 42px; }
 .sidebar-audio-preview audio { width: 85%; }
 
 .meta-row p { font-size: 12px; font-weight: var(--fw-bold); color: var(--text-primary); }
@@ -598,9 +602,11 @@ onUnmounted(() => {
 
 .mini-action { flex: 1; height: 36px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 
-.ctx-item.delete { color: #f87171; }
+.ctx-item.delete { color: var(--state-alert-fg); }
 
-.lv-btn.save { background: #4ade80; color: #000; border: none; }
+/* 채움이라 --state-ok(글자용 -fg 아님). 그 위 글자는 흰색 고정 —
+   상태 채움색 자체가 '흰 글자와 4.5:1' 기준으로 잡힌 값이고, --text-primary 는 라이트에서 검정이 된다. */
+.lv-btn.save { background: var(--state-ok); color: #FFFFFF; border: none; }
 
 .large-img-area img, .large-img-area video { max-width: 100%; max-height: 100%; object-fit: contain; }
 .large-img-area audio { width: min(620px, 90%); }
@@ -610,7 +616,7 @@ onUnmounted(() => {
 
 .exif-preview { position: relative; cursor: pointer; }
 
-.spinner { width: 32px; height: 32px; border: 3px solid #222; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--rule); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 </style>

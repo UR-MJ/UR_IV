@@ -367,12 +367,13 @@ onUnmounted(() => {
 .exif-close { position: absolute; top: 20px; left: -20px; width: 40px; height: 40px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
 .exif-preview { width: 100%; aspect-ratio: 1; overflow: hidden; position: relative; cursor: pointer; }
-.exif-preview img { width: 100%; height: 100%; object-fit: contain; background: #000; }
+/* contain 여백은 이미지가 아니라 그 뒤의 UI 면이다 — 토큰이어야 라이트에서 검은 상자로 남지 않는다 */
+.exif-preview img { width: 100%; height: 100%; object-fit: contain; background: var(--bg-primary); }
 
 .meta-row p { font-size: 12px; font-weight: var(--fw-bold); color: var(--text-primary); word-break: break-all; }
 .meta-head { display: flex; align-items: center; justify-content: space-between; min-height: 18px; margin-bottom: 6px; }
 .meta-block label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--accent); }
-.meta-block label.danger { color: #f87171; }
+.meta-block label.danger { color: var(--state-alert-fg); }
 .copy-btn { opacity: 0; background: none; border: 1px solid transparent; color: var(--text-muted); width: 22px; height: 22px; border-radius: 4px; cursor: pointer; font-size: 11px; }
 .meta-block:hover .copy-btn { opacity: 0.7; }
 .copy-btn:hover { opacity: 1; background: var(--bg-button); border-color: var(--border); color: var(--accent); }
@@ -380,23 +381,24 @@ onUnmounted(() => {
 
 /* 이전 Favorites 중앙 모달 뷰어 복원 */
 .viewer-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; align-items: center; justify-content: center; }
-.viewer-panel { width: 85%; height: 85%; background: #0D0D0D; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #222; }
-.viewer-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #1A1A1A; }
-.viewer-header span { font-size: 12px; color: #787878; }
-.viewer-close { background: none; border: none; color: #f87171; font-size: 18px; cursor: pointer; }
+/* 떠 있는 모달이라 --bg-secondary 가 아니라 --bg-card — 안쪽 pre(--bg-input)와 면이 겹치지 않아야 한다 */
+.viewer-panel { width: 85%; height: 85%; background: var(--bg-card); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); }
+.viewer-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--rule); }
+.viewer-header span { font-size: 12px; color: var(--text-muted); }
+.viewer-close { background: none; border: none; color: var(--state-alert-fg); font-size: 18px; cursor: pointer; }
 .viewer-body { flex: 1; display: flex; overflow: hidden; }
-.viewer-img { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; padding: 16px; }
+.viewer-img { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--bg-primary); padding: 16px; }
 .viewer-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.viewer-info { width: 460px; max-width: 46vw; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; border-left: 1px solid #1A1A1A; }
-.vi-size { color: #585858; font-size: 12px; }
+.viewer-info { width: 460px; max-width: 46vw; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; border-left: 1px solid var(--rule); }
+.vi-size { color: var(--text-muted); font-size: 12px; }
 .vi-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; min-height: 18px; }
 .vi-head label { color: var(--accent); font-size: 11px; font-weight: var(--fw-bold); letter-spacing: 0; margin: 0; }
-.vi-head label.neg { color: #f87171; }
+.vi-head label.neg { color: var(--state-alert-fg); }
 .vi-pre-wrap { position: relative; }
-.vi-copy-float { position: absolute; top: 7px; right: 7px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: rgba(20,20,20,0.5); border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; color: #ddd; font-size: 14px; cursor: pointer; opacity: 0.5; backdrop-filter: blur(3px); transition: opacity .15s, background .15s, border-color .15s; z-index: 2; }
+.vi-copy-float { position: absolute; top: 7px; right: 7px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: rgba(20,20,20,0.5); border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; color: var(--text-primary); font-size: 14px; cursor: pointer; opacity: 0.5; backdrop-filter: blur(3px); transition: opacity .15s, background .15s, border-color .15s; z-index: 2; }
 .vi-pre-wrap:hover .vi-copy-float { opacity: 0.85; }
 .vi-copy-float:hover { opacity: 1 !important; background: rgba(45,45,45,0.9); border-color: var(--accent); color: var(--accent); }
-.vi-section pre { color: #C4C4C4; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; background: #111; padding: 12px 14px; border-radius: 6px; margin: 0; max-height: 360px; overflow-y: auto; }
+.vi-section pre { color: var(--text-secondary); font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; background: var(--bg-input); padding: 12px 14px; border-radius: 6px; margin: 0; max-height: 360px; overflow-y: auto; }
 .vi-actions-section { margin-top: auto; padding-top: 12px; }
 .vi-actions-label { display: block; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-bottom: 8px; }
 .vi-send-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }

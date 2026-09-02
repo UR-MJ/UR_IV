@@ -36,24 +36,25 @@ function open(u: string) {
 .web-view { width: 100%; height: 100%; display: flex; flex-direction: column; }
 .toolbar { display: flex; gap: 6px; padding: 8px 12px; }
 .url-input {
-  flex: 1; background: #131313; border: none; border-radius: 6px;
-  padding: 8px 12px; color: #E8E8E8; font-size: 13px; outline: none;
+  flex: 1; background: var(--bg-input); border: none; border-radius: 6px;
+  padding: 8px 12px; color: var(--text-primary); font-size: 13px; outline: none;
 }
-.url-input:focus { background: #1A1A1A; }
+/* 포커스는 면을 한 단계 들어 올려 표시한다 — 라이트에서도 같은 방향이 되도록 토큰으로 */
+.url-input:focus { background: var(--bg-card); }
 .btn {
-  padding: 8px 16px; background: #181818; border: none; border-radius: 6px;
-  color: #787878; font-size: 12px; cursor: pointer; white-space: nowrap;
+  padding: 8px 16px; background: var(--bg-button); border: none; border-radius: 6px;
+  color: var(--text-muted); font-size: 12px; cursor: pointer; white-space: nowrap;
 }
-.btn:hover { background: #222; color: #E8E8E8; }
+.btn:hover { background: var(--bg-button-hover); color: var(--text-primary); }
 .info {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px;
-  color: #585858; font-size: 13px; text-align: center;
+  color: var(--text-muted); font-size: 13px; text-align: center;
 }
 .quick-links { display: flex; gap: 8px; margin-top: 12px; }
 .link-btn {
-  padding: 10px 20px; background: #181818; border: none; border-radius: 6px;
-  color: #E2B340; font-size: 13px; font-weight: var(--fw-bold); cursor: pointer;
+  padding: 10px 20px; background: var(--bg-button); border: none; border-radius: 6px;
+  color: var(--accent); font-size: 13px; font-weight: var(--fw-bold); cursor: pointer;
 }
-.link-btn:hover { background: #222; }
+.link-btn:hover { background: var(--bg-button-hover); }
 </style>

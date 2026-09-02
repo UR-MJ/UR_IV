@@ -150,10 +150,12 @@ onUnmounted(() => {
   width: max-content;
   max-width: min(460px, calc(100vw - 24px));
   padding: 10px 12px;
-  border: 1px solid #64748b;
+  /* 툴팁은 떠 있는 면이라 카드 배경 + 강한 테두리. 배경·글자를 같이 토큰화해야
+     한쪽만 바뀌어 라이트 모드에서 글자가 사라지는 일이 없다. */
+  border: 1px solid var(--edge);
   border-radius: 7px;
-  background: #172033;
-  color: #f8fafc;
+  background: var(--bg-card);
+  color: var(--text-primary);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.72);
   font-size: 12px;
   font-weight: var(--fw-bold);

@@ -286,8 +286,10 @@ onUnmounted(() => {
 .lm-modetab:hover { color: var(--text-primary); }
 .lm-modetab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .lm-ext { flex: 1; display: flex; min-height: 0; }
+/* 외부 LoRA 매니저 페이지를 얹는 자리라 우리 테마의 면이 아니다 — 그쪽이 자기 배경을
+   그리기 전까지의 받침이므로 토큰화하지 않는다 */
 .lm-iframe { flex: 1; width: 100%; height: 100%; border: none; background: #fff; }
-.lm-error { color: #f87171; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.lm-error { color: var(--state-alert-fg); display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .mt-8 { margin-top: 8px; }
 .lm-searchbar { display: flex; gap: 8px; padding: 12px 20px; }
 .lm-search { flex: 1; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-base); padding: 9px 12px; color: var(--text-primary); font-size: 13px; }
@@ -298,7 +300,8 @@ onUnmounted(() => {
 .lm-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px; }
 .lm-availability-note {
   margin: 4px 4px 10px; padding: 8px 10px; border: 1px solid rgba(251,191,36,.28);
-  border-radius: 7px; background: rgba(251,191,36,.06); color: #d4b45f; font-size: var(--fs-label);
+  /* 금색이지만 뜻은 '주의'(모델 일부를 못 쓴다)라 강조색이 아니라 경고 글자색 */
+  border-radius: 7px; background: rgba(251,191,36,.06); color: var(--state-warn-fg); font-size: var(--fs-label);
 }
 .lm-section { margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .lm-section-header {
@@ -322,15 +325,18 @@ onUnmounted(() => {
   flex-shrink: 0; padding: 2px 5px; border: 1px solid var(--border); border-radius: 7px;
   background: var(--bg-input); color: var(--text-muted); font-size: 7px; font-weight: var(--fw-bold); letter-spacing: 0;
 }
-.lm-source-badge.main { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); color: #60a5fa; }
-.lm-source-badge.secondary { border-color: rgba(34,211,238,.3); background: rgba(34,211,238,.08); color: #67e8f9; }
-.lm-source-badge.conflict { border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.1); color: #f87171; }
-.lm-unavailable { margin-top: 3px; color: #d4b45f; font-size: var(--fs-label); }
+/* main/secondary 는 v-if 로 배타 표시라 같은 정보색으로 합쳐도 구분이 죽지 않는다
+   (파랑/청록의 색상 차이가 아니라 라벨 글자가 둘을 구분한다) */
+.lm-source-badge.main { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.1); color: var(--state-info-fg); }
+.lm-source-badge.secondary { border-color: rgba(34,211,238,.3); background: rgba(34,211,238,.08); color: var(--state-info-fg); }
+.lm-source-badge.conflict { border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.1); color: var(--state-alert-fg); }
+.lm-unavailable { margin-top: 3px; color: var(--state-warn-fg); font-size: var(--fs-label); }
 .lm-triggers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .lm-tw { font-size: var(--fs-label); padding: 1px 6px; border-radius: 7px; background: var(--bg-button); color: var(--text-muted); }
 .lm-weight { width: 64px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px; padding: 5px 6px; color: var(--text-primary); font-size: 12px; text-align: center; }
-.lm-add { background: var(--accent); color: #000; border: none; border-radius: 6px; font-size: 11px; font-weight: var(--fw-bold); padding: 6px 12px; cursor: pointer; white-space: nowrap; }
-.lm-add:hover { background: var(--accent-hover); }
+/* 주 버튼: 글자를 얹는 면이라 --accent 가 아니라 --accent-fill + --on-accent */
+.lm-add { background: var(--accent-fill); color: var(--on-accent); border: none; border-radius: 6px; font-size: 11px; font-weight: var(--fw-bold); padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.lm-add:hover { background: var(--accent-fill-hover); }
 .lm-add:disabled, .lm-weight:disabled { opacity: .5; cursor: not-allowed; }
 .lm-batch { margin: 4px 20px; border: 1px solid var(--border); border-radius: var(--radius-base); }
 .lm-batch > summary { padding: 8px 12px; font-size: 11px; font-weight: var(--fw-bold); color: var(--text-secondary); cursor: pointer; }

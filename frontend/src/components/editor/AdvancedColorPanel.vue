@@ -157,7 +157,7 @@ function resetControls() {
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
@@ -172,7 +172,7 @@ function resetControls() {
 
 .divider {
   height: 1px;
-  background-color: #2A2A2A;
+  background-color: var(--rule);
   margin: 4px 0;
 }
 
@@ -183,7 +183,7 @@ function resetControls() {
 }
 
 .slider-label {
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 12px;
   min-width: 80px;
   white-space: nowrap;
@@ -191,14 +191,14 @@ function resetControls() {
 
 .slider {
   flex: 1;
-  accent-color: #E2B340;
+  accent-color: var(--accent);
   height: 4px;
-  background: #2A2A2A;
+  background: var(--rule);
   border-radius: 2px;
 }
 
 .slider-value {
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 12px;
   min-width: 30px;
   text-align: right;
@@ -212,8 +212,8 @@ function resetControls() {
 
 .accent-btn {
   height: 36px;
-  background-color: #E2B340;
-  color: #fff;
+  background-color: var(--accent-fill);
+  color: var(--on-accent);
   border: none;
   border-radius: 4px;
   font-size: 13px;
@@ -221,20 +221,20 @@ function resetControls() {
   cursor: pointer;
 }
 .accent-btn:hover {
-  background-color: #c9a038;
+  background-color: var(--accent-fill-hover);
 }
 
 .reset-btn {
   height: 36px;
-  background-color: #222;
-  color: #B0B0B0;
+  background-color: var(--bg-button);
+  color: var(--text-secondary);
   border: none;
   border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
 }
 .reset-btn:hover {
-  background-color: #2A2A2A;
+  background-color: var(--bg-button-hover);
 }
 
 .flex-1 { flex: 1; }

@@ -275,12 +275,12 @@ function onApplyImage() {
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
 .group-box {
-  border: 1px solid #2A2A2A;
+  border: 1px solid var(--rule);
   border-radius: 6px;
   padding: 15px 8px 8px;
   margin: 0;
@@ -290,16 +290,16 @@ function onApplyImage() {
 }
 
 .group-box legend {
-  color: #585858;
+  color: var(--text-muted);
   font-weight: var(--fw-bold);
   font-size: 13px;
   padding: 0 4px;
 }
 
 .text-input {
-  background-color: #1A1A1A;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 6px;
   font-size: 13px;
@@ -307,7 +307,7 @@ function onApplyImage() {
   box-sizing: border-box;
 }
 .text-input::placeholder {
-  color: #585858;
+  color: var(--text-muted);
 }
 
 .font-color-row {
@@ -317,9 +317,9 @@ function onApplyImage() {
 
 .font-select {
   flex: 2;
-  background-color: #1A1A1A;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 4px;
   font-size: 12px;
@@ -328,11 +328,13 @@ function onApplyImage() {
 .color-btn {
   flex: 1;
   height: 35px;
-  border: 1px solid #2A2A2A;
+  border: 1px solid var(--rule);
   border-radius: 4px;
   font-size: 13px;
   font-weight: var(--fw-bold);
   cursor: pointer;
+  /* 배경이 사용자가 고른 워터마크 색(인라인 스타일)이라 테마와 무관하다 —
+     밝은 색 위에서 글자가 읽히게 검정 고정. 토큰화하면 흰 색을 고른 순간 안 보인다. */
   color: #000;
 }
 
@@ -344,16 +346,16 @@ function onApplyImage() {
 .preset-pos-btn {
   flex: 1;
   height: 26px;
-  background-color: #222;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-button);
+  color: var(--text-primary);
+  border: 1px solid var(--rule);
   border-radius: 3px;
   font-size: 11px;
   cursor: pointer;
   padding: 3px 6px;
 }
 .preset-pos-btn:hover {
-  background-color: #2A2A2A;
+  background-color: var(--bg-button-hover);
 }
 
 .slider-group {
@@ -363,7 +365,7 @@ function onApplyImage() {
 }
 
 .slider-label {
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 12px;
   min-width: 70px;
   white-space: nowrap;
@@ -371,14 +373,14 @@ function onApplyImage() {
 
 .slider {
   flex: 1;
-  accent-color: #E2B340;
+  accent-color: var(--accent);
   height: 4px;
-  background: #2A2A2A;
+  background: var(--rule);
   border-radius: 2px;
 }
 
 .slider-value {
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 12px;
   min-width: 30px;
   text-align: right;
@@ -388,7 +390,7 @@ function onApplyImage() {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
 }
@@ -396,14 +398,14 @@ function onApplyImage() {
   font-weight: var(--fw-bold);
 }
 .checkbox-row input[type="checkbox"] {
-  accent-color: #E2B340;
+  accent-color: var(--accent);
 }
 
 .file-btn {
   height: 35px;
-  background-color: #1A1A1A;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-button);
+  color: var(--text-primary);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   font-size: 13px;
   font-weight: var(--fw-bold);
@@ -411,19 +413,19 @@ function onApplyImage() {
   width: 100%;
 }
 .file-btn:hover {
-  background-color: #222;
+  background-color: var(--bg-button-hover);
 }
 
 .file-label {
-  color: #585858;
+  color: var(--text-muted);
   font-size: 11px;
   min-height: 20px;
 }
 
 .accent-btn {
   height: 35px;
-  background-color: #E2B340;
-  color: #fff;
+  background-color: var(--accent-fill);
+  color: var(--on-accent);
   border: none;
   border-radius: 4px;
   font-size: 13px;
@@ -432,6 +434,6 @@ function onApplyImage() {
   width: 100%;
 }
 .accent-btn:hover {
-  background-color: #c9a038;
+  background-color: var(--accent-fill-hover);
 }
 </style>

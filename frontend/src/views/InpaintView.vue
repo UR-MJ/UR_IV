@@ -263,6 +263,8 @@ function onMove(e: MouseEvent) {
     return
   }
 
+  // 아래 오버레이 캔버스의 선 색들은 토큰화하지 않는다 — 이미지 위에 얹히는 선택 표시라
+  // UI 크롬이 아니고, 배경(사용자 이미지)이 테마와 무관해서 테마색을 따라가면 오히려 안 보인다.
   if (currentTool.value === 'box') {
     clearOverlay()
     if (oCtx) { oCtx.strokeStyle = '#E2B340'; oCtx.lineWidth = 2; oCtx.setLineDash([6,4]); oCtx.strokeRect(startX, startY, p.x-startX, p.y-startY); oCtx.setLineDash([]) }
@@ -424,24 +426,29 @@ onMounted(() => { onBackendEvent('inpaintImageLoaded', (path: string) => loadFro
 .tool-chip { min-height: 30px; padding: 6px 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; }
 .tool-chip:hover { border-color: var(--text-muted); }
 .tool-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-.tool-chip.magnet.active { background: rgba(96,165,250,0.1); border-color: #60a5fa; color: #60a5fa; }
+/* 테두리도 선/글자 역할이라 채움용 --state-info 가 아니라 --state-info-fg 를 쓴다 */
+.tool-chip.magnet.active { background: rgba(96,165,250,0.1); border-color: var(--state-info-fg); color: var(--state-info-fg); }
 .slider-row { display: flex; align-items: center; gap: 6px; }
 .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
 .slider-val { font-size: var(--fs-label); color: var(--accent); min-width: 36px; text-align: right; font-family: monospace; }
 .mt-6 { margin-top: 6px; }
 .mask-actions { display: flex; gap: 3px; }
 .act-btn { flex: 1; height: 30px; padding: 0 8px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; }
-.btn-gen { width: 100%; height: 42px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold); font-size: 12px; cursor: pointer; }
+.btn-gen { width: 100%; height: 42px; background: var(--accent-fill); border: none; border-radius: var(--radius-pill); color: var(--on-accent); font-weight: var(--fw-bold); font-size: 12px; cursor: pointer; }
 .btn-gen:disabled { opacity: 0.4; }
-.canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #080808; position: relative; }
+/* 캔버스 '뒤' 여백은 UI 면이다 — 이미지에 칠해지는 색이 아니라 토큰으로 간다 */
+.canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--bg-primary); position: relative; }
 .canvas-wrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
 .canvas-wrap.dragging { background: rgba(250,204,21,0.05); }
 .drop-empty { text-align: center; cursor: pointer; }
 .drop-icon { font-size: 48px; opacity: 0.3; }
 .drop-empty h2 { letter-spacing: 0.08em; color: var(--text-muted); letter-spacing: 0; }
-.drop-empty p { color: #484848; font-size: 12px; }
+.drop-empty p { color: var(--text-muted); font-size: 12px; }
 .cv { position: absolute; max-width: 85%; max-height: 85%; }
 .cv.mask { pointer-events: none; }
 .cv.overlay { pointer-events: auto; }
+/* 글자색을 토큰으로 못 바꾼다: 바탕이 테마를 안 타는 rgba(0,0,0,0.6) 칩이라
+   --text-muted 로 두면 라이트에서 어두운 글자가 어두운 칩 위에 얹혀 안 보인다.
+   제대로 고치려면 칩 자체에 라이트 모드 규칙이 필요하다(이번 범위 밖). */
 .cv-info { position: absolute; bottom: 8px; right: 12px; color: #585858; font-size: var(--fs-label); background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px; pointer-events: none; }
 </style>

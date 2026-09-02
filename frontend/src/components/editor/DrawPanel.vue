@@ -129,6 +129,8 @@ const props = withDefaults(defineProps<{
   gradientEndColor: '#000000',
 })
 
+/** 그리기 팔레트 — 이미지에 실제로 칠해지는 사용자 콘텐츠 색이라 테마 토큰이 아니다.
+ *  테마가 바뀌어도 빨강은 빨강이어야 한다. */
 const paletteColors: string[] = [
   '#000000', '#FFFFFF', '#FF0000', '#00FF00',
   '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
@@ -215,7 +217,7 @@ defineExpose({ setColor, setTool })
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
@@ -243,7 +245,7 @@ defineExpose({ setColor, setTool })
 }
 
 .section-subheader {
-  color: #585858;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: var(--fw-bold);
   padding: 2px;
@@ -256,10 +258,10 @@ defineExpose({ setColor, setTool })
 }
 
 .tool-btn {
-  background-color: #1A1A1A;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-button);
+  border: 1px solid var(--rule);
   border-radius: 6px;
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: var(--fw-bold);
   text-align: left;
@@ -270,18 +272,18 @@ defineExpose({ setColor, setTool })
   align-items: center;
 }
 .tool-btn:hover {
-  border-color: #585858;
-  background-color: #222;
+  border-color: var(--edge);
+  background-color: var(--bg-button-hover);
 }
 .tool-btn.active {
-  background-color: #E2B340;
-  color: #fff;
-  border-color: #E2B340;
+  background-color: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
 }
 
 .divider {
   height: 1px;
-  background-color: #2A2A2A;
+  background-color: var(--rule);
   margin: 4px 0;
 }
 
@@ -294,13 +296,13 @@ defineExpose({ setColor, setTool })
 .palette-btn {
   width: 32px;
   height: 32px;
-  border: 2px solid #2A2A2A;
+  border: 2px solid var(--rule);
   border-radius: 4px;
   cursor: pointer;
   padding: 0;
 }
 .palette-btn:hover {
-  border-color: #585858;
+  border-color: var(--edge);
 }
 
 .color-row {
@@ -312,7 +314,7 @@ defineExpose({ setColor, setTool })
 .color-preview {
   width: 36px;
   height: 36px;
-  border: 2px solid #585858;
+  border: 2px solid var(--edge);
   border-radius: 4px;
   flex-shrink: 0;
 }
@@ -328,15 +330,15 @@ defineExpose({ setColor, setTool })
 }
 
 .small-label {
-  color: #585858;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .small-btn {
   height: 32px;
-  background: #1A1A1A;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
+  background: var(--bg-button);
+  color: var(--text-primary);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
@@ -346,16 +348,16 @@ defineExpose({ setColor, setTool })
 .secondary-btn {
   flex: 1;
   height: 36px;
-  background-color: #1A1A1A;
-  color: #E8E8E8;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-button);
+  color: var(--text-primary);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   font-size: 12px;
   font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .secondary-btn:hover {
-  background-color: #222;
+  background-color: var(--bg-button-hover);
 }
 .secondary-btn.full-width {
   width: 100%;
@@ -372,16 +374,18 @@ defineExpose({ setColor, setTool })
 
 .heal-apply-btn {
   height: 36px;
-  background-color: #2D8C4E;
-  color: #fff;
+  background-color: var(--state-ok);
+  /* 상태 채움색은 세 프리셋 모두 흰 글자 기준(4.5:1)으로 잡은 값이라 흰색을 유지한다 */
+  color: #FFFFFF;
   border: none;
   border-radius: 6px;
   font-size: 13px;
   font-weight: var(--fw-bold);
   cursor: pointer;
 }
+/* 상태색에는 hover 파생 토큰이 없다 — 사용자가 state-ok 를 바꿔도 따라오게 밝기로 민다 */
 .heal-apply-btn:hover {
-  background-color: #3AA05E;
+  filter: brightness(1.15);
 }
 
 .slider-group {
@@ -391,7 +395,7 @@ defineExpose({ setColor, setTool })
 }
 
 .slider-label {
-  color: #B0B0B0;
+  color: var(--text-secondary);
   font-size: 12px;
   min-width: 80px;
   white-space: nowrap;
@@ -399,14 +403,14 @@ defineExpose({ setColor, setTool })
 
 .slider {
   flex: 1;
-  accent-color: #E2B340;
+  accent-color: var(--accent);
   height: 4px;
-  background: #2A2A2A;
+  background: var(--rule);
   border-radius: 2px;
 }
 
 .slider-value {
-  color: #E8E8E8;
+  color: var(--text-primary);
   font-size: 12px;
   min-width: 30px;
   text-align: right;
@@ -414,20 +418,20 @@ defineExpose({ setColor, setTool })
 
 .fill-btn {
   height: 34px;
-  background-color: #1A1A1A;
-  color: #B0B0B0;
-  border: 1px solid #2A2A2A;
+  background-color: var(--bg-button);
+  color: var(--text-secondary);
+  border: 1px solid var(--rule);
   border-radius: 6px;
   font-size: 13px;
   font-weight: var(--fw-bold);
   cursor: pointer;
 }
 .fill-btn:hover {
-  border-color: #585858;
+  border-color: var(--edge);
 }
 .fill-btn.active {
-  background-color: #E2B340;
-  color: #fff;
-  border-color: #E2B340;
+  background-color: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
 }
 </style>

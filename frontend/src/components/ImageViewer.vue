@@ -77,7 +77,7 @@ const progressPct = computed(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #0A0A0A;
+  background: var(--bg-primary);
 }
 
 .image-area {
@@ -109,14 +109,14 @@ const progressPct = computed(() => {
 
 .placeholder-text {
   font-size: 18px;
-  color: #8A8A8A;
+  color: var(--text-muted);
   font-weight: var(--fw-bold);
   margin-bottom: 8px;
 }
 
 .placeholder-sub {
   font-size: 13px;
-  color: #8A8A8A;
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 
@@ -125,11 +125,11 @@ const progressPct = computed(() => {
   justify-content: center;
   gap: 24px;
   padding: 8px 16px;
-  background: #111111;
-  border-top: 1px solid #1A1A1A;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--rule);
 }
 
-.info-item { font-size: 12px; color: #787878; }
+.info-item { font-size: 12px; color: var(--text-muted); }
 .explore-btn {
   padding: 3px 12px; background: var(--bg-button); border: 1px solid var(--border);
   border-radius: 4px; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer;
@@ -138,17 +138,18 @@ const progressPct = computed(() => {
 .generating { text-align: center; }
 .spinner {
   width: 40px; height: 40px; margin: 0 auto 12px;
-  border: 3px solid #1A1A1A; border-top: 3px solid #E2B340;
+  /* 진행 표시의 '빈 부분'은 구분선 역할이라 --rule (라이트에서도 보이는 값) */
+  border: 3px solid var(--rule); border-top: 3px solid var(--accent);
   border-radius: 50%; animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.gen-text { color: #E2B340; font-size: 14px; font-weight: var(--fw-bold); }
+.gen-text { color: var(--accent); font-size: 14px; font-weight: var(--fw-bold); }
 .progress-bar {
-  width: 200px; height: 4px; background: #1A1A1A; border-radius: 2px;
+  width: 200px; height: 4px; background: var(--rule); border-radius: 2px;
   margin: 12px auto 0; overflow: hidden;
 }
 .progress-fill {
-  height: 100%; background: #E2B340; border-radius: 2px;
+  height: 100%; background: var(--accent); border-radius: 2px;
   transition: width 0.3s ease;
 }
 </style>

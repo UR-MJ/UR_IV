@@ -81,11 +81,12 @@ class GeneratorMainUI(
             self.filtered_results = []
 
             # 1-A. UI 상태 영속화 매니저 — 창 크기/위치 자동 저장/복원
-            from pathlib import Path
             from core.ui_state_manager import UIStateManager
-            _save_dir = Path(__file__).resolve().parent.parent / "save"
-            _save_dir.mkdir(exist_ok=True)
-            self.ui_state = UIStateManager(_save_dir / "ui_state.json")
+            from core.storage_paths import config_file
+            self.ui_state = UIStateManager(config_file(
+                "state/ui_state.json",
+                legacy_paths="save/ui_state.json",
+            ))
             self._register_ui_state_handlers()
 
             # 2. 아이콘 설정
@@ -392,7 +393,7 @@ class GeneratorMainUI(
             elif action == 'update_prompt_deck':
                 # Vue에서 필터링된 결과로 덱 업데이트
                 deck = payload.get('results', [])
-                if deck:
+                if 'results' in payload and isinstance(deck, list):
                     import random as _rnd
                     rating_filter = getattr(self, '_rating_filter', {'g', 's', 'q', 'e'})
                     self.filtered_results = deck
@@ -703,11 +704,27 @@ class GeneratorMainUI(
                                 'image_height': _idim(row.get('image_height')),
                             })
                         self._last_search_results = out
+                        # 가져온 결과는 기존 Search cache/deck snapshot과 섞지 않는다.
+                        # 현재 manifest identity 아래 새 snapshot pair로 저장하면 이후
+                        # 필터(active-only)도 같은 full base를 안전하게 유지한다.
+                        import uuid as _uuid
+                        from core.search_result_store import SearchResultStore
+                        imported_identity = SearchResultStore().dataset_info()
+                        imported_snapshot = _uuid.uuid4().hex
+                        self._search_dataset_identity = imported_identity
+                        self._search_snapshot_id = imported_snapshot
+
                         # Python filtered_results + shuffled_prompt_deck 업데이트
                         import random as _rnd
                         self.filtered_results = out
                         self.shuffled_prompt_deck = out.copy()
                         _rnd.shuffle(self.shuffled_prompt_deck)
+                        self._persist_search_results(
+                            out,
+                            full=out,
+                            dataset_identity=imported_identity,
+                            snapshot_id=imported_snapshot,
+                        )
                         if hasattr(self, '_save_deck_state'):
                             self._save_deck_state()
                         # Vue로 결과 전달
@@ -1127,6 +1144,10 @@ class GeneratorMainUI(
                     self._apply_ui_prefs_to_cleaner(prefs)
                     # 실행 중인 자동화도 다음 생성부터 새 제한값을 사용.
                     self._apply_anima_guard_prefs(prefs)
+                    # 테마는 PyQt 쪽 색표에도 반영 — 다음에 뜨는 다이얼로그/스플래시가
+                    # Vue 와 같은 색이어야 한다. (theme 키가 안 왔으면 no-op)
+                    if 'theme' in payload or 'themeOverrides' in payload:
+                        self._apply_theme_prefs(prefs)
                     # 재전송 하지 않음 — uiPrefsLoaded는 앱 시작 시에만 emit
                     # 재전송하면 watch → save → emit → watch 무한 루프 발생
                 except Exception as e:
@@ -1548,26 +1569,50 @@ class GeneratorMainUI(
                 'error', f'백엔드 {action} 실패: {message}'
             )
 
-    def _persist_search_results(self, active, full=None):
+    def _persist_search_results(
+        self,
+        active,
+        full=None,
+        *,
+        dataset_identity=None,
+        snapshot_id=None,
+    ):
         """검색 결과 디스크 영속화 — 단일 쓰기 경로(중복 제거).
-        디스크 = 영속 단일 소스. 메모리(filtered_results/shuffled_prompt_deck)는 런타임 캐시,
-        Vue localStorage(slim ≤500)는 폴백.
-          active: 표시/자동화 덱용(필터 적용) 셋 → last_search_results.json (항상)
-          full  : '필터 해제' 베이스(전체) 셋 → last_full_results.json (새 검색 때만 전달)
+        dataset label이 포함된 cache/search envelope가 디스크 단일 소스다.
+        메모리(filtered_results/shuffled_prompt_deck)는 런타임 캐시,
+          active: 표시/자동화 덱용(필터 적용) 셋 (항상)
+          full  : '필터 해제' 베이스(전체) 셋 (새 검색 때만 전달)
         NOTE: os/json은 모듈 레벨 import — 여기서 지역 재import 금지(UnboundLocalError 회피).
         대용량(수십만 행) 직렬화+쓰기를 GUI 스레드에서 하면 검색 완료 시 UI가 멈추므로
-        백그라운드 데몬 스레드로 수행(atomic_write_json은 Qt 비의존이라 스레드 안전)."""
-        cache_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
+        백그라운드 데몬 스레드로 수행한다. 요청 순번은 GUI 스레드에서 먼저 예약해
+        늦게 시작한 구형 writer가 최신 결과를 덮지 못하게 한다."""
+        from core.search_result_store import reserve_write_sequence
+        expected_identity = dataset_identity or getattr(
+            self,
+            '_search_dataset_identity',
+            None,
+        )
+        expected_snapshot = snapshot_id or getattr(
+            self,
+            '_search_snapshot_id',
+            None,
+        )
+        write_sequence = reserve_write_sequence(expected_snapshot)
 
         def _write():
             try:
-                # indent 없이 — 원자적 쓰기로 강제 종료 시 절단 방지
-                atomic_write_json(os.path.join(cache_dir, 'last_search_results.json'),
-                                  active, indent=None)
-                if full is not None:
-                    atomic_write_json(os.path.join(cache_dir, 'last_full_results.json'),
-                                      full, indent=None)
+                from core.search_result_store import SearchResultStore
+                saved = SearchResultStore().save_if_latest(
+                    write_sequence,
+                    active,
+                    full=full,
+                    snapshot_id=expected_snapshot,
+                    expected_identity=expected_identity,
+                )
+                if not saved:
+                    print(
+                        f"[Search] 오래된 디스크 저장 요청 건너뜀: {write_sequence}"
+                    )
             except Exception as e:
                 print(f"[Search] 디스크 영속 실패: {e}")
 
@@ -1731,9 +1776,14 @@ class GeneratorMainUI(
             # 레거시 흡수: ui_prefs에 loraStack이 없고 옛 prompt_settings.active_loras가 있으면 1회 이관
             self._migrate_legacy_lora_stack(prefs, prefs_path)
             if prefs and hasattr(self, 'vue_bridge'):
+                # prefs 전체를 보낸다 — theme/themeOverrides 처럼 Vue 만 아는 키도
+                # 그대로 실려야 다른 기기에서 바꾼 테마가 이 기기에 반영된다.
                 self.vue_bridge.uiPrefsLoaded.emit(json.dumps(prefs))
                 # FIX: 시작 시점에 LOGIC 토글을 prompt_cleaner에 적용
                 self._apply_ui_prefs_to_cleaner(prefs)
+                # PyQt 색표도 같은 prefs 로 맞춘다(ThemeManager 는 파일을 스스로도
+                # 읽지만, 마이그레이션 후 값이면 여기서 온 게 최신이다).
+                self._apply_theme_prefs(prefs)
                 # 단일 소스(ui_prefs.json)에서 런타임 상태 직접 복원 —
                 #   Vue가 set_rating_filter/set_high_res_factor를 아직 안 보낸 시점(자동화 즉시 시작 등)에도 올바른 값.
                 self._restore_runtime_prefs(prefs)
@@ -2574,6 +2624,33 @@ class GeneratorMainUI(
         except Exception as e:
             print(f"[Warning] LOGIC 토글 적용 실패: {e}")
 
+    # ── 테마 (Vue) → PyQt 위젯 ────────────────────────────
+    def _apply_theme_prefs(self, prefs: dict) -> None:
+        """ui_prefs 의 theme/themeOverrides 를 PyQt 쪽 색표에 반영.
+
+        **어디까지 즉시 반영되나**: ThemeManager 의 색표와 전역 QSS 는 바로 바뀌므로,
+        이 시점 *이후에 만들어지는* PyQt 화면(백엔드 선택 다이얼로그, 컨텍스트 메뉴,
+        파일 대화상자 등)은 새 테마로 그려진다. 이미 떠 있는 위젯 중 색을 인라인
+        f-string 스타일시트로 박아 넣은 것들(tabs/·widgets/ 대부분)은 생성 시점에
+        색이 굳어 있어 다시 만들지 않는 한 안 바뀐다 — 앱 화면 대부분은 Vue 가
+        그리고 PyQt 는 껍데기라 실사용에서 문제되지 않는다. (전면 반영이 필요하면
+        위젯 재생성이 필요하고, 그건 테마 하나 바꾸는 값으로는 너무 비싸다.)
+        """
+        if not isinstance(prefs, dict):
+            return
+        try:
+            from utils.theme_manager import get_theme_manager
+
+            tm = get_theme_manager()
+            tm.apply_prefs(prefs)
+            # 앱은 시작 시 app.setStyleSheet("")로 전역 QSS 를 비운다(스타일링은 Vue 담당).
+            # 이미 QSS 를 쓰고 있던 경우에만 새 QSS 로 갈아끼운다 — 안 그러면 여기서
+            # 없던 전역 스타일이 갑자기 생겨 Vue 뷰 주변 껍데기가 달라 보인다.
+            if self.styleSheet():
+                self.setStyleSheet(tm.get_stylesheet())
+        except Exception as e:
+            print(f"[Warning] 테마 적용 실패: {e}")
+
     # ── 워크플로우 프로파일 ────────────────────────────────
     def _send_workflow_profiles_list(self):
         """현재 프로파일 목록을 Vue로 전송."""
@@ -2650,9 +2727,12 @@ class GeneratorMainUI(
     def _get_instant_wildcards(self):
         """싱글톤 InstantWildcards 인스턴스 — 게으른 초기화 + PromptPipeline 훅 등록."""
         if not hasattr(self, '_instant_wildcards'):
-            from pathlib import Path
             from core.instant_wildcards import InstantWildcards
-            store = Path(__file__).resolve().parent.parent / "save" / "instant_wildcards.json"
+            from core.storage_paths import user_data_file
+            store = user_data_file(
+                "instant_wildcards.json",
+                legacy_paths="save/instant_wildcards.json",
+            )
             self._instant_wildcards = InstantWildcards(store_path=store)
             # PromptPipeline에 자동 등록 — 와일드카드 확장 단계에 추가
             try:
@@ -2743,17 +2823,26 @@ class GeneratorMainUI(
 
         self.ui_state.register("main_window", _get_main_geometry, _set_main_geometry)
 
+    def _save_shutdown_state(self) -> bool:
+        """Persist live settings unless a just-imported backup must win."""
+        if getattr(self, '_preserve_imported_settings_on_quit', False):
+            print("[Config] 가져온 설정 보존을 위해 종료 시 자동 저장을 건너뜁니다")
+            return False
+        else:
+            try:
+                self.save_settings()
+            except Exception as e:
+                print(f"[Warning] 종료 시 설정 저장 실패: {e}")
+            try:
+                # UI 상태 (창 크기/위치/스플리터 등) 저장
+                if hasattr(self, "ui_state"):
+                    self.ui_state.save_all()
+            except Exception as e:
+                print(f"[Warning] UI 상태 저장 실패: {e}")
+        return True
+
     def _quit_app(self):
-        try:
-            self.save_settings()
-        except Exception as e:
-            print(f"[Warning] 종료 시 설정 저장 실패: {e}")
-        try:
-            # UI 상태 (창 크기/위치/스플리터 등) 저장
-            if hasattr(self, "ui_state"):
-                self.ui_state.save_all()
-        except Exception as e:
-            print(f"[Warning] UI 상태 저장 실패: {e}")
+        self._save_shutdown_state()
         try:
             # 진행 중 생성 워커에 취소(+백엔드 interrupt) — GPU 작업 중단
             worker = getattr(self, 'gen_worker', None)

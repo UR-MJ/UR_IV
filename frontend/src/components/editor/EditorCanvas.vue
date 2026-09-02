@@ -507,7 +507,11 @@ function imagePerScreenPx(): number {
   return total > 0 ? 1 / total : 1
 }
 
-/** 매 프레임 오버레이 위에 다시 그려야 하는 일회성 요소들 */
+/** 매 프레임 오버레이 위에 다시 그려야 하는 일회성 요소들.
+ *
+ * 여기 hex 는 마스크 오버레이 색이라 **테마 토큰으로 바꾸지 않는다** — 임의의 이미지
+ * 위에 얹히는 표시라 배경색과 무관해야 하고, `strokeLasso` 가 색으로 선택/지우기를
+ * 구분(`color === '#E2B340'`)하므로 `var(...)` 문자열을 넣으면 비교가 깨진다. */
 function drawTransientOverlay() {
   if (!maskCtx) return
   if (perspectiveActive) { drawPerspectiveGuide(); return }
@@ -1480,7 +1484,7 @@ onBeforeUnmount(() => {
 .canvas-container {
   width: 100%; height: 100%; position: relative;
   display: flex; align-items: center; justify-content: center;
-  overflow: hidden; background: #111;
+  overflow: hidden; background: var(--bg-secondary);
 }
 /* 90% 제한은 고정폭 사이드패널과 겹쳐 이미지가 창의 약 59%만 쓰게 했다.
    baseScale(=clientWidth/width)이 실측값을 읽으므로 좌표 변환은 그대로 성립한다. */
@@ -1497,6 +1501,8 @@ canvas { max-width: 100%; max-height: 100%; position: absolute; }
   min-width: 160px;
   padding: 4px 8px;
   background: rgba(0, 0, 0, 0.85);
+  /* 바탕이 이미지 위에 얹히는 고정 검정 오버레이라 테마를 따라가면 안 된다 —
+     라이트에서 글자만 어두워지면 검은 알약 위에서 안 읽힌다. */
   color: #fff;
   border: 1px solid var(--edge, #666);
   border-radius: 4px;
@@ -1505,6 +1511,7 @@ canvas { max-width: 100%; max-height: 100%; position: absolute; }
 }
 .canvas-info {
   position: absolute; bottom: 8px; right: 12px;
+  /* 위와 같은 이유 — 고정 검정 알약 위의 글자라 테마와 무관하다 */
   color: #585858; font-size: 11px;
   background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 4px;
   pointer-events: none; z-index: 2;

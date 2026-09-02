@@ -476,9 +476,9 @@ const activeSummary = computed(() => {
 .ag-reset:hover { border-color: var(--text-muted); color: var(--text-primary); }
 .ag-import {
   background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.55);
-  color: #bfdbfe;
+  color: var(--state-info-fg);
 }
-.ag-import:hover { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; color: #fff; }
+.ag-import:hover { background: rgba(96, 165, 250, 0.2); border-color: var(--state-info-fg); color: var(--text-primary); }
 
 /* Anima 패널은 9~11px의 컴팩트 입력 체계다. 공용 CustomSelect의 14px 기본값을
    이 패널 안에서만 맞춰 다른 드롭다운과 입력의 글자 크기가 튀지 않게 한다. */

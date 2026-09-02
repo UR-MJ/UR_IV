@@ -187,24 +187,25 @@ function exportCSV() {
 <style scoped>
 .xyz-view { width: 100%; height: 100%; display: flex; }
 .config-panel {
-  width: 320px; padding: 16px; border-right: 1px solid #1A1A1A;
+  width: 320px; padding: 16px; border-right: 1px solid var(--rule);
   display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
 }
-.config-panel h3 { color: #E8E8E8; font-size: 14px; margin: 0; }
+.config-panel h3 { color: var(--text-primary); font-size: 14px; margin: 0; }
 .axis-config { display: flex; flex-direction: column; gap: 4px; }
-.axis-label { color: #E2B340; font-size: 12px; font-weight: var(--fw-bold); }
+.axis-label { color: var(--accent); font-size: 12px; font-weight: var(--fw-bold); }
 .s-select, .s-input {
-  background: #131313; border: 1px solid #222; border-radius: 4px; padding: 6px 8px;
-  color: #E8E8E8; font-size: 12px; outline: none; caret-color: #E2B340;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px;
+  color: var(--text-primary); font-size: 12px; outline: none; caret-color: var(--accent);
 }
-.s-input:focus { border-color: #E2B340; }
+.s-input:focus { border-color: var(--accent); }
 .s-input::selection { background: rgba(226, 179, 64, 0.3); }
-.s-select:focus { border-color: #E2B340; }
-.combo-info { color: #787878; font-size: 12px; text-align: center; }
-.accent { color: #E2B340; font-weight: var(--fw-bold); }
+.s-select:focus { border-color: var(--accent); }
+.combo-info { color: var(--text-muted); font-size: 12px; text-align: center; }
+.accent { color: var(--accent); font-weight: var(--fw-bold); }
+/* 주 버튼 — 면은 accent-fill, 글자는 on-accent 여야 사용자가 어떤 강조색을 골라도 읽힌다 */
 .btn-gen {
-  padding: 12px; background: #E2B340; border: none; border-radius: 6px;
-  color: #000; font-weight: var(--fw-bold); cursor: pointer;
+  padding: 12px; background: var(--accent-fill); border: none; border-radius: 6px;
+  color: var(--on-accent); font-weight: var(--fw-bold); cursor: pointer;
 }
 .btn-gen:disabled { opacity: 0.35; cursor: not-allowed; }
 .result-area { flex: 1; overflow-y: auto; padding: 8px; }
@@ -212,18 +213,18 @@ function exportCSV() {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px 4px 12px; gap: 8px;
 }
-.result-count { font-size: 12px; color: #787878; font-weight: var(--fw-bold); }
+.result-count { font-size: 12px; color: var(--text-muted); font-weight: var(--fw-bold); }
 .btn-export {
-  padding: 6px 14px; background: #1A1A1A; border: 1px solid #2A2A2A;
-  border-radius: 6px; color: #E2B340; font-size: 11px; font-weight: var(--fw-bold);
+  padding: 6px 14px; background: var(--bg-button); border: 1px solid var(--rule);
+  border-radius: 6px; color: var(--accent); font-size: 11px; font-weight: var(--fw-bold);
   cursor: pointer; transition: all 0.15s;
 }
-.btn-export:hover { background: #222; border-color: #E2B340; }
+.btn-export:hover { background: var(--bg-button-hover); border-color: var(--accent); }
 .empty {
   width: 100%; height: 100%;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 20px;
-  color: #484848; font-size: 14px;
+  color: var(--text-muted); font-size: 14px;
 }
 .empty-illustration {
   width: 320px; max-width: 60%; height: auto;
@@ -240,7 +241,7 @@ function exportCSV() {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 4px; align-content: start;
 }
-.result-item { border-radius: 4px; overflow: hidden; border: 1px solid #1A1A1A; }
+.result-item { border-radius: 4px; overflow: hidden; border: 1px solid var(--rule); }
 .result-item img { width: 100%; aspect-ratio: 1; object-fit: cover; }
-.result-label { font-size: var(--fs-label); color: #585858; padding: 4px 6px; text-align: center; }
+.result-label { font-size: var(--fs-label); color: var(--text-muted); padding: 4px 6px; text-align: center; }
 </style>

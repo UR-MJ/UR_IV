@@ -294,8 +294,11 @@ function isWc(text: string) { return /__.+__/.test(text) }
   width: 26px;
   height: 26px;
   border-radius: 50%;       /* 원형 변형 */
-  border: 1px solid #f87171;
-  background: #f87171;
+  /* 전체 삭제는 '채움' 배지라 글자색(-fg)이 아니라 --state-alert.
+     그 위 글자는 흰색 고정 — --state-alert 자체가 흰 글자와 4.6:1 을 맞춘 값이고,
+     --text-primary 로 두면 라이트 모드에서 검정 글자가 얹혀 2.6:1 로 무너진다. */
+  border: 1px solid var(--state-alert);
+  background: var(--state-alert);
   color: #fff;
   font-size: 12px;
   box-shadow: 0 4px 14px rgba(248, 113, 113, 0.45), 0 0 0 2px rgba(248,113,113,0.15);
@@ -320,18 +323,22 @@ function isWc(text: string) { return /__.+__/.test(text) }
 .tbf-block[draggable="true"]:active { cursor: grabbing; opacity: 0.5; }
 .tbf-block.disabled { opacity: 0.35; }
 .tbf-block.disabled .tbf-text { text-decoration: line-through; }
-/* 색상 */
-.tbf-block.bc-count { border-color: rgba(96,165,250,0.3); color: #60a5fa; }
-.tbf-block.bc-nsfw { border-color: rgba(248,113,113,0.3); color: #f87171; }
-.tbf-block.bc-body { border-color: rgba(251,146,60,0.3); color: #fb923c; }
-.tbf-block.bc-clothing { border-color: rgba(167,139,250,0.3); color: #a78bfa; }
-.tbf-block.bc-action { border-color: rgba(74,222,128,0.3); color: #4ade80; }
-.tbf-block.bc-expression { border-color: rgba(251,191,36,0.3); color: #fbbf24; }
-.tbf-block.bc-bg { border-color: rgba(56,189,248,0.3); color: #38bdf8; }
-.tbf-block.bc-effect { border-color: rgba(192,132,252,0.3); color: #c084fc; }
-.tbf-block.bc-objects { border-color: rgba(148,163,184,0.3); color: #94a3b8; }
-.tbf-block.bc-color { border-color: rgba(244,114,182,0.3); color: #f472b6; }
-.tbf-block.bc-trait { border-color: rgba(52,211,153,0.3); color: #34d399; }
+/* 색상 — 옛 11색을 태그 6색+중립으로 접었다. 11색은 5개 색상 무리에 뭉쳐 구분이
+   안 됐고(인물수↔사물 2도), 토큰의 6색은 최소 이격 30도로 잡은 값이다.
+   묶음은 토큰의 뜻 그대로: 인물·캐릭터(수·신체·특성) / 배경·구도 / 포즈·표정 /
+   의상 / 효과·색 / NSFW / 중립(사물).
+   테두리는 같은 토큰의 30% 틴트라 색이 갈라지지 않는다(하드코딩 rgba 는 안 따라온다). */
+.tbf-block.bc-count { border-color: color-mix(in srgb, var(--tag-person) 30%, transparent); color: var(--tag-person); }
+.tbf-block.bc-nsfw { border-color: color-mix(in srgb, var(--tag-nsfw) 30%, transparent); color: var(--tag-nsfw); }
+.tbf-block.bc-body { border-color: color-mix(in srgb, var(--tag-person) 30%, transparent); color: var(--tag-person); }
+.tbf-block.bc-clothing { border-color: color-mix(in srgb, var(--tag-wear) 30%, transparent); color: var(--tag-wear); }
+.tbf-block.bc-action { border-color: color-mix(in srgb, var(--tag-pose) 30%, transparent); color: var(--tag-pose); }
+.tbf-block.bc-expression { border-color: color-mix(in srgb, var(--tag-pose) 30%, transparent); color: var(--tag-pose); }
+.tbf-block.bc-bg { border-color: color-mix(in srgb, var(--tag-scene) 30%, transparent); color: var(--tag-scene); }
+.tbf-block.bc-effect { border-color: color-mix(in srgb, var(--tag-fx) 30%, transparent); color: var(--tag-fx); }
+.tbf-block.bc-objects { border-color: color-mix(in srgb, var(--tag-neutral) 30%, transparent); color: var(--tag-neutral); }
+.tbf-block.bc-color { border-color: color-mix(in srgb, var(--tag-fx) 30%, transparent); color: var(--tag-fx); }
+.tbf-block.bc-trait { border-color: color-mix(in srgb, var(--tag-person) 30%, transparent); color: var(--tag-person); }
 .tbf-block.wc-block { border-color: rgba(250,204,21,0.4); background: rgba(250,204,21,0.08); color: var(--accent); border-style: dashed; }
 .wc-ico { margin-right: 2px; font-size: var(--fs-label); }
 /* 드롭 마커 */
@@ -362,8 +369,8 @@ function isWc(text: string) { return /__.+__/.test(text) }
   cursor: pointer; border-radius: 4px;
 }
 .ac-popup-block .ac-item:hover, .ac-popup-block .ac-item.selected {
-  background: rgba(96,165,250,0.2); color: #93c5fd;
+  background: rgba(96,165,250,0.2); color: var(--state-info-fg);
 }
 /* neg */
-.neg .tbf-block { border-color: rgba(248,113,113,0.2); color: #f87171; font-size: var(--fs-label); }
+.neg .tbf-block { border-color: rgba(248,113,113,0.2); color: var(--state-alert-fg); font-size: var(--fs-label); }
 </style>

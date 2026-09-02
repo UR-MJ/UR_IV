@@ -1,0 +1,47 @@
+/* 테마 폴백 — `core/theme_presets.py` 의 'default' 프리셋에서 생성.
+ *
+ * 실제 색은 `theme/applyTheme.ts` 가 첫 페인트 전에 `documentElement` 인라인
+ * 스타일로 넣는다(인라인이 :root 규칙보다 우선한다). 여기 값은 **스크립트가
+ * 실패했을 때 앱이 색 없이 뜨지 않게** 하는 안전망이고, 동시에 토큰의 전체 목록이다.
+ *
+ * 손으로 고치지 말 것 — `core/theme_presets.py` 를 고치고
+ * `tools/gen_theme_css.py` 를 다시 돌린다.
+ */
+
+:root {
+  --bg-primary: #0A0A0A;
+  --bg-secondary: #131313;
+  --bg-card: #161616;
+  --bg-input: #131313;
+  --bg-button: #1E1E1E;
+  --bg-button-hover: #282828;
+  --accent: #C9A227;
+  --text-primary: #E4E4E4;
+  --text-secondary: #A2A2A2;
+  --text-muted: #919191;
+  --edge: #747474;
+  --rule: #242424;
+  --border: #242424;
+  --border-strong: #4A4A4A;
+  --state-info: #4C76B0;
+  --state-info-fg: #8FB8E6;
+  --state-alert: #D14141;
+  --state-alert-fg: #F87171;
+  --state-ok: #2C8549;
+  --state-ok-fg: #4ADE80;
+  --state-warn: #986D1C;
+  --state-warn-fg: #E0B341;
+  --tag-person: #8EADE1;
+  --tag-scene: #8EE1DE;
+  --tag-pose: #8EE19C;
+  --tag-wear: #BA8EE1;
+  --tag-fx: #E18EC8;
+  --tag-nsfw: #E18E94;
+  --tag-neutral: #C6C6C6;
+  --tag-wild-edge: #8A8A8A;
+  --accent-hover: #DBB848;
+  --accent-dim: rgba(201,162,39,0.14);
+  --accent-fill: #C9A227;
+  --accent-fill-hover: #DBB848;
+  --on-accent: #0A0A0A;
+}

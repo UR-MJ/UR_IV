@@ -307,15 +307,16 @@ function generate() {
 .sidebar-footer { padding: 16px; background: var(--bg-card); border-top: 1px solid var(--border); }
 
 .krea-card { border-color: rgba(167,139,250,0.35); background: rgba(124,58,237,0.06); }
-.optional { margin-left: 5px; font-size: var(--fs-label); color: #a78bfa; letter-spacing: 0; }
+/* 보라색이었지만 태그 분류가 아니라 '선택 항목' 표시라 정보색으로 간다 */
+.optional { margin-left: 5px; font-size: var(--fs-label); color: var(--state-info-fg); letter-spacing: 0; }
 .identity-thumb { aspect-ratio: 2/1; }
 .clear-reference {
   width: 100%; margin-top: 7px; padding: 6px; background: transparent;
   border: 1px solid rgba(248,113,113,0.3); border-radius: 5px;
-  color: #f87171; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer;
+  color: var(--state-alert-fg); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer;
 }
 .krea-help { margin: 8px 0 0; color: var(--text-muted); font-size: var(--fs-label); line-height: 1.45; }
-.krea-slider .val { color: #a78bfa; }
+.krea-slider .val { color: var(--state-info-fg); }
 
 .source-thumb {
   width: 100%; aspect-ratio: 16/9; background: var(--bg-input); border-radius: var(--radius-base);
@@ -353,11 +354,12 @@ function generate() {
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .mt-12 { margin-top: 12px; }
-.danger { color: #f87171; }
+.danger { color: var(--state-alert-fg); }
 
+/* 주 버튼: 면은 --accent 가 아니라 글자가 읽히게 민 --accent-fill */
 .btn-generate {
-  width: 100%; height: 46px; background: var(--accent); border: none;
-  border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold);
+  width: 100%; height: 46px; background: var(--accent-fill); border: none;
+  border-radius: var(--radius-pill); color: var(--on-accent); font-weight: var(--fw-bold);
   font-size: 12px; letter-spacing: 0; cursor: pointer; transition: var(--transition);
 }
 .btn-generate:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250, 204, 21, 0.3); }

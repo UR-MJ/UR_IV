@@ -345,23 +345,25 @@ defineExpose({ items })
   position: fixed; right: 18px; bottom: 32px;  /* 하단 VRAM 바(22px) 위로 띄움 */
   z-index: 2400; display: flex; align-items: center; gap: 7px;
   height: 34px; padding: 0 14px; border-radius: 18px;
-  background: #141414; border: 1px solid var(--border); color: var(--text-muted);
+  background: var(--bg-button); border: 1px solid var(--border); color: var(--text-muted);
   font-size: 11px; font-weight: var(--fw-bold); letter-spacing: 0; cursor: pointer;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4); transition: 0.18s;
 }
-.queue-pin:hover { background: #1e1e1e; color: #E8E8E8; border-color: var(--accent); }
+.queue-pin:hover { background: var(--bg-button-hover); color: var(--text-primary); border-color: var(--accent); }
 .queue-pin.open { border-color: var(--accent); color: var(--accent); }
-.queue-pin.running { border-color: #4ade80; color: #4ade80; }
-.queue-pin.paused { border-color: #fbbf24; color: #fbbf24; }
+.queue-pin.running { border-color: var(--state-ok-fg); color: var(--state-ok-fg); }
+.queue-pin.paused { border-color: var(--state-warn-fg); color: var(--state-warn-fg); }
 .queue-pin.bump { animation: pin-bump 0.55s ease; }
 @keyframes pin-bump { 0% { transform: scale(1); } 30% { transform: scale(1.12); } 100% { transform: scale(1); } }
 .qp-ico { font-size: 13px; opacity: 0.9; }
 .qp-label { letter-spacing: 0; }
-.qp-count { background: var(--accent); color: #000; min-width: 16px; text-align: center; padding: 1px 5px; border-radius: 9px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
-.queue-pin.running .qp-count { background: #4ade80; }
-.queue-pin.paused .qp-count { background: #fbbf24; }
+/* 상태색으로 채운 배지의 글자는 '바탕색 뒤집기'(--bg-primary) — 상태색은 다크에서
+   밝고 라이트에서 어두워 두 모드 모두 대비가 나오고, 사용자 강조색에 묶이지도 않는다 */
+.qp-count { background: var(--accent-fill); color: var(--on-accent); min-width: 16px; text-align: center; padding: 1px 5px; border-radius: 9px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
+.queue-pin.running .qp-count { background: var(--state-ok-fg); color: var(--bg-primary); }
+.queue-pin.paused .qp-count { background: var(--state-warn-fg); color: var(--bg-primary); }
 .qp-run { font-size: var(--fs-label); }
-.qp-run.paused { color: #fbbf24; }
+.qp-run.paused { color: var(--state-warn-fg); }
 
 /* ── 우측 드로어 ── */
 .qd-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 2450; }
@@ -372,41 +374,43 @@ defineExpose({ items })
 }
 .qd-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .title { color: var(--text-secondary); font-size: 12px; font-weight: var(--fw-bold); letter-spacing: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.count-badge { background: var(--accent); color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
-.running-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); animation: pulse 1.5s infinite; }
-.paused-badge { background: #fbbf24; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
-.selected-badge { background: #60a5fa; color: #000; padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
+.count-badge { background: var(--accent-fill); color: var(--on-accent); padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
+.running-badge { background: var(--state-ok-fg); color: var(--bg-primary); padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); animation: pulse 1.5s infinite; }
+.paused-badge { background: var(--state-warn-fg); color: var(--bg-primary); padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
+.selected-badge { background: var(--state-info-fg); color: var(--bg-primary); padding: 1px 6px; border-radius: 8px; font-size: var(--fs-label); font-weight: var(--fw-bold); }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .qd-x { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); width: 30px; height: 30px; cursor: pointer; font-size: 13px; }
 .qd-x:hover { color: var(--text-primary); border-color: var(--accent); }
 
 .qd-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
-.btn { padding: 5px 12px; background: #181818; border: none; border-radius: 5px; color: #9a9a9a; font-size: 11px; cursor: pointer; font-weight: var(--fw-bold); }
-.btn:hover { background: #222; color: #E8E8E8; }
-.btn.danger { color: #f87171; }
-.btn.primary { background: var(--accent); color: #000; }
-.btn.primary:hover { background: #fff176; }
+.btn { padding: 5px 12px; background: var(--bg-button); border: none; border-radius: 5px; color: var(--text-secondary); font-size: 11px; cursor: pointer; font-weight: var(--fw-bold); }
+.btn:hover { background: var(--bg-button-hover); color: var(--text-primary); }
+.btn.danger { color: var(--state-alert-fg); }
+.btn.primary { background: var(--accent-fill); color: var(--on-accent); }
+.btn.primary:hover { background: var(--accent-fill-hover); }
 
 /* ── 세로 리스트 (찌그러짐 없음) ── */
 .qd-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
 .q-row {
   display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin: 3px 0;
-  background: #141414; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
   cursor: pointer; transition: 0.12s;
 }
-.q-row:hover { background: #1c1c1c; border-color: #333; }
-.q-row.active { border-color: var(--accent); background: rgba(226,179,64,0.1); }
-.q-row.sel { border-color: #60a5fa; background: rgba(96,165,250,0.08); }
+.q-row:hover { background: var(--bg-button); border-color: var(--border); }
+.q-row.active { border-color: var(--accent); background: var(--accent-dim); }
+.q-row.sel { border-color: var(--state-info-fg); background: rgba(96,165,250,0.08); }
 .q-row.done { opacity: 0.45; }
 .q-row-st { flex-shrink: 0; width: 22px; text-align: center; color: var(--accent); font-weight: var(--fw-bold); font-size: 12px; }
 .q-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .q-row-prompt { color: var(--text-primary); font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.q-row-neg { color: #f8717188; font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 원래 8자리 hex(#f8717188 = 알파 53%)였다. 토큰에는 알파가 없어 색만 토큰으로 두고
+   투명도는 color-mix 로 유지한다 */
+.q-row-neg { color: color-mix(in srgb, var(--state-alert-fg) 53%, transparent); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-row-tools { flex-shrink: 0; display: flex; gap: 3px; opacity: 0; transition: 0.12s; }
 .q-row:hover .q-row-tools { opacity: 1; }
-.qr-btn { width: 24px; height: 24px; background: #222; border: 1px solid var(--border); border-radius: 5px; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 0; }
-.qr-btn:hover:not(:disabled) { color: #E8E8E8; border-color: var(--accent); }
-.qr-btn.danger:hover:not(:disabled) { color: #f87171; border-color: #f87171; }
+.qr-btn { width: 24px; height: 24px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 5px; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 0; }
+.qr-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent); }
+.qr-btn.danger:hover:not(:disabled) { color: var(--state-alert-fg); border-color: var(--state-alert-fg); }
 .qr-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* 드로어 슬라이드/백드롭 트랜지션 */
@@ -414,7 +418,7 @@ defineExpose({ items })
 .qd-slide-enter-from, .qd-slide-leave-to { transform: translateX(100%); }
 .qd-fade-enter-active, .qd-fade-leave-active { transition: opacity 0.22s ease; }
 .qd-fade-enter-from, .qd-fade-leave-to { opacity: 0; }
-.qe-hint { color: #4a4a4a; font-size: var(--fs-label); }
+.qe-hint { color: var(--text-muted); font-size: var(--fs-label); }
 
 /* 큐 항목 편집 모달 */
 .qe-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
@@ -430,8 +434,8 @@ defineExpose({ items })
 .qe-btn { background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 11px; font-weight: var(--fw-bold); padding: 7px 12px; cursor: pointer; }
 .qe-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent); }
 .qe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.qe-btn.danger { color: #f87171; }
-.qe-btn.primary { background: var(--accent); color: #000; border-color: var(--accent); }
+.qe-btn.danger { color: var(--state-alert-fg); }
+.qe-btn.primary { background: var(--accent-fill); color: var(--on-accent); border-color: var(--accent-fill); }
 
 .queue-progress { padding: 4px 16px 8px; }
 .progress-bar { width: 100%; height: 3px; background: var(--bg-input); border-radius: 2px; overflow: hidden; }
@@ -439,5 +443,5 @@ defineExpose({ items })
 .progress-text { font-size: var(--fs-label); color: var(--text-muted); text-align: right; margin-top: 2px; display: block; }
 .progress-text .eta { color: var(--accent); font-weight: var(--fw-bold); margin-left: 4px; }
 
-.queue-empty { padding: 12px; text-align: center; color: #383838; font-size: 11px; }
+.queue-empty { padding: 12px; text-align: center; color: var(--text-muted); font-size: 11px; }
 </style>

@@ -88,6 +88,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey, true))
 .ovr-desc { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .ovr-footer { display: flex; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
 .ovr-spacer { flex: 1; }
-.ovr-save { background: var(--accent); color: #000; border: none; border-radius: var(--radius-base); font-weight: var(--fw-bold); font-size: 12px; padding: 9px 18px; cursor: pointer; }
+/* 주 버튼: 글자를 얹는 면이라 --accent 가 아니라 --accent-fill + --on-accent */
+.ovr-save { background: var(--accent-fill); color: var(--on-accent); border: none; border-radius: var(--radius-base); font-weight: var(--fw-bold); font-size: 12px; padding: 9px 18px; cursor: pointer; }
 .ovr-cancel { background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-weight: var(--fw-bold); font-size: 12px; padding: 9px 16px; cursor: pointer; }
 </style>

@@ -276,6 +276,9 @@ const moveFillColor = ref('black')
 // 드로잉 레이어 불투명도 (병합 시 사용)
 const drawLayerOpacity = ref(100)
 // DrawPanel이 보내는 도구 파라미터. currentTool 에는 문자열만 넣는다(캔버스가 문자열 비교).
+// 아래 펜·워터마크·그라디언트의 기본 색은 테마 토큰으로 바꾸지 않는다 —
+// 이미지에 실제로 칠해지는 사용자 콘텐츠지 UI 크롬이 아니라서, 테마를 바꿨다고
+// 이미 그린 그림의 색이 따라 변하면 안 된다.
 const drawParams = ref<{ tool: string; color: string; size: number; opacity: number; filled: boolean }>({
   tool: 'pen', color: '#ffffff', size: 10, opacity: 1, filled: false,
 })
@@ -1178,12 +1181,14 @@ onMounted(() => {
   _autoSaveTickTimer = setInterval(() => { _nowTick.value++ }, 60_000)
   // 사이드 패널 폭이 Settings에서 변경되면 동기화
   window.addEventListener('storage', _syncSidePanelWidthFromStorage)
+  window.addEventListener('editorSidePanelWidthChanged', _syncSidePanelWidthFromStorage)
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onEditorKeyDown)
   if (_autoSaveTimer) clearInterval(_autoSaveTimer)
   if (_autoSaveTickTimer) clearInterval(_autoSaveTickTimer)
   window.removeEventListener('storage', _syncSidePanelWidthFromStorage)
+  window.removeEventListener('editorSidePanelWidthChanged', _syncSidePanelWidthFromStorage)
 })
 </script>
 
@@ -1192,50 +1197,53 @@ onUnmounted(() => {
 
 .top-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 12px; background: #0D0D0D; flex-shrink: 0;
+  padding: 6px 12px; background: var(--bg-secondary); flex-shrink: 0;
   border-bottom: 1px solid var(--border);
 }
 .bar-group { display: flex; align-items: center; gap: 6px; }
 .bar-group.center { flex: 1; justify-content: center; }
 .bar-btn {
-  padding: 8px 16px; background: #181818; border: 1px solid var(--border); border-radius: 6px;
-  color: #909090; font-size: 12px; font-weight: var(--fw-bold); cursor: pointer; white-space: nowrap;
+  padding: 8px 16px; background: var(--bg-button); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-muted); font-size: 12px; font-weight: var(--fw-bold); cursor: pointer; white-space: nowrap;
   transition: var(--transition);
 }
-.bar-btn:hover { background: #222; color: #E8E8E8; border-color: #333; }
+.bar-btn:hover { background: var(--bg-button-hover); color: var(--text-primary); border-color: var(--border); }
 .bar-btn:disabled { opacity: 0.3; }
 .bar-btn.accent { border-color: var(--accent-dim); color: var(--accent); }
-.bar-btn.save { background: var(--accent); color: #000; border: none; font-weight: var(--fw-bold); }
-.bar-btn.save:hover { background: var(--accent-hover); }
-.bar-btn.danger { color: #f87171; border-color: rgba(248,113,113,0.2); }
-.bar-sep { color: #333; margin: 0 4px; }
-.bar-info { color: #585858; font-size: 11px; font-family: 'Consolas', monospace; }
-.bar-info.autosave { color: #4ade80; opacity: 0.75; }
+/* 주 버튼이라 면은 --accent-fill(글자가 읽히게 민 값), 글자는 --on-accent.
+   hover 도 같은 계열이어야 해서 --accent-hover 가 아니라 --accent-fill-hover. */
+.bar-btn.save { background: var(--accent-fill); color: var(--on-accent); border: none; font-weight: var(--fw-bold); }
+.bar-btn.save:hover { background: var(--accent-fill-hover); }
+.bar-btn.danger { color: var(--state-alert-fg); border-color: rgba(248,113,113,0.2); }
+.bar-sep { color: var(--border); margin: 0 4px; }
+.bar-info { color: var(--text-muted); font-size: 11px; font-family: 'Consolas', monospace; }
+.bar-info.autosave { color: var(--state-ok-fg); opacity: 0.75; }
 .bar-info.autosave:hover { opacity: 1; cursor: help; }
 .bar-filename {
-  color: #c8c8c8; font-size: 12px; font-weight: var(--fw-bold);
+  color: var(--text-secondary); font-size: 12px; font-weight: var(--fw-bold);
   max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 0 8px;
 }
-.dirty-mark { color: #fbbf24; margin-right: 4px; font-size: 14px; vertical-align: middle; }
-.bar-counter { color: #585858; font-size: var(--fs-label); font-family: 'Consolas', monospace; margin-left: 4px; }
+/* 저장 안 된 표시는 오류가 아니라 '주의'라 warn 계열 */
+.dirty-mark { color: var(--state-warn-fg); margin-right: 4px; font-size: 14px; vertical-align: middle; }
+.bar-counter { color: var(--text-muted); font-size: var(--fs-label); font-family: 'Consolas', monospace; margin-left: 4px; }
 
 .editor-body { flex: 1; display: flex; overflow: hidden; }
 
 .side-panel {
-  width: 280px; flex-shrink: 0; background: #0D0D0D;
+  width: 280px; flex-shrink: 0; background: var(--bg-secondary);
   display: flex; flex-direction: column; overflow: hidden;
 }
 /* 탭이 6개에서 3개가 되어 한 줄에 들어간다. 글자 10px 은 진단에서 지적된 크기라
    12px 로 올리고 높이도 타격 가능한 32px 로 준다. */
-.tab-buttons { display: flex; gap: var(--sp-1); padding: var(--sp-2); background: #0A0A0A; flex-shrink: 0; }
+.tab-buttons { display: flex; gap: var(--sp-1); padding: var(--sp-2); background: var(--bg-primary); flex-shrink: 0; }
 .tab-btn {
-  flex: 1; height: 32px; background: #131313; border: none; border-radius: var(--radius-base);
+  flex: 1; height: 32px; background: var(--bg-button); border: none; border-radius: var(--radius-base);
   color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-medium);
   cursor: pointer; white-space: nowrap;
 }
-.tab-btn:hover { background: #1A1A1A; color: #E8E8E8; }
-.tab-btn.active { background: #1A1A1A; color: #E2B340; }
+.tab-btn:hover { background: var(--bg-button-hover); color: var(--text-primary); }
+.tab-btn.active { background: var(--bg-button-hover); color: var(--accent); }
 .tab-content { flex: 1; overflow-y: auto; overflow-x: hidden; }
 .tab-stack { display: flex; flex-direction: column; }
 
@@ -1243,32 +1251,34 @@ onUnmounted(() => {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px;
 }
-.drop-area.dragging { background: #111; }
+.drop-area.dragging { background: var(--bg-secondary); }
 .drop-icon { font-size: 48px; opacity: 0.3; }
-.drop-area h2 { color: #787878; font-size: 20px; }
-.drop-area p { color: #484848; font-size: 13px; }
+/* 제목이 본문보다 밝아야 위계가 산다 — 둘 다 --text-muted 로 눕히지 않는다 */
+.drop-area h2 { color: var(--text-secondary); font-size: 20px; }
+.drop-area p { color: var(--text-muted); font-size: 13px; }
 .drop-actions { display: flex; gap: 8px; }
 .open-btn {
-  padding: 10px 24px; background: #E2B340; border: none; border-radius: 8px;
-  color: #000; font-weight: var(--fw-bold); font-size: 14px; cursor: pointer;
+  padding: 10px 24px; background: var(--accent-fill); border: none; border-radius: 8px;
+  color: var(--on-accent); font-weight: var(--fw-bold); font-size: 14px; cursor: pointer;
 }
-.open-btn.secondary { background: #2A2A2A; color: #E2B340; border: 1px solid #E2B340; }
-.drop-shortcuts { color: #585858; font-size: 11px; margin-top: 4px; }
+/* 보조 버튼은 강조색을 '테두리·글자'로만 쓴다 — 면이 아니라서 --accent 그대로 */
+.open-btn.secondary { background: var(--bg-button); color: var(--accent); border: 1px solid var(--accent); }
+.drop-shortcuts { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
 .drop-shortcuts kbd {
-  background: #1A1A1A; color: #E2B340; padding: 1px 6px; border-radius: 3px;
+  background: var(--bg-button); color: var(--accent); padding: 1px 6px; border-radius: 3px;
   font-family: Consolas, monospace; font-size: var(--fs-label); margin: 0 2px;
 }
 .recent-files { width: 100%; max-width: 540px; margin-top: 14px; }
-.recent-label { color: #787878; font-size: var(--fs-label); letter-spacing: 0;
+.recent-label { color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 0;
   font-weight: var(--fw-bold); padding: 0 4px 6px; }
 .recent-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .recent-item {
-  padding: 6px 12px; background: #1A1A1A; border: 1px solid #2A2A2A;
-  border-radius: 6px; color: #c8c8c8; font-size: 11px; cursor: pointer;
+  padding: 6px 12px; background: var(--bg-button); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-secondary); font-size: 11px; cursor: pointer;
   max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.recent-item:hover { background: #222; border-color: #E2B340; color: #E2B340; }
+.recent-item:hover { background: var(--bg-button-hover); border-color: var(--accent); color: var(--accent); }
 .recent-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .feature-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; justify-content: center; }
-.feature-list span { padding: 5px 12px; background: #131313; border-radius: 6px; color: #585858; font-size: 11px; }
+.feature-list span { padding: 5px 12px; background: var(--bg-secondary); border-radius: 6px; color: var(--text-muted); font-size: 11px; }
 </style>

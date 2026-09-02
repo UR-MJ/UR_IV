@@ -73,17 +73,6 @@
             <button v-for="r in ratings" :key="r.key" class="rating-chip"
               :class="{ active: r.checked }" @click="r.checked = !r.checked">{{ r.label }}</button>
           </div>
-          <!-- 데이터셋 — 단일 선택 (2025 / 2026 / 2026.06 슬림) -->
-          <div class="combine-row" title="검색 데이터셋 선택&#10;2026.06 = 해상도/score 포함 슬림 데이터">
-            <span class="combine-label">데이터셋:</span>
-            <button v-for="y in AVAILABLE_YEARS" :key="y"
-              class="combine-chip year-chip"
-              :class="{ active: datasetYear === y }"
-              @click="datasetYear = y">
-              {{ yearLabel(y) }}
-            </button>
-          </div>
-
           <!-- 결과 cap 토글 — UI 부하 방지 / 무제한 -->
           <div class="combine-row">
             <span class="combine-label">결과 제한:</span>
@@ -130,7 +119,7 @@
         <span :title="'마지막 | 다음을 비워두면 → 이 필드 조건은 매칭 안 되어도 통과\n예: copyright=[tots|alc|] → TOT/ALC 매치 또는 무관\n\n⚠ 중간 ||(이중 파이프)는 wildcard 아님 — 그냥 빈 토큰 무시\n예: character=[A||B] → A 또는 B만 (필드 조건 면제 안 됨)'">[A|B|<b>↵</b>] = 끝에 비우면 필드 면제</span>
         <span>Exclude로 제외 조건 설정</span>
         <span class="hint-mode" :class="combineMode">
-          현재: <strong>{{ combineMode === 'and' ? 'AND' : 'OR' }}</strong> · <strong>{{ yearLabel(datasetYear) }}</strong>
+          현재: <strong>{{ combineMode === 'and' ? 'AND' : 'OR' }}</strong> · <strong>최신 {{ activeDatasetDisplay }}</strong>
           · <strong>{{ resultCapMode === 'capped' ? 'cap 50만' : 'cap OFF ⚠' }}</strong>
         </span>
       </div>
@@ -412,13 +401,9 @@ const hasSearched = ref(false)
 // 마지막 쿼리 요약 (사용자가 무엇을 검색했는지 보여주기 위함)
 const lastQuerySummary = ref('')
 
-// 데이터셋 — 단일 선택. 값이 곧 parquet prefix (danbooru_{값}_{rating}.parquet)
-// 최신 릴리스가 로컬에 없으면 Python worker가 이전 호환 릴리스로 안전하게 폴백한다.
-const AVAILABLE_YEARS = ['2026_07', '2026_06', '2026', '2025']
-const datasetYear = ref(localStorage.getItem('search.datasetYear') || '2026_07')
-if (!AVAILABLE_YEARS.includes(datasetYear.value)) datasetYear.value = '2026_07'
-watch(datasetYear, (v) => { try { localStorage.setItem('search.datasetYear', v) } catch {} })
-function yearLabel(y: string) { return y.replace(/^(\d{4})_(\d{2})$/, '$1.$2') }
+// 런타임 Search는 사용자 지정 데이터 경로의 manifest가 가리키는 단일 릴리스만 사용한다.
+const activeDatasetLabel = ref('2026_07')
+const activeDatasetDisplay = computed(() => activeDatasetLabel.value.replace(/^([0-9]{4})_([0-9]{2})$/, '$1.$2'))
 
 // 결과 cap — 기본 50만 (UI 부하 방지), 'unlimited' 선택 시 전체 결과 받음
 // 무제한이면 JSON 직렬화 + Vue 메모리가 무거워질 수 있음 (수 GB 가능)
@@ -482,9 +467,8 @@ function onListRowUse(r: SearchRow) {
 let progressTimer: ReturnType<typeof setInterval> | null = null
 
 const currentResult = computed<SearchRow | null>(() => filteredResults.value[previewIdx.value] || null)
-// 데이터셋별 general 포맷이 다름 — 포맷 인식 분리:
-//  - 2025/2026 : 콤마 구분 + 태그 내부 공백 ('aqua gloves, black hair', 언더스코어 없음)
-//  - 2026_06   : 공백 구분 + 언더스코어 보존 ('aqua_gloves black_hair')
+// 현재 결과는 공백 구분 + 언더스코어 보존 형식이다. .parquet 가져오기와
+// 과거에 저장한 외부 결과를 위해 콤마 구분 legacy 포맷도 계속 읽는다.
 // 콤마가 있으면 콤마로만 쪼개 'aqua gloves'를 통째로 유지하고,
 // 없으면 공백으로 쪼갠 뒤 표시용으로만 _→공백 치환 → 'black_hair'가 안 쪼개짐.
 // (콤마 split에 공백을 섞으면 2025/2026의 'aqua gloves'가 잘못 쪼개지므로 분기 필수.)
@@ -505,7 +489,6 @@ function persistSearchFields() {
     fields: fields.map(f => ({ include: f.include, exclude: f.exclude })),
     ratings: ratings.map(r => ({ key: r.key, checked: r.checked })),
     combineMode: combineMode.value,
-    datasetYear: datasetYear.value,
     resultCapMode: resultCapMode.value,
   }
   // ① localStorage 즉시 저장 — 한 글자 입력 후 바로 닫아도 보존
@@ -518,7 +501,7 @@ function persistSearchFields() {
 }
 
 // 저장된 검색 상태 적용 — uiPrefsLoaded 이벤트 + mount 시 능동 fetch 양쪽에서 재사용.
-// fields/ratings/combineMode/datasetYear/resultCapMode 전부 복원.
+// fields/ratings/combineMode/resultCapMode 전부 복원.
 function applySearchState(state: any) {
   if (!state) return false
   let touched = false
@@ -532,7 +515,6 @@ function applySearchState(state: any) {
     state.ratings.forEach((r: any) => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = !!r.checked })
   }
   if (state.combineMode === 'and' || state.combineMode === 'or') combineMode.value = state.combineMode
-  if (state.datasetYear && AVAILABLE_YEARS.includes(state.datasetYear)) datasetYear.value = state.datasetYear
   if (state.resultCapMode && ['capped', 'unlimited'].includes(state.resultCapMode)) resultCapMode.value = state.resultCapMode
   return touched
 }
@@ -559,7 +541,6 @@ async function search() {
     queries: Object.fromEntries(fields.map(f => [f.key, f.include])),
     excludes: Object.fromEntries(fields.map(f => [f.key, f.exclude])),
     combine_mode: combineMode.value,  // 'and' | 'or' — 필드 간 결합 방식
-    dataset_year: datasetYear.value,  // '2026_07' | '2026_06' | '2026' | '2025'
     disable_result_cap: resultCapMode.value === 'unlimited',  // true면 50만 cap 무시
   }
   // 사용자에게 보여줄 쿼리 요약 (0건 시 활용)
@@ -570,7 +551,7 @@ async function search() {
     .filter(f => f.exclude?.trim())
     .map(f => `~${f.key}: ${f.exclude}`)
   const ratingSel = ratings.filter(r => r.checked).map(r => r.label).join('+') || 'no rating'
-  lastQuerySummary.value = `[${datasetYear.value}] [${combineMode.value.toUpperCase()}] [${ratingSel}] ${[...includeParts, ...excludeParts].join(' / ') || '(빈 검색)'}`
+  lastQuerySummary.value = `[${activeDatasetLabel.value}] [${combineMode.value.toUpperCase()}] [${ratingSel}] ${[...includeParts, ...excludeParts].join(' / ') || '(빈 검색)'}`
   if (backend.searchDanbooru) backend.searchDanbooru(JSON.stringify(query))
 }
 
@@ -606,6 +587,23 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
+  // 결과는 manifest fingerprint를 검증하는 backend cache만 사용한다. 구형 브라우저
+  // 결과 cache는 사용자 지정 경로 전환 시 stale할 수 있어 1회 제거한다.
+  try {
+    for (const key of ['search.datasetYear', 'search.resultsDataset', 'lastSearchResults', 'lastFullResults']) {
+      window.localStorage.removeItem(key)
+    }
+  } catch {}
+  ;(async () => {
+    try {
+      const backend: any = await getBackend()
+      if (backend.getActiveSearchDataset) {
+        const raw = await new Promise<string>(resolve => backend.getActiveSearchDataset((s: string) => resolve(s)))
+        const info = JSON.parse(raw)
+        if (typeof info.label === 'string' && info.label) activeDatasetLabel.value = info.label
+      }
+    } catch (e) { console.warn('[Search] active dataset 확인 실패:', e) }
+  })()
   // 이전 검색 입력 필드 복원
   try {
     const sf = window.localStorage.getItem('lastSearchFields')
@@ -614,7 +612,6 @@ onMounted(() => {
       if (d.fields) d.fields.forEach((f: any, i: number) => { if (fields[i]) { fields[i].include = f.include || ''; fields[i].exclude = f.exclude || '' } })
       if (d.ratings) d.ratings.forEach((r: any) => { const found = ratings.find(rt => rt.key === r.key); if (found) found.checked = r.checked })
       if (d.combineMode && (d.combineMode === 'and' || d.combineMode === 'or')) combineMode.value = d.combineMode
-      if (d.datasetYear && AVAILABLE_YEARS.includes(d.datasetYear)) datasetYear.value = d.datasetYear
       if (d.resultCapMode && ['capped', 'unlimited'].includes(d.resultCapMode)) resultCapMode.value = d.resultCapMode
       _restoredFromLocalStorage = true
     }
@@ -635,8 +632,7 @@ onMounted(() => {
       } catch (e) { console.warn('[Search] ui_prefs 능동 복원 실패:', e) }
     })()
   }
-  // 이전 검색 결과 복원 — backend 파일 우선, fallback으로 localStorage
-  // backend는 무제한 (파일), localStorage는 5MB cap → 큰 결과는 backend에서만 보존됨
+  // 이전 검색 결과는 manifest fingerprint를 검증하는 backend cache에서만 복원한다.
   ;(async () => {
     try {
       const backend: any = await getBackend()
@@ -657,20 +653,6 @@ onMounted(() => {
         return
       }
     } catch (e) { console.warn('[Search] backend restore failed:', e) }
-    // fallback: localStorage
-    try {
-      const savedActive = window.localStorage.getItem('lastSearchResults')
-      const savedFull = window.localStorage.getItem('lastFullResults')
-      const active: any = savedActive ? JSON.parse(savedActive) : null
-      const full: any = savedFull ? JSON.parse(savedFull) : null
-      if (Array.isArray(active) && active.length > 0) {
-        const base = (Array.isArray(full) && full.length) ? full : active
-        results.value = base; lastResults.value = base
-        deepBase.value = active
-        filteredResults.value = active
-        statusText.value = `${active.length.toLocaleString()} MATCHES (localStorage 복원)`
-      }
-    } catch {}
   })()
 
   onBackendEvent('searchResultsReady', (json: string) => {
@@ -684,12 +666,6 @@ onMounted(() => {
         activeFilters.ratings.clear(); activeFilters.characters.clear()
         activeFilters.copyrights.clear(); activeFilters.artists.clear()
         try { window.localStorage.removeItem('searchActiveFilters') } catch {}
-        // 자동 저장 (재시작 시 복원용) — 새 검색이라 active=full 동일
-        try {
-          const _slim = JSON.stringify(data.slice(0, 500))
-          window.localStorage.setItem('lastSearchResults', _slim)
-          window.localStorage.setItem('lastFullResults', _slim)
-        } catch {}
         persistSearchFields()
       } else if (data && typeof data === 'object' && data.error) {
         // 백엔드가 명시적 에러 객체를 보낸 경우 — 사용자에게 토스트
@@ -709,7 +685,7 @@ onMounted(() => {
   onBackendEvent('searchStatus', (msg: string) => {
     statusText.value = msg.toUpperCase()
     // 결과 이벤트(searchResultsReady)가 안 오는 '진짜 종료(❌ 로드실패/데이터없음)'만 잡아 정리.
-    // (기존 /없|실패|완료|0/ 은 '📊 2026_06 데이터 병합 중'의 연도 '0', '파일 없음'(파일별 경고),
+    // (기존 /없|실패|완료|0/ 은 데이터 병합 상태나 '파일 없음'(파일별 경고),
     //  '검색 완료' 등 진행/정상 메시지까지 오매칭 → 검색 도중 로딩이 꺼지고 '결과 없음'이 먼저 떴음.
     //  정상 완료/0건은 searchResultsReady 핸들러가 searching=false 처리하므로 여기선 불필요.)
     if (/^\s*❌/.test(msg)) {
@@ -728,9 +704,8 @@ onMounted(() => {
 
 watch(fields, persistSearchFields, { deep: true })
 watch(ratings, persistSearchFields, { deep: true })
-// 모드/년도/cap 토글도 통합 payload에 자동 반영 (개별 키와 별개로 묶음 백업)
+// 모드/cap 토글도 통합 payload에 자동 반영 (개별 키와 별개로 묶음 백업)
 watch(combineMode, persistSearchFields)
-watch(datasetYear, persistSearchFields)
 watch(resultCapMode, persistSearchFields)
 
 function applyDeepSearch() {
@@ -944,7 +919,6 @@ const filteredByManager = computed(() => _applyManagerFilters(deepBase.value))
 // filteredResults → 자동화 덱 동기화 (모든 필터 변경 시 호출 → 덱이 항상 표시와 일치)
 function syncDeck() {
   requestAction('update_prompt_deck', { results: filteredResults.value })
-  try { window.localStorage.setItem('lastSearchResults', JSON.stringify(filteredResults.value.slice(0, 500))) } catch {}
 }
 
 // activeFilters(Set들)를 localStorage에 영속 → 재시작 시 필터 칩 복원
@@ -1027,7 +1001,7 @@ function importResults() { requestAction('import_search_results') }
 .form-field input { padding: 11px 14px; font-size: 13px; }
 
 .exclude-section { border: 1px solid rgba(248,113,113,0.1); border-radius: var(--radius-card); padding: 12px; }
-.exclude-toggle { font-size: 11px; font-weight: var(--fw-bold); color: #f87171; cursor: pointer; letter-spacing: 0; list-style: none; }
+.exclude-toggle { font-size: 11px; font-weight: var(--fw-bold); color: var(--state-alert-fg); cursor: pointer; letter-spacing: 0; list-style: none; }
 .exclude-toggle::-webkit-details-marker { display: none; }
 
 .form-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
@@ -1057,12 +1031,10 @@ function importResults() { requestAction('import_search_results') }
   background: var(--accent-dim);
   box-shadow: 0 0 0 1px var(--accent-dim);
 }
-.year-chip { min-width: 56px; padding: 5px 12px; }
-
 /* 무제한 cap 모드 — 활성 시 위험 색상 (orange/red) */
 .warn-chip.active {
-  border-color: #fb923c !important;
-  color: #fb923c !important;
+  border-color: var(--state-warn-fg) !important;
+  color: var(--state-warn-fg) !important;
   background: rgba(251, 146, 60, 0.1) !important;
   box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.2) !important;
 }
@@ -1072,10 +1044,10 @@ function importResults() { requestAction('import_search_results') }
   border-radius: 4px;
   font-size: var(--fs-label) !important;
 }
-.hint-mode.and { background: rgba(96, 165, 250, 0.08); color: #93c5fd; }
+.hint-mode.and { background: rgba(96, 165, 250, 0.08); color: var(--state-info-fg); }
 .hint-mode.or  { background: rgba(250, 204, 21, 0.08); color: var(--accent); }
 .hint-mode strong { font-weight: var(--fw-bold); }
-.go-btn { padding: 12px 40px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold); font-size: 14px; cursor: pointer; letter-spacing: 0; }
+.go-btn { padding: 12px 40px; background: var(--accent-fill); border: none; border-radius: var(--radius-pill); color: var(--on-accent); font-weight: var(--fw-bold); font-size: 14px; cursor: pointer; letter-spacing: 0; }
 .go-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(250,204,21,0.3); }
 .io-row { display: flex; gap: 4px; }
 .io-btn { height: 30px; padding: 0 12px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-base); color: var(--text-secondary); font-size: var(--fs-meta); font-weight: var(--fw-bold); cursor: pointer; }
@@ -1127,10 +1099,10 @@ function importResults() { requestAction('import_search_results') }
   border-color: var(--text-muted);
 }
 .nr-btn.primary {
-  background: var(--accent); color: #000; border-color: var(--accent);
+  background: var(--accent-fill); color: var(--on-accent); border-color: var(--accent-fill);
 }
 .nr-btn.primary:hover {
-  background: var(--accent-hover); transform: translateY(-1px);
+  background: var(--accent-fill-hover); transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(250, 204, 21, 0.25);
 }
 .nr-summary {
@@ -1211,7 +1183,7 @@ function importResults() { requestAction('import_search_results') }
 .bar-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .bar-btn.gold { color: var(--accent); border-color: var(--accent-dim); }
 .bar-btn:disabled { opacity: 0.3; }
-.bar-sep { color: #333; }
+.bar-sep { color: var(--rule); }
 .bar-idx { font-family: monospace; font-size: 11px; color: var(--text-secondary); }
 .bar-idx b { color: var(--accent); font-size: 14px; }
 .bar-count { font-size: var(--fs-label); color: var(--text-muted); font-weight: var(--fw-bold); letter-spacing: 0; }
@@ -1237,8 +1209,8 @@ function importResults() { requestAction('import_search_results') }
 .fm-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 .fm-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-top: 1px solid var(--border); }
 .fm-count { font-size: 11px; color: var(--text-muted); font-family: monospace; }
-.fm-apply { padding: 8px 24px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; letter-spacing: 0; }
-.bar-btn.parquet { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); color: #60a5fa; }
+.fm-apply { padding: 8px 24px; background: var(--accent-fill); border: none; border-radius: var(--radius-pill); color: var(--on-accent); font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; letter-spacing: 0; }
+.bar-btn.parquet { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); color: var(--state-info-fg); }
 
 /* Deep bar */
 .deep-bar {
@@ -1258,14 +1230,20 @@ function importResults() { requestAction('import_search_results') }
 .detail-meta { display: flex; gap: 10px; flex-wrap: wrap; }
 .meta-pill { padding: 12px 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: var(--fw-bold); color: var(--text-primary); display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; overflow-wrap: anywhere; word-break: break-word; }
 .meta-pill.artist { color: var(--accent); }
-.meta-pill.character { color: #4ade80; }
+/* 캐릭터는 '성공'이 아니라 분류다 — 상태색(state-ok)을 쓰면 사용자가 설정에서 성공색을
+   바꿨을 때 캐릭터 이름 색이 같이 변한다. 분류색인 tag-person 을 쓴다. */
+.meta-pill.character { color: var(--tag-person); }
 .meta-pill.mini { min-width: 60px; flex: 0; }
 .ml { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; }
 
 .tag-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
 .tag-section label { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); letter-spacing: 0; margin-bottom: 10px; display: block; }
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 5px; max-height: 300px; overflow-y: auto; }
-.tag { padding: 4px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: #787878; font-size: var(--fs-label); overflow-wrap: anywhere; max-width: 100%; }
+.tag { padding: 4px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: var(--fs-label); overflow-wrap: anywhere; max-width: 100%; }
+/* 아래 16개 태그 분류색은 아직 토큰화하지 않았다 — 테마의 태그 토큰은 6색(person/scene/
+   pose/wear/fx/nsfw)뿐이라, 16개를 6개에 욱여넣으면 서로 다른 분류가 같은 색이 되어
+   범례(.legend-item)가 구분 기능을 잃는다. 팔레트를 늘릴지 분류를 합칠지는 설계 결정이라
+   여기서 임의로 정하지 않는다. (라이트 모드에서 이 색들은 흰 배경 대비가 부족하다.) */
 .tag.count { color: #60a5fa; border-color: rgba(96,165,250,0.3); background: rgba(96,165,250,0.05); }
 .tag.clothing { color: #a78bfa; border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.05); }
 .tag.body { color: #fb923c; border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.05); }
@@ -1298,7 +1276,7 @@ function importResults() { requestAction('import_search_results') }
 .legend-item.trait { color: #34d399; background: rgba(52,211,153,0.1); }
 
 .detail-actions { display: flex; gap: 10px; }
-.primary-btn { flex: 2; height: 48px; background: var(--accent); border: none; border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold); font-size: 13px; letter-spacing: 0; cursor: pointer; }
+.primary-btn { flex: 2; height: 48px; background: var(--accent-fill); border: none; border-radius: var(--radius-pill); color: var(--on-accent); font-weight: var(--fw-bold); font-size: 13px; letter-spacing: 0; cursor: pointer; }
 .secondary-btn { flex: 1; height: 48px; background: var(--bg-button); border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text-secondary); font-weight: var(--fw-bold); font-size: 11px; cursor: pointer; }
 .primary-btn:hover, .secondary-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
 
@@ -1342,16 +1320,16 @@ function importResults() { requestAction('import_search_results') }
 .list-row:hover { background: rgba(255,255,255,0.02); }
 .list-row.active { background: var(--accent-dim); }
 .lr.idx { width: 40px; color: var(--text-muted); font-family: monospace; font-size: var(--fs-label); }
-.lr.char { width: 160px; color: #4ade80; font-weight: var(--fw-bold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lr.char { width: 160px; color: var(--tag-person); font-weight: var(--fw-bold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lr.copy { width: 120px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lr.artist { width: 100px; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lr.tags { flex: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-label); }
 .lr.act { width: 44px; text-align: center; }
-.use-btn { padding: 2px 8px; background: var(--accent); border: none; border-radius: 3px; color: #000; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
+.use-btn { padding: 2px 8px; background: var(--accent-fill); border: none; border-radius: 3px; color: var(--on-accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .list-pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 6px; border-top: 1px solid var(--border); }
 .pager-info { font-size: 11px; color: var(--text-muted); font-family: monospace; }
 
-label.danger { color: #f87171; }
+label.danger { color: var(--state-alert-fg); }
 
 /* 조건부 프롬프트 */
 .cond-section { padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -1360,8 +1338,8 @@ label.danger { color: #f87171; }
 .cond-card.neg { border-color: rgba(248,113,113,0.15); }
 .cond-title { font-size: 12px; font-weight: var(--fw-bold); letter-spacing: 0; cursor: pointer; list-style: none; }
 .cond-title::-webkit-details-marker { display: none; }
-.cond-title.positive { color: #4ade80; }
-.cond-title.negative { color: #f87171; }
+.cond-title.positive { color: var(--state-ok-fg); }
+.cond-title.negative { color: var(--state-alert-fg); }
 .cond-desc { font-size: var(--fs-label); color: var(--text-muted); margin: 4px 0 8px; }
 .cond-rule { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; flex-wrap: wrap; }
 .cond-rule-block { border: 1px solid var(--border); border-radius: 6px; padding: 6px; margin-bottom: 4px; }
@@ -1373,13 +1351,13 @@ label.danger { color: #f87171; }
 .cond-input.neg { border-color: rgba(248,113,113,0.2); }
 .cond-sel { padding: 3px 4px; font-size: var(--fs-label); background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); }
 .cond-sel.sm { width: 55px; }
-.cond-rm { background: none; border: none; color: #f87171; cursor: pointer; font-size: 12px; padding: 0 2px; }
+.cond-rm { background: none; border: none; color: var(--state-alert-fg); cursor: pointer; font-size: 12px; padding: 0 2px; }
 .cond-save-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .cond-autosave {
-  font-size: var(--fs-label); color: #4ade80;
+  font-size: var(--fs-label); color: var(--state-ok-fg);
   background: rgba(74, 222, 128, 0.08); padding: 6px 10px;
   border-radius: 6px; font-weight: var(--fw-bold); letter-spacing: 0;
 }
-.cond-save-btn { flex: 1; padding: 8px; background: var(--accent); border: none; border-radius: 8px; color: #000; font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
+.cond-save-btn { flex: 1; padding: 8px; background: var(--accent-fill); border: none; border-radius: 8px; color: var(--on-accent); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; }
 .cond-add { width: 100%; padding: 5px; background: var(--bg-button); border: 1px dashed var(--border); border-radius: 4px; color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); cursor: pointer; margin-top: 4px; }
 </style>

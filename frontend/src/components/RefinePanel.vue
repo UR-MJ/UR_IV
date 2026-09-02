@@ -368,7 +368,7 @@ defineExpose({ setImage })
 
 .glass-card label { display: block; font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); margin-bottom: 4px; }
 .glass-card label.accent { color: var(--accent); }
-.glass-card label.danger { color: #f87171; }
+.glass-card label.danger { color: var(--state-alert-fg); }
 .glass-card .sub { font-weight: var(--fw-bold); opacity: 0.7; }
 .glass-card input[type=text], .glass-card input[type=number], .glass-card textarea {
   width: 100%; box-sizing: border-box; padding: 8px 10px;
@@ -405,8 +405,9 @@ defineExpose({ setImage })
 }
 
 .btn-generate {
-  width: 100%; height: 46px; background: var(--accent); border: none;
-  border-radius: var(--radius-pill); color: #000; font-weight: var(--fw-bold);
+  /* 주 버튼: 글자를 얹는 면이라 --accent 가 아니라 --accent-fill + --on-accent */
+  width: 100%; height: 46px; background: var(--accent-fill); border: none;
+  border-radius: var(--radius-pill); color: var(--on-accent); font-weight: var(--fw-bold);
   font-size: 12px; letter-spacing: 0; cursor: pointer; transition: var(--transition);
 }
 .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -437,10 +438,10 @@ defineExpose({ setImage })
 }
 .trace-row { display: flex; gap: 8px; }
 .trace-key { flex-shrink: 0; font-weight: var(--fw-bold); font-size: var(--fs-label); color: var(--accent); letter-spacing: 0; padding-top: 1px; }
-.trace-key.danger { color: #f87171; }
+.trace-key.danger { color: var(--state-alert-fg); }
 .trace-val { color: var(--text-secondary); word-break: break-word; font-family: 'Consolas', monospace; }
 .refine-error {
-  background: rgba(248, 113, 113, 0.1); border: 1px solid #f87171;
-  border-radius: 8px; padding: 10px 12px; color: #f87171; font-size: 11px;
+  background: rgba(248, 113, 113, 0.1); border: 1px solid var(--state-alert-fg);
+  border-radius: 8px; padding: 10px 12px; color: var(--state-alert-fg); font-size: 11px;
 }
 </style>

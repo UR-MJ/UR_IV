@@ -601,7 +601,71 @@
           </div>
         </div>
 
-        <!-- 5. Shortcuts -->
+        <!-- 5. Theme -->
+        <div v-show="currentTab === 'theme'" class="section-fade">
+          <div class="glass-card">
+            <label>프리셋</label>
+            <p class="theme-note">고르면 바로 적용됩니다. 미리보기는 아래에서 직접 바꾼 색까지 반영한 실제 모습입니다.</p>
+            <div class="theme-preset-grid">
+              <button
+                v-for="card in themePresetCards" :key="card.id" type="button"
+                class="theme-preset" :class="{ selected: card.id === themePreset }"
+                :aria-pressed="card.id === themePreset"
+                @click="selectThemePreset(card.id)"
+              >
+                <!-- 실제 색으로 칠한 축소판 — 배경·표면·글자·강조가 어떻게 보이는지 -->
+                <span class="theme-preview" :style="{ background: card.colors['bg-primary'], borderColor: card.colors.border }">
+                  <span class="theme-preview-bar" :style="{ background: card.colors['bg-secondary'], borderColor: card.colors.rule }">
+                    <span class="theme-preview-dot" :style="{ background: card.colors.accent }"></span>
+                    <span class="theme-preview-line" :style="{ background: card.colors['text-muted'] }"></span>
+                  </span>
+                  <span class="theme-preview-body">
+                    <span class="theme-preview-card" :style="{ background: card.colors['bg-card'], borderColor: card.colors.border }">
+                      <span class="theme-preview-line wide" :style="{ background: card.colors['text-primary'] }"></span>
+                      <span class="theme-preview-line" :style="{ background: card.colors['text-secondary'] }"></span>
+                      <span class="theme-preview-btn" :style="{ background: card.colors['accent-fill'], color: card.colors['on-accent'] }">Aa</span>
+                    </span>
+                    <span class="theme-preview-states">
+                      <span :style="{ background: card.colors['state-info'] }"></span>
+                      <span :style="{ background: card.colors['state-ok'] }"></span>
+                      <span :style="{ background: card.colors['state-alert'] }"></span>
+                      <span :style="{ background: card.colors['state-warn'] }"></span>
+                    </span>
+                  </span>
+                </span>
+                <span class="theme-preset-name">
+                  <span>{{ card.label }}</span>
+                  <Icon v-if="card.id === themePreset" name="check" size="13" />
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="glass-card mt-16">
+            <div class="theme-card-head">
+              <label>색 직접 바꾸기</label>
+              <button class="btn-pill" :disabled="!themeHasOverrides" @click="resetThemeOverrides">전체 되돌리기</button>
+            </div>
+            <p class="theme-note">
+              여기서 고른 색은 프리셋을 바꿔도 유지됩니다.
+              나머지 색(배경 · 글자 · 경계)은 프리셋이 정합니다.
+            </p>
+            <div class="theme-field-list">
+              <ColorField
+                v-for="field in themeFields" :key="field.key"
+                :label="field.label"
+                :hint="field.hint"
+                :model-value="themeColor(field.key)"
+                :preset-value="themePresetColor(field.key)"
+                :background="themeColors['bg-card']"
+                @update:model-value="setThemeColor(field.key, $event)"
+                @reset="resetThemeColor(field.key)"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Shortcuts -->
         <div v-show="currentTab === 'shortcuts'" class="section-fade">
           <div class="hint-banner"><Icon name="info" /> 같은 단축키도 <strong>현재 활성 탭</strong>에 따라 동작이 달라집니다.
             예: <kbd>Ctrl+Z</kbd>는 Editor 탭에서는 편집 Undo, T2I/I2I/Inpaint에서는 프롬프트 Undo.
@@ -622,7 +686,7 @@
               <div class="s-row"><span>이전 / 다음 이미지</span><kbd><Icon name="arrow-up" /><Icon name="arrow-down" /></kbd></div>
               <div class="s-row">
                 <span>최상단 / 최하단으로 점프 (보조키 + ↑↓)</span>
-                <select v-model="historyJumpModifier" @change="window.localStorage.setItem('historyJumpModifier', historyJumpModifier)" class="hjm-select">
+                <select v-model="historyJumpModifier" @change="saveHistoryJumpModifier" class="hjm-select">
                   <option value="shiftKey">Shift</option>
                   <option value="ctrlKey">Ctrl</option>
                   <option value="altKey">Alt</option>
@@ -659,7 +723,7 @@
           </div>
         </div>
 
-        <!-- 6. Anima Guard -->
+        <!-- 7. Anima Guard -->
         <div v-show="currentTab === 'guard'" class="section-fade">
           <div class="hint-banner">
             자동 해상도와 고해상도 배율 적용 시 이미지 비율을 유지하면서 최종 크기를 제한합니다.
@@ -700,7 +764,7 @@
           </div>
         </div>
 
-        <!-- 7. 기본값 설정 (탭별) -->
+        <!-- 8. 기본값 설정 (탭별) -->
         <div v-show="currentTab === 'defaults'" class="section-fade">
           <!-- UI 크기 조절 -->
           <div class="glass-card mt-16">
@@ -708,12 +772,12 @@
             <div class="def-field-wide">
               <span>{{ Math.round(uiScale * 100) }}% — 폰트·아이콘·패딩 비례 확대</span>
               <input type="range" min="0.8" max="1.5" step="0.05" v-model.number="uiScale"
-                @input="onUiScaleChange" class="w-slider" />
+                @input="onUiScaleChange()" @change="onUiScaleChange(true)" class="w-slider" />
               <div class="scale-presets">
                 <button v-for="p in [0.9, 1.0, 1.1, 1.2, 1.3]" :key="p"
                   class="scale-btn"
                   :class="{ active: Math.abs(uiScale - p) < 0.025 }"
-                  @click="uiScale = p; onUiScaleChange()">
+                  @click="uiScale = p; onUiScaleChange(true)">
                   {{ Math.round(p * 100) }}%
                 </button>
               </div>
@@ -750,7 +814,7 @@
             <div class="def-field-wide mt-12">
               <span>사이드 패널 너비 ({{ editorSidePanelWidth }}px)</span>
               <input type="range" min="200" max="500" step="10" v-model.number="editorSidePanelWidth"
-                @input="onSidePanelWidthChange" class="w-slider" />
+                @input="onSidePanelWidthChange()" @change="onSidePanelWidthChange(true)" class="w-slider" />
             </div>
           </div>
 
@@ -778,7 +842,7 @@
           </div>
         </div>
 
-        <!-- 8. AI Assist (Ollama) -->
+        <!-- 9. AI Assist (Ollama) -->
         <div v-show="currentTab === 'ollama'" class="section-fade">
           <div class="glass-card">
             <label>Ollama 설정</label>
@@ -859,6 +923,9 @@ import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import { getStudioClient, replyData, StudioClientError, type StudioClient } from '../studio/client'
 import CustomSelect from '../components/CustomSelect.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
+import ColorField from '../components/ColorField.vue'
+import { DEFAULT_PRESET, EDITABLE_KEYS, PRESETS, PRESET_IDS, type EditableKey } from '../theme/presets'
+import { getThemeState, reconcileTheme, resolveTheme, setTheme } from '../theme/applyTheme'
 
 interface SubTab {
   id: string
@@ -955,6 +1022,7 @@ const subTabs: SubTab[] = [
   { id: 'forge',     label: 'Forge',      icon: 'package', keywords: 'forge neo checkpoint model lora vae te text encoder 경로 폴더 모델 로라' },
   { id: 'prompt',    label: '로직',       icon: 'pencil', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
   { id: 'tabs',      label: '워크스페이스', icon: 'layers', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
+  { id: 'theme',     label: '테마',       icon: 'palette', keywords: 'theme 테마 색 컬러 다크 라이트 강조색 accent color dark light' },
   { id: 'shortcuts', label: '단축키',     icon: 'keyboard', keywords: 'hotkeys shortcuts 단축키 키보드 ctrl shift z y s g' },
   { id: 'guard',     label: '가드',       icon: 'shield', keywords: 'anima guard 가드 자동 해상도 제한 최대 면적 픽셀 긴 변 resolution cap vram oom' },
   { id: 'defaults',  label: '기본값',     icon: 'sliders', keywords: 'defaults 기본값 t2i i2i inpaint 해상도 steps cfg sampler 시드' },
@@ -1405,8 +1473,17 @@ function saveCopyrightPref() {
 }
 
 const historyBlink = ref(window.localStorage.getItem('historyBlinkSelected') !== 'false')
+function saveHistoryJumpModifier() {
+  const value = ['shiftKey', 'ctrlKey', 'altKey'].includes(historyJumpModifier.value)
+    ? historyJumpModifier.value
+    : 'shiftKey'
+  historyJumpModifier.value = value
+  window.localStorage.setItem('historyJumpModifier', value)
+  requestAction('save_ui_prefs', { historyJumpModifier: value })
+}
 function saveHistoryBlink() {
   window.localStorage.setItem('historyBlinkSelected', String(historyBlink.value))
+  requestAction('save_ui_prefs', { historyBlinkSelected: historyBlink.value })
   try { window.dispatchEvent(new CustomEvent('historyBlinkChanged', { detail: { value: historyBlink.value } })) } catch {}
 }
 
@@ -1423,6 +1500,27 @@ function applyUiPrefs(prefs: any) {
   if (typeof prefs.cleanUnderscore === 'boolean') cleanUnderscore.value = prefs.cleanUnderscore
   if (typeof prefs.galleryShowMetadata === 'boolean') { galleryMetadata.value = prefs.galleryShowMetadata; window.localStorage.setItem('galleryShowMetadata', String(prefs.galleryShowMetadata)) }
   if (typeof prefs.autoAddCopyright === 'boolean') { autoAddCopyright.value = prefs.autoAddCopyright; window.localStorage.setItem('autoAddCopyright', String(prefs.autoAddCopyright)) }
+  if (['shiftKey', 'ctrlKey', 'altKey'].includes(prefs.historyJumpModifier)) {
+    historyJumpModifier.value = prefs.historyJumpModifier
+    window.localStorage.setItem('historyJumpModifier', prefs.historyJumpModifier)
+  }
+  if (typeof prefs.historyBlinkSelected === 'boolean') {
+    historyBlink.value = prefs.historyBlinkSelected
+    window.localStorage.setItem('historyBlinkSelected', String(prefs.historyBlinkSelected))
+    try { window.dispatchEvent(new CustomEvent('historyBlinkChanged', { detail: { value: prefs.historyBlinkSelected } })) } catch {}
+  }
+  const restoredScale = Number(prefs.uiScale)
+  if (Number.isFinite(restoredScale) && restoredScale >= 0.8 && restoredScale <= 1.5) {
+    uiScale.value = restoredScale
+    window.localStorage.setItem('ui.scale', String(restoredScale))
+    try { window.dispatchEvent(new CustomEvent('uiScaleChanged', { detail: { value: restoredScale } })) } catch {}
+  }
+  const restoredPanelWidth = Number(prefs.editorSidePanelWidth)
+  if (Number.isInteger(restoredPanelWidth) && restoredPanelWidth >= 200 && restoredPanelWidth <= 500) {
+    editorSidePanelWidth.value = restoredPanelWidth
+    window.localStorage.setItem('editorSidePanelWidth', String(restoredPanelWidth))
+    try { window.dispatchEvent(new CustomEvent('editorSidePanelWidthChanged')) } catch {}
+  }
   if (typeof prefs.animaGuardEnabled === 'boolean') animaGuardEnabled.value = prefs.animaGuardEnabled
   animaGuardMaxAreaSide.value = normalizeGuardDimension(prefs.animaGuardMaxAreaSide, 1536)
   animaGuardMaxSide.value = normalizeGuardDimension(prefs.animaGuardMaxSide, 2048)
@@ -1434,6 +1532,10 @@ function applyUiPrefs(prefs: any) {
   if (prefs.ollamaUrl) { ollamaUrl.value = prefs.ollamaUrl; window.localStorage.setItem('ollamaUrl', prefs.ollamaUrl) }
   if (prefs.ollamaModel) { ollamaModel.value = prefs.ollamaModel; window.localStorage.setItem('ollamaModel', prefs.ollamaModel) }
   if (typeof prefs.ollamaUnloadOnGen === 'boolean') { ollamaUnloadOnGen.value = prefs.ollamaUnloadOnGen; window.localStorage.setItem('ollamaUnloadOnGen', String(prefs.ollamaUnloadOnGen)) }
+  // 디스크가 테마의 단일 출처다(다른 기기/프로필에서 바꾼 값이 우선). reconcileTheme 은
+  // 값이 같으면 아무것도 하지 않으므로 앱 시작 시 이미 맞췄어도 중복 적용이 아니다.
+  reconcileTheme(prefs)
+  syncThemeState()
 }
 
 function parseRuntimePayload(raw: unknown): any {
@@ -2087,6 +2189,88 @@ const resetTabOrder = () => {
   tabOrder.value = [...defaultOrder]
   persistTabOrder()
 }
+
+// ── 테마 ────────────────────────────────────────────────────────────────────
+// 색의 단일 출처는 core/theme_presets.py → theme/presets.ts 다. 여기서는 고르기만
+// 하고, 계산·적용·영속은 전부 theme/applyTheme.ts 에 맡긴다.
+const themePreset = ref(getThemeState().preset)
+const themeOverrides = ref<Record<string, string>>(getThemeState().overrides)
+
+/** setTheme 이 걸러낸 결과를 되읽는다 — 화면이 실제 적용값과 어긋나지 않게. */
+function syncThemeState() {
+  const state = getThemeState()
+  themePreset.value = state.preset
+  themeOverrides.value = state.overrides
+}
+
+function persistTheme(payload: { theme: string; themeOverrides: Record<string, string> }) {
+  requestAction('save_ui_prefs', payload)
+}
+
+/** 현재 최종 색 — ColorField 의 대비 계산 배경도 여기서 꺼낸다. */
+const themeColors = computed(() => resolveTheme(themePreset.value, themeOverrides.value))
+
+// 프리셋 카드 미리보기는 **덮어쓰기를 반영한** 색으로 그린다. 프리셋 원본 색만
+// 보여 주면 "고르면 이렇게 된다" 는 약속이 거짓말이 된다.
+const themePresetCards = computed(() =>
+  PRESET_IDS.map(id => ({
+    id,
+    label: PRESETS[id].label || id,
+    colors: resolveTheme(id, themeOverrides.value),
+  })),
+)
+
+interface ThemeColorField {
+  key: EditableKey
+  label: string
+  hint: string
+}
+// EDITABLE_KEYS 순서를 그대로 따른다 — 키가 늘면 설명만 채우면 된다.
+const THEME_FIELD_COPY: Record<string, { label: string; hint: string }> = {
+  accent: { label: '강조', hint: '주 실행 버튼과 열린 상태 · 포커스 테두리에 쓰입니다.' },
+  'state-info': { label: '선택', hint: '선택된 항목과 진행 중 표시에 쓰입니다.' },
+  'state-alert': { label: '알림', hint: '오류와 경고에 쓰입니다.' },
+  'state-ok': { label: '연결', hint: '성공과 연결됨 표시에 쓰입니다.' },
+}
+const themeFields = computed<ThemeColorField[]>(() =>
+  EDITABLE_KEYS.map(key => ({
+    key,
+    label: THEME_FIELD_COPY[key]?.label || key,
+    hint: THEME_FIELD_COPY[key]?.hint || '',
+  })),
+)
+
+const themeHasOverrides = computed(() => Object.keys(themeOverrides.value).length > 0)
+
+/** 프리셋 색(덮어쓰기 이전) — ColorField 의 '되돌리기' 목적지. */
+function themePresetColor(key: EditableKey): string {
+  return PRESETS[themePreset.value]?.[key] || PRESETS[DEFAULT_PRESET][key]
+}
+function themeColor(key: EditableKey): string {
+  return themeColors.value[key] || themePresetColor(key)
+}
+
+function selectThemePreset(id: string) {
+  // 덮어쓰기는 일부러 유지한다 — 고른 강조색이 프리셋 전환으로 사라지면 놀란다.
+  setTheme({ preset: id }, persistTheme)
+  syncThemeState()
+}
+function setThemeColor(key: EditableKey, value: string) {
+  setTheme({ overrides: { ...themeOverrides.value, [key]: value } }, persistTheme)
+  syncThemeState()
+}
+function resetThemeColor(key: EditableKey) {
+  const next = { ...themeOverrides.value }
+  delete next[key]
+  setTheme({ overrides: next }, persistTheme)
+  syncThemeState()
+}
+function resetThemeOverrides() {
+  setTheme({ overrides: {} }, persistTheme)
+  syncThemeState()
+  requestAction('show_toast', { type: 'success', msg: '직접 바꾼 색을 모두 프리셋 기본값으로 되돌렸습니다' })
+}
+
 const act = (name: string) => {
   // SAVE GLOBAL 시 localStorage 설정도 함께 저장
   if (name === 'save_settings') {
@@ -2097,6 +2281,10 @@ const act = (name: string) => {
       cleanUnderscore: cleanUnderscore.value,
       galleryShowMetadata: galleryMetadata.value,
       autoAddCopyright: autoAddCopyright.value,
+      historyJumpModifier: historyJumpModifier.value,
+      historyBlinkSelected: historyBlink.value,
+      uiScale: uiScale.value,
+      editorSidePanelWidth: editorSidePanelWidth.value,
       tabOrder: tabOrder.value,
       animaGuardEnabled: animaGuardEnabled.value,
       animaGuardMaxAreaSide: animaGuardMaxAreaSide.value,
@@ -2128,23 +2316,27 @@ watch(defaults, () => {
 }, { deep: true })
 function resetDefaults() { Object.assign(defaults, FACTORY_DEFAULTS) }
 
-// 사이드 패널 너비 — localStorage 직접 (EditorView가 호출하는 같은 키)
+// 사이드 패널 너비 — localStorage로 즉시 반영하고 ui_prefs에 영속
 const editorSidePanelWidth = ref(parseInt(window.localStorage.getItem('editorSidePanelWidth') || '280'))
 
 // UI 크기 (전역 zoom) — App.vue가 _applyUiScale로 적용
 const uiScale = ref(parseFloat(window.localStorage.getItem('ui.scale') || '1.0') || 1.0)
-function onUiScaleChange() {
+function onUiScaleChange(persist = false) {
   const v = Math.max(0.8, Math.min(1.5, uiScale.value))
   uiScale.value = v
   try { window.localStorage.setItem('ui.scale', String(v)) } catch {}
+  if (persist) requestAction('save_ui_prefs', { uiScale: v })
   // 같은 창에서 즉시 반영
   try { window.dispatchEvent(new CustomEvent('uiScaleChanged', { detail: { value: v } })) } catch {}
 }
 
 // (자동화 자동 재시작 설정 제거됨 — 큐는 오직 '▶ 시작' 버튼으로만 시작. QueuePanel과 일치)
-function onSidePanelWidthChange() {
-  window.localStorage.setItem('editorSidePanelWidth', String(editorSidePanelWidth.value))
-  // EditorView가 storage 이벤트 듣고 즉시 반영
+function onSidePanelWidthChange(persist = false) {
+  const v = Math.max(200, Math.min(500, Math.round(editorSidePanelWidth.value)))
+  editorSidePanelWidth.value = v
+  window.localStorage.setItem('editorSidePanelWidth', String(v))
+  if (persist) requestAction('save_ui_prefs', { editorSidePanelWidth: v })
+  try { window.dispatchEvent(new CustomEvent('editorSidePanelWidthChanged')) } catch {}
 }
 
 const t2iSynced = ref(false)
@@ -2252,7 +2444,7 @@ function handleOllamaModels(json: string) {
   background: none; border: none; color: var(--text-muted); cursor: pointer;
   font-size: 12px; padding: 0 4px;
 }
-.search-clear:hover { color: #f87171; }
+.search-clear:hover { color: var(--state-alert-fg); }
 .nav-empty { padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center; font-style: italic; }
 .nav-item {
   height: 44px; padding: 0 16px; border: none; background: transparent;
@@ -2289,22 +2481,22 @@ function handleOllamaModels(json: string) {
 .generation-api-security {
   background: rgba(34,211,238,.07); border-color: rgba(34,211,238,.3); color: var(--text-secondary);
 }
-.generation-api-security strong { display: block; margin-bottom: 4px; color: #22d3ee; letter-spacing: 0; }
+.generation-api-security strong { display: block; margin-bottom: 4px; color: var(--state-info-fg); letter-spacing: 0; }
 .generation-api-security b { color: var(--text-primary); }
 .generation-api-readonly {
   background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.3); color: var(--text-secondary);
 }
-.generation-api-readonly strong { margin-right: 5px; color: #fbbf24; }
+.generation-api-readonly strong { margin-right: 5px; color: var(--state-warn-fg); }
 .generation-api-card { border-color: rgba(34,211,238,.17); }
 .generation-api-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-.generation-api-eyebrow { color: #22d3ee; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
+.generation-api-eyebrow { color: var(--state-info-fg); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .generation-api-header h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 18px; }
 .generation-api-badges { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .generation-api-badge {
   padding: 4px 7px; border: 1px solid var(--border); border-radius: var(--radius-pill);
   background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
-.generation-api-badge.on { border-color: rgba(74,222,128,.42); background: rgba(74,222,128,.09); color: #4ade80; }
+.generation-api-badge.on { border-color: rgba(74,222,128,.42); background: rgba(74,222,128,.09); color: var(--state-ok-fg); }
 .generation-api-toggle-row {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
   margin-top: 18px; padding: 12px 14px; border-radius: 8px; background: var(--bg-input);
@@ -2324,12 +2516,12 @@ function handleOllamaModels(json: string) {
   border: 1px solid var(--border); border-radius: 7px; outline: none;
   background: var(--bg-primary); color: var(--text-primary); font-family: 'Consolas', monospace; font-size: var(--fs-label);
 }
-.generation-api-field input:focus, .generation-api-field select:focus { border-color: #22d3ee; }
+.generation-api-field input:focus, .generation-api-field select:focus { border-color: var(--state-info-fg); }
 .generation-api-field input:disabled, .generation-api-field select:disabled { opacity: .5; cursor: not-allowed; }
 .generation-api-secret { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 7px; }
 .generation-api-lan-warning {
   margin-top: 10px; padding: 9px 11px; border: 1px solid rgba(248,113,113,.35); border-radius: 7px;
-  background: rgba(248,113,113,.07); color: #fca5a5; font-size: var(--fs-label); line-height: 1.5;
+  background: rgba(248,113,113,.07); color: var(--state-alert-fg); font-size: var(--fs-label); line-height: 1.5;
 }
 .generation-api-endpoint {
   min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
@@ -2337,7 +2529,7 @@ function handleOllamaModels(json: string) {
 }
 .generation-api-endpoint code {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: #67e8f9; font-family: 'Consolas', monospace; font-size: var(--fs-label);
+  color: var(--state-info-fg); font-family: 'Consolas', monospace; font-size: var(--fs-label);
 }
 .generation-api-actions { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1.2fr; gap: 8px; }
 .generation-api-actions .btn-pill { min-width: 0; }
@@ -2355,7 +2547,7 @@ function handleOllamaModels(json: string) {
 .generation-api-target-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .generation-api-target-head > strong { color: var(--text-primary); font-size: 11px; }
 .generation-api-enabled { color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
-.generation-api-enabled input { accent-color: #22d3ee; vertical-align: -2px; }
+.generation-api-enabled input { accent-color: var(--state-info); vertical-align: -2px; }
 .generation-api-target-actions { display: flex; justify-content: flex-end; gap: 7px; }
 .generation-api-jobs { display: flex; flex-direction: column; gap: 7px; }
 .generation-api-job {
@@ -2369,21 +2561,21 @@ function handleOllamaModels(json: string) {
   flex-shrink: 0; padding: 3px 7px; border-radius: var(--radius-pill); background: var(--border);
   color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
-.generation-api-job-state.completed { background: rgba(74,222,128,.1); color: #4ade80; }
-.generation-api-job-state.running { background: rgba(96,165,250,.1); color: #60a5fa; }
-.generation-api-job-state.failed, .generation-api-job-state.cancelled { background: rgba(248,113,113,.1); color: #f87171; }
+.generation-api-job-state.completed { background: rgba(74,222,128,.1); color: var(--state-ok-fg); }
+.generation-api-job-state.running { background: rgba(96,165,250,.1); color: var(--state-info-fg); }
+.generation-api-job-state.failed, .generation-api-job-state.cancelled { background: rgba(248,113,113,.1); color: var(--state-alert-fg); }
 
 /* App-managed runtimes */
 .runtime-section { width: 100%; }
 .runtime-safety-warning {
   background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.35);
 }
-.runtime-safety-warning strong { display: block; color: #f87171; letter-spacing: 0; margin-bottom: 3px; }
+.runtime-safety-warning strong { display: block; color: var(--state-alert-fg); letter-spacing: 0; margin-bottom: 3px; }
 .runtime-safety-warning b { color: var(--text-primary); }
 .runtime-readonly-warning {
   background: rgba(251,191,36,.07); border-color: rgba(251,191,36,.3); color: var(--text-secondary);
 }
-.runtime-readonly-warning strong { color: #fbbf24; margin-right: 5px; }
+.runtime-readonly-warning strong { color: var(--state-warn-fg); margin-right: 5px; }
 .runtime-primary-card {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr); gap: 20px;
   margin-bottom: 18px; border-color: rgba(96,165,250,.28);
@@ -2401,9 +2593,9 @@ function handleOllamaModels(json: string) {
 .runtime-primary-option span { font-size: 11px; font-weight: var(--fw-bold); }
 .runtime-primary-option strong { color: var(--text-muted); font-size: var(--fs-label); letter-spacing: 0; }
 .runtime-primary-option:hover:not(:disabled), .runtime-primary-option.selected {
-  border-color: #60a5fa; background: rgba(96,165,250,.12); color: #93c5fd;
+  border-color: var(--state-info-fg); background: rgba(96,165,250,.12); color: var(--state-info-fg);
 }
-.runtime-primary-option.selected strong { color: #60a5fa; }
+.runtime-primary-option.selected strong { color: var(--state-info-fg); }
 .runtime-primary-option:disabled { cursor: default; opacity: .72; }
 .runtime-card-list { display: flex; flex-direction: column; gap: 18px; }
 .runtime-card { position: relative; overflow: hidden; }
@@ -2411,8 +2603,8 @@ function handleOllamaModels(json: string) {
   content: ''; position: absolute; inset: 0 auto 0 0; width: 3px;
   background: var(--runtime-accent, var(--accent)); opacity: .85;
 }
-.runtime-card-forge { --runtime-accent: #a78bfa; }
-.runtime-card-comfyui { --runtime-accent: #22d3ee; }
+.runtime-card-forge { --runtime-accent: var(--tag-wear); }
+.runtime-card-comfyui { --runtime-accent: var(--tag-scene); }
 .runtime-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
 .runtime-eyebrow { color: var(--runtime-accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .runtime-card h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 20px; letter-spacing: -.2px; }
@@ -2421,13 +2613,13 @@ function handleOllamaModels(json: string) {
   padding: 4px 7px; border: 1px solid var(--border); border-radius: var(--radius-pill);
   background: var(--bg-input); color: var(--text-muted); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
-.runtime-badge.on { border-color: rgba(96,165,250,.45); background: rgba(96,165,250,.11); color: #60a5fa; }
-.runtime-badge.health.on { border-color: rgba(74,222,128,.45); background: rgba(74,222,128,.1); color: #4ade80; }
-.runtime-badge.busy.on { border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.1); color: #fbbf24; animation: runtimePulse 1.25s ease-in-out infinite; }
+.runtime-badge.on { border-color: rgba(96,165,250,.45); background: rgba(96,165,250,.11); color: var(--state-info-fg); }
+.runtime-badge.health.on { border-color: rgba(74,222,128,.45); background: rgba(74,222,128,.1); color: var(--state-ok-fg); }
+.runtime-badge.busy.on { border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.1); color: var(--state-warn-fg); animation: runtimePulse 1.25s ease-in-out infinite; }
 .runtime-badge.active.on { border-color: color-mix(in srgb, var(--runtime-accent) 55%, transparent); background: color-mix(in srgb, var(--runtime-accent) 12%, transparent); color: var(--runtime-accent); }
-.runtime-badge.source { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.09); color: #60a5fa; }
-.runtime-badge.source.existing { border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.1); color: #fbbf24; }
-.runtime-badge.primary-source { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.1); color: #4ade80; }
+.runtime-badge.source { border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.09); color: var(--state-info-fg); }
+.runtime-badge.source.existing { border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.1); color: var(--state-warn-fg); }
+.runtime-badge.primary-source { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.1); color: var(--state-ok-fg); }
 @keyframes runtimePulse { 50% { opacity: .52; } }
 .runtime-meta-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px;
@@ -2443,7 +2635,7 @@ function handleOllamaModels(json: string) {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--text-secondary); font-family: 'Consolas', monospace; font-size: var(--fs-label); font-weight: var(--fw-bold);
 }
-.runtime-meta strong.update-ready { color: #fbbf24; }
+.runtime-meta strong.update-ready { color: var(--state-warn-fg); }
 .runtime-model-paths > div { min-width: 0; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 8px; align-items: center; }
 .runtime-model-paths > div + div { margin-top: 4px; }
 .runtime-model-paths > div strong { color: var(--runtime-accent); font-size: var(--fs-label); letter-spacing: 0; }
@@ -2462,7 +2654,7 @@ function handleOllamaModels(json: string) {
 .runtime-subheading p { margin: 3px 0 0; color: var(--text-muted); font-size: var(--fs-label); line-height: 1.45; }
 .runtime-unsaved, .extension-update-badge {
   flex-shrink: 0; padding: 3px 6px; border-radius: 4px; background: rgba(251,191,36,.12);
-  color: #fbbf24; font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
+  color: var(--state-warn-fg); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0;
 }
 .runtime-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; }
 .runtime-install-path-control { grid-template-columns: minmax(0, 1fr) auto auto auto; }
@@ -2476,11 +2668,11 @@ function handleOllamaModels(json: string) {
 .runtime-path-control input:disabled, .runtime-repo-control input:disabled { opacity: .52; cursor: not-allowed; }
 .runtime-dependency-note {
   margin-top: 8px; padding: 8px 10px; border: 1px solid rgba(251,191,36,.28); border-radius: 7px;
-  background: rgba(251,191,36,.06); color: #d4b45f; font-size: var(--fs-label); line-height: 1.5;
+  background: rgba(251,191,36,.06); color: var(--state-warn-fg); font-size: var(--fs-label); line-height: 1.5;
 }
 .runtime-action-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
 .runtime-action-grid .btn-pill { min-width: 0; }
-.btn-pill.danger:not(:disabled) { border-color: rgba(248,113,113,.4); color: #f87171; }
+.btn-pill.danger:not(:disabled) { border-color: rgba(248,113,113,.4); color: var(--state-alert-fg); }
 .btn-pill.accent:not(:disabled) { border-color: var(--runtime-accent, var(--accent)); color: var(--runtime-accent, var(--accent)); }
 .runtime-extension-section { margin-top: 18px; }
 .runtime-extension-list { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
@@ -2513,7 +2705,7 @@ function handleOllamaModels(json: string) {
   color: var(--accent); font-family: 'Consolas', monospace; font-size: var(--fs-label);
 }
 .forge-readonly-warning { margin-top: 10px; border-color: rgba(245,158,11,.28); }
-.forge-readonly-warning strong { color: #fbbf24; margin-right: 5px; }
+.forge-readonly-warning strong { color: var(--state-warn-fg); margin-right: 5px; }
 .forge-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .forge-scanning { color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: 0; }
 .forge-path-list { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
@@ -2531,14 +2723,14 @@ function handleOllamaModels(json: string) {
   font-family: 'Consolas', monospace; font-size: 11px;
 }
 .forge-path-control input:focus { border-color: var(--accent); }
-.forge-path-control input.invalid { border-color: #f87171; box-shadow: 0 0 0 1px rgba(248,113,113,.15); }
+.forge-path-control input.invalid { border-color: var(--state-alert-fg); box-shadow: 0 0 0 1px rgba(248,113,113,.15); }
 .forge-path-control input:disabled { opacity: .62; cursor: not-allowed; }
 .btn-pill.compact { min-width: 74px; padding: 7px 11px; font-size: var(--fs-label); }
 .forge-path-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 7px; color: var(--text-muted); font-size: var(--fs-label); }
-.path-ok { color: #4ade80; }
-.path-missing, .path-error { color: #f87171; }
+.path-ok { color: var(--state-ok-fg); }
+.path-missing, .path-error { color: var(--state-alert-fg); }
 .path-error { width: 100%; }
-.env-lock { padding: 2px 6px; border-radius: 4px; background: rgba(96,165,250,.12); color: #60a5fa; font-weight: var(--fw-bold); }
+.env-lock { padding: 2px 6px; border-radius: 4px; background: rgba(96,165,250,.12); color: var(--state-info-fg); font-weight: var(--fw-bold); }
 .forge-actions { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 10px; }
 .forge-status { color: var(--text-muted); font-size: var(--fs-label); line-height: 1.5; }
 
@@ -2550,7 +2742,9 @@ function handleOllamaModels(json: string) {
 }
 .toggle-row:hover { background: var(--bg-button); }
 .toggle-row span { font-size: 13px; font-weight: var(--fw-bold); color: var(--text-secondary); }
-/* 체크박스 → 토글 스위치 */
+/* 체크박스 → 토글 스위치.
+   켜짐 표시는 '면'이 아니라 표시등이라 어두운 채움(--state-ok)이 아닌 -fg 를 쓴다
+   (ToggleSwitch.vue 와 같은 이유 — 초록 틴트 트랙 위에서 채움색 노브는 대비가 죽는다). */
 .toggle-row input[type="checkbox"] {
   appearance: none; -webkit-appearance: none; margin: 0; flex-shrink: 0;
   width: 42px; height: 22px; border-radius: 12px;
@@ -2562,8 +2756,8 @@ function handleOllamaModels(json: string) {
   width: 16px; height: 16px; border-radius: 50%;
   background: var(--text-muted); transition: left .18s, background .18s;
 }
-.toggle-row input[type="checkbox"]:checked { background: rgba(74,222,128,0.28); border-color: #4ade80; }
-.toggle-row input[type="checkbox"]:checked::before { left: 22px; background: #4ade80; }
+.toggle-row input[type="checkbox"]:checked { background: rgba(74,222,128,0.28); border-color: var(--state-ok-fg); }
+.toggle-row input[type="checkbox"]:checked::before { left: 22px; background: var(--state-ok-fg); }
 
 .btn-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .mt-16 { margin-top: 16px; }
@@ -2577,6 +2771,41 @@ function handleOllamaModels(json: string) {
 .drag-item:active { cursor: grabbing; background: var(--bg-button); scale: 0.98; }
 .drag-item .handle { color: var(--text-muted); }
 .drag-item .name { font-size: 12px; font-weight: var(--fw-bold); letter-spacing: 0; color: var(--text-primary); }
+
+/* Theme */
+.theme-note { margin: 8px 0 0; color: var(--text-muted); font-size: var(--fs-label); line-height: 1.55; }
+.theme-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.theme-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.theme-preset {
+  min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-base);
+  background: var(--bg-input); cursor: pointer; transition: var(--transition);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.theme-preset:hover { border-color: var(--edge); }
+.theme-preset.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-dim); }
+.theme-preset-name {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  color: var(--text-secondary); font-size: 12px; font-weight: var(--fw-bold); letter-spacing: 0;
+}
+.theme-preset.selected .theme-preset-name { color: var(--accent); }
+
+/* 미리보기 안쪽은 토큰이 아니라 **그 프리셋의 색**을 인라인으로 받는다 —
+   토큰을 쓰면 어떤 카드든 지금 테마 색으로 보여서 미리보기가 거짓말이 된다. */
+.theme-preview { display: block; overflow: hidden; height: 92px; border: 1px solid; border-radius: 6px; }
+.theme-preview-bar { display: flex; align-items: center; gap: 5px; height: 16px; padding: 0 6px; border-bottom: 1px solid; }
+.theme-preview-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.theme-preview-line { display: block; width: 60%; height: 3px; border-radius: 2px; opacity: .8; }
+.theme-preview-line.wide { width: 85%; height: 4px; opacity: 1; }
+.theme-preview-body { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+.theme-preview-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+  padding: 7px; border: 1px solid; border-radius: 5px;
+}
+.theme-preview-btn { padding: 1px 8px 2px; border-radius: 4px; font-size: 9px; font-weight: var(--fw-bold); line-height: 1.6; }
+.theme-preview-states { display: flex; gap: 4px; }
+.theme-preview-states > span { flex: 1; height: 5px; border-radius: 3px; }
+
+.theme-field-list { display: flex; flex-direction: column; gap: 18px; margin-top: 16px; }
 
 .shortcut-grid { display: flex; flex-direction: column; gap: 4px; }
 .s-row {
@@ -2637,7 +2866,9 @@ kbd {
   box-shadow: 0 0 0 1px var(--accent-dim);
 }
 .def-field span { font-size: var(--fs-label); font-weight: var(--fw-bold); color: var(--text-muted); }
-.sync-badge { background: #4ade80; color: #000; padding: 1px 6px; border-radius: 4px; font-size: var(--fs-label); font-weight: var(--fw-bold); margin-left: 8px; }
+/* 채움용 --state-ok 는 '흰 글자와 4.6:1' 로 맞춘 값이라 그 위 글자는 흰색 고정이다
+   (--text-primary 는 라이트 테마에서 검정이 되어 이 면 위에서 안 읽힌다). */
+.sync-badge { background: var(--state-ok); color: #fff; padding: 1px 6px; border-radius: 4px; font-size: var(--fs-label); font-weight: var(--fw-bold); margin-left: 8px; }
 .def-field input, .def-field select { padding: 8px 10px; font-size: 12px; }
 .ollama-unload-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer; line-height: 1.4; }
 .ollama-unload-row input { margin-top: 2px; accent-color: var(--accent); }
@@ -2652,7 +2883,7 @@ kbd {
   padding: 10px 14px; background: var(--bg-input); border: 1px solid var(--border);
   border-radius: var(--radius-base); transition: var(--transition);
 }
-.rec-item:hover { border-color: #444; }
+.rec-item:hover { border-color: var(--border-strong); }
 .rec-item.best { border-color: var(--accent-dim); background: rgba(250, 204, 21, 0.03); }
 .rec-name { font-size: 13px; font-weight: var(--fw-bold); color: var(--text-primary); min-width: 120px; font-family: 'Consolas', monospace; }
 .rec-item.best .rec-name { color: var(--accent); }
@@ -2681,6 +2912,7 @@ kbd {
   .nav-header, .settings-search-wrap, .nav-empty { grid-column: 1 / -1; }
   .nav-item { height: 38px; padding: 0 10px; }
   .nav-item .label { font-size: var(--fs-label); letter-spacing: 0; }
+  .theme-preset-grid { grid-template-columns: 1fr; }
   .settings-body { padding: 16px 12px 28px; }
   .glass-card { padding: 17px; }
   .generation-api-header { flex-direction: column; }
