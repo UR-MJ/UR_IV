@@ -375,6 +375,33 @@ class BackendRuntimeConfigurationTests(BackendRuntimeTestCase):
                 Path(manager.snapshot()["runtimeRoot"]), override.resolve()
             )
 
+    def test_app_model_fallback_is_shared_by_both_engines(self):
+        shared_root = self.temp / "project" / "user_data" / "models"
+        shared_paths = {
+            "checkpoints": shared_root / "Stable-diffusion",
+            "diffusion_models": shared_root / "diffusion_models",
+            "loras": shared_root / "Lora",
+            "vae": shared_root / "VAE",
+            "text_encoders": shared_root / "text_encoder",
+        }
+        for path in shared_paths.values():
+            path.mkdir(parents=True)
+
+        with (
+            patch("core.forge_modules.get_forge_root", return_value=shared_root),
+            patch("core.forge_modules.get_app_models_root", return_value=shared_root),
+            patch("core.forge_modules.get_app_model_paths", return_value=shared_paths),
+        ):
+            snapshot = self.manager.snapshot()
+            combined = self.manager._combined_model_paths()
+
+        for engine in ("forge", "comfyui"):
+            model_paths = snapshot["engines"][engine]["modelPaths"]
+            for category, expected in shared_paths.items():
+                self.assertIn(str(expected.resolve()), model_paths[category])
+        for category, expected in shared_paths.items():
+            self.assertEqual(combined[category].count(str(expected.resolve())), 1)
+
     def test_configure_persists_atomically_and_aliases_forge_neo(self):
         external_extensions = self.temp / "external-forge" / "extensions"
         external_extensions.mkdir(parents=True)

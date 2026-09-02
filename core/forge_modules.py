@@ -4,9 +4,10 @@ Settings에서 체크포인트 / LoRA / VAE / Text Encoder 폴더를 각각 지�
 설정은 사용자 전용 ``config/forge_model_paths.json``에 저장되며 Git에는
 포함되지 않는다.
 
-우선순위는 개별 환경변수 → 저장된 Settings 값 → Forge models 루트 기반
-기본값이다. 기존 ``FORGE_MODELS_ROOT`` 및
-``config/forge_models_root.txt``도 계속 지원한다.
+우선순위는 개별 환경변수 → 저장된 Settings 값 → 감지된 Forge models 루트 →
+앱 공용 ``user_data/models`` fallback이다. 기존 ``FORGE_MODELS_ROOT`` 및
+``config/forge_models_root.txt``도 계속 지원한다. 외부 Forge가 전혀 없어도
+fallback의 표준 하위 폴더를 만들어 Forge와 ComfyUI가 같은 모델 파일을 공유한다.
 """
 from __future__ import annotations
 
@@ -17,13 +18,13 @@ from typing import Any
 
 from core.storage_paths import config_file
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_FORGE_MODELS_ROOT = r"C:\sd-webui-forge-neo\models"
 FORGE_ROOT_CANDIDATES = (
     Path(DEFAULT_FORGE_MODELS_ROOT),
     Path(r"C:\sd-webui-forge-classic\models"),
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FORGE_PATHS_FILE = config_file(
     "forge_model_paths.json",
     legacy_paths="user_data/forge_model_paths.json",
@@ -42,6 +43,14 @@ _DEFAULT_SUBDIRS = {
     "lora_dir": "Lora",
     "vae_dir": "VAE",
     "text_encoder_dir": "text_encoder",
+}
+
+APP_MODEL_SUBDIRS = {
+    "checkpoints": "Stable-diffusion",
+    "diffusion_models": "diffusion_models",
+    "loras": "Lora",
+    "vae": "VAE",
+    "text_encoders": "text_encoder",
 }
 
 _ENV_KEYS = {
@@ -71,8 +80,34 @@ def _normalise_directory(value: str | os.PathLike[str]) -> Path:
     return Path(os.path.abspath(os.path.normpath(expanded)))
 
 
+def get_app_models_root() -> Path:
+    """Return the stable model-library fallback owned by this application."""
+    return (PROJECT_ROOT / "user_data" / "models").resolve()
+
+
+def get_app_model_paths(
+    root: str | os.PathLike[str] | None = None,
+) -> dict[str, Path]:
+    """Return canonical shared folders in backend-runtime category names."""
+    base = _normalise_directory(root) if root is not None else get_app_models_root()
+    return {
+        category: base / subdir
+        for category, subdir in APP_MODEL_SUBDIRS.items()
+    }
+
+
+def ensure_app_model_layout(
+    root: str | os.PathLike[str] | None = None,
+) -> dict[str, Path]:
+    """Idempotently create the empty shared library used as the final fallback."""
+    paths = get_app_model_paths(root)
+    for path in paths.values():
+        path.mkdir(parents=True, exist_ok=True)
+    return paths
+
+
 def get_forge_root(environ: Mapping[str, str] | None = None) -> Path:
-    """Forge ``models`` 루트 반환. 환경변수 → 레거시 파일 → 기본값 순서."""
+    """Forge ``models`` root, falling back to the app-owned shared library."""
     env = os.environ if environ is None else environ
     configured = str(env.get("FORGE_MODELS_ROOT", "") or "").strip()
     if configured:
@@ -87,8 +122,10 @@ def get_forge_root(environ: Mapping[str, str] | None = None) -> Path:
         pass
     for candidate in FORGE_ROOT_CANDIDATES:
         if candidate.is_dir():
-            return candidate
-    return _normalise_directory(DEFAULT_FORGE_MODELS_ROOT)
+            return candidate.resolve()
+    fallback = get_app_models_root()
+    ensure_app_model_layout(fallback)
+    return fallback
 
 
 def get_default_forge_paths(

@@ -1181,7 +1181,7 @@ class BackendRuntimeManager:
         engine: str,
         location: RuntimeLocation | None,
     ) -> dict[str, list[str]]:
-        """Return this engine's own model directories, never shared imports."""
+        """Return configured, runtime-local, and final fallback model directories."""
         paths: dict[str, list[Path]] = {
             "checkpoints": [],
             "diffusion_models": [],
@@ -1189,6 +1189,7 @@ class BackendRuntimeManager:
             "vae": [],
             "text_encoders": [],
         }
+        app_fallback_paths: dict[str, Path] = {}
         if engine == "forge":
             # Preserve the pre-existing Settings contract and its priority.
             try:
@@ -1208,6 +1209,25 @@ class BackendRuntimeManager:
             except Exception:
                 # A malformed optional legacy setting must not hide the runtime.
                 pass
+
+        # When neither of the known Forge model roots exists, forge_modules
+        # selects and creates one app-owned library.  Project that same physical
+        # fallback into both engines so a Comfy-only installation does not need
+        # a duplicate model tree.  Explicit Settings/linked/runtime paths stay
+        # ahead of this final fallback.
+        try:
+            from core.forge_modules import (
+                get_app_model_paths,
+                get_app_models_root,
+                get_forge_root,
+            )
+
+            if get_forge_root().resolve() == get_app_models_root().resolve():
+                app_fallback_paths = get_app_model_paths()
+        except Exception:
+            # Snapshot/model discovery must remain usable if the optional
+            # fallback directory cannot be inspected on a read-only volume.
+            app_fallback_paths = {}
 
         model_roots: list[Path] = []
         if location is not None:
@@ -1239,6 +1259,9 @@ class BackendRuntimeManager:
                 self._append_existing_paths(
                     paths["text_encoders"], model_root, ("text_encoders", "clip")
                 )
+        for category, fallback_path in app_fallback_paths.items():
+            if category in paths:
+                paths[category].append(fallback_path)
         return {category: self._dedupe_paths(values) for category, values in paths.items()}
 
     def _model_engine_order(self) -> tuple[str, ...]:

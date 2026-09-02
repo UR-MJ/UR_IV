@@ -40,6 +40,56 @@ class TestForgeModelPaths(unittest.TestCase):
                 paths,
             )
 
+    def test_no_detected_forge_creates_app_owned_shared_model_layout(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project_root = Path(temp) / "project"
+            missing = Path(temp) / "missing"
+
+            with (
+                patch.object(forge_modules, "PROJECT_ROOT", project_root),
+                patch.object(forge_modules, "LEGACY_ROOT_FILE", missing / "legacy.txt"),
+                patch.object(
+                    forge_modules,
+                    "FORGE_ROOT_CANDIDATES",
+                    (missing / "forge-neo", missing / "forge-classic"),
+                ),
+            ):
+                root = forge_modules.get_forge_root(environ={})
+                paths = forge_modules.get_app_model_paths()
+
+            self.assertEqual(root, (project_root / "user_data" / "models").resolve())
+            self.assertEqual(
+                {key: path.name for key, path in paths.items()},
+                {
+                    "checkpoints": "Stable-diffusion",
+                    "diffusion_models": "diffusion_models",
+                    "loras": "Lora",
+                    "vae": "VAE",
+                    "text_encoders": "text_encoder",
+                },
+            )
+            self.assertTrue(all(path.is_dir() for path in paths.values()))
+
+    def test_detected_forge_keeps_priority_over_app_fallback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project_root = Path(temp) / "project"
+            detected = Path(temp) / "forge" / "models"
+            detected.mkdir(parents=True)
+
+            with (
+                patch.object(forge_modules, "PROJECT_ROOT", project_root),
+                patch.object(
+                    forge_modules,
+                    "LEGACY_ROOT_FILE",
+                    Path(temp) / "missing-legacy.txt",
+                ),
+                patch.object(forge_modules, "FORGE_ROOT_CANDIDATES", (detected,)),
+            ):
+                root = forge_modules.get_forge_root(environ={})
+
+            self.assertEqual(root, detected.resolve())
+            self.assertFalse((project_root / "user_data" / "models").exists())
+
     def test_invalid_path_rejects_whole_save_and_preserves_existing_json(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
