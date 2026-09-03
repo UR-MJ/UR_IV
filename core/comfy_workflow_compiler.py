@@ -16,6 +16,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
+from core import anima38
+
 
 class WorkflowCompileError(RuntimeError):
     """A Forge request cannot be represented by the target ComfyUI runtime."""
@@ -26,6 +28,31 @@ class LoraSpec:
     name: str
     strength_model: float
     strength_clip: float
+
+
+@dataclass(frozen=True)
+class _Anima38Plan:
+    """Resolved loader/conditioning decisions for one immutable payload copy."""
+
+    loader_kind: str = "standard"
+    conditioning_kind: str = "native"
+    model_name: str = ""
+    native_modules: tuple[str, ...] = ()
+    native_clip_modules: tuple[str, ...] = ()
+    vae_modules: tuple[str, ...] = ()
+    unknown_modules: tuple[str, ...] = ()
+    qwen35_model: str = ""
+    adapter_name: str = ""
+    settings: anima38.Anima38Settings = anima38.DEFAULT_SETTINGS
+    is_anima: bool = False
+
+    @property
+    def semantic(self) -> bool:
+        return self.conditioning_kind in {"v1", "v2"}
+
+    @property
+    def v2(self) -> bool:
+        return self.loader_kind == "v2"
 
 
 _LORA_RE = re.compile(
@@ -149,15 +176,18 @@ class ComfyWorkflowCompiler:
             str(local_payload.get("negative_prompt", "") or ""),
         )
         local_payload["prompt"], local_payload["negative_prompt"] = prompts
+        anima_plan = self._resolve_anima38_plan(model_name, local_payload)
+        if anima_plan.native_modules != tuple(self._module_names(local_payload)):
+            local_payload["forge_additional_modules"] = list(anima_plan.native_modules)
 
         if workflow is None:
             graph = self._compile_default(
-                normalized, model_name, local_payload, loras,
+                normalized, model_name, local_payload, loras, anima_plan,
                 uploaded_image=uploaded_image, uploaded_mask=uploaded_mask,
             )
         else:
             graph = self._compile_custom(
-                normalized, model_name, local_payload, loras, workflow,
+                normalized, model_name, local_payload, loras, workflow, anima_plan,
                 uploaded_image=uploaded_image, uploaded_mask=uploaded_mask,
             )
         self.validate(graph)
@@ -229,21 +259,26 @@ class ComfyWorkflowCompiler:
             str(local_payload.get("negative_prompt", "") or ""),
         )
         local_payload["prompt"], local_payload["negative_prompt"] = prompts
+        anima_plan = self._resolve_anima38_plan(model_name, local_payload)
+        if anima_plan.native_modules != tuple(self._module_names(local_payload)):
+            local_payload["forge_additional_modules"] = list(anima_plan.native_modules)
         graph = _Graph()
-        model, clip, vae = self._add_loaders(graph, model_name, local_payload)
+        model, clip, vae = self._add_loaders(
+            graph, model_name, local_payload, anima_plan,
+        )
         shift = _float(local_payload.get("distilled_cfg_scale"), 0.0)
         if shift > 0:
-            node = graph.add("ModelSamplingSD3", {"model": model, "shift": shift}, "Forge distilled CFG shift")
+            node = graph.add(
+                "ForgeNeoModelSamplingShift",
+                {"model": model, "shift": shift},
+                "Forge flow shift (preserve timestep scale)",
+            )
             model = [node, 0]
-        model, clip = self._add_loras(graph, model, clip, loras)
+        model, clip = self._add_loras(graph, model, clip, loras, anima_plan)
         model, clip = self._add_negpip(graph, model, clip, local_payload)
-        pos = graph.add("CLIPTextEncode", {
-            "clip": clip, "text": str(local_payload.get("prompt") or ""),
-        }, "Positive")
-        neg = graph.add("CLIPTextEncode", {
-            "clip": clip, "text": str(local_payload.get("negative_prompt") or ""),
-        }, "Negative")
-        positive, negative = [pos, 0], [neg, 0]
+        positive, negative = self._add_conditioning(
+            graph, model, clip, local_payload, anima_plan,
+        )
         model, _sampler_options = self._add_anima_guidance(
             graph, model, clip, positive, negative, local_payload,
         )
@@ -364,30 +399,29 @@ class ComfyWorkflowCompiler:
         model_name: str,
         payload: dict,
         loras: Sequence[LoraSpec],
+        anima_plan: _Anima38Plan,
         *,
         uploaded_image: str,
         uploaded_mask: str,
     ) -> dict:
         graph = _Graph()
-        model, clip, vae = self._add_loaders(graph, model_name, payload)
+        model, clip, vae = self._add_loaders(
+            graph, model_name, payload, anima_plan,
+        )
 
         shift = _float(payload.get("distilled_cfg_scale"), 0.0)
         if shift > 0:
-            shift_node = graph.add("ModelSamplingSD3", {
+            shift_node = graph.add("ForgeNeoModelSamplingShift", {
                 "model": model, "shift": shift,
-            }, "Forge distilled CFG shift")
+            }, "Forge flow shift (preserve timestep scale)")
             model = [shift_node, 0]
 
-        model, clip = self._add_loras(graph, model, clip, loras)
+        model, clip = self._add_loras(graph, model, clip, loras, anima_plan)
         model, clip = self._add_negpip(graph, model, clip, payload)
 
-        positive = graph.add("CLIPTextEncode", {
-            "clip": clip, "text": str(payload.get("prompt", "") or ""),
-        }, "Positive")
-        negative = graph.add("CLIPTextEncode", {
-            "clip": clip, "text": str(payload.get("negative_prompt", "") or ""),
-        }, "Negative")
-        positive_ref, negative_ref = [positive, 0], [negative, 0]
+        positive_ref, negative_ref = self._add_conditioning(
+            graph, model, clip, payload, anima_plan,
+        )
 
         model, sampler_options = self._add_anima_guidance(
             graph, model, clip, positive_ref, negative_ref, payload,
@@ -404,7 +438,7 @@ class ComfyWorkflowCompiler:
         if _bool(payload.get("enable_hr")):
             samples, decode_vae = self._add_hires(
                 graph, model, clip, vae, positive_ref, negative_ref, samples, payload,
-                sampler_options=sampler_options,
+                sampler_options=sampler_options, anima_plan=anima_plan,
             )
         decode = graph.add("VAEDecode", {"samples": samples, "vae": decode_vae}, "Decode")
         image = [decode, 0]
@@ -416,8 +450,57 @@ class ComfyWorkflowCompiler:
         }, "Save generated image")
         return graph.nodes
 
-    def _add_loaders(self, graph: _Graph, model_name: str, payload: Mapping[str, Any]):
-        modules = self._module_names(payload)
+    def _add_loaders(
+        self,
+        graph: _Graph,
+        model_name: str,
+        payload: Mapping[str, Any],
+        anima_plan: Optional[_Anima38Plan] = None,
+    ):
+        modules = (
+            list(anima_plan.native_modules)
+            if anima_plan is not None
+            else self._module_names(payload)
+        )
+        if anima_plan is not None and anima_plan.v2:
+            selected_model = self._resolve_choice(
+                "ForgeNeoAnima38V2Loader", "model_name",
+                anima_plan.model_name or model_name,
+            )
+            model_node = graph.add(
+                "ForgeNeoAnima38V2Loader",
+                {"model_name": selected_model},
+                "Anima 3.8B Semantic Connector v2 bundle",
+            )
+            clip_modules, vae_modules, unknown = self._classify_modules(modules)
+            if unknown:
+                raise WorkflowCompileError(
+                    "Anima 3.8B v2 additional modules 매핑 실패: "
+                    + ", ".join(unknown)
+                )
+            if not clip_modules:
+                explicit = payload.get("text_encoder_name") or payload.get("clip_name")
+                if explicit:
+                    clip_modules = [str(explicit)]
+            if not vae_modules and payload.get("vae_name"):
+                vae_modules = [str(payload["vae_name"])]
+            if len(clip_modules) != 1:
+                raise WorkflowCompileError(
+                    "Anima 3.8B v2에는 native Qwen 0.6B text encoder 한 개가 "
+                    f"필요합니다. 현재 매핑: {len(clip_modules)}개"
+                )
+            if len(vae_modules) != 1:
+                raise WorkflowCompileError(
+                    "Anima 3.8B v2에는 VAE 한 개가 필요합니다. "
+                    f"현재 매핑: {len(vae_modules)}개"
+                )
+            clip = self._add_clip_loader(graph, clip_modules, payload)
+            vae_name = self._resolve_choice(
+                "VAELoader", "vae_name", vae_modules[0],
+            )
+            vae_node = graph.add("VAELoader", {"vae_name": vae_name}, "VAE")
+            return [model_node, 0], clip, [vae_node, 0]
+
         checkpoint_choices = self._choices("CheckpointLoaderSimple", "ckpt_name")
         unet_choices = self._choices("UNETLoader", "unet_name")
         checkpoint = self._match_choice(model_name, checkpoint_choices)
@@ -507,6 +590,196 @@ class ComfyWorkflowCompiler:
             )
         return [node, 0]
 
+    @staticmethod
+    def _looks_like_qwen35(value: Any) -> bool:
+        name = _filename(value).casefold()
+        return any(marker in name for marker in (
+            "qwen35_4b", "qwen3.5-4b", "qwen3_5_4b",
+        ))
+
+    @staticmethod
+    def _looks_like_anima_adapter(value: Any) -> bool:
+        name = _filename(value).casefold()
+        return "anima" in name and any(
+            marker in name for marker in ("adapter", "connector")
+        )
+
+    @staticmethod
+    def _looks_like_anima_model(value: Any) -> bool:
+        return "anima" in _filename(value).casefold()
+
+    @staticmethod
+    def _looks_like_anima38_v2_bundle(value: Any) -> bool:
+        """Recognise bundle release names without treating every Anima UNET as v2."""
+
+        name = _filename(value).casefold()
+        family = "anima" in name and any(
+            marker in name for marker in ("3.8b", "3-8b", "3_8b")
+        )
+        release = any(
+            marker in name for marker in (
+                "-v2", "_v2", ".v2", "-v1.1", "_v1.1", ".v1.1",
+            )
+        )
+        return family and release
+
+    @staticmethod
+    def _preferred_qwen35_choice(choices: Sequence[str]) -> str:
+        for preferred in (
+            "qwen35_4b.safetensors",
+            "qwen3.5-4b.safetensors",
+            "qwen3_5_4b.safetensors",
+        ):
+            for choice in choices:
+                if _filename(choice).casefold() == preferred:
+                    return str(choice)
+        return str(choices[0]) if choices else ""
+
+    def _resolve_anima38_plan(
+        self, model_name: str, payload: Mapping[str, Any],
+    ) -> _Anima38Plan:
+        """Resolve ANIMA resources once, before any graph nodes are emitted.
+
+        The dedicated v2 loader publishes only metadata-verified bundle
+        choices.  Qwen3.5 and legacy connector files can also appear in
+        ``CLIPLoader``'s broad text-encoder list, so they are classified first
+        and never leak into Dual/TripleCLIPLoader.
+        """
+
+        block = self._script(payload, anima38.SCRIPT_NAME)
+        settings = anima38.parse_script_block(block)
+        modules = self._module_names(payload)
+
+        v2_choices = self._choices("ForgeNeoAnima38V2Loader", "model_name")
+        v2_model = (
+            self._match_choice(model_name, v2_choices)
+            if v2_choices
+            else None
+        )
+        if (
+            v2_model is None
+            and v2_choices is not None
+            and self._looks_like_anima38_v2_bundle(model_name)
+        ):
+            raise WorkflowCompileError(
+                "Anima 3.8B v2 bundle은 metadata 검증 전용 loader로만 열 수 "
+                "있지만 ForgeNeoAnima38V2Loader.model_name 선택 목록에서 찾지 "
+                f"못했습니다: {model_name}"
+            )
+        qwen_choices = self._choices(
+            "ForgeNeoAnimaQwen35Loader", "qwen35_model",
+        )
+        adapter_choices = self._choices(
+            "ForgeNeoAnimaQwen35Prompt", "adapter_name",
+        )
+
+        qwen_modules: list[str] = []
+        adapter_modules: list[str] = []
+        ordinary_modules: list[str] = []
+        for item in modules:
+            qwen_match = (
+                self._match_choice(item, qwen_choices) if qwen_choices else None
+            )
+            adapter_match = (
+                self._match_choice(item, adapter_choices)
+                if adapter_choices else None
+            )
+            if qwen_match is not None or self._looks_like_qwen35(item):
+                qwen_modules.append(qwen_match or item)
+            elif adapter_match is not None or self._looks_like_anima_adapter(item):
+                adapter_modules.append(adapter_match or item)
+            else:
+                ordinary_modules.append(item)
+
+        def one_resource(values: Sequence[str], label: str) -> str:
+            unique: list[str] = []
+            seen: set[str] = set()
+            for value in values:
+                key = _filename(value).casefold()
+                if key not in seen:
+                    unique.append(str(value))
+                    seen.add(key)
+            if len(unique) > 1:
+                raise WorkflowCompileError(
+                    f"Anima 3.8B {label} 리소스가 여러 개라 선택할 수 없습니다: "
+                    + ", ".join(unique)
+                )
+            return unique[0] if unique else ""
+
+        detected_qwen = one_resource(qwen_modules, "Qwen3.5")
+        detected_adapter = one_resource(adapter_modules, "adapter")
+        legacy_candidate = bool(detected_qwen and detected_adapter)
+
+        loader_kind = "v2" if v2_model is not None else "standard"
+        if settings.bypass:
+            conditioning_kind = "native"
+        elif v2_model is not None:
+            conditioning_kind = "v2"
+        elif settings.enabled or legacy_candidate:
+            conditioning_kind = "v1"
+        else:
+            conditioning_kind = "native"
+
+        # Qwen3.5 and connector adapters are never native CLIP inputs.  Strip
+        # them even when the script is disabled so a broad CLIPLoader choice
+        # list cannot accidentally turn an incomplete semantic setup into a
+        # Dual/TripleCLIPLoader graph.
+        native_modules = ordinary_modules
+        native_clips, vaes, unknown = self._classify_modules(native_modules)
+
+        qwen35_model = ""
+        adapter_name = ""
+        if conditioning_kind in {"v1", "v2"}:
+            requested_qwen = detected_qwen
+            if qwen_choices:
+                requested_qwen = requested_qwen or self._preferred_qwen35_choice(
+                    qwen_choices,
+                )
+                qwen35_model = self._resolve_choice(
+                    "ForgeNeoAnimaQwen35Loader", "qwen35_model", requested_qwen,
+                )
+            elif qwen_choices is None:
+                qwen35_model = requested_qwen or "qwen35_4b.safetensors"
+            else:
+                raise WorkflowCompileError(
+                    "Anima 3.8B Semantic Connector에 필요한 Qwen3.5 4B "
+                    "text encoder를 ComfyUI에서 찾을 수 없습니다."
+                )
+
+        if conditioning_kind == "v1":
+            requested_adapter = (
+                settings.adapter if settings.enabled else detected_adapter
+            ) or settings.adapter
+            if adapter_choices:
+                adapter_name = self._resolve_choice(
+                    "ForgeNeoAnimaQwen35Prompt", "adapter_name", requested_adapter,
+                )
+            elif adapter_choices is None:
+                adapter_name = requested_adapter
+            else:
+                raise WorkflowCompileError(
+                    "Anima 3.8B legacy Semantic Connector adapter를 "
+                    "ComfyUI에서 찾을 수 없습니다."
+                )
+
+        anima_markers = [model_name, *native_modules, *qwen_modules, *adapter_modules]
+        is_anima = bool(v2_model is not None or conditioning_kind == "v1") or any(
+            self._looks_like_anima_model(item) for item in anima_markers
+        )
+        return _Anima38Plan(
+            loader_kind=loader_kind,
+            conditioning_kind=conditioning_kind,
+            model_name=str(v2_model or model_name),
+            native_modules=tuple(native_modules),
+            native_clip_modules=tuple(native_clips),
+            vae_modules=tuple(vaes),
+            unknown_modules=tuple(unknown),
+            qwen35_model=qwen35_model,
+            adapter_name=adapter_name,
+            settings=settings,
+            is_anima=is_anima,
+        )
+
     def _add_latent(
         self, graph: _Graph, mode: str, vae: list, payload: Mapping[str, Any],
         *, uploaded_image: str, uploaded_mask: str,
@@ -595,15 +868,95 @@ class ComfyWorkflowCompiler:
 
     # ---- graph stages --------------------------------------------------
 
-    def _add_loras(self, graph: _Graph, model: list, clip: list, loras: Sequence[LoraSpec]):
+    def _add_loras(
+        self,
+        graph: _Graph,
+        model: list,
+        clip: list,
+        loras: Sequence[LoraSpec],
+        anima_plan: Optional[_Anima38Plan] = None,
+    ):
+        loader_type = (
+            "ForgeNeoAnimaLoraLoader"
+            if anima_plan is not None and anima_plan.is_anima
+            else "LoraLoader"
+        )
         for spec in loras:
-            name = self._resolve_choice("LoraLoader", "lora_name", spec.name)
-            node = graph.add("LoraLoader", {
+            name = self._resolve_choice(loader_type, "lora_name", spec.name)
+            node = graph.add(loader_type, {
                 "model": model, "clip": clip, "lora_name": name,
                 "strength_model": spec.strength_model, "strength_clip": spec.strength_clip,
             }, f"LoRA: {name}")
             model, clip = [node, 0], [node, 1]
         return model, clip
+
+    def _add_conditioning(
+        self,
+        graph: _Graph,
+        model: list,
+        clip: list,
+        payload: Mapping[str, Any],
+        anima_plan: _Anima38Plan,
+    ) -> tuple[list, list]:
+        positive_text = str(payload.get("prompt", "") or "")
+        negative_text = str(payload.get("negative_prompt", "") or "")
+        if not anima_plan.semantic:
+            positive = graph.add(
+                "CLIPTextEncode", {"clip": clip, "text": positive_text}, "Positive",
+            )
+            negative = graph.add(
+                "CLIPTextEncode", {"clip": clip, "text": negative_text}, "Negative",
+            )
+            return [positive, 0], [negative, 0]
+
+        qwen_node = graph.add(
+            "ForgeNeoAnimaQwen35Loader",
+            {"qwen35_model": anima_plan.qwen35_model},
+            "Anima Qwen3.5 semantic encoder",
+        )
+        qwen_clip = [qwen_node, 0]
+        if anima_plan.conditioning_kind == "v2":
+            prompt_type = "ForgeNeoAnima38V2Prompt"
+
+            def prompt_inputs(text: str, _strength: float) -> dict[str, Any]:
+                return {
+                    "model": model,
+                    "native_clip": clip,
+                    "qwen35_clip": qwen_clip,
+                    "prompt": text,
+                }
+        else:
+            prompt_type = "ForgeNeoAnimaQwen35Prompt"
+
+            def prompt_inputs(text: str, strength: float) -> dict[str, Any]:
+                return {
+                    "model": model,
+                    "native_clip": clip,
+                    "qwen35_clip": qwen_clip,
+                    "adapter_name": anima_plan.adapter_name,
+                    "prompt": text,
+                    "adapter_strength": strength,
+                }
+
+        positive = graph.add(
+            prompt_type,
+            prompt_inputs(positive_text, anima_plan.settings.strength),
+            "Anima semantic positive",
+        )
+        if anima_plan.settings.negative:
+            negative = graph.add(
+                prompt_type,
+                prompt_inputs(negative_text, anima_plan.settings.negative_strength),
+                "Anima semantic negative",
+            )
+            negative_ref = [negative, 0]
+        else:
+            negative = graph.add(
+                "CLIPTextEncode", {"clip": clip, "text": negative_text},
+                "Anima native negative",
+            )
+            negative_ref = [negative, 0]
+        return [positive, 0], negative_ref
 
     def _add_negpip(self, graph: _Graph, model: list, clip: list, payload: Mapping[str, Any]):
         block = self._script(payload, "NegPiP")
@@ -687,7 +1040,37 @@ class ComfyWorkflowCompiler:
         self, graph: _Graph, model: list, clip: list, vae: list,
         positive: list, negative: list, samples: list, payload: Mapping[str, Any],
         *, sampler_options: Optional[Mapping[str, Any]] = None,
+        anima_plan: Optional[_Anima38Plan] = None,
     ) -> tuple[list, list]:
+        if anima_plan is not None and anima_plan.semantic:
+            alternate_checkpoint = str(
+                payload.get("hr_checkpoint_name") or ""
+            ).strip()
+            alternate_modules = payload.get("hr_additional_modules", [])
+            if isinstance(alternate_modules, str):
+                alternate_modules = [
+                    item.strip() for item in alternate_modules.split(",")
+                    if item.strip()
+                ]
+            module_override = bool(
+                isinstance(alternate_modules, Sequence)
+                and not isinstance(alternate_modules, (str, bytes, bytearray))
+                and any(
+                    str(item).strip()
+                    and str(item).strip().casefold() != "use same choices"
+                    for item in alternate_modules
+                )
+            )
+            prompt_override = bool(
+                str(payload.get("hr_prompt") or "").strip()
+                or str(payload.get("hr_negative_prompt") or "").strip()
+            )
+            if alternate_checkpoint or module_override or prompt_override:
+                raise WorkflowCompileError(
+                    "Anima Semantic Connector에서 Hires의 다른 checkpoint/TE/prompt "
+                    "override는 아직 안전하게 표현할 수 없습니다. Hires는 같은 "
+                    "model과 conditioning을 사용하세요."
+                )
         sampler_options = sampler_options or {}
         upscaler = str(payload.get("hr_upscaler") or "latent:bislerp")
         upscaler_map = {
@@ -916,7 +1299,8 @@ class ComfyWorkflowCompiler:
 
     def _compile_custom(
         self, mode: str, model_name: str, payload: dict, loras: Sequence[LoraSpec],
-        workflow: Mapping[str, Any], *, uploaded_image: str, uploaded_mask: str,
+        workflow: Mapping[str, Any], anima_plan: _Anima38Plan,
+        *, uploaded_image: str, uploaded_mask: str,
     ) -> dict:
         graph = _Graph(workflow)
         sampler_id = self._find_sampler(graph.nodes)
@@ -940,6 +1324,8 @@ class ComfyWorkflowCompiler:
             latent_inputs["height"] = max(64, _int(payload.get("height"), 512))
             latent_inputs["batch_size"] = batch
 
+        loader_id: Optional[str] = None
+        loader_type = ""
         if model_name:
             loader_id = self._trace_model_loader(graph.nodes, inputs.get("model"))
             if not loader_id:
@@ -948,10 +1334,15 @@ class ComfyWorkflowCompiler:
                 )
             loader = graph.nodes[loader_id]
             loader_type = str(loader.get("class_type") or "")
-            loader_input = "ckpt_name" if loader_type == "CheckpointLoaderSimple" else "unet_name"
-            loader.setdefault("inputs", {})[loader_input] = self._resolve_choice(
-                loader_type, loader_input, model_name,
-            )
+            if not anima_plan.v2:
+                loader_input = (
+                    "ckpt_name"
+                    if loader_type == "CheckpointLoaderSimple"
+                    else "unet_name"
+                )
+                loader.setdefault("inputs", {})[loader_input] = self._resolve_choice(
+                    loader_type, loader_input, model_name,
+                )
 
         pos_ids = self._trace_classes(
             graph.nodes, inputs.get("positive"), {"CLIPTextEncode", "CLIPTextEncodeSDXL"},
@@ -964,8 +1355,14 @@ class ComfyWorkflowCompiler:
                 "custom workflow의 positive/negative CLIPTextEncode 연결은 각각 하나여야 합니다."
             )
         pos_id, neg_id = pos_ids[0], neg_ids[0]
-        self._set_encode_text(graph.nodes[pos_id], str(payload.get("prompt") or ""))
-        self._set_encode_text(graph.nodes[neg_id], str(payload.get("negative_prompt") or ""))
+        if anima_plan.semantic and any(
+            graph.nodes[node_id].get("class_type") != "CLIPTextEncode"
+            for node_id in (pos_id, neg_id)
+        ):
+            raise WorkflowCompileError(
+                "Anima Semantic Connector custom workflow는 positive/negative에 "
+                "각각 일반 CLIPTextEncode 한 개가 필요합니다."
+            )
         model = inputs.get("model")
         positive, negative = inputs.get("positive"), inputs.get("negative")
         if not (_is_link(model) and _is_link(positive) and _is_link(negative)):
@@ -974,9 +1371,19 @@ class ComfyWorkflowCompiler:
         neg_clip = graph.nodes[neg_id].get("inputs", {}).get("clip")
         if not (_is_link(pos_clip) and _is_link(neg_clip)):
             raise WorkflowCompileError("custom workflow CLIP 연결을 찾지 못했습니다.")
-        if pos_clip != neg_clip and (loras or self._script(payload, "NegPiP")):
+        if pos_clip != neg_clip and (
+            loras or self._script(payload, "NegPiP") or anima_plan.semantic
+        ):
             raise WorkflowCompileError("서로 다른 positive/negative CLIP을 쓰는 custom workflow에는 LoRA/NegPiP를 자동 삽입할 수 없습니다.")
         clip = pos_clip
+        active_ids = self._upstream_node_ids(
+            graph.nodes,
+            (inputs.get("model"), inputs.get("positive"), inputs.get("negative")),
+        )
+        active_ids.add(sampler_id)
+        active_lora_ids, active_clip_uses_lora = self._rewrite_custom_anima_loras(
+            graph, inputs.get("model"), active_ids, pos_clip, neg_clip, anima_plan,
+        )
 
         decode_id = self._find_decode_after(graph.nodes, sampler_id)
         vae = self._find_vae_link_for_branch(
@@ -994,18 +1401,62 @@ class ComfyWorkflowCompiler:
         )
         # Overrides can replace encoder/VAE links.
         clip = graph.nodes[pos_id].get("inputs", {}).get("clip", clip)
+        if override_vae is not None and active_clip_uses_lora:
+            clip = self._rebase_custom_lora_clips(graph, active_lora_ids, clip)
+            graph.nodes[pos_id].setdefault("inputs", {})["clip"] = clip
+            graph.nodes[neg_id].setdefault("inputs", {})["clip"] = clip
         vae = override_vae or vae or []
+
+        if anima_plan.v2:
+            if not loader_id:
+                raise WorkflowCompileError(
+                    "Anima 3.8B v2 custom workflow model loader를 찾지 못했습니다."
+                )
+            if loader_type == "CheckpointLoaderSimple":
+                stale_consumers = self._direct_link_consumers(
+                    graph.nodes, loader_id, {1, 2},
+                )
+                if stale_consumers:
+                    detail = ", ".join(
+                        f"{node_id}.{name}" for node_id, name in stale_consumers
+                    )
+                    raise WorkflowCompileError(
+                        "Anima 3.8B v2 loader는 MODEL만 반환하지만 custom workflow가 "
+                        "기존 checkpoint의 CLIP/VAE 출력을 계속 사용합니다: " + detail
+                    )
+            shared_model = [
+                item for item in self._direct_link_consumers(
+                    graph.nodes, loader_id, {0},
+                )
+                if item[0] not in active_ids
+            ]
+            if shared_model:
+                detail = ", ".join(
+                    f"{node_id}.{name}" for node_id, name in shared_model
+                )
+                raise WorkflowCompileError(
+                    "Anima 3.8B v2 loader를 선택하지 않은 custom workflow 분기가 "
+                    "공유하고 있어 안전하게 교체할 수 없습니다: " + detail
+                )
+            graph.nodes[loader_id]["class_type"] = "ForgeNeoAnima38V2Loader"
+            graph.nodes[loader_id]["inputs"] = {
+                "model_name": self._resolve_choice(
+                    "ForgeNeoAnima38V2Loader", "model_name",
+                    anima_plan.model_name or model_name,
+                ),
+            }
 
         shift = _float(payload.get("distilled_cfg_scale"), 0.0)
         if shift > 0:
-            shift_node = graph.add("ModelSamplingSD3", {
+            shift_node = graph.add("ForgeNeoModelSamplingShift", {
                 "model": model, "shift": shift,
-            }, "Forge distilled CFG shift")
+            }, "Forge flow shift (preserve timestep scale)")
             model = [shift_node, 0]
-        model, clip = self._add_loras(graph, model, clip, loras)
+        model, clip = self._add_loras(graph, model, clip, loras, anima_plan)
         model, clip = self._add_negpip(graph, model, clip, payload)
-        graph.nodes[pos_id]["inputs"]["clip"] = clip
-        graph.nodes[neg_id]["inputs"]["clip"] = clip
+        self._rewrite_custom_conditioning(
+            graph, pos_id, neg_id, model, clip, payload, anima_plan,
+        )
         model, sampler_options = self._add_anima_guidance(
             graph, model, clip, positive, negative, payload,
         )
@@ -1047,7 +1498,7 @@ class ComfyWorkflowCompiler:
         if _bool(payload.get("enable_hr")):
             samples, decode_vae = self._add_hires(
                 graph, model, clip, vae, positive, negative, samples, payload,
-                sampler_options=sampler_options,
+                sampler_options=sampler_options, anima_plan=anima_plan,
             )
             decode.setdefault("inputs", {})["samples"] = samples
             decode["inputs"]["vae"] = decode_vae
@@ -1116,6 +1567,186 @@ class ComfyWorkflowCompiler:
             inputs["text_l"] = text
         else:
             inputs["text"] = text
+
+    def _rewrite_custom_conditioning(
+        self,
+        graph: _Graph,
+        pos_id: str,
+        neg_id: str,
+        model: list,
+        clip: list,
+        payload: Mapping[str, Any],
+        anima_plan: _Anima38Plan,
+    ) -> None:
+        positive_text = str(payload.get("prompt") or "")
+        negative_text = str(payload.get("negative_prompt") or "")
+        if not anima_plan.semantic:
+            for node_id, text in (
+                (pos_id, positive_text), (neg_id, negative_text),
+            ):
+                self._set_encode_text(graph.nodes[node_id], text)
+                graph.nodes[node_id].setdefault("inputs", {})["clip"] = clip
+            return
+
+        qwen_node = graph.add(
+            "ForgeNeoAnimaQwen35Loader",
+            {"qwen35_model": anima_plan.qwen35_model},
+            "Anima Qwen3.5 semantic encoder",
+        )
+        qwen_clip = [qwen_node, 0]
+
+        def semantic_inputs(text: str, strength: float) -> dict[str, Any]:
+            common = {
+                "model": model,
+                "native_clip": clip,
+                "qwen35_clip": qwen_clip,
+                "prompt": text,
+            }
+            if anima_plan.conditioning_kind == "v1":
+                common["adapter_name"] = anima_plan.adapter_name
+                common["adapter_strength"] = strength
+            return common
+
+        prompt_type = (
+            "ForgeNeoAnima38V2Prompt"
+            if anima_plan.conditioning_kind == "v2"
+            else "ForgeNeoAnimaQwen35Prompt"
+        )
+        graph.nodes[pos_id]["class_type"] = prompt_type
+        graph.nodes[pos_id]["inputs"] = semantic_inputs(
+            positive_text, anima_plan.settings.strength,
+        )
+        if anima_plan.settings.negative:
+            graph.nodes[neg_id]["class_type"] = prompt_type
+            graph.nodes[neg_id]["inputs"] = semantic_inputs(
+                negative_text, anima_plan.settings.negative_strength,
+            )
+        else:
+            graph.nodes[neg_id]["class_type"] = "CLIPTextEncode"
+            graph.nodes[neg_id]["inputs"] = {
+                "clip": clip,
+                "text": negative_text,
+            }
+
+    @staticmethod
+    def _direct_link_consumers(
+        workflow: Mapping[str, Any], source_id: str, output_indexes: set[int],
+    ) -> list[tuple[str, str]]:
+        consumers: list[tuple[str, str]] = []
+        for node_id, node in workflow.items():
+            if not isinstance(node, Mapping):
+                continue
+            inputs = node.get("inputs", {})
+            if not isinstance(inputs, Mapping):
+                continue
+            for name, value in inputs.items():
+                if (
+                    _is_link(value)
+                    and str(value[0]) == str(source_id)
+                    and _int(value[1], -1) in output_indexes
+                ):
+                    consumers.append((str(node_id), str(name)))
+        return consumers
+
+    @staticmethod
+    def _upstream_node_ids(
+        workflow: Mapping[str, Any], roots: Iterable[Any],
+    ) -> set[str]:
+        active: set[str] = set()
+
+        def visit(value: Any) -> None:
+            if not _is_link(value):
+                return
+            node_id = str(value[0])
+            if node_id in active:
+                return
+            node = workflow.get(node_id)
+            if not isinstance(node, Mapping):
+                return
+            active.add(node_id)
+            inputs = node.get("inputs", {})
+            if isinstance(inputs, Mapping):
+                for upstream in inputs.values():
+                    visit(upstream)
+
+        for root in roots:
+            visit(root)
+        return active
+
+    def _rewrite_custom_anima_loras(
+        self,
+        graph: _Graph,
+        model_link: Any,
+        active_ids: set[str],
+        pos_clip: Any,
+        neg_clip: Any,
+        anima_plan: _Anima38Plan,
+    ) -> tuple[list[str], bool]:
+        """Upgrade only active native LoRAs; reject unsupported/shared seams."""
+
+        if not anima_plan.is_anima:
+            return [], False
+        lora_ids: list[str] = []
+        visited: set[str] = set()
+        link = model_link
+        for _depth in range(31):
+            if not _is_link(link):
+                break
+            node_id = str(link[0])
+            if node_id in visited:
+                break
+            visited.add(node_id)
+            node = graph.nodes.get(node_id)
+            if not isinstance(node, Mapping):
+                break
+            class_type = str(node.get("class_type") or "")
+            if class_type in {"CheckpointLoaderSimple", "UNETLoader", "ForgeNeoAnima38V2Loader"}:
+                break
+            if class_type in {"LoraLoader", "ForgeNeoAnimaLoraLoader"}:
+                lora_ids.append(node_id)
+            elif "lora" in class_type.casefold():
+                raise WorkflowCompileError(
+                    "Anima custom workflow의 활성 model 분기에 호환 remap을 "
+                    f"적용할 수 없는 LoRA node가 있습니다: {node_id} ({class_type})"
+                )
+            inputs = node.get("inputs", {})
+            link = inputs.get("model") if isinstance(inputs, Mapping) else None
+
+        for node_id in lora_ids:
+            external = [
+                item for item in self._direct_link_consumers(
+                    graph.nodes, node_id, {0, 1},
+                )
+                if item[0] not in active_ids
+            ]
+            if external:
+                detail = ", ".join(
+                    f"{consumer}.{name}" for consumer, name in external
+                )
+                raise WorkflowCompileError(
+                    "Anima LoRA node를 선택하지 않은 custom workflow 분기가 "
+                    "공유하고 있어 안전하게 교체할 수 없습니다: " + detail
+                )
+        for node_id in lora_ids:
+            if graph.nodes[node_id].get("class_type") == "LoraLoader":
+                graph.nodes[node_id]["class_type"] = "ForgeNeoAnimaLoraLoader"
+
+        clip_uses_lora = bool(
+            lora_ids
+            and pos_clip == [lora_ids[0], 1]
+            and neg_clip == [lora_ids[0], 1]
+        )
+        return lora_ids, clip_uses_lora
+
+    @staticmethod
+    def _rebase_custom_lora_clips(
+        graph: _Graph, lora_ids: Sequence[str], base_clip: list,
+    ) -> list:
+        clip = list(base_clip)
+        for node_id in reversed(lora_ids):
+            graph.nodes[node_id].setdefault("inputs", {})["clip"] = clip
+            clip = [node_id, 1]
+        return clip
 
     def _override_custom_modules(
         self,
@@ -1302,6 +1933,7 @@ class ComfyWorkflowCompiler:
             "dpm++ 2m": "dpmpp_2m", "dpm++ 2m sde": "dpmpp_2m_sde",
             "dpm++ sde": "dpmpp_sde", "dpm++ 3m sde": "dpmpp_3m_sde",
             "dpm2 a": "dpm_2_ancestral", "dpm2": "dpm_2",
+            "er sde": "er_sde", "er-sde": "er_sde",
             "heun": "heun", "lms": "lms", "ddim": "ddim", "uni_pc": "uni_pc",
         }
         return aliases.get(folded, raw)
@@ -1318,6 +1950,8 @@ class ComfyWorkflowCompiler:
             "karras": "karras", "exponential": "exponential", "sgm uniform": "sgm_uniform",
             "simple": "simple", "normal": "normal", "ddim uniform": "ddim_uniform",
             "beta": "beta",
+            "beta57": "beta57", "beta 57": "beta57",
+            "beta57 (res4lyf)": "beta57", "beta 57 (res4lyf)": "beta57",
         }.get(folded, raw)
 
     def _runtime_sampler_values(self, sampler: Any, scheduler: Any) -> tuple[str, str]:

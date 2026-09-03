@@ -1,14 +1,18 @@
 """Small lazy compatibility layer for the AI Studio ComfyUI node pack.
 
-This module intentionally imports neither ComfyUI nor torch at module import
-time.  The app owns this node pack and also imports parts of it in its normal
-Python test process, where the large ComfyUI runtime is not installed.
+The app owns this node pack and also imports parts of it in its normal Python
+test process, where the large ComfyUI runtime is not installed.  Import-time
+registration therefore only probes Comfy's lightweight sampler registry; all
+torch and model work remains behind runtime calls.
 """
 
 from __future__ import annotations
 
 import importlib
 from typing import Any, Iterable
+
+
+BETA57_SCHEDULER = "beta57"
 
 
 class MissingComfyProvider(RuntimeError):
@@ -130,6 +134,77 @@ def scheduler_names() -> list[str]:
         return ["simple"]
 
 
+def install_forge_scheduler_support(*, required: bool = False) -> bool:
+    """Register Forge/RES4LYF's exact ``beta57`` schedule in ComfyUI.
+
+    Forge's ``Beta57 (RES4LYF)`` is not Comfy's stock ``beta`` preset: both
+    use the same beta-distribution PPF scheduler, but Beta57 pins alpha=0.5
+    and beta=0.7.  Registering it in Comfy's scheduler table keeps the same
+    meaning in KSampler, Hires, ADetailer, and SAM3 instead of approximating it
+    with ``beta`` (whose stock parameters are 0.6/0.6).
+    """
+
+    try:
+        comfy_samplers = importlib.import_module("comfy.samplers")
+    except ModuleNotFoundError as exc:
+        if required:
+            raise RuntimeError(
+                "Beta57 scheduler registration requires a ComfyUI host."
+            ) from exc
+        return False
+
+    handlers = getattr(comfy_samplers, "SCHEDULER_HANDLERS", None)
+    scheduler_handler = getattr(comfy_samplers, "SchedulerHandler", None)
+    beta_scheduler = getattr(comfy_samplers, "beta_scheduler", None)
+    if not isinstance(handlers, dict) or not callable(scheduler_handler):
+        if required:
+            raise RuntimeError(
+                "This ComfyUI version has no extensible scheduler registry."
+            )
+        return False
+
+    inserted_handler = False
+    if BETA57_SCHEDULER not in handlers:
+        if not callable(beta_scheduler):
+            if required:
+                raise RuntimeError(
+                    "This ComfyUI version has no beta scheduler implementation."
+                )
+            return False
+
+        def beta57_scheduler(model_sampling, steps):
+            return beta_scheduler(
+                model_sampling, steps, alpha=0.5, beta=0.7,
+            )
+
+        beta57_scheduler._ai_studio_res4lyf_beta57 = True
+        handlers[BETA57_SCHEDULER] = scheduler_handler(beta57_scheduler)
+        inserted_handler = True
+
+    published_lists: list[list[str]] = []
+    scheduler_names_value = getattr(comfy_samplers, "SCHEDULER_NAMES", None)
+    if isinstance(scheduler_names_value, list):
+        published_lists.append(scheduler_names_value)
+    ksampler = getattr(comfy_samplers, "KSampler", None)
+    ksampler_names = getattr(ksampler, "SCHEDULERS", None)
+    if isinstance(ksampler_names, list) and all(
+        ksampler_names is not values for values in published_lists
+    ):
+        published_lists.append(ksampler_names)
+    if not published_lists:
+        if required:
+            raise RuntimeError(
+                "This ComfyUI version does not publish scheduler choices."
+            )
+        if inserted_handler:
+            handlers.pop(BETA57_SCHEDULER, None)
+        return False
+    for values in published_lists:
+        if BETA57_SCHEDULER not in values:
+            values.append(BETA57_SCHEDULER)
+    return True
+
+
 def clone_model(model: Any, feature: str) -> Any:
     clone = getattr(model, "clone", None)
     if not callable(clone):
@@ -154,3 +229,9 @@ def is_disabled_choice(value: Any) -> bool:
         "use same choices",
         "(none)",
     }
+
+
+# Inside ComfyUI this runs while custom nodes are imported, before /object_info
+# is served.  In the desktop app's lightweight test process Comfy is absent and
+# the registration is intentionally a no-op.
+install_forge_scheduler_support(required=False)

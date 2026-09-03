@@ -20,6 +20,11 @@ from .compat import (
     scheduler_names,
 )
 from .guidance import color_noise_wavelet
+from .anima_lora_nodes import (
+    AnimaLoraStateCache,
+    load_lora_block_weight,
+    load_lora_model_only,
+)
 
 
 CATEGORY = "AI Studio/Forge Neo parity/Generation"
@@ -359,6 +364,55 @@ class ForgeNeoKSamplerCNS:
         return _common_sample(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise, cns=cns)
 
 
+def _patch_flow_shift(model: Any, shift: float):
+    """Patch a discrete-flow shift without changing its timestep unit.
+
+    Comfy's ``ModelSamplingSD3`` defaults to a 1000-unit timestep multiplier,
+    while Anima is trained with multiplier 1.0.  Forge changes only ``shift``
+    on the existing predictor, so forwarding the model's current multiplier is
+    required for parity (and prevents Anima generations from remaining noise).
+    """
+
+    multiplier = 1000.0
+    get_model_object = getattr(model, "get_model_object", None)
+    if callable(get_model_object):
+        original = get_model_object("model_sampling")
+        current = getattr(original, "multiplier", None)
+        if current is not None:
+            multiplier = float(current)
+    if not math.isfinite(multiplier) or multiplier <= 0:
+        raise RuntimeError(
+            f"Invalid discrete-flow timestep multiplier: {multiplier!r}"
+        )
+    return invoke_provider(
+        "ModelSamplingSD3",
+        method="patch",
+        feature="Forge flow shift",
+        args=(model, float(shift), multiplier),
+    )[0]
+
+
+class ForgeNeoModelSamplingShift:
+    """Forge-compatible flow shift that preserves the model timestep scale."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "model": ("MODEL",),
+            "shift": (
+                "FLOAT",
+                {"default": 3.0, "min": 0.0, "max": 100.0, "step": 0.01},
+            ),
+        }}
+
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "patch"
+    CATEGORY = CATEGORY
+
+    def patch(self, model, shift):
+        return (_patch_flow_shift(model, shift),)
+
+
 class ForgeNeoHiresFix:
     @classmethod
     def INPUT_TYPES(cls):
@@ -444,7 +498,7 @@ class ForgeNeoHiresFix:
             if negative_text.strip() or clip_changed:
                 negative = invoke_provider("CLIPTextEncode", method="encode", feature="hires negative prompt", args=(active_clip, negative_source))[0]
         if float(shift) > 0:
-            active_model = invoke_provider("ModelSamplingSD3", method="patch", feature="hires shift", args=(active_model, float(shift)))[0]
+            active_model = _patch_flow_shift(active_model, float(shift))
         tensor = samples["samples"]
         ratio_method = getattr(active_vae, "spacial_compression_decode", None)
         try:
@@ -505,6 +559,9 @@ class ForgeNeoMaskSelector:
 
 
 class ForgeNeoLoraBlockWeight:
+    def __init__(self):
+        self._anima_lora_cache = AnimaLoraStateCache()
+
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
@@ -513,23 +570,44 @@ class ForgeNeoLoraBlockWeight:
             "strength_clip": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0}), "inverse": ("BOOLEAN", {"default": False}),
             "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}), "A": ("FLOAT", {"default": 4.0, "min": -10.0, "max": 10.0}),
             "B": ("FLOAT", {"default": 1.0, "min": -10.0, "max": 10.0}), "preset": (["Preset"],),
-            "block_vector": ("STRING", {"default": "1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1", "multiline": True}),
+            "block_vector": ("STRING", {
+                "default": "",
+                "multiline": True,
+                "tooltip": (
+                    "ANIMA requires exactly 28, 40, or 52 block values for the "
+                    "active model; an optional leading value controls non-block keys. "
+                    "Leave empty to use weight 1 for the base and every block."
+                ),
+            }),
         }}
 
     RETURN_TYPES = ("MODEL", "CLIP", "STRING")
     RETURN_NAMES = ("model", "clip", "populated_vector")
     FUNCTION = "load"
     CATEGORY = CATEGORY
+    DESCRIPTION = (
+        "Uses native per-block weighting for ANIMA 28/40/52 models and Inspire "
+        "Pack weighting for other architectures."
+    )
 
     def load(self, model, clip, enabled=False, lora_name="None", strength_model=1.0, strength_clip=1.0, inverse=False, seed=0, A=4.0, B=1.0, preset="Preset", block_vector=""):
         if not enabled:
             return model, clip, str(block_vector)
         if is_disabled_choice(lora_name):
             raise RuntimeError("LoRA block weighting is enabled but no LoRA is selected.")
-        return invoke_provider(
-            "LoraLoaderBlockWeight //Inspire", method="doit", feature="LoRA block weighting",
-            args=(model, clip, "All", lora_name, float(strength_model), float(strength_clip), bool(inverse), int(seed), float(A), float(B), preset, block_vector, False),
-        )[:3]
+        return load_lora_block_weight(
+            model,
+            clip,
+            lora_name,
+            strength_model,
+            strength_clip,
+            inverse,
+            seed,
+            A,
+            B,
+            block_vector,
+            cache=self._anima_lora_cache,
+        )
 
 
 def compose_reference_prompt(text: str, enabled: bool, prefix: str) -> str:
@@ -553,6 +631,9 @@ class ForgeNeoReferencePrompt:
 
 
 class ForgeNeoCharacterReference:
+    def __init__(self):
+        self._anima_lora_cache = AnimaLoraStateCache()
+
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
@@ -583,7 +664,12 @@ class ForgeNeoCharacterReference:
             )
         patched = model
         if not is_disabled_choice(lora_name):
-            patched = invoke_provider("LoraLoaderModelOnly", method="load_lora_model_only", feature="Character Reference LoRA", args=(patched, lora_name, float(lora_strength)))[0]
+            patched = load_lora_model_only(
+                patched,
+                lora_name,
+                lora_strength,
+                cache=self._anima_lora_cache,
+            )
         if reference_method == "split_screen":
             # The actual reference pixels are carried by ForgeNeoLatentInput's
             # split canvas. This node still validates and loads the edit LoRA.
@@ -1143,6 +1229,7 @@ class ForgeNeoSaveImage:
 
 NODE_CLASS_MAPPINGS = {
     "ForgeNeoKSamplerCNS": ForgeNeoKSamplerCNS,
+    "ForgeNeoModelSamplingShift": ForgeNeoModelSamplingShift,
     "ForgeNeoLatentInput": ForgeNeoLatentInput,
     "ForgeNeoHiresFix": ForgeNeoHiresFix,
     "ForgeNeoMaskSelector": ForgeNeoMaskSelector,

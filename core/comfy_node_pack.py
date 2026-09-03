@@ -18,12 +18,19 @@ from typing import Any, Mapping
 
 
 PACK_ID = "ai_studio_forge_parity"
-PACK_VERSION = "1.0.0"
+PACK_VERSION = "1.1.1"
 OWNER_ID = "ai-studio-pro.bundled-comfy-nodes"
 OWNER_MARKER = ".aistudio-owned.json"
 
 REQUIRED_NODE_TYPES = frozenset(
     {
+        "ForgeNeoAnimaQwen35Loader",
+        "ForgeNeoAnimaQwen35Prompt",
+        "ForgeNeoAnima38V2Loader",
+        "ForgeNeoAnima38V2Prompt",
+        "ForgeNeoAnimaLoraLoader",
+        "ForgeNeoAnimaLoraLoaderModelOnly",
+        "ForgeNeoModelSamplingShift",
         "ForgeNeoNegPip",
         "ForgeNeoAnimaDAVE",
         "ForgeNeoAnimaModGuidance",
@@ -201,4 +208,8 @@ def capability_manifest() -> dict[str, Any]:
         "owner": OWNER_ID,
         "nodes": sorted(REQUIRED_NODE_TYPES),
         "forgeSam3Source": "forge_sam3_extension@0.21.2",
+        "anima38Source": (
+            "GumGum10/comfyui-anima-3-8B@"
+            "381c13af328b958febf86c155d2f4b007cd0f55b"
+        ),
     }

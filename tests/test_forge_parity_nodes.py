@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -27,7 +28,8 @@ class TestForgeParityContracts(unittest.TestCase):
             "ForgeNeoAnimaGuidanceSuite", "ForgeNeoAnimaDetailDaemon",
         }
         expected_generation = {
-            "ForgeNeoKSamplerCNS", "ForgeNeoLatentInput", "ForgeNeoHiresFix",
+            "ForgeNeoKSamplerCNS", "ForgeNeoModelSamplingShift",
+            "ForgeNeoLatentInput", "ForgeNeoHiresFix",
             "ForgeNeoMaskSelector", "ForgeNeoLoraBlockWeight",
             "ForgeNeoCharacterReference", "ForgeNeoReferencePrompt",
             "ForgeNeoReferenceOutput", "ForgeNeoAnimaPiD", "ForgeNeoAnimaVAE2x",
@@ -76,6 +78,65 @@ class TestForgeParityContracts(unittest.TestCase):
 
 
 class TestForgeParityPureBehavior(unittest.TestCase):
+    def test_beta57_scheduler_registration_pins_res4lyf_parameters(self):
+        beta_scheduler = mock.Mock(return_value="sigmas")
+        scheduler_names = ["simple", "beta"]
+
+        def handler(function):
+            return SimpleNamespace(handler=function, use_ms=True)
+
+        fake_samplers = SimpleNamespace(
+            SCHEDULER_HANDLERS={"simple": handler(object())},
+            SCHEDULER_NAMES=scheduler_names,
+            SchedulerHandler=handler,
+            KSampler=SimpleNamespace(SCHEDULERS=scheduler_names),
+            beta_scheduler=beta_scheduler,
+        )
+        with mock.patch.object(
+            compat.importlib, "import_module", return_value=fake_samplers,
+        ):
+            self.assertTrue(compat.install_forge_scheduler_support(required=True))
+            self.assertTrue(compat.install_forge_scheduler_support(required=True))
+
+        self.assertEqual(scheduler_names.count("beta57"), 1)
+        registered = fake_samplers.SCHEDULER_HANDLERS["beta57"].handler
+        self.assertEqual(registered("model-sampling", 32), "sigmas")
+        beta_scheduler.assert_called_once_with(
+            "model-sampling", 32, alpha=0.5, beta=0.7,
+        )
+
+    def test_beta57_registration_never_removes_an_existing_provider(self):
+        existing = object()
+        fake_samplers = SimpleNamespace(
+            SCHEDULER_HANDLERS={"beta57": existing},
+            SchedulerHandler=lambda function: function,
+            beta_scheduler=mock.Mock(),
+            KSampler=SimpleNamespace(SCHEDULERS=()),
+        )
+        with mock.patch.object(
+            compat.importlib, "import_module", return_value=fake_samplers,
+        ):
+            self.assertFalse(
+                compat.install_forge_scheduler_support(required=False)
+            )
+        self.assertIs(fake_samplers.SCHEDULER_HANDLERS["beta57"], existing)
+
+    def test_sampling_shift_preserves_anima_timestep_multiplier(self):
+        model = mock.Mock()
+        model.get_model_object.return_value = SimpleNamespace(multiplier=1.0)
+        with mock.patch.object(
+            generation, "invoke_provider", return_value=("patched",),
+        ) as invoke:
+            result = generation.ForgeNeoModelSamplingShift().patch(model, 3.0)
+
+        self.assertEqual(result, ("patched",))
+        invoke.assert_called_once_with(
+            "ModelSamplingSD3",
+            method="patch",
+            feature="Forge flow shift",
+            args=(model, 3.0, 1.0),
+        )
+
     def test_parse_indices_supports_ranges_and_clamps(self):
         self.assertEqual(guidance.parse_indices("1, 3-5, 99, bad", 7), {1, 3, 4, 5})
         self.assertEqual(guidance.parse_indices("", 20, default="8-10"), {8, 9, 10})

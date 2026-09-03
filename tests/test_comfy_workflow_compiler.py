@@ -28,7 +28,8 @@ def _capabilities(*, include_forge: bool = True) -> dict:
     }
     if include_forge:
         names.update({
-            "ForgeNeoLatentInput", "ForgeNeoKSamplerCNS", "ForgeNeoNegPip",
+            "ForgeNeoLatentInput", "ForgeNeoKSamplerCNS",
+            "ForgeNeoModelSamplingShift", "ForgeNeoNegPip",
             "ForgeNeoHiresFix", "ForgeNeoADetailer", "ForgeNeoSAM3Mask",
             "ForgeNeoSAM3Detailer", "ForgeNeoSAM3Refine", "ForgeNeoAnimaGuidanceSuite",
             "ForgeNeoSkimmedCFG", "ForgeNeoAnimaDetailDaemon",
@@ -186,6 +187,29 @@ class TestDefaultCompilation(unittest.TestCase):
             compiler.compile("txt2img", "checkpoint.safetensors", {
                 "sampler_name": "Not A Real Sampler",
             })
+
+    def test_translates_forge_er_sde_and_exact_res4lyf_beta57(self):
+        capabilities = _capabilities()
+        capabilities["KSampler"]["input"]["required"].update({
+            "sampler_name": _choice("euler", "er_sde", "er_sde_cns"),
+            "scheduler": _choice("normal", "beta", "beta_1_1", "beta57"),
+        })
+        compiler = ComfyWorkflowCompiler(capabilities)
+
+        graph = compiler.compile("txt2img", "checkpoint.safetensors", {
+            "sampler_name": "ER SDE",
+            "scheduler": "Beta57 (RES4LYF)",
+        })
+        _sampler_id, sampler = _node(graph, "ForgeNeoKSamplerCNS")
+        self.assertEqual(sampler["inputs"]["sampler_name"], "er_sde")
+        self.assertEqual(sampler["inputs"]["scheduler"], "beta57")
+
+        explicit_cns = compiler.compile("txt2img", "checkpoint.safetensors", {
+            "sampler_name": "er_sde_cns",
+            "scheduler": "beta57",
+        })
+        _sampler_id, cns_sampler = _node(explicit_cns, "ForgeNeoKSamplerCNS")
+        self.assertEqual(cns_sampler["inputs"]["sampler_name"], "er_sde_cns")
 
     def test_enabled_extension_chain_is_explicit(self):
         guidance = anima_guidance.default_settings()
