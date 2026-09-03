@@ -1160,39 +1160,41 @@ class WebUIMixin:
     def _update_backend_ui_state(self):
         """백엔드에 따라 UI 기능 활성화/비활성화"""
         is_comfyui = get_backend_type() == BackendType.COMFYUI
-        comfyui_tip = "ComfyUI에서는 워크플로우에서 직접 설정하세요"
+        comfyui_tip = "AI Studio Forge 호환 ComfyUI 워크플로우로 실행됩니다"
 
-        # ComfyUI에서 미지원 기능 비활성화
+        # ComfyUI도 앱 소유 워크플로 컴파일러와 Forge 호환 custom node를
+        # 사용하므로 같은 기능을 노출한다. 활성 옵션이 서버에 없으면 compiler가
+        # 조용히 무시하지 않고 필요한 node 이름과 함께 명시적으로 실패한다.
         if hasattr(self, 'adetailer_group'):
-            self.adetailer_group.setEnabled(not is_comfyui)
+            self.adetailer_group.setEnabled(True)
             self.adetailer_group.setToolTip(comfyui_tip if is_comfyui else "")
 
         if hasattr(self, 'sam3_group'):
-            self.sam3_group.setEnabled(not is_comfyui)
+            self.sam3_group.setEnabled(True)
             self.sam3_group.setToolTip(comfyui_tip if is_comfyui else "")
 
         if hasattr(self, 'negpip_group'):
-            self.negpip_group.setEnabled(not is_comfyui)
+            self.negpip_group.setEnabled(True)
 
         if hasattr(self, 'hires_options_group'):
-            self.hires_options_group.setEnabled(not is_comfyui)
+            self.hires_options_group.setEnabled(True)
             self.hires_options_group.setToolTip(comfyui_tip if is_comfyui else "")
 
-        # I2I / Inpaint / Upscale 탭 비활성화 (ComfyUI 미지원)
+        # T2I/I2I/Inpaint/Upscale 모두 동일 compiler 경로를 사용한다.
         if hasattr(self, 'center_tabs'):
-            unsupported_tabs = []
+            generation_tabs = []
             if hasattr(self, 'i2i_tab'):
-                unsupported_tabs.append(self.i2i_tab)
+                generation_tabs.append(self.i2i_tab)
             if hasattr(self, 'inpaint_tab'):
-                unsupported_tabs.append(self.inpaint_tab)
+                generation_tabs.append(self.inpaint_tab)
             if hasattr(self, 'upscale_tab'):
-                unsupported_tabs.append(self.upscale_tab)
+                generation_tabs.append(self.upscale_tab)
 
-            for tab in unsupported_tabs:
+            for tab in generation_tabs:
                 try:
                     idx = self.center_tabs.indexOf(tab)
                     if idx is not None and idx >= 0:
-                        self.center_tabs.setTabEnabled(idx, not is_comfyui)
+                        self.center_tabs.setTabEnabled(idx, True)
                 except (TypeError, AttributeError):
                     pass  # Vue 모드에서는 center_tabs가 더미
 
