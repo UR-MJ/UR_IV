@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import copy
+from graphlib import TopologicalSorter
 import unittest
 
-from core import anima38
+from core import anima38, anima_guidance
 from core.comfy_workflow_compiler import ComfyWorkflowCompiler, WorkflowCompileError
 from tests.test_comfy_workflow_compiler import (
     _capabilities,
@@ -133,6 +134,71 @@ class TestAnima38Settings(unittest.TestCase):
 
 
 class TestAnima38DefaultCompilation(unittest.TestCase):
+    def test_generated_semantic_workflow_with_guidance_roundtrips_without_a_cycle(self):
+        compiler = ComfyWorkflowCompiler(_anima_capabilities())
+        guidance = anima_guidance.default_settings()
+        guidance["guid_apg_enabled"] = True
+        payload = {
+            "prompt": "original", "negative_prompt": "artifact",
+            "forge_additional_modules": _modules(),
+            "alwayson_scripts": anima_guidance.build_alwayson(guidance),
+        }
+        original = compiler.compile("txt2img", V2_MODEL, payload)
+        self.assertIn("ForgeNeoAnimaGuidanceSuite", _classes(original))
+        updated = compiler.compile("txt2img", V2_MODEL, {
+            **payload, "prompt": "updated", "alwayson_scripts": {},
+        }, workflow=original)
+        dependencies = {
+            node_id: [
+                str(value[0]) for value in node.get("inputs", {}).values()
+                if isinstance(value, list) and len(value) == 2 and str(value[0]) in updated
+            ]
+            for node_id, node in updated.items()
+        }
+        self.assertEqual(len(tuple(TopologicalSorter(dependencies).static_order())), len(updated))
+
+    def test_generated_v2_workflow_roundtrip_updates_prompts_dimensions_and_bypass(self):
+        compiler = ComfyWorkflowCompiler(_anima_capabilities())
+        payload = {
+            "prompt": "original", "negative_prompt": "old negative",
+            "forge_additional_modules": _modules(),
+            "width": 512, "height": 512, "batch_size": 1,
+        }
+        original = compiler.compile("txt2img", V2_MODEL, payload)
+        original_copy = copy.deepcopy(original)
+        updated_payload = {
+            **payload, "prompt": "updated", "negative_prompt": "new negative",
+            "width": 768, "height": 1024, "batch_size": 2,
+            "alwayson_scripts": _script(False, ADAPTER, 1, True, 1, False),
+        }
+        updated = compiler.compile("txt2img", V2_MODEL, updated_payload, workflow=original)
+        self.assertEqual(original, original_copy)
+        self.assertEqual(
+            {n["inputs"]["prompt"] for n in updated.values() if n["class_type"] == "ForgeNeoAnima38V2Prompt"},
+            {"updated", "new negative"},
+        )
+        latent = _node(updated, "ForgeNeoLatentInput")[1]["inputs"]
+        self.assertEqual((latent["width"], latent["height"], latent["batch_size"]), (768, 1024, 2))
+        bypassed = compiler.compile("txt2img", V2_MODEL, {
+            **updated_payload, "alwayson_scripts": _script(False, ADAPTER, 1, False, 1, True),
+        }, workflow=updated)
+        self.assertNotIn("ForgeNeoAnima38V2Prompt", _classes(bypassed))
+        self.assertEqual(
+            {n["inputs"]["text"] for n in bypassed.values() if n["class_type"] == "CLIPTextEncode"},
+            {"updated", "new negative"},
+        )
+
+    def test_generated_v2_workflow_can_switch_to_a_native_anima_model(self):
+        compiler = ComfyWorkflowCompiler(_anima_capabilities())
+        payload = {"prompt": "portrait", "forge_additional_modules": _modules()}
+        original = compiler.compile("txt2img", V2_MODEL, payload)
+        updated = compiler.compile("txt2img", V1_MODEL, {
+            **payload, "forge_additional_modules": _modules(qwen=""),
+        }, workflow=original)
+        self.assertNotIn("ForgeNeoAnima38V2Loader", _classes(updated))
+        self.assertNotIn("ForgeNeoAnima38V2Prompt", _classes(updated))
+        self.assertEqual(_node(updated, "UNETLoader")[1]["inputs"]["unet_name"], V1_MODEL)
+
     def test_v2_shift_preserves_the_anima_unit_timestep_scale(self):
         graph = ComfyWorkflowCompiler(_anima_capabilities()).compile(
             "txt2img", V2_MODEL, {

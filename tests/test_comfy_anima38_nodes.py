@@ -343,6 +343,9 @@ print(json.dumps({
 
         with mock.patch.object(anima38_nodes, "_RUNTIME", None), mock.patch.object(
             anima38_nodes.importlib, "import_module", side_effect=import_module
+        ), mock.patch.object(
+            anima38_nodes, "install_conditioning_cache_support",
+            side_effect=lambda module: events.append("cache-lifetime")
         ):
             provider = anima38_nodes._provider_class("Anima38BV2Loader")
 
@@ -357,6 +360,7 @@ print(json.dumps({
                 "detect-52",
                 f"import:{anima38_nodes._VENDOR_MODULE}.semantic_v2_runtime",
                 "timestep-v2",
+                "cache-lifetime",
             ],
         )
         self.assertTrue(getattr(

@@ -14,7 +14,7 @@ from .sam3_nodes import (
 )
 
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 
 
 def _merge_node_maps(*maps):

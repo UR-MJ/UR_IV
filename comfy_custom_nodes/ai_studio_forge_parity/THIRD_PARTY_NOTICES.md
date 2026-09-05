@@ -35,6 +35,9 @@ surrounding `vendor/__init__.py` namespace file are local integration code.
 algorithm from upstream `patches.py`; it keeps the upstream compatibility
 marker while avoiding eager ML-library imports. It is identified as local glue,
 not as a byte-identical upstream file, and the upstream MIT notice is retained.
+`anima38_cache.py` is a local integration shim that ties registered semantic
+conditioning runs to Comfy cache ownership; it patches runtime entrypoints in
+memory without modifying the pinned upstream source files.
 No model checkpoint, text-encoder weight, VAE weight, LoRA, GGUF, or other model
 binary is redistributed with this node pack. Those files must be supplied
 separately by the user and remain subject to their own licenses.

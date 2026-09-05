@@ -99,6 +99,79 @@ class TestLoraParsing(unittest.TestCase):
 
 
 class TestDefaultCompilation(unittest.TestCase):
+    def test_explicit_lora_path_wins_over_an_earlier_matching_filename(self):
+        capabilities = _capabilities()
+        capabilities["LoraLoader"]["input"]["required"]["lora_name"] = _choice(
+            "forge/style.safetensors", "comfy/style.safetensors",
+        )
+        graph = ComfyWorkflowCompiler(capabilities).compile(
+            "txt2img", "checkpoint.safetensors", {
+                "prompt": "portrait, <lora:comfy/style.safetensors:0.7>",
+            },
+        )
+        self.assertEqual(
+            _node(graph, "LoraLoader")[1]["inputs"]["lora_name"],
+            "comfy/style.safetensors",
+        )
+
+    def test_ambiguous_lora_basename_and_stem_fail_before_queueing(self):
+        capabilities = _capabilities()
+        capabilities["LoraLoader"]["input"]["required"]["lora_name"] = _choice(
+            "forge/style.safetensors", "comfy/style.safetensors",
+        )
+        for name in ("style.safetensors", "style"):
+            with self.subTest(name=name), self.assertRaisesRegex(
+                WorkflowCompileError, "여러.*리소스|리소스.*여러",
+            ):
+                ComfyWorkflowCompiler(capabilities).compile(
+                    "txt2img", "checkpoint.safetensors", {
+                        "prompt": f"portrait, <lora:{name}:0.7>",
+                    },
+                )
+
+    def test_lora_path_without_extension_and_exact_filename_are_unambiguous(self):
+        cases = (
+            ("comfy/style", ("forge/style.safetensors", "comfy/style.safetensors"),
+             "comfy/style.safetensors"),
+            ("style.safetensors", ("forge/style.pt", "comfy/style.safetensors"),
+             "comfy/style.safetensors"),
+        )
+        for requested, choices, expected in cases:
+            with self.subTest(requested=requested):
+                capabilities = _capabilities()
+                capabilities["LoraLoader"]["input"]["required"]["lora_name"] = _choice(*choices)
+                graph = ComfyWorkflowCompiler(capabilities).compile(
+                    "txt2img", "checkpoint.safetensors", {
+                        "prompt": f"portrait, <lora:{requested}:0.7>",
+                    },
+                )
+                self.assertEqual(_node(graph, "LoraLoader")[1]["inputs"]["lora_name"], expected)
+
+    def test_main_and_hires_modules_preserve_explicit_relative_paths(self):
+        capabilities = _capabilities()
+        capabilities["CLIPLoader"]["input"]["required"]["clip_name"] = _choice(
+            "forge/base.safetensors", "comfy/base.safetensors",
+        )
+        capabilities["VAELoader"]["input"]["required"]["vae_name"] = _choice(
+            "forge/image_vae.safetensors", "comfy/image_vae.safetensors",
+        )
+        graph = ComfyWorkflowCompiler(capabilities).compile(
+            "txt2img", "checkpoint.safetensors", {
+                "forge_additional_modules": [
+                    "comfy\\base.safetensors", "comfy\\image_vae.safetensors",
+                ],
+                "enable_hr": True,
+                "hr_additional_modules": [
+                    "comfy/base.safetensors", "comfy/image_vae.safetensors",
+                ],
+            },
+        )
+        self.assertEqual(_node(graph, "CLIPLoader")[1]["inputs"]["clip_name"], "comfy/base.safetensors")
+        self.assertEqual(_node(graph, "VAELoader")[1]["inputs"]["vae_name"], "comfy/image_vae.safetensors")
+        hires = _node(graph, "ForgeNeoHiresFix")[1]["inputs"]
+        self.assertEqual(hires["text_encoder_name"], "comfy/base.safetensors")
+        self.assertEqual(hires["vae_name"], "comfy/image_vae.safetensors")
+
     def test_checkpoint_graph_needs_no_user_workflow_and_orders_loras(self):
         compiler = ComfyWorkflowCompiler(_capabilities())
         graph = compiler.compile("t2i", "checkpoint.safetensors", {
@@ -477,6 +550,25 @@ class TestAdvancedWorkflowCompilation(unittest.TestCase):
                 "txt2img", "checkpoint.safetensors", {}, workflow=workflow,
             )
 
+    def test_distinct_custom_negative_clip_survives_plain_prompt_updates(self):
+        workflow = _custom_workflow()
+        workflow["8"] = {
+            "class_type": "CLIPLoader",
+            "inputs": {
+                "clip_name": "text/base.safetensors",
+                "type": "stable_diffusion", "device": "default",
+            },
+        }
+        workflow["3"]["inputs"]["clip"] = ["8", 0]
+        graph = ComfyWorkflowCompiler(_capabilities()).compile(
+            "txt2img", "checkpoint.safetensors", {
+                "prompt": "updated positive", "negative_prompt": "updated negative",
+            }, workflow=workflow,
+        )
+        self.assertEqual(graph["2"]["inputs"]["clip"], ["1", 1])
+        self.assertEqual(graph["3"]["inputs"]["clip"], ["8", 0])
+        self.assertEqual(graph["3"]["inputs"]["text"], "updated negative")
+
     def test_pixel_and_model_upscale_graphs(self):
         compiler = ComfyWorkflowCompiler(_capabilities())
         pixel = compiler.compile_upscale("source.png", {
@@ -489,6 +581,26 @@ class TestAdvancedWorkflowCompilation(unittest.TestCase):
         })
         self.assertIn("ImageUpscaleWithModel", _classes(model))
         self.assertIn("ImageScale", _classes(model))
+
+    def test_model_upscale_factor_uses_original_image_dimensions(self):
+        compiler = ComfyWorkflowCompiler(_capabilities())
+        for factor, width, height in ((2.0, 640, 480), (3.0, 960, 720), (1.5, 480, 360)):
+            with self.subTest(factor=factor):
+                graph = compiler.compile_upscale("source.png", {
+                    "upscaler_name": "4x-UltraSharp.pth",
+                    "scale_mode": "factor", "scale_factor": factor,
+                }, source_width=320, source_height=240)
+                resize_id, resize = _node(graph, "ImageScale")
+                upscale_id, _ = _node(graph, "ImageUpscaleWithModel")
+                self.assertEqual(resize["inputs"]["image"], [upscale_id, 0])
+                self.assertEqual((resize["inputs"]["width"], resize["inputs"]["height"]), (width, height))
+                self.assertEqual(_node(graph, "SaveImage")[1]["inputs"]["images"], [resize_id, 0])
+
+    def test_model_upscale_factor_rejects_missing_source_dimensions(self):
+        with self.assertRaisesRegex(WorkflowCompileError, "원본 너비와 높이"):
+            ComfyWorkflowCompiler(_capabilities()).compile_upscale("source.png", {
+                "upscaler_name": "4x-UltraSharp.pth", "scale_factor": 2,
+            })
 
     def test_standalone_postprocess_has_no_wasteful_base_sampler(self):
         graph = ComfyWorkflowCompiler(_capabilities()).compile_postprocess(

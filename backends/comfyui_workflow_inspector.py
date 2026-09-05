@@ -52,6 +52,7 @@ NATIVE_CHECKPOINT_LOADERS: set[str] = {
 NATIVE_UNET_LOADERS: set[str] = {
     "UNETLoader",
     "DiffusionModelLoaderKJ",  # KJNodes
+    "ForgeNeoAnima38V2Loader",
 }
 
 # Sampler 노드 — 메인 모델 노드 역추적 시작점
@@ -60,7 +61,14 @@ SAMPLER_NODES: set[str] = {
     "KSamplerAdvanced",
     "SamplerCustomAdvanced",
     "SamplerCustom",
+    "ForgeNeoKSamplerCNS",
 }
+
+TEXT_ENCODER_NODES = {
+    "CLIPTextEncode", "CLIPTextEncodeSDXL",
+    "ForgeNeoAnimaQwen35Prompt", "ForgeNeoAnima38V2Prompt",
+}
+SAVE_NODES = {"SaveImage", "PreviewImage", "ForgeNeoSaveImage"}
 
 # 모델 라인을 통과시키는 패치 노드 (model 입력이 있고 model 출력도 있음)
 PATCH_NODES: set[str] = {
@@ -89,6 +97,9 @@ PATCH_NODES: set[str] = {
     "Power Lora Loader (rgthree)",
     # Differential diffusion 등
     "DifferentialDiffusion",
+    "ForgeNeoAnimaLoraLoader", "ForgeNeoAnimaLoraLoaderModelOnly",
+    "ForgeNeoLoraBlockWeight", "ForgeNeoModelSamplingShift",
+    "ForgeNeoNegPip", "ForgeNeoAnimaSafePAG", "ForgeNeoAnimaGuidanceSuite",
 }
 
 

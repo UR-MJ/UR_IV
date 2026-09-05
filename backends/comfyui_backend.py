@@ -21,6 +21,10 @@ from backends.base import (
     ProgressCallback,
 )
 from backends.comfyui_progress import ProgressTracker
+from backends.comfyui_workflow_inspector import (
+    NATIVE_CHECKPOINT_LOADERS, NATIVE_UNET_LOADERS, SAMPLER_NODES,
+    SAVE_NODES, TEXT_ENCODER_NODES,
+)
 
 import config
 from utils.app_logger import get_logger
@@ -63,6 +67,27 @@ def _float_or(value, default: float) -> float:
     except (TypeError, ValueError):
         return default
     return parsed if parsed == parsed and parsed not in (float('inf'), float('-inf')) else default
+
+
+def _base64_image_size(image_b64: str) -> Tuple[int, int]:
+    """Read source dimensions without allocating a resized image or uploading it."""
+    try:
+        encoded = str(image_b64 or '').strip()
+        if encoded[:5].casefold() == 'data:':
+            header, separator, encoded = encoded.partition(',')
+            if not separator or ';base64' not in header.casefold():
+                raise ValueError("invalid data URI")
+        compact = ''.join(encoded.split())
+        compact += '=' * (-len(compact) % 4)
+        raw = base64.b64decode(compact, validate=True)
+        with Image.open(io.BytesIO(raw)) as image:
+            width, height = image.size
+            # Comfy LoadImage applies EXIF transpose before graph execution.
+            if image.getexif().get(274) in {5, 6, 7, 8}:
+                return height, width
+            return width, height
+    except (binascii.Error, OSError, ValueError) as exc:
+        raise ValueError("입력 이미지가 올바르지 않습니다.") from exc
 
 
 def _read_bounded_media(response, remaining_bytes: int) -> bytes:
@@ -140,19 +165,20 @@ def analyze_workflow(file_path: str) -> dict:
             nodes_by_type[nt] = nodes_by_type.get(nt, 0) + 1
 
             wv = node.get('widgets_values', [])
-            if nt == 'CheckpointLoaderSimple' and wv:
+            if nt in NATIVE_CHECKPOINT_LOADERS | NATIVE_UNET_LOADERS and wv:
                 result['checkpoint'] = str(wv[0])
-            elif nt in ('KSampler', 'KSamplerAdvanced', 'SamplerCustom'):
+            elif nt in SAMPLER_NODES:
                 result['ksampler_type'] = nt
-            elif nt == 'EmptyLatentImage' and len(wv) >= 2:
+            elif nt in ('EmptyLatentImage', 'ForgeNeoLatentInput'):
                 try:
-                    result['width'] = int(wv[0])
-                    result['height'] = int(wv[1])
-                except (ValueError, TypeError):
+                    offset = 1 if nt == 'ForgeNeoLatentInput' else 0
+                    result['width'] = int(wv[offset])
+                    result['height'] = int(wv[offset + 1])
+                except (ValueError, TypeError, IndexError):
                     pass
-            elif nt in ('SaveImage', 'PreviewImage'):
+            elif nt in SAVE_NODES:
                 result['has_save_node'] = True
-            elif nt in ('CLIPTextEncode', 'CLIPTextEncodeSDXL'):
+            elif nt in TEXT_ENCODER_NODES:
                 result['has_positive_clip'] = True
 
         result['node_count'] = len(data.get('nodes', []))
@@ -167,19 +193,21 @@ def analyze_workflow(file_path: str) -> dict:
             nodes_by_type[cls] = nodes_by_type.get(cls, 0) + 1
             inputs = node.get('inputs', {})
 
-            if cls == 'CheckpointLoaderSimple':
+            if cls in NATIVE_CHECKPOINT_LOADERS:
                 result['checkpoint'] = inputs.get('ckpt_name')
-            elif cls in ('KSampler', 'KSamplerAdvanced', 'SamplerCustom'):
+            elif cls in NATIVE_UNET_LOADERS:
+                result['checkpoint'] = inputs.get('unet_name') or inputs.get('model_name')
+            elif cls in SAMPLER_NODES:
                 result['ksampler_type'] = cls
-            elif cls == 'EmptyLatentImage':
+            elif cls in ('EmptyLatentImage', 'ForgeNeoLatentInput'):
                 try:
                     result['width'] = int(inputs.get('width', 0))
                     result['height'] = int(inputs.get('height', 0))
                 except (ValueError, TypeError):
                     pass
-            elif cls in ('SaveImage', 'PreviewImage'):
+            elif cls in SAVE_NODES:
                 result['has_save_node'] = True
-            elif cls in ('CLIPTextEncode', 'CLIPTextEncodeSDXL'):
+            elif cls in TEXT_ENCODER_NODES:
                 result['has_positive_clip'] = True
 
         result['node_count'] = len([k for k, v in data.items() if isinstance(v, dict)])
@@ -203,6 +231,10 @@ def analyze_workflow(file_path: str) -> dict:
             result['model_class'] = ins.model_class
             result['model_param'] = ins.model_param
             result['patch_chain'] = list(ins.patch_chain)
+            if ins.sampler_class:
+                result['ksampler_type'] = ins.sampler_class
+            if ins.model_node_id and ins.model_param:
+                result['checkpoint'] = data[ins.model_node_id].get('inputs', {}).get(ins.model_param)
             if ins.notes:
                 result.setdefault('inspector_notes', []).extend(ins.notes)
         except Exception as e:
@@ -1485,7 +1517,10 @@ class ComfyUIBackend(AbstractBackend):
                 'steps': _int_or(saved.get('steps'), 28),
                 'cfg_scale': _float_or(saved.get('cfg'), 7.0),
                 'seed': _int_or(saved.get('seed'), -1),
+                'alwayson_scripts': copy.deepcopy(saved.get('alwayson_scripts') or {}),
             }
+            if saved.get('shift') is not None:
+                payload['distilled_cfg_scale'] = _float_or(saved['shift'], 1.0)
             if modules:
                 payload['forge_additional_modules'] = modules
         if not model_name:
@@ -1496,30 +1531,35 @@ class ComfyUIBackend(AbstractBackend):
         payload.update({key: value for key, value in settings.items() if key in {
             'forge_additional_modules', 'weight_dtype', 'clip_type', 'comfy_clip_type',
             'clip_device', 'sampler_name', 'scheduler', 'steps', 'cfg_scale', 'seed',
+            'distilled_cfg_scale',
         }})
+        # Explicit API settings override saved scripts case-insensitively, just
+        # like the compiler's lookup, without mutating either caller dictionary.
+        scripts = copy.deepcopy(payload.get('alwayson_scripts') or {})
+        if not isinstance(scripts, dict):
+            scripts = {}
+        overrides = settings.get('alwayson_scripts')
+        if isinstance(overrides, dict):
+            for name, block in overrides.items():
+                scripts = {key: value for key, value in scripts.items()
+                           if str(key).strip().casefold() != str(name).strip().casefold()}
+                scripts[name] = copy.deepcopy(block)
+        payload['alwayson_scripts'] = scripts
         return model_name, payload
 
     def _standalone_detail(self, image_b64: str, settings: Dict, kind: str) -> str:
         model_name, payload = self._saved_generation_context(settings)
-        try:
-            encoded = str(image_b64 or '').strip()
-            if encoded[:5].casefold() == 'data:':
-                header, separator, encoded = encoded.partition(',')
-                if not separator or ';base64' not in header.casefold():
-                    raise ValueError("invalid data URI")
-            compact = ''.join(encoded.split())
-            compact += '=' * (-len(compact) % 4)
-            raw = base64.b64decode(compact, validate=True)
-            with Image.open(io.BytesIO(raw)) as image:
-                width, height = image.size
-        except (binascii.Error, OSError, ValueError) as exc:
-            raise ValueError("후처리 입력 이미지가 올바르지 않습니다.") from exc
+        width, height = _base64_image_size(image_b64)
+        # Replace only prior image passes. Model/conditioning scripts (including
+        # Anima bypass/semantic negative, NegPiP and guidance) remain in force.
+        scripts = {name: block for name, block in payload['alwayson_scripts'].items()
+                   if str(name).strip().casefold() not in {'adetailer', 'sam3 mask'}}
         payload.update({
             'init_images': [image_b64], 'width': width, 'height': height,
             'denoising_strength': 0.0,
             'prompt': str(settings.get('prompt') or settings.get('ad_prompt') or payload.get('prompt') or ''),
             'negative_prompt': str(settings.get('negative_prompt') or settings.get('ad_negative') or payload.get('negative_prompt') or ''),
-            'alwayson_scripts': {},
+            'alwayson_scripts': scripts,
         })
         if kind == 'adetailer':
             args = settings.get('adetailer_args')
@@ -1564,8 +1604,11 @@ class ComfyUIBackend(AbstractBackend):
 
     def upscale(self, image_b64: str, settings: Dict) -> str:
         """Run a standalone ComfyUI pixel/model upscale graph."""
+        width, height = _base64_image_size(image_b64)
         uploaded = self._upload_image(image_b64)
-        workflow = self._workflow_compiler().compile_upscale(uploaded, settings)
+        workflow = self._workflow_compiler().compile_upscale(
+            uploaded, settings, source_width=width, source_height=height,
+        )
         return self._result_as_base64(self._queue_and_wait(workflow), '업스케일')
 
     def adetailer(self, image_b64: str, settings: Dict) -> str:

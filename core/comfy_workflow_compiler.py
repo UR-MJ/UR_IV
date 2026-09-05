@@ -64,6 +64,8 @@ _SAMPLERS = {
     "ForgeNeoKSamplerCNS",
 }
 _SAVE_NODES = {"SaveImage", "PreviewImage", "ForgeNeoSaveImage"}
+_SEMANTIC_ENCODERS = {"ForgeNeoAnimaQwen35Prompt", "ForgeNeoAnima38V2Prompt"}
+_TEXT_ENCODERS = {"CLIPTextEncode", "CLIPTextEncodeSDXL"} | _SEMANTIC_ENCODERS
 
 
 def _float(value: Any, default: float) -> float:
@@ -193,7 +195,10 @@ class ComfyWorkflowCompiler:
         self.validate(graph)
         return graph
 
-    def compile_upscale(self, uploaded_image: str, settings: Mapping[str, Any]) -> dict:
+    def compile_upscale(
+        self, uploaded_image: str, settings: Mapping[str, Any],
+        *, source_width: Optional[int] = None, source_height: Optional[int] = None,
+    ) -> dict:
         if not uploaded_image:
             raise WorkflowCompileError("업스케일 입력 이미지가 업로드되지 않았습니다.")
         graph = _Graph()
@@ -230,6 +235,19 @@ class ComfyWorkflowCompiler:
                     "height": max(1, _int(settings.get("target_height"), 1024)),
                     "crop": "disabled",
                 }, "Final exact size")
+            else:
+                width, height = _int(source_width, 0), _int(source_height, 0)
+                if width <= 0 or height <= 0:
+                    raise WorkflowCompileError(
+                        "모델 업스케일 배율을 적용하려면 입력 이미지의 원본 너비와 높이가 필요합니다."
+                    )
+                factor = max(0.01, _float(settings.get("scale_factor"), 2.0))
+                image = graph.add("ImageScale", {
+                    "image": [image, 0], "upscale_method": "lanczos",
+                    "width": max(1, round(width * factor)),
+                    "height": max(1, round(height * factor)),
+                    "crop": "disabled",
+                }, "Requested factor from original size")
         graph.add("SaveImage", {"images": [image, 0], "filename_prefix": "AIStudio/upscale"}, "Save")
         self.validate(graph.nodes)
         return graph.nodes
@@ -695,7 +713,7 @@ class ComfyWorkflowCompiler:
             unique: list[str] = []
             seen: set[str] = set()
             for value in values:
-                key = _filename(value).casefold()
+                key = str(value).strip().replace("\\", "/").casefold()
                 if key not in seen:
                     unique.append(str(value))
                     seen.add(key)
@@ -1311,7 +1329,7 @@ class ComfyWorkflowCompiler:
             1, _int(payload.get("n_iter", payload.get("batch_count", 1)), 1)
         )
         latent_ids = self._trace_classes(
-            graph.nodes, inputs.get("latent_image"), {"EmptyLatentImage"},
+            graph.nodes, inputs.get("latent_image"), {"EmptyLatentImage", "ForgeNeoLatentInput"},
         )
         if len(latent_ids) > 1:
             raise WorkflowCompileError(
@@ -1323,6 +1341,8 @@ class ComfyWorkflowCompiler:
             latent_inputs["width"] = max(64, _int(payload.get("width"), 512))
             latent_inputs["height"] = max(64, _int(payload.get("height"), 512))
             latent_inputs["batch_size"] = batch
+            if graph.nodes[latent_id].get("class_type") == "ForgeNeoLatentInput":
+                latent_inputs["mode"] = mode
 
         loader_id: Optional[str] = None
         loader_type = ""
@@ -1335,6 +1355,12 @@ class ComfyWorkflowCompiler:
             loader = graph.nodes[loader_id]
             loader_type = str(loader.get("class_type") or "")
             if not anima_plan.v2:
+                if loader_type == "ForgeNeoAnima38V2Loader":
+                    loader_type = "UNETLoader"
+                    loader["class_type"] = loader_type
+                    loader["inputs"] = {
+                        "weight_dtype": str(payload.get("weight_dtype") or "default"),
+                    }
                 loader_input = (
                     "ckpt_name"
                     if loader_type == "CheckpointLoaderSimple"
@@ -1345,10 +1371,10 @@ class ComfyWorkflowCompiler:
                 )
 
         pos_ids = self._trace_classes(
-            graph.nodes, inputs.get("positive"), {"CLIPTextEncode", "CLIPTextEncodeSDXL"},
+            graph.nodes, inputs.get("positive"), _TEXT_ENCODERS,
         )
         neg_ids = self._trace_classes(
-            graph.nodes, inputs.get("negative"), {"CLIPTextEncode", "CLIPTextEncodeSDXL"},
+            graph.nodes, inputs.get("negative"), _TEXT_ENCODERS,
         )
         if len(pos_ids) != 1 or len(neg_ids) != 1:
             raise WorkflowCompileError(
@@ -1356,7 +1382,7 @@ class ComfyWorkflowCompiler:
             )
         pos_id, neg_id = pos_ids[0], neg_ids[0]
         if anima_plan.semantic and any(
-            graph.nodes[node_id].get("class_type") != "CLIPTextEncode"
+            graph.nodes[node_id].get("class_type") not in {"CLIPTextEncode"} | _SEMANTIC_ENCODERS
             for node_id in (pos_id, neg_id)
         ):
             raise WorkflowCompileError(
@@ -1367,8 +1393,8 @@ class ComfyWorkflowCompiler:
         positive, negative = inputs.get("positive"), inputs.get("negative")
         if not (_is_link(model) and _is_link(positive) and _is_link(negative)):
             raise WorkflowCompileError("custom workflow sampler의 model/positive/negative 연결이 유효하지 않습니다.")
-        pos_clip = graph.nodes[pos_id].get("inputs", {}).get("clip")
-        neg_clip = graph.nodes[neg_id].get("inputs", {}).get("clip")
+        pos_clip = graph.nodes[pos_id].get("inputs", {}).get(self._encode_clip_input(graph.nodes[pos_id]))
+        neg_clip = graph.nodes[neg_id].get("inputs", {}).get(self._encode_clip_input(graph.nodes[neg_id]))
         if not (_is_link(pos_clip) and _is_link(neg_clip)):
             raise WorkflowCompileError("custom workflow CLIP 연결을 찾지 못했습니다.")
         if pos_clip != neg_clip and (
@@ -1400,11 +1426,12 @@ class ComfyWorkflowCompiler:
             graph, payload, pos_id, neg_id, decode_id, inputs.get("latent_image"),
         )
         # Overrides can replace encoder/VAE links.
-        clip = graph.nodes[pos_id].get("inputs", {}).get("clip", clip)
+        clip = graph.nodes[pos_id].get("inputs", {}).get(self._encode_clip_input(graph.nodes[pos_id]), clip)
         if override_vae is not None and active_clip_uses_lora:
             clip = self._rebase_custom_lora_clips(graph, active_lora_ids, clip)
-            graph.nodes[pos_id].setdefault("inputs", {})["clip"] = clip
-            graph.nodes[neg_id].setdefault("inputs", {})["clip"] = clip
+            for node_id in (pos_id, neg_id):
+                node = graph.nodes[node_id]
+                node.setdefault("inputs", {})[self._encode_clip_input(node)] = clip
         vae = override_vae or vae or []
 
         if anima_plan.v2:
@@ -1456,6 +1483,9 @@ class ComfyWorkflowCompiler:
         model, clip = self._add_negpip(graph, model, clip, payload)
         self._rewrite_custom_conditioning(
             graph, pos_id, neg_id, model, clip, payload, anima_plan,
+            negative_clip=(
+                neg_clip if pos_clip != neg_clip and override_vae is None else clip
+            ),
         )
         model, sampler_options = self._add_anima_guidance(
             graph, model, clip, positive, negative, payload,
@@ -1560,6 +1590,10 @@ class ComfyWorkflowCompiler:
             inputs["denoise"] = denoise
 
     @staticmethod
+    def _encode_clip_input(node: Mapping[str, Any]) -> str:
+        return "native_clip" if node.get("class_type") in _SEMANTIC_ENCODERS else "clip"
+
+    @staticmethod
     def _set_encode_text(node: dict, text: str) -> None:
         inputs = node.setdefault("inputs", {})
         if node.get("class_type") == "CLIPTextEncodeSDXL":
@@ -1577,16 +1611,38 @@ class ComfyWorkflowCompiler:
         clip: list,
         payload: Mapping[str, Any],
         anima_plan: _Anima38Plan,
+        *, negative_clip: Optional[list] = None,
     ) -> None:
         positive_text = str(payload.get("prompt") or "")
         negative_text = str(payload.get("negative_prompt") or "")
         if not anima_plan.semantic:
-            for node_id, text in (
-                (pos_id, positive_text), (neg_id, negative_text),
+            for node_id, text, encoder in (
+                (pos_id, positive_text, clip),
+                (neg_id, negative_text, negative_clip if negative_clip is not None else clip),
             ):
+                if graph.nodes[node_id].get("class_type") in _SEMANTIC_ENCODERS:
+                    graph.nodes[node_id]["class_type"] = "CLIPTextEncode"
+                    graph.nodes[node_id]["inputs"] = {}
                 self._set_encode_text(graph.nodes[node_id], text)
-                graph.nodes[node_id].setdefault("inputs", {})["clip"] = clip
+                graph.nodes[node_id].setdefault("inputs", {})["clip"] = encoder
             return
+
+        # Imported guidance nodes can already depend on these encoders.
+        # Semantic encoding needs the upstream diffusion model/connector,
+        # not the downstream sampling hooks, which would create a cycle.
+        conditioning_model = model
+        visited: set[str] = set()
+        while any(
+            self._link_depends_on(graph.nodes, conditioning_model, node_id)
+            for node_id in (pos_id, neg_id)
+        ):
+            source_id = str(conditioning_model[0])
+            if source_id in visited:
+                raise WorkflowCompileError("custom workflow semantic model 연결이 순환합니다.")
+            visited.add(source_id)
+            conditioning_model = graph.nodes[source_id].get("inputs", {}).get("model")
+            if not _is_link(conditioning_model):
+                raise WorkflowCompileError("custom workflow semantic encoding의 upstream model을 찾지 못했습니다.")
 
         qwen_node = graph.add(
             "ForgeNeoAnimaQwen35Loader",
@@ -1597,7 +1653,7 @@ class ComfyWorkflowCompiler:
 
         def semantic_inputs(text: str, strength: float) -> dict[str, Any]:
             common = {
-                "model": model,
+                "model": conditioning_model,
                 "native_clip": clip,
                 "qwen35_clip": qwen_clip,
                 "prompt": text,
@@ -1767,8 +1823,9 @@ class ComfyWorkflowCompiler:
         clip_ref = self._add_clip_loader(graph, clips, payload)
         vae_name = self._resolve_choice("VAELoader", "vae_name", vaes[0])
         vae_node = graph.add("VAELoader", {"vae_name": vae_name}, "VAE override")
-        graph.nodes[pos_id].setdefault("inputs", {})["clip"] = clip_ref
-        graph.nodes[neg_id].setdefault("inputs", {})["clip"] = clip_ref
+        for node_id in (pos_id, neg_id):
+            node = graph.nodes[node_id]
+            node.setdefault("inputs", {})[self._encode_clip_input(node)] = clip_ref
         vae_ref = [vae_node, 0]
         if decode_id:
             graph.nodes[decode_id].setdefault("inputs", {})["vae"] = vae_ref
@@ -1787,7 +1844,10 @@ class ComfyWorkflowCompiler:
             raw = [item.strip() for item in raw.split(",")]
         if not isinstance(raw, Iterable) or isinstance(raw, (bytes, bytearray, Mapping)):
             return []
-        return [_filename(item) for item in raw if _filename(item) and str(item).casefold() != "use same choices"]
+        return [
+            str(item).strip() for item in raw
+            if item and str(item).strip() and str(item).strip().casefold() != "use same choices"
+        ]
 
     def _classify_modules(self, modules: Sequence[str]) -> tuple[list[str], list[str], list[str]]:
         clip_choices = self._choices("CLIPLoader", "clip_name")
@@ -1812,7 +1872,7 @@ class ComfyWorkflowCompiler:
         raw = payload.get("hr_additional_modules", [])
         if isinstance(raw, str):
             raw = [item.strip() for item in raw.split(",")]
-        items = [_filename(item) for item in raw if _filename(item)] if isinstance(raw, Sequence) else []
+        items = [str(item).strip() for item in raw if item and str(item).strip()] if isinstance(raw, Sequence) else []
         if not items or any(item.casefold() == "use same choices" for item in items):
             return "Use same choices"
         clips, vaes, unknown = self._classify_modules(items)
@@ -1850,14 +1910,27 @@ class ComfyWorkflowCompiler:
         basename = _filename(value).casefold()
         stem = os.path.splitext(basename)[0]
         for choice in choices:
-            normalized = str(choice).replace("\\", "/")
-            choice_base = _filename(normalized).casefold()
-            if (
-                normalized.casefold() == folded
-                or choice_base == basename
-                or (stem and os.path.splitext(choice_base)[0] == stem)
-            ):
+            if str(choice).replace("\\", "/").casefold() == folded:
                 return str(choice)
+        # A bare filename/stem is a convenience, never permission to choose
+        # whichever copy from a shared model directory happens to be first.
+        for match in (
+            lambda name: "/" in folded and os.path.splitext(name.replace("\\", "/").casefold())[0] == folded,
+            lambda name: _filename(name).casefold() == basename,
+            lambda name: bool(stem) and os.path.splitext(_filename(name).casefold())[0] == stem,
+        ):
+            candidates: dict[str, str] = {}
+            for choice in choices:
+                if match(str(choice)):
+                    candidates.setdefault(str(choice).replace("\\", "/").casefold(), str(choice))
+            if len(candidates) > 1:
+                raise WorkflowCompileError(
+                    f"ComfyUI 리소스가 여러 개 일치합니다: {value} → "
+                    + ", ".join(candidates.values())
+                    + ". 폴더를 포함한 정확한 경로를 지정하세요."
+                )
+            if candidates:
+                return next(iter(candidates.values()))
         return None
 
     def _resolve_choice(self, class_type: str, input_name: str, requested: Any) -> str:
@@ -2035,7 +2108,7 @@ class ComfyWorkflowCompiler:
             node = workflow.get(node_id)
             if not isinstance(node, Mapping):
                 return None
-            if node.get("class_type") in {"CheckpointLoaderSimple", "UNETLoader"}:
+            if node.get("class_type") in {"CheckpointLoaderSimple", "UNETLoader", "ForgeNeoAnima38V2Loader"}:
                 return node_id
             link = node.get("inputs", {}).get("model")
         return None

@@ -1,1 +1,3 @@
 danbooru_optimized/legacy_search_tags_before_2026_07.csv text eol=lf
+# Preserve the pinned upstream license verbatim, including its trailing blanks.
+comfy_custom_nodes/ai_studio_forge_parity/LICENSES/comfyui-anima-3-8B-MIT.txt text eol=lf whitespace=-blank-at-eof

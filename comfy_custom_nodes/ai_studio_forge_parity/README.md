@@ -5,6 +5,24 @@ ComfyUI `custom_nodes` directory. It is the execution layer used by the app's
 default ComfyUI workflow compiler; no workflow JSON is required for normal
 T2I, I2I, inpaint, upscale, ADetailer, or SAM3 jobs.
 
+## 1.1.2 compatibility fixes
+
+- Inpaint masks use the source image's crop/contain geometry.
+- PAG blends the selected self-attention output toward each token's value
+  after normalization, and runs only during the weak prediction.
+- Semantic v2 cached conditionings own their runtime records; changing the
+  positive prompt no longer expires a cached negative after 64 registrations.
+  Discarded conditionings release their records without disabling Comfy's cache.
+- The app compiler resolves full model/LoRA/TE/VAE paths before filename
+  fallbacks, rejects ambiguous names, and honors learned-upscaler factors.
+- Standalone detail operations retain model/semantic settings. Custom workflows
+  retain separate negative encoders, and bundled samplers/encoders are recognised
+  by the workflow picker.
+
+The pinned files under `vendor/` are unchanged. The cache-lifetime adapter is
+local integration code in `anima38_cache.py`. Restart a running Comfy backend
+after the updated pack is installed.
+
 ## Node groups
 
 - Generation: native checkpoint/split-model loading support, ANIMA-aware LoRA

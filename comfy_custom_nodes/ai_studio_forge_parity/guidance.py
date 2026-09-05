@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import uuid
 from typing import Any
 
 from .compat import (
@@ -569,6 +570,54 @@ def _gaussian_blur_query(query: Any, sigma: float):
     return image.reshape(batch, frames, channels, height, width).permute(0, 1, 3, 4, 2)
 
 
+def _patch_pag_attention(model: Any, block_indices: str, strength: float):
+    """Blend Cosmos self-attention toward V, after Q/K normalization.
+
+    The Comfy pre-projection hook cannot implement partial PAG: its query
+    scaling is cancelled by q_norm. Patch only each selected MODEL object's
+    attention operation, and activate it solely in this node's weak forward.
+    This preserves the original normal/CFG/SLG passes and other node clones.
+    """
+
+    blocks = _model_blocks(model)
+    targets = parse_indices(block_indices, len(blocks), default="18")
+    if not targets:
+        raise RuntimeError("PAG requires valid Anima/Cosmos self-attention blocks.")
+    amount = min(1.0, max(0.0, float(strength)))
+    token = uuid.uuid4().hex
+    for index in sorted(targets):
+        path = f"diffusion_model.blocks.{index}.self_attn.attn_op"
+        getter = getattr(model, "get_model_object", None)
+        original = (
+            getter(path) if callable(getter)
+            else getattr(getattr(blocks[index], "self_attn", None), "attn_op", None)
+        )
+        if not callable(original):
+            raise RuntimeError(
+                f"PAG requires Anima/Cosmos block {index} self_attn.attn_op."
+            )
+
+        def attention_op(q, k, v, *args, _original=original, **kwargs):
+            output = _original(q, k, v, *args, **kwargs)
+            options = kwargs.get("transformer_options")
+            if options is None and args:
+                options = args[0]
+            if not isinstance(options, dict) or options.get("forge_neo_pag_active") != token:
+                return output
+            # Cosmos attention takes [B,...,heads,head_dim], and merges both
+            # the spatial/token axes and heads before output_proj. Forge's
+            # identity-attention endpoint keeps each token's own V, not mean(V).
+            target = v.reshape(v.shape[0], -1, v.shape[-2] * v.shape[-1])
+            if target.shape != output.shape:
+                raise RuntimeError(
+                    f"PAG attention/value layout mismatch: {tuple(output.shape)} vs {tuple(target.shape)}"
+                )
+            return require_torch().lerp(output, target.to(output), amount)
+
+        model.add_object_patch(path, attention_op)
+    return token
+
+
 def _patch_perturbation_guidance(
     model: Any,
     *,
@@ -584,7 +633,10 @@ def _patch_perturbation_guidance(
     rescale: float,
     rescale_mode: str,
 ):
-    attention_enabled = attention_method in {"pag", "seg"} and float(attention_scale) != 0.0
+    attention_enabled = (
+        attention_method in {"pag", "seg"}
+        and float(attention_scale) != 0.0 and float(attention_strength) > 0.0
+    )
     slg_enabled = bool(slg_enabled) and float(slg_scale) != 0.0
     if not attention_enabled and not slg_enabled:
         return model
@@ -592,15 +644,16 @@ def _patch_perturbation_guidance(
     if attention_enabled and not targets:
         raise RuntimeError("PAG/SEG has no valid attention block indices.")
     patched = clone_model(model, "Anima PAG/SEG/SLG")
+    pag_token = (
+        _patch_pag_attention(patched, attention_blocks, attention_strength)
+        if attention_enabled and attention_method == "pag" else None
+    )
 
     def perturb(q, k, v, **kwargs):
         extra = kwargs.get("extra_options") or {}
         if int(extra.get("block_index", -1)) not in targets:
             return {"q": q, "k": k, "v": v}
-        if attention_method == "seg":
-            weak_q = _gaussian_blur_query(q, float(seg_sigma))
-        else:
-            weak_q = q * 0.0
+        weak_q = _gaussian_blur_query(q, float(seg_sigma))
         strength = min(1.0, max(0.0, float(attention_strength)))
         return {"q": q + (weak_q - q) * strength, "k": k, "v": v}
 
@@ -610,9 +663,12 @@ def _patch_perturbation_guidance(
         options = dict(args["model_options"])
         transformer = dict(options.get("transformer_options", {}) or {})
         if attention:
-            patches = dict(transformer.get("patches", {}) or {})
-            patches["attn1_patch"] = [*(patches.get("attn1_patch", []) or []), perturb]
-            transformer["patches"] = patches
+            if pag_token is not None:
+                transformer["forge_neo_pag_active"] = pag_token
+            else:
+                patches = dict(transformer.get("patches", {}) or {})
+                patches["attn1_patch"] = [*(patches.get("attn1_patch", []) or []), perturb]
+                transformer["patches"] = patches
         else:
             transformer["forge_neo_slg_active"] = True
         options["transformer_options"] = transformer
@@ -825,53 +881,13 @@ class ForgeNeoAnimaSafePAG:
             raise RuntimeError(
                 "Head-selective PAG is unavailable through ComfyUI's Anima pre-projection hook; leave head_indices empty."
             )
-        targets = parse_indices(block_indices, 4096, default="18")
-        if not targets:
-            raise RuntimeError("Safe PAG has no valid block indices.")
-        patched = clone_model(model, "Anima Safe PAG")
-
-        def perturb(q, k, v, **kwargs):
-            extra = kwargs.get("extra_options") or {}
-            index = int(extra.get("block_index", -1))
-            if index not in targets:
-                return {"q": q, "k": k, "v": v}
-            # q→0 makes self-attention uniform. Partial strength is a stable
-            # interpolation toward that official hard-PAG endpoint.
-            return {"q": q * (1.0 - float(perturbation_strength)), "k": k, "v": v}
-
-        def post_cfg(args):
-            original = args["denoised"]
-            progress = _sampling_percent(args.get("sigma", 1.0))
-            if not float(start_percent) <= progress <= float(end_percent):
-                return original
-            import comfy.samplers  # lazy: only reachable inside ComfyUI
-
-            options = dict(args["model_options"])
-            transformer = dict(options.get("transformer_options", {}) or {})
-            patches = dict(transformer.get("patches", {}) or {})
-            patches["attn1_patch"] = [
-                *(patches.get("attn1_patch", []) or []), perturb
-            ]
-            transformer["patches"] = patches
-            options["transformer_options"] = transformer
-            (weak,) = comfy.samplers.calc_cond_batch(
-                args["model"], [args["cond"]], args["input"], args["sigma"], options
-            )
-            cond = args["cond_denoised"].float()
-            guidance = (cond - weak.float()) * float(scale)
-            amount = float(rescale)
-            if amount > 0:
-                source = cond + guidance if rescale_mode == "partial" else original.float() + guidance
-                dims = tuple(range(1, source.ndim))
-                factor = amount * (
-                    cond.std(dim=dims, keepdim=True).clamp_min(1e-6)
-                    / source.std(dim=dims, keepdim=True).clamp_min(1e-6)
-                ) + (1.0 - amount)
-                guidance *= factor
-            return (original.float() + guidance).to(original.dtype)
-
-        patched.set_model_sampler_post_cfg_function(post_cfg, disable_cfg1_optimization=True)
-        return (patched,)
+        return (_patch_perturbation_guidance(
+            model, attention_method="pag", attention_scale=scale,
+            attention_blocks=block_indices, attention_strength=perturbation_strength,
+            seg_sigma=0.0, slg_enabled=False, slg_scale=0.0,
+            start_percent=start_percent, end_percent=end_percent,
+            rescale=rescale, rescale_mode=rescale_mode,
+        ),)
 
 
 _SMC_PRESETS = {

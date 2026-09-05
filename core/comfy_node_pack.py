@@ -18,7 +18,7 @@ from typing import Any, Mapping
 
 
 PACK_ID = "ai_studio_forge_parity"
-PACK_VERSION = "1.1.1"
+PACK_VERSION = "1.1.2"
 OWNER_ID = "ai-studio-pro.bundled-comfy-nodes"
 OWNER_MARKER = ".aistudio-owned.json"
 

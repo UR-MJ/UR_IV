@@ -21,6 +21,8 @@ import threading
 from types import ModuleType
 from typing import Any
 
+from .anima38_cache import install_conditioning_cache_support
+
 
 _VENDOR_MODULE = f"{__package__}.vendor.comfyui_anima_3_8b"
 _RUNTIME: ModuleType | None = None
@@ -115,6 +117,7 @@ def _install_upstream_patches(runtime: ModuleType) -> None:
             "Pinned Anima runtime does not expose install_timestep_support()."
         )
     timestep_installer()
+    install_conditioning_cache_support(semantic_runtime)
 
 
 def ensure_anima38_runtime(*, required: bool = True) -> ModuleType | None:

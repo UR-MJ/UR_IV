@@ -52,7 +52,7 @@ def _image_tensor(value: Any, name: str = "image"):
     return value
 
 
-def resize_image(image: Any, width: int, height: int, fit: str = "crop", background: float = 0.0):
+def resize_image(image: Any, width: int, height: int, fit: str = "crop", background: float = 0.0, *, interpolation: str = "bicubic"):
     """Resize a BHWC Comfy image without changing its batch/channel layout."""
 
     torch = require_torch()
@@ -63,7 +63,7 @@ def resize_image(image: Any, width: int, height: int, fit: str = "crop", backgro
     nchw = image.movedim(-1, 1)
     if mode in {"stretch", "resize", "just resize"}:
         result = torch.nn.functional.interpolate(
-            nchw, size=(height, width), mode="bicubic", align_corners=False, antialias=True
+            nchw, size=(height, width), mode=interpolation, align_corners=False, antialias=True
         )
         return result.movedim(1, -1).contiguous()
 
@@ -71,7 +71,7 @@ def resize_image(image: Any, width: int, height: int, fit: str = "crop", backgro
     resized_w = max(1, int(round(source_w * scale)))
     resized_h = max(1, int(round(source_h * scale)))
     resized = torch.nn.functional.interpolate(
-        nchw, size=(resized_h, resized_w), mode="bicubic", align_corners=False, antialias=True
+        nchw, size=(resized_h, resized_w), mode=interpolation, align_corners=False, antialias=True
     )
     if mode in {"crop", "cover", "crop and resize"}:
         left, top = max(0, (resized_w - width) // 2), max(0, (resized_h - height) // 2)
@@ -229,6 +229,7 @@ class ForgeNeoLatentInput:
                 source = torch.full((batch_size, height, width, 3), float(reference_background))
             else:
                 raise RuntimeError(f"{mode} mode requires its source IMAGE input.")
+        source_height, source_width = source.shape[1:3]
         source = resize_image(source, width, height, fit, reference_background)
         mask = None
         if reference_enabled:
@@ -250,7 +251,14 @@ class ForgeNeoLatentInput:
                     mask = _mask_from_image(inpaint_mask_image)
                 else:
                     raise RuntimeError("inpaint mode requires a MASK or mask IMAGE input.")
-                mask = _resize_mask(mask, width, height, blur=True)
+                # A mask is drawn in source-image coordinates. Use the same
+                # scale, center crop and letterbox as its image, with zero
+                # outside the image; stretching it directly shifts the edit.
+                mask = _resize_mask(mask, source_width, source_height, blur=True)
+                mask = resize_image(
+                    mask.unsqueeze(-1), width, height, fit, 0.0,
+                    interpolation="bilinear",
+                )[..., 0].clamp(0, 1)
             if mask_invert:
                 mask = 1.0 - mask
             mask = _blur_and_grow_mask(mask, int(mask_blur), int(grow_mask_by))
