@@ -67,6 +67,8 @@
           <CustomSelect v-model="maskContentLabel" :options="maskContents" placeholder="마스크 영역 초기값" />
           <CustomSelect v-model="inpaintAreaLabel" :options="inpaintAreas" placeholder="인페인트 범위" class="mt-6" />
         </div>
+
+        <HandReconstructionPanel :source-revision="handSourceRevision" :has-image="handImageReady" :has-mask="hasMask" :get-input="getHandReconstructionInput" />
       </div>
 
       <div class="sidebar-footer">
@@ -110,6 +112,7 @@ import { INPAINT_TOOLS, toolById, toolByKey } from '../utils/editorTools'
 import { requestAction } from '../stores/widgetStore.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from '../components/CustomSelect.vue'
+import HandReconstructionPanel from '../components/HandReconstructionPanel.vue'
 
 interface Point { x: number; y: number }
 interface DirtyRect { x1: number; y1: number; x2: number; y2: number }
@@ -162,6 +165,9 @@ onUnmounted(() => document.removeEventListener('keydown', onInpaintKeyDown))
 const imgW = ref(0), imgH = ref(0)
 const zoom = ref(1), panX = ref(0), panY = ref(0)
 const hasMask = ref(false)
+const handSourceRevision = ref(0)
+const handImageReady = ref(false)
+let imageLoadRevision = 0
 
 let iCtx: CanvasRenderingContext2D | null = null
 let mCtx: CanvasRenderingContext2D | null = null
@@ -198,6 +204,12 @@ function loadFile(file: File) {
   if ((file as any).path) imagePath.value = (file as any).path.replace(/\\/g, '/')
 }
 async function loadFromPath(path: string) {
+  if (/^data:image\//i.test(path) || path.startsWith('blob:')) {
+    imagePath.value = ''
+    imageSrc.value = path
+    initCanvas(path)
+    return
+  }
   const normalized = path.replace(/\\/g, '/')
   imagePath.value = normalized
   const localUrl = 'file:///' + normalized
@@ -206,8 +218,12 @@ async function loadFromPath(path: string) {
 }
 
 function initCanvas(src: string) {
+  const loadRevision = ++imageLoadRevision
+  handSourceRevision.value++
+  handImageReady.value = false
   const img = new Image()
   img.onload = () => {
+    if (loadRevision !== imageLoadRevision) return
     srcImg = img; imgW.value = img.naturalWidth; imgH.value = img.naturalHeight
     zoom.value = 1; panX.value = 0; panY.value = 0
     const ic = imgRef.value; if (!ic) return
@@ -222,6 +238,7 @@ function initCanvas(src: string) {
     maskData = new Uint8Array(img.naturalWidth * img.naturalHeight)
     maskImageData = mCtx!.createImageData(img.naturalWidth, img.naturalHeight)
     hasMask.value = false; undoStack = []; redoStack = []
+    handImageReady.value = true
   }
   img.src = src
 }
@@ -339,6 +356,7 @@ function clearOverlay() {
 }
 function renderDirty(rect?: DirtyRect) {
   if (!mCtx || !maskData || !maskImageData || !srcImg) return
+  handSourceRevision.value++
   const w = srcImg.naturalWidth, h = srcImg.naturalHeight
   const x1 = Math.max(0, Math.floor(rect?.x1 ?? 0)), y1 = Math.max(0, Math.floor(rect?.y1 ?? 0))
   const x2 = Math.min(w, Math.ceil(rect?.x2 ?? w)), y2 = Math.min(h, Math.ceil(rect?.y2 ?? h))
@@ -395,6 +413,132 @@ function getMaskBase64() {
   const tctx = tc.getContext('2d')!; const id = tctx.createImageData(w, h)
   for (let i = 0; i < maskData.length; i++) { id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=maskData[i]; id.data[i*4+3]=255 }
   tctx.putImageData(id, 0, 0); return tc.toDataURL('image/png')
+}
+
+const HAND_SOURCE_MAX_BYTES = 64 * 1024 * 1024
+
+function validatedHandSourceUrl(source: string): URL {
+  const url = new URL(source)
+  const decodedPath = decodeURIComponent(url.pathname).replace(/\\/g, '/')
+  if (!(url.protocol === 'blob:' || (url.protocol === 'file:' && !url.hostname && !decodedPath.startsWith('//')))) {
+    throw Error('외부 이미지 URL은 읽지 않습니다. 원본 PNG/JPEG/WebP를 직접 올려주세요.')
+  }
+  return url
+}
+
+function handRasterMime(head: Uint8Array): string {
+  const ascii = (start: number, end: number) => String.fromCharCode(...head.slice(start, end))
+  return head[0] === 137 && ascii(1, 4) === 'PNG' && head[4] === 13 && head[5] === 10 && head[6] === 26 && head[7] === 10 ? 'image/png'
+    : head[0] === 255 && head[1] === 216 && head[2] === 255 ? 'image/jpeg'
+      : ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP' ? 'image/webp' : ''
+}
+
+function readHandNativeSource(source: string): Promise<{ image: string; sourceKind: 'original' | 'canvas' }> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const fail = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(Error('현재 로컬 원본 파일을 읽지 못했습니다. 64 MB 이하 PNG/JPEG/WebP 파일을 직접 올려주세요. 캔버스로 자동 대체하지 않습니다.'))
+    }
+    const timeout = setTimeout(fail, 30000)
+    void getBackend().then((backend: any) => {
+      if (settled) return
+      if (typeof backend.loadImageBase64 !== 'function') { fail(); return }
+      backend.loadImageBase64(source, (data: unknown) => {
+        if (settled) return
+        if (typeof data !== 'string' || data.length > Math.ceil(HAND_SOURCE_MAX_BYTES * 4 / 3) + 128) { fail(); return }
+        const match = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data)
+        if (!match || match[1].length % 4 || match[1].length / 4 * 3 - (match[1].endsWith('==') ? 2 : match[1].endsWith('=') ? 1 : 0) > HAND_SOURCE_MAX_BYTES) { fail(); return }
+        let head: Uint8Array
+        try { head = Uint8Array.from(atob(match[1].slice(0, 64)), character => character.charCodeAt(0)) } catch { fail(); return }
+        const mime = handRasterMime(head)
+        const textHead = String.fromCharCode(...head)
+        // The legacy reader labels unknown extensions PNG. Check bytes before
+        // accepting that label; supported original bytes never pass a canvas.
+        const convertible = textHead.startsWith('BM') || /^GIF8[79]a/.test(textHead) || (/\.svg$/i.test(new URL(source).pathname) && /^\s*(?:<svg[\s>]|<\?xml[\s>])/i.test(textHead))
+        if (!mime && !convertible) { fail(); return }
+        settled = true
+        clearTimeout(timeout)
+        resolve(mime ? { image: `data:${mime};base64,${match[1]}`, sourceKind: 'original' } : { image: '', sourceKind: 'canvas' })
+      })
+    }).catch(fail)
+  })
+}
+
+async function readHandSourceBlob(source: string): Promise<Blob> {
+  validatedHandSourceUrl(source)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30000)
+  try {
+    const response = await fetch(source, { redirect: 'error', credentials: 'omit', signal: controller.signal })
+    if (!response.ok || !response.body || Number(response.headers.get('content-length')) > HAND_SOURCE_MAX_BYTES) throw Error('Source unavailable or too large')
+    const reader = response.body.getReader()
+    const chunks: ArrayBuffer[] = []
+    let length = 0
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        length += value.byteLength
+        if (length > HAND_SOURCE_MAX_BYTES) { await reader.cancel(); throw Error('Source too large') }
+        const copy = new Uint8Array(value.byteLength)
+        copy.set(value)
+        chunks.push(copy.buffer)
+      }
+    } finally { reader.releaseLock() }
+    if (length === 0) throw Error('Empty source')
+    return new Blob(chunks, { type: response.headers.get('content-type')?.split(';')[0] || '' })
+  } catch {
+    controller.abort()
+    throw Error('현재 로컬 원본 파일을 읽지 못했습니다. 64 MB 이하 PNG/JPEG/WebP 파일을 직접 올려주세요. 캔버스로 자동 대체하지 않습니다.')
+  } finally { clearTimeout(timeout) }
+}
+
+async function handBlobData(blob: Blob): Promise<{ image: string; sourceKind: 'original' | 'canvas' }> {
+  const head = new Uint8Array(await blob.slice(0, 16).arrayBuffer())
+  const ascii = (start: number, end: number) => String.fromCharCode(...head.slice(start, end))
+  const mime = handRasterMime(head)
+  if (!mime) {
+    // Only images that the canvas has already decoded may take the disclosed
+    // conversion path. Never silently convert a failed original file read.
+    if (/^image\/(?:svg\+xml|bmp|x-ms-bmp|gif|tiff|avif)$/i.test(blob.type) || ascii(0, 2) === 'BM' || /^GIF8[79]a$/.test(ascii(0, 6))) return { image: '', sourceKind: 'canvas' }
+    throw Error('원본 형식을 확인할 수 없습니다. PNG/JPEG/WebP 파일을 직접 올려주세요.')
+  }
+  const image = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(Error('원본 파일을 읽지 못했습니다. PNG/JPEG/WebP 파일을 직접 올려주세요.'))
+    reader.readAsDataURL(new Blob([blob], { type: mime }))
+  })
+  return { image, sourceKind: 'original' }
+}
+
+async function getHandReconstructionInput() {
+  if (!handImageReady.value || !imgRef.value || !hasMask.value || drawing) throw Error('원본을 올린 뒤 손 마스크 그리기를 끝내주세요.')
+  const source = imageSrc.value
+  const revision = handSourceRevision.value
+  const mask = getMaskBase64()
+  let input: { image: string; sourceKind: 'original' | 'canvas' }
+  if (/^data:image\/(?:png|jpeg|webp);base64,/i.test(source)) {
+    if (source.length > Math.ceil(HAND_SOURCE_MAX_BYTES * 4 / 3) + 128) throw Error('64 MB 이하의 원본 PNG/JPEG/WebP를 사용하세요.')
+    input = { image: source, sourceKind: 'original' }
+  } else if (source.startsWith('file:///') || source.startsWith('blob:')) {
+    const url = validatedHandSourceUrl(source)
+    if (url.protocol === 'file:' && typeof window !== 'undefined' && (window as Window & { qt?: { webChannelTransport?: unknown } }).qt?.webChannelTransport) input = await readHandNativeSource(source)
+    else input = await handBlobData(await readHandSourceBlob(source))
+  } else if (/^data:image\/(?:svg\+xml|bmp|x-ms-bmp|gif|tiff|avif)[;,]/i.test(source)) {
+    input = { image: '', sourceKind: 'canvas' }
+  } else throw Error('외부 이미지 URL은 읽지 않습니다. 원본 PNG/JPEG/WebP를 직접 올려주세요.')
+  if (source !== imageSrc.value || revision !== handSourceRevision.value || !handImageReady.value || !hasMask.value || drawing) throw Error('원본 또는 마스크가 바뀌었습니다. 현재 이미지에서 다시 실행하세요.')
+  try {
+    // Supported raster bytes retain metadata and transparent RGB. Only unsupported
+    // but already-displayed formats use an explicitly disclosed canvas snapshot.
+    return { image: input.sourceKind === 'canvas' ? imgRef.value.toDataURL('image/png') : input.image, mask, sourceKind: input.sourceKind }
+  } catch {
+    throw Error('현재 이미지 픽셀을 읽을 수 없습니다. 원본 파일을 직접 올린 뒤 다시 시도하세요.')
+  }
 }
 
 function generate() {

@@ -120,6 +120,20 @@ function savePrefs(patch) {
 }
 methods.onAction = (name, raw) => {
   const payload = JSON.parse(raw || '{}')
+  if (name.startsWith('hand_reconstruction_')) {
+    record(`${name}: 화면 검증용 모의 응답 (생성·저장 없음)`)
+    if (name === 'hand_reconstruction_generate') {
+      // Copy the input only. This fixture verifies comparison/export UI, NOT
+      // Python image preparation, GPU sampling or anatomical repair quality.
+      emit('handReconstructionEvent', json({ action: name, requestId: payload.requestId, phase: 'complete', ok: true,
+        source: payload.image, prepared: payload.image,
+        candidates: Array.from({ length: payload.settings.candidates }, (_, index) => ({ index, seed: index + 100, image: payload.image })),
+        warning: '오프라인 UI 모의 후보입니다. 원본 복제이며 실제 손 재구성·입력 제거·파일 저장은 하지 않습니다.' }))
+    } else if (name === 'hand_reconstruction_export') {
+      emit('handReconstructionEvent', json({ action: name, requestId: payload.requestId, phase: 'complete', ok: false, error: offlineMessage }))
+    }
+    return
+  }
   if (name === 'save_ui_prefs') { savePrefs(payload); return }
   if (name === 'show_toast') { emit('showNotification', payload.type || 'info', payload.msg || offlineMessage); return }
   if (name === 'vue_tab_switch') return

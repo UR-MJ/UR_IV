@@ -230,6 +230,7 @@ class TestWebModeSecurity(unittest.TestCase):
         }
         desktop_only = {
             "copyTextToClipboard",
+            "loadImageBase64",  # Local original bytes for the opt-in hand repair panel.
             "requestInitialConfig",
             "getBackendRuntimeState",
             "runBackendRuntimeOperation",
@@ -266,7 +267,7 @@ class TestWebModeSecurity(unittest.TestCase):
         )
         signals = set(re.findall(r"^[ \t]*(\w+)\s*=\s*pyqtSignal\(", source, re.MULTILINE))
         listened = set(re.findall(r"onBackendEvent\(\s*[\"'](\w+)[\"']", frontend))
-        native_only_events = {"modelDownloadEvent", "comfyCompatibilityResult", "comfyWorkflowEvent", "relightEvent"}
+        native_only_events = {"modelDownloadEvent", "comfyCompatibilityResult", "comfyWorkflowEvent", "relightEvent", "handReconstructionEvent"}
         self.assertTrue(native_only_events <= signals,
                         "네이티브 전용 예외도 실제 VueBridge 시그널이어야 합니다.")
         self.assertTrue(native_only_events.isdisjoint(web_main_ui._WEB_SIGNALS),

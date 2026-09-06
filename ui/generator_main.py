@@ -40,6 +40,7 @@ from ui.xyz_actions import XYZActionsMixin
 from ui.comfy_workflow_actions import ComfyWorkflowActionsMixin
 from ui.comfy_compatibility_actions import ComfyCompatibilityActionsMixin
 from ui.relight_actions import RelightActionsMixin
+from ui.hand_reconstruction_actions import HandReconstructionActionsMixin
 from widgets.queue_panel import QueuePanel
 from widgets.queue_manager import QueueManager
 from utils.prompt_cleaner import get_prompt_cleaner
@@ -69,6 +70,7 @@ class GeneratorMainUI(
     SearchMixin,
     CreatorActionsMixin, ChatActionsMixin, ModelDownloadActionsMixin, XYZActionsMixin,
     ComfyWorkflowActionsMixin, ComfyCompatibilityActionsMixin, RelightActionsMixin,
+    HandReconstructionActionsMixin,
 ):
     _IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.webp', '.bmp')
     animaForgeImportReady = pyqtSignal(object)
@@ -206,6 +208,8 @@ class GeneratorMainUI(
         if ComfyCompatibilityActionsMixin._handle_comfy_compatibility_action(self, action, payload):
             return
         if RelightActionsMixin._handle_relight_action(self, action, payload):
+            return
+        if HandReconstructionActionsMixin._handle_hand_reconstruction_action(self, action, payload):
             return
         if XYZActionsMixin._handle_xyz_action(self, action, payload):
             return
@@ -3022,7 +3026,7 @@ class GeneratorMainUI(
         self._save_shutdown_state()
         for stop in (self._shutdown_model_downloads, self._chat_stop,
                      self._shutdown_comfy_compatibility, self._shutdown_comfy_workflow_controls,
-                     self._shutdown_relight):
+                     self._shutdown_relight, self._shutdown_hand_reconstruction):
             try:
                 stop()
             except Exception as exc:

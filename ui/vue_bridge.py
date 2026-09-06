@@ -138,6 +138,7 @@ class VueBridge(QObject):
     comfyWorkflowEvent = pyqtSignal(str)
     comfyCompatibilityResult = pyqtSignal(str)
     relightEvent = pyqtSignal(str)
+    handReconstructionEvent = pyqtSignal(str)
     eventImportResults = pyqtSignal(str)      # JSON event list
 
     # Creator Studio — 모든 payload는 JSON 문자열 하나로 유지해 Qt/WebSocket
