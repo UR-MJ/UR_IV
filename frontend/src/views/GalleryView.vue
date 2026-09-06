@@ -85,12 +85,12 @@
             <span class="large-filename">{{ largeView.filename }}</span>
             <div class="large-actions">
               <button class="lv-btn" @click="editFilename"><Icon name="pencil" /> 이름 변경</button>
-              <button v-if="isImage(largeView.path)" class="lv-btn save" @click="saveExif"><Icon name="save" /> EXIF 저장</button>
+              <button v-if="isImage(largeView.path) && largeView.source !== 'comfyui'" class="lv-btn save" @click="saveExif"><Icon name="save" /> EXIF 저장</button>
               <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_i2i', { path: largeView.path })">I2I</button>
               <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_inpaint', { path: largeView.path })">인페인트</button>
               <button v-if="isImage(largeView.path)" class="lv-btn" @click="action('send_to_editor', { path: largeView.path })">에디터</button>
               <button class="lv-btn" @click="quickAction('add_favorite', largeView.path)"><Icon name="star" /> 즐겨찾기</button>
-              <button v-if="isImage(largeView.path)" class="lv-btn accent" @click="sendExifToT2I">프롬프트 사용</button>
+              <button v-if="isImage(largeView.path)" class="lv-btn accent" :disabled="largeView.can_apply === false" @click="sendExifToT2I">프롬프트 사용</button>
               <button class="lv-close" @click="closeLargeView"><Icon name="close" /></button>
             </div>
           </div>
@@ -106,13 +106,13 @@
               <div class="meta-row path-row"><span>경로</span><p>{{ largeView.path }}</p></div>
               <div v-if="largeView.prompt" class="meta-block">
                 <label>프롬프트</label>
-                <div class="code-box editable" contenteditable @blur="onExifEdit($event, 'prompt')">{{ largeView.prompt }}</div>
+                <div class="code-box" :class="{ editable: largeView.source !== 'comfyui' }" :contenteditable="largeView.source !== 'comfyui'" @blur="onExifEdit($event, 'prompt')">{{ largeView.prompt }}</div>
               </div>
               <div v-if="largeView.negative" class="meta-block mt-8">
                 <label class="danger">네거티브</label>
                 <div class="code-box">{{ largeView.negative }}</div>
               </div>
-              <div v-if="largeView.raw && !largeView.prompt" class="meta-block">
+              <div v-if="largeView.raw && !largeView.prompt && !largeView.raw_prompt && !largeView.raw_workflow" class="meta-block">
                 <label>원본</label>
                 <div class="code-box">{{ largeView.raw }}</div>
               </div>
@@ -120,6 +120,7 @@
                 <label>파라미터</label>
                 <div class="code-box params">{{ largeViewParams }}</div>
               </div>
+              <ComfyMetadataDetails :data="largeView" />
             </div>
           </div>
         </div>
@@ -169,9 +170,10 @@
               <label>파라미터</label>
               <div class="code-box params">{{ sidebarParams }}</div>
             </div>
+            <ComfyMetadataDetails :data="exifData" />
           </div>
           <div v-if="isImage(exifData.path)" class="exif-footer">
-            <button class="main-apply-btn" @click="sendExifToT2I">T2I에서 사용</button>
+            <button class="main-apply-btn" :disabled="exifData.can_apply === false" @click="sendExifToT2I">T2I에서 사용</button>
             <div class="grid-2 mt-8">
               <button class="mini-action" @click="action('send_to_i2i', { path: exifData.path })">I2I</button>
               <button class="mini-action" @click="action('send_to_inpaint', { path: exifData.path })">인페인트</button>
@@ -205,6 +207,7 @@ import { getBackend, onBackendEvent } from '../bridge.js'
 import { requestAction } from '../stores/widgetStore.js'
 import { mediaUrl, thumbnailUrl } from '../utils/media.js'
 import type { ActionName } from '../types/bridge'
+import ComfyMetadataDetails from '../components/ComfyMetadataDetails.vue'
 
 import { computed } from 'vue'
 
@@ -218,6 +221,7 @@ interface ExifParams {
   [k: string]: any
 }
 interface ExifData {
+  source?: string
   path: string
   filename: string
   mediaType?: string
@@ -426,10 +430,10 @@ async function editFilename() {
   }
 }
 function onExifEdit(e: FocusEvent, field: string) {
-  if (largeView.value) largeView.value[field] = (e.target as HTMLElement).textContent
+  if (largeView.value && largeView.value.source !== 'comfyui') largeView.value[field] = (e.target as HTMLElement).textContent
 }
 async function saveExif() {
-  if (!largeView.value) return
+  if (!largeView.value || largeView.value.source === 'comfyui') return
   const backend: any = await getBackend()
   if (!backend.saveImageExif) return
   // prompt + negative + raw 에서 A1111 형식으로 재구성
@@ -559,7 +563,10 @@ function ctx(actionName: ActionName | 'gallery_load_exif') {
 const quickAction = (name: ActionName, path: string) => requestAction(name, { path })
 const sendToCompare = (slot: string) => { requestAction('send_to_compare', { path: ctxMenu.value.path, slot }); ctxMenu.value.show = false }
 const ctxAdetailer = () => { requestAction('run_adetailer_single', { path: ctxMenu.value.path, settings: { ad_model: 'face_yolov8n.pt', ad_confidence: 0.3, ad_denoise: 0.4 } }); ctxMenu.value.show = false }
-const sendExifToT2I = () => { if (exifData.value) requestAction('gallery_send_exif_to_t2i', { exif: exifData.value.raw || '', path: exifData.value.path }) }
+const sendExifToT2I = () => {
+  const data = largeView.value || exifData.value
+  if (data && data.can_apply !== false) requestAction('gallery_send_exif_to_t2i', { exif: data.raw || '', path: data.path, metadata: data })
+}
 const action = (name: ActionName, payload: Record<string, any> = {}) => requestAction(name, payload)
 const hideMenu = () => ctxMenu.value.show = false
 

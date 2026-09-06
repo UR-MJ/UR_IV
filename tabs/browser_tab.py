@@ -5,9 +5,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
+from ui.native_dialogs import ThemedWebDialogs
 
 
-class _QuietPage(QWebEnginePage):
+class _QuietPage(ThemedWebDialogs, QWebEnginePage):
     """외부 사이트의 JS 콘솔 잡음(CSP, Permissions-Policy, 코덱 등) 억제"""
     def javaScriptConsoleMessage(self, level, message, line, source):
         pass
@@ -98,6 +99,15 @@ class BrowserTab(QWidget):
         self.web_view.urlChanged.connect(
             lambda u: self.url_input.setText(u.toString())
         )
+        self.apply_theme()
+
+    def apply_theme(self):
+        """Refresh native navigation colors without navigating the web page."""
+        from PyQt6.QtGui import QColor
+        from utils.theme_manager import get_theme_manager
+        theme = get_theme_manager()
+        self.setStyleSheet(theme.get_stylesheet())
+        self.web_view.page().setBackgroundColor(QColor(theme.get_colors()['bg_primary']))
 
     def ensure_loaded(self):
         """탭을 열 때 부른다. 처음 한 번만 홈 URL 을 싣는다."""

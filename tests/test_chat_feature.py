@@ -98,6 +98,14 @@ class ChatStreamTests(unittest.TestCase):
             result = OllamaClient(model="m").chat_stream([{"role": "user", "content": "x"}])
         self.assertEqual(result["content"], "ok")
 
+    def test_eof_without_done_is_not_a_completed_answer(self):
+        seen = []
+        fake = _FakeResponse([json.dumps({"message": {"content": "partial"}, "done": False})])
+        with patch("core.ollama_client.requests.post", return_value=fake):
+            with self.assertRaisesRegex(RuntimeError, "완료.*끊어"):
+                OllamaClient(model="m").chat_stream([], on_token=seen.append)
+        self.assertEqual(seen, ["partial"], "이미 받은 응답은 오류 표시와 함께 유지한다")
+
 
 class ThinkingModelTests(unittest.TestCase):
     """Gemma 4·Qwen3.x 는 생각부터 한다 — 생각은 따로 흐르고, 플래그는 요청에 실리고, 모르는 모델엔 빠진다."""
@@ -142,6 +150,42 @@ class ThinkingModelTests(unittest.TestCase):
         with patch("core.ollama_client.requests.post", return_value=refused):
             with self.assertRaises(RuntimeError):
                 OllamaClient(model="m").chat_stream([{"role": "user", "content": "?"}], think=False)
+
+
+class ChatStreamCompletionTests(unittest.TestCase):
+    def test_worker_keeps_partial_tokens_and_reports_unexpected_eof_as_error(self):
+        from workers.chat_worker import ChatWorker
+        worker = ChatWorker('interrupted-stream', 'http://test-only', 'm', [])
+        tokens, completed = [], []
+        worker.token.connect(lambda raw: tokens.append(json.loads(raw)))
+        worker.done.connect(lambda raw: completed.append(json.loads(raw)))
+        fake = _FakeResponse([json.dumps({'message': {'content': 'partial'}, 'done': False})])
+        with patch('core.ollama_client.requests.post', return_value=fake):
+            worker.run()
+        self.assertEqual(''.join(packet.get('text', '') for packet in tokens), 'partial')
+        self.assertEqual(len(completed), 1)
+        self.assertFalse(completed[0]['ok'])
+        self.assertFalse(completed[0]['stopped'])
+        self.assertIn('완료 신호', completed[0]['error'])
+
+    def test_eof_after_user_stop_is_cancelled_not_an_incomplete_stream_error(self):
+        from workers.chat_worker import ChatWorker
+        worker = ChatWorker('cancelled-stream', 'http://test-only', 'm', [])
+        completed = []
+        worker.done.connect(lambda raw: completed.append(json.loads(raw)))
+
+        class CancelledResponse(_FakeResponse):
+            def iter_lines(self, decode_unicode=True):
+                yield json.dumps({'message': {'content': 'partial'}, 'done': False})
+                worker.stop()
+
+        with patch('core.ollama_client.requests.post', return_value=CancelledResponse([])):
+            worker.run()
+        self.assertEqual(len(completed), 1)
+        self.assertTrue(completed[0]['ok'])
+        self.assertTrue(completed[0]['stopped'])
+        self.assertEqual(completed[0]['content'], 'partial')
+        self.assertNotIn('error', completed[0])
 
 
 class OptionCleaningTests(unittest.TestCase):

@@ -157,6 +157,7 @@ class ComfyWorkflowCompiler:
         payload: Mapping[str, Any],
         *,
         workflow: Optional[Mapping[str, Any]] = None,
+        workflow_controls: Optional[Mapping[str, Any]] = None,
         uploaded_image: str = "",
         uploaded_mask: str = "",
     ) -> dict:
@@ -171,6 +172,21 @@ class ComfyWorkflowCompiler:
             raise WorkflowCompileError("생성 payload는 객체여야 합니다.")
 
         local_payload = copy.deepcopy(dict(payload))
+        from core.spectrum_settings import validate_spectrum_payload
+        try:
+            validate_spectrum_payload(local_payload, self.object_info or {})
+        except ValueError as exc:
+            raise WorkflowCompileError(str(exc)) from exc
+        detail_passes = local_payload.get("_comfy_detail_passes", [])
+        if not isinstance(detail_passes, list) or len(detail_passes) > 3 or any(
+            not isinstance(target, str) or not target.strip() or len(target) > 128
+            for target in detail_passes
+        ):
+            raise WorkflowCompileError("추가 SAM3 보정 패스는 최대 3개의 비어 있지 않은 대상 문자열이어야 합니다.")
+        if detail_passes:
+            sam_state = self._sam3_state(local_payload)
+            if sam_state is None or str(sam_state.get("sam3_mode") or "Inpaint") != "Inpaint":
+                raise WorkflowCompileError("추가 보정 패스를 사용하려면 SAM3 Inpaint를 켜세요.")
         if normalized != "txt2img":
             local_payload.setdefault("denoising_strength", 0.75)
         loras, prompts = parse_lora_tags(
@@ -192,6 +208,14 @@ class ComfyWorkflowCompiler:
                 normalized, model_name, local_payload, loras, workflow, anima_plan,
                 uploaded_image=uploaded_image, uploaded_mask=uploaded_mask,
             )
+        if workflow_controls is not None:
+            from core.comfy_workflow_controls import apply_controls, WorkflowControlError
+            if workflow is None:
+                raise WorkflowCompileError("상세 설정을 적용할 사용자 워크플로가 없습니다.")
+            try:
+                graph = apply_controls(graph, workflow, self.object_info, workflow_controls)
+            except WorkflowControlError as exc:
+                raise WorkflowCompileError(str(exc)) from exc
         self.validate(graph)
         return graph
 
@@ -1311,6 +1335,19 @@ class ComfyWorkflowCompiler:
                     "enabled": True,
                 }, "SAM3 detailer")
                 image = [detail, 0]
+        # A sequential detail preset re-detects on the previous pass's result,
+        # not on the original image. Reuse the exact supported SAM3 state while
+        # avoiding a second ADetailer/Hires or recursive pass schedule.
+        for target in payload.get("_comfy_detail_passes", []):
+            next_payload = copy.deepcopy(dict(payload))
+            next_payload.pop("_comfy_detail_passes", None)
+            next_state = dict(self._sam3_state(payload) or {})
+            next_state["sam3_prompt"] = target
+            next_payload["alwayson_scripts"] = {"SAM3 Mask": {"args": [next_state]}}
+            image = self._add_image_extensions(
+                graph, image, model, clip, vae, positive, negative, next_payload,
+                sam3_detailer_class=sam3_detailer_class,
+            )
         return image
 
     # ---- custom workflow ----------------------------------------------

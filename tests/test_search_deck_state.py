@@ -10,6 +10,7 @@ import pandas as pd
 
 from ui.generator_actions import ActionsMixin
 from ui.generator_main import GeneratorMainUI
+from ui.model_download_actions import ModelDownloadActionsMixin
 
 
 _TEST_IDENTITY = {"label": "2026_07", "fingerprint": "f" * 64}
@@ -71,7 +72,7 @@ class SearchDeckStateTests(unittest.TestCase):
             self.assertFalse(subject._restore_deck_state())
 
     def test_empty_vue_filter_clears_runtime_deck_and_persists_active_cache(self) -> None:
-        class Subject:
+        class Subject(ModelDownloadActionsMixin):
             filtered_results = [{"general": "old"}]
             shuffled_prompt_deck = [{"general": "old"}]
             _rating_filter = {"g", "s", "q", "e"}
@@ -114,7 +115,7 @@ class SearchDeckStateTests(unittest.TestCase):
         self.assertEqual(subject.deck_saves, 1)
 
     def test_empty_vue_filter_stops_running_automation(self) -> None:
-        class Subject:
+        class Subject(ModelDownloadActionsMixin):
             filtered_results = [{"general": "old"}]
             shuffled_prompt_deck = [{"general": "old"}]
             _rating_filter = {"g", "s", "q", "e"}
@@ -167,7 +168,7 @@ class SearchDeckStateTests(unittest.TestCase):
             "snapshot_id": "a" * 32,
         }
 
-        class Subject:
+        class Subject(ModelDownloadActionsMixin):
             filtered_results = [{"general": "current_b"}]
             shuffled_prompt_deck = [{"general": "current_b"}]
             _rating_filter = {"g", "s", "q", "e"}
@@ -231,7 +232,7 @@ class SearchDeckStateTests(unittest.TestCase):
             def dataset_info():
                 return identity
 
-        class Subject:
+        class Subject(ModelDownloadActionsMixin):
             vue_bridge = Bridge()
             _search_snapshot_id = "a" * 32
 

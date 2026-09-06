@@ -1,14 +1,17 @@
 # workers/generation_worker.py
 import base64
+import copy
 import json
 import logging
+import threading
 import time
+from contextlib import contextmanager
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from backends import get_backend
 from core.error_handler import sanitize_for_ui
-from core.resource_coordinator import get_generation_coordinator
+from core.resource_coordinator import ResourceBusyError, get_generation_coordinator
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +54,11 @@ class _CancellableMixin:
 
         def _do_interrupt():
             try:
-                get_backend().interrupt()
+                owned_interrupt = getattr(self, '_interrupt_owned_backend', None)
+                if owned_interrupt:
+                    owned_interrupt()
+                else:
+                    get_backend().interrupt()
             except Exception:
                 logger.debug("backend interrupt 실패(무시)", exc_info=True)
         threading.Thread(target=_do_interrupt, daemon=True).start()
@@ -99,17 +106,33 @@ def _run_postprocess_chain(backend, image_data: bytes, chain: list[dict],
     return base64.b64decode(last_good_b64), errors
 
 
+class _GenerationDeferred(RuntimeError):
+    """A queued snapshot could not be submitted; keep it for explicit resume."""
+
+
 class GenerationFlowWorker(QThread, _CancellableMixin):
     """이미지 생성 워커"""
     finished = pyqtSignal(object, dict)
     progress = pyqtSignal(int, int, object)  # step, total_steps, preview_bytes|None
 
-    def __init__(self, model_name: str, payload: dict):
+    def __init__(self, model_name: str, payload: dict, *, backend=None):
         QThread.__init__(self)
         _CancellableMixin.__init__(self)
         self.model_name = model_name
-        self.payload = payload
+        self.payload = copy.deepcopy(payload)
+        self._backend_snapshot = backend
+        self._backend_lock = threading.RLock()
+        self._owned_backend = None
         self._start_time: float | None = None
+        self._result_emitted = False
+
+    def _emit_result(self, result, info):
+        info = dict(info or {})
+        xyz_info = self.payload.get("_xyz_info")
+        if isinstance(xyz_info, dict):
+            info["_xyz_info"] = copy.deepcopy(xyz_info)
+        self._result_emitted = True
+        self.finished.emit(result, info)
 
     # 기존 호출부 호환용 static wrapper
     @staticmethod
@@ -117,11 +140,35 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
         final, _errors = _run_postprocess_chain(backend, image_data, chain)
         return final
 
+    def _interrupt_owned_backend(self):
+        # Hold only this worker's lease lock, never a GUI lock, during HTTP.
+        with self._backend_lock:
+            if self._owned_backend is not None:
+                self._owned_backend.interrupt()
+
+    @contextmanager
+    def _backend_lease(self, backend):
+        with get_generation_coordinator().reserve("txt2img", unload_llm=False, timeout=0):
+            with self._backend_lock:
+                if self._backend_snapshot is not None and get_backend() is not self._backend_snapshot:
+                    raise _GenerationDeferred("XYZ 작업의 백엔드가 변경되었습니다. 원래 백엔드를 선택하고 대기열을 재개하세요.")
+                self._owned_backend = backend
+            try:
+                yield
+            finally:
+                with self._backend_lock:
+                    self._owned_backend = None
+
     def run(self):
         self._start_time = time.monotonic()
+        dispatched = False
         try:
-            backend = get_backend()
+            backend = self._backend_snapshot if self._backend_snapshot is not None else get_backend()
             payload = dict(self.payload)
+            if "_chat_deferred_prompt" in payload:
+                from core.chat_generation import prepare_prompt_payload
+                payload = prepare_prompt_payload(payload)
+            xyz_info = payload.pop("_xyz_info", None)
             postprocess_chain = list(payload.pop("_postprocess_chain", []) or [])
             generation_family = str(payload.pop("_generation_family", "standard") or "standard").lower()
 
@@ -131,12 +178,14 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
                 self.progress.emit(step, total, preview)
 
             if self.is_cancelled:
-                self.finished.emit("생성 취소됨", {'cancelled': True})
+                self._emit_result("생성 취소됨", {'cancelled': True})
                 return
 
-            with get_generation_coordinator().reserve(
-                "txt2img", unload_llm=False, timeout=0
-            ):
+            with self._backend_lease(backend):
+                if self.is_cancelled:
+                    self._emit_result("생성 취소됨", {'cancelled': True})
+                    return
+                dispatched = True
                 if generation_family == "krea2":
                     from core.krea2_generation import run_krea2_generation
 
@@ -154,11 +203,11 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
                 # 취소 후 도착한 결과(interrupt의 부분 이미지 포함)는 성공으로 emit하지 않음
                 # — 디스크 저장/히스토리/성공 통계/자동화 계속으로 이어지던 버그 방지
                 if self.is_cancelled:
-                    self.finished.emit("생성 취소됨", {'cancelled': True})
+                    self._emit_result("생성 취소됨", {'cancelled': True})
                     return
 
                 if not result.success:
-                    self.finished.emit(result.error, {})
+                    self._emit_result(result.error, {})
                     return
 
                 final_image, pp_errors = _run_postprocess_chain(
@@ -166,20 +215,26 @@ class GenerationFlowWorker(QThread, _CancellableMixin):
                     cancelled_cb=lambda: self.is_cancelled,
                 )
             if self.is_cancelled:
-                self.finished.emit("생성 취소됨", {'cancelled': True})
+                self._emit_result("생성 취소됨", {'cancelled': True})
                 return
             info = dict(result.info or {})
+            if xyz_info:
+                info['_xyz_info'] = xyz_info
             if pp_errors:
                 info['postprocess_errors'] = pp_errors
-            self.finished.emit(final_image, info)
+            self._emit_result(final_image, info)
 
         except Exception as e:
             if self.is_cancelled:
                 # interrupt로 인한 요청 중단 예외는 '취소'로 보고
-                self.finished.emit("생성 취소됨", {'cancelled': True})
+                self._emit_result("생성 취소됨", {'cancelled': True})
+                return
+            if (self._backend_snapshot is not None and not dispatched
+                    and isinstance(e, (_GenerationDeferred, ResourceBusyError))):
+                self._emit_result(sanitize_for_ui(e), {'_queue_deferred': True})
                 return
             logger.exception("GenerationFlowWorker failed")
-            self.finished.emit(f"이미지 생성 중 오류: {sanitize_for_ui(e)}", {})
+            self._emit_result(f"이미지 생성 중 오류: {sanitize_for_ui(e)}", {})
 
 
 class Img2ImgFlowWorker(QThread, _CancellableMixin):

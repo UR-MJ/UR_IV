@@ -151,6 +151,7 @@ _WEB_METHODS = frozenset({
     "requestGalleryImages", "getFavorites", "generateThumbnails",
     "searchDanbooru", "loadLastSearchResults", "loadFullResults",
     "getActiveSearchDataset", "getUiPrefs",
+    "getAiAssistInstructions", "saveAiAssistInstructions",
     # Backend runtime, generation API, model-path 설정은 redaction과 native
     # capability 검사를 한곳에서 강제하는 ``studio`` 객체로만 공개한다.
     "getUpscalers", "requestUpscalers", "saveImageExif", "renameFile",
@@ -184,7 +185,8 @@ _WEB_SIGNALS = frozenset({
     "yoloModelUpdated", "condRulesLoaded", "batchFilesSelected", "ollamaResult",
     "genNlResult", "globalWeightsLoaded", "uiPrefsLoaded", "compareImageLoaded",
     "galleryImagesReady", "thumbnailReady", "upscalersReady", "ollamaModelsReady",
-    "chatToken", "chatDone", "chatThreads",
+    "chatToken", "chatDone", "chatThreads", "chatGenerationEvent", "chatModelInfo",
+    "xyzCapabilitiesReceived", "xyzPlotEvent",
     "adetailerModelsReady", "queueUpdated", "queueItemAdded", "queueCompleted",
     "showNotification", "adetailerResult", "adetailerProgress", "sam3Result",
     "sam3Progress", "eventSearchProgress", "eventSearchResults", "eventImportResults",
@@ -195,7 +197,7 @@ _WEB_SIGNALS = frozenset({
     "automationStatus", "automationSettingsLoaded", "instantWildcardsList",
     "promptOrderLoaded", "workflowProfilesList", "widgetValueChanged",
     "widgetPropertyChanged", "batchUpdate", "tabChanged", "vramUpdated",
-    "creatorStateChanged", "creatorProgress", "creatorResult",
+    "creatorStateChanged", "creatorProgress", "creatorResult", "creatorCacheEvent",
     "creatorMediaSelected", "comicStoryboardReady", "comicDocumentChanged",
     # SAM3 Refine (sam-extra 워크플로 2) + 임베드 LoRA Manager (워크플로 4)
     "refineResult", "loraManagerUrlReady",

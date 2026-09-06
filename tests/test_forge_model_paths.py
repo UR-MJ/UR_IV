@@ -66,9 +66,19 @@ class TestForgeModelPaths(unittest.TestCase):
                     "loras": "Lora",
                     "vae": "VAE",
                     "text_encoders": "text_encoder",
+                    "upscale_models": "upscale_models",
                 },
             )
             self.assertTrue(all(path.is_dir() for path in paths.values()))
+            upscale = paths["upscale_models"]
+            self.assertEqual(upscale, root / "upscale_models")
+            self.assertEqual(list(upscale.iterdir()), [])
+            # Creating the fallback again must never replace existing weights.
+            weight = upscale / "existing-upscaler.pth"
+            weight.write_bytes(b"existing model")
+            recreated = forge_modules.ensure_app_model_layout(root)
+            self.assertEqual(recreated, paths)
+            self.assertEqual(weight.read_bytes(), b"existing model")
 
     def test_detected_forge_keeps_priority_over_app_fallback(self):
         with tempfile.TemporaryDirectory() as temp:

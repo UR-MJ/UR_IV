@@ -11,9 +11,10 @@ from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile, QWebEng
 
 from config import CURRENT_DIR
 from utils.theme_manager import get_color
+from ui.native_dialogs import ThemedWebDialogs
 
 
-class _QuietPage(QWebEnginePage):
+class _QuietPage(ThemedWebDialogs, QWebEnginePage):
     """JS 콘솔 경고 억제 페이지"""
     def javaScriptConsoleMessage(self, level, message, line, source):
         pass
@@ -96,8 +97,24 @@ class BackendUITab(QWidget):
         self._web_view.urlChanged.connect(self._on_url_changed)
 
         # 초기 빈 페이지
-        self._web_view.setHtml(self._placeholder_html(), QUrl("about:blank"))
         layout.addWidget(self._web_view)
+        self.apply_theme()
+
+    def apply_theme(self):
+        """Refresh existing chrome, including formerly frozen inline colors."""
+        from PyQt6.QtGui import QColor
+        from utils.theme_manager import get_theme_manager
+        theme = get_theme_manager()
+        colors = theme.get_colors()
+        self.setStyleSheet(theme.get_stylesheet())
+        self._status_label.setStyleSheet(
+            f"color: {colors['text_secondary']}; font-weight: bold; font-size: 13px;")
+        self._url_display.setStyleSheet(
+            f"background: {colors['bg_input']}; color: {colors['text_secondary']}; "
+            f"border: 1px solid {colors['border']}; border-radius: 4px; padding: 3px 8px; font-size: 11px;")
+        self._web_view.page().setBackgroundColor(QColor(colors['bg_primary']))
+        if not self._current_url:
+            self._web_view.setHtml(self._placeholder_html(), QUrl('about:blank'))
 
     def _on_url_changed(self, url: QUrl):
         """URL 변경 시 표시 업데이트"""
@@ -282,7 +299,7 @@ class BackendUITab(QWidget):
           <div style="text-align:center;">
             <div style="font-size:48px; margin-bottom:16px;">🖥️</div>
             <div style="font-size:16px;">백엔드에 연결되면 UI가 여기에 표시됩니다</div>
-            <div style="font-size:13px; color:{get_color('border')}; margin-top:8px;">
+            <div style="font-size:13px; color:{get_color('text_secondary')}; margin-top:8px;">
               WebUI &nbsp;|&nbsp; ComfyUI
             </div>
           </div>

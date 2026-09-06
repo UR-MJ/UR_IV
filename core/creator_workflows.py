@@ -115,6 +115,8 @@ _CUSTOM_NODE_TYPES = frozenset(
         "MiniMaxH3BlockCacheT8",
         "Krea2EditGroundedEncode",
         "Krea2EditModelPatch",
+        "ForgeNeoH3ConditioningCachePrepare",
+        "ForgeNeoH3ConditioningCacheLoad",
     }
 )
 
@@ -195,10 +197,18 @@ def build(mode: str, params: Mapping[str, Any] | None = None) -> CreatorWorkflow
     else:
         graph, output_node_ids, metadata = _build_krea2_hires(values, models)
 
+    stages = []
+    if canonical_mode.startswith("h3_") and _boolean(values.get("conditioning_cache", False), "conditioning_cache"):
+        from core.h3_conditioning_cache import DEFAULT_MAX_BYTES, DEFAULT_MAX_ENTRIES, split_workflow
+        stages = split_workflow(graph, {"mode": canonical_mode, **metadata},
+                                max_bytes=values.get("conditioning_cache_max_bytes", DEFAULT_MAX_BYTES),
+                                max_entries=values.get("conditioning_cache_max_entries", DEFAULT_MAX_ENTRIES))
+        graph = stages[-1]["workflow"]
     required = sorted(
         {
             str(node.get("class_type", ""))
-            for node in graph.values()
+            for stage_graph in ([stage["workflow"] for stage in stages] or [graph])
+            for node in stage_graph.values()
             if isinstance(node, Mapping) and node.get("class_type")
         }
     )
@@ -219,7 +229,7 @@ def build(mode: str, params: Mapping[str, Any] | None = None) -> CreatorWorkflow
         "models": dict(models),
         **metadata,
     }
-    return CreatorWorkflow({
+    result = CreatorWorkflow({
         "workflow": graph,
         "required_node_types": required,
         "custom_node_types": custom,
@@ -227,6 +237,10 @@ def build(mode: str, params: Mapping[str, Any] | None = None) -> CreatorWorkflow
         "output_node_ids": output_node_ids,
         "metadata": metadata,
     })
+    if stages:
+        result["stages"] = stages
+        result["metadata"]["conditioning_cache"] = True
+    return result
 
 
 def _normalize_params(mode: str, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -250,6 +264,7 @@ def _normalize_params(mode: str, params: Mapping[str, Any]) -> dict[str, Any]:
     alias("reference_megapixels", "referenceMegapixels")
     alias("ref_image_size", "refImageSize")
     alias("block_cache", "blockCache")
+    alias("conditioning_cache", "h3ConditioningCache", "h3ConditioningCacheEnabled")
     alias("low_vram", "lowVram")
     alias("webp_lossless", "webpLossless")
     alias("webp_quality", "webpQuality")

@@ -23,6 +23,9 @@
           </div>
         </div>
 
+        <RelightPanel :image-src="imageSrc" @apply="applyRelight" />
+        <button v-if="relightOriginal" type="button" class="clear-reference" @click="restoreRelightOriginal">조명 적용 전 원본 복원</button>
+
         <div v-if="isKrea2" class="glass-card krea-card">
           <label>아이덴티티 참조 <span class="optional">선택</span></label>
           <div class="source-thumb identity-thumb" @click="triggerReferenceInput">
@@ -146,6 +149,7 @@ import { onBackendEvent } from '../bridge.js'
 import { mediaUrl } from '../utils/media.js'
 import CustomSelect from '../components/CustomSelect.vue'
 import RefinePanel from '../components/RefinePanel.vue'
+import RelightPanel from '../components/RelightPanel.vue'
 import { useViewMode } from '../composables/useViewMode'
 
 /** 하위 탭(img2img / SAM3 정밀화)은 왼쪽 레일의 서랍이 정한다 — `useViewMode` 참조. */
@@ -164,6 +168,18 @@ const checkpointOptions = computed(
 const isDragging = ref(false)
 const imageSrc = ref('')
 const imagePath = ref('')
+const relightOriginal = ref<{ src: string; path: string } | null>(null)
+function applyRelight(result: { image: string; width: number; height: number }) {
+  if (!relightOriginal.value) relightOriginal.value = { src: imageSrc.value, path: imagePath.value }
+  imagePath.value = ''
+  imageSrc.value = result.image
+}
+function restoreRelightOriginal() {
+  const original = relightOriginal.value
+  if (!original) return
+  imageSrc.value = original.src; imagePath.value = original.path
+  relightOriginal.value = null
+}
 const fileInput = ref<HTMLInputElement | null>(null)
 const referenceSrc = ref('')
 const referencePath = ref('')
@@ -223,6 +239,7 @@ function handleDrop(e: DragEvent) {
   if (path && path.includes('/')) loadFromPath(path)
 }
 function loadFile(file: File) {
+  relightOriginal.value = null
   const reader = new FileReader()
   reader.onload = (ev: ProgressEvent<FileReader>) => { imageSrc.value = ev.target?.result as string }
   reader.readAsDataURL(file)
@@ -231,6 +248,7 @@ function loadFile(file: File) {
 
 // 경로로 직접 이미지 로드 (History/Gallery에서 전송 시)
 async function loadFromPath(path: string) {
+  relightOriginal.value = null
   const normalized = path.replace(/\\/g, '/')
   imagePath.value = normalized
   imageSrc.value = mediaUrl(normalized)

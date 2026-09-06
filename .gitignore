@@ -110,6 +110,10 @@ config/prompt_settings.json
 config/backend_runtime.json
 config/forge_model_paths.json
 config/app_update.json
+config/model_downloads/
+config/comfy_workflow_controls.json
+config/comfy_quality_preset.json
+config/comfy_compatibility_baselines.json
 config/automation/
 config/state/
 

@@ -14,21 +14,25 @@
         <div class="info-header">
           <h3>PNG Info</h3>
           <button class="btn" @click="openFile"><Icon name="folder-open" /> 열기</button>
-          <button class="btn" @click="copyAll" v-if="exif.raw"><Icon name="clipboard" /> 복사</button>
+          <button class="btn" @click="copyAll" v-if="exif.raw"><Icon name="clipboard" /> 전체 복사</button>
           <button class="btn" @click="sendToCompare" v-if="imagePath"><Icon name="search" /> 비교로</button>
         </div>
         <div class="info-body" v-if="exif.raw">
+          <div class="prompt-copy-actions">
+            <button type="button" class="btn" :disabled="!exif.prompt" @click="copySection(exif.prompt || '', 'Prompt')">Prompt만 복사</button>
+            <button type="button" class="btn" :disabled="!exif.negative" @click="copySection(exif.negative || '', 'Negative')">Negative만 복사</button>
+          </div>
           <div v-if="exif.prompt" class="section">
             <div class="section-head">
               <label>Prompt</label>
-              <button class="copy-btn" @click="copySection(exif.prompt, 'Prompt')" title="Prompt 복사"><Icon name="clipboard" /></button>
+              <button class="copy-btn" @click="copySection(exif.prompt, 'Prompt')" title="Prompt 복사" aria-label="Prompt만 복사"><Icon name="clipboard" /></button>
             </div>
             <pre>{{ exif.prompt }}</pre>
           </div>
           <div v-if="exif.negative" class="section">
             <div class="section-head">
               <label>네거티브</label>
-              <button class="copy-btn" @click="copySection(exif.negative, 'Negative')" title="Negative 복사"><Icon name="clipboard" /></button>
+              <button class="copy-btn" @click="copySection(exif.negative, 'Negative')" title="Negative 복사" aria-label="Negative만 복사"><Icon name="clipboard" /></button>
             </div>
             <pre>{{ exif.negative }}</pre>
           </div>
@@ -53,21 +57,22 @@
             </div>
             <pre>{{ exif.params_line }}</pre>
           </div>
-          <div v-if="!exif.prompt" class="section">
+          <div v-if="!exif.prompt && !exif.raw_prompt && !exif.raw_workflow" class="section">
             <div class="section-head">
               <label>Raw</label>
               <button class="copy-btn" @click="copySection(exif.raw, 'Raw')" title="Raw 복사"><Icon name="clipboard" /></button>
             </div>
             <pre>{{ exif.raw }}</pre>
           </div>
+          <ComfyMetadataDetails :data="exif" />
           <div class="action-section">
             <label class="action-label">보내기</label>
             <div class="send-grid">
-              <button class="send-card primary" @click="sendPrompt" title="현재 프롬프트를 T2I 탭으로 전송">
+              <button class="send-card primary" :disabled="exif.can_apply === false" @click="sendPrompt" title="현재 프롬프트를 T2I 탭으로 전송">
                 <span class="send-ico"><Icon name="upload" /></span>
                 <span class="send-name">T2I 전송</span>
               </button>
-              <button class="send-card" @click="sendGenerate" title="현재 EXIF로 즉시 생성">
+              <button class="send-card" :disabled="exif.can_apply === false" @click="sendGenerate" title="현재 EXIF로 즉시 생성">
                 <span class="send-ico"><Icon name="zap" /></span>
                 <span class="send-name">즉시 생성</span>
               </button>
@@ -173,6 +178,8 @@ import { useViewMode } from '../composables/useViewMode'
 import { mediaUrl } from '../utils/media.js'
 import CompareSlider from '../components/CompareSlider.vue'
 import CustomSelect from '../components/CustomSelect.vue'
+import ComfyMetadataDetails from '../components/ComfyMetadataDetails.vue'
+import { copyTextToClipboard } from '../utils/clipboard'
 import type { ActionName } from '../types/bridge'
 
 interface ExifParams {
@@ -185,6 +192,7 @@ interface ExifParams {
   [k: string]: any
 }
 interface ExifData {
+  source?: string
   raw?: string
   prompt?: string
   negative?: string
@@ -259,9 +267,10 @@ const promptDiff = computed(() => {
 
 async function loadImage(path: string) {
   imagePath.value = path
+  exif.value = {}
   const backend: any = await getBackend()
   if (backend.getImageExif) {
-    backend.getImageExif(path, (json: string) => { try { exif.value = JSON.parse(json) } catch {} })
+    backend.getImageExif(path, (json: string) => { if (imagePath.value !== path) return; try { exif.value = JSON.parse(json) } catch {} })
   }
 }
 
@@ -275,22 +284,21 @@ function onDrop(e: DragEvent) {
 }
 
 function openFile() { requestAction('open_png_info_file') }
-function copyAll() {
-  navigator.clipboard?.writeText(exif.value.raw || '')
-  requestAction('show_toast', { type: 'success', msg: '전체 메타데이터 복사됨' })
+async function copyAll() {
+  const data = exif.value
+  const chunks = [data.raw || '']
+  if (data.raw_prompt && data.raw_prompt !== data.raw) chunks.push(`prompt:\n${data.raw_prompt}`)
+  if (data.raw_workflow && data.raw_workflow !== data.raw) chunks.push(`workflow:\n${data.raw_workflow}`)
+  await copySection(chunks.filter(Boolean).join('\n\n'), '전체 메타데이터')
 }
-// 항목별 복사 — 호버 시 노출되는 작은 버튼에서 호출
+// Native Qt and browser-local clipboard share one confirmed-success contract.
 async function copySection(text: string, label: string) {
   if (!text) return
-  try {
-    await navigator.clipboard.writeText(text)
-    requestAction('show_toast', { type: 'success', msg: `${label} 복사됨` })
-  } catch (e: any) {
-    requestAction('show_toast', { type: 'error', msg: `복사 실패: ${e?.message || e}` })
-  }
+  const ok = await copyTextToClipboard(text)
+  requestAction('show_toast', { type: ok ? 'success' : 'error', msg: ok ? `${label} 복사됨` : '클립보드에 복사하지 못했습니다' })
 }
-function sendPrompt() { requestAction('pnginfo_send_prompt', { prompt: exif.value.prompt || '', negative: exif.value.negative || '' }) }
-function sendGenerate() { requestAction('pnginfo_generate', exif.value) }
+function sendPrompt() { if (exif.value.can_apply !== false) requestAction('pnginfo_send_prompt', { prompt: exif.value.prompt || '', negative: exif.value.negative || '', source: exif.value.source, can_apply: exif.value.can_apply, path: exif.value.path }) }
+function sendGenerate() { if (exif.value.can_apply !== false) requestAction('pnginfo_generate', exif.value) }
 function action(name: ActionName, payload: Record<string, any> = {}) { requestAction(name, payload) }
 
 function sendToCompare() {
@@ -386,9 +394,9 @@ onUnmounted(() => {
   margin-bottom: 2px; min-height: 16px;
 }
 .section-head label { color: var(--accent); font-size: 11px; font-weight: var(--fw-bold); margin: 0; }
-/* 호버 시에만 보이는 복사 버튼 — 평소엔 부재감 없이 깔끔 */
+/* Keyboard/touch users can discover the section copy actions without hover. */
 .copy-btn {
-  opacity: 0; transition: opacity 0.15s, background 0.15s;
+  opacity: .7; transition: opacity 0.15s, background 0.15s;
   background: none; border: 1px solid transparent;
   color: var(--text-muted); font-size: 11px;
   width: 20px; height: 20px; border-radius: 4px;
@@ -397,6 +405,9 @@ onUnmounted(() => {
 }
 .section:hover .copy-btn { opacity: 0.7; }
 .copy-btn:hover { opacity: 1 !important; background: var(--bg-button); border-color: var(--border); color: var(--accent); }
+.prompt-copy-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.btn:disabled, .send-card:disabled { opacity: .45; cursor: not-allowed; }
+.copy-btn:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; opacity: 1; }
 .section pre { color: var(--text-secondary); font-size: 11px; white-space: pre-wrap; word-break: break-all; background: var(--bg-secondary); padding: 6px 8px; border-radius: 4px; margin: 0; max-height: 150px; overflow-y: auto; }
 .action-section { margin-top: 16px; }
 .action-label {

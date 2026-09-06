@@ -106,6 +106,10 @@ class VueBridge(QObject):
     chatToken = pyqtSignal(str)          # JSON {id, text} — 대화 탭 스트리밍 조각(모아 보냄)
     chatDone = pyqtSignal(str)           # JSON {id, ok, content, stopped, error?}
     chatThreads = pyqtSignal(str)        # JSON [threads] — 저장된 대화 목록
+    chatModelInfo = pyqtSignal(str)      # capability metadata, never loads a model
+    xyzCapabilitiesReceived = pyqtSignal(str)
+    xyzPlotEvent = pyqtSignal(str)
+    chatGenerationEvent = pyqtSignal(str)  # JSON request-owned generation progress/media
     adetailerModelsReady = pyqtSignal(str) # JSON [name]
     queueItemAdded = pyqtSignal(str)     # JSON {prompt, ...}
     queueCompleted = pyqtSignal(str)     # JSON {total}
@@ -131,6 +135,9 @@ class VueBridge(QObject):
     instantWildcardsList = pyqtSignal(str)      # JSON [{name, lines: [...]}] — PR 8
     promptOrderLoaded = pyqtSignal(str)         # JSON [{key, label}] — 사용자 지정 섹션 순서
     workflowProfilesList = pyqtSignal(str)      # JSON [{name, created_at, model, vae}]
+    comfyWorkflowEvent = pyqtSignal(str)
+    comfyCompatibilityResult = pyqtSignal(str)
+    relightEvent = pyqtSignal(str)
     eventImportResults = pyqtSignal(str)      # JSON event list
 
     # Creator Studio — 모든 payload는 JSON 문자열 하나로 유지해 Qt/WebSocket
@@ -139,12 +146,14 @@ class VueBridge(QObject):
     creatorProgress = pyqtSignal(str)
     creatorResult = pyqtSignal(str)
     creatorMediaSelected = pyqtSignal(str)
+    creatorCacheEvent = pyqtSignal(str)
     comicStoryboardReady = pyqtSignal(str)
     comicDocumentChanged = pyqtSignal(str)
 
     # 앱 관리형 Forge Neo / ComfyUI runtime. 설치처럼 긴 작업은 슬롯에서
     # operation id만 즉시 돌려주고 이 단일 JSON signal로 진행/완료를 보낸다.
     backendRuntimeEvent = pyqtSignal(str)
+    modelDownloadEvent = pyqtSignal(str)
 
     # ── 시작 백엔드 게이트 (앱 창 위의 Vue 오버레이) ──
     # 왜 별도 채널인가: 예전엔 이 선택이 Vue보다 먼저 뜨는 별도 QDialog였다.
@@ -278,8 +287,12 @@ class VueBridge(QObject):
         """Vue에서 사용자가 위젯 값을 변경했을 때 (타입 무관 수용)"""
         proxy = self._proxies.get(widget_id)
         if proxy:
+            previous = self.getWidgetValue(widget_id)
             # 문자열로 변환하여 전달
             proxy._on_vue_changed(str(value))
+            preset_changed = getattr(self.parent(), '_comfy_quality_user_change', None)
+            if callable(preset_changed):
+                preset_changed(widget_id, previous, self.getWidgetValue(widget_id))
 
     @pyqtSlot(str, str)
     def onAction(self, action: str, payload_json: str):
@@ -796,14 +809,14 @@ class VueBridge(QObject):
                 'error': '웹 모드에서는 로컬 폴더를 선택할 수 없습니다.',
             }, ensure_ascii=False)
         try:
-            from PyQt6.QtWidgets import QFileDialog
+            from ui.native_dialogs import select_directory
 
             ui_engine, _core_engine = self._backend_runtime_engine(engine)
             state = self._backend_runtime_public_snapshot()
             current = str(
                 state.get('engines', {}).get(ui_engine, {}).get('extensionDir') or ''
             )
-            selected = QFileDialog.getExistingDirectory(
+            selected = select_directory(
                 self.parent(),
                 '기존 extensions 폴더 선택' if ui_engine == 'forge' else '기존 custom_nodes 폴더 선택',
                 current,
@@ -823,7 +836,7 @@ class VueBridge(QObject):
                 'error': '웹 모드에서는 로컬 설치 폴더를 선택할 수 없습니다.',
             }, ensure_ascii=False)
         try:
-            from PyQt6.QtWidgets import QFileDialog
+            from ui.native_dialogs import select_directory
 
             ui_engine, _core_engine = self._backend_runtime_engine(engine)
             state = self._backend_runtime_public_snapshot()
@@ -839,7 +852,7 @@ class VueBridge(QObject):
                 if ui_engine == 'forge'
                 else '기존 ComfyUI 또는 portable 폴더 선택'
             )
-            selected = QFileDialog.getExistingDirectory(self.parent(), title, current)
+            selected = select_directory(self.parent(), title, current)
             if not selected:
                 return json.dumps({'ok': False, 'cancelled': True}, ensure_ascii=False)
             return json.dumps({'ok': True, 'path': selected}, ensure_ascii=False)
@@ -1999,6 +2012,40 @@ class VueBridge(QObject):
             print(f"[UIPrefs] getUiPrefs failed: {e}")
             return '{}'
 
+    @pyqtSlot(result=str)
+    def getAiAssistInstructions(self) -> str:
+        """AI helper instructions only; chat settings use their separate store."""
+        try:
+            from core.ai_assist_instructions import load_instructions
+            return json.dumps({'ok': True, 'instructions': load_instructions()}, ensure_ascii=False)
+        except Exception as exc:
+            from core.error_handler import handle_error
+            try:
+                handle_error('E030', 'AI 어시스트 지침 불러오기', exc, notify=False)
+            except Exception:
+                pass  # A closed/legacy-encoded console must not swallow the reply.
+            return json.dumps({'ok': False, 'error': 'AI 어시스트 지침을 불러오지 못했습니다.'}, ensure_ascii=False)
+
+    @pyqtSlot(str, result=str)
+    def saveAiAssistInstructions(self, payload_json: str) -> str:
+        """Acknowledge only after validation and an atomic settings-file save."""
+        try:
+            from core.ai_assist_instructions import save_instructions
+            # Bound parsing as well as individual fields, including JSON escapes.
+            if len(payload_json) > 600_000:
+                raise ValueError('지침 데이터가 너무 큽니다. 각 입력란을 8,000자 이내로 작성하세요.')
+            instructions = save_instructions(json.loads(payload_json))
+            return json.dumps({'ok': True, 'instructions': instructions}, ensure_ascii=False)
+        except (ValueError, TypeError):
+            return json.dumps({'ok': False, 'error': '지침 형식이 올바르지 않습니다. 각 입력란을 8,000자 이내로 작성하세요.'}, ensure_ascii=False)
+        except Exception as exc:
+            from core.error_handler import handle_error
+            try:
+                handle_error('E030', 'AI 어시스트 지침 저장', exc, notify=False)
+            except Exception:
+                pass  # Still deliver a usable error if console logging itself fails.
+            return json.dumps({'ok': False, 'error': 'AI 어시스트 지침을 저장하지 못했습니다. 설정 파일과 쓰기 권한을 확인하세요.'}, ensure_ascii=False)
+
     def _refresh_forge_module_widgets(self) -> None:
         """저장된 Forge VAE/TE 경로를 현재 프록시 목록에 즉시 반영."""
         try:
@@ -2067,22 +2114,16 @@ class VueBridge(QObject):
         if self._backend_runtime_is_web_mode():
             return self._forge_model_paths_web_denial()
         try:
-            from pathlib import Path
-            from PyQt6.QtWidgets import QFileDialog
+            from ui.native_dialogs import select_directory
             from core.forge_modules import FORGE_PATH_KEYS, get_forge_paths
 
             if key not in FORGE_PATH_KEYS:
                 raise ValueError(f'지원하지 않는 Forge 경로 키: {key}')
             current = get_forge_paths()[key]
-            start = current
-            while not start.is_dir() and start.parent != start:
-                start = start.parent
-            if not start.is_dir():
-                start = Path.home()
-            selected = QFileDialog.getExistingDirectory(
+            selected = select_directory(
                 self.parent(),
                 'Forge Neo 모델 폴더 선택',
-                str(start),
+                str(current),
             )
             if not selected:
                 return json.dumps({'ok': False, 'cancelled': True}, ensure_ascii=False)
@@ -2326,7 +2367,9 @@ class VueBridge(QObject):
                 pass
             if not model:
                 model = 'gemma3:4b'
-            self._gennl_worker = OllamaWorker(url, model, text, 'nl_caption', '', self)
+            self._gennl_worker = OllamaWorker(
+                url, model, text, 'nl_caption', '', self, instruction_feature='auto_nl',
+            )
             self._gennl_worker.finished.connect(lambda r: self.genNlResult.emit(r))
             self._gennl_worker.error.connect(lambda e: self.genNlResult.emit(json.dumps({'error': e})))
             self._gennl_worker.start()
@@ -4308,33 +4351,32 @@ class VueBridge(QObject):
             if save_locked:
                 self._caption_job_lock.release()
 
+    @pyqtSlot(str, result=bool)
+    def copyTextToClipboard(self, text: str) -> bool:
+        """Copy on the desktop GUI thread; remote clients keep their own clipboard."""
+        if self._backend_runtime_is_web_mode():
+            return False
+        try:
+            from PyQt6.QtWidgets import QApplication
+            clipboard = QApplication.clipboard()
+            if clipboard is None:
+                return False
+            clipboard.setText(text)
+            return clipboard.text() == text
+        except Exception:
+            logger.warning('Desktop clipboard write failed', exc_info=True)
+            return False
+
     @pyqtSlot(str, result=str)
     def getImageExif(self, filepath: str) -> str:
-        """이미지의 EXIF 반환 (구조화된 파라미터 포함)"""
+        """Shared A1111/Forge/Comfy metadata reader; never modifies the image."""
         try:
-            from PIL import Image
-            import os, re
+            from core.image_metadata import read_metadata_for_ui
             clean = _normalize_vue_path(filepath)
             if not clean:
                 return json.dumps({'error': '파일을 찾을 수 없습니다', 'path': filepath})
-            img = Image.open(clean)
-            info = {}
-            raw = img.info.get('parameters', img.info.get('prompt', ''))
-            info['raw'] = raw
-            info['path'] = clean.replace('\\', '/')
-            info['filename'] = os.path.basename(clean)
-            info['size'] = f"{img.width} × {img.height}"
-            if raw and 'Steps:' in raw:
-                parts = raw.split('\nNegative prompt: ')
-                info['prompt'] = parts[0].strip()
-                if len(parts) > 1:
-                    sub = parts[1].split('\nSteps: ')
-                    info['negative'] = sub[0].strip()
-                    if len(sub) > 1:
-                        params_raw = 'Steps: ' + sub[1].strip()
-                        info['params_line'] = params_raw
-                        # 구조화된 파라미터 파싱
-                        info['params'] = self._parse_params_line(params_raw)
+            info = read_metadata_for_ui(clean)
+            info['params'] = self._parse_params_line(info.get('params_line', ''))
             return json.dumps(info, ensure_ascii=False)
         except Exception as e:
             return json.dumps({'error': str(e), 'path': filepath})

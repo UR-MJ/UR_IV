@@ -1205,6 +1205,7 @@ class BackendRuntimeManager:
             "loras": [],
             "vae": [],
             "text_encoders": [],
+            "upscale_models": [],
         }
         app_fallback_paths: dict[str, Path] = {}
         if engine == "forge":
@@ -1252,6 +1253,10 @@ class BackendRuntimeManager:
         model_roots.append(self._data_root(engine) / "models")
 
         for model_root in model_roots:
+            self._append_existing_paths(
+                paths["upscale_models"], model_root,
+                ("ESRGAN", "upscale_models") if engine == "forge" else ("upscale_models",),
+            )
             if engine == "forge":
                 self._append_existing_paths(
                     paths["checkpoints"], model_root, ("Stable-diffusion", "checkpoints")
@@ -1296,6 +1301,7 @@ class BackendRuntimeManager:
             "loras": [],
             "vae": [],
             "text_encoders": [],
+            "upscale_models": [],
         }
         seen = {category: set() for category in combined}
         for engine in self._model_engine_order():

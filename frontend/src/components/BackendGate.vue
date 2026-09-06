@@ -131,6 +131,11 @@
 
         <div class="rule"></div>
 
+        <details v-if="dismissible" class="gate-workflow-tools">
+          <summary>현재 ComfyUI 워크플로 도구</summary>
+          <ComfyWorkflowControls />
+        </details>
+
         <!-- ── 꼬리말 ── -->
         <footer class="gate-foot">
           <button type="button" class="btn-quiet" :disabled="busy" @click="probeNow">
@@ -156,6 +161,7 @@
  * 이벤트를 받아 처리한다. 그래야 파이썬 쪽 계약이 이 파일 하나에 갇히지 않는다.
  */
 import { computed, nextTick, ref, useId, watch } from 'vue'
+import ComfyWorkflowControls from './ComfyWorkflowControls.vue'
 
 /** 감지 결과. 'checking' 은 요청이 나갔지만 답이 안 온 상태. */
 type ProbeState = 'ok' | 'fail' | 'checking'
@@ -306,7 +312,7 @@ function onBackdrop() {
 function focusables(): HTMLElement[] {
   const root = rootEl.value
   if (!root) return []
-  const selector = 'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  const selector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
   return Array.from(root.querySelectorAll<HTMLElement>(selector))
     .filter((el) => el.offsetParent !== null)
 }

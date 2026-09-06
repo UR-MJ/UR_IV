@@ -15,16 +15,29 @@
         <Icon :name="tab.icon" size="16" />
         <span class="label">{{ tab.label }}</span>
       </button>
+      <div v-if="settingMatches.length" class="settings-search-results" aria-label="하위 설정 검색 결과">
+        <button v-for="entry in settingMatches" :key="entry.id" type="button" @click="revealSetting(entry, true)">
+          <small>{{ subTabs.find(tab => tab.id === entry.tab)?.label }}</small>
+          <span>{{ entry.title }}</span>
+        </button>
+      </div>
       <div v-if="settingsSearch && filteredSubTabs.length === 0" class="nav-empty">
         검색 결과 없음
       </div>
     </aside>
 
     <!-- Right: Content Area -->
-    <main class="settings-body">
+    <main ref="settingsBodyRef" class="settings-body">
       <div class="settings-content">
+        <div v-if="currentTab === 'models'" data-settings-tab="models" class="section-fade">
+          <ModelDownloadsSettings />
+          <H3CacheSettings />
+          <SpectrumSettings />
+          <ComfyCompatibilitySettings @open-runtime="openComfyRecipeRuntime" />
+          <ComfyWorkflowControls />
+        </div>
         <!-- 1. General & Backend -->
-        <div v-show="currentTab === 'general'" class="section-fade">
+        <div v-show="currentTab === 'general'" data-settings-tab="general" class="section-fade">
           <div class="glass-card">
             <label>시스템 상태</label>
             <div class="info-row">
@@ -39,7 +52,7 @@
         </div>
 
         <!-- 2. Application updates -->
-        <div v-show="currentTab === 'updates'" class="section-fade app-update-section">
+        <div v-show="currentTab === 'updates'" data-settings-tab="updates" class="section-fade app-update-section">
           <div v-if="!appUpdate.available" class="hint-banner update-readonly">
             <strong>업데이트 연결 대기</strong>
             {{ appUpdate.statusMessage || '현재 실행 환경에서 업데이트 정보를 불러오지 못했습니다.' }}
@@ -119,7 +132,7 @@
         </div>
 
         <!-- 3. Network & API -->
-        <div v-show="currentTab === 'api'" class="section-fade generation-api-section">
+        <div v-show="currentTab === 'api'" data-settings-tab="api" class="section-fade generation-api-section">
           <div class="hint-banner generation-api-security">
             <strong>인증 생성 게이트웨이</strong>
             로컬 앱이 인증 token이 필요한 생성 API를 제공하고, 미리 등록한 Forge/WebUI·ComfyUI로 작업을 중계합니다.
@@ -289,7 +302,7 @@
         </div>
 
         <!-- 3. App-managed runtimes / engines -->
-        <div v-show="currentTab === 'runtimes'" class="section-fade runtime-section">
+        <div v-show="currentTab === 'runtimes'" data-settings-tab="runtimes" class="section-fade runtime-section">
           <div class="hint-banner runtime-safety-warning">
             <strong>보안 안내</strong>
             확장 저장소는 엔진 프로세스 안에서 코드를 실행할 수 있습니다. 신뢰하는 저장소만 설치하세요.
@@ -415,7 +428,7 @@
                     :disabled="runtimeMutationDisabled(engineId)"
                     @input="runtimeInstallRootDirty[engineId] = true" />
                   <button class="btn-pill compact" :disabled="runtimeMutationDisabled(engineId)"
-                    :title="runtimeMutationTitle" @click="browseRuntimeInstallDirectory(engineId)">찾아보기</button>
+                    :title="runtimeMutationTitle" @click="browseRuntimeInstallDirectory(engineId)">{{ runtimeDirectoryPicking === `${engineId}:install` ? '폴더 선택 중…' : '찾아보기' }}</button>
                   <button class="btn-pill compact primary"
                     :disabled="runtimeMutationDisabled(engineId) || !runtimeInstallRootDrafts[engineId].trim() || (!runtimeInstallRootDirty[engineId] && runtimeEngines[engineId].sourceMode === 'existing')"
                     :title="runtimeMutationTitle" @click="linkExistingRuntime(engineId)">연결</button>
@@ -462,7 +475,7 @@
                     :disabled="runtimeMutationDisabled(engineId)"
                     :title="runtimeMutationTitle"
                     @click="browseRuntimeExtensionDirectory(engineId)"
-                  >찾아보기</button>
+                  >{{ runtimeDirectoryPicking === `${engineId}:extension` ? '폴더 선택 중…' : '찾아보기' }}</button>
                   <button
                     class="btn-pill compact primary"
                     :disabled="runtimeMutationDisabled(engineId) || !runtimeExtensionFolderDirty[engineId] || !runtimeExtensionDrafts[engineId].trim()"
@@ -621,7 +634,7 @@
         </div>
 
         <!-- 4. Forge Neo model directories -->
-        <div v-show="currentTab === 'forge'" class="section-fade">
+        <div v-show="currentTab === 'forge'" data-settings-tab="forge" class="section-fade">
           <div class="hint-banner forge-hint">
             이 설정은 Image viewer가 VAE·TE를 직접 찾고 Forge 파일 구성을 확인할 때 사용합니다.
             Checkpoint와 LoRA 선택 목록은 실행 중인 Forge API가 기준이므로, 다른 폴더를 지정했다면
@@ -680,7 +693,7 @@
         </div>
 
         <!-- 4. Prompt Logic -->
-        <div v-show="currentTab === 'prompt'" class="section-fade">
+        <div v-show="currentTab === 'prompt'" data-settings-tab="prompt" class="section-fade">
           <div class="glass-card">
             <label>프롬프트 자동화</label>
             <div class="toggle-grid">
@@ -724,7 +737,7 @@
         </div>
 
         <!-- 4. Tab Layout (Drag & Drop) -->
-        <div v-show="currentTab === 'tabs'" class="section-fade">
+        <div v-show="currentTab === 'tabs'" data-settings-tab="tabs" class="section-fade">
           <div class="glass-card">
             <label>탭 순서</label>
             <div class="drag-list">
@@ -745,7 +758,7 @@
         </div>
 
         <!-- 5. Theme -->
-        <div v-show="currentTab === 'theme'" class="section-fade">
+        <div v-show="currentTab === 'theme'" data-settings-tab="theme" class="section-fade">
           <div class="glass-card">
             <label>프리셋</label>
             <p class="theme-note">고르면 바로 적용됩니다. 미리보기는 아래에서 직접 바꾼 색까지 반영한 실제 모습입니다.</p>
@@ -835,7 +848,7 @@
         </div>
 
         <!-- 6. Shortcuts -->
-        <div v-show="currentTab === 'shortcuts'" class="section-fade">
+        <div v-show="currentTab === 'shortcuts'" data-settings-tab="shortcuts" class="section-fade">
           <div class="hint-banner"><Icon name="info" /> 같은 단축키도 <strong>현재 활성 탭</strong>에 따라 동작이 달라집니다.
             예: <kbd>Ctrl+Z</kbd>는 Editor 탭에서는 편집 Undo, T2I/I2I/Inpaint에서는 프롬프트 Undo.
             전역 키는 모든 탭에서 동일.
@@ -893,7 +906,7 @@
         </div>
 
         <!-- 7. Anima Guard -->
-        <div v-show="currentTab === 'guard'" class="section-fade">
+        <div v-show="currentTab === 'guard'" data-settings-tab="guard" class="section-fade">
           <div class="hint-banner">
             자동 해상도와 고해상도 배율 적용 시 이미지 비율을 유지하면서 최종 크기를 제한합니다.
             값은 SD 호환을 위해 저장할 때 8배수로 정렬됩니다.
@@ -934,7 +947,7 @@
         </div>
 
         <!-- 8. 기본값 설정 (탭별) -->
-        <div v-show="currentTab === 'defaults'" class="section-fade">
+        <div v-show="currentTab === 'defaults'" data-settings-tab="defaults" class="section-fade">
           <!-- UI 크기 조절 -->
           <div class="glass-card mt-16">
             <label>UI 크기 (전역 zoom)</label>
@@ -1012,7 +1025,7 @@
         </div>
 
         <!-- 9. AI Assist (Ollama) -->
-        <div v-show="currentTab === 'ollama'" class="section-fade">
+        <div v-show="currentTab === 'ollama'" data-settings-tab="ollama" class="section-fade">
           <div class="glass-card">
             <label>Ollama 설정</label>
             <div class="input-stack">
@@ -1057,14 +1070,7 @@
               설치는 <code>ollama pull {{ ollamaModel || 'gemma4:e4b' }}</code>
             </div>
           </div>
-          <div class="glass-card mt-16">
-            <label>사용량</label>
-            <div class="shortcut-grid">
-              <div class="s-row"><span><Icon name="sparkles" /> 태그 확장</span><span>기존 태그를 고품질 태그로 확장</span></div>
-              <div class="s-row"><span><Icon name="message" /> 자연어</span><span>자연어 설명을 태그로 변환</span></div>
-              <div class="s-row"><span><Icon name="refresh" /> 유사 태그 추천</span><span>유사하지만 다른 태그 추천</span></div>
-            </div>
-          </div>
+          <AiAssistInstructionsSettings />
         </div>
       </div>
     </main>
@@ -1072,7 +1078,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { searchSettings, type SettingSearchEntry } from '../utils/settingsSearch'
 import { requestAction, useWidgetStore } from '../stores/widgetStore.js'
 import {
   appUpdateState,
@@ -1084,6 +1091,12 @@ import { getStudioClient, replyData, StudioClientError, type StudioClient } from
 import CustomSelect from '../components/CustomSelect.vue'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
 import ColorField from '../components/ColorField.vue'
+import ModelDownloadsSettings from '../components/ModelDownloadsSettings.vue'
+import H3CacheSettings from '../components/H3CacheSettings.vue'
+import SpectrumSettings from '../components/SpectrumSettings.vue'
+import ComfyCompatibilitySettings from '../components/ComfyCompatibilitySettings.vue'
+import ComfyWorkflowControls from '../components/ComfyWorkflowControls.vue'
+import AiAssistInstructionsSettings from '../components/AiAssistInstructionsSettings.vue'
 import { DEFAULT_PRESET, EDITABLE_KEYS, PRESETS, PRESET_IDS, type EditableKey } from '../theme/presets'
 import { getThemeState, reconcileTheme, resolveTheme, setTheme } from '../theme/applyTheme'
 import {
@@ -1197,6 +1210,7 @@ const subTabs: SubTab[] = [
   { id: 'updates',   label: '앱 업데이트', icon: 'download', keywords: 'update 업데이트 github release 릴리스 패치노트 버전 알림 재시작' },
   { id: 'api',       label: '네트워크',   icon: 'globe', keywords: 'network api 네트워크 webui comfy url 백엔드 연결' },
   { id: 'runtimes',  label: '런타임 · 엔진', icon: 'cpu', keywords: 'runtime engine forge neo comfyui install update start stop extension 확장 설치 업데이트 실행' },
+  { id: 'models', label: '모델 다운로드', icon: 'download', keywords: 'model download anima krea2 h3 cache 모델 다운로드 영상 캐시 인코딩 텍스트 인코더 vae' },
   { id: 'forge',     label: 'Forge',      icon: 'package', keywords: 'forge neo checkpoint model lora vae te text encoder 경로 폴더 모델 로라' },
   { id: 'prompt',    label: '로직',       icon: 'pencil', keywords: 'logic 로직 프롬프트 와일드카드 wildcard 제외 exclude 조건부' },
   { id: 'tabs',      label: '워크스페이스', icon: 'layers', keywords: 'workspace 워크스페이스 탭 순서 tab order layout' },
@@ -1204,17 +1218,64 @@ const subTabs: SubTab[] = [
   { id: 'shortcuts', label: '단축키',     icon: 'keyboard', keywords: 'hotkeys shortcuts 단축키 키보드 ctrl shift z y s g' },
   { id: 'guard',     label: '가드',       icon: 'shield', keywords: 'anima guard 가드 자동 해상도 제한 최대 면적 픽셀 긴 변 resolution cap vram oom' },
   { id: 'defaults',  label: '기본값',     icon: 'sliders', keywords: 'defaults 기본값 t2i i2i inpaint 해상도 steps cfg sampler 시드' },
-  { id: 'ollama',    label: 'AI 어시스트', icon: 'sparkles', keywords: 'ollama ai assist 어시스트 자동완성 번역' },
+  { id: 'ollama',    label: 'AI 어시스트', icon: 'sparkles', keywords: 'ollama ai assist 어시스트 자동완성 번역 사용자 지침 공통 태그 확장 추천 자연어 캡션 영문 장면 창의 네거티브 자동 변환' },
 ]
 const currentTab = ref('general')
 const settingsSearch = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
+const settingsBodyRef = ref<HTMLElement | null>(null)
+const settingEntries = ref<SettingSearchEntry[]>([])
+const settingMatches = computed(() => searchSettings(settingEntries.value, settingsSearch.value))
+const settingElements = new Map<string, HTMLElement>()
+let settingsObserver: MutationObserver | undefined
+let settingHighlight: HTMLElement | null = null
+// Most tabs already use v-show; index their labels without mounting extra tools,
+// reading input values (API secrets), or maintaining a second list of controls.
+function indexSettingLabels() {
+  const entries: SettingSearchEntry[] = []
+  settingElements.clear()
+  for (const section of settingsBodyRef.value?.querySelectorAll<HTMLElement>('[data-settings-tab]') || []) {
+    const tab = section.dataset.settingsTab || ''
+    const seen = new Set<string>()
+    const labels = section.querySelectorAll<HTMLElement>('label, h2, h3, strong, .toggle-row > span, .def-field > span, .desc, .s-row > span, .field-label, .runtime-meta > span')
+    for (const element of labels) {
+      const title = (element.textContent || '').replace(/\s+/g, ' ').trim()
+      if (!title || title.length > 160 || seen.has(title)) continue
+      seen.add(title)
+      const id = `${tab}-${entries.length}`
+      entries.push({ id, tab, title, keywords: subTabs.find(t => t.id === tab)?.label })
+      settingElements.set(id, element)
+    }
+  }
+  // The download panel is deliberately lazy so searching never queries disks.
+  for (const title of ['기능별 모델 다운로드', 'H3 인코딩 캐시', '최대 용량 (GB)', '최대 항목 수', '캐시 비우기', 'Spectrum 가속 · 실험 기능', 'ComfyUI 호환 조합 안내', 'ComfyUI 워크플로 도구']) {
+    if (!entries.some(entry => entry.tab === 'models' && entry.title === title)) entries.push({ id: `models-${title}`, tab: 'models', title })
+  }
+  settingEntries.value = entries
+}
+async function revealSetting(entry: SettingSearchEntry, focus = false) {
+  currentTab.value = entry.tab
+  await nextTick()
+  indexSettingLabels()
+  const refreshed = settingEntries.value.find(item => item.tab === entry.tab && item.title === entry.title)
+  const element = refreshed ? settingElements.get(refreshed.id) : undefined
+  settingHighlight?.classList.remove('settings-search-hit')
+  if (!element) return
+  settingHighlight = element.closest<HTMLElement>('.toggle-row, .def-field, .generation-api-field, .forge-path-field, .runtime-meta') || element
+  settingHighlight.classList.add('settings-search-hit')
+  settingHighlight.scrollIntoView({ block: 'center', behavior: 'auto' })
+  if (focus) {
+    settingHighlight.setAttribute('tabindex', '-1')
+    settingHighlight.focus({ preventScroll: true })
+  }
+}
 const filteredSubTabs = computed(() => {
   const q = settingsSearch.value.trim().toLowerCase()
   if (!q) return subTabs
   return subTabs.filter(t =>
     t.label.toLowerCase().includes(q) ||
-    (t.keywords || '').toLowerCase().includes(q)
+    (t.keywords || '').toLowerCase().includes(q) ||
+    settingMatches.value.some(entry => entry.tab === t.id)
   )
 })
 // 검색 결과가 1개면 자동 선택
@@ -1223,6 +1284,17 @@ watch(filteredSubTabs, (val) => {
     currentTab.value = val[0].id
   }
 })
+watch(settingsSearch, query => {
+  if (!query.trim()) { settingHighlight?.classList.remove('settings-search-hit'); return }
+  const first = settingMatches.value[0]
+  if (first) void revealSetting(first)
+})
+onMounted(() => {
+  indexSettingLabels()
+  settingsObserver = new MutationObserver(indexSettingLabels)
+  if (settingsBodyRef.value) settingsObserver.observe(settingsBodyRef.value, { childList: true, subtree: true, characterData: true })
+})
+onUnmounted(() => settingsObserver?.disconnect())
 function focusSearch() {
   searchInputRef.value?.focus()
   searchInputRef.value?.select()
@@ -1592,6 +1664,7 @@ const runtimeBridgeAvailable = ref(false)
 const runtimeLoaded = ref(false)
 const runtimeLoading = ref(false)
 const runtimeStatus = ref('')
+const runtimeDirectoryPicking = ref('')
 const runtimeWebMode = Boolean((window as any).__AISTUDIO_WS_PORT__ || (window as any).__AISTUDIO_WS_URL__)
 const runtimeCanMutate = computed(() =>
   runtimeLoaded.value && runtimeBridgeAvailable.value && runtimeNativeOperations.value && !runtimeWebMode
@@ -1945,7 +2018,7 @@ async function loadBackendRuntimeState() {
 }
 
 function runtimeMutationDisabled(engineId: RuntimeEngineId) {
-  return !runtimeCanMutate.value || runtimeLoading.value
+  return !runtimeCanMutate.value || runtimeLoading.value || Boolean(runtimeDirectoryPicking.value)
     || runtimeEngines[engineId].busy
     || runtimeEngineOrder.some(candidate => runtimeEngines[candidate].busy)
 }
@@ -2042,18 +2115,24 @@ function fileName(path: string): string {
 
 async function browseRuntimeInstallDirectory(engineId: RuntimeEngineId) {
   if (runtimeMutationDisabled(engineId)) return
+  runtimeDirectoryPicking.value = `${engineId}:install`
+  runtimeStatus.value = `${runtimeEngines[engineId].name}: 설치 폴더 선택 창을 여는 중…`
+  await nextTick()
   try {
     const studio = await studioClient()
     const reply = await studio.invoke('native.pick_directory', { purpose: 'runtime_install', engine: engineId })
     const result: any = replyData(reply)
-    if (result.cancelled) return
+    if (result.cancelled) { runtimeStatus.value = '폴더 선택을 취소했습니다. 기존 설정을 유지합니다.'; return }
     if (result.ok === false) throw new Error(result.error || '기존 설치 폴더를 선택하지 못했습니다')
     const path = String(result.path || result.directory || '')
     if (!path) throw new Error('선택된 설치 폴더가 없습니다')
     runtimeInstallRootDrafts[engineId] = path
     runtimeInstallRootDirty[engineId] = true
+    runtimeStatus.value = '폴더를 선택했습니다. 연결 버튼을 눌러 적용하세요. 기존 Forge 모델 경로 설정과는 별개입니다.'
   } catch (error) {
     showRuntimeError(error, engineId)
+  } finally {
+    runtimeDirectoryPicking.value = ''
   }
 }
 
@@ -2077,18 +2156,24 @@ async function setPrimaryModelEngine(engineId: RuntimeEngineId) {
 
 async function browseRuntimeExtensionDirectory(engineId: RuntimeEngineId) {
   if (runtimeMutationDisabled(engineId)) return
+  runtimeDirectoryPicking.value = `${engineId}:extension`
+  runtimeStatus.value = `${runtimeEngines[engineId].name}: 확장 폴더 선택 창을 여는 중…`
+  await nextTick()
   try {
     const studio = await studioClient()
     const reply = await studio.invoke('native.pick_directory', { purpose: 'runtime_extension', engine: engineId })
     const result: any = replyData(reply)
-    if (result.cancelled) return
+    if (result.cancelled) { runtimeStatus.value = '폴더 선택을 취소했습니다. 기존 설정을 유지합니다.'; return }
     if (result.ok === false) throw new Error(result.error || '확장 폴더를 선택하지 못했습니다')
     const path = String(result.path || result.directory || '')
     if (!path) throw new Error('선택된 확장 폴더가 없습니다')
     runtimeExtensionDrafts[engineId] = path
     runtimeExtensionFolderDirty[engineId] = true
+    runtimeStatus.value = '확장 폴더를 선택했습니다. 저장 버튼을 눌러 적용하세요.'
   } catch (error) {
     showRuntimeError(error, engineId)
+  } finally {
+    runtimeDirectoryPicking.value = ''
   }
 }
 
@@ -2102,6 +2187,14 @@ async function installRuntimeExtension(engineId: RuntimeEngineId) {
   const repoUrl = runtimeRepoUrls[engineId].trim()
   if (!repoUrl) return
   await runRuntimeOperation(engineId, 'install_extension', { repoUrl })
+}
+
+function openComfyRecipeRuntime(repoUrl: string) {
+  currentTab.value = 'runtimes'
+  // Only prefill the reviewed catalog entry; installation remains an explicit
+  // existing runtime action, including external-extension-folder approval.
+  if (repoUrl === 'https://github.com/sorryhyun/ComfyUI-Spectrum-KSampler'
+      && !runtimeRepoUrls.comfyui.trim()) runtimeRepoUrls.comfyui = repoUrl
 }
 
 async function runRuntimeExtensionOperation(
@@ -2722,6 +2815,11 @@ function handleOllamaModels(json: string) {
 }
 .search-clear:hover { color: var(--state-alert-fg); }
 .nav-empty { padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center; font-style: italic; }
+.settings-search-results { display: grid; gap: 5px; padding-top: 10px; border-top: 1px solid var(--border); }
+.settings-search-results button { min-width: 0; display: grid; gap: 4px; text-align: left; padding: 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-card); color: var(--text-primary); white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
+.settings-search-results small { color: var(--text-muted); }
+.settings-search-results button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:deep(.settings-search-hit) { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 5px; scroll-margin: 32px; }
 .nav-item {
   height: 44px; padding: 0 16px; border: none; background: transparent;
   border-radius: var(--radius-base); display: flex; align-items: center; gap: 12px;

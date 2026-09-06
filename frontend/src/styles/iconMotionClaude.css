@@ -112,6 +112,9 @@
     ):hover .icon[data-icon-motion] .icon-part {
     --ic-part: var(--ic-open, none);
     --ic-ms: var(--ic-hover-ms);
+    /* Repeat the existing part gesture. More specific semantic loops below
+       (download, refresh, etc.) keep their original animation. */
+    animation: ic-hover-repeat 1100ms var(--ic-ease) infinite;
   }
 }
 
@@ -137,8 +140,14 @@
     [role='button']:not([aria-disabled='true']),
     [role='tab']:not([aria-disabled='true']), .ctx-item, .hist-card
   ):active .icon[data-icon-motion] .icon-part {
+  animation: none;
   --ic-part: none;
   --ic-ms: var(--ic-press-ms);
+}
+
+@keyframes ic-hover-repeat {
+  0%, 80%, 100% { transform: var(--ic-rest, none); }
+  20%, 42% { transform: var(--ic-open, var(--ic-rest, none)); }
 }
 
 /* ── 아이콘별 장치 ────────────────────────────────────────────────────
@@ -525,6 +534,27 @@
 :root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='keyboard'] .icon-part-5 { animation: ic-keypress 300ms ease-out 150ms both; }
 :root[data-icon-animation='claude'] :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):hover .icon[data-icon-name='keyboard'] .icon-part-6 { animation: ic-keypress 300ms ease-out 200ms both; }
 }
+
+/* Hover-repeat preference: retain the original semantic keyframes, but give
+ * formerly one-shot hover effects a relaxed repeating cycle. */
+@media (hover: hover) and (pointer: fine) {
+  :root[data-icon-animation='claude']
+    :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), .ctx-item, .hist-card):hover:not(:active)
+    .icon.icon:is([data-icon-name='check'], [data-icon-name='zap'], [data-icon-name='alert'], [data-icon-name='info'], [data-icon-name='message'], [data-icon-name='bulb'], [data-icon-name='palette'], [data-icon-name='tag'], [data-icon-name='dice'], [data-icon-name='keyboard']),
+  :root[data-icon-animation='claude']
+    :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), .ctx-item, .hist-card):hover:not(:active)
+    .icon.icon:is([data-icon-name='check'], [data-icon-name='zap'], [data-icon-name='alert'], [data-icon-name='info'], [data-icon-name='message'], [data-icon-name='bulb'], [data-icon-name='palette'], [data-icon-name='tag'], [data-icon-name='dice'], [data-icon-name='keyboard']) .icon-part {
+    animation-iteration-count: infinite;
+    animation-duration: 1400ms;
+    animation-fill-mode: none;
+  }
+}
+:root[data-icon-animation='claude']
+  :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):active
+  .icon[data-icon-motion],
+:root[data-icon-animation='claude']
+  :where(button:not(:disabled), a[href], summary, [role='button']:not([aria-disabled='true']), [role='tab']:not([aria-disabled='true']), [role='option']:not([aria-disabled='true']), [role='menuitem']:not([aria-disabled='true']), .ctx-item, .hist-card):active
+  .icon[data-icon-motion] .icon-part { animation: none !important; }
 
 /* ── 짧은 피드백 · 지속 상태 ──────────────────────────────────────────
  * 호버와 무관하게 상태가 말하는 것. 무한 반복은 '지금 계속되고 있다' 일 때만.

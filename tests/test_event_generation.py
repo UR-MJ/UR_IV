@@ -11,6 +11,7 @@ from core.event_generation import (
     plan_event_generation,
 )
 from ui.generator_main import GeneratorMainUI
+from ui.model_download_actions import ModelDownloadActionsMixin
 
 
 class _Signal:
@@ -39,7 +40,7 @@ class _HiddenEventTab:
         raise AssertionError(f"hidden EventGen tab was accessed: {name}")
 
 
-class _Harness:
+class _Harness(ModelDownloadActionsMixin):
     _handle_vue_action = GeneratorMainUI._handle_vue_action
     _handle_event_generation_request = (
         GeneratorMainUI._handle_event_generation_request

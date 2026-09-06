@@ -38,10 +38,17 @@ export type ActionName =
   | 'instant_wildcards_list' | 'instant_wildcards_save' | 'instant_wildcards_delete'
   | 'show_prompt_history' | 'open_lora_manager' | 'show_api_manager' | 'open_url'
   | 'import_anima_from_forge' | 'unload_model_request' | 'show_toast'
-  | 'chat_send' | 'chat_stop' | 'chat_load' | 'chat_save' | 'chat_export'
+  | 'chat_send' | 'chat_stop' | 'chat_load' | 'chat_save' | 'chat_export' | 'chat_model_info'
+  | 'get_xyz_capabilities'
+  | 'comfy_compatibility_refresh' | 'comfy_compatibility_save_baseline'
+  | 'comfy_controls_inspect' | 'comfy_controls_save' | 'comfy_controls_clear'
+  | 'comfy_quality_preset' | 'comfy_feature_preflight'
+  | 'relight_preview' | 'relight_export' | 'relight_cancel'
   | 'native_tab_switch' | 'vue_tab_switch'
   | 'probe_backend' | 'select_backend' | 'pick_comfy_workflow'
   | 'creator_get_state' | 'creator_select_media' | 'creator_generate' | 'creator_cancel'
+  | 'creator_h3_cache_status' | 'creator_h3_cache_clear'
+  | 'model_download_status' | 'model_download_start' | 'model_download_cancel' | 'model_download_verify'
   | 'comic_plan' | 'comic_generate_all' | 'comic_animate_all'
   | 'comic_export_page' | 'comic_export_living' | 'comic_save'
 
@@ -56,6 +63,9 @@ export type BackendEvent =
   | 'compareImageLoaded' | 'galleryFolderLoaded' | 'galleryImagesReady' | 'thumbnailReady'
   | 'upscalersReady' | 'ollamaModelsReady' | 'adetailerModelsReady'
   | 'chatToken' | 'chatDone' | 'chatThreads'
+  | 'chatGenerationEvent' | 'modelDownloadEvent' | 'creatorCacheEvent' | 'chatModelInfo'
+  | 'xyzCapabilitiesReceived' | 'xyzPlotEvent'
+  | 'comfyWorkflowEvent' | 'comfyCompatibilityResult' | 'relightEvent'
   | 'batchFilesSelected' | 'adetailerResult' | 'adetailerProgress' | 'sam3Result' | 'sam3Progress'
   | 'captionFilesSelected' | 'captionProgress' | 'captionDone' | 'captionOutDirSelected'
   | 'captionModelDirSelected' | 'captionRuntimeReady'
@@ -66,6 +76,19 @@ export type BackendEvent =
   | 'creatorStateChanged' | 'creatorProgress' | 'creatorResult' | 'creatorMediaSelected'
   | 'comicStoryboardReady' | 'comicDocumentChanged'
   | 'loraManagerUrlReady' | 'refineResult'
+
+// AI helper instructions are intentionally independent of Chat settings.
+export type AiAssistFeature = 'expand' | 'suggest' | 'nl2tags' | 'nl_caption'
+  | 'nl_scene' | 'translate' | 'creative' | 'negative' | 'auto_nl'
+
+export interface AiAssistInstructions {
+  common: string
+  features: Record<AiAssistFeature, string>
+}
+
+export type AiAssistInstructionsResult =
+  | { ok: true; instructions: AiAssistInstructions }
+  | { ok: false; error: string }
 
 // ── Batch / Caption ──
 

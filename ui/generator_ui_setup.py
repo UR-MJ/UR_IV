@@ -108,6 +108,7 @@ class UISetupMixin:
         )
 
         from PyQt6.QtGui import QDesktopServices
+        from ui.native_dialogs import ThemedWebDialogs, apply_native_shell_theme
 
         class _ExternalNavigationPage(QWebEnginePage):
             """target=_blank/window.open을 메인 페이지와 채널에서 격리한다."""
@@ -119,7 +120,7 @@ class UISetupMixin:
                 # 팝업용 WebEngine 문서는 절대 로드하지 않는다.
                 return False
 
-        class _DebugPage(QWebEnginePage):
+        class _DebugPage(ThemedWebDialogs, QWebEnginePage):
             def javaScriptConsoleMessage(self, level, message, line, source):
                 print(f"[Vue] {message}")
 
@@ -152,16 +153,13 @@ class UISetupMixin:
         self.web_profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
         
         from PyQt6.QtGui import QColor
-        # 배경을 어둡게 — Vue가 그려지기 전(초기 로딩/전환 순간) 창 기본 '흰색'이 비쳐
-        # '응답 없음'처럼 보이던 문제 방지. 창/스택/뷰/페이지 모두 동일 다크로 고정.
-        _DARK = "#0d0d0d"
-        self.setStyleSheet(f"QMainWindow {{ background: {_DARK}; }}")
+        # First paint and native chrome use the same current theme as Vue.
+        background = get_color('bg_primary')
         self.vue_viewer = QWebEngineView()
-        self.vue_viewer.setStyleSheet(f"border: none; background: {_DARK}; margin: 0px; padding: 0px;")
 
         # 중요: 새로 만든 프로필로 페이지 생성
         page = _DebugPage(self.web_profile, self.vue_viewer)
-        page.setBackgroundColor(QColor(_DARK))  # 페이지 자체 배경(첫 페인트 전)도 다크
+        page.setBackgroundColor(QColor(background))
         self.vue_viewer.setPage(page)
 
         channel = QWebChannel(page)
@@ -190,7 +188,6 @@ class UISetupMixin:
         # QStackedWidget: 0=Vue SPA, 1=Web, 2=Backend
         from PyQt6.QtWidgets import QStackedWidget
         self._main_stack = QStackedWidget()
-        self._main_stack.setStyleSheet(f"background: {_DARK};")
         self._main_stack.setContentsMargins(0, 0, 0, 0)
         self._main_stack.addWidget(self.vue_viewer)  # index 0
 
@@ -205,6 +202,7 @@ class UISetupMixin:
         self._main_stack.addWidget(self.backend_ui_tab)  # index 2
 
         self.setCentralWidget(self._main_stack)
+        apply_native_shell_theme(self)
 
         # ── 프록시 위젯 초기화 ──
         self._init_prompt_proxies()

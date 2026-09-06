@@ -8,13 +8,15 @@ from .anima38_nodes import (
 from .anima_lora_nodes import NODE_CLASS_MAPPINGS as _ANIMA_LORA_NODES
 from .generation import NODE_CLASS_MAPPINGS as _GENERATION_NODES
 from .guidance import NODE_CLASS_MAPPINGS as _GUIDANCE_NODES
+from .h3_cache_nodes import NODE_CLASS_MAPPINGS as _H3_CACHE_NODES
+from .relight import NODE_CLASS_MAPPINGS as _RELIGHT_NODES
 from .sam3_nodes import (
     NODE_CLASS_MAPPINGS as _SAM3_NODES,
     NODE_DISPLAY_NAME_MAPPINGS as _SAM3_DISPLAY_NAMES,
 )
 
 
-__version__ = "1.1.2"
+__version__ = "1.2.0"
 
 
 def _merge_node_maps(*maps):
@@ -34,6 +36,8 @@ NODE_CLASS_MAPPINGS = _merge_node_maps(
     _GUIDANCE_NODES,
     _GENERATION_NODES,
     _SAM3_NODES,
+    _H3_CACHE_NODES,
+    _RELIGHT_NODES,
 )
 
 NODE_DISPLAY_NAME_MAPPINGS = {

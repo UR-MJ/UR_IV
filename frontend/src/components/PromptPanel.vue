@@ -199,6 +199,7 @@
           <div v-for="(tag, i) in acItems" :key="tag" class="ac-item" :class="{ selected: acIdx === i }" @mousedown.prevent="acceptSuggestion(tag)">{{ tag }}</div>
         </div>
       </div>
+      <CompositionControl :model-value="widgets.main_prompt_text || ''" :other-prompts="compositionOtherPrompts" @append="appendComposition" />
       <div class="input-group">
         <label>접두 <span v-if="sectionTokens.prefix" class="tk-badge" :class="tokenBadgeClass(sectionTokens.prefix)">{{ sectionTokens.prefix }}t</span></label>
         <TagBlockField v-if="tagBlockMode" v-model="widgets.prefix_prompt_text" :color-fn="blockColorClass" placeholder="선행 추가..." @open-wildcard="(n) => emit('open-wildcard', n)" />
@@ -292,11 +293,25 @@ import { openCharPresetModal } from '../composables/uiModals.js'
 import { getBackend, onBackendEvent } from '../bridge.js'
 import CustomSelect from './CustomSelect.vue'
 import TagBlockField from './TagBlockField.vue'
+import CompositionControl from './CompositionControl.vue'
 
 const emit = defineEmits(['toggle-extend', 'open-wildcard'])
 const store = useWidgetStore()
 const widgets = store.widgets
 const route = useRoute()
+const compositionOtherPrompts = computed(() => [
+  widgets.char_count_input, widgets.character_input, widgets.copyright_input,
+  widgets.artist_input, widgets.prefix_prompt_text, widgets.suffix_prompt_text,
+].filter(Boolean).join(', '))
+
+function appendComposition(text: string) {
+  // Main-tag writes use the same Python proxy/recomposition path as text and blocks.
+  // Save both sides immediately so even a rapid Ctrl+Z restores the full old prompt.
+  if (debounceTimer) clearTimeout(debounceTimer)
+  pushUndoSnapshot()
+  widgets.main_prompt_text = text
+  pushUndoSnapshot()
+}
 
 const generationFamilyItems = ['Standard', 'Krea2']
 /** 저장값(대문자)과 표시 라벨을 잇는다 — 비교는 전부 toUpperCase 로 하므로 표시만 바꾸면 된다. */

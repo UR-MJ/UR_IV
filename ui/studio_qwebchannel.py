@@ -11,11 +11,10 @@ import json
 import logging
 import threading
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QFileDialog
+from ui.native_dialogs import select_directory, start_directory
 
 from core.studio_application import (
     CallContext,
@@ -78,12 +77,7 @@ class DesktopNativeHost(QObject):
 
     @staticmethod
     def _start_directory(current: str) -> str:
-        candidate = Path(str(current or "")).expanduser() if current else Path.home()
-        while not candidate.is_dir() and candidate.parent != candidate:
-            candidate = candidate.parent
-        if not candidate.is_dir():
-            candidate = Path.home()
-        return str(candidate)
+        return start_directory(current)
 
     @staticmethod
     def _dialog_title(kind: str, selector: str) -> str:
@@ -110,10 +104,10 @@ class DesktopNativeHost(QObject):
     def pick_directory(self, kind: str, selector: str, current: str) -> str | None:
         """Open the native directory picker for an authorized desktop request."""
 
-        selected = QFileDialog.getExistingDirectory(
+        selected = select_directory(
             self._window,
             self._dialog_title(str(kind or ""), str(selector or "")),
-            self._start_directory(str(current or "")),
+            str(current or ""),
         )
         return str(selected) if selected else None
 

@@ -362,6 +362,10 @@ class ForgeNeoKSamplerCNS:
                 args=(model, int(seed), int(steps), float(cfg), sampler_name, scheduler, positive, negative, latent_image, speed_split_mode, float(speed_spd_scale), float(speed_spd_sigma), float(denoise), float(speed_adaptive_smc_alpha)),
             )[:1]
         if spectrum_enabled:
+            from .spectrum_isolation import isolated_sampler_model
+            # A new provider/model-options state for each sampling invocation.
+            # Do not deepcopy GPU handles or modify the upstream cached MODEL.
+            model = isolated_sampler_model(model)
             model = invoke_provider(
                 "DiTSpectrumPatch", method="patch", feature="Spectrum sampler",
                 args=(model, int(steps), float(spectrum_window_size), float(spectrum_flex_window), int(spectrum_warmup_steps), int(spectrum_tail_actual_steps), float(spectrum_blend_w), int(spectrum_cheby_degree), float(spectrum_ridge_lambda), int(spectrum_history_size), True, bool(spectrum_one_sampler_only), bool(spectrum_verbose)),

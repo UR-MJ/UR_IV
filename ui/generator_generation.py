@@ -3,6 +3,7 @@
 이미지 생성 및 자동화 관련 로직
 """
 import os
+import copy
 import time
 import random
 import json
@@ -103,18 +104,37 @@ class GenerationMixin:
         except Exception:
             pass
 
-    def start_generation(self):
+    def start_generation(self, *, payload_override=None, model_override=None, backend_override=None):
         """이미지 생성 시작"""
+        worker = getattr(self, 'gen_worker', None)
+        try:
+            active = worker is not None and worker.isRunning()
+        except RuntimeError:
+            active = False
+        if active and getattr(worker, '_result_emitted', False) is not True:
+            message = '이미지 생성 중입니다. 현재 작업이 끝난 뒤 다시 시작하세요.'
+            self.show_status(message, 5000)
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.showNotification.emit('warning', message)
+            return False
         # 1) 입력 파싱 + payload 구성 + 검증 — UI를 '생성 중'으로 전환하기 *전에* 수행.
         #    (검증 실패 시 버튼/Vue 스피너가 '생성 중'으로 영구 잔류하던 버그 방지)
         try:
-            payload, err = self._build_generation_payload()
+            if payload_override is None:
+                payload, err = self._build_generation_payload()
+            else:
+                from core.payload_validator import PayloadValidator
+                payload = copy.deepcopy(payload_override)
+                validation = PayloadValidator.validate(payload)
+                err = " / ".join(validation.errors)
+                if not validation.ok:
+                    payload = None
         except Exception as e:
             _logger.exception("payload 구성 실패")
             payload, err = None, str(e)
         if payload is None:
             self._abort_generation(err or '생성 준비 실패')
-            return
+            return False
 
         self._maybe_unload_ollama()
         self._gen_start_time = time.time()
@@ -145,12 +165,15 @@ class GenerationMixin:
         _logger.info("Sending Payload to WebUI API")
         _logger.debug(f"프롬프트: {payload['prompt'][:100]}...")
 
-        selected_model = self.model_combo.currentText()
+        selected_model = self.model_combo.currentText() if model_override is None else model_override
         if not str(selected_model or '').strip() and self._backend_needs_checkpoint():
             self._abort_generation("체크포인트가 아직 선택되지 않았습니다 — 목록이 로딩 중이면 잠시 후 다시 누르세요")
-            return
+            return False
         self._cleanup_gen_worker()
-        self.gen_worker = GenerationFlowWorker(selected_model, payload)
+        if backend_override is None:
+            self.gen_worker = GenerationFlowWorker(selected_model, payload)
+        else:
+            self.gen_worker = GenerationFlowWorker(selected_model, payload, backend=backend_override)
         self.gen_worker.finished.connect(self.on_generation_finished)
         self.gen_worker.progress.connect(self._on_generation_progress)
 
@@ -161,6 +184,7 @@ class GenerationMixin:
         self.gen_progress_bar.show()
 
         self.gen_worker.start()
+        return True
 
     @staticmethod
     def _backend_needs_checkpoint() -> bool:
@@ -195,14 +219,31 @@ class GenerationMixin:
             except Exception:
                 self.is_automating = False
 
-    def _build_generation_payload(self):
+    def _chat_generation_snapshot(self, prompt: str):
+        """Capture current generation controls on the UI thread without writes.
+
+        Chat resolves wildcard files and prompt hooks later in its own worker.
+        It must remove ``_chat_deferred_prompt`` before handing off to an API.
+        """
+        import copy
+
+        model = str(self.model_combo.currentText() or '').strip()
+        if not model:
+            raise ValueError("T2I에서 사용할 모델을 먼저 선택하세요.")
+        payload, error = self._build_generation_payload(prompt_override=prompt, snapshot=True)
+        if error:
+            raise ValueError(error)
+        return model, copy.deepcopy(payload)
+
+    def _build_generation_payload(self, *, prompt_override=None, snapshot=False, comfy_workflow_snapshot=None):
         """입력 위젯 → 검증된 payload. 성공 시 (payload, None), 실패 시 (None, 사유).
         UI 상태는 건드리지 않음 — start_generation이 검증 통과 후에만 busy 전환."""
         # 해상도 결정
         if self.random_res_check.isChecked() and self.random_resolutions:
             width, height, _ = random.choice(self.random_resolutions)
-            self.width_input.setText(str(width))
-            self.height_input.setText(str(height))
+            if not snapshot:
+                self.width_input.setText(str(width))
+                self.height_input.setText(str(height))
         else:
             width = _widget_int(self.width_input, 1024)
             height = _widget_int(self.height_input, 1024)
@@ -233,11 +274,11 @@ class GenerationMixin:
         combined_neg_prompt = self.neg_prompt_text.toPlainText().strip()
 
         # 와일드카드 치환
-        final_prompt = self.total_prompt_display.toPlainText()
+        final_prompt = self.total_prompt_display.toPlainText() if prompt_override is None else str(prompt_override)
         wc_enabled = (hasattr(self, 'settings_tab') and
                       hasattr(self.settings_tab, 'chk_wildcard_enabled') and
                       self.settings_tab.chk_wildcard_enabled.isChecked())
-        if wc_enabled:
+        if wc_enabled and not snapshot:
             final_prompt = resolve_file_wildcards(final_prompt)
             final_prompt = process_wildcards(final_prompt)
             combined_neg_prompt = resolve_file_wildcards(combined_neg_prompt)
@@ -247,9 +288,10 @@ class GenerationMixin:
         # 기존 처리 *뒤*에 호출되므로 비파괴적. instant_wildcards($$name$$),
         # standard_dedupe, 사용자 추가 훅 등이 여기서 동작.
         try:
-            from core.standard_hooks import run_pipeline_on_text
-            final_prompt = run_pipeline_on_text(final_prompt)
-            combined_neg_prompt = run_pipeline_on_text(combined_neg_prompt)
+            if not snapshot:
+                from core.standard_hooks import run_pipeline_on_text
+                final_prompt = run_pipeline_on_text(final_prompt)
+                combined_neg_prompt = run_pipeline_on_text(combined_neg_prompt)
         except Exception as e:
             _logger.warning(f"pipeline 실행 실패 (원본 유지): {e}")
 
@@ -360,6 +402,27 @@ class GenerationMixin:
 
         self._apply_postprocess_chain(payload)
 
+        # Opt-in Comfy sampler experiments are snapshotted with the queued job.
+        # Never leak provider-specific switches into Forge or Krea2 requests.
+        from backends import BackendType, get_backend_type, get_backend
+        if get_backend_type() == BackendType.COMFYUI and not self._is_krea2_generation():
+            from core.config_migration import load_ui_prefs
+            from core.storage_paths import config_file
+            from core.spectrum_settings import spectrum_payload_from_prefs
+            from ui.comfy_workflow_actions import quality_preset_payload
+            try:
+                payload.update(spectrum_payload_from_prefs(load_ui_prefs(str(config_file('ui_prefs.json')))))
+                payload.update(quality_preset_payload(payload, host=self, endpoint=get_backend().api_url))
+                if prompt_override is None:
+                    if comfy_workflow_snapshot is not None:
+                        payload['_comfy_workflow_snapshot'] = copy.deepcopy(comfy_workflow_snapshot)
+                    else:
+                        from core.comfy_workflow_controls import snapshot_comfy_payload
+                        payload = snapshot_comfy_payload(get_backend(), payload, 'txt2img')
+                    payload['_comfy_model_snapshot'] = self.model_combo.currentText()
+            except ValueError as exc:
+                return None, str(exc)
+
         # payload 사전 검증 — 잘못된 값은 API 호출 전에 사용자에게 안내
         from core.payload_validator import PayloadValidator
         vr = PayloadValidator.validate(payload)
@@ -372,6 +435,8 @@ class GenerationMixin:
 
         if self._is_krea2_generation():
             payload["_generation_family"] = "krea2"
+        if snapshot:
+            payload["_chat_deferred_prompt"] = {"wildcards": bool(wc_enabled)}
         return payload, None
 
     def _build_vae_te_override(self) -> list:
@@ -422,7 +487,7 @@ class GenerationMixin:
                 # cancel() = 취소 플래그 + 백엔드 interrupt → 블로킹 HTTP가 곧 반환되어
                 # run()이 자연 종료됨. terminate(스레드 강제 종료, 락 잡은 채 죽을 수
                 # 있음)는 최후 수단으로만.
-                if hasattr(worker, 'cancel'):
+                if hasattr(worker, 'cancel') and getattr(worker, '_result_emitted', False) is not True:
                     worker.cancel()
                 worker.quit()
                 if not worker.wait(5000):
@@ -488,6 +553,23 @@ class GenerationMixin:
         self.btn_generate.setEnabled(True)
         self.setWindowTitle("AI Studio - Pro")
 
+    def _generation_matches_queue(self, gen_info):
+        """Only a matching XYZ result may consume its queued snapshot."""
+        manager = getattr(self, 'queue_manager', None)
+        if manager is None or not manager.is_running:
+            return False
+        current = manager.queue_panel.get_first_item()
+        expected = current.get('_xyz_info') if isinstance(current, dict) else None
+        actual = gen_info.get('_xyz_info') if isinstance(gen_info, dict) else None
+        if expected or actual:
+            return bool(
+                isinstance(expected, dict) and isinstance(actual, dict)
+                and expected.get('requestId')
+                and actual.get('requestId') == expected.get('requestId')
+                and actual.get('index') == expected.get('index')
+            )
+        return True
+
     def on_generation_finished(self, result, gen_info):
         """생성 완료 처리"""
         # 버튼/타이틀 복구 (자동화 모드에 따라 다르게)
@@ -506,6 +588,18 @@ class GenerationMixin:
                 color: {c['text_muted']};
             }}
         """)
+
+        # The request never reached a backend. This is not a failed image and
+        # must not consume the queued snapshot or advance automation.
+        if isinstance(gen_info, dict) and gen_info.get('_queue_deferred'):
+            manager = getattr(self, 'queue_manager', None)
+            if manager is not None and self._generation_matches_queue(gen_info):
+                manager.pause()
+            self.viewer_label.setText(f"⏸ 대기열 일시정지\n{result}")
+            self.show_status(f"대기열 일시정지: {result}", 5000)
+            if hasattr(self, 'vue_bridge'):
+                self.vue_bridge.generationError.emit(str(result))
+            return
         
         # 취소 분기 — 에러(E020)/실패 통계/자동화 재시도로 처리하지 않음
         if isinstance(gen_info, dict) and gen_info.get('cancelled'):
@@ -514,7 +608,7 @@ class GenerationMixin:
             if hasattr(self, 'vue_bridge'):
                 # Vue 스피너 리셋 (✕로 이미 리셋된 경우 무해)
                 self.vue_bridge.generationError.emit('생성 취소됨')
-            if hasattr(self, 'queue_manager') and self.queue_manager.is_running:
+            if self._generation_matches_queue(gen_info):
                 self.queue_manager.on_generation_completed(False)
             return
 
@@ -596,7 +690,7 @@ class GenerationMixin:
                 self._auto_retry_count = 0   # 재시도 소진
 
         # 대기열 매니저에 생성 완료 알림
-        if hasattr(self, 'queue_manager') and self.queue_manager.is_running:
+        if self._generation_matches_queue(gen_info):
             self.queue_manager.on_generation_completed(isinstance(result, bytes))
 
         # ★★★ 자동화 계속 (generator_actions.py의 메서드 호출) ★★★
@@ -664,6 +758,10 @@ class GenerationMixin:
                 xyz_info = last_gen.get('_xyz_info')
         if xyz_info and hasattr(self, 'xyz_plot_tab'):
             self.xyz_plot_tab.add_result_image(filepath, xyz_info)
+        if xyz_info and hasattr(self, '_xyz_emit'):
+            self._xyz_emit('xyzPlotEvent', {"type": "result", "ok": True,
+                "requestId": xyz_info.get('requestId', ''), "path": filepath,
+                "label": xyz_info.get('label', ''), "axes": xyz_info.get('axes', {})})
 
         self._create_thumbnail(filepath)
         self.add_image_to_gallery(filepath)
@@ -735,6 +833,10 @@ class GenerationMixin:
         if hasattr(self, 'negpip_group') and self.negpip_group.isChecked():
             payload["alwayson_scripts"].setdefault("NegPiP", {"args": [True]})
         self._apply_postprocess_chain(payload)
+        from backends import BackendType, get_backend_type, get_backend
+        if get_backend_type() == BackendType.COMFYUI and not self._is_krea2_generation():
+            from core.comfy_workflow_controls import snapshot_comfy_payload
+            payload.update(snapshot_comfy_payload(get_backend(), payload, 'img2img'))
         return payload
 
     def _apply_postprocess_chain(self, payload):

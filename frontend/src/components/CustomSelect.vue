@@ -15,7 +15,8 @@
       <span class="csel-text">{{ displayText }}</span>
       <span class="csel-arrow" aria-hidden="true"><Icon name="chevron-down" /></span>
     </button>
-    <div :id="listboxId" class="csel-dropdown" role="listbox" v-if="isOpen">
+    <Teleport to="body">
+    <div ref="dropdown" :id="listboxId" class="csel-dropdown" :style="menuStyle" role="listbox" v-if="isOpen">
       <template v-if="normalizedGroups.length">
         <section v-for="(group, groupIndex) in normalizedGroups"
           :key="`${group.source || group.label}-${groupIndex}`" class="csel-group"
@@ -34,7 +35,7 @@
             :aria-selected="modelValue === opt"
             @mouseenter="activeIndex = optionFlatIndex(groupIndex, optionIndex)"
             @click="select(opt)"
-          >{{ opt }}</div>
+          >{{ opt === '' ? placeholder : opt }}</div>
         </section>
       </template>
       <template v-else>
@@ -44,15 +45,17 @@
           role="option"
           :aria-selected="modelValue === opt"
           @mouseenter="activeIndex = optionIndex"
-          @click="select(opt)">{{ opt }}</div>
+          @click="select(opt)">{{ opt === '' ? placeholder : opt }}</div>
       </template>
       <div v-if="!hasOptions" class="csel-empty">항목 없음</div>
     </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, useId, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onDeactivated, onUnmounted, useId, watch } from 'vue'
+import { dropdownPlacement } from '../utils/dropdownPlacement'
 
 type SelectValue = string | number
 interface SelectOptionGroup {
@@ -78,6 +81,10 @@ const emit = defineEmits<{ 'update:modelValue': [value: SelectValue] }>()
 const isOpen = ref(false)
 const root = ref<HTMLElement | null>(null)
 const trigger = ref<HTMLButtonElement | null>(null)
+const dropdown = ref<HTMLElement | null>(null)
+const menuStyle = ref<Record<string, string>>({})
+let placementFrame = 0
+let triggerObserver: ResizeObserver | undefined
 const activeIndex = ref(-1)
 const listboxId = `csel-listbox-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
 
@@ -94,7 +101,7 @@ const hasOptions = computed(() => normalizedGroups.value.length > 0 || props.opt
 const flatOptions = computed<SelectValue[]>(() => normalizedGroups.value.length
   ? normalizedGroups.value.flatMap(group => group.options)
   : props.options)
-const activeDescendant = computed(() => activeIndex.value >= 0
+const activeDescendant = computed(() => isOpen.value && activeIndex.value >= 0
   ? optionDomId(activeIndex.value)
   : undefined)
 
@@ -117,11 +124,25 @@ function optionDomId(index: number) {
 
 function open(direction: 1 | -1 = 1) {
   if (!flatOptions.value.length) return
+  updatePlacement()
   isOpen.value = true
   const selectedIndex = flatOptions.value.findIndex(option => option === props.modelValue)
   activeIndex.value = selectedIndex >= 0
     ? selectedIndex
     : direction > 0 ? 0 : flatOptions.value.length - 1
+}
+
+function updatePlacement() {
+  if (!trigger.value) return
+  const { above: _above, ...position } = dropdownPlacement(trigger.value.getBoundingClientRect(), {
+    width: document.documentElement.clientWidth, height: window.innerHeight,
+  })
+  menuStyle.value = Object.fromEntries(Object.entries(position).map(([key, value]) => [key, `${value}px`]))
+}
+
+function schedulePlacement() {
+  if (!isOpen.value || placementFrame) return
+  placementFrame = requestAnimationFrame(() => { placementFrame = 0; updatePlacement() })
 }
 
 function toggle() {
@@ -172,11 +193,29 @@ function select(opt: SelectValue) {
 }
 
 function onClickOutside(e: MouseEvent) {
-  if (root.value && !root.value.contains(e.target as Node)) isOpen.value = false
+  if (root.value && !root.value.contains(e.target as Node) && !dropdown.value?.contains(e.target as Node)) isOpen.value = false
 }
 
-onMounted(() => document.addEventListener('click', onClickOutside))
-onUnmounted(() => document.removeEventListener('click', onClickOutside))
+onMounted(() => {
+  document.addEventListener('click', onClickOutside)
+  window.addEventListener('scroll', schedulePlacement, true)
+  window.addEventListener('resize', schedulePlacement)
+  triggerObserver = new ResizeObserver(schedulePlacement)
+  if (trigger.value) triggerObserver.observe(trigger.value)
+})
+// Teleported menus must not remain above another keep-alive tab.
+onDeactivated(() => {
+  isOpen.value = false
+  cancelAnimationFrame(placementFrame)
+  placementFrame = 0
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onClickOutside)
+  window.removeEventListener('scroll', schedulePlacement, true)
+  window.removeEventListener('resize', schedulePlacement)
+  triggerObserver?.disconnect()
+  cancelAnimationFrame(placementFrame)
+})
 </script>
 
 <style scoped>
@@ -193,12 +232,13 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside))
 .csel-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .csel-arrow { color: var(--text-muted); font-size: 12px; flex-shrink: 0; }
 .csel-dropdown {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
-  max-height: 240px; overflow-y: auto;
+  position: fixed; z-index: 20000; box-sizing: border-box;
+  max-height: 240px; overflow-y: auto; overscroll-behavior: contain;
   background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-  margin-top: 2px; box-shadow: 0 12px 32px rgba(0,0,0,0.7);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.2);
 }
 .csel-option {
+  overflow-wrap: anywhere; white-space: normal;
   padding: 8px 14px; color: var(--text-secondary); font-size: 13px;
   cursor: pointer; transition: background 0.1s;
 }

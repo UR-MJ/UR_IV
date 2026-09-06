@@ -51,6 +51,7 @@ APP_MODEL_SUBDIRS = {
     "loras": "Lora",
     "vae": "VAE",
     "text_encoders": "text_encoder",
+    "upscale_models": "upscale_models",
 }
 
 _ENV_KEYS = {

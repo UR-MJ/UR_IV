@@ -2,6 +2,7 @@
 """Ollama REST API 클라이언트 — 로컬 LLM 프롬프트 강화"""
 import requests
 import json
+import re
 
 
 SYSTEM_PROMPTS = {
@@ -356,6 +357,27 @@ def _extract_final_nl(text: str) -> str:
     return _strip_meta_sentences(t)
 
 
+def summarize_model_info(data: dict) -> dict:
+    """Bounded /api/show metadata; no templates, system prompts or filename guesses."""
+    details = data.get('details') if isinstance(data.get('details'), dict) else {}
+    metadata = data.get('model_info') if isinstance(data.get('model_info'), dict) else {}
+    architecture = str(metadata.get('general.architecture') or details.get('family') or '')[:100]
+    capabilities = data.get('capabilities')
+    capabilities = [v for v in capabilities if v in {'completion', 'vision', 'thinking', 'tools', 'embedding'}] if isinstance(capabilities, list) else None
+    def positive_int(key):
+        value = metadata.get(f'{architecture}.{key}')
+        return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 10_000_000 else None
+    experts = positive_int('expert_count')
+    thinking = 'unknown' if capabilities is None else 'none' if 'thinking' not in capabilities else 'levels' if architecture == 'gptoss' else 'boolean'
+    return {'architecture': architecture, 'parameterSize': str(details.get('parameter_size') or '')[:80],
+            'quantization': str(details.get('quantization_level') or '')[:80],
+            'contextLength': positive_int('context_length'), 'experts': experts,
+            'activeExperts': positive_int('expert_used_count'),
+            'moe': None if experts is None else experts > 1,
+            'capabilities': capabilities, 'thinkingMode': thinking,
+            'vision': None if capabilities is None else 'vision' in capabilities}
+
+
 class OllamaClient:
     """Ollama REST API 래퍼"""
 
@@ -364,9 +386,12 @@ class OllamaClient:
         self.model = model
         self.timeout = 60
 
-    def enhance(self, tags: str, mode: str = 'expand', extra_prompt: str = '') -> str:
+    def enhance(self, tags: str, mode: str = 'expand', extra_prompt: str = '', *,
+                instructions=None, instruction_feature=None) -> str:
         """태그를 LLM으로 강화하여 반환"""
+        from core.ai_assist_instructions import compose_system_prompt
         system = SYSTEM_PROMPTS.get(mode, SYSTEM_PROMPTS['expand'])
+        system = compose_system_prompt(system, mode, instructions, feature=instruction_feature)
         # 태그→자연어: LLM에 '묘사할 내용'만 — 네거티브/선행·후행 고정(품질·score·year)/
         # <lora>/@트리거 제거하고 인물수·캐릭터·작품·메인 태그만 전송 (정확도↑, 소형 모델 혼란↓).
         if mode == 'nl_caption':
@@ -519,7 +544,7 @@ class OllamaClient:
 
         ``think`` — thinking 모델(Gemma 4·Qwen3.x)은 기본으로 생각부터 하느라 첫 글자가 한참 뒤에
         온다. False 면 바로 답하게 하고, True 면 생각 조각을 ``on_thinking(text)`` 으로 따로 흘린다.
-        thinking 을 모르는 모델이 400 으로 거부하면 플래그 없이 한 번 더 요청한다.
+        비추론 모델이 False를 명시적으로 거부할 때만 플래그 없이 한 번 더 요청한다.
 
         ``should_stop()`` 이 참이 되면 응답을 닫고 그때까지의 본문을 돌려준다 — 서버 쪽
         생성도 연결이 끊기면 멈춘다(Ollama 는 클라이언트가 떠나면 요청을 버린다).
@@ -529,17 +554,22 @@ class OllamaClient:
         if options:
             payload["options"] = dict(options)
         if think is not None:
-            payload["think"] = bool(think)
+            if not isinstance(think, bool) and think not in ('low', 'medium', 'high', 'max'):
+                raise ValueError('지원하지 않는 추론 설정입니다')
+            payload["think"] = think
         pieces = []
         thoughts = []
         resp = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True, timeout=(10, timeout))
-        if resp.status_code == 400 and "think" in payload:
+        if resp.status_code == 400 and payload.get("think") is False:
             detail = ""
             try:
                 detail = str(resp.json().get("error", ""))
             except Exception:
                 detail = (resp.text or "")[:200]
-            if "think" in detail.lower():
+            # Only a model explicitly lacking thinking can safely omit OFF.
+            # Generic think/level validation failures must not silently restore
+            # the model's default (which may enable thinking).
+            if re.fullmatch(r'(?:"[^"\r\n]+"|\S+) does not support thinking\.?', detail.strip(), re.IGNORECASE):
                 resp.close()
                 payload.pop("think", None)
                 resp = requests.post(f"{self.base_url}/api/chat", json=payload, stream=True, timeout=(10, timeout))
@@ -582,7 +612,11 @@ class OllamaClient:
                         # 'length' 면 num_predict 에 걸려 잘린 것 — 화면에 그렇게 알린다
                         "done_reason": data.get("done_reason"),
                     }
-        return {"content": "".join(pieces), "thinking": "".join(thoughts), "stopped": False}
+        # A clean HTTP EOF is not an Ollama completion: proxies and stopped
+        # servers can close the stream before its required done packet.
+        if should_stop is not None and should_stop():
+            return {"content": "".join(pieces), "thinking": "".join(thoughts), "stopped": True}
+        raise RuntimeError("응답 완료 신호를 받기 전에 연결이 끊어졌습니다. 받은 내용은 유지됩니다. 다시 시도해 주세요.")
 
     def unload(self) -> bool:
         """모델을 VRAM에서 즉시 언로드 (keep_alive=0). best-effort."""
@@ -605,6 +639,16 @@ class OllamaClient:
             return [m['name'] for m in data.get('models', [])]
         except Exception:
             return []
+
+    def get_model_info(self) -> dict:
+        """Read model architecture/capabilities without loading or generating."""
+        response = requests.post(f'{self.base_url}/api/show',
+                                 json={'model': self.model, 'verbose': False}, timeout=(3, 8))
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError('Ollama 모델 정보 응답 형식이 올바르지 않습니다')
+        return summarize_model_info(data)
 
     def test_connection(self) -> bool:
         """연결 테스트"""

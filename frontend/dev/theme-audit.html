@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; font-src 'self' data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>AI Studio Pro · 오프라인 테마 미리보기</title>
+    <style>
+      html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; background: #f4f4f2; color: #1b1b19; }
+      body { display: flex; flex-direction: column; }
+      #preview-status { flex: none; padding: 8px 12px; background: var(--bg-card, #fff); color: var(--text-primary, #1b1b19); border-bottom: 1px solid var(--border, #d9d9d3); font-size: 12px; }
+      #preview-status[data-state="error"] { background: #fff0ed; color: #842718; }
+      #preview-help { padding: 24px; line-height: 1.7; max-width: 900px; }
+      #preview-help p { margin: 12px 0; }
+      #preview-help code { user-select: text; overflow-wrap: anywhere; }
+      #preview-tools { flex: none; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-bottom: 1px solid var(--border, #d9d9d3); background: var(--bg-secondary, #fff); }
+      #preview-tools button { border: 1px solid var(--border, #d9d9d3); border-radius: 6px; background: var(--bg-button, #e9e9e6); color: var(--text-primary, #1b1b19); padding: 5px 9px; cursor: pointer; font-size: 12px; }
+      #preview-tools button:focus-visible { outline: 2px solid var(--accent, #775c00); outline-offset: 2px; }
+      #preview-tools label { font-size: 12px; }
+      #preview-filter { width: 180px; padding: 5px; background: var(--bg-input, #fff); color: var(--text-primary, #1b1b19); border: 1px solid var(--border, #d9d9d3); }
+      #app { flex: 1; height: auto !important; min-height: 0; overflow: hidden; }
+      #app > .app-container { height: 100%; }
+      #preview-log { flex: none; padding: 6px 12px; max-height: 120px; overflow: auto; background: var(--bg-card, #fff); color: var(--text-primary, #1b1b19); font-size: 12px; }
+      #preview-log pre { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div id="preview-status" role="status" aria-live="polite">미리보기 시작 준비 중…</div>
+    <section id="preview-help">
+      <h1>오프라인 테마 미리보기</h1>
+      <p>이 파일은 Vue 개발용 화면이라 파일 경로를 직접 열면 실행되지 않습니다. 앱 또는 AI 백엔드는 실행하지 않습니다.</p>
+      <p>프로젝트의 <code>frontend</code> 폴더에서 다음 명령으로 미리보기 서버를 시작하세요.</p>
+      <p><code>npm run dev -- --host 127.0.0.1 --port 5174 --strictPort</code></p>
+      <p>그다음 <a href="http://127.0.0.1:5174/dev/theme-audit.html">테마 미리보기 열기</a>를 누르세요. 서버가 꺼져 있으면 이 주소도 연결되지 않습니다.</p>
+      <p>설정·파일·클립보드는 메모리 모의 데이터만 사용하며, 모델 생성·다운로드·외부 연결은 차단됩니다. 새로고침하면 미리보기 설정은 초기화됩니다.</p>
+      <noscript><p>JavaScript가 꺼져 있어 미리보기를 시작할 수 없습니다.</p></noscript>
+    </section>
+    <nav id="preview-tools" aria-label="오프라인 미리보기 도구" hidden></nav>
+    <div id="app"></div>
+    <details id="preview-log" hidden><summary>오프라인 동작 기록</summary><pre></pre></details>
+    <script>
+      (() => {
+        const status = document.getElementById('preview-status');
+        const help = document.getElementById('preview-help');
+        const fail = error => {
+          status.dataset.state = 'error';
+          status.textContent = '미리보기를 불러오지 못했습니다: ' + (error?.message || String(error));
+          help.hidden = false;
+        };
+        window.addEventListener('error', event => { if (event.error) fail(event.error); });
+        window.addEventListener('unhandledrejection', event => fail(event.reason));
+        if (location.protocol === 'file:') {
+          status.textContent = '파일 직접 열기 모드 — 아래 안내대로 로컬 서버에서 열어 주세요.';
+          return;
+        }
+        if (!['http:', 'https:'].includes(location.protocol)) {
+          fail(new Error('HTTP 로컬 서버 주소에서 열어 주세요.'));
+          return;
+        }
+        // Install before any Vue imports: never read/write the app's real browser storage.
+        function memoryStorage() {
+          const values = new Map();
+          return new Proxy({
+            getItem: key => values.get(String(key)) ?? null,
+            setItem: (key, value) => values.set(String(key), String(value)),
+            removeItem: key => values.delete(String(key)), clear: () => values.clear(),
+            key: index => [...values.keys()][index] ?? null,
+            get length() { return values.size; },
+          }, {
+            get: (target, key) => key in target ? target[key] : values.get(String(key)),
+            set: (_target, key, value) => { values.set(String(key), String(value)); return true; },
+            deleteProperty: (_target, key) => values.delete(String(key)),
+          });
+        }
+        try {
+          Object.defineProperty(window, 'localStorage', { configurable: true, value: memoryStorage() });
+          Object.defineProperty(window, 'sessionStorage', { configurable: true, value: memoryStorage() });
+          const blocked = () => { throw new Error('오프라인 미리보기에서는 외부 연결을 사용할 수 없습니다.'); };
+          const originalFetch = window.fetch.bind(window);
+          window.fetch = (resource, options) => {
+            const url = typeof resource === 'string' ? resource : resource?.url || '';
+            return /^(data:|blob:)/.test(url) ? originalFetch(resource, options) : Promise.reject(new Error('오프라인 미리보기: 네트워크 요청 차단'));
+          };
+          window.XMLHttpRequest = window.WebSocket = window.EventSource = blocked;
+          window.open = () => null;
+          Object.defineProperty(navigator, 'sendBeacon', { configurable: true, value: () => false });
+          let clipboard = '';
+          Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+            writeText: async text => { clipboard = String(text); }, readText: async () => clipboard,
+          } });
+          // A fail-closed fixture: if isolation cannot be installed, do not import the app.
+          status.textContent = '실제 Vue 화면을 불러오는 중… (파일·설정·API 연결 없음)';
+          const timeout = setTimeout(() => fail(new Error('로딩 시간이 길어지고 있습니다. 미리보기 서버 터미널을 확인하고 새로고침해 주세요.')), 30000);
+          import('./theme-audit.js').then(() => clearTimeout(timeout)).catch(error => { clearTimeout(timeout); fail(error); });
+        } catch (error) { fail(error); }
+      })();
+    </script>
+  </body>
+</html>

@@ -18,6 +18,7 @@ import re
 import secrets
 import threading
 import time
+from contextlib import contextmanager
 
 
 _CREATOR_ACTIONS = {
@@ -25,6 +26,8 @@ _CREATOR_ACTIONS = {
     "creator_select_media",
     "creator_generate",
     "creator_cancel",
+    "creator_h3_cache_status",
+    "creator_h3_cache_clear",
     "comic_plan",
     "comic_save",
     "comic_generate_all",
@@ -45,6 +48,7 @@ class CreatorActionsMixin:
             "creator_cancel", "comic_plan", "comic_save",
             "comic_generate_all", "comic_animate_all", "comic_export_page",
             "comic_export_living",
+            "creator_h3_cache_status", "creator_h3_cache_clear",
         ):
             pass
         else:
@@ -55,6 +59,8 @@ class CreatorActionsMixin:
             "creator_select_media": self._creator_select_media,
             "creator_generate": self._creator_start_generation,
             "creator_cancel": self._creator_cancel,
+            "creator_h3_cache_status": lambda data: self._creator_cache_request("status", data),
+            "creator_h3_cache_clear": lambda data: self._creator_cache_request("clear", data),
             "comic_plan": self._comic_start_plan,
             "comic_save": self._comic_save,
             "comic_generate_all": self._comic_start_generate_all,
@@ -74,6 +80,8 @@ class CreatorActionsMixin:
         self._creator_state_lock = threading.RLock()
         self._creator_running = False
         self._creator_mode = ""
+        self._creator_active_job = None
+        self._creator_job_local = threading.local()
         self._creator_coordinator = get_generation_coordinator(
             unload_llm=self._creator_unload_ollama,
             on_state=lambda state: self._creator_emit(
@@ -92,6 +100,16 @@ class CreatorActionsMixin:
         )
 
     def _creator_emit(self, signal_name: str, payload: Dict[str, Any]) -> None:
+        payload = dict(payload)
+        if signal_name in {"creatorProgress", "creatorResult"}:
+            local = getattr(self, "_creator_job_local", None)
+            job = getattr(local, "job", None) or getattr(self, "_creator_active_job", None)
+            payload.setdefault("requestId", job["requestId"] if job else "")
+            if (job and payload["requestId"] == job["requestId"]
+                    and job["cancel"].is_set() and signal_name == "creatorResult"
+                    and payload.get("ok")):
+                payload = {"ok": False, "canceled": True, "mode": payload.get("mode", ""),
+                           "requestId": job["requestId"], "error": "생성이 취소되었습니다"}
         bridge = getattr(self, "vue_bridge", None)
         signal = getattr(bridge, signal_name, None)
         if signal is not None:
@@ -112,26 +130,43 @@ class CreatorActionsMixin:
         )
 
     def _creator_run_thread(self, mode: str, target, payload: dict) -> None:
+        payload = dict(payload)
+        request_id = str(payload.get("requestId") or secrets.token_hex(16))[:100]
+        payload["requestId"] = request_id
         with self._creator_state_lock:
             if self._creator_running:
+                if self._creator_active_job and self._creator_active_job["requestId"] == request_id:
+                    # Retried transport delivery is not a terminal failure of
+                    # the already accepted job with this identity.
+                    return
                 self._creator_emit(
                     "creatorResult",
-                    {"ok": False, "mode": mode, "error": "다른 Creator 작업이 실행 중입니다"},
+                    {"ok": False, "mode": mode, "requestId": request_id,
+                     "error": "다른 Creator 작업이 실행 중입니다"},
                 )
                 return
-            self._creator_cancel_event.clear()
+            job = {"requestId": request_id, "cancel": threading.Event(), "backend": None,
+                   "backend_lock": threading.RLock()}
+            self._creator_active_job = job
+            self._creator_cancel_event = job["cancel"]
             self._creator_set_running(True, mode)
 
         def _work():
+            self._creator_job_local.job = job
             try:
                 target(payload)
             except Exception as exc:
                 self._creator_emit(
                     "creatorResult",
-                    {"ok": False, "mode": mode, "error": str(exc)[:2000]},
+                    {"ok": False, "mode": mode, "requestId": request_id,
+                     "canceled": job["cancel"].is_set(), "error": str(exc)[:2000]},
                 )
             finally:
-                self._creator_set_running(False)
+                with self._creator_state_lock:
+                    if self._creator_active_job is job:
+                        self._creator_active_job = None
+                        self._creator_set_running(False)
+                self._creator_job_local.job = None
 
         threading.Thread(
             target=_work,
@@ -215,8 +250,10 @@ class CreatorActionsMixin:
         canonical_mode = "krea2_edit" if requested_mode in {"krea2", "krea_edit"} else requested_mode
         object_info = self._creator_object_info(backend)
         available = set(object_info.keys())
+        self._creator_configure_h3_cache(canonical_mode, params, available)
         if (
             canonical_mode in {"h3_t2v", "h3_i2v"}
+            and str(params.get("quality", "turbo")).strip().lower() == "turbo"
             and "block_cache" not in params
             and "blockCache" not in params
         ):
@@ -228,10 +265,8 @@ class CreatorActionsMixin:
         unload = self._creator_should_unload_ollama()
         all_artifacts = []
         info: Dict[str, Any] = {"passes": []}
-        with self._creator_coordinator.reserve(
-            requested_mode or "creator", unload_llm=unload, timeout=0
-        ):
-            result = backend.run_workflow(built["workflow"], self._creator_progress_callback)
+        with self._creator_reserve(backend, requested_mode or "creator", unload):
+            result = self._creator_run_workflow(backend, built, self._creator_progress_callback)
             if not result.success:
                 raise RuntimeError(result.error or "Creator 생성에 실패했습니다")
             all_artifacts.extend(result.artifacts)
@@ -260,7 +295,8 @@ class CreatorActionsMixin:
                 hires_built = build("krea2_hires", hires_params)
                 self._creator_check_nodes(hires_built, available)
                 self._creator_resolve_comfy_choices(hires_built, object_info)
-                result = backend.run_workflow(hires_built["workflow"], self._creator_progress_callback)
+                self._creator_check_cancelled()
+                result = self._creator_run_workflow(backend, hires_built, self._creator_progress_callback)
                 if not result.success:
                     raise RuntimeError(result.error or "Krea2 hires 생성에 실패했습니다")
                 all_artifacts.extend(result.artifacts)
@@ -281,15 +317,163 @@ class CreatorActionsMixin:
             },
         )
 
-    def _creator_cancel(self, _payload: dict) -> None:
-        self._creator_cancel_event.set()
-        try:
-            from backends import get_backend
+    @contextmanager
+    def _creator_reserve(self, backend, owner, unload):
+        with self._creator_coordinator.reserve(owner, unload_llm=unload, timeout=0):
+            self._creator_claim_backend(backend)
+            try:
+                self._creator_check_cancelled()
+                yield
+            finally:
+                job = getattr(self._creator_job_local, "job", None)
+                if job is not None:
+                    with job["backend_lock"], self._creator_state_lock:
+                        if self._creator_active_job is job:
+                            job["backend"] = None
 
-            get_backend().interrupt()
-        except Exception:
-            pass
-        self._creator_emit("creatorProgress", {"stage": "cancel", "message": "취소 요청 전송"})
+    def _creator_claim_backend(self, backend) -> None:
+        """Called only while this job owns the shared generation lease."""
+        job = getattr(self._creator_job_local, "job", None)
+        if job is not None:
+            with job["backend_lock"], self._creator_state_lock:
+                if self._creator_active_job is job:
+                    job["backend"] = backend
+
+    def _creator_check_cancelled(self) -> None:
+        local = getattr(self, "_creator_job_local", None)
+        job = getattr(local, "job", None)
+        if job is not None and job["cancel"].is_set():
+            raise RuntimeError("생성이 취소되었습니다")
+
+    def _creator_cache_preferences(self):
+        prefs = self._creator_prefs()
+        enabled = prefs.get("h3ConditioningCacheEnabled", True) is True
+        try:
+            gb = max(1, min(64, int(prefs.get("h3ConditioningCacheMaxGB", 8))))
+            entries = max(1, min(256, int(prefs.get("h3ConditioningCacheMaxEntries", 32))))
+        except (ValueError, TypeError, OverflowError):
+            gb, entries = 8, 32
+        return enabled, gb * 1024 ** 3, entries
+
+    def _creator_configure_h3_cache(self, mode, params, available):
+        if not mode.startswith("h3_"):
+            return
+        from core.h3_conditioning_cache import CACHE_NODE_TYPES
+        enabled, max_bytes, max_entries = self._creator_cache_preferences()
+        enabled = params.get("conditioning_cache", params.get("h3ConditioningCacheEnabled", enabled)) is True
+        supported = (CACHE_NODE_TYPES | {"EmptyMiniMaxH3LatentAV"}).issubset(available)
+        params["conditioning_cache"] = enabled and supported
+        params["conditioning_cache_max_bytes"] = max_bytes
+        params["conditioning_cache_max_entries"] = max_entries
+        if enabled and not supported:
+            self._creator_emit("creatorProgress", {"stage": "cache_unavailable", "percent": 0,
+                "cache": "unavailable", "message": "H3 캐시 노드가 없어 이번 작업은 캐시 없이 생성합니다. ComfyUI 노드 업데이트/재시작이 필요합니다."})
+
+    def _creator_run_workflow(self, backend, built, progress):
+        from core.h3_conditioning_cache import prepare_receipt
+
+        stages = built.get("stages") or [{"name": "sample", "workflow": built["workflow"]}]
+        receipt = None
+        result = None
+        for stage in stages:
+            self._creator_check_cancelled()
+            encode = stage["name"] == "encode"
+            graph = copy.deepcopy(stage["workflow"])
+            if receipt and not encode:
+                graph["6"]["inputs"]["expected_key"] = receipt["key"]
+            if encode:
+                self._creator_emit("creatorProgress", {"stage": "cache_check", "percent": 0,
+                    "message": "H3 인코딩 캐시와 서버의 모델·입력 파일을 확인하는 중"})
+
+            def stage_progress(value, maximum, preview=None):
+                if len(stages) == 1:
+                    progress(value, maximum, preview)
+                    return
+                ratio = max(0.0, min(1.0, value / maximum if maximum else 0))
+                progress(round((ratio * 25) if encode else (25 + ratio * 75)), 100, preview)
+
+            kwargs = {"cancel_check": self._creator_cancel_event.is_set}
+            if encode:
+                kwargs["allow_empty_outputs"] = True
+            result = backend.run_workflow(graph, stage_progress, **kwargs)
+            self._creator_check_cancelled()
+            if not result.success:
+                raise RuntimeError(result.error or "Creator 워크플로 실행에 실패했습니다")
+            if encode:
+                receipt = prepare_receipt(result.info or {})
+                self._creator_emit("creatorProgress", {"stage": "cache_hit" if receipt.get("hit") else "cache_saved",
+                    "percent": 25, "cache": "hit" if receipt.get("hit") else "miss",
+                    "message": "저장된 H3 인코딩을 재사용합니다 · 인코더 해제 완료" if receipt.get("hit") else "H3 인코딩 저장 · 인코더 해제 완료"})
+                self._creator_check_cancelled()
+        if receipt is not None:
+            result.info = {**(result.info or {}), "conditioning_cache": receipt}
+        return result
+
+    def _creator_cache_request(self, operation, payload):
+        def work():
+            import requests
+            event = {"operation": operation, "requestId": str(payload.get("requestId", ""))[:100],
+                     "ok": False, "available": False, "scope": "comfy_server"}
+            enabled, max_bytes, max_entries = self._creator_cache_preferences()
+            event.update(enabled=enabled, maxBytes=max_bytes, maxEntries=max_entries)
+            try:
+                from backends import BackendType, get_backend, get_backend_type
+                if get_backend_type() is not BackendType.COMFYUI:
+                    raise RuntimeError("H3 캐시는 선택된 ComfyUI 서버에서 관리합니다")
+                with self._creator_state_lock:
+                    if operation == "clear" and self._creator_running:
+                        raise RuntimeError("Creator 작업이 끝난 뒤 캐시를 비워 주세요")
+                backend = get_backend()
+                url = f"{backend.api_url.rstrip('/')}/aistudio/h3-cache/{operation}"
+                response = (requests.post(url, json={}, timeout=15) if operation == "clear"
+                            else requests.get(url, timeout=15))
+                if response.status_code == 404:
+                    raise RuntimeError("ComfyUI에 H3 캐시 노드가 없습니다. 노드 업데이트 후 서버를 재시작하세요")
+                event["available"] = True
+                if response.status_code == 409:
+                    raise RuntimeError("ComfyUI 서버에서 다른 작업이 실행 중입니다. 완료 후 캐시를 비워 주세요")
+                response.raise_for_status()
+                data = response.json()
+                # Never forward arbitrary server paths or other clients' metadata.
+                for key in ("entries", "bytes", "removedEntries", "removedBytes"):
+                    if key in data:
+                        event[key] = max(0, int(data[key]))
+                event["ok"] = True
+            except Exception as exc:
+                # Network errors may contain a URL; do not expose backend addresses.
+                event["error"] = str(exc)[:300] if isinstance(exc, RuntimeError) else "H3 캐시 서버 요청에 실패했습니다"
+            self._creator_emit("creatorCacheEvent", event)
+        threading.Thread(target=work, daemon=True, name=f"creator-cache-{operation}").start()
+
+    def _creator_cancel(self, payload: dict) -> None:
+        requested = str(payload.get("requestId") or "")[:100]
+        with self._creator_state_lock:
+            job = self._creator_active_job
+            if job is None or (requested and requested != job["requestId"]):
+                self._creator_emit("creatorProgress", {
+                    "stage": "cancel_ignored", "requestId": requested,
+                    "message": "해당 Creator 작업은 실행 중이 아닙니다",
+                })
+                return
+            if job["cancel"].is_set():
+                return
+            job["cancel"].set()
+
+        def interrupt_owned():
+            # Network latency must not hold the short UI state lock. Only the
+            # worker's lease release waits on this separate ownership lock.
+            with job["backend_lock"]:
+                with self._creator_state_lock:
+                    backend = job["backend"] if self._creator_active_job is job else None
+                if backend is None:
+                    return
+                try:
+                    backend.interrupt()
+                except Exception:
+                    pass
+        threading.Thread(target=interrupt_owned, daemon=True, name="creator-cancel").start()
+        self._creator_emit("creatorProgress", {"stage": "cancel", "requestId": job["requestId"],
+                                               "message": "취소 요청 전송"})
 
     def _creator_progress_callback(self, value: int, maximum: int, _preview=None) -> None:
         percent = int(value if maximum == 100 else (value * 100 / maximum if maximum else 0))
@@ -385,7 +569,17 @@ class CreatorActionsMixin:
         Linux while still satisfying Comfy's exact ``value_not_in_list`` check.
         """
 
-        for node in built.get("workflow", {}).values():
+        graphs = [built.get("workflow", {})] + [stage["workflow"] for stage in built.get("stages", [])]
+        descriptors = []
+        for graph in list(graphs):
+            for node in graph.values():
+                if node.get("class_type") not in {"ForgeNeoH3ConditioningCachePrepare", "ForgeNeoH3ConditioningCacheLoad"}:
+                    continue
+                inputs = node["inputs"]
+                descriptor = json.loads(inputs["descriptor"])
+                descriptors.append((inputs, descriptor))
+                graphs.extend([descriptor["conditioning"], dict(enumerate(descriptor["models"]))])
+        for node in (node for graph in graphs for node in graph.values()):
             if not isinstance(node, dict):
                 continue
             schema = object_info.get(str(node.get("class_type", "")), {})
@@ -433,6 +627,8 @@ class CreatorActionsMixin:
                         f"ComfyUI 리소스 선택지에 {node.get('class_type')}.{name}="
                         f"{value!r} 항목이 없습니다"
                     )
+        for inputs, descriptor in descriptors:
+            inputs["descriptor"] = json.dumps(descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
     @staticmethod
     def _creator_image_size(data: bytes) -> tuple[int, int]:
@@ -534,7 +730,7 @@ class CreatorActionsMixin:
         height = int(payload.get("height", 1024) or 1024)
         panel_payloads = list(panel_generation_payloads(document))
         unload = self._creator_should_unload_ollama()
-        with self._creator_coordinator.reserve("comic_generate", unload_llm=unload, timeout=0):
+        with self._creator_reserve(backend, "comic_generate", unload):
             for index, panel_payload in enumerate(panel_payloads):
                 if self._creator_cancel_event.is_set():
                     raise RuntimeError("Comic 컷 생성이 취소되었습니다")
@@ -601,9 +797,7 @@ class CreatorActionsMixin:
             "width": int(payload.get("width", 1024) or 1024),
             "height": int(payload.get("height", 1024) or 1024),
         }
-        with self._creator_coordinator.reserve(
-            "comic_panel", unload_llm=self._creator_should_unload_ollama(), timeout=0
-        ):
+        with self._creator_reserve(backend, "comic_panel", self._creator_should_unload_ollama()):
             result = backend.txt2img(
                 str(payload.get("model", "") or self._creator_current_model()),
                 generation_payload,
@@ -646,7 +840,7 @@ class CreatorActionsMixin:
         object_info = self._creator_object_info(backend)
         available = set(object_info.keys())
         unload = self._creator_should_unload_ollama()
-        with self._creator_coordinator.reserve("comic_animate", unload_llm=unload, timeout=0):
+        with self._creator_reserve(backend, "comic_animate", unload):
             for index, panel in enumerate(document.panels):
                 if self._creator_cancel_event.is_set():
                     raise RuntimeError("Comic 애니메이션이 취소되었습니다")
@@ -665,6 +859,7 @@ class CreatorActionsMixin:
                         "seed": secrets.randbits(63) if panel.seed < 0 else panel.seed,
                     }
                 )
+                self._creator_configure_h3_cache("h3_i2v", params, available)
                 built = build("h3_i2v", params)
                 self._creator_check_nodes(built, available)
                 self._creator_resolve_comfy_choices(built, object_info)
@@ -681,7 +876,7 @@ class CreatorActionsMixin:
                         },
                     )
 
-                result = backend.run_workflow(built["workflow"], _progress)
+                result = self._creator_run_workflow(backend, built, _progress)
                 if not result.success:
                     raise RuntimeError(result.error or f"컷 {index + 1} 영상 생성 실패")
                 saved = self._creator_save_artifacts(result.artifacts, "comic_video")
@@ -769,6 +964,7 @@ class CreatorActionsMixin:
     def _creator_save_artifacts(self, artifacts: Iterable, feature: str) -> list:
         saved = []
         for index, artifact in enumerate(artifacts or []):
+            self._creator_check_cancelled()
             kind = str(getattr(artifact, "kind", "binary"))
             data = getattr(artifact, "data", None)
             filename = str(getattr(artifact, "filename", "") or f"{feature}_{index + 1}.bin")
@@ -776,6 +972,7 @@ class CreatorActionsMixin:
             path = str(getattr(artifact, "path", "") or "")
             if data:
                 path = self._creator_write_bytes(data, filename, feature)
+            self._creator_check_cancelled()
             saved.append(
                 {
                     "kind": kind,
@@ -800,8 +997,14 @@ class CreatorActionsMixin:
             candidate = directory / f"{safe_name}_{stamp}_{serial}{suffix}"
             serial += 1
         temporary = candidate.with_suffix(candidate.suffix + ".writing")
-        temporary.write_bytes(data)
-        os.replace(temporary, candidate)
+        self._creator_check_cancelled()
+        try:
+            temporary.write_bytes(data)
+            with self._creator_state_lock:
+                self._creator_check_cancelled()
+                os.replace(temporary, candidate)
+        finally:
+            temporary.unlink(missing_ok=True)
         return str(candidate).replace("\\", "/")
 
     @staticmethod

@@ -48,6 +48,19 @@ class TestStandaloneComfyContext(unittest.TestCase):
                 self.assertNotIn("ForgeNeoAnimaQwen35Loader", {n["class_type"] for n in graph.values()})
                 self.assertEqual(backend._last_generation_context, before)
 
+    def test_standalone_detail_does_not_inherit_previous_generation_eye_pass(self):
+        for kind in ("adetailer", "sam3", "refine"):
+            with self.subTest(kind=kind):
+                backend = self._backend({})
+                backend._last_generation_context["payload"]["_comfy_detail_passes"] = ["eyes"]
+                before = copy.deepcopy(backend._last_generation_context)
+                getattr(backend, kind)(_png(), {"sam3_prompt": "face"})
+                graph = backend._queue_and_wait.call_args.args[0]
+                targets = [node["inputs"]["prompt"] for node in graph.values()
+                           if node["class_type"] == "ForgeNeoSAM3Mask"]
+                self.assertEqual(targets, [] if kind == "adetailer" else ["face"])
+                self.assertEqual(backend._last_generation_context, before)
+
     def test_negative_semantic_survives_but_old_image_passes_do_not(self):
         backend = self._backend({
             anima38.SCRIPT_NAME: {"args": [{"negative": True}]},

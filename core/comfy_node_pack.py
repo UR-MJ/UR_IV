@@ -18,7 +18,7 @@ from typing import Any, Mapping
 
 
 PACK_ID = "ai_studio_forge_parity"
-PACK_VERSION = "1.1.2"
+PACK_VERSION = "1.2.0"
 OWNER_ID = "ai-studio-pro.bundled-comfy-nodes"
 OWNER_MARKER = ".aistudio-owned.json"
 
@@ -55,6 +55,9 @@ REQUIRED_NODE_TYPES = frozenset(
         "ForgeNeoSAM3TileRepair",
         "ForgeNeoADetailer",
         "ForgeNeoSaveImage",
+        "ForgeNeoH3ConditioningCachePrepare",
+        "ForgeNeoH3ConditioningCacheLoad",
+        "AIStudioRelight",
     }
 )
 

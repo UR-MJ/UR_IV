@@ -54,11 +54,14 @@ class ImageMetadata:
     raw_parameters: str = ""  # WebUI Parameters 텍스트 그대로
     raw_workflow: str = ""    # ComfyUI workflow JSON 그대로
     raw_prompt: str = ""      # ComfyUI prompt JSON 그대로
+    metadata_warnings: list[str] = field(default_factory=list)
+    prompt_candidates: list[dict] = field(default_factory=list)
+    comfy_parse_complete: bool = False
 
     def has_any(self) -> bool:
         return bool(
             self.prompt or self.negative_prompt or self.parameters
-            or self.workflow or self.prompt_graph
+            or self.workflow or self.prompt_graph or self.raw_parameters or self.raw_prompt or self.raw_workflow
         )
 
     def to_dict(self) -> dict:
@@ -70,6 +73,10 @@ class ImageMetadata:
             "has_workflow": self.workflow is not None,
             "has_prompt_graph": self.prompt_graph is not None,
             "raw_parameters": self.raw_parameters,
+            "raw_prompt": self.raw_prompt,
+            "raw_workflow": self.raw_workflow,
+            "metadata_warnings": list(self.metadata_warnings),
+            "prompt_candidates": list(self.prompt_candidates),
         }
 
 
@@ -111,7 +118,7 @@ def extract_from_pil(img) -> ImageMetadata:
         raw_info = img.info
 
         # WebUI: "parameters" 키
-        if "parameters" in raw_info:
+        if raw_info.get("parameters"):
             meta.raw_parameters = str(raw_info["parameters"])
             meta.source = MetadataSource.WEBUI
             _parse_webui_parameters(meta.raw_parameters, meta)
@@ -120,21 +127,23 @@ def extract_from_pil(img) -> ImageMetadata:
         if "workflow" in raw_info:
             meta.raw_workflow = str(raw_info["workflow"])
             try:
-                meta.workflow = json.loads(meta.raw_workflow)
+                value = _read_graph_json(meta.raw_workflow)
+                meta.workflow = value if isinstance(value, dict) else None
                 if meta.source == MetadataSource.UNKNOWN:
                     meta.source = MetadataSource.COMFYUI
-            except json.JSONDecodeError:
-                pass
+            except (ValueError, RecursionError):
+                meta.metadata_warnings.append("workflow JSON이 손상되었거나 크기 제한을 초과했습니다. 원문은 보존했습니다.")
 
-        if "prompt" in raw_info and meta.source != MetadataSource.WEBUI:
-            # WebUI의 prompt 키와 충돌 — WebUI 우선
+        if "prompt" in raw_info:
+            # Display WebUI fields first, but never discard embedded Comfy JSON.
             meta.raw_prompt = str(raw_info["prompt"])
             try:
-                meta.prompt_graph = json.loads(meta.raw_prompt)
+                value = _read_graph_json(meta.raw_prompt)
+                meta.prompt_graph = value if isinstance(value, dict) else None
                 if meta.source == MetadataSource.UNKNOWN:
                     meta.source = MetadataSource.COMFYUI
-            except json.JSONDecodeError:
-                pass
+            except (ValueError, RecursionError):
+                meta.metadata_warnings.append("prompt JSON이 손상되었거나 크기 제한을 초과했습니다. 원문은 보존했습니다.")
 
     # 2) JPEG/WebP — EXIF UserComment
     if meta.source == MetadataSource.UNKNOWN:
@@ -144,7 +153,48 @@ def extract_from_pil(img) -> ImageMetadata:
             meta.source = MetadataSource.WEBUI
             _parse_webui_parameters(comment, meta)
 
+    if meta.source == MetadataSource.COMFYUI:
+        from core.comfy_metadata import parse_comfy_metadata
+        parsed = parse_comfy_metadata(meta.prompt_graph, meta.workflow)
+        meta.prompt = parsed["prompt"]
+        meta.negative_prompt = parsed["negative_prompt"]
+        meta.parameters = parsed["parameters"]
+        meta.metadata_warnings.extend(parsed["warnings"])
+        meta.prompt_candidates = parsed["candidates"]
+        meta.comfy_parse_complete = parsed["complete"]
+
     return meta
+
+
+def _read_graph_json(raw: str):
+    if len(raw) > 8 * 1024 * 1024:
+        raise ValueError("Metadata graph exceeds 8 MiB")
+    return json.loads(raw)
+
+
+def read_metadata_for_ui(path: Union[str, Path]) -> dict:
+    """Gallery/PNG Info data, preserving the existing bridge field names.
+
+    Raw graph JSON is for display/copy only; ``parameters`` and ``params_line``
+    contain the conservative normalized settings usable by existing UI actions.
+    """
+    from PIL import Image
+    file_path = Path(path)
+    with Image.open(file_path) as image:
+        meta = extract_from_pil(image)
+        size = f"{image.width} × {image.height}"
+    candidates = meta.prompt_candidates
+    known = bool(candidates) and all(item["positive_known"] and item["negative_known"] for item in candidates)
+    same_prompts = len({(item["prompt"], item["negative"]) for item in candidates}) <= 1
+    can_apply = (meta.comfy_parse_complete and known and same_prompts) if meta.source == MetadataSource.COMFYUI else bool(meta.prompt or meta.negative_prompt or meta.parameters)
+    params_line = ", ".join(f"{key}: {value}" for key, value in meta.parameters.items())
+    return {"source": meta.source, "raw": meta.raw_parameters or meta.raw_prompt or meta.raw_workflow,
+            "prompt": meta.prompt, "negative": meta.negative_prompt,
+            "parameters": dict(meta.parameters), "params_line": params_line,
+            "path": str(file_path).replace("\\", "/"), "filename": file_path.name, "size": size,
+            "raw_prompt": meta.raw_prompt, "raw_workflow": meta.raw_workflow,
+            "metadata_warnings": list(meta.metadata_warnings), "prompt_candidates": list(candidates),
+            "can_apply": can_apply, "metadata_ambiguous": meta.source == MetadataSource.COMFYUI and not can_apply}
 
 
 def _read_exif_user_comment(img) -> str:
@@ -155,6 +205,8 @@ def _read_exif_user_comment(img) -> str:
             return ""
         # UserComment
         v = exif.get(0x9286)
+        if v is None and hasattr(exif, "get_ifd"):
+            v = exif.get_ifd(0x8769).get(0x9286)
         if isinstance(v, (bytes, bytearray)):
             # WebUI는 보통 UTF-16/UTF-8 prefix 후 텍스트
             try:
@@ -180,7 +232,7 @@ def _read_exif_user_comment(img) -> str:
 # <positive prompt>
 # Negative prompt: <negative>
 # Steps: 20, Sampler: Euler, CFG scale: 7, Seed: 12345, Size: 512x768, ...
-_NEG_RE = re.compile(r"\nNegative prompt:\s*", re.IGNORECASE)
+_NEG_RE = re.compile(r"\nNegative prompt:[ \t]*", re.IGNORECASE)
 _PARAM_TAIL_RE = re.compile(
     r"\n(?=(?:Steps|Sampler|CFG scale|Seed|Size|Model|Denoising strength|Schedule type|Version|Clip skip):)",
     re.IGNORECASE,
@@ -282,7 +334,10 @@ def embed_to_file(src_image: Union[str, Path],
         pnginfo = PngImagePlugin.PngInfo()
 
         # WebUI parameters
-        params_text = meta.raw_parameters or _format_parameters(meta)
+        # A normalized Comfy prompt is not an A1111 generation record. Adding
+        # a synthetic parameters chunk would change source precedence on read.
+        params_text = meta.raw_parameters or (
+            "" if meta.source == MetadataSource.COMFYUI and include_workflow else _format_parameters(meta))
         if params_text:
             pnginfo.add_text("parameters", params_text)
 

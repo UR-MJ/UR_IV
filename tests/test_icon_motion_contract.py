@@ -224,8 +224,14 @@ class IconMotionContractTests(unittest.TestCase):
         )
         self.assertIsNone(layout_declaration.search(ICON_MOTION_CSS))
 
-    def test_infinite_motion_is_limited_to_running_or_loading_states(self):
-        self.assertEqual(len(re.findall(r"\binfinite\b", ICON_MOTION_CSS)), 3)
+    def test_infinite_motion_is_limited_to_pointer_hover_or_live_states(self):
+        # User opted into repeating hover gestures; none/reduced-motion retain
+        # their no-motion contract, and idle controls must never animate.
+        self.assertEqual(len(re.findall(r"\binfinite\b", ICON_MOTION_CSS)), 5)
+        self.assertIn('animation: icon-hover-repeat 1000ms', ICON_MOTION_CSS)
+        self.assertIn('animation: icon-part-hover-repeat 1000ms', ICON_MOTION_CSS)
+        hover = ICON_MOTION_CSS.index('@media (hover: hover) and (pointer: fine)')
+        self.assertGreater(ICON_MOTION_CSS.index('animation: icon-hover-repeat'), hover)
         self.assertIn(
             ":where([aria-busy='true'], .is-loading, .busy.on)",
             ICON_MOTION_CSS,

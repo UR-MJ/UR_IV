@@ -229,6 +229,7 @@ class TestWebModeSecurity(unittest.TestCase):
             or re.search(r"[\"']" + re.escape(name) + r"[\"']", frontend)
         }
         desktop_only = {
+            "copyTextToClipboard",
             "requestInitialConfig",
             "getBackendRuntimeState",
             "runBackendRuntimeOperation",
@@ -251,10 +252,10 @@ class TestWebModeSecurity(unittest.TestCase):
         self.assertTrue(all(callable(getattr(VueBridge, name, None)) for name in web_main_ui._WEB_METHODS))
 
     def test_frontend_events_are_covered_by_web_signals(self):
-        """프론트가 onBackendEvent 로 듣는 시그널은 전부 _WEB_SIGNALS 에 있어야 한다.
+        """공용 프론트 이벤트는 웹에 공개하고, 네이티브 전용 이벤트는 차단한다.
 
         누락되면 웹 모드에서 그 이벤트만 조용히 사라진다(예전 searchResultsReady).
-        데스크톱 모드는 멀쩡해서 눈치채기 어렵다.
+        로컬 설치 경로를 포함하는 모델 다운로드는 명시적인 데스크톱 전용 예외다.
         """
         root = pathlib.Path(__file__).resolve().parents[1]
         source = (root / "ui" / "vue_bridge.py").read_text(encoding="utf-8")
@@ -265,7 +266,12 @@ class TestWebModeSecurity(unittest.TestCase):
         )
         signals = set(re.findall(r"^[ \t]*(\w+)\s*=\s*pyqtSignal\(", source, re.MULTILINE))
         listened = set(re.findall(r"onBackendEvent\(\s*[\"'](\w+)[\"']", frontend))
-        missing = (listened & signals) - web_main_ui._WEB_SIGNALS
+        native_only_events = {"modelDownloadEvent", "comfyCompatibilityResult", "comfyWorkflowEvent", "relightEvent"}
+        self.assertTrue(native_only_events <= signals,
+                        "네이티브 전용 예외도 실제 VueBridge 시그널이어야 합니다.")
+        self.assertTrue(native_only_events.isdisjoint(web_main_ui._WEB_SIGNALS),
+                        "로컬 설치·설정·파일 처리 이벤트는 웹 클라이언트에 공개하면 안 됩니다.")
+        missing = (listened & signals) - web_main_ui._WEB_SIGNALS - native_only_events
         self.assertEqual(missing, set())
         # 반대 방향: 화이트리스트에 실제 시그널이 아닌 이름(오타/사문)이 남지 않도록.
         self.assertEqual(web_main_ui._WEB_SIGNALS - signals, set())

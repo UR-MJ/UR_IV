@@ -21,6 +21,7 @@ from backends.base import (
     ProgressCallback,
 )
 from backends.comfyui_progress import ProgressTracker
+from backends.comfyui_preview import PreviewStream
 from backends.comfyui_workflow_inspector import (
     NATIVE_CHECKPOINT_LOADERS, NATIVE_UNET_LOADERS, SAMPLER_NODES,
     SAVE_NODES, TEXT_ENCODER_NODES,
@@ -818,7 +819,8 @@ class ComfyUIBackend(AbstractBackend):
 
     def _queue_and_wait(self, workflow: dict,
                         progress_callback: Optional[ProgressCallback] = None,
-                        cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
+                        cancel_check: Optional[Callable[[], bool]] = None,
+                        *, allow_empty_outputs: bool = False) -> GenerationResult:
         """워크플로우를 큐에 넣고 WebSocket으로 결과 대기"""
         ws = None
         try:
@@ -850,6 +852,13 @@ class ComfyUIBackend(AbstractBackend):
                 f'{ws_url}/ws?clientId={client_id}',
                 **ws_kwargs,
             )
+            if progress_callback:
+                # New servers can attach prompt IDs to binary previews. Older
+                # servers ignore feature negotiation and retain event-1 frames.
+                ws.send(json.dumps({
+                    'type': 'feature_flags',
+                    'data': {'supports_preview_metadata': True},
+                }))
 
             # 프롬프트 제출
             if cancel_check and cancel_check():
@@ -857,7 +866,10 @@ class ComfyUIBackend(AbstractBackend):
             _logger.info("프롬프트 제출 중...")
             prompt_response = requests.post(
                 f'{self.api_url}/prompt',
-                json={'prompt': workflow, 'client_id': client_id},
+                json={
+                    'prompt': workflow, 'client_id': client_id,
+                    **({'extra_data': {'preview_method': 'auto'}} if progress_callback else {}),
+                },
                 timeout=30
             )
 
@@ -913,6 +925,11 @@ class ComfyUIBackend(AbstractBackend):
             # 결과 대기. 워크플로우 전체를 아는 순수 tracker가 노드별 이벤트를
             # 기존 3인자 progress callback 형식의 단조 증가 퍼센트로 변환한다.
             tracker = ProgressTracker(workflow)
+            if allow_empty_outputs:
+                return self._wait_for_result(
+                    ws, prompt_id, progress_callback, tracker=tracker,
+                    cancel_check=cancel_check, allow_empty_outputs=True,
+                )
             if cancel_check is None:
                 return self._wait_for_result(
                     ws, prompt_id, progress_callback, tracker=tracker
@@ -946,10 +963,13 @@ class ComfyUIBackend(AbstractBackend):
     def _wait_for_result(self, ws, prompt_id: str,
                          progress_callback: Optional[ProgressCallback],
                          tracker: Optional[ProgressTracker] = None,
-                         cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
+                         cancel_check: Optional[Callable[[], bool]] = None,
+                         *, allow_empty_outputs: bool = False) -> GenerationResult:
         """WebSocket 메시지를 수신하며 결과 대기"""
         _logger.info(f"결과 대기 중... (prompt_id={prompt_id})")
         tracker = tracker or ProgressTracker({})
+        previews = PreviewStream(prompt_id)
+        last_progress = (0, 100)
 
         while True:
             if cancel_check and cancel_check():
@@ -957,9 +977,16 @@ class ComfyUIBackend(AbstractBackend):
                 return GenerationResult(success=False, error="사용자가 작업을 취소했습니다.")
             msg = ws.recv()
             if isinstance(msg, bytes):
-                continue  # 바이너리 메시지 (프리뷰 이미지) 스킵
+                if progress_callback:
+                    preview = previews.consume(msg)
+                    if preview is not None:
+                        progress_callback(*last_progress, preview)
+                continue
 
             data = json.loads(msg)
+            if not isinstance(data, dict):
+                continue
+            previews.observe(data)
             msg_type = data.get('type', '')
             event_data = data.get('data', {})
 
@@ -973,10 +1000,10 @@ class ComfyUIBackend(AbstractBackend):
                 continue
 
             progress_update = tracker.consume(data)
-            if progress_update is not None and progress_callback:
-                progress_callback(
-                    progress_update.step, progress_update.total, None
-                )
+            if progress_update is not None:
+                last_progress = (progress_update.step, progress_update.total)
+                if progress_callback:
+                    progress_callback(*last_progress, None)
 
             if msg_type == 'status':
                 # 큐 상태 업데이트
@@ -1011,6 +1038,8 @@ class ComfyUIBackend(AbstractBackend):
                 continue
 
         # 히스토리의 모든 미디어 결과 가져오기
+        if allow_empty_outputs:
+            return self._fetch_result_artifacts(prompt_id, allow_empty_outputs=True)
         return self._fetch_result_artifacts(prompt_id)
 
     @staticmethod
@@ -1048,7 +1077,8 @@ class ComfyUIBackend(AbstractBackend):
         guessed, _encoding = mimetypes.guess_type(filename)
         return guessed
 
-    def _fetch_result_artifacts(self, prompt_id: str) -> GenerationResult:
+    def _fetch_result_artifacts(self, prompt_id: str,
+                                *, allow_empty_outputs: bool = False) -> GenerationResult:
         """Download every image, animation, video, and audio history output."""
         _logger.info(f"결과 미디어 다운로드 중... (prompt_id={prompt_id})")
 
@@ -1058,10 +1088,22 @@ class ComfyUIBackend(AbstractBackend):
         history_response.raise_for_status()
         history = history_response.json()
 
-        prompt_history = history.get(prompt_id, {})
+        prompt_history = history.get(prompt_id, {}) if isinstance(history, dict) else {}
+        if not isinstance(prompt_history, dict):
+            return GenerationResult(success=False, error="ComfyUI 히스토리 형식이 올바르지 않습니다.")
         outputs = prompt_history.get('outputs', {})
+        if not isinstance(outputs, dict):
+            return GenerationResult(success=False, error="ComfyUI 출력 형식이 올바르지 않습니다.")
 
-        if not outputs:
+        # Encoding/cache preparation is an explicit non-media workflow. Never
+        # accept a missing, running, or failed history entry as a successful pass.
+        if allow_empty_outputs:
+            status = prompt_history.get('status', {})
+            if (not isinstance(status, dict) or status.get('completed') is not True
+                    or status.get('status_str') != 'success'):
+                return GenerationResult(success=False, error="ComfyUI 준비 작업의 성공 완료를 확인할 수 없습니다.")
+
+        if not outputs and not allow_empty_outputs:
             _logger.error("히스토리에 출력 데이터 없음")
             return GenerationResult(
                 success=False,
@@ -1156,6 +1198,11 @@ class ComfyUIBackend(AbstractBackend):
                     ))
 
         if not artifacts:
+            if allow_empty_outputs and not failed_downloads:
+                return GenerationResult(success=True, info={
+                    'prompt_id': prompt_id, 'node_outputs': outputs,
+                    'artifact_count': 0, 'artifact_filenames': [],
+                })
             _logger.error("출력 노드에 지원되는 미디어 없음")
             detail = ""
             if failed_downloads:
@@ -1176,6 +1223,7 @@ class ComfyUIBackend(AbstractBackend):
         )
         gen_info = {
             'prompt_id': prompt_id,
+            'node_outputs': outputs,
             'filename': primary.filename if primary else artifacts[0].filename,
             'artifact_count': len(artifacts),
             'artifact_filenames': [artifact.filename for artifact in artifacts],
@@ -1195,7 +1243,8 @@ class ComfyUIBackend(AbstractBackend):
 
     def run_workflow(self, workflow: Dict,
                      progress_callback: Optional[ProgressCallback] = None,
-                     cancel_check: Optional[Callable[[], bool]] = None) -> GenerationResult:
+                     cancel_check: Optional[Callable[[], bool]] = None,
+                     *, allow_empty_outputs: bool = False) -> GenerationResult:
         """Run an already prepared API-format workflow.
 
         Model-specific workflow packs can use this seam without depending on
@@ -1208,6 +1257,10 @@ class ComfyUIBackend(AbstractBackend):
             return GenerationResult(
                 success=False,
                 error="ComfyUI API 형식의 워크플로우가 필요합니다.",
+            )
+        if allow_empty_outputs:
+            return self._queue_and_wait(
+                workflow, progress_callback, cancel_check, allow_empty_outputs=True,
             )
         if cancel_check is None:
             return self._queue_and_wait(workflow, progress_callback)
@@ -1337,8 +1390,12 @@ class ComfyUIBackend(AbstractBackend):
             _logger.info(f"워크플로우 경로: {self._configured_workflow_path('txt2img') or '(미설정)'}")
             compiler = self._workflow_compiler()
             custom_workflow = self._load_configured_workflow('txt2img')
+            from core.comfy_workflow_controls import generation_workflow_controls
             workflow = compiler.compile(
                 'txt2img', model_name, payload, workflow=custom_workflow,
+                workflow_controls=generation_workflow_controls(
+                    self.api_url, self._configured_workflow_path('txt2img'), custom_workflow, payload, 'txt2img',
+                ),
             )
             self._last_generation_context = {
                 'model_name': model_name, 'payload': copy.deepcopy(dict(payload)),
@@ -1448,9 +1505,13 @@ class ComfyUIBackend(AbstractBackend):
             mode = 'inpaint' if mask_value or payload.get('use_image_alpha_as_mask') else 'img2img'
             compiler = self._workflow_compiler()
             custom_workflow = self._load_configured_workflow('img2img')
+            from core.comfy_workflow_controls import generation_workflow_controls
             workflow = compiler.compile(
                 mode, model_name, payload, workflow=custom_workflow,
                 uploaded_image=uploaded_filename, uploaded_mask=uploaded_mask,
+                workflow_controls=generation_workflow_controls(
+                    self.api_url, self._configured_workflow_path('img2img'), custom_workflow, payload, 'img2img',
+                ),
             )
             self._last_generation_context = {
                 'model_name': model_name, 'payload': copy.deepcopy(dict(payload)),
@@ -1549,6 +1610,10 @@ class ComfyUIBackend(AbstractBackend):
 
     def _standalone_detail(self, image_b64: str, settings: Dict, kind: str) -> str:
         model_name, payload = self._saved_generation_context(settings)
+        # This action requests a new, explicit image pass. A previous T2I
+        # quality preset is not part of its reusable model/conditioning context.
+        payload.pop('_comfy_detail_passes', None)
+        payload.pop('_comfy_workflow_snapshot', None)
         width, height = _base64_image_size(image_b64)
         # Replace only prior image passes. Model/conditioning scripts (including
         # Anima bypass/semantic negative, NegPiP and guidance) remain in force.

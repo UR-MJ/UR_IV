@@ -207,6 +207,7 @@
     --icon-state-transform: var(--icon-hover-transform, none);
     --icon-duration: var(--icon-hover-duration);
     --icon-ease: cubic-bezier(.2, .7, .2, 1);
+    animation: icon-hover-repeat 1000ms cubic-bezier(.4, 0, .2, 1) infinite;
   }
 
   :root[data-icon-animation='gpt']
@@ -224,6 +225,7 @@
       :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
     ):hover .icon[data-icon-motion] .icon-part {
     --icon-part-transform: var(--icon-part-hover-transform, none);
+    animation: icon-part-hover-repeat 1000ms cubic-bezier(.4, 0, .2, 1) infinite;
   }
 
   :root[data-icon-animation='gpt']
@@ -274,6 +276,7 @@
     .hist-card,
     :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
   ):active .icon[data-icon-motion] {
+  animation: none;
   --icon-state-transform: var(--icon-press-transform, scale(.97));
   --icon-duration: var(--icon-press-duration);
   --icon-ease: cubic-bezier(.2, .7, .2, 1);
@@ -294,6 +297,7 @@
     :is(.half-moon, .cpm-item, .q-row, .file-item, .folder-info, .gallery-card, .exif-close, .exif-preview, .drop-empty, .compare-container, .image-area)
   ):active
   .icon[data-icon-motion] .icon-part {
+  animation: none;
   --icon-part-transform: var(--icon-part-press-transform, none);
 }
 
@@ -436,6 +440,16 @@
   animation: icon-wait-running 1200ms ease-in-out infinite;
 }
 
+/* Reuse each semantic gesture, with a short rest between repetitions. Leaving
+ * hover removes the animation; no forwards fill or accumulated transforms. */
+@keyframes icon-hover-repeat {
+  0%, 80%, 100% { transform: none; }
+  20%, 42% { transform: var(--icon-hover-transform, none); }
+}
+@keyframes icon-part-hover-repeat {
+  0%, 80%, 100% { transform: none; }
+  20%, 42% { transform: var(--icon-part-hover-transform, none); }
+}
 @keyframes icon-confirm-draw {
   from { stroke-dasharray: 24; stroke-dashoffset: 24; opacity: .6; }
   to { stroke-dasharray: 24; stroke-dashoffset: 0; opacity: 1; }

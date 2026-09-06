@@ -704,7 +704,9 @@ class ActionsMixin:
             if not model:
                 model = 'gemma3:4b'
             self._auto_nl_base = base_tags
-            w = OllamaWorker(url, model, base_tags, 'nl_caption', '', self)
+            w = OllamaWorker(
+                url, model, base_tags, 'nl_caption', '', self, instruction_feature='auto_nl',
+            )
             w.finished.connect(self._on_auto_nl_done)
             w.error.connect(self._on_auto_nl_error)
             self._auto_nl_worker = w

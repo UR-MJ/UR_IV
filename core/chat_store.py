@@ -12,6 +12,8 @@ from __future__ import annotations
 import os
 import base64
 import json
+import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +69,34 @@ def _clean_message(raw: Any) -> dict[str, Any] | None:
         out["doneReason"] = str(raw["doneReason"])[:40]
     if raw.get("model"):
         out["model"] = str(raw["model"])[:200]
+    artifacts = []
+    raw_artifacts = raw.get('artifacts')
+    for item in (raw_artifacts[:32] if isinstance(raw_artifacts, list) else []):
+        if not isinstance(item, dict) or item.get('kind') not in {'image', 'animated', 'video', 'audio'}:
+            continue
+        path = str(item.get('path') or '')[:4000]
+        if not path or re.match(r'^(?:https?|data|blob|javascript|file):', path, re.I):
+            continue
+        artifacts.append({'kind': item['kind'], 'path': path,
+                          'filename': str(item.get('filename') or '')[:200],
+                          'mime': str(item.get('mime') or '')[:100]})
+    if artifacts:
+        out['artifacts'] = artifacts
+    request = raw.get('generationRequest')
+    if isinstance(request, dict) and request.get('mode') in {'auto', 'chat', 'image', 'video'}:
+        cleaned = {'mode': request['mode'], 'family': 'krea2' if request.get('family') == 'krea2' else 'current',
+                   'hadImage': bool(request.get('hadImage'))}
+        for key, default, low, high in [('duration', 5, 1, 15), ('denoise', .65, .01, 1)]:
+            try:
+                value = float(request.get(key, default))
+                cleaned[key] = max(low, min(high, value)) if math.isfinite(value) else default
+            except (TypeError, ValueError):
+                cleaned[key] = default
+        out['generationRequest'] = cleaned
+    generation = raw.get('generation')
+    if isinstance(generation, dict) and generation.get('kind') in {'image', 'video'}:
+        out['generation'] = {'kind': generation['kind'], 'phase': str(generation.get('phase') or '')[:40],
+                             'message': str(generation.get('message') or '')[:1000]}
     return out
 
 

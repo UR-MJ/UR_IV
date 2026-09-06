@@ -89,7 +89,7 @@ class TestForgePathsBridge(unittest.TestCase):
             with (
                 patch.object(forge_modules, "FORGE_PATHS_FILE", config),
                 patch(
-                    "PyQt6.QtWidgets.QFileDialog.getExistingDirectory",
+                    "ui.native_dialogs.select_directory",
                     return_value=str(root / "picked"),
                 ) as picker,
                 patch.object(bridge, "_refresh_forge_module_widgets") as refresh,

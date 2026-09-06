@@ -62,8 +62,8 @@ class GenerationResult:
             self.image_data = primary.data
 
 
-# progress_callback 타입: (step: int, total_steps: int, preview_bytes: Optional[bytes]) -> None
-ProgressCallback = Callable[[int, int, Optional[bytes]], None]
+# Preview strings are raw base64 (Forge/Comfy); bytes remain valid for adapters.
+ProgressCallback = Callable[[int, int, Optional[bytes | str]], None]
 
 
 class AbstractBackend(ABC):

@@ -35,6 +35,11 @@ from ui.generator_webui import WebUIMixin
 from ui.generator_search import SearchMixin
 from ui.creator_actions import CreatorActionsMixin
 from ui.chat_actions import ChatActionsMixin
+from ui.model_download_actions import ModelDownloadActionsMixin
+from ui.xyz_actions import XYZActionsMixin
+from ui.comfy_workflow_actions import ComfyWorkflowActionsMixin
+from ui.comfy_compatibility_actions import ComfyCompatibilityActionsMixin
+from ui.relight_actions import RelightActionsMixin
 from widgets.queue_panel import QueuePanel
 from widgets.queue_manager import QueueManager
 from utils.prompt_cleaner import get_prompt_cleaner
@@ -62,7 +67,8 @@ class GeneratorMainUI(
     GalleryMixin,
     WebUIMixin,
     SearchMixin,
-    CreatorActionsMixin, ChatActionsMixin,
+    CreatorActionsMixin, ChatActionsMixin, ModelDownloadActionsMixin, XYZActionsMixin,
+    ComfyWorkflowActionsMixin, ComfyCompatibilityActionsMixin, RelightActionsMixin,
 ):
     _IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.webp', '.bmp')
     animaForgeImportReady = pyqtSignal(object)
@@ -128,7 +134,7 @@ class GeneratorMainUI(
             # VRAM 은 NVML 로 장치 전체를 직접 잰다(마이크로초) — 5초면 Ollama 가 모델을
             # 올리고 내리는 것이 바로 보인다. 예전 30초 + Forge 자기 메모리는 12.1 에 멈춰 있었다.
             self._vram_timer = QTimer()
-            self._vram_timer.setInterval(5000)
+            self._vram_timer.setInterval(1000)
             self._vram_timer.timeout.connect(self._update_vram_status)
             self._vram_timer.start()
             QTimer.singleShot(1500, self._update_vram_status)
@@ -193,6 +199,16 @@ class GeneratorMainUI(
 
         # Creator Studio는 별도 deep module에서 처리한다. 이 seam을 먼저
         # 통과시켜 아래의 거대한 레거시 문자열 라우터를 더 키우지 않는다.
+        if self._handle_model_download_action(action, payload):
+            return
+        if ComfyWorkflowActionsMixin._handle_comfy_workflow_action(self, action, payload):
+            return
+        if ComfyCompatibilityActionsMixin._handle_comfy_compatibility_action(self, action, payload):
+            return
+        if RelightActionsMixin._handle_relight_action(self, action, payload):
+            return
+        if XYZActionsMixin._handle_xyz_action(self, action, payload):
+            return
         if self._handle_chat_action(action, payload):
             return
         if self._handle_creator_action(action, payload):
@@ -934,13 +950,29 @@ class GeneratorMainUI(
 
             # ═══════ PNG Info 전송/생성 ═══════
             elif action == 'pnginfo_send_prompt':
+                if payload.get('source') == 'comfyui' and payload.get('can_apply') is not True:
+                    self.vue_bridge.showNotification.emit('warning', 'ComfyUI 프롬프트를 확정할 수 없습니다. 메타데이터에서 내용을 확인하세요.')
+                    return
                 prompt = payload.get('prompt', '')
                 negative = payload.get('negative', '')
                 self.handle_prompt_only_transfer(prompt, negative)
 
             elif action == 'pnginfo_generate':
                 # EXIF 데이터에서 payload 구성하여 즉시 생성
-                raw = payload.get('raw', payload.get('parameters', ''))
+                if payload.get('source') == 'comfyui':
+                    if payload.get('can_apply') is not True:
+                        self.vue_bridge.showNotification.emit('warning', '여러 프롬프트 또는 해석하지 못한 노드가 있습니다. 내용을 확인해 직접 적용하세요.')
+                        return
+                    item = self._build_queue_payload_from_exif(payload, preserve_seed=True)
+                    if item:
+                        # Keep graph JSON and display-only parameter ordering out of
+                        # the WebUI text parser. Do not load metadata model/LoRAs.
+                        self.main_prompt_text.setPlainText(item['prompt'])
+                        self._apply_payload_to_ui(item)
+                        self.start_generation()
+                    return
+                else:
+                    raw = payload.get('raw', payload.get('parameters', ''))
                 if raw:
                     self._handle_immediate_generation_from_raw(raw)
 
@@ -950,6 +982,9 @@ class GeneratorMainUI(
                 if path and os.path.exists(path):
                     try:
                         info = json.loads(self.vue_bridge.getImageExif(path))
+                        if info.get('source') == 'comfyui' and info.get('can_apply') is not True:
+                            self.vue_bridge.showNotification.emit('warning', 'ComfyUI 프롬프트를 확정할 수 없습니다. 메타데이터에서 내용을 확인하세요.')
+                            return
                         prompt = info.get('prompt', '')
                         negative = info.get('negative', '')
                         if prompt or negative:
@@ -974,18 +1009,6 @@ class GeneratorMainUI(
                             self.vue_bridge.showNotification.emit('warning', '이 이미지에 생성 정보가 없습니다')
                     except Exception as e:
                         self.vue_bridge.showNotification.emit('error', f'큐 추가 실패: {e}')
-
-            # ═══════ XYZ Plot 실행 ═══════
-            elif action == 'start_xyz_plot':
-                axes = payload.get('axes', [])
-                combinations = payload.get('combinations', [])
-                if combinations and hasattr(self, 'queue_panel'):
-                    for combo in combinations:
-                        p = self._build_xyz_payload(combo)
-                        self.queue_panel.add_single_item(p)
-                    self.show_status(f"XYZ Plot: {len(combinations)} jobs queued.")
-                    if hasattr(self, 'queue_manager'):
-                        self.queue_manager.start()
 
             # ═══════ 배치 파일 열기 ═══════
             elif action in ('open_batch_files', 'open_upscale_files'):
@@ -1049,6 +1072,21 @@ class GeneratorMainUI(
 
             # ═══════ Gallery EXIF → T2I ═══════
             elif action == 'gallery_send_exif_to_t2i':
+                metadata = payload.get('metadata', {})
+                path = _clean_path(payload.get('path', ''))
+                if path and os.path.isfile(path) and (not isinstance(metadata, dict) or metadata.get('source') != 'comfyui'):
+                    # Older Gallery payloads carry only path + raw. Recover the
+                    # source before the legacy WebUI text fallback sees JSON.
+                    metadata = json.loads(self.vue_bridge.getImageExif(path))
+                    if metadata.get('error'):
+                        self.vue_bridge.showNotification.emit('warning', '이미지 메타데이터를 읽지 못했습니다.')
+                        return
+                if isinstance(metadata, dict) and metadata.get('source') == 'comfyui':
+                    if metadata.get('can_apply') is not True:
+                        self.vue_bridge.showNotification.emit('warning', 'ComfyUI 프롬프트가 여러 갈래입니다. 메타데이터에서 내용을 확인하세요.')
+                        return
+                    self.handle_prompt_only_transfer(metadata.get('prompt', ''), metadata.get('negative', ''))
+                    return
                 exif_raw = payload.get('exif', '')
                 if exif_raw:
                     parts = exif_raw.split('\nNegative prompt: ')
@@ -2012,21 +2050,24 @@ class GeneratorMainUI(
         except Exception as e:
             print(f"[Error] Immediate generation from raw: {e}")
 
-    def _build_queue_payload_from_exif(self, info: dict):
+    def _build_queue_payload_from_exif(self, info: dict, *, preserve_seed=False):
         """getImageExif 결과(dict)에서 큐 아이템 payload 구성.
 
         이미지의 프롬프트/샘플러/steps/cfg/해상도는 EXIF에서 그대로 가져오고,
         seed는 -1(새 변형)로 둔다 — 동일 시드 재생성은 같은 이미지라 무의미하므로
         '비슷한 걸 더 생성'이 자연스러운 기본값. 프롬프트 없으면 None 반환.
         """
-        raw = info.get('raw', '') or ''
+        is_comfy = info.get('source') == 'comfyui'
+        if info.get('can_apply') is False or (is_comfy and info.get('can_apply') is not True):
+            return None
+        raw = '' if is_comfy else (info.get('raw', '') or '')
         prompt = info.get('prompt', '') or (raw.split('\nNegative prompt:')[0].strip() if raw else '')
         negative = info.get('negative', '') or ''
         if not prompt:
             return None
         # raw의 'Steps: ...' 파라미터 라인을 key→value로 파싱
-        params = {}
-        if 'Steps:' in raw:
+        params = {str(k).lower().replace(' ', '_'): v for k, v in info.get('parameters', {}).items()} if is_comfy and isinstance(info.get('parameters'), dict) else {}
+        if not is_comfy and 'Steps:' in raw:
             tail = raw.split('Steps:', 1)[1]
             for kv in ('Steps:' + tail).split(', '):
                 if ':' in kv:
@@ -2034,8 +2075,8 @@ class GeneratorMainUI(
                     params[k.strip().lower().replace(' ', '_')] = v.strip()
 
         def _to_int(v, d):
-            try: return int(float(v))
-            except (TypeError, ValueError): return d
+            try: return int(v)
+            except (TypeError, ValueError, OverflowError): return d
         def _to_float(v, d):
             try: return float(v)
             except (TypeError, ValueError): return d
@@ -2047,7 +2088,7 @@ class GeneratorMainUI(
             'scheduler': params.get('schedule_type') or self.scheduler_combo.currentText(),
             'steps': _to_int(params.get('steps'), int(self.steps_input.text() or 20)),
             'cfg_scale': _to_float(params.get('cfg_scale'), float(self.cfg_input.text() or 7)),
-            'seed': -1,  # 새 변형 (동일 시드 재생성은 무의미)
+            'seed': _to_int(params.get('seed'), -1) if preserve_seed else -1,
             'width': int(self.width_input.text() or 1024),
             'height': int(self.height_input.text() or 1024),
         }
@@ -2133,6 +2174,15 @@ class GeneratorMainUI(
         # add_single_item 래핑으로 Vue 동기화
         _orig_add = self.queue_panel.add_single_item
         def _wrapped_add(item):
+            # Search/EXIF/automation use the legacy abbreviated payload. Freeze
+            # only custom workflow controls; keep their other UI-time semantics.
+            from backends import BackendType, get_backend, get_backend_type
+            if (isinstance(item, dict) and '_comfy_workflow_snapshot' not in item
+                    and '_comfy_queued_controls' not in item
+                    and get_backend_type() == BackendType.COMFYUI and not self._is_krea2_generation()):
+                from core.comfy_workflow_controls import snapshot_comfy_payload
+                frozen = snapshot_comfy_payload(get_backend(), {}, 'txt2img')
+                item = {**item, '_comfy_queued_controls': frozen['_comfy_workflow_snapshot']}
             _orig_add(item)
             # 실제 생성된 항목(id 포함)을 전달 — 원본 item엔 id가 없어 Vue 중복 방지가
             # 동작하지 않던 문제 방지
@@ -2220,6 +2270,54 @@ class GeneratorMainUI(
             self.is_programmatic_change = False
 
     def _on_generation_requested(self, item: dict):
+        if isinstance(item, dict) and item.get('_xyz_backend_id'):
+            try:
+                payload, model, backend = self._xyz_prepare_queue_generation(item)
+                if not self.start_generation(payload_override=payload, model_override=model, backend_override=backend):
+                    self.queue_manager.pause()
+                return
+            except Exception as exc:
+                self.queue_manager.pause()
+                self._abort_generation(str(exc))
+                return
+        if isinstance(item, dict) and '_comfy_workflow_snapshot' in item:
+            try:
+                import copy
+                from backends import BackendType, get_backend, get_backend_type
+                if get_backend_type() != BackendType.COMFYUI:
+                    raise ValueError('이 대기열 항목을 만든 ComfyUI 백엔드를 다시 선택하세요.')
+                payload = copy.deepcopy(item)
+                if '_comfy_model_snapshot' not in payload:
+                    raise ValueError('대기열의 모델 스냅샷이 없습니다. 작업을 다시 등록하세요.')
+                model = str(payload.pop('_comfy_model_snapshot', '') or '')
+                for key in ('id', 'group_id', 'group_index', 'group_total', 'is_last_of_group'):
+                    payload.pop(key, None)
+                if not self.start_generation(payload_override=payload, model_override=model, backend_override=get_backend()):
+                    self.queue_manager.pause()
+                return
+            except Exception as exc:
+                self.queue_manager.pause()
+                self._abort_generation(str(exc))
+                return
+        if isinstance(item, dict) and '_comfy_queued_controls' in item:
+            try:
+                from backends import BackendType, get_backend, get_backend_type
+                if get_backend_type() != BackendType.COMFYUI or self._is_krea2_generation():
+                    raise ValueError('이 대기열 항목을 만든 ComfyUI 이미지 생성 경로를 다시 선택하세요.')
+                frozen = item['_comfy_queued_controls']
+                if not isinstance(frozen, dict):
+                    raise ValueError('대기열의 워크플로 설정 스냅샷이 올바르지 않습니다.')
+                self._apply_payload_to_ui(item)
+                payload, error = self._build_generation_payload(comfy_workflow_snapshot=frozen)
+                if payload is None:
+                    raise ValueError(error or '대기열 생성 설정을 확인하세요.')
+                if not self.start_generation(payload_override=payload, backend_override=get_backend()):
+                    self.queue_manager.pause()
+                return
+            except Exception as exc:
+                self.queue_manager.pause()
+                self._abort_generation(str(exc))
+                return
         self._apply_payload_to_ui(item)
         self.start_generation()
 
@@ -2406,6 +2504,12 @@ class GeneratorMainUI(
         """
         import threading
 
+        # Called only by the GUI timer: reserve before starting the worker so a
+        # slow fallback query cannot enqueue another poll every second.
+        if getattr(self, '_vram_poll_inflight', False):
+            return
+        self._vram_poll_inflight = True
+
         def _work():
             try:
                 from core.gpu_stats import read_vram
@@ -2427,8 +2531,13 @@ class GeneratorMainUI(
                         }))
             except Exception:
                 pass  # VRAM 모니터링은 비핵심 — GPU 미탑재/백엔드 미응답 시 무시
+            finally:
+                self._vram_poll_inflight = False
 
-        threading.Thread(target=_work, daemon=True).start()
+        try:
+            threading.Thread(target=_work, daemon=True).start()
+        except Exception:
+            self._vram_poll_inflight = False
 
     def closeEvent(self, event):
         from PyQt6.QtWidgets import QMessageBox as _QMB
@@ -2754,28 +2863,16 @@ class GeneratorMainUI(
 
     # ── 테마 (Vue) → PyQt 위젯 ────────────────────────────
     def _apply_theme_prefs(self, prefs: dict) -> None:
-        """ui_prefs 의 theme/themeOverrides 를 PyQt 쪽 색표에 반영.
-
-        **어디까지 즉시 반영되나**: ThemeManager 의 색표와 전역 QSS 는 바로 바뀌므로,
-        이 시점 *이후에 만들어지는* PyQt 화면(백엔드 선택 다이얼로그, 컨텍스트 메뉴,
-        파일 대화상자 등)은 새 테마로 그려진다. 이미 떠 있는 위젯 중 색을 인라인
-        f-string 스타일시트로 박아 넣은 것들(tabs/·widgets/ 대부분)은 생성 시점에
-        색이 굳어 있어 다시 만들지 않는 한 안 바뀐다 — 앱 화면 대부분은 Vue 가
-        그리고 PyQt 는 껍데기라 실사용에서 문제되지 않는다. (전면 반영이 필요하면
-        위젯 재생성이 필요하고, 그건 테마 하나 바꾸는 값으로는 너무 비싸다.)
-        """
+        """Update native shell/Web/Backend chrome immediately without reloading pages."""
         if not isinstance(prefs, dict):
             return
         try:
             from utils.theme_manager import get_theme_manager
+            from ui.native_dialogs import apply_native_shell_theme
 
             tm = get_theme_manager()
             tm.apply_prefs(prefs)
-            # 앱은 시작 시 app.setStyleSheet("")로 전역 QSS 를 비운다(스타일링은 Vue 담당).
-            # 이미 QSS 를 쓰고 있던 경우에만 새 QSS 로 갈아끼운다 — 안 그러면 여기서
-            # 없던 전역 스타일이 갑자기 생겨 Vue 뷰 주변 껍데기가 달라 보인다.
-            if self.styleSheet():
-                self.setStyleSheet(tm.get_stylesheet())
+            apply_native_shell_theme(self, tm)
         except Exception as e:
             print(f"[Warning] 테마 적용 실패: {e}")
 
@@ -2923,6 +3020,13 @@ class GeneratorMainUI(
 
     def _quit_app(self):
         self._save_shutdown_state()
+        for stop in (self._shutdown_model_downloads, self._chat_stop,
+                     self._shutdown_comfy_compatibility, self._shutdown_comfy_workflow_controls,
+                     self._shutdown_relight):
+            try:
+                stop()
+            except Exception as exc:
+                print(f"[Shutdown] 생성/다운로드 정리 실패(계속 종료): {exc}")
         try:
             # 진행 중 생성 워커에 취소(+백엔드 interrupt) — GPU 작업 중단
             worker = getattr(self, 'gen_worker', None)

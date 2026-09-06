@@ -2,19 +2,35 @@
   <div class="xyz-view">
     <div class="config-panel">
       <h3>XYZ Plot</h3>
+      <div class="capability-toolbar">
+        <span>{{ backendName || '백엔드 미연결' }}</span>
+        <button type="button" class="btn-export" :disabled="loading" @click="refreshCapabilities">{{ loading ? '확인 중…' : '축 새로고침' }}</button>
+      </div>
+      <p v-if="error" class="axis-error" role="alert">{{ error }}</p>
+      <p v-if="!loading && !axisOptions.length && !error" class="axis-note">현재 생성 모드에서 사용할 수 있는 XYZ 축이 없습니다.</p>
+      <fieldset :disabled="loading || !capabilityId" class="axes-fieldset">
       <div v-for="(axis, ai) in axes" :key="ai" class="axis-config">
         <label class="axis-label">{{ axis.name }} 축</label>
-        <CustomSelect v-model="axis.type" :options="['', ...axisOptions]" placeholder="None" />
+        <CustomSelect v-model="axis.type" :options="['', ...axisOptions]" placeholder="None" @update:model-value="resetAxis(axis)" />
+        <input v-if="definitionFor(axis)?.type === 'replace'" class="s-input" v-model="axis.search" placeholder="찾을 문자열 (S/R 검색어)" :aria-label="`${axis.name} 검색어`" />
+        <CustomSelect v-if="definitionFor(axis)?.type === 'choice'" :model-value="''" :options="definitionFor(axis)?.choices || []"
+          placeholder="서버에서 사용 가능한 값 추가" @update:model-value="value => addChoice(axis, String(value))" />
         <input v-if="axis.type" class="s-input" v-model="axis.values"
-          :placeholder="axis.type === 'Prompt S/R' ? 'search, replace1, replace2' : '값1, 값2, 값3 또는 20-40:5'"
+          :placeholder="definitionFor(axis)?.type === 'replace' ? '대체값1, 대체값2 (검색어를 넣으면 원본 유지)' : '값1, 값2 또는 20-40:5'"
+          :aria-label="`${axis.name} 축 값`"
         />
+        <small v-if="definitionFor(axis)?.min !== undefined" class="axis-note">허용 범위 {{ definitionFor(axis)?.min }}–{{ definitionFor(axis)?.max }}{{ ['Width', 'Height'].includes(axis.type) ? ' · 8 단위' : '' }}</small>
       </div>
+      </fieldset>
+      <p v-if="validationError" class="axis-error" role="alert">{{ validationError }}</p>
       <div class="combo-info">
-        조합 수: <span class="accent">{{ comboCount }}</span>
+        조합 수: <span class="accent">{{ comboCount }}</span> / 256
       </div>
-      <button class="btn-gen" @click="startPlot" :disabled="comboCount === 0">
+      <button class="btn-gen" @click="startPlot" :disabled="!capabilityId || loading || submitting || comboCount === 0 || comboCount > 256 || !!validationError">
         XYZ Plot 시작
       </button>
+      <p v-for="note in notes" :key="note" class="axis-note">{{ note }}</p>
+      <details v-if="unsupported.length" class="axis-note"><summary>앱에서 실행하지 않는 서버 확장 축 ({{ unsupported.length }})</summary>{{ unsupported.join(', ') }}</details>
     </div>
     <div class="result-area">
       <div v-if="resultImages.length === 0" class="empty">
@@ -74,16 +90,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated, onDeactivated, onUnmounted } from 'vue'
 import { requestAction } from '../stores/widgetStore.js'
 import { mediaUrl } from '../utils/media.js'
 import CustomSelect from '../components/CustomSelect.vue'
-import { getBackend } from '../bridge.js'
+import { getBackend, onBackendEvent } from '../bridge.js'
+import { acceptCapabilityEvent, parseAxisValues, quoteAxisValue, type XYZAxisDefinition } from '../utils/xyzPlot'
 
 interface Axis {
   name: string
   type: string
   values: string
+  search: string
 }
 
 interface ResultImage {
@@ -92,55 +110,108 @@ interface ResultImage {
   [k: string]: any
 }
 
-const axisOptions = ['Prompt S/R', 'Negative S/R', 'Steps', 'CFG Scale', 'Sampler', 'Scheduler', 'Seed', 'Width', 'Height', 'Denoising']
+const definitions = ref<XYZAxisDefinition[]>([])
+const axisOptions = computed(() => definitions.value.map(axis => axis.label))
+const capabilityId = ref('')
+const backendName = ref('')
+const loading = ref(false)
+const submitting = ref(false)
+const error = ref('')
+const notes = ref<string[]>([])
+const unsupported = ref<string[]>([])
+let queryId = '', plotId = '', bridgeReady = false, active = true, disposed = false
+let queryTimer: ReturnType<typeof setTimeout> | undefined
+let plotTimer: ReturnType<typeof setTimeout> | undefined
+const disconnects: Array<() => void> = []
 
 const axes = reactive<Axis[]>([
-  { name: 'X', type: '', values: '' },
-  { name: 'Y', type: '', values: '' },
-  { name: 'Z', type: '', values: '' },
+  { name: 'X', type: '', values: '', search: '' },
+  { name: 'Y', type: '', values: '', search: '' },
+  { name: 'Z', type: '', values: '', search: '' },
 ])
 const resultImages = ref<ResultImage[]>([])
 
-const comboCount = computed(() => {
-  let count = 1
-  for (const a of axes) {
-    if (a.type && a.values.trim()) {
-      const vals = parseValues(a.values)
-      if (vals.length > 0) count *= vals.length
-    }
-  }
-  return axes.some(a => a.type && a.values.trim()) ? count : 0
-})
-
-function parseValues(str: string): string[] {
-  const s = str.trim()
-  const m = s.match(/^(\d+)-(\d+):(\d+)$/)
-  if (m) {
-    const vals: string[] = []
-    for (let v = parseInt(m[1]); v <= parseInt(m[2]); v += parseInt(m[3])) vals.push(String(v))
-    return vals
-  }
-  return s.split(',').map(v => v.trim()).filter(Boolean)
-}
-
-async function startPlot() {
-  const axisData = axes.filter(a => a.type && a.values.trim()).map(a => ({
-    type: a.type, values: parseValues(a.values),
-  }))
-  // 조합 생성
-  const backend: any = await getBackend()
-  if (backend.generateXYZCombinations) {
-    backend.generateXYZCombinations(JSON.stringify(axisData), (json: string) => {
-      try {
-        const data = JSON.parse(json)
-        if (data.combinations) {
-          // 대기열에 추가
-          requestAction('start_xyz_plot', { axes: axisData, combinations: data.combinations })
+const definitionFor = (axis: Axis) => definitions.value.find(item => item.label === axis.type)
+function resetAxis(axis: Axis) { axis.values = ''; axis.search = '' }
+function addChoice(axis: Axis, value: string) { axis.values += `${axis.values.trim() ? ', ' : ''}${quoteAxisValue(value)}` }
+const parsed = computed(() => {
+  try {
+    const selected = axes.filter(axis => axis.type)
+    const used = new Set<string>()
+    const data = selected.map(axis => {
+      const definition = definitionFor(axis)
+      if (!definition || used.has(definition.id)) throw new Error('서로 다른 지원 축을 선택하세요.')
+      used.add(definition.id)
+      const values = parseAxisValues(axis.values, definition.type)
+      if (!values.length) throw new Error(`${axis.name} 축 값을 입력하세요.`)
+      if (definition.type === 'replace' && !axis.search) throw new Error(`${axis.name} S/R 검색어를 입력하세요.`)
+      for (const value of values) {
+        if (definition.type === 'choice' && !definition.choices?.includes(value)) throw new Error(`${axis.name}: 서버 목록에서 값을 선택하세요.`)
+        if (definition.type === 'integer' || definition.type === 'number') {
+          const number = Number(value)
+          if (!Number.isFinite(number) || number < (definition.min ?? -Infinity) || number > (definition.max ?? Infinity)
+            || (definition.type === 'integer' && !Number.isInteger(number))
+            || (['width', 'height'].includes(definition.id) && number % 8)) throw new Error(`${axis.name}: 허용 범위와 간격을 확인하세요.`)
         }
-      } catch {}
+      }
+      return { id: definition.id, search: axis.search, values }
     })
-  }
+    const count = data.length ? data.reduce((total, axis) => total * axis.values.length, 1) : 0
+    if (count > 256) throw new Error('XYZ 조합은 최대 256개입니다.')
+    return { data, count, error: '' }
+  } catch (problem: any) { return { data: [], count: 0, error: problem.message } }
+})
+const comboCount = computed(() => parsed.value.count)
+const validationError = computed(() => parsed.value.error)
+
+function refreshCapabilities() {
+  if (!bridgeReady || disposed) return
+  clearTimeout(queryTimer)
+  queryId = `xyz-query-${crypto.randomUUID()}`
+  capabilityId.value = ''; definitions.value = []; error.value = ''; loading.value = true
+  requestAction('get_xyz_capabilities', { requestId: queryId })
+  queryTimer = setTimeout(() => { loading.value = false; queryId = ''; error.value = '백엔드 응답이 지연되고 있습니다. 연결을 확인하고 새로고침하세요.' }, 50000)
 }
+function startPlot() {
+  if (validationError.value || !comboCount.value || !capabilityId.value) return
+  plotId = `xyz-plot-${crypto.randomUUID()}`
+  submitting.value = true; error.value = ''; resultImages.value = []
+  requestAction('start_xyz_plot', { requestId: plotId, capabilityId: capabilityId.value, axes: parsed.value.data })
+  clearTimeout(plotTimer)
+  plotTimer = setTimeout(() => { submitting.value = false; error.value = '큐 등록 응답이 지연되고 있습니다. 대기열을 확인하세요.' }, 15000)
+}
+onMounted(() => {
+  disconnects.push(onBackendEvent('xyzCapabilitiesReceived', (raw: string) => {
+    let event: any
+    try { event = JSON.parse(raw) } catch { return }
+    if (!acceptCapabilityEvent(queryId, event)) return
+    if (event.invalidated) {
+      definitions.value = []; capabilityId.value = ''
+      axes.forEach(axis => { axis.type = ''; resetAxis(axis) })
+      if (active) refreshCapabilities()
+      return
+    }
+    clearTimeout(queryTimer); loading.value = false; queryId = ''
+    error.value = event.ok ? '' : event.error || '백엔드 기능을 읽지 못했습니다.'
+    definitions.value = event.ok && Array.isArray(event.axes) ? event.axes : []
+    capabilityId.value = event.ok ? event.capabilityId : ''
+    backendName.value = event.backend === 'comfyui' ? 'ComfyUI' : event.backend === 'webui' ? 'Forge / WebUI' : ''
+    notes.value = event.notes || []; unsupported.value = event.unsupported || []
+    for (const axis of axes) if (!definitionFor(axis)) { axis.type = ''; resetAxis(axis) }
+  }))
+  disconnects.push(onBackendEvent('xyzPlotEvent', (raw: string) => {
+    let event: any
+    try { event = JSON.parse(raw) } catch { return }
+    if (!plotId || event.requestId !== plotId) return
+    if (event.type === 'result' && event.path) { resultImages.value.push({ path: event.path, label: event.label || '', axes: event.axes }); return }
+    clearTimeout(plotTimer); submitting.value = false
+    if (!event.ok) error.value = event.error || 'XYZ 큐 등록에 실패했습니다.'
+  }))
+  void getBackend().then(() => { bridgeReady = true; refreshCapabilities() })
+})
+onActivated(() => { active = true; if (bridgeReady) refreshCapabilities() })
+onDeactivated(() => { active = false })
+onUnmounted(() => { disposed = true; clearTimeout(queryTimer); clearTimeout(plotTimer); disconnects.forEach(disconnect => disconnect()) })
 
 // CSV 내보내기 — 결과 이미지 + 축 메타데이터 (라벨에서 축값 파싱)
 function exportCSV() {
@@ -159,8 +230,8 @@ function exportCSV() {
   const lines = [headers.map(esc).join(',')]
   resultImages.value.forEach((img, i) => {
     // 라벨은 보통 "축타입=값, ..." 형식 — 파싱 시도
-    const axisValues: Record<string, string> = {}
-    if (img.label) {
+    const axisValues: Record<string, string> = { ...(img.axes || {}) }
+    if (img.label && !img.axes) {
       img.label.split(/\s*[,;]\s*/).forEach((part: string) => {
         const [k, ...vparts] = part.split('=')
         if (k && vparts.length) axisValues[k.trim()] = vparts.join('=').trim()
@@ -193,6 +264,12 @@ function exportCSV() {
 .config-panel h3 { color: var(--text-primary); font-size: 14px; margin: 0; }
 .axis-config { display: flex; flex-direction: column; gap: 4px; }
 .axis-label { color: var(--accent); font-size: 12px; font-weight: var(--fw-bold); }
+.axes-fieldset { padding: 0; margin: 0; border: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.axes-fieldset:disabled { opacity: .55; pointer-events: none; }
+.capability-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }
+.axis-note { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.axis-error { margin: 0; color: var(--error, #d85c5c); font-size: 12px; line-height: 1.5; }
+@media (max-width: 640px) { .xyz-view { flex-direction: column; overflow-y: auto; } .config-panel { box-sizing: border-box; width: 100%; border-right: 0; border-bottom: 1px solid var(--rule); flex-shrink: 0; } .result-area { min-height: 280px; flex-shrink: 0; } }
 .s-select, .s-input {
   background: var(--bg-input); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px;
   color: var(--text-primary); font-size: 12px; outline: none; caret-color: var(--accent);

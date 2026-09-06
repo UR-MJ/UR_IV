@@ -252,12 +252,14 @@ class StudioQWebChannelAdapterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             chosen = str(Path(temp) / "chosen")
             with patch(
-                "ui.studio_qwebchannel.QFileDialog.getExistingDirectory",
+                "ui.studio_qwebchannel.select_directory",
                 return_value=chosen,
             ) as picker:
                 result = host.pick_directory("runtime_install", "forge", temp)
         self.assertEqual(result, chosen)
         self.assertIn("Forge Neo", picker.call_args.args[1])
+        self.assertIs(picker.call_args.args[0], bridge)
+        self.assertEqual(picker.call_args.args[2], temp)
         host.refresh_model_widgets()
         self.assertEqual(bridge.refreshes, 1)
 

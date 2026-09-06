@@ -27,7 +27,7 @@ class ChatWorker(QThread):
 
     def __init__(self, request_id: str, base_url: str, model: str,
                  messages: list[dict[str, Any]], options: dict[str, Any] | None = None,
-                 think: bool | None = None, parent=None):
+                 think: bool | str | None = None, parent=None):
         super().__init__(parent)
         self.request_id = request_id
         self.base_url = base_url

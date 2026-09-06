@@ -458,6 +458,7 @@ class BackendRuntimeConfigurationTests(BackendRuntimeTestCase):
             "loras": shared_root / "Lora",
             "vae": shared_root / "VAE",
             "text_encoders": shared_root / "text_encoder",
+            "upscale_models": shared_root / "upscale_models",
         }
         for path in shared_paths.values():
             path.mkdir(parents=True)
@@ -476,6 +477,13 @@ class BackendRuntimeConfigurationTests(BackendRuntimeTestCase):
                 self.assertIn(str(expected.resolve()), model_paths[category])
         for category, expected in shared_paths.items():
             self.assertEqual(combined[category].count(str(expected.resolve())), 1)
+        shared_upscale = str((shared_root / "upscale_models").resolve())
+        self.assertEqual(combined["upscale_models"], [shared_upscale])
+        for engine in ("forge", "comfyui"):
+            self.assertEqual(
+                snapshot["engines"][engine]["modelPaths"]["upscale_models"],
+                [shared_upscale],
+            )
 
     def test_forge_unet_only_checkpoints_are_visible_to_comfy_unet_loader(self):
         """Forge 는 Anima·Krea2 UNET 전용 파일을 Stable-diffusion 에 둔다 — ComfyUI 쪽 diffusion_models 에도 보여야 한다."""
@@ -957,6 +965,21 @@ class BackendRuntimeLinkedInstallTests(BackendRuntimeTestCase):
 
         forge_root = self.make_linked_forge()
         comfy_root = self.make_linked_comfy()
+        forge_upscale = [
+            forge_root / "models" / "ESRGAN",
+            forge_root / "models" / "upscale_models",
+            self.runtime_root / "forge" / "data" / "models" / "upscale_models",
+        ]
+        comfy_upscale = [
+            comfy_root / "models" / "upscale_models",
+            self.runtime_root / "comfyui" / "data" / "models" / "upscale_models",
+        ]
+        for path in forge_upscale + comfy_upscale:
+            path.mkdir(parents=True)
+        # Explicit installed roots, not the developer machine's model fallback.
+        root_patch = patch("core.forge_modules.get_forge_root", return_value=forge_root / "models")
+        root_patch.start()
+        self.addCleanup(root_patch.stop)
         self.manager.execute(
             "forge", "set_install_root", {"existingRoot": str(forge_root)}
         )
@@ -971,8 +994,13 @@ class BackendRuntimeLinkedInstallTests(BackendRuntimeTestCase):
         self.assertEqual(snapshot["activeEngine"], "")
         self.assertEqual(
             set(snapshot["engines"]["comfyui"]["modelPaths"]),
-            {"checkpoints", "diffusion_models", "loras", "vae", "text_encoders"},
+            {"checkpoints", "diffusion_models", "loras", "vae", "text_encoders", "upscale_models"},
         )
+        for engine, expected in (("forge", forge_upscale), ("comfyui", comfy_upscale)):
+            self.assertEqual(
+                snapshot["engines"][engine]["modelPaths"]["upscale_models"],
+                [str(path.resolve()) for path in expected],
+            )
 
         self.manager.execute("forge", "start")
         forge_argv = self.adapter.start_calls[-1]["argv"]
@@ -997,6 +1025,18 @@ class BackendRuntimeLinkedInstallTests(BackendRuntimeTestCase):
             str((comfy_root / "models" / "checkpoints").resolve()),
         )
         self.assertIn(str(self.model_paths["checkpoint_dir"].resolve()), shared_checkpoints)
+        self.assertEqual(
+            config["aistudio_shared"]["upscale_models"].splitlines(),
+            [str(path.resolve()) for path in comfy_upscale + forge_upscale],
+        )
+
+        # Changing the primary library must update the actual Comfy path file.
+        self.manager.execute("forge", "set_primary_model_engine")
+        reconfigured = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            reconfigured["aistudio_shared"]["upscale_models"].splitlines(),
+            [str(path.resolve()) for path in forge_upscale + comfy_upscale],
+        )
 
     def test_auto_detected_extension_folder_is_read_only_until_explicitly_saved(self):
         root = self.make_linked_forge()
